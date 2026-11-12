@@ -24,6 +24,8 @@
 # - xtask is Tooling, the top layer: it may read any crate, and no crate may
 #   depend on it.
 # - analysis/ is the package `opentide-native` (bindings/python in the plan).
+# - bindings/node is the package `opentide-node` (UC-5.3, #838), compiled into
+#   the npm package @opentide/opentide: it depends on the facade alone.
 # - opentide-compare (UC-0.7, #805) is foundation tier 0: the differential
 #   comparator depends on no workspace crate, and both xtask (`compare`,
 #   `golden check --engine compare`) and opentide-native (the CLI's
@@ -98,7 +100,7 @@ tiers = [
 [[layer]]
 name = "bindings"
 tiers = [
-    ["opentide-native", "opentide-wasm"],
+    ["opentide-native", "opentide-wasm", "opentide-node"],
 ]
 
 [[layer]]

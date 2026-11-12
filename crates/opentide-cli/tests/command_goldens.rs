@@ -128,6 +128,16 @@ fn a_watch_shows_a_pass_and_ctrl_c_exits_0() {
     assert!(err.0.lock().unwrap().is_empty());
 }
 
+/// `query` (UC-4.2c, #832): its refusals and usage errors, the unset
+/// credentials of each platform, and the runs on the stand-in tenants
+/// (`tenants`) answered by their cassettes (`tests/cassettes/golden/`), as
+/// a table, JSON lines, CSV and the JSON document, the requests checked
+/// against each cassette.
+#[test]
+fn query_cases_are_the_oracles() {
+    check(&["query"], 60);
+}
+
 #[test]
 fn lint_cases_are_the_oracles() {
     check(&["lint"], 50);
@@ -337,16 +347,18 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
 }
 
 /// The replay reads `RUST_COMMANDS` as the dispatch does: every entry, with
-/// its `requires`, so it tolerates a refusal only of a run the table does not
-/// cover (a bare `generate`) and fails on any other.
+/// its `requires`, `refuses` and `platforms`, so it tolerates a refusal only
+/// of a run the table does not cover (a bare `generate`, `query` of a rule)
+/// and fails on any other.
 #[test]
 fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_run() {
     let words =
         |text: &str| -> Vec<String> { text.split_whitespace().map(str::to_owned).collect() };
     let table = replay::rust_commands();
-    assert_eq!(table["validate"], Vec::<String>::new());
-    assert_eq!(table["deploy"], Vec::<String>::new());
-    assert_eq!(replay::offline_flags()["deploy"], ["--dry-run"]);
+    assert_eq!(table["validate"], replay::Coverage::default());
+    assert_eq!(table["deploy"].requires, Vec::<String>::new());
+    assert_eq!(table["deploy"].offline, ["--dry-run"]);
+    assert!(table["deploy"].platforms.contains(&"sysdig".to_owned()));
     assert!(replay::covers("deploy", &words("deploy --dry-run --all")));
     assert!(replay::covers(
         "deploy",
@@ -358,10 +370,15 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     ));
     assert!(!replay::covers("deploy", &words("deploy -- --dry-run")));
     assert_eq!(
-        table["generate"],
+        table["generate"].requires,
         ["schemas", "templates", "vocabs", "snippets"]
     );
-    assert_eq!(table["generate docs rules"], Vec::<String>::new());
+    assert_eq!(table["generate docs rules"], replay::Coverage::default());
+    assert_eq!(table["setup"].refuses, ["--skills", "--plugin"]);
+    // A tuple named by its constant, and a scope of its own.
+    assert_eq!(table["query"].refuses, ["--rule", "--file"]);
+    assert!(table["query"].platforms.contains(&"elastic".to_owned()));
+    assert_eq!(table["validate query"].platform_scope, ["--live"]);
     assert!(replay::covers(
         "generate",
         &words("--json generate schemas")
@@ -373,20 +390,56 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     assert!(replay::covers("doctor", &words("doctor --offline")));
     assert!(!replay::covers("doctor", &words("doctor")));
     assert!(replay::covers("setup", &words("setup --plan")));
+    assert!(!replay::covers("setup", &words("setup --skills")));
     assert!(replay::covers("setup vscode", &words("setup vscode")));
     assert!(!replay::covers(
         "setup skills",
         &words("setup skills --claude-code")
     ));
-    // A multi-line entry, and one the parser cannot read, which is no table.
-    let source = "x = 1\nRUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
+    assert!(replay::covers(
+        "query",
+        &words("query --platform elastic q")
+    ));
+    assert!(replay::covers(
+        "query",
+        &words("query --platform=crowdstrike q")
+    ));
+    // Every platform with a query runner, Splunk too since UC-4.3 (#833).
+    assert!(replay::covers("query", &words("query --platform splunk q")));
+    assert!(!replay::covers("query", &words("query q")));
+    assert!(!replay::covers(
+        "query",
+        &words("query --platform elastic --rule r")
+    ));
+    assert!(replay::covers(
+        "validate query",
+        &words("validate query --file q.kql")
+    ));
+    assert!(!replay::covers(
+        "validate query",
+        &words("validate query --live --platform elastic")
+    ));
+    assert!(replay::covers(
+        "validate query",
+        &words("validate query --live --platform sysdig")
+    ));
+    // A multi-line entry, a tuple named by a constant, and one the parser
+    // cannot read, which is no table.
+    let source = "x = 1\nPLATFORMS: tuple[str, ...] = (\n    \"p\",\n    \"q\",\n)\n\
+                  RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
                   (\"a\",): RustCommand(launch=RUST_CLI),\n    (\"b\", \"c\"): RustCommand(\n        \
-                  launch=RUST_CLI, requires=(\"--x\", \"y\")\n    ),\n}\n";
+                  launch=RUST_CLI, requires=(\"--x\", \"y\"),\n        refuses=(\"--z\",),\n        \
+                  platforms=PLATFORMS,\n    ),\n}\n";
     let parsed = replay::parse_rust_commands(source);
     assert_eq!(parsed.len(), 2);
-    assert_eq!(parsed["b c"], ["--x", "y"]);
+    assert_eq!(parsed["a"], replay::Coverage::default());
+    assert_eq!(parsed["b c"].requires, ["--x", "y"]);
+    assert_eq!(parsed["b c"].refuses, ["--z"]);
+    assert_eq!(parsed["b c"].platforms, ["p", "q"]);
     let unreadable = source.replace("(\"a\",)", "KEY");
     assert!(std::panic::catch_unwind(|| replay::parse_rust_commands(&unreadable)).is_err());
+    let undefined = source.replace("platforms=PLATFORMS", "platforms=NOWHERE");
+    assert!(std::panic::catch_unwind(|| replay::parse_rust_commands(&undefined)).is_err());
 }
 
 /// `generate <phase>...` (UC-3.5d, #933): the `schemas`, `templates`,

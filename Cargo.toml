@@ -34,6 +34,7 @@ members = [
     "crates/opentide-cassette",
     "crates/opentide",
     "analysis",
+    "bindings/node",
     "xtask",
 ]
 
@@ -172,7 +173,10 @@ wait4 = "0.2"
 # crates/opentide-wasm: the wasm32 libc shims). `forbid` cannot be relaxed
 # inside a crate, so those two copy this table with `unsafe_code = "deny"` and
 # allow it at each site with a reason; xtask/tests/lint_policy.rs fails when a
-# copy differs from this table or another crate leaves it.
+# copy differs from this table or another crate leaves it. bindings/node (the
+# napi-rs binding) copies it too, with `deny`, and writes no `unsafe`: each
+# `#[napi]` item expands to a static constructor carrying
+# `#[allow(unsafe_code)]`, which `forbid` refuses (docs/internal/unsafe.md).
 #
 # CI runs clippy with `-D warnings`, so a `warn` here fails CI as `deny` does;
 # `warn` lets a local build carry on while you work. An `allow` in a crate's

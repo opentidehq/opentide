@@ -111,6 +111,14 @@ src/opentide/_native.so
 /node_modules
 /packages/*/node_modules
 /packages/*/dist
+# The Node binding's npm packages: their dependencies, and the addons `npm run
+# build` and the release copy in (bindings/node/index.js and index.d.ts are
+# generated and committed).
+/bindings/node/node_modules
+/bindings/node/alias/node_modules
+/bindings/node/*.node
+/bindings/node/npm/*/*.node
+/bindings/node/*.tgz
 **/*.wasm
 grammars/*/build
 grammars/*/node_modules

@@ -1,0 +1,43 @@
+{
+  "name": "opentide",
+  "version": "0.0.0",
+  "description": "An alias of @opentide/opentide, the opentide SDK and command line for Node.js, so that `npx opentide` works.",
+  "license": "EUPL-1.2",
+  "homepage": "https://opentide.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opentidehq/opentide.git",
+    "directory": "bindings/node/alias"
+  },
+  "bugs": {
+    "url": "https://github.com/opentidehq/opentide/issues"
+  },
+  "keywords": [
+    "opentide",
+    "detection-as-code",
+    "security",
+    "siem"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "opentide": "cli.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "cli.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">= 18"
+  },
+  "dependencies": {
+    "@opentide/opentide": "0.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -877,5 +877,27 @@ mod tests {
             ))
         );
         assert_eq!(seconds_g(Duration::from_millis(1500)), "1.5");
+        assert_eq!(seconds_g(Duration::from_secs(120)), "120");
+    }
+
+    #[test]
+    fn the_sdk_values_read_as_python_reads_them() {
+        let value = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
+        // Python's truth: `search_validation`'s `valid`.
+        for falsy in ["null", "false", "0", "0.0", "\"\"", "[]", "{}"] {
+            assert!(!truthy(&value(falsy)), "{falsy}");
+        }
+        for truthful in ["true", "1", "-0.5", "\"no\"", "[0]", "{\"a\": null}"] {
+            assert!(truthy(&value(truthful)), "{truthful}");
+        }
+        // `str(value)`: a string as it is, anything else as its repr (the
+        // job status's `message`, a tag that is not a string).
+        assert_eq!(
+            value_str(&value("\"No data available\"")),
+            "No data available"
+        );
+        assert_eq!(value_str(&value("7")), "7");
+        assert_eq!(value_str(&value("[true, null]")), "[True, None]");
+        assert_eq!(value_str(&value("{\"a\": \"b\"}")), "{'a': 'b'}");
     }
 }

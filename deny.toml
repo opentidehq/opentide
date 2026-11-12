@@ -129,6 +129,10 @@ skip = [
   # wiremock (the recorded-HTTP harness, opentide-cassette: test tooling,
   # never shipped) is on base64 0.22; hyper-util (reqwest) is on 0.23.
   { crate = "base64@0.22.1", reason = "only opentide-cassette (test tooling, never shipped) uses it, through wiremock 0.6; reqwest's hyper-util uses base64 0.23" },
+  # Two proc macros convert identifiers' case at compile time: crossterm's
+  # derive_more-impl (opentide-cli's setup wizard) with convert_case 0.10, and
+  # napi-derive (the Node binding, UC-5.3) with 0.12.
+  { crate = "convert_case@0.10.0", reason = "only derive_more-impl 2.1 (crossterm, opentide-cli's setup wizard) uses it, a proc macro run at compile time; napi-derive (the Node binding's TypeScript names) uses convert_case 0.12. Neither links into an artifact" },
   { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
 ]
 

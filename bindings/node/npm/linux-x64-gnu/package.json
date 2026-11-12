@@ -1,0 +1,40 @@
+{
+  "name": "@opentide/opentide-linux-x64-gnu",
+  "version": "0.0.0",
+  "cpu": [
+    "x64"
+  ],
+  "main": "opentide.linux-x64-gnu.node",
+  "files": [
+    "opentide.linux-x64-gnu.node"
+  ],
+  "description": "opentide for Node.js: the SDK and the opentide command line. Spec-driven development for agentic detection engineering.",
+  "keywords": [
+    "opentide",
+    "detection-as-code",
+    "security",
+    "siem"
+  ],
+  "homepage": "https://opentide.org",
+  "license": "EUPL-1.2",
+  "engines": {
+    "node": ">= 18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opentidehq/opentide.git",
+    "directory": "bindings/node"
+  },
+  "bugs": {
+    "url": "https://github.com/opentidehq/opentide/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "linux"
+  ],
+  "libc": [
+    "glibc"
+  ]
+}

@@ -8,9 +8,9 @@ name: CI
 #   required checks, and their jobs carry no `if`.
 # - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
 #   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
-#   Windows CLI smoke, the facade crate's every feature and semver checks, LSP
-#   clients and benchmarks. It runs nightly, on every push to development and
-#   integration/unified-core, on Run workflow, and on
+#   Windows CLI smoke, the facade crate's every feature and semver checks, the
+#   Node package, LSP clients and benchmarks. It runs nightly, on every push
+#   to development and integration/unified-core, on Run workflow, and on
 #   a pull request that carries the `full-ci` label (read at each push: add
 #   the label, then push, or Run workflow on the branch). Each of these jobs
 #   has an `if` on that condition; the release dry run (and crate packaging)
@@ -242,6 +242,7 @@ jobs:
   #   python-engine   the Python jobs' `uv sync` build of the binding: `test`
   #                   (3.14) saves it, the other Linux Python jobs read it
   #   golden-compare  `golden-compare` (the binding and xtask, -Dwarnings)
+  #   node            `node` (the Node addon, the Python binding and xtask)
   #   engine-release  the release dry run (engine-release-build.yml), per target
   # ---------------------------------------------------------------------------
 
@@ -471,6 +472,107 @@ jobs:
           else
             echo "::notice::crates/opentide is new in this change: no baseline API to check against"
           fi
+
+  # The Node binding (bindings/node, UC-5.3, #838): @opentide/opentide built
+  # with napi-rs for linux-x64-gnu (the other seven targets are declared, and
+  # built and installed in UC-5.3b); the loader and declarations napi-rs
+  # generates against the committed ones; the package's tests (the SDK, the
+  # bin, the packages, the TypeScript page's snippets and a `tsc --noEmit`
+  # consumer); and its command line against the PyPI CLI's: `--json
+  # commands` byte for byte, and every ported golden case through the
+  # comparator (`cargo xtask golden check --runner node`; it leaves out
+  # `--help` and `doctor`, which the PyPI CLI still answers in Python). It
+  # builds the CLI a second time, so it is in the full set.
+  node:
+    name: Node package (napi-rs build, tests, golden)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: node
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/node/package-lock.json
+
+      # The other side of the comparisons: this repository's PyPI CLI, whose
+      # version the addon is built to report, so that the two documents can
+      # be equal byte for byte.
+      - name: Install this repository's CLI
+        run: |
+          uv sync --group dev
+          echo "OPENTIDE_VERSION=$(.venv/bin/opentide --version | cut -d' ' -f2)" >> "$GITHUB_ENV"
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # The develop profile (optimised, without the release profile's
+      # link-time optimisation), as `uv sync` builds the Python binding.
+      - name: Build the addon (linux-x64-gnu)
+        working-directory: bindings/node
+        run: node build.mjs --profile develop
+
+      - name: The generated loader and declarations are the committed ones
+        run: |
+          if ! git diff --exit-code -- bindings/node/index.js bindings/node/index.d.ts; then
+            echo "::error::bindings/node/index.js or index.d.ts differs from what napi-rs generates: run \`npm run build\` in bindings/node and commit them."
+            exit 1
+          fi
+
+      - name: The package's tests
+        working-directory: bindings/node
+        run: npm test
+
+      # The issue's acceptance criterion: the same command tree, byte for
+      # byte, but for the run's own wall time (`duration_ms`).
+      - name: npx --json commands is the PyPI CLI's
+        working-directory: bindings/node
+        run: |
+          zero='s/"duration_ms":[0-9]+/"duration_ms":0/g'
+          npx --no-install . --json commands | sed -E "$zero" > "$RUNNER_TEMP/node.json"
+          ../../.venv/bin/opentide --json commands | sed -E "$zero" > "$RUNNER_TEMP/pypi.json"
+          cmp "$RUNNER_TEMP/node.json" "$RUNNER_TEMP/pypi.json"
+
+      - name: Every ported golden case through the Node bin
+        run: cargo xtask golden check --runner node --report golden-node.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: golden-node
+          path: golden-node.json
+          if-no-files-found: ignore
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
