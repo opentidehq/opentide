@@ -1,0 +1,4 @@
+[1;31merror:[0m Invalid value: Unknown skill slug(s): no-such-skill. Run 'opentide setup skills discover' to
+       list available skills.
+  [1musage:[0m opentide setup skills [OPTIONS] COMMAND [ARGS]...
+  [1;36mhelp:[0m run 'opentide setup skills --help'

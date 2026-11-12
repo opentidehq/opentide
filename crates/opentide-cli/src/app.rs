@@ -758,6 +758,10 @@ impl Run<'_> {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)
             }
+            "setup skills" => {
+                let report = self.setup_skills(&matches);
+                self.emit_report(&report, out, err)
+            }
             "setup skills discover" | "setup skills show" => {
                 let report = self.setup_skills_catalogue(&matches, &path);
                 self.emit_report(&report, out, err)
@@ -971,6 +975,7 @@ impl Run<'_> {
             terminal: self.terminal(),
             interrupt: self.host.interrupt.clone(),
             stderr: self.host.log_sink.clone(),
+            proxy: self.globals.proxy.as_deref(),
         }
     }
 
@@ -1076,6 +1081,59 @@ impl Run<'_> {
             flag("plan") || group.get_flag("plan"),
             &self.setup_context(&cwd),
         )
+    }
+
+    /// `opentide setup skills` without a subcommand: the install.
+    fn setup_skills(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::run::{Paths, SkillsArgs, skills};
+        use crate::commands::setup::skills::{Options, Target};
+        let Some((_, group)) = matches.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let Some((_, args)) = group.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let flag = |id: &str| args.get_flag(id);
+        let paths = Paths {
+            own: given(args, "path").then(|| text("path")).flatten(),
+            group: given(group, "path")
+                .then(|| group.get_one::<String>("path").cloned())
+                .flatten(),
+            both: false,
+            group_only: self.setup_group_only(group),
+        };
+        let targets = [
+            ("cursor", Target::Cursor),
+            ("claude_code", Target::ClaudeCode),
+            ("generic", Target::Generic),
+            ("github_copilot", Target::GithubCopilot),
+        ]
+        .into_iter()
+        .filter(|(id, _)| flag(id))
+        .map(|(_, target)| target)
+        .collect();
+        let parsed = SkillsArgs {
+            options: Options {
+                targets,
+                slugs: args
+                    .get_many::<String>("install")
+                    .map(|values| values.cloned().collect())
+                    .unwrap_or_default(),
+                all: flag("all_skills"),
+                name: text("name"),
+                org: text("org"),
+                description: text("description"),
+                plugin: flag("plugin"),
+            },
+            yes: flag("yes") || group.get_flag("yes"),
+            plan: flag("plan") || group.get_flag("plan"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        skills(&parsed, &paths, &self.setup_context(&cwd))
     }
 
     /// `opentide setup` without a subcommand.
@@ -1791,6 +1849,25 @@ impl Run<'_> {
             out.flush()?;
             err.flush()?;
             return Ok(outcome.exit_code);
+        }
+        if report.usage_notes && self.mode != Mode::Json {
+            let words: Vec<String> = outcome
+                .command
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect();
+            let notes = vec![
+                ("usage".to_owned(), usage::usage_line(&self.root, &words)),
+                (
+                    "help".to_owned(),
+                    format!(
+                        "run '{} {} --help'",
+                        crate::catalog::PROGRAM,
+                        words.join(" ")
+                    ),
+                ),
+            ];
+            return self.emit(outcome, &notes, &[], out, err);
         }
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;

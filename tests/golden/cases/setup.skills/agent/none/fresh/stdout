@@ -1,0 +1,11 @@
+  .agents/skills/opentide-detection-rule/SKILL.md
+  .agents/skills/detection-engineering/SKILL.md
+  .cursor/skills/opentide-detection-rule/SKILL.md   Cursor configuration
+  .cursor/skills/detection-engineering/SKILL.md     Cursor configuration
+  CLAUDE.md
+  .claude/skills/opentide-detection-rule/SKILL.md
+  .claude/skills/detection-engineering/SKILL.md
+  AGENTS.md
+  .github/copilot-instructions.md
+
+✓ Wrote 9 files

@@ -41,3 +41,6 @@ src/opentide/data/diagnostics/*.md -text
 # byte with the oracle's (crates/opentide-schema/tests/catalog.rs): the bytes as
 # committed, LF, on a Windows checkout too.
 data/catalogs/tide/generated/*.json -text
+# The agent skills and entrypoint templates `setup skills` writes (compiled into
+# the Rust CLI with include_bytes!): the same bytes on every checkout.
+src/opentide/data/setup/skills/** -text

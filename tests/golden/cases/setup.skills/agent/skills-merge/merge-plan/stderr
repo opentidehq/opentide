@@ -1,0 +1,2 @@
+warning: Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by hand, or delete it and re-run to write opentide's template.
+warning: Kept 1 file(s) in .claude/skills/detection-engineering that the skill does not ship (NOTES.md); delete them by hand if they are left over from an older version.

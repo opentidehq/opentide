@@ -84,6 +84,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-legacy-id-error",
     "vscode",
     "setup-merge",
+    "skills-merge",
     "vscode-docs-folder",
     "tenants",
     "live-tenants",
@@ -164,6 +165,7 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
+        "skills-merge" => copy_tree(&repo().join("tests/golden/fixtures/skills-merge"), ws),
         // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
@@ -801,7 +803,13 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 written.insert(format!("{prefix}/{path}"), FileState::Deleted);
             }
         }
-        for folder in dirs(root).difference(folders_before) {
+        let folders_after = dirs(root);
+        // A folder the run removed (a skill's tree replaced whole), as the
+        // recording lists it.
+        for folder in folders_before.difference(&folders_after) {
+            written.insert(format!("{prefix}/{folder}"), FileState::Deleted);
+        }
+        for folder in folders_after.difference(folders_before) {
             let mode = std::fs::metadata(root.join(folder))
                 .unwrap()
                 .permissions()

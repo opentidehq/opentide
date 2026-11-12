@@ -42,10 +42,9 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
-#: A command line with no Rust implementation: ``setup --plugin`` (``setup``
-#: itself runs on Rust since UC-3.6, #828, and ``setup vscode`` since UC-3.6c,
-#: #951; installing the skills and the plugin stays Python's).
-UNPORTED = ("setup", "--plan", "--plugin")
+#: A command line with no Rust implementation: ``share targets`` (``setup
+#: --plugin``, the last ``setup`` run on Python, moved to Rust with UC-4.4d, #834).
+UNPORTED = ("share", "targets")
 
 
 def fake(mode: str) -> RustCommand:
@@ -83,11 +82,11 @@ def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) ->
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "setup"
+    assert doc["command"] == "share targets"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
     message = doc["failure"]["message"]
-    assert "opentide setup with --plugin has no Rust implementation yet" in message
+    assert "opentide share targets has no Rust implementation yet" in message
     assert stdout.endswith("}\n") and stdout.count("\n") == 1
 
 
@@ -103,7 +102,7 @@ def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
     code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
-    assert "error: opentide setup with --plugin has no Rust implementation yet" in stderr
+    assert "error: opentide share targets has no Rust implementation yet" in stderr
 
 
 def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -> None:
@@ -187,8 +186,10 @@ def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> Non
     # After ``--`` it is an argument, not the flag.
     assert command.covers(["validate", "query", "--", "--live"])
     assert command.uncovered("validate query", ["--live"]) == "validate query with --live"
-    assert engines.RUST_COMMANDS[("setup",)].refuses == ("--skills", "--plugin")
-    assert not engines.RUST_COMMANDS[("setup",)].covers(["setup", "--skills"])
+    # Agent skills install on Rust (UC-4.4d, #834): setup refuses nothing now.
+    assert engines.RUST_COMMANDS[("setup",)].refuses == ()
+    assert engines.RUST_COMMANDS[("setup",)].covers(["setup", "--skills", "generic", "--plugin"])
+    assert engines.RUST_COMMANDS[("setup", "skills")].covers(["setup", "skills", "--generic"])
 
 
 def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() -> None:

@@ -64,6 +64,16 @@ fn skills_catalogue_cases_are_the_oracles() {
     check(&["setup.skills.discover", "setup.skills.show"], 20);
 }
 
+/// `setup skills` (the install), `setup --skills` and `--plugin` (UC-4.4d,
+/// #834): a fresh install, one over the repository's own agent files and
+/// settings, the plugin, a remote skill and a failed download, each tree
+/// served from its cassette (`tests/cassettes/skills/`), and the files
+/// written compared with the oracle's.
+#[test]
+fn skills_install_cases_are_the_oracles() {
+    check(&["setup.skills"], 40);
+}
+
 #[test]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);
@@ -396,7 +406,9 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         ["schemas", "templates", "vocabs", "snippets"]
     );
     assert_eq!(table["generate docs rules"], replay::Coverage::default());
-    assert_eq!(table["setup"].refuses, ["--skills", "--plugin"]);
+    // Agent skills install on Rust (UC-4.4d, #834): setup refuses nothing.
+    assert_eq!(table["setup"], replay::Coverage::default());
+    assert_eq!(table["setup skills"], replay::Coverage::default());
     // A tuple named by its constant; a rule's query is covered (#834).
     assert!(table["query"].refuses.is_empty());
     assert!(table["query"].platforms.contains(&"elastic".to_owned()));
@@ -421,9 +433,12 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         &words("deploy migrate-state")
     ));
     assert!(replay::covers("setup", &words("setup --plan")));
-    assert!(!replay::covers("setup", &words("setup --skills")));
+    assert!(replay::covers(
+        "setup",
+        &words("setup --skills generic --plugin")
+    ));
     assert!(replay::covers("setup vscode", &words("setup vscode")));
-    assert!(!replay::covers(
+    assert!(replay::covers(
         "setup skills",
         &words("setup skills --claude-code")
     ));

@@ -263,8 +263,9 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: show`` with UC-4.1 (#831): the opentidehq/skills catalogue through the connectors'
 #: HTTP client; ``setup`` (scripted runs and ``--plan``) and its ``env``, ``hooks``,
 #: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828); ``setup vscode``,
-#: ``setup --vscode-setup`` and the wizards at a terminal with UC-3.6c (#951):
-#: ``--skills`` and ``--plugin`` stay Python's.
+#: ``setup --vscode-setup`` and the wizards at a terminal with UC-3.6c (#951);
+#: ``setup skills`` (the install), ``setup --skills`` and ``--plugin`` with
+#: UC-4.4d (#834): the skill trees through the connectors' HTTP client.
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
 #: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
@@ -315,7 +316,8 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("setup", "ci"): RustCommand(launch=RUST_CLI),
     ("setup", "skills", "discover"): RustCommand(launch=RUST_CLI),
     ("setup", "skills", "show"): RustCommand(launch=RUST_CLI),
-    ("setup",): RustCommand(launch=RUST_CLI, refuses=("--skills", "--plugin")),
+    ("setup", "skills"): RustCommand(launch=RUST_CLI),
+    ("setup",): RustCommand(launch=RUST_CLI),
     ("setup", "env"): RustCommand(launch=RUST_CLI),
     ("setup", "hooks"): RustCommand(launch=RUST_CLI),
     ("setup", "mcp"): RustCommand(launch=RUST_CLI),

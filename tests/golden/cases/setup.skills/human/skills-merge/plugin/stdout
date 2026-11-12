@@ -1,0 +1,8 @@
+  [1m.claude/settings.json[0m
+
+[1;32m✓[0m Wrote .claude/settings.json
+  [1;36mhelp:[0m Claude Code offers the opentide plugin to whoever opens this project. The plugin starts
+        opentide mcp start itself: other agents install it with cursor: /add-plugin
+        opentidehq/skills; vscode: Chat: Install Plugin From Source → opentidehq/skills (needs
+        chat.plugins.enabled); copilot-cli: copilot plugin marketplace add opentidehq/skills &&
+        copilot plugin install opentide@opentide.
