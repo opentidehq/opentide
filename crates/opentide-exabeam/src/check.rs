@@ -13,7 +13,7 @@
 
 use crate::catalog::{Catalog, FieldKind};
 use crate::codes;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 /// Which use the query is checked for (exabeam-1.0, "Profiles").
@@ -584,22 +584,6 @@ fn unescaped(text: &str, target: impl Fn(char) -> bool) -> bool {
 /// reference checker's tests; then the `regex` crate's parser, whose syntax
 /// is RE2's.
 pub fn re2_refusal(pattern: &str) -> Option<String> {
-    let b = pattern.as_bytes();
-    // A back-reference: an odd run of backslashes before a digit 1-9.
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'\\' {
-            let start = i;
-            while i < b.len() && b[i] == b'\\' {
-                i += 1;
-            }
-            if (i - start) % 2 == 1 && i < b.len() && (b'1'..=b'9').contains(&b[i]) {
-                return Some("back-references are not RE2".into());
-            }
-            continue;
-        }
-        i += 1;
-    }
     // Look-around, atomic groups and possessive quantifiers are refused by
     // `re2_rewrite`, outside character classes only: `[a?+]` and `[(?=]`
     // are sets of literals.
@@ -607,7 +591,13 @@ pub fn re2_refusal(pattern: &str) -> Option<String> {
         Ok(p) => p,
         Err(why) => return Some(why),
     };
-    match regex_syntax::ParserBuilder::new().build().parse(&rewritten) {
+    // `re2_rewrite` holds the depth to RE2's limit; the `regex` crate's own
+    // limit (250) would refuse what RE2 takes.
+    match regex_syntax::ParserBuilder::new()
+        .nest_limit(4 * RE2_MAX_DEPTH)
+        .build()
+        .parse(&rewritten)
+    {
         Ok(_) => None,
         Err(err) => Some(re2_message(&err)),
     }
@@ -615,6 +605,13 @@ pub fn re2_refusal(pattern: &str) -> Option<String> {
 
 /// RE2's largest repetition count.
 const RE2_MAX_REPEAT: u32 = 1000;
+/// RE2's deepest nesting of groups.
+const RE2_MAX_DEPTH: u32 = 1000;
+/// RE2's ASCII classes, `[[:alpha:]]`.
+const POSIX_CLASSES: [&str; 14] = [
+    "alnum", "alpha", "ascii", "blank", "cntrl", "digit", "graph", "lower", "print", "punct",
+    "space", "upper", "word", "xdigit",
+];
 
 /// `pattern` as the `regex` crate's parser reads the same RE2 syntax, or why
 /// RE2 refuses it. The two syntaxes differ where RE2 is looser or stricter:
@@ -632,6 +629,8 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
     let mut class_depth = 0usize;
     // The last item was a repetition operator (`*`, `+`, `?`, `{n,m}`).
     let mut repeated = false;
+    let mut depth = 0u32;
+    let mut names: Vec<String> = Vec::new();
     let escape = |c: char, out: &mut String| out.push_str(&format!("\\x{{{:X}}}", c as u32));
     while i < chars.len() {
         let c = chars[i];
@@ -639,6 +638,27 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
             let Some(&next) = chars.get(i + 1) else {
                 return Err("trailing backslash at end of expression".into());
             };
+            if next == 'Q' && class_depth > 0 {
+                return Err("\\Q is not an escape inside a class".into());
+            }
+            if next.is_ascii_digit() {
+                // RE2: `\0`, and `\1`-`\7` before another octal digit, are octal
+                // (up to three digits); any other digit is a back-reference.
+                let octal = |j: usize| chars.get(j).is_some_and(|c| ('0'..='7').contains(c));
+                if next == '0' || (next <= '7' && octal(i + 2)) {
+                    let mut j = i + 2;
+                    while j < i + 4 && octal(j) {
+                        j += 1;
+                    }
+                    let digits: String = chars[i + 1..j].iter().collect();
+                    let code = u32::from_str_radix(&digits, 8).unwrap_or(0);
+                    out.push_str(&format!("\\x{{{code:X}}}"));
+                    i = j;
+                    repeated = false;
+                    continue;
+                }
+                return Err("back-references are not RE2".into());
+            }
             if next == 'Q' {
                 // `\Q…\E` (or to the end): every character is literal.
                 let mut j = i + 2;
@@ -677,6 +697,13 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
                     if let Some(end) = (i + 2..chars.len().saturating_sub(1))
                         .find(|&j| chars[j] == ':' && chars[j + 1] == ']')
                     {
+                        let name: String = chars[i + 2..end].iter().collect();
+                        let name = name.strip_prefix('^').unwrap_or(&name);
+                        if name.chars().all(|c| c.is_ascii_lowercase())
+                            && !POSIX_CLASSES.contains(&name)
+                        {
+                            return Err(format!("[:{name}:] is not an RE2 character class"));
+                        }
                         out.extend(&chars[i..end + 2]);
                         i = end + 2;
                         continue;
@@ -759,6 +786,31 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
                 if after.starts_with('>') {
                     return Err("atomic groups are not RE2".into());
                 }
+                if after.starts_with('<') || after == "P<" {
+                    // A named group: RE2 takes `[A-Za-z0-9_]+`, once each; the
+                    // `regex` crate wants a letter or `_` first, so it gets `n_`.
+                    let start = i + if after.starts_with('<') { 3 } else { 4 };
+                    let close = (start..chars.len()).find(|&j| chars[j] == '>');
+                    let name: String =
+                        close.map_or(String::new(), |c| chars[start..c].iter().collect());
+                    if name.is_empty()
+                        || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                    {
+                        return Err(format!("invalid capture group name `{name}`"));
+                    }
+                    if names.contains(&name) {
+                        return Err(format!("duplicate capture group name `{name}`"));
+                    }
+                    out.push_str(&format!("(?P<n_{name}>"));
+                    names.push(name);
+                    depth += 1;
+                    if depth > RE2_MAX_DEPTH {
+                        return Err(format!("nesting deeper than {RE2_MAX_DEPTH}"));
+                    }
+                    i = close.map_or(chars.len(), |c| c + 1);
+                    repeated = false;
+                    continue;
+                }
                 // Flags: `(?i)`, `(?i-s:`; names and groups pass through.
                 let mut j = i + 2;
                 while j < chars.len() && (chars[j].is_ascii_alphabetic() || chars[j] == '-') {
@@ -773,6 +825,28 @@ fn re2_rewrite(pattern: &str) -> Result<String, String> {
                 {
                     return Err(format!("invalid named capture or flag: {bad}"));
                 }
+                if chars.get(j) == Some(&')') {
+                    // `(?i)`: flags from here on, not a group.
+                    out.extend(&chars[i..=j]);
+                    i = j + 1;
+                    repeated = false;
+                    continue;
+                }
+                depth += 1;
+                if depth > RE2_MAX_DEPTH {
+                    return Err(format!("nesting deeper than {RE2_MAX_DEPTH}"));
+                }
+                out.push(c);
+            }
+            '(' => {
+                depth += 1;
+                if depth > RE2_MAX_DEPTH {
+                    return Err(format!("nesting deeper than {RE2_MAX_DEPTH}"));
+                }
+                out.push(c);
+            }
+            ')' => {
+                depth = depth.saturating_sub(1);
                 out.push(c);
             }
             _ => out.push(c),
@@ -1005,12 +1079,8 @@ impl<'a> Parser<'a> {
 
     fn parse(mut self) -> Checked {
         if let Err(err) = self.top() {
-            self.diag(
-                codes::EXABEAM_PARSE_ERROR,
-                err.message,
-                err.pos,
-                err.pos + 1,
-            );
+            // One character from the error, never part of one (`diag`).
+            self.diag(codes::EXABEAM_PARSE_ERROR, err.message, err.pos, err.pos);
         }
         self.check_context_tables();
         self.out.context_tables = self.context_tables.clone();
@@ -1851,19 +1921,26 @@ impl<'a> Parser<'a> {
     fn check_fields(&mut self) {
         let catalog = Catalog::cached();
         let uses = std::mem::take(&mut self.fields);
+        // Where each `AS` name is first defined, and each unknown name's
+        // suggestion, computed once per name: a long query repeats them.
+        let mut first_alias: HashMap<String, usize> = HashMap::new();
+        for (alias, at) in &self.aliases {
+            let at_min = first_alias.entry(alias.to_lowercase()).or_insert(*at);
+            *at_min = (*at_min).min(*at);
+        }
+        let mut verdicts: HashMap<String, Option<Option<String>>> = HashMap::new();
         for f in uses {
-            if catalog.knows(&f.name) {
-                continue;
-            }
             let lower = f.name.to_lowercase();
-            if self
-                .aliases
-                .iter()
-                .any(|(alias, at)| *at < f.start && alias.to_lowercase() == lower)
-            {
+            if first_alias.get(&lower).is_some_and(|at| *at < f.start) {
                 continue;
             }
-            let message = match catalog.suggest(&f.name) {
+            let verdict = verdicts.entry(lower).or_insert_with(|| {
+                (!catalog.knows(&f.name)).then(|| catalog.suggest(&f.name).map(str::to_string))
+            });
+            let Some(suggestion) = verdict.clone() else {
+                continue;
+            };
+            let message = match suggestion {
                 Some(near) => format!(
                     "`{}` is not a field of Exabeam's Common Information Model; did you mean `{near}`? A tenant's parsers may still define it",
                     f.name
@@ -1999,7 +2076,11 @@ impl<'a> Parser<'a> {
             }
         }
         if self.in_foreach > 0 && seen.iter().any(|w| matches!(*w, "GROUP-BY" | "ORDER-BY")) {
-            let at = self.pos.saturating_sub(1);
+            // The character before the cursor, whole (a `]` or a multi-byte one).
+            let at = self.text[..self.pos]
+                .char_indices()
+                .last()
+                .map_or(0, |(i, _)| i);
             self.diag(
                 codes::EXABEAM_FOREACH_CLAUSE,
                 "a FOREACH sub-query has no GROUP-BY or ORDER-BY",
@@ -2016,8 +2097,9 @@ impl<'a> Parser<'a> {
                     e,
                 );
             }
+            let grouped: HashSet<String> = group_by.iter().map(|g| g.to_lowercase()).collect();
             for (column, aggregated, s, e) in select_items.clone() {
-                if !aggregated && !group_by.iter().any(|g| g.eq_ignore_ascii_case(column)) {
+                if !aggregated && !grouped.contains(&column.to_lowercase()) {
                     self.diag(
                         codes::EXABEAM_GROUP_BY_COLUMN,
                         format!("{column} is selected but neither grouped nor aggregated"),
@@ -2459,6 +2541,13 @@ mod unit {
             "a$?",
             "^*a",
             r"\b+",
+            r"\0",
+            r"\012",
+            r"\12",
+            r"[\01]",
+            "[[:^alpha:]]",
+            "(?P<1a>x)",
+            "(?i:(a))",
         ] {
             assert!(re2_refusal(ok).is_none(), "{ok}: {:?}", re2_refusal(ok));
         }
@@ -2470,6 +2559,14 @@ mod unit {
             "(?P=n)",
             "(?#note)a",
             "a\\\u{a0}b",
+            r"\1",
+            r"\18",
+            r"\8",
+            r"[\1]",
+            "[[:foo:]]",
+            "(?P<a.b>x)",
+            "(?<n>a)(?<n>b)",
+            r"[\Q]\E]",
         ] {
             assert!(re2_refusal(bad).is_some(), "{bad}");
         }

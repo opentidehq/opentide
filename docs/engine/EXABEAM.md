@@ -28,7 +28,7 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 | Suite | Queries | Agreement | Harness |
 |-------|---------|-----------|---------|
 | The spec's fixtures (`testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree-sitter highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
-| The reference checker's recorded verdicts (`reference.json`): the fixtures above, `testdata/conformance/external/exabeam/` and 228 probes (`probes.tsv`) | 305 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
+| The reference checker's recorded verdicts (`reference.json`): the fixtures above, `testdata/conformance/external/exabeam/` and 254 probes (`probes.tsv`) | 331 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
 | Tree-sitter highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
 | Queries written for opentide (`testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
 | The block checker's recorded verdicts: 51 block cases written for opentide and the spec's 8 object fixtures | 59 | every error, code and field path, identical, but for the block without `status` (below) | `crates/opentide-tide/tests/exabeam_spec.rs` |
@@ -64,8 +64,8 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 
 `RGX`, `RGXi` and `RGX_EXTRACT` patterns are RE2 (exabeam-1.0). The pattern is the string's value (`\"`, `\'`, `` \` `` and `\\` lose their backslash). The engine refuses, in this order:
 
-1. a back-reference (an odd run of backslashes before `1`–`9`), as the reference checker does;
-2. RE2's own rules where the `regex` crate's syntax differs, outside character classes only (`[a?+]` and `[(?=]` are sets of literals): look-around (`(?=`, `(?!`, `(?<=`, `(?<!`), an atomic group (`(?>`) and a possessive quantifier (`*+`, `}+`) are errors; a repetition of a repetition (`.**`, `a{2}{3}`) and a count above 1,000 are errors; `\p{…}` and `\x{…}` keep their braces; a `{` that does not open `{n}`, `{n,}` or `{n,m}`, and `]` or `}` outside a class, are literals; a backslash before any ASCII character other than a letter, digit or `_` escapes it (`\ `), but not before a non-ASCII one; `\Q…\E` quotes; `[` inside a class is a literal (no nested classes or `&&`); flags are `i`, `m`, `s` and `U`;
+1. a back-reference: `\1`–`\9` unless `\1`–`\7` opens an octal escape (`\12`), as in RE2, where `\0` and up to three octal digits are a character;
+2. RE2's own rules where the `regex` crate's syntax differs, outside character classes only (`[a?+]` and `[(?=]` are sets of literals): look-around (`(?=`, `(?!`, `(?<=`, `(?<!`), an atomic group (`(?>`) and a possessive quantifier (`*+`, `}+`) are errors; a repetition of a repetition (`.**`, `a{2}{3}`) and a count above 1,000 are errors; `\p{…}` and `\x{…}` keep their braces; `\Q` inside a class, an ASCII class other than RE2's fourteen (`[[:foo:]]`), a capture name other than `[A-Za-z0-9_]+` or a repeated one, and groups nested deeper than 1,000 are errors; a `{` that does not open `{n}`, `{n,}` or `{n,m}`, and `]` or `}` outside a class, are literals; a backslash before any ASCII character other than a letter, digit or `_` escapes it (`\ `), but not before a non-ASCII one; `\Q…\E` quotes; `[` inside a class is a literal (no nested classes or `&&`); flags are `i`, `m`, `s` and `U`;
 3. the `regex` crate's syntax parser (`regex-syntax`, already in the lock as `regex`'s parser) on the result.
 
 The reference checker approximates RE2 with Python's `re`, refusing and rewriting the syntax the two read differently (`\Z`, `\pL`, `\z`, `\x{…}`, `\Q…\E`, `(?<n>…)`, the `U` flag, counts above 1,000, `$?`, an escaped non-ASCII character), so the two agree on every probe.
@@ -86,6 +86,9 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 
 | Where | Reference | Engine | Why |
 |-------|-----------|--------|-----|
+| RE2's program-size limit (`(a{100}){100}`), `[a--b]`, a leading-zero count (`a{01}`) | as Python's `re` reads them | as the `regex` crate reads them | rare; neither is RE2's own parser |
+| tree-sitter highlighting (editors only) of a Unicode space other than U+0020, a lone `AS` or `LIMIT`, a `WHERE` inside a filter, an IPv6-looking word that is not an address | — | the grammar's tokens; the verdict parser's semantic tokens are the reference's | highlighting only, never a diagnostic |
+| a bad threshold or outcome value in the editor | — | `vocab_unknown` from the Tide catalogue and the `exabeam_*` code, as on Bitdefender blocks | the opentide CLI reports the `exabeam_*` code only |
 | `exabeam_group_by_column`, `exabeam_group_by_select_star` ranges | from the start of the query to the end of the statement | the column, or the `*` | a usable range; the codes are the same |
 | unknown fields, numbers on string fields | not reported (no catalogue) | the catalogue warnings | exabeam-1.0 "Field catalogue" |
 | messages of `exabeam_unknown_function` and `exabeam_not_equal` | a generic hint | the Exabeam form of `contains`, `startswith`, `endswith`, `cidr`, `exists` and `!=` | exabeam-1.0 asks for it |

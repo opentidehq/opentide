@@ -55,83 +55,36 @@
   {
     "type": "and_expression",
     "named": true,
-    "fields": {
-      "left": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "and_expression",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "context_term",
-            "named": true
-          },
-          {
-            "type": "field_term",
-            "named": true
-          },
-          {
-            "type": "free_text",
-            "named": true
-          },
-          {
-            "type": "group",
-            "named": true
-          },
-          {
-            "type": "not_expression",
-            "named": true
-          },
-          {
-            "type": "or_expression",
-            "named": true
-          }
-        ]
-      },
-      "right": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "and_expression",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "context_term",
-            "named": true
-          },
-          {
-            "type": "field_term",
-            "named": true
-          },
-          {
-            "type": "free_text",
-            "named": true
-          },
-          {
-            "type": "group",
-            "named": true
-          },
-          {
-            "type": "not_expression",
-            "named": true
-          },
-          {
-            "type": "or_expression",
-            "named": true
-          }
-        ]
-      }
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "call",
+          "named": true
+        },
+        {
+          "type": "context_term",
+          "named": true
+        },
+        {
+          "type": "field_term",
+          "named": true
+        },
+        {
+          "type": "free_text",
+          "named": true
+        },
+        {
+          "type": "group",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -598,10 +551,6 @@
         "required": true,
         "types": [
           {
-            "type": "and_expression",
-            "named": true
-          },
-          {
             "type": "call",
             "named": true
           },
@@ -623,10 +572,6 @@
           },
           {
             "type": "not_expression",
-            "named": true
-          },
-          {
-            "type": "or_expression",
             "named": true
           }
         ]
@@ -636,83 +581,40 @@
   {
     "type": "or_expression",
     "named": true,
-    "fields": {
-      "left": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "and_expression",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "context_term",
-            "named": true
-          },
-          {
-            "type": "field_term",
-            "named": true
-          },
-          {
-            "type": "free_text",
-            "named": true
-          },
-          {
-            "type": "group",
-            "named": true
-          },
-          {
-            "type": "not_expression",
-            "named": true
-          },
-          {
-            "type": "or_expression",
-            "named": true
-          }
-        ]
-      },
-      "right": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "and_expression",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "context_term",
-            "named": true
-          },
-          {
-            "type": "field_term",
-            "named": true
-          },
-          {
-            "type": "free_text",
-            "named": true
-          },
-          {
-            "type": "group",
-            "named": true
-          },
-          {
-            "type": "not_expression",
-            "named": true
-          },
-          {
-            "type": "or_expression",
-            "named": true
-          }
-        ]
-      }
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "call",
+          "named": true
+        },
+        {
+          "type": "context_term",
+          "named": true
+        },
+        {
+          "type": "field_term",
+          "named": true
+        },
+        {
+          "type": "free_text",
+          "named": true
+        },
+        {
+          "type": "group",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        }
+      ]
     }
   },
   {

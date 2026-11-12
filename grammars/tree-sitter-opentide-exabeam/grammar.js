@@ -125,20 +125,20 @@ module.exports = grammar({
 
     filter: ($) => $._expression,
 
-    _expression: ($) =>
-      choice($.or_expression, $.and_expression, $.not_expression, $._primary),
+    // Flat, not left-recursive: a long run of terms is one node with many
+    // children, so highlighting stays linear (`a AND b AND c …`).
+    _expression: ($) => choice($.or_expression, $._and_operand),
 
-    or_expression: ($) =>
-      prec.left(1, seq(field("left", $._expression), kw("OR"), field("right", $._expression))),
+    or_expression: ($) => seq($._and_operand, repeat1(seq(kw("OR"), $._and_operand))),
+
+    _and_operand: ($) => choice($.and_expression, $._unary),
 
     // `AND`, or two terms side by side.
-    and_expression: ($) =>
-      prec.left(
-        2,
-        seq(field("left", $._expression), optional(kw("AND")), field("right", $._expression)),
-      ),
+    and_expression: ($) => prec.left(seq($._unary, repeat1(seq(optional(kw("AND")), $._unary)))),
 
-    not_expression: ($) => prec(3, seq(kw("NOT"), field("operand", $._expression))),
+    _unary: ($) => choice($.not_expression, $._primary),
+
+    not_expression: ($) => seq(kw("NOT"), field("operand", $._unary)),
 
     _primary: ($) =>
       choice(

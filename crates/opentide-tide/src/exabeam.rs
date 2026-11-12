@@ -698,7 +698,7 @@ pub(crate) fn constraint_diagnostics(
     {
         let lower = name.to_lowercase();
         let other = workspace.iter().find(|o| {
-            o.path != path
+            !crate::same_file(&o.path, path)
                 && o.object_type == "rule"
                 && o.body
                     .get("configurations")

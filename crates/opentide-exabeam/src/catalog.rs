@@ -110,6 +110,8 @@ pub struct Catalog {
     pub activity_types: Vec<ActivityType>,
     pub outcomes: Vec<String>,
     by_name: HashMap<String, usize>,
+    /// Each field's name in lower case, as characters, for [`Catalog::suggest`].
+    lower_chars: Vec<Vec<char>>,
 }
 
 impl Catalog {
@@ -126,7 +128,13 @@ impl Catalog {
                 .enumerate()
                 .map(|(i, f)| (f.name.to_lowercase(), i))
                 .collect();
+            let lower_chars = fields
+                .fields
+                .iter()
+                .map(|f| f.name.to_lowercase().chars().collect())
+                .collect();
             Catalog {
+                lower_chars,
                 fields: fields.fields,
                 prefixes: fields.prefixes,
                 subjects: values.subjects,
@@ -163,14 +171,20 @@ impl Catalog {
     }
 
     /// A known field one edit (two for names of 12 characters or more) from
-    /// `name`, for the warning's message.
+    /// `name`, for the warning's message; none for a name under 3 characters.
     pub fn suggest(&self, name: &str) -> Option<&str> {
         let lower = name.to_lowercase();
-        let limit = if lower.chars().count() >= 12 { 2 } else { 1 };
+        // One or two letters are a field name of nearly anything: no hint.
+        if lower.chars().count() < 3 {
+            return None;
+        }
+        let chars: Vec<char> = lower.chars().collect();
+        let limit = if chars.len() >= 12 { 2 } else { 1 };
         self.fields
             .iter()
-            .filter_map(|f| {
-                let d = edit_distance(&lower, &f.name.to_lowercase(), limit)?;
+            .zip(&self.lower_chars)
+            .filter_map(|(f, candidate)| {
+                let d = edit_distance(&chars, candidate, limit)?;
                 Some((d, f.name.as_str()))
             })
             .min_by_key(|(d, _)| *d)
@@ -192,9 +206,7 @@ impl Catalog {
 
 /// Levenshtein distance between `a` and `b`, or `None` when it exceeds
 /// `limit`.
-fn edit_distance(a: &str, b: &str, limit: usize) -> Option<usize> {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
+fn edit_distance(a: &[char], b: &[char], limit: usize) -> Option<usize> {
     if a.len().abs_diff(b.len()) > limit {
         return None;
     }

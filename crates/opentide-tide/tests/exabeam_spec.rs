@@ -6,9 +6,9 @@
 //! `testdata/conformance/exabeam/blocks/` and the spec's fixtures under
 //! `objects/`. Every error, code and field path, must be the reference's.
 //!
-//! The Tide catalogue does not model `configurations.exabeam` until it is
-//! regenerated from an opentide with the Exabeam models, so its
-//! `schema_validation` on the block is left out here.
+//! Unknown keys are the Tide catalogue's (`schema_validation`), never a
+//! constraint code, so the reference's `unknown_field` is left out here; a
+//! test below holds the catalogue to reporting them.
 
 use opentide_core::{Diagnostic, Severity, codes};
 use opentide_tide::{AnalyzeInput, IndexedObject, analyze, index_object};
@@ -256,6 +256,10 @@ fn a_name_another_enabled_block_resolves_to_is_a_duplicate() {
     let me = index_object("objects/rules/mine.yaml", &mine).unwrap();
     let d = diagnostics("objects/rules/mine.yaml", &mine, &[me]);
     assert!(!d.iter().any(|d| d.code == codes::EXABEAM_NAME_DUPLICATE));
+    // ... nor when the index spells the path with other separators (Windows).
+    let me = index_object("C:\\w\\objects\\rules\\mine.yaml", &mine).unwrap();
+    let d = diagnostics("c:\\w\\objects/rules/mine.yaml", &mine, &[me]);
+    assert!(!d.iter().any(|d| d.code == codes::EXABEAM_NAME_DUPLICATE));
 }
 
 #[test]
@@ -332,4 +336,19 @@ fn nested_unknown_keys_are_unknown_keys_at_their_path() {
             "{file}: {d:?}"
         );
     }
+}
+
+#[test]
+fn merge_keys_are_resolved_before_the_block_checks() {
+    // opentide's loader resolves `<<: *anchor`; so do the block checks.
+    let text = rule(
+        "Merged",
+        "00000000-0000-4000-8003-000000000204",
+        "    sequences:\n      - query: 'activity_type:\"app-login\"'\n        threshold:\n          <<: &base {function: count, operator: more_than, value: 3}\n          within: 1h\n",
+    );
+    let d = diagnostics("objects/rules/merged.yaml", &text, &[]);
+    assert!(
+        !d.iter().any(|d| d.code.starts_with("exabeam_threshold")),
+        "{d:?}"
+    );
 }

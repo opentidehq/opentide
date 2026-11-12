@@ -17377,6 +17377,1092 @@
      "string"
     ]
    ]
+  },
+  {
+   "name": "probes.tsv:233",
+   "profile": "rule",
+   "text": "user:\"a\" é",
+   "diagnostics": [
+    [
+     "exabeam_free_text_special",
+     9,
+     11
+    ],
+    [
+     "exabeam_implicit_and",
+     9,
+     11
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ],
+    [
+     5,
+     8,
+     "string"
+    ],
+    [
+     9,
+     11,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:234",
+   "profile": "rule",
+   "text": "user:\"é",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     5,
+     6
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     4,
+     "property"
+    ],
+    [
+     4,
+     5,
+     "operator"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:235",
+   "profile": "search",
+   "text": "vendor:\"a\" | FOREACH h [ SELECT u WHERE x:\"é\" GROUP-BY é ]",
+   "diagnostics": [
+    [
+     "exabeam_parse_error",
+     56,
+     58
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     12,
+     "operator.pipe"
+    ],
+    [
+     13,
+     20,
+     "keyword"
+    ],
+    [
+     21,
+     22,
+     "property"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ],
+    [
+     25,
+     31,
+     "keyword"
+    ],
+    [
+     32,
+     33,
+     "property"
+    ],
+    [
+     34,
+     39,
+     "keyword"
+    ],
+    [
+     40,
+     41,
+     "property"
+    ],
+    [
+     41,
+     42,
+     "operator"
+    ],
+    [
+     42,
+     46,
+     "string"
+    ],
+    [
+     47,
+     55,
+     "keyword"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:236",
+   "profile": "rule",
+   "text": "vendor:\"a\" AND (é",
+   "diagnostics": [
+    [
+     "exabeam_free_text_special",
+     16,
+     18
+    ],
+    [
+     "exabeam_parse_error",
+     18,
+     19
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     6,
+     "property"
+    ],
+    [
+     6,
+     7,
+     "operator"
+    ],
+    [
+     7,
+     10,
+     "string"
+    ],
+    [
+     11,
+     14,
+     "keyword"
+    ],
+    [
+     15,
+     16,
+     "punctuation.bracket"
+    ],
+    [
+     16,
+     18,
+     "string"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:237",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\0\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     21,
+     "string"
+    ],
+    [
+     21,
+     22,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:238",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\012\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     23,
+     "string"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:239",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\12\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     22,
+     "string"
+    ],
+    [
+     22,
+     23,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:240",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\1\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     21
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     21,
+     "string"
+    ],
+    [
+     21,
+     22,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:241",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\18\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     22
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     22,
+     "string"
+    ],
+    [
+     22,
+     23,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:242",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\8\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     21
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     21,
+     "string"
+    ],
+    [
+     21,
+     22,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:243",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[\\1]\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     23
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     23,
+     "string"
+    ],
+    [
+     23,
+     24,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:244",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[\\01]\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:245",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[[:foo:]]\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     28
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     28,
+     "string"
+    ],
+    [
+     28,
+     29,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:246",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[[:^alpha:]]\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     31,
+     "string"
+    ],
+    [
+     31,
+     32,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:247",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?P<a.b>x)\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     29
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     29,
+     "string"
+    ],
+    [
+     29,
+     30,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:248",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?P<1a>x)\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     28,
+     "string"
+    ],
+    [
+     28,
+     29,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:249",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?<n>a)(?<n>b)\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     33
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     33,
+     "string"
+    ],
+    [
+     33,
+     34,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:250",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[\\Q]\\E]\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     26
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     26,
+     "string"
+    ],
+    [
+     26,
+     27,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:251",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(?i:(a))\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     27,
+     "string"
+    ],
+    [
+     27,
+     28,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:252",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     2018,
+     "string"
+    ],
+    [
+     2018,
+     2019,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:253",
+   "profile": "rule",
+   "text": "process_name:RGX(\"(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))\")",
+   "diagnostics": [
+    [
+     "exabeam_regex",
+     17,
+     2022
+    ]
+   ],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     2022,
+     "string"
+    ],
+    [
+     2022,
+     2023,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:254",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\p{L}+\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     25,
+     "string"
+    ],
+    [
+     25,
+     26,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:255",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\x{41}{2}\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     28,
+     "string"
+    ],
+    [
+     28,
+     29,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:256",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\x{41}*\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     26,
+     "string"
+    ],
+    [
+     26,
+     27,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:257",
+   "profile": "rule",
+   "text": "process_name:RGX(\"\\x{202E}\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     27,
+     "string"
+    ],
+    [
+     27,
+     28,
+     "punctuation.bracket"
+    ]
+   ]
+  },
+  {
+   "name": "probes.tsv:258",
+   "profile": "rule",
+   "text": "process_name:RGX(\"[^?+]\")",
+   "diagnostics": [],
+   "tokens": [
+    [
+     0,
+     12,
+     "property"
+    ],
+    [
+     12,
+     13,
+     "operator"
+    ],
+    [
+     13,
+     16,
+     "function.builtin"
+    ],
+    [
+     16,
+     17,
+     "punctuation.bracket"
+    ],
+    [
+     17,
+     24,
+     "string"
+    ],
+    [
+     24,
+     25,
+     "punctuation.bracket"
+    ]
+   ]
   }
  ],
  "blocks": [

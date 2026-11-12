@@ -883,12 +883,17 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         ));
     }
 
-    if let Some(block) = object
+    // The block as opentide loads it: `<<` merge keys resolved.
+    if object
         .configurations
         .as_ref()
         .and_then(|c| c.get("exabeam"))
-        .filter(|b| b.is_mapping())
-        && let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(input.source)
+        .is_some_and(|b| b.is_mapping())
+        && let Some(rule) = merged_yaml(input.source)
+        && let Some(block) = rule
+            .get("configurations")
+            .and_then(|c| c.get("exabeam"))
+            .filter(|b| b.is_mapping())
     {
         diagnostics.extend(exabeam::constraint_diagnostics(
             input.source,
