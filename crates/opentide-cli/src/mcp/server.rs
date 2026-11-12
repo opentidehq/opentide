@@ -1,5 +1,5 @@
-//! The rmcp [`ServerHandler`]: the handshake, the lists, and each call routed
-//! to its Rust implementation or to the [`Delegate`].
+//! The rmcp [`ServerHandler`]: the handshake, the lists, and each call
+//! routed to its tool or resource.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use super::{Delegate, NATIVE_TOOLS, tools};
+use super::{resources, tools};
 use crate::env::Env;
 
 /// What the Python server says of itself (`scripts/build/mcp_manifest.py`).
@@ -64,25 +64,38 @@ pub struct Server {
     env: Env,
     cwd: Option<PathBuf>,
     repo: Option<String>,
-    delegate: Option<&'static dyn Delegate>,
+    version: String,
+    workspace_problem: Option<String>,
 }
 
 impl Server {
     /// A server for the workspace `env`, `cwd` and `repo` (`--repo`) place,
-    /// answering for the package `version`, with the host's `delegate`.
+    /// answering for the package `version`; `workspace_problem` is why there
+    /// is no workspace to serve (an Agent Plugin launch that found none).
     pub fn new(
         env: Env,
         cwd: Option<PathBuf>,
         repo: Option<String>,
         version: &str,
-        delegate: Option<&'static dyn Delegate>,
+        workspace_problem: Option<String>,
     ) -> Server {
         Server {
             manifest: Manifest::load(version),
             env,
             cwd,
             repo,
-            delegate,
+            version: version.to_owned(),
+            workspace_problem,
+        }
+    }
+
+    fn context(&self) -> tools::Context<'_> {
+        tools::Context {
+            env: &self.env,
+            cwd: self.cwd.as_deref(),
+            repo: self.repo.as_deref(),
+            version: &self.version,
+            workspace_problem: self.workspace_problem.clone(),
         }
     }
 
@@ -109,77 +122,22 @@ impl Server {
 
     /// The answer to `tools/call`, as the Python server gives it.
     pub fn call(&self, name: &str, arguments: &serde_json::Map<String, Value>) -> Answer {
-        if NATIVE_TOOLS.contains(&name) {
-            let context = tools::Context {
-                env: &self.env,
-                cwd: self.cwd.as_deref(),
-                repo: self.repo.as_deref(),
-                workspace_problem: self.delegate.and_then(Delegate::workspace_problem),
-            };
-            return Answer::Result(tools::call(name, arguments, &context));
-        }
-        let Some(delegate) = self.delegate else {
-            return Answer::Result(tools::error_result(&undelegated(&format!("tool {name}"))));
-        };
-        let arguments = Value::Object(arguments.clone()).to_string();
-        delegated(delegate.call_tool(name, &arguments))
+        Answer::Result(tools::call(name, arguments, &self.context()))
     }
 
     /// The answer to `resources/read`, as the Python server gives it.
     pub fn read(&self, uri: &str) -> Answer {
-        let Some(delegate) = self.delegate else {
-            return Answer::Error(json!({
-                "code": ErrorCode::INTERNAL_ERROR.0,
-                "message": undelegated(&format!("resource {uri}")),
-            }));
-        };
-        delegated(delegate.read_resource(uri))
+        resources::read(uri, &self.context())
     }
 }
 
-/// A delegated answer: the JSON-RPC `result` or `error`.
+/// An answer: the JSON-RPC `result` or `error`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Answer {
     /// The `result`.
     Result(Value),
     /// The `error`: `{code, message, data}`.
     Error(Value),
-}
-
-fn undelegated(what: &str) -> String {
-    format!(
-        "engine_not_ported: the {what} is answered by the Python package's MCP server, \
-         which this process does not host; run `opentide mcp start` from the opentide package"
-    )
-}
-
-/// The delegate's answer read; the keys only a 2026-07-28 response carries
-/// (`resultType`, `ttlMs`, `cacheScope`) dropped, as the Python server's
-/// request loop drops them for a client that negotiated `initialize`.
-fn delegated(answer: Result<String, String>) -> Answer {
-    let parsed = answer.and_then(|text| {
-        serde_json::from_str::<Value>(&text).map_err(|error| format!("unreadable answer: {error}"))
-    });
-    match parsed {
-        Ok(Value::Object(mut answer)) => {
-            if let Some(Value::Object(mut result)) = answer.remove("result") {
-                for key in ["resultType", "ttlMs", "cacheScope"] {
-                    result.remove(key);
-                }
-                return Answer::Result(Value::Object(result));
-            }
-            match answer.remove("error") {
-                Some(error) => Answer::Error(error),
-                None => Answer::Error(internal("the answer has neither result nor error")),
-            }
-        }
-        Ok(_) => Answer::Error(internal("the answer is not an object")),
-        Err(problem) => Answer::Error(internal(&problem)),
-    }
-}
-
-fn internal(message: &str) -> Value {
-    json!({"code": ErrorCode::INTERNAL_ERROR.0, "message": message})
 }
 
 fn error_data(error: &Value) -> ErrorData {
@@ -293,90 +251,33 @@ mod tests {
             .iter()
             .map(|tool| tool.name.as_ref())
             .collect();
-        for name in NATIVE_TOOLS
-            .iter()
-            .chain(super::super::DELEGATED_TOOLS.iter().map(|(name, _)| name))
-        {
-            assert!(names.contains(name), "{name} is not in the manifest");
-        }
         assert_eq!(
-            names.len(),
-            NATIVE_TOOLS.len() + super::super::DELEGATED_TOOLS.len(),
-            "every tool is native or delegated: {names:?}"
+            names,
+            super::super::TOOLS,
+            "every tool of the manifest is answered"
         );
         assert!(!manifest.resources.resources.is_empty());
         assert!(!manifest.templates.resource_templates.is_empty());
     }
 
     #[test]
-    fn a_delegated_answer_drops_what_only_a_stateless_client_reads() {
-        let answer = delegated(Ok(json!({"result": {
-            "content": [], "isError": true, "resultType": "complete",
-            "ttlMs": 0, "cacheScope": "private",
-        }})
-        .to_string()));
-        assert_eq!(
-            answer,
-            Answer::Result(json!({"content": [], "isError": true}))
-        );
-    }
-
-    #[test]
-    fn a_delegated_error_keeps_its_code_and_data() {
-        let answer = delegated(Ok(json!({"error": {
-            "code": -32602, "message": "Unknown resource: x", "data": {"uri": "x"},
-        }})
-        .to_string()));
-        let Answer::Error(error) = answer else {
-            panic!("not an error: {answer:?}");
-        };
+    fn an_error_keeps_its_code_and_data() {
+        let error = json!({"code": -32602, "message": "Unknown resource: x", "data": {"uri": "x"}});
         let data = error_data(&error);
         assert_eq!(data.code, ErrorCode::INVALID_PARAMS);
         assert_eq!(data.message, "Unknown resource: x");
         assert_eq!(data.data, Some(json!({"uri": "x"})));
+        assert_eq!(error_data(&json!({})).code, ErrorCode::INTERNAL_ERROR);
     }
 
     #[test]
-    fn an_unreadable_answer_is_an_internal_error() {
-        for answer in [
-            Ok("not json".to_owned()),
-            Ok("[]".to_owned()),
-            Err("gone".to_owned()),
-        ] {
-            let Answer::Error(error) = delegated(answer) else {
-                panic!("not an error");
-            };
-            assert_eq!(error["code"], ErrorCode::INTERNAL_ERROR.0);
-        }
-    }
-
-    /// A host with no workspace to serve.
-    struct NoWorkspace;
-
-    impl Delegate for NoWorkspace {
-        fn start(&self, _environment: &[(String, String)]) -> Result<(), String> {
-            Ok(())
-        }
-        fn workspace_problem(&self) -> Option<String> {
-            Some("workspace_not_found: nothing here".into())
-        }
-        fn call_tool(&self, _name: &str, _arguments: &str) -> Result<String, String> {
-            Err("not delegated in this test".into())
-        }
-        fn read_resource(&self, _uri: &str) -> Result<String, String> {
-            Err("not delegated in this test".into())
-        }
-    }
-
-    #[test]
-    fn a_native_tool_hears_the_hosts_workspace_problem() {
-        let host: &'static dyn Delegate = Box::leak(Box::new(NoWorkspace));
+    fn a_catalogue_tool_hears_the_launchs_workspace_problem() {
         let server = Server::new(
             Env::from_pairs::<&str, &str>([]),
             None,
             None,
             "1",
-            Some(host),
+            Some("workspace_not_found: nothing here".into()),
         );
         let arguments = serde_json::from_value(json!({"queries": "loud"})).unwrap();
         let Answer::Result(result) = server.call("validation_report", &arguments) else {
@@ -387,21 +288,12 @@ mod tests {
             result["content"][0]["text"],
             "Error executing tool validation_report: workspace_not_found: nothing here"
         );
-    }
-
-    #[test]
-    fn without_a_delegate_a_delegated_tool_says_why() {
-        let server = Server::new(Env::from_pairs::<&str, &str>([]), None, None, "1", None);
-        let Answer::Result(result) = server.call("search", &serde_json::Map::new()) else {
-            panic!("not a result");
+        let Answer::Error(error) = server.read("opentide://index") else {
+            panic!("a resource without a workspace is an error");
         };
-        assert_eq!(result["isError"], true);
-        assert!(
-            result["content"][0]["text"]
-                .as_str()
-                .is_some_and(|text| text.starts_with("engine_not_ported")),
-            "{result}"
-        );
-        assert!(matches!(server.read("opentide://index"), Answer::Error(_)));
+        assert_eq!(error["message"], "Error reading resource opentide://index");
+        let Answer::Result(_) = server.read("opentide://vocabularies") else {
+            panic!("a bundled resource needs no workspace");
+        };
     }
 }

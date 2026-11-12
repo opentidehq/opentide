@@ -12,7 +12,8 @@ The rollout of a command's Rust implementation, one command at a time:
 A command flips only when it is in :data:`opentide.cli.engines.RUST_COMMANDS`
 (the CLI), or, for the SDK and MCP surfaces that return its result
 (``run_validation``, ``validation_report``), when the library has its Rust
-implementation. No command has flipped yet.
+implementation. ``mcp start`` flipped with UC-6.0c (#841): the Rust server
+answers every tool and resource.
 
 Standard library only, and no imports at all: the root callback reads it on
 every run.
@@ -29,7 +30,7 @@ RUST = "rust"
 
 #: A command path's default engine when ``OPENTIDE_ENGINE`` is unset or blank;
 #: a path that is not here runs Python. Only ``python`` or ``rust``.
-DEFAULT_ENGINES: dict[tuple[str, ...], str] = {}
+DEFAULT_ENGINES: dict[tuple[str, ...], str] = {("mcp", "start"): RUST}
 
 
 def default_engine(words: tuple[str, ...]) -> str:

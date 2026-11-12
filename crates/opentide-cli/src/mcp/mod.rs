@@ -1,33 +1,37 @@
-//! `opentide mcp start` (UC-3.7, #829): the MCP server on rmcp, the official
-//! Rust MCP SDK, over stdio.
+//! `opentide mcp start` (UC-3.7, #829; UC-6.0c, #841): the MCP server on
+//! rmcp, the official Rust MCP SDK, over stdio.
 //!
 //! What the server says of itself (its name, instructions, capabilities, the
 //! protocol version it falls back to, every tool's description and schemas,
 //! every resource and template) is the Python server's
 //! (`src/opentide/mcp_server/server.py`), as `scripts/build/mcp_manifest.py`
-//! writes it to `data/mcp/manifest.json`: MCP shapes are a plan §3 invariant,
-//! and the Python server stays the oracle until it is deleted.
+//! wrote it to `data/mcp/manifest.json`: MCP shapes are a plan §3 invariant.
 //!
-//! Tools run in this process. Those in [`NATIVE_TOOLS`] run here, on the
-//! workspace crates; the others, and every resource, are answered by the
-//! Python server's own handlers through the [`Delegate`] the host installs
-//! (`opentide._native` installs `opentide.mcp_server.bridge`), until their
-//! Rust implementation exists: search, coverage, get_chaining, the resources
-//! and the SDK registry objects are UC-5.2's (#837), the tools that reach a
-//! tenant UC-4.x's. Without a delegate (the standalone binary), a delegated
-//! tool or resource answers with an error that says so.
+//! Every tool ([`TOOLS`]) and every resource runs here, on the workspace
+//! crates, and answers as the Python server's handlers do
+//! (`tests/golden/mcp/`, `cargo xtask mcp replay`): no Python is needed.
+//! The tools that reach a tenant (`validate_query` and `run_query` with
+//! `live`, `deploy_rule` without `dry_run`) run the command line's own
+//! commands in this process.
 //!
 //! stdout carries JSON-RPC alone: the server writes its frames to a duplicate
 //! of descriptor 1, and descriptor 1 itself points at stderr while it serves
-//! (Unix), so nothing else in the process (a log line, the Python half, a
-//! child process) can corrupt a frame. Logging is the run's: WARNING and above
-//! on stderr, everything with `--debug`.
+//! (Unix), so nothing else in the process (a log line, a child process) can
+//! corrupt a frame. Logging is the run's: WARNING and above on stderr,
+//! everything with `--debug`.
 
+mod args;
+mod catalog;
+mod deploy;
+mod plugin;
+mod queries;
+mod resources;
 mod server;
+#[cfg(test)]
+mod tests;
 mod tools;
 
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
 pub use server::Server;
 
@@ -64,83 +68,19 @@ mod launch_tests {
     }
 }
 
-/// The tools that run in Rust; every other tool is the [`Delegate`]'s.
-pub const NATIVE_TOOLS: &[&str] = &["explain", "validation_report"];
-
-/// The tools handed to the [`Delegate`], each with the work item that ports it.
-pub const DELEGATED_TOOLS: &[(&str, &str)] = &[
-    (
-        "search",
-        "UC-5.2 (#837): the SDK registry's catalogue search",
-    ),
-    (
-        "get_chaining",
-        "UC-5.2 (#837): the SDK registry's chaining graph",
-    ),
-    (
-        "coverage",
-        "UC-5.2 (#837): the SDK registry's ATT&CK coverage",
-    ),
-    (
-        "validate_rule",
-        "UC-5.2 (#837): the rule lookup and its deployment next steps read the SDK registry",
-    ),
-    (
-        "validate_query",
-        "UC-4.x: `live` validates on the tenant; offline it stays with it for one answer",
-    ),
-    ("run_query", "UC-4.x: runs a query on a tenant"),
-    (
-        "deploy_rule",
-        "UC-4.x: deploys to a tenant (dry_run previews it)",
-    ),
-    (
-        "deployment_status",
-        "UC-5.2 (#837): reads the rule from the SDK registry",
-    ),
+/// Every tool the server answers, in the manifest's order.
+pub const TOOLS: &[&str] = &[
+    "search",
+    "get_chaining",
+    "coverage",
+    "validate_rule",
+    "validation_report",
+    "explain",
+    "validate_query",
+    "run_query",
+    "deploy_rule",
+    "deployment_status",
 ];
-
-/// What the host of the Rust server (the Python package) answers for it.
-pub trait Delegate: Send + Sync {
-    /// The Python server's start-up, before anything is answered: the
-    /// variables the root options export ([`Launch::environment`]) put in
-    /// the host's environment, then its output mode, the Agent Plugin launch
-    /// (which may name the workspace through the environment), its logging.
-    ///
-    /// # Errors
-    ///
-    /// Why the host could not start.
-    fn start(&self, environment: &[(String, String)]) -> Result<(), String>;
-
-    /// Why there is no workspace to serve (`workspace_not_found`), or `None`.
-    fn workspace_problem(&self) -> Option<String>;
-
-    /// `tools/call` of `name` with `arguments` (a JSON object, as text): the
-    /// JSON text of `{"result": ...}` or `{"error": {...}}`.
-    ///
-    /// # Errors
-    ///
-    /// Why the host could not answer at all.
-    fn call_tool(&self, name: &str, arguments: &str) -> Result<String, String>;
-
-    /// `resources/read` of `uri`, answered as [`Delegate::call_tool`] is.
-    ///
-    /// # Errors
-    ///
-    /// Why the host could not answer at all.
-    fn read_resource(&self, uri: &str) -> Result<String, String>;
-}
-
-static DELEGATE: OnceLock<Box<dyn Delegate>> = OnceLock::new();
-
-/// Installs the host's [`Delegate`]; a second call keeps the first.
-pub fn set_delegate(delegate: Box<dyn Delegate>) {
-    let _ignored = DELEGATE.set(delegate);
-}
-
-fn delegate() -> Option<&'static dyn Delegate> {
-    DELEGATE.get().map(AsRef::as_ref)
-}
 
 /// The root options `mcp start` runs with.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -159,9 +99,9 @@ pub struct Launch {
 
 impl Launch {
     /// The variables the Python CLI's root callback exports for these
-    /// options (`CliContext.apply_environment`), which the Python half and
-    /// the processes it starts read the workspace, the data and the proxy
-    /// from: only what an option names, the rest is the process's own.
+    /// options (`CliContext.apply_environment`), which the tools and the
+    /// commands they run read the workspace, the data and the proxy from:
+    /// only what an option names, the rest is the process's own.
     pub fn environment(&self) -> Vec<(String, String)> {
         let mut out = Vec::new();
         let mut put = |name: &str, value: &str| out.push((name.to_owned(), value.to_owned()));
@@ -193,22 +133,26 @@ impl Launch {
 pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
     use std::io::Write;
     let environment = launch.environment();
-    if let Some(delegate) = delegate()
-        && let Err(problem) = delegate.start(&environment)
-    {
-        tracing::error!(problem = %problem, "the MCP server's Python half did not start");
-        return Ok(1);
-    }
-    // The Python half may have named the workspace (an Agent Plugin launch);
-    // the root options' variables hold without it too.
     let process = crate::env::Env::from_process();
     let env = crate::env::Env::from_pairs(
-        process.iter().chain(
-            environment
-                .iter()
-                .map(|(name, value)| (name.as_str(), value.as_str())),
-        ),
+        process
+            .iter()
+            .filter(|(name, _)| !environment.iter().any(|(set, _)| set == name))
+            .chain(
+                environment
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str())),
+            )
+            .map(|(name, value)| (name.to_owned(), value.to_owned()))
+            .collect::<Vec<_>>(),
     );
+    let cwd = launch
+        .cwd
+        .clone()
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_default();
+    // Started by an Agent Plugin client, the cwd is the plugin, not the catalogue (#431).
+    let (env, workspace_problem) = plugin::served(env, &cwd);
     std::io::stdout().flush()?;
     let rpc = stdio::reserve_stdout()?;
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -219,7 +163,7 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
         launch.cwd.clone(),
         launch.repo.clone(),
         version,
-        delegate(),
+        workspace_problem,
     );
     let outcome = runtime.block_on(server.run(rpc.file()?));
     rpc.restore()?;

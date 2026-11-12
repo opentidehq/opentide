@@ -290,12 +290,23 @@ pub fn check_query_text(
     language: opentide_analysis::LanguageId,
     platform: Option<&str>,
 ) -> Vec<Finding> {
+    check_query_on_stack(text, language, platform, None)
+}
+
+/// [`check_query_text`] for an Elastic `stack` (`9.5`), which ES|QL's
+/// checks read.
+pub fn check_query_on_stack(
+    text: &str,
+    language: opentide_analysis::LanguageId,
+    platform: Option<&str>,
+    stack: Option<&str>,
+) -> Vec<Finding> {
     let text = universal_newlines(text);
     let lines = LineStarts::new(&text);
     opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
         language,
         platform: platform.map(str::to_owned),
-        stack: None,
+        stack: stack.map(str::to_owned),
         text: text.clone().into_owned(),
     })
     .into_iter()

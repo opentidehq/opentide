@@ -470,6 +470,8 @@ def test_mcp_mode_never_writes_stdout(
         raise RuntimeError("transport failed")
 
     monkeypatch.setattr(launcher, "main", explode)
+    # The Python server (the Rust one is the default): its crash path.
+    monkeypatch.setenv("OPENTIDE_ENGINE", "python")
     assert _run_main(monkeypatch, "mcp", "start") == 1
     captured = capsys.readouterr()
     assert captured.out == ""

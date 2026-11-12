@@ -10049,6 +10049,249 @@ reason = "a workspace whose configuration does not parse is refused the same way
 issue = "https://github.com/opentidehq/opentide/issues/829"
 changelog = "**`OPENTIDE_ENGINE=rust opentide mcp start` serves MCP from Rust**"
 
+# UC-6.0c (#841): every MCP tool and resource on the Rust server. A tool
+# refuses a missing argument or one of the wrong type in opentide's words,
+# where MCPServer quoted Pydantic's validation error.
+[[diff]]
+command = "mcp start"
+case = "tools-catalogue/search-missing-query"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool search: 1 validation error for searchArguments\\nquery\\n  Field required [type=missing, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.14/v/missing\""
+candidate = "\"Error executing tool search: argument query is required\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-catalogue/search-bad-type"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool search: 1 validation error for searchArguments\\nquery\\n  Input should be a valid string [type=string_type, input_value=7, input_type=int]\\n    For further information visit https://errors.pydantic.dev/2.14/v/string_type\""
+candidate = "\"Error executing tool search: argument query must be a string, not a number\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-catalogue/get-chaining-missing"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool get_chaining: 1 validation error for get_chainingArguments\\nuuid\\n  Field required [type=missing, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.14/v/missing\""
+candidate = "\"Error executing tool get_chaining: argument uuid is required\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-catalogue/coverage-bad-type"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool coverage: 1 validation error for coverageArguments\\ntechnique\\n  Input should be a valid string [type=string_type, input_value=['T1059'], input_type=list]\\n    For further information visit https://errors.pydantic.dev/2.14/v/string_type\""
+candidate = "\"Error executing tool coverage: argument technique must be a string, not an array\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-catalogue/deployment-status-missing"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool deployment_status: 1 validation error for deployment_statusArguments\\nuuid\\n  Field required [type=missing, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.14/v/missing\""
+candidate = "\"Error executing tool deployment_status: argument uuid is required\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-deploy/deploy-rule-missing-platform"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool deploy_rule: 1 validation error for deploy_ruleArguments\\nplatform\\n  Field required [type=missing, input_value={'uuid': '00000000-0000-4000-8003-000000000001'}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.14/v/missing\""
+candidate = "\"Error executing tool deploy_rule: argument platform is required\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-queries/validate-query-missing-platform"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool validate_query: 1 validation error for validate_queryArguments\\nplatform\\n  Field required [type=missing, input_value={'query': 'x'}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.14/v/missing\""
+candidate = "\"Error executing tool validate_query: argument platform is required\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-queries/validate-query-bad-live"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool validate_query: 1 validation error for validate_queryArguments\\nlive\\n  Input should be a valid boolean, unable to interpret input [type=bool_parsing, input_value='sometimes', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.14/v/bool_parsing\""
+candidate = "\"Error executing tool validate_query: argument live must be a boolean (true or false), not 'sometimes'\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-queries/run-query-bad-limit"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool run_query: 1 validation error for run_queryArguments\\nlimit\\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='many', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.14/v/int_parsing\""
+candidate = "\"Error executing tool run_query: argument limit must be an integer, not 'many'\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "tools-validation/validate-rule-missing"
+target = "stdout"
+rule = "json:/result/content/0/text"
+oracle = "\"Error executing tool validate_rule: 1 validation error for validate_ruleArguments\\nuuid\\n  Field required [type=missing, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.14/v/missing\""
+candidate = "\"Error executing tool validate_rule: argument uuid is required\""
+reason = "every tool runs in Rust and checks its own arguments: the call is refused the same way (isError, one text block naming the tool and the argument), worded by opentide rather than as Pydantic's validation error, whose text and documentation link follow the Pydantic release"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+# UC-6.0c (#841): `opentide://index` from the Rust workspace. The Python
+# registry's schema sources (Pydantic's metaschemas, their definitions and
+# the platform block subschemas) have no Rust counterpart: the editor schemas
+# are generated from the Rust models (`opentide generate schemas`) and served
+# at opentide://schemas/{object_type}. They are approved by digest, being
+# hundreds of kilobytes.
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json-sha256:/result/contents/0/text/json/metaschemas"
+oracle = "ab589365f537d718f581749646eade35e6aa1633c512d641cc2252800dd93ecc"
+candidate = "(absent)"
+reason = "the Python registry's schema source of each object revision, built from its Pydantic models, which the Rust index has no counterpart of: the editor schemas generated from the Rust models are served at opentide://schemas/{object_type}"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json-sha256:/result/contents/0/text/json/definitions"
+oracle = "effec8ddd920cee74615c07edfd98658c277c7fc4f9a5877079caa91e1e7af35"
+candidate = "(absent)"
+reason = "the Python registry's schema source of each object revision, built from its Pydantic models, which the Rust index has no counterpart of: the editor schemas generated from the Rust models are served at opentide://schemas/{object_type}"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json-sha256:/result/contents/0/text/json/subschemas"
+oracle = "33a9c241503bf654f41fa37b203db38115ac96674266bd95ebde9002600c80ef"
+candidate = "(absent)"
+reason = "the Python registry's schema source of each object revision, built from its Pydantic models, which the Rust index has no counterpart of: the editor schemas generated from the Rust models are served at opentide://schemas/{object_type}"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+# The folders of the Python package's bundled data: the Rust server reads
+# its data compiled in, from no folder.
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/vocabularies"
+oracle = "\"<PACKAGE>/data/vocabulary\""
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/resources"
+oracle = "\"<PACKAGE>/data/external\""
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/log_sources"
+oracle = "\"<PACKAGE>/data/log_sources\""
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/platform_configs"
+oracle = "\"<PACKAGE>/data/configurations/platforms\""
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/platform_templates"
+oracle = "\"<PACKAGE>/schemas/data/platform_templates\""
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/configurations"
+oracle = "\"<PACKAGE>/data/configurations\""
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/core"
+oracle = "{\"docs_folder\": \"<WS>/docs\", \"log_sources\": \"<PACKAGE>/data/log_sources\", \"objectives_docs_folder\": \"<WS>/docs/objectives\", \"platform_configs\": \"<PACKAGE>/data/configurations/platforms\", \"platform_templates\": \"<PACKAGE>/schemas/data/platform_templates\", \"resources\": \"<PACKAGE>/data/external\", \"rules_docs_folder\": \"<WS>/docs/rules\", \"threats_docs_folder\": \"<WS>/docs/threats\", \"vocabularies\": \"<PACKAGE>/data/vocabulary\"}"
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json:/result/contents/0/text/json/paths/raw"
+oracle = "{\"core\": {\"docs_folder\": \"<WS>/docs\", \"log_sources\": \"<PACKAGE>/data/log_sources\", \"objectives_docs_folder\": \"<WS>/docs/objectives\", \"platform_configs\": \"<PACKAGE>/data/configurations/platforms\", \"platform_templates\": \"<PACKAGE>/schemas/data/platform_templates\", \"resources\": \"<PACKAGE>/data/external\", \"rules_docs_folder\": \"<WS>/docs/rules\", \"threats_docs_folder\": \"<WS>/docs/threats\", \"vocabularies\": \"<PACKAGE>/data/vocabulary\"}, \"tide\": {\"custom_configurations\": \"<WS>/.opentide/configurations\", \"exports\": \"<WS>/.opentide/exports\", \"json_schemas\": \"<WS>/.opentide/schemas\", \"objective\": \"<WS>/Objects/Detection Objectives\", \"rule\": \"<WS>/Objects/Detection Rules\", \"snippet_file\": \"<WS>/.vscode/model-templates.code-snippets\", \"templates\": \"<WS>/.opentide/templates\", \"threat\": \"<WS>/Objects/Threat Vectors\"}}"
+candidate = "(absent)"
+reason = "a folder of the Python package's bundled data (or the paths that name them): the Rust server reads its vocabularies, configuration and templates compiled in, from no folder, and the index names only the workspace's folders"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`opentide mcp start` serves every tool and resource from Rust**"
+
+
 # `setup skills discover` and `setup skills show` on the Rust command line
 # (UC-4.1, #831): the catalogue through the connectors' HTTP client.
 

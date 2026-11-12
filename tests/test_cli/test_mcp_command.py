@@ -62,6 +62,8 @@ def test_mcp_has_no_lifecycle_verb(verb: str) -> None:
 
 
 def test_start_missing_mcp_prints_repair_line_on_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The Python server, the one that needs the mcp package: the escape hatch.
+    monkeypatch.setenv("OPENTIDE_ENGINE", "python")
     monkeypatch.setattr(
         "opentide.mcp_server.launcher.probe",
         lambda: (

@@ -318,15 +318,14 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: UC-3.5 (#827); offline ``validate query`` with UC-3.5b (#927): ``--live`` stays
 #: Python's; ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c (#928): a
 #: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
-#: (#829): the Rust server, which hands the tools and resources it has no
-#: implementation of to the Python server's handlers in its own process
-#: (``opentide.mcp_server.bridge``); ``setup skills discover`` and ``setup skills
-#: show`` with UC-4.1 (#831): the opentidehq/skills catalogue through the connectors'
-#: HTTP client; ``setup`` (scripted runs and ``--plan``) and its ``env``, ``hooks``,
-#: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828); ``setup vscode``,
-#: ``setup --vscode-setup`` and the wizards at a terminal with UC-3.6c (#951);
-#: ``setup skills`` (the install), ``setup --skills`` and ``--plugin`` with
-#: UC-4.4d (#834): the skill trees through the connectors' HTTP client.
+#: (#829): the Rust server, which answers every tool and resource itself since
+#: UC-6.0c (#841), and is the default (``engine_defaults``); ``setup skills
+#: discover`` and ``setup skills show`` with UC-4.1 (#831): the opentidehq/skills
+#: catalogue through the connectors' HTTP client; ``setup`` (scripted runs and
+#: ``--plan``) and its ``env``, ``hooks``, ``mcp``, ``platforms`` and ``repo`` with
+#: UC-3.6 (#828); ``setup vscode``, ``setup --vscode-setup`` and the wizards at a
+#: terminal with UC-3.6c (#951); ``setup skills`` (the install), ``setup --skills``
+#: and ``--plugin`` with UC-4.4d (#834): the skill trees through the connectors' HTTP client.
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933); a bare ``generate``,
 #: the full pipeline, with UC-6.0 (#841).
