@@ -1,11 +1,11 @@
 """Deployment state shards at ``.opentide/states/deployment/<uuid>.json``.
 
-Defender for Endpoint, SentinelOne and CrowdStrike address a deployed rule by
-an id the vendor assigns at create time. That id is per tenant and is not
-detection content, so it lives here rather than on the rule (RFC 0010,
-``deployment.state::1.0``). One file per rule, committed to git: losing the
-file loses the only handle on the remote rule, and the next deploy creates a
-second one beside it.
+Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig and platform plugins
+address a deployed rule by an id the vendor assigns at create time. That id is
+per tenant and is not detection content, so it lives here rather than on the
+rule (RFC 0010, ``deployment.state::1.0``). One file per rule, committed to
+git: losing the file loses the only handle on the remote rule, and the next
+deploy creates a second one beside it.
 
 Writers read the file, change one tenant entry, and write the rest back,
 including root keys this version does not know. Output is UTF-8 JSON with
@@ -35,6 +35,24 @@ STATE_PLATFORMS: tuple[str, ...] = (
     "sentinel_one",
     "sysdig",
 )
+
+_PLUGIN_IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def stores_ids(platform: str) -> bool:
+    """Whether a shard may bind *platform*'s rules to ids.
+
+    A built-in platform of :data:`STATE_PLATFORMS`, or a platform plugin's
+    (UC-4.5b, #835): an identifier (lower case letters, digits and ``_``,
+    starting with a letter) that no built-in platform has, installed here or
+    not.
+    """
+    from opentide.plugins import BUILTIN_PLATFORMS
+
+    return platform in STATE_PLATFORMS or (
+        platform not in BUILTIN_PLATFORMS and _PLUGIN_IDENTIFIER.fullmatch(platform) is not None
+    )
+
 
 #: Platforms whose legacy rule-YAML ids ``opentide deploy migrate-state`` moves into shards.
 #: Sysdig is state-backed but never had a legacy key: one found on its block is dropped
@@ -227,7 +245,7 @@ class DeploymentState:
             raise _shape(path, "has no platforms object")
         platforms: dict[str, dict[str, str]] = {}
         for platform, tenants in platforms_raw.items():
-            if platform not in STATE_PLATFORMS:
+            if not stores_ids(platform):
                 raise DeploymentStateError(
                     "deployment_state_platform",
                     f"{path} names platform {platform!r}; only "
@@ -271,7 +289,7 @@ class DeploymentState:
 
     def set(self, platform: str, tenant_name: object, external_id: object) -> str:
         """Bind one tenant. Returns the id as stored."""
-        if platform not in STATE_PLATFORMS:
+        if not stores_ids(platform):
             raise DeploymentStateError(
                 "deployment_state_platform",
                 f"{platform} does not store external ids in deployment state",

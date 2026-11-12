@@ -216,6 +216,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
             .get(opentide_compile::strategy::REMOVED_PLAN_ENV)
             .map(str::to_owned),
         cwd: cx.cwd.to_path_buf(),
+        plugins: crate::plugins::plugin_ids(),
     };
     let env = |name: &str| cx.env.get(name).map(str::to_owned);
     let root_dir = workspace.root().to_path_buf();
