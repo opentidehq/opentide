@@ -517,7 +517,7 @@ pub fn golden(
     // The recorded MCP sessions' entries are `cargo xtask mcp replay`'s to
     // apply, and to find stale.
     for (index, entry) in ledger.entries.iter().enumerate() {
-        if crate::mcp::owns(entry) {
+        if crate::mcp::owns(entry) || on_a_cassette(entry) {
             usage.mark(index);
         }
     }
@@ -554,9 +554,50 @@ pub fn golden(
     Ok(passed)
 }
 
+/// Whether a ledger entry is a cassette test's (case `cassette:<scenario>`):
+/// a command no golden case can replay, compared against its connector's
+/// cassette by an integration test of its own, which applies the entry and
+/// finds it stale (`generate extract sentinel`:
+/// `crates/opentide-cli/tests/extract_sentinel.rs`).
+pub fn on_a_cassette(entry: &opentide_compare::Entry) -> bool {
+    entry.case.starts_with("cassette:")
+}
+
 #[cfg(test)]
 mod tests {
     use super::version_of;
+
+    #[test]
+    fn a_cassette_tests_entries_are_its_own() {
+        let ledger = opentide_compare::ledger::Ledger::parse(
+            r#"
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "stdout"
+rule = "text"
+oracle = "a"
+candidate = "b"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**c**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/plain/none/default"
+target = "stdout"
+rule = "text"
+oracle = "a"
+candidate = "b"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**c**"
+"#,
+        )
+        .unwrap();
+        let owned: Vec<bool> = ledger.entries.iter().map(super::on_a_cassette).collect();
+        assert_eq!(owned, [true, false]);
+    }
 
     #[test]
     fn the_node_runner_leaves_out_what_the_pypi_cli_answers_in_python() {

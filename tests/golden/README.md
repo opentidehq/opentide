@@ -105,6 +105,8 @@ twice: once per implementation). Cassettes are recorded from the oracle with `ca
 record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
+A command no golden case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is compared by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`); its approved differences name the case `cassette:<scenario>`, and that test, not `golden check`, applies them and finds them stale.
+
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
 of `docs/internal/cli-experience.md` ("Errors people and agents make": a typo in a command, an
 option or a choice, a missing option, a prompt without a terminal, `--json` after the subcommand,

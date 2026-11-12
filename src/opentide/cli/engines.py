@@ -313,7 +313,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``share`` and its ``push``, ``preview``, ``status``, ``retract`` and
 #: ``targets`` over MISP's REST API, and ``generate extract defender`` and
 #: ``generate extract elastic`` through their connectors, with UC-4.4b (#834);
-#: ``share push --changed`` reading its git diff with UC-4.4e (#834).
+#: ``share push --changed`` reading its git diff, and ``generate extract
+#: sentinel`` through the Sentinel connector, with UC-4.4e (#834).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -379,6 +380,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("share", "targets"): RustCommand(launch=RUST_CLI),
     ("generate", "extract", "defender"): RustCommand(launch=RUST_CLI, side_effects=True),
     ("generate", "extract", "elastic"): RustCommand(launch=RUST_CLI, side_effects=True),
+    ("generate", "extract", "sentinel"): RustCommand(launch=RUST_CLI, side_effects=True),
 }
 
 

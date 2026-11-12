@@ -12,7 +12,14 @@ publish = false
 # The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
 # oracles: the explain pages it holds quote vendor SDK names the licence scan
 # keeps out of release artifacts (scripts/engine/license-scan.sh).
-exclude = ["tests/render/", "tests/render.rs"]
+# `generate extract sentinel`'s oracle files (tests/extract_sentinel.rs) are
+# CI-only too: the test replays a cassette of the repository's tests/.
+exclude = [
+    "tests/render/",
+    "tests/render.rs",
+    "tests/extract_sentinel/",
+    "tests/extract_sentinel.rs",
+]
 description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
 
 [lints]

@@ -161,7 +161,7 @@ fn deploy_migrate_state_cases_are_the_oracles() {
 
 /// `share` and its subcommands (UC-4.4b, #834): the MISP stand-in's
 /// cassettes for a push and a retract, and the runs that stop before any
-/// request.
+/// request; `share push --changed` on the git checkouts of a push (UC-4.4e).
 #[test]
 fn share_cases_are_the_oracles() {
     check(
@@ -173,18 +173,24 @@ fn share_cases_are_the_oracles() {
             "share.retract",
             "share.targets",
         ],
-        55,
+        120,
     );
 }
 
 /// `generate extract defender` and `generate extract elastic` (UC-4.4b,
 /// #834): the stand-in tenants' cassettes, the files written under
-/// `Imported/` and Defender's deployment state.
+/// `Imported/` and Defender's deployment state; `generate extract sentinel`'s
+/// runs without a tenant (UC-4.4e; its tenant's run is
+/// `tests/extract_sentinel.rs`').
 #[test]
 fn generate_extract_cases_are_the_oracles() {
     check(
-        &["generate.extract.defender", "generate.extract.elastic"],
-        10,
+        &[
+            "generate.extract.defender",
+            "generate.extract.elastic",
+            "generate.extract.sentinel",
+        ],
+        30,
     );
 }
 

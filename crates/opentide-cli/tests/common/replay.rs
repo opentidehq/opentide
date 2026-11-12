@@ -945,7 +945,9 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
             // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            }) || entry.case.ends_with("/help");
+            }) || entry.case.ends_with("/help")
+                // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
+                || entry.case.starts_with("cassette:");
             if commands.contains(&entry.command.replace(' ', ".").as_str())
                 && !elsewhere
                 && !usage.is_used(index)

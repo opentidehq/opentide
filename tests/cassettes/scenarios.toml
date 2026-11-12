@@ -283,6 +283,15 @@ secrets = ["AZURE_CLIENT_SECRET"]
 cwd = "repo"
 
 [[scenario]]
+name = "sentinel/extract"
+description = "Sentinel: opentide generate extract sentinel on the stand-in's workspace `extract` (UC-4.4e): sign in, then ARM's alertRules listed in two pages; the oracle's files and document go to crates/opentide-cli/tests/extract_sentinel/oracle/."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "extract", "crates/opentide-cli/tests/extract_sentinel"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
 name = "sentinel/query"
 description = "Sentinel: opentide query's Log Analytics queries: rows past the limit, a partial result, two tables, a syntax error, a missing permission."
 client = ["{python}", "tests/cassettes/sentinel/client.py", "query"]
@@ -514,4 +523,3 @@ tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
 routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
 secrets = ["ELASTIC_API_KEY"]
 cwd = "repo"
-

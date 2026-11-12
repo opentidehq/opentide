@@ -12,6 +12,10 @@
 //! `import from <platform>`, counting the YAML files it wrote under the
 //! repository.
 
+mod sentinel;
+
+pub use sentinel::{sentinel, sentinel_with};
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 

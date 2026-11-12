@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 50 |
+| Commands with a Rust implementation | 51 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 746 |
-| … no Rust yet | 48 (6.4%) |
+| Recordings (command × corpus × mode) | 751 |
+| … no Rust yet | 40 (5.3%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 698 (93.5%) |
+| … compare not run | 711 (94.6%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1043 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1050 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -236,10 +236,12 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate extract sentinel`
 
+7 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate inflight`
 
@@ -530,6 +532,8 @@ No compare results were given: every command with a Rust implementation that is 
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | share-misp | compare not run | not recorded | compare not run | compare not run |
+| share-misp-push | compare not run | not recorded | compare not run | compare not run |
+| share-misp-push-config | not recorded | not recorded | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share retract`
