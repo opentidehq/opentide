@@ -3,7 +3,7 @@
   dict({
     'counts': dict({
       'objectives': 1,
-      'rules': 11,
+      'rules': 12,
       'threats': 1,
     }),
     'platforms': list([
@@ -74,6 +74,29 @@
             'variables': list([
               dict({
                 'name': 'ELASTIC_API_KEY',
+                'set': False,
+              }),
+            ]),
+          }),
+        ]),
+      }),
+      dict({
+        'can_deploy': True,
+        'can_query': True,
+        'can_validate': True,
+        'enabled': True,
+        'name': 'google_secops',
+        'tenants': list([
+          dict({
+            'description': '',
+            'manual': False,
+            'name': 'staging',
+            'strategies': list([
+              'PREVIEW',
+            ]),
+            'variables': list([
+              dict({
+                'name': 'GOOGLE_SECOPS_CREDENTIALS',
                 'set': False,
               }),
             ]),
