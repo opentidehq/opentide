@@ -474,6 +474,8 @@ jobs:
           for dir in bindings/node/npm/*/; do
             platform="$(basename "${dir}")"
             cp "native/npm-native-${platform}/opentide.${platform}.node" "${dir}"
+            # The licence ships with every package (npm packs LICENSE whatever `files` says).
+            cp bindings/node/LICENSE "${dir}"
           done
           # The loader and declarations napi-rs wrote at this version.
           cp native/npm-native-linux-x64-gnu/index.js native/npm-native-linux-x64-gnu/index.d.ts bindings/node/
@@ -490,9 +492,10 @@ jobs:
           for p in lsp-client lsp-worker; do
             (cd "packages/$p" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/4-lsp")
           done
-          # Each native package holds its addon.
+          # Each native package holds its addon and the licence.
           for tarball in npm/1-native/*.tgz; do
             tar -tzf "${tarball}" | grep -q '^package/opentide\..*\.node$'
+            tar -tzf "${tarball}" | grep -qx 'package/LICENSE'
           done
           ls -lR npm
       # The language server's packages are engine assets; @opentide/opentide
@@ -569,26 +572,31 @@ jobs:
           echo "${out}"
           grep -qF "${PYPI_VERSION}" <<< "${out}"
 
-  # `npx @opentide/opentide --version` from the packed tarballs: the package
-  # and the native package of the runner's platform.
+  # The npm packages installed as a user installs them, before npm has any:
+  # every tarball published to a throwaway local registry (Verdaccio, no
+  # uplink), then `npm install @opentide/opentide` in a clean project, which
+  # must choose exactly the runner's native package by os/cpu/libc; `npx
+  # opentide --version`, the SDK from require() and import, `runJson`, and
+  # `tsc` against index.d.ts; and the same through the `opentide` alias
+  # (scripts/engine/npm-local-registry/test.mjs). Nothing reaches npmjs.com
+  # but the test's own tools (its package-lock.json).
   smoke-npm:
-    name: Smoke npx (${{ matrix.os }})
+    name: Smoke npm install (${{ matrix.os }})
     needs: [guard, npm-pack]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x64-gnu
-          - os: macos-latest
-            platform: darwin-arm64
-          - os: windows-latest
-            platform: win32-x64-msvc
+        os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       NPM_VERSION: ${{ needs.guard.outputs.version }}
-      PLATFORM: ${{ matrix.platform }}
     steps:
+      # The test and its lock, at the commit the packages were built from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -596,22 +604,10 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: npm-packages
-          path: npm
-      - name: npm install the tarballs, then npx @opentide/opentide --version
+          path: ${{ runner.temp }}/npm
+      - name: Publish to a local registry, npm install, npx, SDK and types
         shell: bash
-        run: |
-          set -euo pipefail
-          packages="$(pwd)/npm"
-          mkdir "${RUNNER_TEMP}/project" && cd "${RUNNER_TEMP}/project"
-          npm init --yes >/dev/null
-          # The other platforms' native packages are not on npm yet: install
-          # this one from its tarball and leave the optional ones out.
-          npm install --omit=optional \
-            "${packages}/2-package/opentide-opentide-${NPM_VERSION}.tgz" \
-            "${packages}/1-native/opentide-opentide-${PLATFORM}-${NPM_VERSION}.tgz"
-          out="$(npx --no @opentide/opentide --version)"
-          echo "${out}"
-          grep -qF "${NPM_VERSION}" <<< "${out}"
+        run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --tarballs "${RUNNER_TEMP}/npm"
 
   # `cargo install opentide --features cli` from the crates' packages, before
   # crates.io has any of this version: a patch resolves each to its package

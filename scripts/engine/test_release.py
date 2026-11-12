@@ -654,6 +654,49 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("if: needs.guard.outputs.channel != 'dry-run'", jobs["attest"])
         self.assertIn("needs.attest.result == 'success'", jobs["verify-assets"])
 
+    def test_the_npm_smoke_installs_from_a_local_registry(self) -> None:
+        jobs = workflow_jobs()
+        smoke = jobs["smoke-npm"]
+        self.assertIn("os: [ubuntu-latest, macos-latest, windows-latest]", smoke)
+        self.assertIn(
+            'node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" '
+            '--tarballs "${RUNNER_TEMP}/npm"',
+            smoke,
+        )
+        # The registry is the script's own: the job publishes nothing itself
+        # and cannot mint the token npm's trusted publishing needs.
+        self.assertNotRegex(smoke, r"\bnpm (?:publish|pu)\b")
+        self.assertNotIn("id-token", smoke)
+        # Every native package ships the licence, which the pack checks.
+        pack = jobs["npm-pack"]
+        self.assertIn('cp bindings/node/LICENSE "${dir}"', pack)
+        self.assertIn("grep -qx 'package/LICENSE'", pack)
+        # ci.yml's full set runs the same test on the tree's packages.
+        ci = workflow_jobs(WORKFLOWS / "ci.yml")["npm-install"]
+        self.assertIn("node scripts/engine/npm-local-registry/test.mjs", ci)
+        self.assertIn('--pack "${RUNNER_TEMP}/npm"', ci)
+        self.assertIn('release.py npm-version "${version}"', ci)
+
+    def test_the_local_registry_has_no_uplink_and_pinned_tools(self) -> None:
+        here = Path(__file__).resolve().parent / "npm-local-registry"
+        script = (here / "test.mjs").read_text(encoding="utf-8")
+        self.assertIn("'uplinks: {}'", script)
+        self.assertNotIn("proxy:", script)
+        self.assertIn("'--listen', `127.0.0.1:${port}`", script)
+        manifest = json.loads((here / "package.json").read_text(encoding="utf-8"))
+        self.assertTrue(manifest["private"])
+        lock = json.loads((here / "package-lock.json").read_text(encoding="utf-8"))
+        root = lock["packages"][""]["dependencies"]
+        self.assertEqual(root, manifest["dependencies"])
+        for name, version in manifest["dependencies"].items():
+            # Exact versions, and the lock holds those.
+            self.assertRegex(version, r"^\d+\.\d+\.\d+$", name)
+            self.assertEqual(lock["packages"][f"node_modules/{name}"]["version"], version)
+        for path, entry in lock["packages"].items():
+            if path:
+                self.assertTrue(entry["resolved"].startswith("https://registry.npmjs.org/"), path)
+                self.assertTrue(entry["integrity"].startswith("sha512-"), path)
+
     def test_cargo_about_runs_without_an_oidc_token(self) -> None:
         jobs = all_jobs()
         builds = [job for job, body in jobs.items() if "cargo install" in body]

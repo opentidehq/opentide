@@ -9,7 +9,8 @@ name: CI
 # - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
 #   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 #   Windows CLI smoke, the facade crate's every feature and semver checks, the
-#   Node package, LSP clients and benchmarks. It runs nightly, on every push
+#   Node package and its install from a local registry, LSP clients and
+#   benchmarks. It runs nightly, on every push
 #   to development and integration/unified-core, on Run workflow, and on
 #   a pull request that carries the `full-ci` label (read at each push: add
 #   the label, then push, or Run workflow on the branch). Each of these jobs
@@ -574,6 +575,72 @@ jobs:
           name: golden-node
           path: golden-node.json
           if-no-files-found: ignore
+
+  # The npm packages as a user installs them, as publish.yml's smoke-npm
+  # does before a release: the tree's packages at the workspace version
+  # (`release.py npm-version`), the addon built for linux-x64-gnu only (the
+  # other five native packages packed as stand-ins without an addon, so that
+  # npm still has to choose by os/cpu/libc), published to a throwaway local
+  # registry (Verdaccio, no uplink), then `npm install @opentide/opentide` in
+  # a clean project: exactly the host's native package, `npx opentide
+  # --version`, the SDK, `runJson` and `tsc` against index.d.ts, and the same
+  # through the `opentide` alias (scripts/engine/npm-local-registry/test.mjs).
+  # It reads the node job's Rust cache.
+  npm-install:
+    name: npm install from a local registry (linux-x64-gnu)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: node
+          save-if: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            bindings/node/package-lock.json
+            scripts/engine/npm-local-registry/package-lock.json
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # Before the build: napi-rs writes the version into the loader.
+      - name: The npm packages at the workspace version
+        run: |
+          set -euo pipefail
+          version="$(python3 scripts/engine/release.py version)"
+          python3 scripts/engine/release.py npm-version "${version}"
+          python3 scripts/engine/release.py lockstep "${version}" --npm "${version}"
+          echo "NPM_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Build the addon (linux-x64-gnu)
+        working-directory: bindings/node
+        run: OPENTIDE_VERSION="${NPM_VERSION}" node build.mjs --profile develop
+
+      - name: Pack, publish to a local registry, npm install, npx, SDK and types
+        run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --pack "${RUNNER_TEMP}/npm"
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
