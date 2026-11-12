@@ -16,6 +16,8 @@ techniques:
 response:
   alert_severity: Critical
   procedure:
+    analysis: |
+      Confirm the successful login with the user, then review what the session did.
     searches:
       - system: google_secops
         purpose: Blocked logins per user and source address, last day
