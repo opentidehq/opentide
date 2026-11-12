@@ -75,7 +75,7 @@ python3 scripts/engine/oracles/elasticsearch/probes.py                    # the 
 python3 scripts/engine/oracles/elasticsearch/esql_catalog.py              # data/catalogs/esql versions vs this release
 ```
 
-`start.sh` pulls `mirror.gcr.io/library/elasticsearch:<tag>` (set `ES_IMAGE` for another registry), binds 127.0.0.1 only, runs single-node with security off, a basic licence (EQL and ES|QL are basic features), a 1 GB heap, ML off and disk watermarks off. Set `ES_PORT` to run two releases side by side.
+`start.sh` pulls `mirror.gcr.io/library/elasticsearch:<tag>`, falling back to Docker Hub and then `docker.elastic.co` when a registry refuses after its retries (set `ES_IMAGE` to use one registry only), binds 127.0.0.1 only, runs single-node with security off, a basic licence (EQL and ES|QL are basic features), a 1 GB heap, ML off and disk watermarks off. Set `ES_PORT` to run two releases side by side.
 
 **Fixture.** `run.py` waits for cluster health yellow, then creates `opentide-ecs` (alias `o`) mapped from `data/catalogs/ecs/fields.json`, so the Verifier sees real ECS types, and an empty `opentide-unmapped` (alias `u`) for files named `*.unmapped.*`. `object` and `nested` entries are not mapped themselves (a nested parent's children become plain object fields), and `match_only_text` children of keyword fields become multi-fields, as in ECS. `--extra-mapping` adds `{"field": "type"}` pairs.
 
