@@ -180,7 +180,8 @@ core-metadata-version = "2.4"
 # sources, build script and benches (cargo reads every member's targets), and the
 # data the crates compile in (data/catalogs, grammars/*/src and queries,
 # highlights/). The rest of the engine's tree stays out: test data and the
-# crates' and xtask's integration tests, the fuzz targets, editor samples, npm packages, the
+# crates' and xtask's integration tests, the fuzz targets, editor samples, npm packages (the
+# Node binding's npm side too: bindings/node keeps its manifest, build script and sources), the
 # engine's docs and scripts, the grammar sources tree-sitter
 # generates parser.c from, and the reference Tide schemas. rust-toolchain.toml
 # stays out too, so a build from the sdist uses the toolchain it finds instead of
@@ -199,6 +200,15 @@ exclude = [
     "/fuzz",
     "/editors",
     "/packages",
+    "/bindings/node/npm",
+    "/bindings/node/alias",
+    "/bindings/node/test",
+    "/bindings/node/*.js",
+    "/bindings/node/*.mjs",
+    "/bindings/node/*.d.ts",
+    "/bindings/node/*.json",
+    "/bindings/node/*.md",
+    "/bindings/node/LICENSE",
     "/highlights/test",
     "/grammars/*/grammar.js",
     "/grammars/*/package.json",

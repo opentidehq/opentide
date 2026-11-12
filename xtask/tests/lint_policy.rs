@@ -22,6 +22,11 @@ const UNSAFE_CRATES: &[(&str, &str)] = &[
         "crates/opentide-wasm",
         "the wasm32 libc shims: #[unsafe(no_mangle)] syscall symbols",
     ),
+    (
+        "bindings/node",
+        "napi-derive's registration: each #[napi] item expands to a `ctor` static \
+         constructor carrying #[allow(unsafe_code)], which forbid refuses; no unsafe of its own",
+    ),
 ];
 
 type TestResult = Result<(), Box<dyn Error>>;
