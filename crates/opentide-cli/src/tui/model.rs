@@ -438,6 +438,8 @@ pub struct Catalogue {
     pub visibility: Visibility,
     /// Every threat chaining link, each once (the Chains tab).
     pub chains: Vec<ChainEdge>,
+    /// The Configuration tab: every credential redacted.
+    pub configuration: super::configuration::ConfigurationView,
     /// Each object's document, for its page.
     documents: HashMap<String, Arc<Document>>,
     /// What each UUID a reference can name is: the objects and every signal.
@@ -669,6 +671,19 @@ pub fn load(launch: &Launch) -> Result<Catalogue, String> {
         })
         .collect();
     let root = workspace.root().to_path_buf();
+    let rules: Vec<(String, &Node)> = index
+        .objects
+        .get("rule")
+        .into_iter()
+        .flatten()
+        .filter_map(|(uuid, object)| Some((uuid.clone(), object.root()?)))
+        .collect();
+    let configuration = super::configuration::load(
+        Some(&root),
+        &workspace.configuration().resolved.tree,
+        &rules,
+        &launch.env,
+    );
     // The Visibility tab reads the datasets the queries read (it installs a
     // probe in the engines, then the workspace's declarations again): before
     // the language server's checks, which hold the engines.
@@ -683,6 +698,7 @@ pub fn load(launch: &Launch) -> Result<Catalogue, String> {
         language_server,
         visibility,
         chains,
+        configuration,
         documents,
         links,
         fields,

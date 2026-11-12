@@ -24,9 +24,11 @@ description: What still runs on Python before Rust becomes the default engine (U
   Typer's help, 204 of them on commands that otherwise run on Rust, plus 10 bare runs that print
   a help screen and the 2-case home screen.
 - Outside the goldens, Python still answers 8 of the MCP server's 10 tools and all 12 of its
-  resources, the `serve` host's engine selection, the default `tui`, the language server's
-  launcher, two `doctor`/`setup mcp` probes, shell completion, and three narrow in-Rust
-  refusals (`new` at a prompt, two status-promotion edge cases, a `query --rule` on a plugin).
+  resources and shell completion. UC-6.0d took the rest to Rust: the `serve` host runs every
+  request on Rust, `opentide tui` opens the Rust UI (its Configuration tab ported), `lsp start`
+  hands the server no Python catalog, `doctor` and `setup mcp` probe nothing in Python, and
+  `new` at a prompt, the two status-promotion edge cases and `query --platform sysdig` no
+  longer refuse. One narrow in-Rust refusal is left: a `query --rule` on a plugin (UC-4.5c).
 
 ## How the inventory was taken
 
@@ -51,7 +53,7 @@ itself: it is Python in disguise and is counted with the help group below.
 | G3 | A bare group or root that prints a help screen: `opentide` in plain and agent mode (4), `lsp`, `mcp`, `new` in human and plain mode (6, exit 2) | 10 | Typer's `no_args_is_help` | clap's help (`framework_goldens.rs` leaves these out as "help") | with D1 |
 | G4 | The home screen: a bare `opentide` at a terminal | 2 | Python renders a logo, the workspace's catalogue, health and platforms, and suggested commands with Rich | prints the root's help | **Port** (bounded: two recordings, the data is `info`'s) or approve the help instead (D3) |
 | G5 | Root and group runs that do not print help: `--version` (4), a mistyped command (4) or root option (4), `--repo` that is not a folder (4), `--debug info` (4), `--json` with no command (2); `generate extract`, `migrate`, `rules` bare in every mode (12), `lsp`, `mcp`, `new` bare in json and agent mode (6) | 40 | The launcher (`_may_run_on_rust`, `_plain_root_options`) and Click answer them before the dispatcher, and neither the root nor a group is a key of `RUST_COMMANDS` | byte for byte the oracle's: `crates/opentide-cli/tests/framework_goldens.rs` replays every one of them in-process | **Port the routing at the flip** (flip step 2): no Rust code is missing |
-| G6 | `query` without `--platform` or with a mistyped one (`sentinal`) | 8 | `query`'s `platforms=RUST_QUERY_PLATFORMS` covers a run only when it names a platform with a Rust connector | the same usage errors as Python (checked by hand: `query x`, `query --platform sentinal x`, plain and json). One run differs: `query --platform sysdig` is refused with `engine_not_ported`, where Python answers `sysdig has no query runner` (`usage_invalid_value`, `argument` `--platform`, the eight platforms with a runner as `choices`) | **Port** the Sysdig answer (`commands/query.rs`, where it calls `not_ported`), then **drop `platforms` from `query`'s entry** once UC-4.5b's plugin routing lands (D7). The app's unit tests use the Sysdig refusal as their example of `engine_not_ported`: they need another (a command taken out of the table, as the Python tests do here) |
+| G6 | `query` without `--platform` or with a mistyped one (`sentinal`) | 8 | `query`'s `platforms=RUST_QUERY_PLATFORMS` covers a run only when it names a platform with a Rust connector | the same usage errors as Python (checked by hand: `query x`, `query --platform sentinal x`, plain and json). One run differs: `query --platform sysdig` is refused with `engine_not_ported`, where Python answers `sysdig has no query runner` (`usage_invalid_value`, `argument` `--platform`, the eight platforms with a runner as `choices`) | **Done (UC-6.0d)**: the Sysdig answer is ported (`query::no_runner`, the oracle's usage error) and `query`'s entry routes `sysdig` to Rust (`RUST_QUERY_ROUTED`); the app's unit tests emit a refusal of their own (`app::not_ported`). Left: **drop `platforms` from `query`'s entry** once UC-4.5b's plugin routing lands (D7) |
 
 The Node runner (`cargo xtask golden check --runner node`, the npm bin, no Python at all) leaves
 out G1 and `doctor`'s 8 cases on workspaces that enable a platform (#977); it was not run for
@@ -82,10 +84,10 @@ plain) and its words compared with the recording's:
 
 | Where | What falls back to Python, or is refused | Proposed path |
 |-------|------------------------------------------|---------------|
-| `new <family>` at a terminal | Without `--name`, or a rule without `--platform` on a workspace that enables platforms, it prompts in Python: the Rust command refuses with `engine_not_ported` (`commands/new.rs`, `not_ported`) | **Port**: the `setup` wizards' prompts are on Rust already (UC-3.6c); compare in a pty test as `tui_pty.rs` does |
-| `deploy` status promotion | `Stop::Unported` (`commands/deploy_promote.rs`) when `[promotion]` names no target, and where a rule file, or its promoted text, does not read (`opentide-compile` `promotion::Error::Unported`): the oracle fails there with ruamel's words | **Approve** with the Rust loader's words (one ledger entry and changelog lead), or port the messages; no golden case reaches either |
+| `new <family>` at a terminal | Without `--name`, or a rule without `--platform` on a workspace that enables platforms, it prompted in Python | **Done (UC-6.0d)**: asked through the setup wizards' `Prompter` (`<Family> name`, `Platform blocks`); scripted unit tests and pty tests (`tests/setup_wizard.rs`) |
+| `deploy` status promotion | `Stop::Unported` (`commands/deploy_promote.rs`) when `[promotion]` names no target, and where a rule file, or its promoted text, does not read (`opentide-compile` `promotion::Error::Unported`): the oracle fails there with ruamel's words | **Done (UC-6.0d)** for a rule file that does not parse (the run fails with the Rust loader's words) and a root that is no mapping (Python's `TypeError` text for its YAML 1.2 type): approved in the changelog, no golden case reaches either. Left as `engine_not_ported`: no promotion target, a platform key that is not a string, promoted text that does not read back |
 | `query --rule` / `--file` on a platform plugin | refused as not ported (`commands/query.rs`) | UC-4.5b's (plugin routing); not touched here |
-| `validate_query::live` and `live_not_ported` | no caller since UC-4.6 routed `--live` to `validate_live` | **Delete** (dead code) |
+| `validate_query::live` and `live_not_ported` | no caller since UC-4.6 routed `--live` to `validate_live` | **Done (UC-6.0d)**: deleted; a plugin's live check is `validate_query::plugin_live` |
 | `generate docs`, `exports`, `explorer`, `inflight` with `OPENTIDE_PROGRESS=json` | Python's checklist writes one `progress` event per step (`done: 1, total: 1`); the Rust commands write none. No golden case sets the variable for them | **Port**: set `Report::step_events` on their reports, as this change does for `generate` |
 
 ## Runtime pieces outside the CLI
@@ -93,11 +95,11 @@ plain) and its words compared with the recording's:
 | Piece | Python today | Needed before Python can go | Path |
 |-------|--------------|-----------------------------|------|
 | MCP server (`opentide mcp start`) | Default engine: the Python server (`src/opentide/mcp_server/`). Under `rust`: the rmcp server (`crates/opentide-cli/src/mcp/`) runs `explain` and `validation_report` and delegates `search`, `get_chaining`, `coverage`, `validate_rule`, `deployment_status` (UC-5.2, the SDK registry), `validate_query`, `run_query`, `deploy_rule` (tenants) and all 6 resources and 6 templates to `opentide.mcp_server.bridge` in-process | Rust implementations of the 8 tools and 12 resources, each replayed against `tests/golden/mcp/` (`cargo xtask mcp replay --engine compare`) | **Port** (D4 decides the order: the registry tools need UC-5.2's catalogue on the facade) |
-| `opentide serve` | The Rust host asks `opentide.cli.services.serve_bridge` which engine runs each request (`Bridge.plan`) and runs Python's choices through the Python `CommandRunner` | Engine selection in Rust (the defaults table), and nothing left for Python to run | At the flip: selection reads Rust's default; delete the bridge with the Python implementations |
-| `opentide tui` | Default and `compare`: the Textual UI. `rust`: the ratatui UI, whose Configuration tab says it is not ported | The Configuration tab | **Port** the tab, then flip |
-| `opentide lsp start` | The Python launcher (`cli/services/lsp.py`) hands the Rust server the workspace's catalogs generated by Python (`own_catalog`) and its host info | The catalogs generated in Rust (#941's field-catalog generator) | **Port** `_supply_catalogs` to the Rust host; `lsp start` under `rust` already serves |
-| `doctor` | `platform_sdk` reads the platforms' Python modules from `OPENTIDE_PYTHON_MODULES`, set by the launcher; `python_version` is skipped on Rust | Neither check means anything once the platforms are Rust connectors | **Approve** dropping both (D5, #977) |
-| `setup mcp`, `setup --mcp` | Reads `OPENTIDE_MCP_SERVER` (whether the Python MCP server's imports resolve) from the launcher | Moot once `mcp start` is Rust's | **Drop** with the Python MCP server |
+| `opentide serve` | **Done (UC-6.0d)**: the Rust host runs every request on Rust; `serve_bridge` and the `Delegate` are deleted | — | The Python host (`cli/services/serve.py`) goes with the Python implementations |
+| `opentide tui` | **Done (UC-6.0d)**: the Configuration tab is ported (`tui/configuration.rs`) and `tui`'s default is `rust` (`DEFAULT_ENGINES`); `compare` opens the Rust UI too; `OPENTIDE_ENGINE=python` opens the Textual UI | — | Delete `cli/tui*` with the Python implementations |
+| `opentide lsp start` | **Done (UC-6.0d)**: the Python launcher hands the server no catalog; it generates them from the models (`catalog: "models"`), as under `rust` | — | — |
+| `doctor` | **Done (UC-6.0d, D5)**: neither `python_version` nor `platform_sdk` runs on Rust; the dropped rows are approved (`json-drop:/checks` entries and the text cases' blocks), and the Node runner compares `doctor` on every fixture | — | — |
+| `setup mcp`, `setup --mcp` | **Done (UC-6.0d)**: probes the Rust MCP server (`McpServer::probe`), compiled in; the launcher sets neither `OPENTIDE_MCP_SERVER` nor `OPENTIDE_PYTHON_MODULES` | — | — |
 | Shell completion | `--install-completion`, `--show-completion` are Typer's | A Rust completion, or none | **Decision D2** |
 | The launcher (`opentide.cli.launch`) | Decides Rust or Python before Typer loads; sends `--help`, `--version`, completion, root errors and `compare` to Python | At the flip, everything but the escape hatch to Rust; at removal, a console script that only calls `opentide._native.main` | Flip steps 2 and 5 |
 | SDK | `opentide.Workspace` and `run_json` are the Rust facade (UC-5.2); `opentide.models` are Rust classes (UC-1.9); `opentide.Opentide` (the Python registry) and the Pydantic shims in `opentide.models` warn as deprecated | The end of their deprecation cycle; UC-5.2b (async methods, `sdk.pyi`) in flight | Delete `core/registry.py` and the shims when their cycle ends, independent of the CLI flip |
@@ -153,7 +155,7 @@ keeps `OPENTIDE_ENGINE=python` as an escape hatch, then its Python implementatio
 | D2 | Shell completion | generate completions with a crate (`clap_complete`) under the same options, or drop the options with a changelog entry | Typer's scripts call back into Python; they cannot survive the removal unchanged |
 | D3 | The home screen (G4) | port it (2 recordings; `info`'s data) or approve the root's help in its place | A person running `opentide` with no arguments sees it first |
 | D4 | The MCP server's 8 delegated tools and 12 resources | the order of their ports (UC-5.2 registry tools first, or the tenant tools), and whether `mcp start` flips separately | Until they are ported, `mcp start` cannot flip, and Python stays installed for MCP clients |
-| D5 | `doctor`'s `platform_sdk` and `python_version` without Python | drop both checks, or approve their "not checked" rows in the ledger | Closes the `doctor` half of #977 |
+| D5 | `doctor`'s `platform_sdk` and `python_version` without Python | **Decided: dropped** (UC-6.0d) | Closes the `doctor` half of #977 |
 | D6 | Flip granularity | per command family across several releases (plan §7), or every path at once in one release since compare is green for all | One release is shorter; per family limits what the escape hatch must cover |
 | D7 | `query` routing (G6) | port the Sysdig answer and drop `platforms` from `query`'s entry once UC-4.5b merges | 8 cases (and 4 help cases) move from Python only to compared |
 
@@ -165,3 +167,16 @@ keeps `OPENTIDE_ENGINE=python` as an escape hatch, then its Python implementatio
   `OPENTIDE_PROGRESS=json`'s events out of six (and out of the named phases for
   `generate schemas templates`). 14 cases moved from Python only to compared; 12 equal, 2 differ
   only by the spinner Python drew in human mode (approved, #841).
+
+## What UC-6.0d changed
+
+- **`serve`** runs every request on Rust: the Python bridge is deleted, and `ServeHost` takes
+  the server's environment and directory.
+- **`tui`** opens the Rust UI by default; its Configuration tab is ported, with the raw view
+  redacted and proven redacted as the Python tab does it.
+- **`lsp start`** hands the server no catalog from Python.
+- **`doctor`** runs neither Python check (D5), and **`setup mcp`** probes the Rust server; the
+  ledger gains a `json-drop:` rule (the mirror of `json-extend:`) so the dropped rows keep the
+  oracle's indices for the entries after them.
+- **`new` at a prompt**, **two status-promotion edge cases** and **`query --platform sysdig`**
+  no longer refuse; `validate_query::live` and `live_not_ported` are deleted.

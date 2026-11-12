@@ -742,16 +742,264 @@ fn visibility_lists_the_log_sources_and_what_reads_them() {
     assert_eq!(app.selected, Node::Object(RULE.into()));
 }
 
+/// A literal credential in a file: never shown (`test_tui_configuration.py`).
+const LITERAL: &str = "s3cr3t-literal-do-not-show";
+/// The value of a variable a tenant names: never shown either.
+const VALUE: &str = "value-of-the-variable-do-not-show";
+
+/// The tutorial, with a Sentinel tenant whose `setup` holds a literal
+/// secret, a `$VAR` reference that is set and one that is not, and a
+/// `lint.toml` (`configured_repo`).
+fn configured() -> (tempfile::TempDir, std::path::PathBuf) {
+    let (base, repo) = tutorial();
+    let config = repo.join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let tenant = format!(
+        "\n[[tenants]]\nname = \"Production\"\ndescription = \"Synthetic tenant\"\n\
+         strategies = [\"PREVIEW\", \"RELEASE\"]\n\n[tenants.setup]\nssl = true\n\
+         workspace_id = \"$OPENTIDE_TEST_WORKSPACE_ID\"\n\
+         azure_client_id = \"${{OPENTIDE_TEST_UNSET_CLIENT_ID}}\"\n\
+         azure_client_secret = \"{LITERAL}\"\nproxy_url = \"https://user:{LITERAL}@proxy.example\"\n\n\
+         [[tenants]]\nname = \"Manual\"\nstrategies = [\"RELEASE\"]\nmanual = true\n\
+         setup = {{ azure_client_secret = \"{LITERAL}\" }}\n"
+    );
+    std::fs::write(&config, text + &tenant).unwrap();
+    std::fs::write(
+        repo.join(".opentide/configurations/lint.toml"),
+        "[metadata]\nrequired = [\"author\"]\n",
+    )
+    .unwrap();
+    (base, repo)
+}
+
+/// The UI on `repo`, `OPENTIDE_TEST_WORKSPACE_ID` set in its environment.
+fn open_configured(repo: &Path) -> App {
+    let mut launch = launch(repo, repo);
+    launch.env = opentide_cli::env::Env::from_pairs([
+        ("HOME", repo.display().to_string()),
+        ("OPENTIDE_TEST_WORKSPACE_ID", VALUE.to_owned()),
+    ]);
+    let mut app = App::new(launch);
+    app.start_load();
+    app.settle();
+    assert!(app.catalogue.is_some(), "{}", app.status);
+    app
+}
+
+fn no_secret(text: &str) {
+    assert!(!text.contains(LITERAL), "{text}");
+    assert!(!text.contains(VALUE), "{text}");
+}
+
 #[test]
-fn the_configuration_tab_says_it_is_not_ported() {
+fn the_view_reads_settings_and_never_holds_a_credential() {
+    use opentide_cli::tui::configuration::HIDDEN;
+    let (_base, repo) = configured();
+    let app = open_configured(&repo);
+    let view = &app.catalogue.as_ref().unwrap().configuration;
+    assert!(view.problem.is_none());
+    no_secret(&format!("{view:?}"));
+    let sentinel = view.file("platforms/sentinel.toml").unwrap();
+    let setting = |path: &str| {
+        sentinel
+            .settings
+            .iter()
+            .find(|setting| setting.path == path)
+            .unwrap_or_else(|| panic!("{path}"))
+    };
+    let secret = setting("tenants.0.setup.azure_client_secret");
+    assert!(secret.secret && secret.shown == HIDDEN && secret.variable.is_none());
+    let workspace = setting("tenants.0.setup.workspace_id");
+    assert_eq!(
+        (workspace.variable.as_deref(), workspace.variable_set),
+        (Some("OPENTIDE_TEST_WORKSPACE_ID"), Some(true))
+    );
+    let unset = setting("tenants.0.setup.azure_client_id");
+    assert_eq!(
+        (unset.variable.as_deref(), unset.variable_set),
+        (Some("OPENTIDE_TEST_UNSET_CLIENT_ID"), Some(false))
+    );
+    assert_eq!(setting("tenants.1.setup.azure_client_secret").shown, HIDDEN);
+    assert_eq!(setting("tenants.0.name").shown, "Production");
+    assert!(setting("tenants.0.name").set_here);
+    let raw = sentinel.raw.as_deref().unwrap();
+    no_secret(raw);
+    assert!(
+        raw.contains("\"${OPENTIDE_TEST_UNSET_CLIENT_ID}\"  # unset"),
+        "{raw}"
+    );
+    // lint.toml: the workspace sets metadata.required; the rest are
+    // defaults, each explained.
+    let lint = view.file("lint.toml").unwrap();
+    let required = lint
+        .settings
+        .iter()
+        .find(|setting| setting.path == "metadata.required")
+        .unwrap();
+    assert!(required.set_here);
+    assert_eq!(required.shown, "author");
+    let style = lint
+        .settings
+        .iter()
+        .find(|setting| setting.path == "filenames.style")
+        .unwrap();
+    assert!(!style.set_here);
+    assert!(style.description.contains("stem"), "{}", style.description);
+}
+
+#[test]
+fn platform_cards_list_tenants_credentials_and_the_rules_that_reach_them() {
+    let (_base, repo) = configured();
+    let mut app = open_configured(&repo);
+    let catalogue = app.catalogue.clone().unwrap();
+    let card = catalogue
+        .configuration
+        .platforms
+        .iter()
+        .find(|card| card.platform == "sentinel")
+        .unwrap();
+    assert!(card.enabled);
+    let [production, manual] = &card.tenants[..] else {
+        panic!("{:?}", card.tenants);
+    };
+    assert_eq!(production.strategies, ["PREVIEW", "RELEASE"]);
+    let credential = |key: &str| {
+        production
+            .credentials
+            .iter()
+            .find(|credential| credential.key == key)
+            .unwrap()
+    };
+    assert!(credential("azure_client_secret").variable.is_none());
+    assert_eq!(credential("workspace_id").is_set, Some(true));
+    assert_eq!(credential("azure_client_id").is_set, Some(false));
+    assert_eq!(credential("ssl").flag, Some(true));
+    // The tutorial rule is STAGING (a PREVIEW strategy): it reaches the
+    // tenant that accepts PREVIEW, not the manual one, which it does not list.
+    assert_eq!(production.rules, [RULE]);
+    assert!(manual.manual && manual.rules.is_empty());
+    press(&mut app, "5");
+    app.select_configuration("platforms/sentinel.toml");
+    let (rows, _) = screen(&mut app, 180, 60);
+    let shown = rows.join("\n");
+    no_secret(&shown);
+    assert!(
+        shown.contains("$OPENTIDE_TEST_WORKSPACE_ID")
+            || shown.contains("${OPENTIDE_TEST_WORKSPACE_ID}")
+    );
+    assert!(shown.contains("Sentinel KQL Rule"), "{shown}");
+    assert!(
+        shown.contains("Production") && shown.contains("set here"),
+        "{shown}"
+    );
+}
+
+/// Every way a credential leaked from an earlier redactor, in one valid
+/// platform file (`HOSTILE`).
+fn hostile() -> String {
+    format!(
+        "api_key = {{ value = \"{LITERAL}\" }}\n\
+         url = \"https://user:pa@ss@{LITERAL}@proxy.example/path\"\n\
+         nested = [[{{ token = \"{LITERAL}\" }}]]\n\
+         tenants = [\n  {{ name = \"inline\", strategies = [\"RELEASE\"], setup = {{ client_secret = \"{LITERAL}\" }} }},\n]\n\n\
+         [platform]\nenabled = false\n\n[platform.credentials]\nvalue = \"{LITERAL}\"\n\n\
+         [auth]\nvalue = \"{LITERAL}\"\n\n[extra.'setup']\n\"client id\" = \"{LITERAL}\"\n\
+         'client name' = \"{LITERAL}\"\nkeys = [\n  \"a]\",\n  \"{LITERAL}\",\n]\n\
+         cert = \"\"\"\nab\\\"\"\"\n{LITERAL}\n\"\"\"\n\
+         token = \"a\u{2028}{LITERAL}\u{85}{LITERAL}\"\n"
+    )
+}
+
+#[test]
+fn the_configuration_tab_shows_no_credential_in_any_view() {
+    use opentide_cli::tui::configuration::HIDDEN;
+    let (_base, repo) = configured();
+    std::fs::write(
+        repo.join(".opentide/configurations/platforms/acme.toml"),
+        hostile(),
+    )
+    .unwrap();
+    let mut app = open_configured(&repo);
+    press(&mut app, "5");
+    assert_eq!(app.tab, 4);
+    let keys: Vec<String> = app
+        .catalogue
+        .as_ref()
+        .unwrap()
+        .configuration
+        .files
+        .iter()
+        .map(|item| item.key.clone())
+        .collect();
+    for key in [
+        "deployment.toml",
+        "platforms/sentinel.toml",
+        "platforms/acme.toml",
+        "sharing.toml",
+    ] {
+        assert!(keys.iter().any(|known| known == key), "{key}: {keys:?}");
+    }
+    // Every file, read and raw: no credential on screen.
+    for key in &keys {
+        app.select_configuration(key);
+        for _ in 0..2 {
+            let (rows, _) = screen(&mut app, 180, 50);
+            no_secret(&rows.join("\n"));
+            press(&mut app, "t");
+        }
+    }
+    app.select_configuration("platforms/sentinel.toml");
+    let (rows, _) = screen(&mut app, 180, 50);
+    let shown = rows.join("\n");
+    assert!(
+        shown.contains("Production") && shown.contains(HIDDEN),
+        "{shown}"
+    );
+    assert!(shown.contains("ssl"), "{shown}");
+    // The file of every leak is redacted raw.
+    press(&mut app, "t");
+    assert!(app.config_raw);
+    app.select_configuration("platforms/acme.toml");
+    let (rows, _) = screen(&mut app, 180, 50);
+    let shown = rows.join("\n");
+    assert!(
+        shown.contains(HIDDEN) && shown.contains("proxy.example/path"),
+        "{shown}"
+    );
+    // The keys and the footer.
+    key(&mut app, KeyCode::Up);
+    let (rows, _) = screen(&mut app, 180, 50);
+    assert!(rows.last().unwrap().contains("Raw TOML"), "{rows:?}");
+}
+
+#[test]
+fn without_a_workspace_file_the_defaults_are_shown() {
     let (_base, repo) = tutorial();
     let mut app = open(&repo);
     press(&mut app, "5");
-    let (rows, _) = screen(&mut app, 120, 20);
+    let view = app.catalogue.as_ref().unwrap().configuration.clone();
+    let documentation = view.file("documentation.toml").unwrap();
     assert!(
-        rows.join("\n")
-            .contains("The Configuration tab has no Rust implementation yet.")
+        documentation.path.is_none()
+            || documentation.settings.iter().any(|s| s.set_here)
+            || documentation.path.as_ref().is_some_and(|p| p.is_file())
     );
+    app.select_configuration("documentation.toml");
+    let (rows, _) = screen(&mut app, 180, 40);
+    let shown = rows.join("\n");
+    assert!(shown.contains("documentation.toml"), "{shown}");
+    if documentation.path.is_none() {
+        assert!(
+            shown.contains("not in this workspace: the bundled defaults apply"),
+            "{shown}"
+        );
+        press(&mut app, "t");
+        let (rows, _) = screen(&mut app, 180, 40);
+        assert!(
+            rows.join("\n")
+                .contains("The workspace has no documentation.toml.")
+        );
+    }
 }
 
 #[test]

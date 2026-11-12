@@ -312,11 +312,16 @@ RUST_QUERY_ROUTED: tuple[str, ...] = (
 #: start`` (UC-3.6b, #947) is one too: an editor's session has one server on
 #: stdio, so ``compare`` runs the Python host and ``rust`` the Rust one. So is
 #: ``tui``: a full-screen UI cannot run twice to be compared, so ``compare``
-#: opens the Python one; under ``rust`` its refusals and its UI (on ratatui,
-#: UC-3.6d, #951) run on Rust.
+#: opens the Rust one (:data:`UNCOMPARED_RUST`), the default since its
+#: Configuration tab was ported (UC-6.0d); its refusals and its UI (on
+#: ratatui, UC-3.6d, #951) run on Rust.
 ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
     {("serve",), ("mcp", "start"), ("lsp", "start"), ("tui",)}
 )
+
+#: Hosts that ``compare`` runs on Rust alone: ``tui``, whose Rust UI is the
+#: default (UC-6.0d, #841) and which cannot run twice to be compared.
+UNCOMPARED_RUST: frozenset[tuple[str, ...]] = frozenset({("tui",)})
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
 #: ``rust`` runs it in this process (:func:`opentide.cli.rust.run_in_process`);
@@ -502,6 +507,9 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         return
     words = command_words(click_ctx.command, args)
     engine = selected(words)
+    if engine == COMPARE and words in UNCOMPARED_RUST:
+        # A full-screen UI cannot run twice to be compared: the Rust one opens.
+        engine = RUST
     if engine == PYTHON:
         return
     path = " ".join(words) or "(no command)"
