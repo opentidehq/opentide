@@ -700,7 +700,7 @@ jobs:
       - name: license scan (no oracle references)
         run: |
           bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide-connectors crates/opentide bindings/node
+          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide-connectors crates/opentide bindings/node bindings/python
           cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
