@@ -671,6 +671,64 @@ mod tests {
     }
 
     #[test]
+    fn every_option_reaches_the_facade() {
+        let ws = workspace();
+        let lint = lint_options(LintOptions {
+            checks: Some(vec!["filenames".into(), "metadata".into()]),
+            strict: Some(false),
+            files: Some(vec![RULE.into()]),
+        })
+        .unwrap();
+        assert_eq!(lint.files, [RULE]);
+        assert_eq!(lint.checks, [LintCheck::Filenames, LintCheck::Metadata]);
+        let report = ws
+            .lint_report(Some(LintOptions {
+                files: Some(vec![RULE.into()]),
+                ..LintOptions::default()
+            }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(LintJs::of(&report)).unwrap()["exitCode"],
+            report.exit_code
+        );
+
+        let plan = deploy_plan_options(DeployPlanOptions {
+            strategies: Some(vec!["PREVIEW".into()]),
+            uuids: Some(vec![UUID.into()]),
+            files: Some(vec![RULE.into()]),
+            platform: Some("splunk".into()),
+            keep_deprecated: None,
+        })
+        .unwrap();
+        assert_eq!(plan.strategies, [opentide::Strategy::Preview]);
+        assert_eq!(plan.uuids, [UUID]);
+        assert_eq!(plan.files, [RULE]);
+        let planned = ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["RELEASE".into()]),
+                uuids: Some(vec![UUID.into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&planned.document).unwrap();
+        assert!(document.is_object(), "{document}");
+
+        let validation = ws
+            .validation(Some(ValidateOptions {
+                files: Some(vec![RULE.into()]),
+                uuids: Some(vec![UUID.into()]),
+                types: Some(vec!["rule".into()]),
+                queries: Some("warn".into()),
+                ..ValidateOptions::default()
+            }))
+            .unwrap();
+        let js = serde_json::to_value(ValidationJs::of(&validation)).unwrap();
+        assert_eq!(js["warned"], validation.warned);
+        let coverage = serde_json::to_value(ws.inner.coverage("T1059")).unwrap();
+        assert_eq!(coverage["technique"], "T1059");
+    }
+
+    #[test]
     fn a_bad_option_fails_before_the_workspace_runs() {
         let ws = workspace();
         let bad =
