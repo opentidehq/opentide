@@ -687,6 +687,46 @@ def _advisory_findings(
     return findings
 
 
+def _graylog_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Graylog block advisories (graylog-1.0), at the key each points at."""
+    import yaml
+
+    from opentide.core.io import parse_yaml
+    from opentide.platforms.graylog.advisories import graylog_advisories
+    from opentide.validation.errors import attach_yaml_lines
+    from opentide.validation.issues import ValidationIssue
+
+    findings: list[dict[str, object]] = []
+    for record in records:
+        if record.parse_error or not record.text or "graylog" not in record.text:
+            continue
+        try:
+            body = parse_yaml(record.text)
+        except yaml.YAMLError:
+            continue  # the parse error is another check's finding
+        if not isinstance(body, dict):
+            continue
+        issues = [
+            ValidationIssue(code=item.code, field_path=item.field_path, message=item.message)
+            for item in graylog_advisories(body)
+        ]
+        for issue in attach_yaml_lines(issues, body, file_path=record.path):
+            findings.append(
+                {
+                    **_finding(
+                        LintCheck.queries,
+                        "warning",
+                        record,
+                        issue.message,
+                        code=issue.code,
+                        yaml_line=issue.yaml_line,
+                    ),
+                    "_field_path": list(issue.field_path),
+                }
+            )
+    return findings
+
+
 def _reported_by_opentide(record: _ObjectRecord, finding: Finding) -> bool:
     """Whether opentide's own check reports the engine *finding*'s HarfangLab advisory too.
 
@@ -933,10 +973,11 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
-        # The HarfangLab YARA, Bitdefender and Google SecOps advisories need no engine:
-        # reported whether it loads or not.
+        # The HarfangLab YARA, Bitdefender, Graylog and Google SecOps advisories need no
+        # engine: reported whether it loads or not.
         advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
         advisories.extend(_bitdefender_findings(shown))
+        advisories.extend(_graylog_findings(shown))
         advisories.extend(_google_secops_findings(shown))
         findings.extend(advisories)
         try:

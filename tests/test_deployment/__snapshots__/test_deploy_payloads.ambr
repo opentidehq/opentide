@@ -252,3 +252,87 @@
     'type': 'query',
   })
 # ---
+# name: test_preview_payload_shape[rule-0015-graylog-event-definition.yaml-graylog][graylog_api_request]
+  dict({
+    'body': dict({
+      'entity': dict({
+        '_scope': 'DEFAULT',
+        'alert': True,
+        'config': dict({
+          'conditions': dict({
+            'expression': dict({
+              'expr': '>=',
+              'left': dict({
+                'expr': 'number-ref',
+                'ref': 'count-',
+              }),
+              'right': dict({
+                'expr': 'number',
+                'value': 3,
+              }),
+            }),
+          }),
+          'execute_every_ms': 300000,
+          'filters': list([
+          ]),
+          'group_by': list([
+            'source',
+          ]),
+          'query': 'EventID:1 AND parent_image_lc:/.*\\\\(winword|excel)\\.exe/ AND command_line_lc:/.* -enc .*/',
+          'query_parameters': list([
+          ]),
+          'search_within_ms': 900000,
+          'series': list([
+            dict({
+              'id': 'count-',
+              'type': 'count',
+            }),
+          ]),
+          'stream_categories': list([
+          ]),
+          'streams': list([
+          ]),
+          'type': 'aggregation-v1',
+          'use_cron_scheduling': False,
+        }),
+        'description': 'Simulated Graylog event definition for CLI E2E corpus: an Office application starting an encoded PowerShell, three times in fifteen minutes.',
+        'field_spec': dict({
+          'host': dict({
+            'data_type': 'string',
+            'providers': list([
+              dict({
+                'require_values': False,
+                'template': '${source.source}',
+                'type': 'template-v1',
+              }),
+            ]),
+          }),
+        }),
+        'key_spec': list([
+          'host',
+        ]),
+        'notification_settings': dict({
+          'backlog_size': 0,
+          'grace_period_ms': 0,
+        }),
+        'notifications': list([
+        ]),
+        'priority': 3,
+        'tactics_techniques': list([
+          'T1059',
+          'T1059.005',
+          'TA0002',
+        ]),
+        'tags': list([
+          'office',
+          'opentide',
+          'opentide.00000000-0000-4000-8003-00000091a7e0',
+        ]),
+        'title': 'Graylog Event Definition Rule',
+      }),
+      'share_request': None,
+    }),
+    'method': 'POST',
+    'path': '/api/events/definitions?schedule=true',
+  })
+# ---

@@ -912,6 +912,47 @@ class BitdefenderActions(_BitdefenderTable):
     """Run a risk scan (type 7)."""
 
 
+# --- Graylog (platform::graylog::1.0) ---------------------------------------------------
+
+
+class GraylogSchedule(TideModel):
+    every: str | None = None
+    """How often the definition runs (`execute_every_ms`). Exclusive with `cron`."""
+    window: str | None = None
+    """The time range each run searches (`search_within_ms`)"""
+    cron: str | None = None
+    """A Quartz cron expression of 6 or 7 fields (`0 */5 * * * ?`). Exclusive with `every`."""
+    timezone: str | None = None
+    """The IANA time zone `cron` runs in"""
+
+
+class GraylogAggregation(TideModel):
+    group_by: str | list[str] | None = None
+    """Message fields the events are grouped by"""
+    condition: str
+    """A boolean expression over series, in the condition grammar"""
+
+
+class GraylogEventTemplate(TideModel):
+    template: str
+    """A Graylog template (`${source.<field>}`) or constant text, sent as written."""
+
+
+class GraylogLookupTable(TideModel):
+    table: str
+    """The Graylog lookup table name."""
+    key_field: str
+    """The message field whose value is the lookup key."""
+
+
+class GraylogEventLookup(TideModel):
+    lookup: GraylogLookupTable
+    """A lookup-table value keyed by a message field."""
+
+
+#: An `event_fields` value: a bare field name or a `${...}` template string,
+#: `{template: ...}`, or `{lookup: {table, key_field}}`.
+GraylogEventField = str | GraylogEventTemplate | GraylogEventLookup
 # --- Google Security Operations (platform::google_secops::1.0) ------------------------
 
 

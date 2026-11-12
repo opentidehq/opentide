@@ -177,6 +177,44 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`google_secops_tenant_unauthorized`](#google_secops_tenant_unauthorized) | A Google SecOps instance refused opentide's credentials. |
 | [`google_secops_tenant_unreachable`](#google_secops_tenant_unreachable) | A Google SecOps instance did not answer, so no rule was deployed to it. |
 | [`google_secops_verify_failed`](#google_secops_verify_failed) | Google SecOps does not compile a rule, so deploy neither creates nor updates it. |
+| [`graylog_aggregation`](#graylog_aggregation) | A Graylog aggregation condition does not parse, or a call has the wrong arguments. |
+| [`graylog_alias_unknown`](#graylog_alias_unknown) | A Graylog block names a stream or notification alias the tenant does not define. |
+| [`graylog_all_streams`](#graylog_all_streams) | A Graylog definition names no stream, so it searches every stream. |
+| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard or range applies to Graylog's analysed message field. |
+| [`graylog_create_unconfirmed`](#graylog_create_unconfirmed) | A Graylog create got no answer, so the definition may exist without a binding. |
+| [`graylog_definition_immutable`](#graylog_definition_immutable) | Graylog refuses to change or delete an event definition outside the default scope. |
+| [`graylog_definition_in_use`](#graylog_definition_in_use) | Graylog refuses to delete an event definition another one depends on. |
+| [`graylog_definition_invalid`](#graylog_definition_invalid) | Graylog refused an event definition, naming the fields at fault. |
+| [`graylog_definition_missing`](#graylog_definition_missing) | The recorded Graylog event definition was gone when deploy came to disable it. |
+| [`graylog_definition_recreated`](#graylog_definition_recreated) | The recorded Graylog event definition was gone, so deploy created it again. |
+| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row. |
+| [`graylog_event_field`](#graylog_event_field) | A Graylog event field has an invalid name or value. |
+| [`graylog_event_key`](#graylog_event_key) | A Graylog event_key item is not an event field of the block. |
+| [`graylog_event_limit`](#graylog_event_limit) | A Graylog block's event_limit is out of range, or set on an aggregation. |
+| [`graylog_field_name`](#graylog_field_name) | A Graylog aggregation groups by a name that is not a field name. |
+| [`graylog_field_unsupported_version`](#graylog_field_unsupported_version) | A Graylog block sets a field the tenant's version cannot take. |
+| [`graylog_forbidden`](#graylog_forbidden) | Graylog refused a request for want of a permission. |
+| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`. |
+| [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not a string or a list of distinct, non-blank strings. |
+| [`graylog_open_range`](#graylog_open_range) | A Graylog range has an open end, which Graylog's validator refuses. |
+| [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a window longer than its interval. |
+| [`graylog_priority`](#graylog_priority) | A Graylog block's priority is not one of Graylog's priorities. |
+| [`graylog_priority_collapsed`](#graylog_priority_collapsed) | Graylog before 7.1 has no Informational priority: the definition is sent as Low. |
+| [`graylog_query_blank`](#graylog_query_blank) | A Graylog block has no query, or an empty one. |
+| [`graylog_query_invalid`](#graylog_query_invalid) | Graylog refused a query, so deploy saved nothing. |
+| [`graylog_query_warning`](#graylog_query_warning) | Graylog has a reservation about a query. |
+| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds a character Lucene reads as a regex operator. |
+| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped double quote. |
+| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses syntax Lucene's regex engine does not have. |
+| [`graylog_request_failed`](#graylog_request_failed) | A Graylog request failed for a reason the failure table does not name. |
+| [`graylog_schedule`](#graylog_schedule) | A Graylog block's schedule is invalid. |
+| [`graylog_tenant_unauthorized`](#graylog_tenant_unauthorized) | A Graylog tenant refused the access token. |
+| [`graylog_tenant_unreachable`](#graylog_tenant_unreachable) | A Graylog tenant did not answer. |
+| [`graylog_title_duplicate`](#graylog_title_duplicate) | Two enabled Graylog blocks resolve to one event definition title. |
+| [`graylog_unknown_field`](#graylog_unknown_field) | Graylog does not know a field the query names, on the streams it searches. |
+| [`graylog_value_type`](#graylog_value_type) | A query compares a Graylog field with a value of the wrong type. |
+| [`graylog_version_unsupported`](#graylog_version_unsupported) | A Graylog tenant runs a version opentide does not deploy to. |
+| [`graylog_version_vulnerable`](#graylog_version_vulnerable) | A Graylog tenant runs a version affected by the access-token revocation flaw. |
 | [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
 | [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses. |
 | [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
@@ -343,39 +381,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
 | [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which libyara refuses unless the condition uses them. |
 | [`yara_x_incompatible`](#yara_x_incompatible) | libyara 4.5 compiles this YARA but YARA-X 1.x refuses it. |
-| [`yaral_condition_shape`](#yaral_condition_shape) | The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event. |
-| [`yaral_deprecated_field`](#yaral_deprecated_field) | The UDM field is deprecated. |
-| [`yaral_enum_value`](#yaral_enum_value) | The value is not one of the enumerated UDM field's values. |
-| [`yaral_export_value`](#yaral_export_value) | An `export` `write_row` value is not an outcome variable: Google exports outcome variables only. |
-| [`yaral_function_unavailable`](#yaral_function_unavailable) | The function exists, but not in this profile (rules or search). |
-| [`yaral_leading_wildcard_regex`](#yaral_leading_wildcard_regex) | The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time. |
 | [`yaral_match_shape`](#yaral_match_shape) | A YARA-L `match` is not a `YaraLMatch` object. |
-| [`yaral_match_variable`](#yaral_match_variable) | A `match` name is not a placeholder bound in `events`. |
 | [`yaral_match_window`](#yaral_match_window) | A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows. |
-| [`yaral_meta_duplicate`](#yaral_meta_duplicate) | A meta key appears twice, or a meta value is not a double-quoted string. |
-| [`yaral_multi_event_match`](#yaral_multi_event_match) | A rule with two or more event variables has no `match` section. |
-| [`yaral_nocase_on_enum`](#yaral_nocase_on_enum) | `nocase` is applied to a comparison with an enumerated UDM field. |
 | [`yaral_option`](#yaral_option) | A YARA-L `options` key is unknown, or its value is of the wrong kind. |
-| [`yaral_outcome_aggregation`](#yaral_outcome_aggregation) | With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable. |
-| [`yaral_outcome_limit`](#yaral_outcome_limit) | A rule or search assigns more than 20 outcome variables. |
-| [`yaral_parse_error`](#yaral_parse_error) | The YARA-L text does not parse, or a text holds a second rule. |
-| [`yaral_reference_list_deprecated`](#yaral_reference_list_deprecated) | Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`). |
-| [`yaral_reference_list_limit`](#yaral_reference_list_limit) | More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2). |
-| [`yaral_regex`](#yaral_regex) | The regular expression is not valid RE2. |
-| [`yaral_reserved_identifier`](#yaral_reserved_identifier) | A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`. |
 | [`yaral_section_alias`](#yaral_section_alias) | A YARA-L section key is a YAML alias instead of its own text. |
 | [`yaral_section_empty`](#yaral_section_empty) | A YARA-L section key is present with no text. |
 | [`yaral_section_header`](#yaral_section_header) | A YARA-L section text holds a section label, a `rule` header or a rule's braces. |
 | [`yaral_section_missing`](#yaral_section_missing) | A YARA-L rule has no `events` or no `condition` section. |
-| [`yaral_section_order`](#yaral_section_order) | A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export). |
-| [`yaral_section_unavailable`](#yaral_section_unavailable) | The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections. |
-| [`yaral_string_escape`](#yaral_string_escape) | A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles. |
-| [`yaral_type`](#yaral_type) | An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number. |
-| [`yaral_undefined_variable`](#yaral_undefined_variable) | A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`. |
-| [`yaral_unfiltered_event`](#yaral_unfiltered_event) | An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event. |
-| [`yaral_unknown_function`](#yaral_unknown_function) | The function is not in Google's YARA-L function list, or it takes a different number of arguments. |
-| [`yaral_unknown_udm_field`](#yaral_unknown_udm_field) | The field path is not in the Unified Data Model. |
-| [`yaral_window_bound`](#yaral_window_bound) | `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window. |
 
 ## analysis_engine
 
@@ -3226,6 +3238,663 @@ google_secops_verify_failed: Google SecOps does not compile rule password_spray:
 
 Fix the section the diagnostic names and run `opentide validate query --platform google_secops --live`, which asks the same compiler without deploying.
 
+## graylog_aggregation
+
+A Graylog aggregation condition does not parse, or a call has the wrong arguments.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `aggregation.condition` (or `aggregation` when it has no condition). The condition compares series with numbers: `count() >= 3 OR card(parent_image_lc) >= 2`. The functions are `avg`, `card`, `count`, `latest`, `max`, `min`, `percentage`, `percentile`, `stddev`, `sum`, `sumofsquares` and `variance`; `count` takes no field or one, `percentile` a field and a percentile from above 0 to 100, every other function one field. Operators `AND`, `OR` and `NOT` are upper case. Arguments are separated by one comma (`percentile(bytes, 95)`), and parentheses and `NOT` nest at most 32 deep.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    aggregation:
+      condition: count() >= 3 or avg() > 1
+```
+
+### How to fix
+
+Write the condition in the grammar: `count() >= 3 OR avg(bytes) > 1`.
+
+## graylog_alias_unknown
+
+A Graylog block names a stream or notification alias the tenant does not define.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0), before any call for that rule, and by `opentide deploy --dry-run`. Blocks name streams and notifications by alias; each tenant maps the aliases to ids in `stream_ids` and `notification_ids`.
+
+### Example
+
+```text illustrative
+graylog_alias_unknown: tenant 'graylog-prod': stream alias(es) sysmon are not in the tenant's stream_ids table
+```
+
+### How to fix
+
+Add the alias to the tenant's table in `platforms/graylog.toml`, or change the block.
+
+## graylog_all_streams
+
+A Graylog definition names no stream, so it searches every stream.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0); never fails a rule. The block sets no `streams` and no `stream_categories`, and a tenant it deploys to sets no default `streams`: Graylog then searches every stream the token's user can read.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: EventID:1
+```
+
+### How to fix
+
+Set `streams` on the block, or default `streams` on the tenant's `[tenants.setup]`.
+
+## graylog_analyzed_field
+
+A regex, wildcard or range applies to Graylog's analysed message field.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `message` and `full_message` are tokenised and lower-cased, so a regex or wildcard matches single tokens, never the whole value.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: message:/.*powershell -enc.*/
+```
+
+### How to fix
+
+Match a keyword field the pipeline extracts, or search the words as a phrase (`message:"powershell -enc"`).
+
+## graylog_create_unconfirmed
+
+A Graylog create got no answer, so the definition may exist without a binding.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `POST /api/events/definitions` got no answer (a timeout, a reset), or answered no id. The create may have succeeded, but its id never reached opentide, so nothing was recorded. Titles are not unique, so deploy does not retry, which could create a second definition, and never lists definitions to find it.
+
+### Example
+
+```text illustrative
+graylog_create_unconfirmed: the create got no answer, so it may have succeeded with an id opentide
+does not know. Find the definition by the title 'mshta remote script' or the tag
+'opentide.00000000-0000-4000-8003-000000000061' in Graylog
+```
+
+### How to fix
+
+Find the definition by its title (on 7.2, by the `opentide.<uuid>` tag). Delete it and deploy again, or record its 24-hex id under `platforms.graylog.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## graylog_definition_immutable
+
+Graylog refuses to change or delete an event definition outside the default scope.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered "Immutable entity cannot be modified" or "Non-deletable entity cannot be deleted": the definition's `_scope` is not `DEFAULT` (a content pack or Illuminate installed it). Deploy always sends `_scope: DEFAULT` and never changes a scope.
+
+### Example
+
+```text illustrative
+graylog_definition_immutable: Immutable entity cannot be modified; deploy never changes a definition's scope
+```
+
+### How to fix
+
+Point the rule's binding in `.opentide/states/deployment/<uuid>.json` at a definition opentide created, or remove it so deploy creates one.
+
+## graylog_definition_in_use
+
+Graylog refuses to delete an event definition another one depends on.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) under `DELETION`. Another definition (a correlation) depends on this one, so Graylog keeps it, and the binding stays.
+
+### Example
+
+```text illustrative
+graylog_definition_in_use: another definition depends on this one: ...
+```
+
+### How to fix
+
+Remove or change the dependent definitions named in the message, then deploy again.
+
+## graylog_definition_invalid
+
+Graylog refused an event definition, naming the fields at fault.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered 400 with `{"errors": {<field>: [<message>]}}`: a value it does not accept, such as a stream or notification id that does not exist.
+
+### Example
+
+```text illustrative
+graylog_definition_invalid: notifications: Notification 65f0c0ffee0123456789abcf doesn't exist
+```
+
+### How to fix
+
+Fix the field Graylog names: for an id, the tenant's `stream_ids` or `notification_ids` table.
+
+## graylog_definition_missing
+
+The recorded Graylog event definition was gone when deploy came to disable it.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) under `DISABLEMENT`. `PUT` answered 404; there is nothing to disable, so deploy creates nothing and removes the id from `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+graylog_definition_missing: the recorded definition no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state.
+
+## graylog_definition_recreated
+
+The recorded Graylog event definition was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `PUT /api/events/definitions/{id}` answered 404: someone deleted the definition in Graylog. Deploy creates it again and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+graylog_definition_recreated: the recorded definition no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete definitions through a `DELETION` status, not in Graylog.
+
+## graylog_double_backslash
+
+A Graylog query holds four backslashes in a row.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. In a Graylog query, `\\` is one literal backslash, so `\\\\` matches two, which a Windows path does not have.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: 'image_lc:/.*\\\\\\\\mshta\.exe/'
+```
+
+### How to fix
+
+Write one literal backslash as `\\` in the query text (in single-quoted YAML, as written).
+
+## graylog_event_field
+
+A Graylog event field has an invalid name or value.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_fields.<name>`. A name matches `[A-Za-z0-9_.@-]+`. A value is a bare message field name (copied from the message that fired the event), a string containing `${` (a Graylog template), `{template: ...}`, or `{lookup: {table, key_field}}`.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    event_fields:
+      family: two words
+```
+
+### How to fix
+
+Write constant text as `{template: "two words"}`, or name a message field.
+
+## graylog_event_key
+
+A Graylog event_key item is not an event field of the block.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_key`. Graylog builds the event key from event fields, and refuses a key field `event_fields` does not define.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    event_fields: {host: source}
+    event_key: user
+```
+
+### How to fix
+
+Add the field to `event_fields`, or key on one that is there.
+
+## graylog_event_limit
+
+A Graylog block's event_limit is out of range, or set on an aggregation.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_limit`. `event_limit` caps the events one run of a filter creates: an integer from 1 to 1,000. An aggregation creates one event per group and takes none.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    event_limit: 5000
+```
+
+### How to fix
+
+Set a value from 1 to 1,000, or remove `event_limit` from an aggregation.
+
+## graylog_field_name
+
+A Graylog aggregation groups by a name that is not a field name.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `aggregation.group_by`. A Graylog field name matches `[A-Za-z0-9_.@-]+`.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    aggregation:
+      group_by: [src ip]
+      condition: count() > 1
+```
+
+### How to fix
+
+Group by the field's real name (`src_ip`).
+
+## graylog_field_unsupported_version
+
+A Graylog block sets a field the tenant's version cannot take.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `summary` (the event summary template) needs Graylog 7.1, and block `tags` need 7.2. Deploy leaves the field out of the request rather than let Graylog 6.3 drop it silently or 7.x refuse it.
+
+### Example
+
+```text illustrative
+graylog_field_unsupported_version: summary is left out: Graylog 6.3.5 has no event summary template (7.1 and later)
+```
+
+### How to fix
+
+Upgrade the tenant, or remove the field from the block.
+
+## graylog_forbidden
+
+Graylog refused a request for want of a permission.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered 403; the rule fails and the next one is sent. The token's user needs `eventdefinitions:create`, `eventdefinitions:read`, `eventdefinitions:edit` and `eventdefinitions:delete`, and `streams:read` on every stream a definition names.
+
+### Example
+
+```text illustrative
+graylog_forbidden: POST /api/events/definitions?schedule=true was refused (HTTP 403)
+```
+
+### How to fix
+
+Grant the token's user the permissions, most often `streams:read` on the definition's streams.
+
+## graylog_leading_wildcard
+
+A Graylog query term starts with `*` or `?`.
+
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. Graylog passes the query to `query_string` with `allow_leading_wildcard` from the server's `allow_leading_wildcard_searches`, `false` by default, and refuses the query ("'*' or '?' not allowed as first character"). opentide drops the finding when every tenant the block deploys to sets `allow_leading_wildcard = true`; offline, with no tenant, it is an error.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: image_lc:*\\mshta.exe
+```
+
+### How to fix
+
+Write a regex with a leading `.*` (`image_lc:/.*\\mshta\.exe/`), or set `allow_leading_wildcard = true` on every tenant whose server allows leading wildcards.
+
+## graylog_list_shape
+
+A Graylog list field is not a string or a list of distinct, non-blank strings.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at the list field: `tags`, `streams`, `stream_categories`, `event_key`, `notifications` or `aggregation.group_by`. Each takes one string or a list of strings; a string is a one-item list.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    streams: [sysmon, sysmon]
+```
+
+### How to fix
+
+Write one string, or a list whose items are non-blank and not repeated.
+
+## graylog_open_range
+
+A Graylog range has an open end, which Graylog's validator refuses.
+
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `[1 TO *]` and `{* TO 5}` are refused by `POST /api/search/validate`, so deploy would never save the definition.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: EventID:[4624 TO *]
+```
+
+### How to fix
+
+Write the bound as a comparison (`EventID:>=4624`), or give both ends.
+
+## graylog_overlapping_window
+
+A Graylog filter searches a window longer than its interval.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `schedule`; never fails a rule. With `window` longer than `every`, consecutive runs search overlapping time ranges, and a filter (no `aggregation`) creates an event for each message once per run that sees it.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    schedule: {every: 5m, window: 15m}
+```
+
+### How to fix
+
+Make `window` equal to `every` (the default), or turn the filter into an aggregation.
+
+## graylog_priority
+
+A Graylog block's priority is not one of Graylog's priorities.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `priority`. The priorities are `Informational`, `Low`, `Medium`, `High` and `Critical`.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    priority: Urgent
+```
+
+### How to fix
+
+Write one of the five, or leave `priority` out to derive it from `response.alert_severity`.
+
+## graylog_priority_collapsed
+
+Graylog before 7.1 has no Informational priority: the definition is sent as Low.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). The priority comes from the block's `priority`, else `response.alert_severity`. Graylog 7.1 added priority 0 (Informational); before it, deploy sends 1 (Low).
+
+### Example
+
+```text illustrative
+graylog_priority_collapsed: Graylog 7.0.16 has no Informational priority: sent as Low (1)
+```
+
+### How to fix
+
+Upgrade the tenant to 7.1 or later, or set `priority: Low` on the block.
+
+## graylog_query_blank
+
+A Graylog block has no query, or an empty one.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `query`. Every event definition searches with a query; an empty one would search every message.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    status: STAGING
+    query: ""
+```
+
+### How to fix
+
+Write the Graylog search query, for example `query: EventID:1 AND image_lc:/.*mshta\.exe/`.
+
+## graylog_query_invalid
+
+Graylog refused a query, so deploy saved nothing.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Before every create and every update but a `DISABLEMENT`, deploy sends the query to `POST /api/search/validate`; Graylog stores a query it cannot parse without complaint, so an `ERROR` verdict fails the rule and no request saves it.
+
+### Example
+
+```text illustrative
+graylog_query_invalid: Graylog refuses the query, so nothing is saved: Query parsing error:
+Cannot parse query, cause: incomplete query, query ended unexpectedly (line 1, column 0)
+```
+
+### How to fix
+
+Fix the query at the line and column Graylog names, and check it with `opentide validate query --platform graylog --live`.
+
+## graylog_query_warning
+
+Graylog has a reservation about a query.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`: a `WARNING` or `INFO` explanation of `POST /api/search/validate` that is neither an unknown field nor a value type, such as `INVALID_OPERATOR`.
+
+### Example
+
+```text illustrative
+graylog_query_warning: Invalid operator: Query contains invalid operator "and" (line 1, column 10)
+```
+
+### How to fix
+
+Read Graylog's explanation and change the query; an operator is upper case (`AND`).
+
+## graylog_regex_operator
+
+A Graylog regex holds a character Lucene reads as a regex operator.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An unescaped `#`, `&`, `@`, `<`, `>` or `~`, other than a numeric interval `<n-m>`, is an operator in Lucene's regex syntax, and Graylog's validator still says OK. `@` is "any string": `/.*@contoso\.com/` also matches `alicecontoso.com`; write `\@`.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: url_lc:/.*#section.*/
+```
+
+### How to fix
+
+Escape the character (`\#`) when you mean it literally.
+
+## graylog_regex_quote
+
+A Graylog regex holds an unescaped double quote.
+
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. The regex then matches nothing.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: 'command_line_lc:/.*"c:.*/'
+```
+
+### How to fix
+
+Escape the quote (`\"`), or match without it.
+
+## graylog_regex_unsupported
+
+A Graylog regex uses syntax Lucene's regex engine does not have.
+
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An inline flag such as `(?i)`, `\b`, `\B`, lookahead or lookbehind, or a backreference: Lucene's regex engine accepts none of them, and Graylog matches nothing without saying so.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: command_line:/(?i).*mimikatz.*/
+```
+
+### How to fix
+
+Match a lower-cased copy of the field instead (`command_line_lc:/.*mimikatz.*/`), written by a tenant pipeline; see the case section of the Graylog platform spec.
+
+## graylog_request_failed
+
+A Graylog request failed for a reason the failure table does not name.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0): an answer that is not 2xx and none of 400 with field errors, 401, 403, 404 on update, an immutable entity or a definition in use, such as a 500.
+
+### Example
+
+```text illustrative
+graylog_request_failed: PUT /api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=true: HTTP 500: ...
+```
+
+### How to fix
+
+Read Graylog's message and server log, then deploy again.
+
+## graylog_schedule
+
+A Graylog block's schedule is invalid.
+
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `schedule` or the offending `schedule.<key>`. Exactly one of `every` and `cron` is set (or neither); `every` and `window` are durations greater than zero (`5m`, `1h10m`, `PT15M`); `cron` is a Quartz expression of 6 or 7 fields with `?` in day of month or day of week; `timezone` is an IANA zone name; `window` is set when `cron` is.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    schedule: {cron: "0 */5 * * * ?"}
+```
+
+### How to fix
+
+Fix the key the finding names: with `cron`, also set `window` (`schedule: {cron: "0 */5 * * * ?", window: 5m}`).
+
+## graylog_tenant_unauthorized
+
+A Graylog tenant refused the access token.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0). Graylog answered 401; no rule on the tenant deploys. The token is sent as HTTP Basic, the token as user name and `token` as password.
+
+### Example
+
+```text illustrative
+graylog_tenant_unauthorized: tenant graylog-prod refused the access token: HTTP 401
+```
+
+### How to fix
+
+Set the token's environment variable (`token = "$GRAYLOG_TOKEN"`) to a valid access token; access tokens expire after 30 days by default.
+
+## graylog_tenant_unreachable
+
+A Graylog tenant did not answer.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0): DNS, a refused or reset connection, TLS or a timeout on a request other than a create. No further rule on the tenant deploys.
+
+### Example
+
+```text illustrative
+graylog_tenant_unreachable: HTTPSConnectionPool(host='graylog.example.com', port=443): Max retries exceeded
+```
+
+### How to fix
+
+Check the tenant's `url`, the network path, and `ssl`.
+
+## graylog_title_duplicate
+
+Two enabled Graylog blocks resolve to one event definition title.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0); never fails a rule. The title is the block's `name`, else the rule's `name`. Graylog allows two definitions with one title, and its alert list cannot tell them apart.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Office application spawns PowerShell
+configurations:
+  graylog:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.graylog.name`, or rename one of the rules.
+
+## graylog_unknown_field
+
+Graylog does not know a field the query names, on the streams it searches.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`. Graylog's `UNKNOWN_FIELD`: no index of the definition's streams maps the field, so the query matches nothing until messages carry it. Field names are case-sensitive.
+
+### Example
+
+```text illustrative
+graylog_unknown_field: Unknown field: Query contains unknown field: command_line_lc (line 1, column 12)
+```
+
+### How to fix
+
+Check the field's spelling and case, the streams the definition searches, and the pipeline that writes the field.
+
+## graylog_value_type
+
+A query compares a Graylog field with a value of the wrong type.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`. Graylog's `INVALID_VALUE_TYPE`: the field is mapped as a number or a date, and the value is not one.
+
+### Example
+
+```text illustrative
+graylog_value_type: Invalid value type: Type of EventID is long, cannot use value abc (line 1, column 30)
+```
+
+### How to fix
+
+Compare the field with a value of its type.
+
+## graylog_version_unsupported
+
+A Graylog tenant runs a version opentide does not deploy to.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0). Deploy reads `GET /api/system` once per tenant, before any write, and builds every request for that version. Graylog below 6.3, or a server that reports no version, stops the tenant.
+
+### Example
+
+```text illustrative
+graylog_version_unsupported: tenant graylog-prod runs Graylog '6.2.4+1a2b3c4'; opentide deploys to Graylog 6.3 and later
+```
+
+### How to fix
+
+Upgrade the server to Graylog 6.3 or later, or remove the tenant from `platforms/graylog.toml`.
+
+## graylog_version_vulnerable
+
+A Graylog tenant runs a version affected by the access-token revocation flaw.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0), once per run. Graylog below 6.3.12, 7.0.16 or 7.1.12 is affected by GHSA-j769-9gv9-65gr: a revoked access token may keep working. Deploy goes on.
+
+### Example
+
+```text illustrative
+graylog_version_vulnerable: Graylog 6.3.5 does not revoke access tokens reliably (GHSA-j769-9gv9-65gr)
+```
+
+### How to fix
+
+Upgrade the server to 6.3.12, 7.0.16, 7.1.12 or later.
+
 ## harfanglab_rule_kind
 
 A HarfangLab block sets both sigma and yara; a block is one kind.
@@ -6047,102 +6716,6 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
-## yaral_condition_shape
-
-The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_deprecated_field
-
-The UDM field is deprecated.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_enum_value
-
-The value is not one of the enumerated UDM field's values.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_export_value
-
-An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_function_unavailable
-
-The function exists, but not in this profile (rules or search).
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_leading_wildcard_regex
-
-The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
 ## yaral_match_shape
 
 A YARA-L `match` is not a `YaraLMatch` object.
@@ -6175,22 +6748,6 @@ configurations:
       direction: after
 ```
 
-## yaral_match_variable
-
-A `match` name is not a placeholder bound in `events`.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
 ## yaral_match_window
 
 A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows.
@@ -6211,54 +6768,6 @@ configurations:
 
 Write a window within the bounds, such as `30m`, `12h` or `14d`.
 
-## yaral_meta_duplicate
-
-A meta key appears twice, or a meta value is not a double-quoted string.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_multi_event_match
-
-A rule with two or more event variables has no `match` section.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_nocase_on_enum
-
-`nocase` is applied to a comparison with an enumerated UDM field.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
 ## yaral_option
 
 A YARA-L `options` key is unknown, or its value is of the wrong kind.
@@ -6277,118 +6786,6 @@ configurations:
 ### How to fix
 
 Write `suppression_window: 1h`, and `allow_zero_values: true` without quotes.
-
-## yaral_outcome_aggregation
-
-With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_outcome_limit
-
-A rule or search assigns more than 20 outcome variables.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_parse_error
-
-The YARA-L text does not parse, or a text holds a second rule.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_reference_list_deprecated
-
-Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`).
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_reference_list_limit
-
-More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2).
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_regex
-
-The regular expression is not valid RE2.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_reserved_identifier
-
-A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
 
 ## yaral_section_alias
 
@@ -6493,147 +6890,3 @@ configurations:
     condition: |
       $e
 ```
-
-## yaral_section_order
-
-A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export).
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_section_unavailable
-
-The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_string_escape
-
-A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_type
-
-An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_undefined_variable
-
-A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_unfiltered_event
-
-An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_unknown_function
-
-The function is not in Google's YARA-L function list, or it takes a different number of arguments.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_unknown_udm_field
-
-The field path is not in the Unified Data Model.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
-## yaral_window_bound
-
-`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.

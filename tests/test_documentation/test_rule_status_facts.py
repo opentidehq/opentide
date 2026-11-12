@@ -14,10 +14,18 @@ from typing import Any
 
 import pytest
 
+from opentide.documentation.catalog import DocumentationCatalog
+from opentide.documentation.facts.deployment import (
+    StaticEnvironment,
+    StatusDefinition,
+    rule_deployments,
+)
 from opentide.documentation.format.factory import formatter_for
-from opentide.documentation.parts.sections import render_rule_status
+from opentide.documentation.parts.common import Links
+from opentide.documentation.parts.rule import deployment_body, overview
 from opentide.documentation.publish.index import _extra_cells
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.rule import DetectionRule
 
 _SENTINEL = {
@@ -26,6 +34,20 @@ _SENTINEL = {
     "scheduling": {"frequency": "1h"},
     "alert": {},
 }
+
+
+def _status_page(rule: DetectionRule) -> str:
+    """The overview and the deployment section: every place a page states a status."""
+    formatter = formatter_for(DocumentFlavor.generic)
+    environment = StaticEnvironment(
+        status_definitions=(
+            StatusDefinition("STAGING", "", StatusStrategy.PREVIEW),
+            StatusDefinition("PRODUCTION", "", StatusStrategy.RELEASE),
+        )
+    )
+    deployments = rule_deployments(rule, environment)
+    links = Links(formatter, DocumentationCatalog([], [], []), "rules")
+    return overview(rule, deployments, links) + deployment_body(deployments, formatter)
 
 
 def _rule(metadata: dict[str, Any], **fields: Any) -> DetectionRule:
@@ -45,7 +67,10 @@ def test_an_unauthored_status_and_severity_stay_unset(metadata: dict[str, Any]) 
     assert rule.severity is None
     assert rule.platform_statuses == {}
     assert rule.displayed_severity is None
-    assert render_rule_status(rule, formatter_for(DocumentFlavor.generic)) == ""
+    page = _status_page(rule)
+    assert "STAGING" not in page
+    assert "Severity" not in page
+    assert "no platform configuration" in page
 
 
 def test_the_page_shows_each_block_status_and_the_alert_severity(
@@ -61,12 +86,14 @@ def test_the_page_shows_each_block_status_and_the_alert_severity(
             "splunk": {"status": "STAGING", "query": "index=main"},
         },
     )
-    page = render_rule_status(rule, formatter_for(DocumentFlavor.generic))
-    assert "Status (sentinel)" in page and "`PRODUCTION`" in page
-    assert "Status (splunk)" in page
-    assert "`Critical`" in page
+    page = _status_page(rule)
+    assert "| Microsoft Sentinel | `PRODUCTION` |" in page
+    assert "| Splunk Enterprise Security | `STAGING` |" in page
+    assert "| Severity | Critical |" in page
     assert "Informational" not in page
-    assert page.count("`STAGING`") == 1  # splunk's block, not the rule-level value
+    # Splunk's block in the overview, the deployment table and the status
+    # reference, never the rule-level value.
+    assert page.count("`STAGING`") == 3
 
 
 @pytest.mark.parametrize(
@@ -96,11 +123,15 @@ def test_the_rules_index_row_uses_the_derived_values(metadata: dict[str, Any]) -
     record = DocumentRecord(
         object_type=DocumentScope.rules, uuid=rule.metadata.uuid, name="Rule", model=rule
     )
-    assert _extra_cells(record) == ["PRODUCTION, STAGING", "High"]
+    assert _extra_cells(record) == [
+        "High",
+        "Microsoft Sentinel `PRODUCTION`<br>Splunk Enterprise Security `STAGING`",
+        "-",
+    ]
     bare = DocumentRecord(
         object_type=DocumentScope.rules,
         uuid=rule.metadata.uuid,
         name="Rule",
         model=_rule(metadata),
     )
-    assert _extra_cells(bare) == ["", ""]
+    assert _extra_cells(bare) == ["-", "-", "-"]

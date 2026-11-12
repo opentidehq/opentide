@@ -33,6 +33,7 @@ STATE_PLATFORMS: tuple[str, ...] = (
     "bitdefender",
     "crowdstrike",
     "defender_for_endpoint",
+    "graylog",
     "google_secops",
     "sentinel_one",
     "sysdig",
@@ -57,11 +58,11 @@ SHARING_IGNORE = f"{OPENTIDE_DIR}/states/sharing.jsonl"
 
 _CANONICAL_DECIMAL = re.compile(r"(?:0|[1-9][0-9]*)")
 #: Platforms whose external id is a 24-digit lower-case hex object id.
-OBJECT_ID_PLATFORMS: frozenset[str] = frozenset({"bitdefender"})
+OBJECT_ID_PLATFORMS: frozenset[str] = frozenset({"bitdefender", "graylog"})
 _OBJECT_ID = re.compile(r"[0-9a-f]{24}")
 #: Platforms whose external id is a string of a fixed shape, and what that shape is.
 _PATTERNED_IDS: dict[str, tuple[re.Pattern[str], str]] = {
-    "bitdefender": (_OBJECT_ID, "24 lower-case hex digits"),
+    **dict.fromkeys(OBJECT_ID_PLATFORMS, (_OBJECT_ID, "24 lower-case hex digits")),
     # google-secops-1.0: the rule id, never a revision (``@v_…``) or a resource name.
     "google_secops": (
         re.compile(r"ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
@@ -130,8 +131,8 @@ def normalise_external_id(platform: str, value: object) -> str:
 
     Integers become canonical decimal strings, so ``12345`` and ``"12345"`` are
     the same id. A Defender or SentinelOne string with a sign or leading zero is
-    refused rather than rewritten to a different number. A Bitdefender id is
-    24 lower-case hex digits, a Google SecOps id ``ru_`` and a lower-case UUID.
+    refused rather than rewritten to a different number. A Bitdefender or Graylog id
+    is 24 lower-case hex digits, a Google SecOps id ``ru_`` and a lower-case UUID.
     CrowdStrike ids are copied verbatim.
     """
     if isinstance(value, bool) or not isinstance(value, (int, str)):

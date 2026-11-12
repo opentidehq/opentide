@@ -29,10 +29,10 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the six platforms (Defender for Endpoint, SentinelOne,
-CrowdStrike, Sysdig, Bitdefender, and Google SecOps) has no file. Sentinel, Splunk, HarfangLab, Carbon
-Black, and Elastic address rules by `metadata.uuid` or by title and never get
-one.
+deployed to one of the seven platforms (Defender for Endpoint, SentinelOne,
+CrowdStrike, Sysdig, Bitdefender, Graylog, and Google SecOps) has no file.
+Sentinel, Splunk, HarfangLab, Carbon Black, and Elastic address rules by
+`metadata.uuid` or by title and never get one.
 
 ```json
 {

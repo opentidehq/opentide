@@ -61,6 +61,7 @@ PLATFORMS = (
     "elastic",
     "sysdig",
     "bitdefender",
+    "graylog",
     "google_secops",
 )
 

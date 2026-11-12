@@ -17,7 +17,9 @@ GARBAGE = 'SecurityEvent | where Account == "unterminated'
 
 
 def test_query_validation_platform_count() -> None:
-    assert len(QUERY_VALIDATION_PLATFORMS) == 7
+    assert len(QUERY_VALIDATION_PLATFORMS) == 8
+    assert "graylog" in QUERY_VALIDATION_PLATFORMS
+    assert "google_secops" in QUERY_VALIDATION_PLATFORMS
     assert "crowdstrike" not in QUERY_VALIDATION_PLATFORMS
 
 
@@ -325,3 +327,19 @@ def test_validate_query_takes_a_harfanglab_context_list(context: str) -> None:
     assert result["valid"] is True
     codes = [item["code"] for item in [*result["warnings"], *result["errors"]]]
     assert "harfanglab_yara_context" not in codes
+
+
+def test_validate_query_checks_a_graylog_query_offline_as_lucene() -> None:
+    """Graylog's query is Lucene, checked offline by the engine (graylog-1.0)."""
+    result = tools.tool_validate_query("EventID:1 AND image_lc:/.*mshta\\.exe/", "graylog")
+    assert result["mode"] == "offline"
+    assert result["language"] == "lucene"
+    assert result["valid"] is True
+    broken = tools.tool_validate_query("EventID:(1", "graylog")
+    assert broken["valid"] is False
+
+
+def test_run_query_graylog_refuses_without_live() -> None:
+    result = tools.tool_run_query("EventID:1", "graylog", tenant="prod")
+    assert result["supported"] is True
+    assert result.get("rows") is None

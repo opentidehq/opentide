@@ -282,6 +282,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "sysdig": "falco",
     "harfanglab": "yara",
     "bitdefender": "yara",
+    "graylog": "lucene",
     # A whole YARA-L rule (a .yaral file's text), checked under the rule profile.
     "google_secops": "yaral",
 }

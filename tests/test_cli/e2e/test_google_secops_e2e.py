@@ -16,7 +16,7 @@ from opentide.query.check import LiveCheckReport, RuleCheck
 pytestmark = pytest.mark.cli_e2e
 
 UUID = CORPUS_RULE_UUIDS["google_secops"]
-RULE = "rule-0015-google-secops-yaral.yaml"
+RULE = "rule-0016-google-secops-yaral.yaml"
 
 
 def _rewrite(repo: Path, old: str, new: str) -> None:

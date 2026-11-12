@@ -159,6 +159,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--elastic` | Elastic Security |
 | `--sysdig` | Sysdig Secure (Falco) |
 | `--bitdefender` | Bitdefender GravityZone |
+| `--graylog` | Graylog |
 | `--google-secops` | Google Security Operations (YARA-L) |
 
 ### setup ci

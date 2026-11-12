@@ -1,0 +1,36 @@
+[platform]
+enabled = false
+name = "Graylog"
+description = "Graylog event definitions (Filter & Aggregation)."
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#priority = "Low"
+
+# Graylog event definitions (Filter & Aggregation) on Graylog 6.3 to 7.2, through
+# the REST API. The event definition id is kept in .opentide/states/deployment/
+# (commit it). url is the Graylog web interface's base URL; calls go to
+# <url>/api/.... token is an access token, sent as HTTP Basic <token>:token; its
+# user needs eventdefinitions:create, read, edit and delete, and streams:read on
+# every stream a definition names. allow_leading_wildcard mirrors the server's
+# allow_leading_wildcard_searches. Stream and notification ids are 24 lower-case
+# hex digits; blocks name them by alias.
+#[[tenants]]
+#name = "graylog-prod"
+#description = "Production Graylog"
+#strategies = ["RELEASE"]
+#[tenants.setup]
+#ssl = true
+#url = "https://graylog.example.com"
+#token = "$GRAYLOG_TOKEN"
+#allow_leading_wildcard = false
+#streams = ["sysmon"]
+#tags = ["managed-by-opentide"]
+#[tenants.setup.stream_ids]
+#sysmon = "65f0c0ffee0123456789abcd"
+#[tenants.setup.notification_ids]
+#soc-slack = "65f0c0ffee0123456789abcf"

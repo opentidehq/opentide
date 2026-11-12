@@ -474,6 +474,51 @@ class BitdefenderConfiguration(PlatformConfigurationBase):
     )
 
 
+# --- Graylog --------------------------------------------------------------------------
+
+#: A Graylog object id: 24 lower-case hex digits.
+GraylogId = Annotated[str, Field(pattern=r"^[0-9a-f]{24}$")]
+#: A non-blank alias or tag.
+GraylogName = Annotated[str, Field(pattern=r"\S")]
+
+
+class GraylogSetup(TenantSetup):
+    """`[tenants.setup]` for Graylog."""
+
+    url: str = Field(description="The Graylog web interface's base URL. Calls go to <url>/api/....")
+    token: EnvPlaceholder = Field(
+        description="A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME "
+        "placeholder."
+    )
+    allow_leading_wildcard: bool = Field(
+        default=False, description="Mirrors the server's allow_leading_wildcard_searches."
+    )
+    streams: GraylogName | list[GraylogName] = Field(
+        default_factory=list, description="Default stream aliases for blocks that set no streams."
+    )
+    stream_ids: dict[str, GraylogId] = Field(
+        default_factory=dict, description="Alias to stream id, 24 hex."
+    )
+    notification_ids: dict[str, GraylogId] = Field(
+        default_factory=dict, description="Alias to notification id, 24 hex."
+    )
+    tags: GraylogName | list[GraylogName] = Field(
+        default_factory=list, description="Tags added to every definition on this tenant (7.2+)."
+    )
+
+
+class GraylogTenant(TenantBase):
+    """`[[tenants]]` for Graylog."""
+
+    setup: GraylogSetup = Field(description="Connection settings.")
+
+
+class GraylogConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/graylog.toml`."""
+
+    tenants: list[GraylogTenant] = Field(default_factory=list, description="Graylog tenants.")
+
+
 # --- Google Security Operations -------------------------------------------------------
 
 
@@ -574,5 +619,6 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "elastic": ElasticConfiguration,
     "sysdig": SysdigConfiguration,
     "bitdefender": BitdefenderConfiguration,
+    "graylog": GraylogConfiguration,
     "google_secops": GoogleSecopsConfiguration,
 }

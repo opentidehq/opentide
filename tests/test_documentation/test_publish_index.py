@@ -41,8 +41,9 @@ def test_render_index_builds_table() -> None:
     assert "[Rule A](rule-a.md)" in content
     assert "u1" in content
     assert "Related" in content
-    assert "Status" in content
+    assert "Platforms and status" in content
     assert "Severity" in content
+    assert "`u1`" in content
     assert "0" in content
 
 
@@ -87,7 +88,9 @@ def test_write_index_writes_folder_pages(tmp_path: Path) -> None:
     assert (pub.objectives_dir / "README.md").is_file()
     assert (pub.threats_dir / "README.md").is_file()
     assert (pub.output_root / "README.md").is_file()
-    assert "Detection Objectives" in (pub.objectives_dir / "README.md").read_text(encoding="utf-8")
+    assert "# Detection objectives" in (pub.objectives_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_write_index_writes_gitlab_order_file(tmp_path: Path) -> None:
@@ -226,9 +229,9 @@ def test_write_index_writes_section_pages_when_every_folder_is_empty(tmp_path: P
     write_index(ctx, pub, rules=[], objectives=[], threats=[])
     root = (tmp_path / "README.md").read_text(encoding="utf-8")
     for folder, title in (
-        ("rules", "Detection Rules"),
-        ("objectives", "Detection Objectives"),
-        ("threats", "Threat Vectors"),
+        ("rules", "Detection rules"),
+        ("objectives", "Detection objectives"),
+        ("threats", "Threat vectors"),
     ):
         page = tmp_path / folder / "README.md"
         assert page.is_file()
@@ -236,3 +239,201 @@ def test_write_index_writes_section_pages_when_every_folder_is_empty(tmp_path: P
         assert title in text
         assert f"{folder}/README.md" in root
         assert "| --- |" in text
+
+
+def test_root_index_summarises_status_per_platform_and_coverage(
+    tmp_path: Path, metadata: dict
+) -> None:
+    from opentide.documentation.facts.deployment import StaticEnvironment, StatusDefinition
+    from opentide.documentation.publish.index import render_root_index
+    from opentide.loading.objective_loader import load_objective_from_dict
+    from opentide.models.deployment_enums import StatusStrategy
+    from opentide.models.rule import DetectionRule
+
+    signal_uuid = "00000000-0000-4000-8000-0000000000a1"
+    objective = load_objective_from_dict(
+        {
+            "name": "Goal",
+            "metadata": {
+                **metadata,
+                "uuid": "00000000-0000-4000-8000-0000000000b1",
+                "schema": "objective::1.0",
+            },
+            "objective": {
+                "priority": "High",
+                "type": "Threat",
+                "description": "d",
+                "composition": {"strategy": "synergetic", "description": "c"},
+                "threats": ["threat-1"],
+                "signals": [
+                    {
+                        "name": "S",
+                        "uuid": signal_uuid,
+                        "description": "d",
+                        "severity": "High",
+                        "methodology": "Monitor process creation",
+                        "entities": ["host"],
+                        "data": {"availability": "Complete", "requirements": "logs"},
+                    }
+                ],
+            },
+        }
+    )
+
+    def rule(uuid: str, **blocks: dict) -> DetectionRule:
+        return DetectionRule.from_yaml_dict(
+            {
+                "name": uuid,
+                "metadata": {**metadata, "uuid": uuid},
+                "description": "d",
+                "techniques": ["T1059"],
+                "detection_model": signal_uuid,
+                "configurations": blocks,
+            }
+        )
+
+    splunk = {"status": "PRODUCTION", "query": "index=main"}
+    rules = [
+        DocumentRecord(DocumentScope.rules, "r1", "r1", rule("r1", splunk=splunk)),
+        DocumentRecord(
+            DocumentScope.rules, "r2", "r2", rule("r2", splunk={**splunk, "status": "DRAFT"})
+        ),
+    ]
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        environment=StaticEnvironment(
+            status_definitions=(
+                StatusDefinition("DRAFT", "", StatusStrategy.INERT),
+                StatusDefinition("PRODUCTION", "", StatusStrategy.RELEASE),
+            )
+        ),
+    )
+    page = render_root_index(
+        ctx,
+        rules=rules,
+        objectives=[DocumentRecord(DocumentScope.objectives, "o", "Goal", objective)],
+        threats=[
+            DocumentRecord(DocumentScope.threats, "threat-1", "T1", MagicMock()),
+            DocumentRecord(DocumentScope.threats, "threat-2", "T2", MagicMock()),
+        ],
+    )
+    assert (
+        "# Detection catalogue\n\n2 threat vectors, 1 detection objective and 2 detection rules"
+        in page
+    )
+    assert "pie showData title Platform blocks by status" in page
+    # Each slice takes its strategy's colour: grey for INERT, green for RELEASE.
+    assert '"pie1":"#667085","pie2":"#039855"' in page
+    assert "| Platform | `DRAFT` | `PRODUCTION` | Total |" in page
+    assert "| Splunk Enterprise Security | 1 | 1 | 2 |" in page
+    assert "| Threat vectors addressed by an objective | 1 of 2 (50%) |" in page
+    assert "| Objectives implemented by a rule | 1 of 1 (100%) |" in page
+    assert "| Signals implemented by a rule | 1 of 1 (100%) |" in page
+    assert "| ATT&CK techniques detected by rules | 1 |" in page
+
+
+def _threat_record(
+    metadata: dict, uuid: str, phase: str | list[str], techniques: list[str]
+) -> DocumentRecord:
+    from opentide.models.threat import ThreatVector
+
+    model = ThreatVector.from_yaml_dict(
+        {
+            "name": f"Threat {uuid}",
+            "criticality": "High",
+            "metadata": {**metadata, "uuid": uuid, "schema": "threat::1.0"},
+            "threat": {
+                "description": "d",
+                "severity": "Moderate incident",
+                "impact": ["Data Breach"],
+                "leverage": ["Spoofing"],
+                "viability": "Likely",
+                "terrain": "t",
+                "surface": ["Entra ID"],
+                "mitre_attack": techniques,
+                "killchain": phase,
+            },
+        }
+    )
+    return DocumentRecord(DocumentScope.threats, uuid, model.name, model)
+
+
+def test_threat_index_groups_threats_by_stage_then_phase(tmp_path: Path, metadata: dict) -> None:
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        index_relation_counts=False,
+    )
+    records = [
+        _threat_record(metadata, "t-collect", "Collection", ["T1114.002"]),
+        _threat_record(metadata, "t-deliver", "Delivery", ["T1566.002"]),
+    ]
+    page = render_index(
+        ctx.formatter, title="Threat vectors", folder="threats", records=records, ctx=ctx
+    )
+    headings = [line for line in page.splitlines() if line.startswith("#")]
+    assert headings == [
+        "# Threat vectors",
+        "## Initial Foothold",
+        "### Delivery",
+        "## Action on Objectives",
+        "### Collection",
+    ]
+
+
+def test_root_index_maps_kill_chain_and_attack_coverage(tmp_path: Path, metadata: dict) -> None:
+    from opentide.documentation.facts.deployment import StaticEnvironment
+    from opentide.documentation.publish.index import render_root_index
+    from opentide.models.rule import DetectionRule
+
+    rule = DetectionRule.from_yaml_dict(
+        {
+            "name": "r",
+            "metadata": {**metadata, "uuid": "r"},
+            "description": "d",
+            "techniques": ["T1114.002"],
+        }
+    )
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        environment=StaticEnvironment(),
+    )
+    page = render_root_index(
+        ctx,
+        rules=[DocumentRecord(DocumentScope.rules, "r", "r", rule)],
+        objectives=[],
+        threats=[
+            _threat_record(metadata, "t-collect", "Collection", ["T1114.002"]),
+            _threat_record(metadata, "t-deliver", "Delivery", ["T1566.002", "T1114"]),
+        ],
+    )
+    assert "accTitle: Kill-chain coverage" in page
+    assert "| Delivery | Initial Foothold | 1 | 0 | 0% |" in page
+    assert (
+        "| Tactic | Techniques in threat vectors | Detected by a rule | Coverage | Not detected |"
+        in page
+    )
+    # T1114 is detected through its sub-technique T1114.002; the phishing technique is not.
+    assert "| Collection | 2 | 2 | 100% | - |" in page
+    assert "| Initial Access | 1 | 0 | 0% | `T1566.002` |" in page
+
+
+def test_kill_chain_table_counts_every_phase_the_map_counts(tmp_path: Path, metadata: dict) -> None:
+    from opentide.documentation.facts.deployment import StaticEnvironment
+    from opentide.documentation.publish.index import render_root_index
+
+    threat = _threat_record(metadata, "t-multi", ["Delivery", "Exploitation"], ["T1566.002"])
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter_for(DocumentFlavor.github),
+        environment=StaticEnvironment(),
+    )
+    page = render_root_index(ctx, rules=[], objectives=[], threats=[threat])
+    assert "| Delivery | Initial Foothold | 1 | 0 | 0% |" in page
+    assert "| Exploitation | Initial Foothold | 1 | 0 | 0% |" in page

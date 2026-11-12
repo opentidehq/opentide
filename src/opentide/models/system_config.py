@@ -282,6 +282,24 @@ class ConfigurationModels:
             tenants: Sequence[Tenant] | None = None
 
         @dataclass
+        class Graylog(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str = ""
+                    token: str = ""
+                    allow_leading_wildcard: bool = False
+                    streams: str | Sequence[str] | None = None
+                    stream_ids: Mapping[str, str] | None = None
+                    notification_ids: Mapping[str, str] | None = None
+                    tags: str | Sequence[str] | None = None
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
+        @dataclass
         class GoogleSecops(SystemConfig):
             @dataclass
             class Tenant(SystemConfig.Tenant):
@@ -363,5 +381,24 @@ class TenantDeployment:
         tenant: ConfigurationModels.Systems.Bitdefender.Tenant
 
     @dataclass
+    class Graylog(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Graylog.Tenant
+
+    @dataclass
     class GoogleSecops(DeploymentBatch):
         tenant: ConfigurationModels.Systems.GoogleSecops.Tenant
+
+
+def tenant_skip_reason(name: str, *, manual: bool, listed: Sequence[str]) -> str | None:
+    """Why a rule block does not select a tenant, or ``None`` when it does.
+
+    A block that lists ``tenants`` selects only those; otherwise every tenant
+    that is not ``manual``. The deploy planner and the documentation both
+    read the rule from here, so a page never says a rule reaches a tenant
+    that deploy skips.
+    """
+    if listed:
+        return None if name in listed else "not listed by the rule"
+    if manual:
+        return "manual tenant: only rules that list it under tenants reach it"
+    return None

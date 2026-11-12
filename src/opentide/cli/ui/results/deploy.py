@@ -24,13 +24,20 @@ class RulePayload(ResultModel):
     help: str | None = Field(None, description="What fixes it, when known")
     file: str | None = Field(None, description="The rule's file, absolute")
     tenant: str | None = Field(
-        None, description="The tenant the request was resolved against (Bitdefender)"
+        None, description="The tenant the request was resolved against (Bitdefender, Graylog)"
     )
     unresolved: dict[str, Any] | None = Field(
         None,
         description=(
             "What the request leaves out because no tenant resolves it: its reason and the "
-            "block's target aliases (Bitdefender)"
+            "block's target aliases (Bitdefender), or stream and notification aliases (Graylog)"
+        ),
+    )
+    server_version: str | None = Field(
+        None,
+        description=(
+            "The server version the request is built for, assumed because a dry run asks no "
+            "server (Graylog)"
         ),
     )
 
