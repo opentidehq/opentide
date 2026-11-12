@@ -13,6 +13,7 @@
 # secrets: environment variables given a fresh random value for the run; the
 #   value is redacted wherever it appears.
 # cwd: `tmp` (an empty directory) or `repo`.
+# exit: the client's exit code when it is not 0 (a run that fails by design).
 
 [[scenario]]
 name = "mock-platform/deploy"
@@ -321,3 +322,61 @@ tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
 routes = ["cbc.invalid"]
 secrets = ["CBC_TOKEN"]
 cwd = "repo"
+
+# ---- UC-4.6 (#979): the cassettes of `validate query --live`'s golden cases ----
+# The client is the oracle's command line on tests/golden/fixtures/live-tenants
+# (the golden fixture `live-tenants`). A check's window ends now, so only the
+# platforms whose check sends no time replay: Splunk's parser, Carbon Black
+# Cloud's search_validation, and an Elastic rule refused by its Elasticsearch
+# check before its preview. Defender, SentinelOne and Sentinel search the last
+# minute; their checks are proven by their connector's cassettes
+# (`<platform>/validate`), and the CLI's flow on them by opentide-cli's
+# tests/validate_live.rs, which replays those cassettes with the time fixed.
+
+[[scenario]]
+name = "golden/validate-live-splunk-parsed"
+description = "validate query --live on Splunk's stand-in, the golden cases' cassette: server/info read twice, then the parser accepts the one rule --uuid selects."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/validate-live-splunk"
+description = "validate query --live on Splunk's stand-in, the golden cases' cassette: three rules through the parser: one parsed, one unknown command refused, one the gateway answers for (a check that timed out)."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "splunk"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/validate-live-carbon-black-valid"
+description = "validate query --live on Carbon Black Cloud's stand-in, the golden cases' cassette: search_validation of the one rule --uuid selects, its query's lines joined, accepted."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "carbon_black_cloud", "--uuid", "00000000-0000-4000-8046-000000000004"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/validate-live-carbon-black"
+description = "validate query --live on Carbon Black Cloud's stand-in, the golden cases' cassette: search_validation of two rules, one refused."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "carbon_black_cloud"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/validate-live-elastic"
+description = "validate query --live on Elastic's stand-in, the golden cases' cassette: an ES|QL rule's advisory, then its pre-flight refused before any preview."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "elastic"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+exit = 1

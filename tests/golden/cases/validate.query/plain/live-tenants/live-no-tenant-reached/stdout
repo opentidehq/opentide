@@ -1,0 +1,2 @@
+Skipped: No query was sent: none of the 1 sentinel rule(s) goes to a tenant in .opentide/configurations/platforms/sentinel.toml
+  help: a tenant takes a rule only when its 'strategies' accept the run strategy that deploys the rule's status; a 'manual' tenant only when the rule lists it under tenants; and a rule's tenants list must name a tenant configured for this platform

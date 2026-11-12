@@ -87,7 +87,7 @@ pub fn languages(platform: &str) -> &'static [&'static str] {
 
 /// The client a platform's runner names when its credentials are unset, and
 /// the setup keys it checks, in order (`reject_unsubstituted_placeholders`).
-fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
+pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
     match platform {
         "defender_for_endpoint" => (
             "Microsoft Graph",
@@ -109,7 +109,7 @@ fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
 
 /// The address a transport failure is reported at, for a tenant configured
 /// without a URL (`_DEFAULT_HOSTS`).
-fn default_host(platform: &str) -> &'static str {
+pub(crate) fn default_host(platform: &str) -> &'static str {
     match platform {
         "defender_for_endpoint" => "https://graph.microsoft.com",
         "crowdstrike" => "https://api.crowdstrike.com",
@@ -442,9 +442,9 @@ fn rows(result: &QueryOutcome) -> Vec<Json> {
 
 /// A configured tenant: its name and its `setup` table, in file order.
 #[derive(Debug)]
-struct Configured {
-    name: String,
-    setup: opentide_compile::json::Object,
+pub(crate) struct Configured {
+    pub(crate) name: String,
+    pub(crate) setup: opentide_compile::json::Object,
 }
 
 /// A platform's configured tenants, in file order, and its configuration
@@ -548,7 +548,7 @@ fn select<'t>(
 }
 
 /// A setup value as `toml` holds it, for [`Tenant::from_setup`].
-fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
+pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
     use opentide_compile::Json as J;
     Some(match value {
         J::Str(text) => toml::Value::String(text.clone()),
@@ -570,7 +570,7 @@ fn reference(value: &opentide_compile::Json) -> Option<&str> {
 /// Logs each tenant's unset `$NAME` credentials once, in file order, as the
 /// configuration loader does (`fetch_config_envvar`:
 /// `environment_variable_missing`, critical).
-fn log_unset(tenants: &[Configured], env: &Env) {
+pub(crate) fn log_unset(tenants: &[Configured], env: &Env) {
     let mut reported: Vec<String> = Vec::new();
     for tenant in tenants {
         let mut pending: Vec<String> = Vec::new();
@@ -599,7 +599,7 @@ fn log_unset(tenants: &[Configured], env: &Env) {
 
 /// The runner's refusal of credentials still `$NAME` placeholders
 /// (`reject_unsubstituted_placeholders`), or `None`.
-fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) -> Option<String> {
+pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) -> Option<String> {
     let (client, keys) = credential_keys(platform);
     let missing: Vec<String> = keys
         .iter()
@@ -617,7 +617,7 @@ fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) -> Option<S
 }
 
 /// The HTTP settings each platform's client mounts.
-fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
+pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
     use opentide_connectors::{
         carbon_black, crowdstrike, defender, elastic, harfanglab, sentinel, sentinel_one, splunk,
     };
@@ -637,7 +637,7 @@ fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
 }
 
 /// `{value:g}` of a number of seconds.
-fn seconds_g(value: f64) -> String {
+pub(crate) fn seconds_g(value: f64) -> String {
     // `{x:g}`: six significant digits, no trailing zeros.
     let text = format!("{value}");
     if value.fract() == 0.0 && value.abs() < 1e16 {

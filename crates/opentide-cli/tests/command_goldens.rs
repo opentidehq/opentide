@@ -68,7 +68,9 @@ fn tui_cases_are_the_oracles() {
     check(&["tui"], 6);
 }
 
-/// Offline `validate query` (UC-3.5b, #927); its `--live` cases are Python's.
+/// `validate query` offline (UC-3.5b, #927) and `--live` (UC-4.2c, #832;
+/// UC-4.6, #979): Splunk's, Carbon Black Cloud's and Elastic's tenants served
+/// from their cassettes.
 #[test]
 fn validate_query_cases_are_the_oracles() {
     check(&["validate.query"], 20);

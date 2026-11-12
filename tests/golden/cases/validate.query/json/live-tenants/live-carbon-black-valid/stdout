@@ -1,0 +1,1 @@
+{"platform":"carbon_black_cloud","mode":"live","supported":true,"strategies":["PREVIEW","RELEASE"],"queries_validated":1,"queries_per_tenant":{"lab":1},"scope":"selected","ok":true,"status":"passed","message":"1 query valid on 1 tenant","schema_version":1,"command":"validate query","duration_ms":0,"exit_code":0,"summary":{"queries":1,"tenants":1},"next_actions":[],"failure":null}

@@ -24,6 +24,7 @@ pub mod setup;
 pub mod skills;
 pub mod tui;
 pub mod validate;
+pub mod validate_live;
 pub mod validate_query;
 pub mod watch;
 
@@ -70,6 +71,9 @@ pub struct Report {
     /// The next steps as a numbered list under a `Next steps` header, for a
     /// sequence the reader follows step by step (`setup`).
     pub numbered_next: bool,
+    /// The CI job summary's section (Markdown), appended in a text mode
+    /// before the result is printed (`publish_summary`).
+    pub ci_summary: Option<String>,
 }
 
 /// One part of a body.
@@ -165,6 +169,7 @@ impl Report {
             body_only: false,
             stderr_first: String::new(),
             numbered_next: false,
+            ci_summary: None,
         }
     }
 
@@ -181,6 +186,7 @@ impl Report {
             body_only: false,
             stderr_first: String::new(),
             numbered_next: false,
+            ci_summary: None,
         }
     }
 

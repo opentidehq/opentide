@@ -62,6 +62,7 @@ pub const FIXTURES: &[&str] = &[
     "vscode",
     "setup-merge",
     "vscode-docs-folder",
+    "live-tenants",
 ];
 
 pub fn repo() -> PathBuf {
@@ -134,6 +135,7 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
+        "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -667,8 +669,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                         dir.file_name().unwrap().to_string_lossy()
                     );
                     let case = std::fs::read_to_string(dir.join("case.toml")).unwrap();
-                    let live = *command == "validate.query" && case.contains("\"--live\"");
-                    if case.contains("\"--help\"") || live || !id.contains(&filter) {
+                    if case.contains("\"--help\"") || !id.contains(&filter) {
                         continue;
                     }
                     problems.extend(replay(&id, &dir, &ledger, &mut usage));

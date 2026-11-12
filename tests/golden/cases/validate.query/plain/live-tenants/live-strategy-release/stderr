@@ -1,0 +1,9 @@
+warning: Rule skipped for strategy · system: CARBON_BLACK_CLOUD · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Carbon Black refused rule
+warning: Rule skipped for strategy · system: CARBON_BLACK_CLOUD · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Carbon Black valid rule
+warning: Rule skipped for strategy · system: DEFENDER_FOR_ENDPOINT · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Defender columns rule
+warning: Rule skipped for strategy · system: ELASTIC · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Elastic parse error rule
+warning: Rule skipped for strategy · system: SENTINEL_ONE · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: SentinelOne process rule
+warning: Rule skipped for strategy · system: SENTINEL · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Sentinel production-only rule
+warning: Rule skipped for strategy · system: SPLUNK · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Splunk gateway rule
+warning: Rule skipped for strategy · system: SPLUNK · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Splunk parsed rule
+warning: Rule skipped for strategy · system: SPLUNK · status: STAGING · strategy: PREVIEW · run_strategies: RELEASE · deployed_by: PREVIEW · rule: Splunk unknown command rule

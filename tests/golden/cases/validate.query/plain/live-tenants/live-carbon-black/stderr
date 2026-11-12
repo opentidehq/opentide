@@ -1,0 +1,3 @@
+error: Query rejected · detail: Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant lab · reason: Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces
+✓ Carbon Black Cloud Enterprise EDR queries · 2 rules · <SECONDS>
+error: Queries rejected on carbon_black_cloud · 2 checked on 1 tenant

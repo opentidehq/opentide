@@ -69,6 +69,11 @@ kind = "copy"
 source = "tests/golden/fixtures/tenants"
 about = "a workspace whose Defender, SentinelOne, CrowdStrike, Elastic and HarfangLab tenants are the stand-in tenants of tests/cassettes/<platform>/tenant.py, their credentials `$NAME`s the cases set: only the cassette cases use it (UC-4.2c)"
 
+[fixtures.live-tenants]
+kind = "copy"
+source = "tests/golden/fixtures/live-tenants"
+about = "the `tenants` workspace with a rule or more per platform whose tenants check queries (Splunk, Carbon Black Cloud, Elastic, Defender for Endpoint, SentinelOne, Sentinel), each sent to the stand-in tenants of tests/cassettes/<platform>/tenant.py: `validate query --live`'s cases (UC-4.6)"
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -780,6 +785,132 @@ command = "validate query"
 variant = "live-unsupported-sysdig"
 args = ["validate", "query", "--live", "--platform", "sysdig", "--check-timeout", "5"]
 fixtures = ["tide-corpus"]
+
+# UC-4.6 (#979): `validate query --live` on the connectors, on the
+# `live-tenants` fixture. Splunk, Carbon Black Cloud and Elastic are served
+# from cassettes recorded from the oracle (tests/cassettes/golden/, the
+# `golden/validate-live-*` scenarios); a check's window ends now, so the
+# platforms that search the last minute (Defender, SentinelOne, Sentinel) are
+# recorded here without credentials, and their checks proven by their
+# connectors' cassettes. Not in human mode: a check's live region is drawn as
+# often as the network allows.
+
+[[case]]
+command = "validate query"
+variant = "live-splunk-parsed"
+args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json", "agent"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-splunk-parsed"
+
+[[case]]
+command = "validate query"
+variant = "live-splunk-progress-json"
+args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+modes = ["json"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", OPENTIDE_PROGRESS = "json" }
+cassette = "golden/validate-live-splunk-parsed"
+
+[[case]]
+command = "validate query"
+variant = "live-splunk"
+args = ["validate", "query", "--live", "--platform", "splunk"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json", "agent"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-splunk"
+
+[[case]]
+command = "validate query"
+variant = "live-carbon-black-valid"
+args = ["validate", "query", "--live", "--platform", "carbon_black_cloud", "--uuid", "00000000-0000-4000-8046-000000000004"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json", "agent"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-carbon-black-valid"
+
+[[case]]
+command = "validate query"
+variant = "live-carbon-black"
+args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json", "agent"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-carbon-black"
+
+[[case]]
+command = "validate query"
+variant = "live-elastic-rejected"
+args = ["validate", "query", "--live", "--platform", "elastic"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json", "agent"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/validate-live-elastic"
+
+[[case]]
+command = "validate query"
+variant = "live-unset-defender-for-endpoint"
+args = ["validate", "query", "--live", "--platform", "defender_for_endpoint"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-unset-sentinel-one"
+args = ["validate", "query", "--live", "--platform", "sentinel_one", "--check-timeout", "30"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-unset-carbon-black-cloud"
+args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-no-tenant-reached"
+args = ["validate", "query", "--live", "--platform", "sentinel"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-strategy-release"
+args = ["validate", "query", "--live", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-uuid-unmatched"
+args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000099"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-changed-and-file"
+args = ["validate", "query", "--live", "--platform", "splunk", "--changed", "--uuid", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+modes = ["json"]
+
+[[case]]
+command = "validate query"
+variant = "live-strategy-typo"
+args = ["validate", "query", "--live", "--platform", "elastic", "--strategy", "STAGING"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "validate query"
+variant = "live-wide-unset-elastic"
+args = ["validate", "query", "--live", "--platform", "elastic", "--wide"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
 
 # ---- query ----
 

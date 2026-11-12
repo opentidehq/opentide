@@ -1,0 +1,28 @@
+name: SentinelOne process rule
+metadata:
+  uuid: 00000000-0000-4000-8046-000000000008
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A PowerQuery on process creation.
+response:
+  alert_severity: High
+configurations:
+  sentinel_one:
+    status: STAGING
+    condition:
+      type: Correlation
+      correlation:
+        entity: host
+        match_in_order: true
+        time_window: 1h
+        sub_queries:
+          - query: EventType = "Process Create"
+            matches_required: 1
+          - query: src.process.name = 'cmd.exe'
+            matches_required: 1
+    response:
+      treat_as_threat: Malicious
+      network_quarantine: false

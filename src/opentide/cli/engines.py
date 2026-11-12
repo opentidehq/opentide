@@ -217,12 +217,23 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
     "splunk",
 )
 
-#: The platforms whose ``validate query --live`` runs on Rust: those whose
-#: tenants cannot check a query (CrowdStrike, HarfangLab, Sysdig), which
-#: answer ``supported: False`` before any request. Defender, Elastic and
-#: SentinelOne check on the tenant, and stay Python's until their live
-#: validation is ported onto the connectors' ``LiveValidator``.
-RUST_LIVE_VALIDATION_PLATFORMS: tuple[str, ...] = ("crowdstrike", "harfanglab", "sysdig")
+#: The platforms whose ``validate query --live`` runs on Rust: every platform.
+#: CrowdStrike, HarfangLab and Sysdig, whose tenants cannot check a query,
+#: answer ``supported: False`` before any request (UC-4.2c, #832); Carbon
+#: Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and
+#: Splunk check each rule's queries through their connector's
+#: ``LiveValidator``, Elastic each rule as a whole (UC-4.6, #979).
+RUST_LIVE_VALIDATION_PLATFORMS: tuple[str, ...] = (
+    "carbon_black_cloud",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "elastic",
+    "harfanglab",
+    "sentinel",
+    "sentinel_one",
+    "splunk",
+    "sysdig",
+)
 
 
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
@@ -279,7 +290,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names; a
 #: rule's query (``--rule``, ``--file``: its tenants' exclusions) stays Python's.
 #: ``query`` on Sentinel, Splunk and Carbon Black Cloud with UC-4.3 (#833).
-#: A deploy that sends stays Python's.
+#: ``validate query --live`` on the six platforms whose tenants check queries
+#: with UC-4.6 (#979). A deploy that sends stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),

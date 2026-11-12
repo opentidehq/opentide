@@ -1,0 +1,19 @@
+name: Elastic parse error rule
+metadata:
+  uuid: 00000000-0000-4000-8046-000000000006
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: An ES|QL rule whose pre-flight the stand-in tenant refuses.
+response:
+  alert_severity: High
+configurations:
+  elastic:
+    status: STAGING
+    type: esql
+    query: FROM logs-* | parse error
+    scheduling:
+      interval: 5m
+      lookback: 0m

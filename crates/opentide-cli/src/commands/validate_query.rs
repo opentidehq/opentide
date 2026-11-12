@@ -227,19 +227,46 @@ pub const LIVE_RUST_PLATFORMS: [&str; 3] = ["crowdstrike", "harfanglab", "sysdig
 /// tenants check no query answers `supported: false`. A run that sends
 /// queries to tenants is refused as `engine_not_ported`.
 pub fn live(args: &Args, env: &Env) -> Report {
+    if let Some(report) = live_usage(args, env) {
+        return report;
+    }
+    unsupported(args).unwrap_or_else(live_not_ported)
+}
+
+/// The answer of a platform whose tenants check no query (`supported:
+/// false`), or `None` for any other `--platform`.
+pub fn unsupported(args: &Args) -> Option<Report> {
+    let platform = args.platform.as_deref()?;
+    if !LIVE_RUST_PLATFORMS.contains(&platform) {
+        return None;
+    }
+    let message = format!("query validation not supported for {platform}");
+    let mut report = Report::error(COMMAND, message);
+    // The envelope writes `error` after the message.
+    report.outcome.data = vec![
+        ("platform".to_owned(), Json::str(platform)),
+        ("valid".to_owned(), Json::Null),
+        ("supported".to_owned(), Json::Bool(false)),
+    ];
+    Some(report)
+}
+
+/// The usage errors of a `--live` run (`validate_query_cmd`'s `--live`
+/// branch), before anything runs; `None` when the options are usable.
+pub fn live_usage(args: &Args, env: &Env) -> Option<Report> {
     if let Some(plan) = &args.plan {
-        return usage(
+        return Some(usage(
             opentide_compile::strategy::removed_plan_message(Some(plan), true),
             "--plan",
             code::USAGE_INVALID_VALUE,
-        );
+        ));
     }
     if args.queries == Some(QueriesMode::Off) {
-        return usage(
+        return Some(usage(
             "--queries off skips the queries check, which is all validate query runs",
             "--queries",
             code::USAGE_ERROR,
-        );
+        ));
     }
     let (raw, source) = match &args.check_timeout {
         Some(value) => (Some(value.as_str()), "--check-timeout"),
@@ -252,14 +279,14 @@ pub fn live(args: &Args, env: &Env) -> Report {
     if let Some(raw) = raw {
         let seconds = raw.trim().parse::<f64>().unwrap_or(f64::NAN);
         if !seconds.is_finite() || seconds <= 0.0 {
-            return usage(
+            return Some(usage(
                 format!(
                     "{source} must be a positive number of seconds, got {}",
                     opentide_connectors::python::python_string_repr(raw)
                 ),
                 source,
                 code::USAGE_INVALID_VALUE,
-            );
+            ));
         }
     }
     for (flag, used) in [
@@ -267,40 +294,39 @@ pub fn live(args: &Args, env: &Env) -> Report {
         ("--queries", args.queries.is_some()),
     ] {
         if used {
-            return usage(
+            return Some(usage(
                 format!("{flag} applies to the offline check: a tenant accepts or rejects a query"),
                 flag,
                 code::USAGE_ERROR,
-            );
+            ));
         }
     }
     if args.files.iter().any(|target| is_query_file(target)) {
-        return usage(
+        return Some(usage(
             "a query file is checked offline: --live sends the queries of rules to tenants",
             "--file",
             code::USAGE_ERROR,
-        );
+        ));
     }
-    match args.platform.as_deref() {
-        Some(platform) if LIVE_RUST_PLATFORMS.contains(&platform) => {
-            let message = format!("query validation not supported for {platform}");
-            let mut report = Report::error(COMMAND, message);
-            let data = vec![
-                ("platform".to_owned(), Json::str(platform)),
-                ("valid".to_owned(), Json::Null),
-                ("supported".to_owned(), Json::Bool(false)),
-            ];
-            // The envelope writes `error` after the message.
-            report.outcome.data = data;
-            report
-        }
-        _ => live_not_ported(),
-    }
+    None
 }
 
 /// `OPENTIDE_QUERY_CHECK_TIMEOUT`: the check timeout when `--check-timeout`
 /// gives none (`CHECK_TIMEOUT_ENV`).
 pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
+
+/// The refusal of a `--live` run that names no `--platform`: the platforms it
+/// would reach are the workspace's, which `opentide.cli.engines` routes to
+/// Python (`engine_not_ported`).
+pub fn live_not_ported_without_platform() -> Report {
+    let mut failure = Failure::new(
+        code::ENGINE_NOT_PORTED,
+        "opentide validate query --live without --platform has no Rust implementation yet: unset \
+         OPENTIDE_ENGINE, or set it to python or compare.",
+    );
+    failure.argument = Some("OPENTIDE_ENGINE".into());
+    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+}
 
 /// The refusal of a `--live` run: Python's (`engine_not_ported`).
 pub fn live_not_ported() -> Report {

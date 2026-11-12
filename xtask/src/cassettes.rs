@@ -62,6 +62,11 @@ pub struct Scenario {
     pub secrets: Vec<String>,
     /// `repo` or `tmp`.
     pub cwd: String,
+    /// The exit code the client ends with (0 unless set): a command line
+    /// whose run fails by design (`validate query --live` with a query the
+    /// tenant refuses) is recorded only when it exits with this code.
+    #[serde(default)]
+    pub exit: i32,
 }
 
 impl Scenarios {
@@ -266,11 +271,12 @@ pub fn record(scenario: &Scenario, repo: &Path, bin: &Path) -> Result<Cassette> 
     let output = command
         .output()
         .with_context(|| format!("run {}", argv[0]))?;
-    if !output.status.success() {
+    if output.status.code() != Some(scenario.exit) {
         bail!(
-            "scenario {}: the client exited with {}\nstdout: {}\nstderr: {}",
+            "scenario {}: the client exited with {}, not {}\nstdout: {}\nstderr: {}",
             scenario.name,
             output.status,
+            scenario.exit,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
@@ -639,6 +645,7 @@ mod tests {
             routes: vec!["tenant.invalid".into()],
             secrets: vec!["SCENARIO_TOKEN".into()],
             cwd: cwd.into(),
+            exit: 0,
         }
     }
 
@@ -698,6 +705,27 @@ mod tests {
             !error.contains(&repo.path().display().to_string()),
             "{error}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_client_must_exit_with_the_scenarios_code() {
+        let repo = tempfile::tempdir().unwrap();
+        let mut failing = scenario(&["/bin/sh", "-c", "exit 1"], &[], "tmp");
+        let error = record_error(&failing, repo.path());
+        assert!(error.contains("the client exited with"), "{error}");
+        assert!(error.contains(", not 0"), "{error}");
+        // Expected to fail: the run goes on to the proxy, which saw nothing.
+        failing.exit = 1;
+        assert_eq!(
+            record_error(&failing, repo.path()),
+            "scenario s: the client sent nothing through the proxy"
+        );
+        let parsed = Scenarios::parse(
+            "[[scenario]]\nname = \"a/b\"\ndescription = \"\"\nclient = [\"x\"]\ncwd = \"tmp\"\nexit = 1\n",
+        )
+        .unwrap();
+        assert_eq!(parsed.scenario[0].exit, 1);
     }
 
     #[cfg(unix)]

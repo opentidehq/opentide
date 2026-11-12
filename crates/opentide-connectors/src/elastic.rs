@@ -2049,6 +2049,29 @@ const RISK_BANDS: [(&str, i64, i64); 4] = [
     ("critical", 74, 100),
 ];
 
+/// The Kibana severity band of an explicit risk score (RFC 0007 §3), as
+/// `(low, high)`; `None` for a severity outside the four.
+pub fn risk_band(severity: &str) -> Option<(i64, i64)> {
+    RISK_BANDS
+        .iter()
+        .find(|(name, _, _)| *name == severity)
+        .map(|(_, low, high)| (*low, *high))
+}
+
+/// The log event an advisory code replaced, which its log line carries as
+/// `legacy_event` (`advisories.LEGACY_EVENTS`); empty for an unknown code.
+pub fn legacy_event(code: &str) -> &'static str {
+    match code {
+        "lookback_zero" => "elastic_lookback_zero_warning",
+        "lookback_long" | "threshold_lookback" => "elastic_lookback_long_warning",
+        "esql_metadata_id" => "elastic_esql_metadata_id_warning",
+        "eql_maxspan_window" | "eql_maxspan_lookback" => "elastic_eql_maxspan_window_warning",
+        "risk_band" => "elastic_risk_score_band_warning",
+        "technique_not_enterprise" => "skipping_non_enterprise_technique",
+        _ => "",
+    }
+}
+
 /// The advisories a live check reports about an Elastic rule, as the codes
 /// `opentide validate` and the language server name them
 /// (`_emit_rule_advisories`). *severity* is the compiled rule's Kibana
@@ -2162,6 +2185,18 @@ mod tests {
         );
         assert!(eql_is_sequence(" /* c */ sequence [a] [b]"));
         assert_eq!(mask_query("a \"é\" b", false), "a \"  \" b");
+    }
+
+    #[test]
+    fn advisory_bands_and_legacy_events() {
+        assert_eq!(risk_band("high"), Some((48, 73)));
+        assert_eq!(risk_band("none"), None);
+        assert_eq!(
+            legacy_event("threshold_lookback"),
+            "elastic_lookback_long_warning"
+        );
+        assert_eq!(legacy_event("risk_band"), "elastic_risk_score_band_warning");
+        assert_eq!(legacy_event("other"), "");
     }
 
     #[test]

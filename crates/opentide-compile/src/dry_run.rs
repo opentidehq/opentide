@@ -394,6 +394,7 @@ pub fn run(
             keep_deprecated,
             enabled: &enabled,
             folder: &folder,
+            log: false,
         },
     );
     let mut selection = match selection {

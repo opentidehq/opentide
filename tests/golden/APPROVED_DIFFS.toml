@@ -10337,3 +10337,108 @@ candidate = "error: Environment variable missing \u00b7 detail: Unset configurat
 reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/832"
 changelog = "**`opentide query` runs on the Rust connectors for CrowdStrike, Defender for Endpoint, Elastic, HarfangLab and SentinelOne, and `validate query --live` for CrowdStrike, HarfangLab and Sysdig**"
+
+# `validate query --live` on the Rust connectors (UC-4.6, #979): every
+# platform's check through its connector. A log line names no tenant
+# (`***`: the Rust log layer redacts tenant identifiers, as the oracle's crash
+# log did), and in human mode it is one unstyled line, and the checklist row
+# is printed when the check is done, without Rich's live region.
+
+[[diff]]
+command = "validate query"
+case = "validate.query/plain/live-tenants/live-splunk"
+target = "stderr"
+rule = "lines"
+oracle = "warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on lab · warning: Splunk's parser timed out behind a gateway; the query is assumed valid\nerror: Query rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant lab · reason: Splunk refused the query on lab: Unknown search command 'badcommand'."
+candidate = "warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on *** · warning: Splunk's parser timed out behind a gateway; the query is assumed valid\nerror: Query rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant *** · reason: Splunk refused the query on ***: Unknown search command 'badcommand'."
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/agent/live-tenants/live-splunk"
+target = "stderr"
+rule = "lines"
+oracle = "warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on lab · warning: Splunk's parser timed out behind a gateway; the query is assumed valid\nerror: Query rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant lab · reason: Splunk refused the query on lab: Unknown search command 'badcommand'."
+candidate = "warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on *** · warning: Splunk's parser timed out behind a gateway; the query is assumed valid\nerror: Query rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant *** · reason: Splunk refused the query on ***: Unknown search command 'badcommand'."
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/json/live-tenants/live-splunk"
+target = "stderr"
+rule = "lines"
+oracle = "{\"detail\":\"Splunk gateway rule (00000000-0000-4000-8046-000000000003) on lab\",\"warning\":\"Splunk's parser timed out behind a gateway; the query is assumed valid\",\"event\":\"query_validation_warning\",\"logger\":\"opentide.platforms.live_validation\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"detail\":\"Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant lab\",\"reason\":\"Splunk refused the query on lab: Unknown search command 'badcommand'.\",\"event\":\"query_rejected\",\"logger\":\"opentide.platforms.live_validation\",\"level\":\"critical\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+candidate = "{\"detail\":\"Splunk gateway rule (00000000-0000-4000-8046-000000000003) on ***\",\"warning\":\"Splunk's parser timed out behind a gateway; the query is assumed valid\",\"event\":\"query_validation_warning\",\"logger\":\"opentide.platforms.live_validation\",\"level\":\"warning\",\"timestamp\":\"0000-00-00 00:00:00\"}\n{\"detail\":\"Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant ***\",\"reason\":\"Splunk refused the query on ***: Unknown search command 'badcommand'.\",\"event\":\"query_rejected\",\"logger\":\"opentide.platforms.live_validation\",\"level\":\"critical\",\"timestamp\":\"0000-00-00 00:00:00\"}"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/plain/live-tenants/live-carbon-black"
+target = "stderr"
+rule = "lines"
+oracle = "error: Query rejected · detail: Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant lab · reason: Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces"
+candidate = "error: Query rejected · detail: Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant *** · reason: Carbon Black Cloud refused the query on ***: ensure each term has a value, and escape slashes, colons and spaces"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/agent/live-tenants/live-carbon-black"
+target = "stderr"
+rule = "lines"
+oracle = "error: Query rejected · detail: Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant lab · reason: Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces"
+candidate = "error: Query rejected · detail: Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant *** · reason: Carbon Black Cloud refused the query on ***: ensure each term has a value, and escape slashes, colons and spaces"
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/json/live-tenants/live-carbon-black"
+target = "stderr"
+rule = "json:/detail"
+oracle = "\"Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant lab\""
+candidate = "\"Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant ***\""
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/json/live-tenants/live-carbon-black"
+target = "stderr"
+rule = "json:/reason"
+oracle = "\"Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces\""
+candidate = "\"Carbon Black Cloud refused the query on ***: ensure each term has a value, and escape slashes, colons and spaces\""
+reason = "A log line of the Rust CLI's logging layer (UC-3.3) names no tenant: the layer redacts the workspace's tenant names and hosts from every line it writes, as the oracle redacted them from its crash log (plan §3, invariant 9). The result document on stdout still names the tenant; the event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/human/tide-corpus/live-elastic"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;31merror: \u001b[0mEnvironment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · \nadvice: Set those environment variables before a live check."
+candidate = "error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check."
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/human/tide-corpus/live-elastic"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;31m✗\u001b[0m  \u001b[1mElastic Security queries\u001b[0m  \u001b[2m1 rule\u001b[0m \u001b[2m<SECONDS>\u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mElastic Security queries\u001b[0m  \u001b[2m1 rule\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mElastic Security queries\u001b[0m  \u001b[2m1 rule\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "The checklist row is printed when the check is done, without the live region Rich drew while it ran; the row is the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/979"
+changelog = "**`validate query --live` runs on the Rust connectors for Carbon Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and Splunk**"

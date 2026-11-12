@@ -34,6 +34,7 @@ pub mod git;
 pub mod harfanglab;
 pub mod json;
 pub mod kql;
+pub mod modifiers;
 pub mod plan;
 pub mod preview;
 pub mod rule;

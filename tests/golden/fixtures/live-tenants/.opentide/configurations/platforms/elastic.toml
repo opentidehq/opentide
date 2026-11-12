@@ -1,0 +1,14 @@
+[platform]
+enabled = true
+name = "Elastic Security"
+
+[[tenants]]
+name = "soc"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://kibana.elastic.invalid"
+elasticsearch_url = "https://es.elastic.invalid"
+api_key = "$ELASTIC_API_KEY"
+space = "soc"
+index = ["logs-*"]

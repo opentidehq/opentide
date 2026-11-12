@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "scenario": "golden/validate-live-carbon-black-valid",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/live-tenants",
+    "--json",
+    "validate",
+    "query",
+    "--live",
+    "--platform",
+    "carbon_black_cloud",
+    "--uuid",
+    "00000000-0000-4000-8046-000000000004"
+  ],
+  "digest": "sha256:98a4b34457a9cc2dd76371ddcef6de991e3ab335347e35af844326ae54302cd7",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:cmd.exe AND netconn_count:[1 TO *]\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": true, \"value_search_query\": true}"
+      }
+    }
+  ]
+}

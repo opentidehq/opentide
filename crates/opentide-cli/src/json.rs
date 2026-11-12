@@ -48,6 +48,14 @@ impl Json {
         text.map_or(Json::Null, |text| Json::Str(text.into()))
     }
 
+    /// The text of a string value.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Json::Str(text) => Some(text),
+            _ => None,
+        }
+    }
+
     /// The value of `key` in an object.
     pub fn get(&self, key: &str) -> Option<&Json> {
         match self {
