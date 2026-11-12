@@ -1,0 +1,8 @@
+lab  2 rows (more matched; raise --limit)
+proces… ┃┃┃ … ┃ process_guid                  ┃ … ┃ process_hash                
+━━━━━━━━╇╇╇━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+c:\win… │││ … │ ORGKEY01-00000001-00000fa0-0… │ … │ ["aaaaaaaaaaaaaaaaaaaaaaaaaa
+c:\win… │││ … │ ORGKEY01-00000002-00000fa0-0… │ … │ ["aaaaaaaaaaaaaaaaaaaaaaaaaa
+1 more columns: name them with --columns, or use --format jsonl
+
+✓ 2 rows from 1 carbon_black_cloud tenant (limited to 2 per tenant)

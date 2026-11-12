@@ -56,6 +56,7 @@ pub struct HttpClient {
     label: TenantLabel,
     settings: HttpSettings,
     permits: Arc<Semaphore>,
+    proxies: ProxySettings,
 }
 
 impl HttpClient {
@@ -85,10 +86,8 @@ impl HttpClient {
             // to `timeout` each by `bytes`.
             .read_timeout(settings.timeout.saturating_mul(2))
             .no_proxy();
-        for proxy in ProxySettings::from_env(env, explicit_proxy)
-            .proxies()
-            .map_err(setup)?
-        {
+        let proxies = ProxySettings::from_env(env, explicit_proxy);
+        for proxy in proxies.proxies().map_err(setup)? {
             builder = builder.proxy(proxy);
         }
         let client = builder
@@ -99,7 +98,14 @@ impl HttpClient {
             label: label.clone(),
             settings: settings.clone(),
             permits: Arc::new(Semaphore::new(settings.max_in_flight.max(1))),
+            proxies,
         })
+    }
+
+    /// The proxy a request to *url* goes through, as `scheme://host[:port]`
+    /// without credentials; `None` when it goes direct (`splunk_route`).
+    pub fn route(&self, url: &url::Url) -> Option<String> {
+        self.proxies.route(url)
     }
 
     /// The tenant this client reaches.

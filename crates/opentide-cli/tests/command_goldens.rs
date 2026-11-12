@@ -338,8 +338,8 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
 
 /// The replay reads `RUST_COMMANDS` as the dispatch does: every entry, with
 /// its `requires`, `refuses` and `platforms`, so it tolerates a refusal only
-/// of a run the table does not cover (a bare `generate`, `query` on Splunk
-/// or of a rule) and fails on any other.
+/// of a run the table does not cover (a bare `generate`, `query` of a rule)
+/// and fails on any other.
 #[test]
 fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_run() {
     let words =
@@ -382,10 +382,8 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "query",
         &words("query --platform=crowdstrike q")
     ));
-    assert!(!replay::covers(
-        "query",
-        &words("query --platform splunk q")
-    ));
+    // Every platform with a query runner, Splunk too since UC-4.3 (#833).
+    assert!(replay::covers("query", &words("query --platform splunk q")));
     assert!(!replay::covers("query", &words("query q")));
     assert!(!replay::covers(
         "query",

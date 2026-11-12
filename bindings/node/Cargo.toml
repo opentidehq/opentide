@@ -1,0 +1,75 @@
+[package]
+name = "opentide-node"
+# Compiled into the npm package @opentide/opentide (package.json, whose
+# version is the package's); this crate is never published to crates.io.
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "The opentide SDK and command line for Node.js: the napi-rs binding of the opentide facade, compiled into @opentide/opentide"
+repository.workspace = true
+
+# The workspace's lints (root Cargo.toml, [workspace.lints], which gives each
+# allowed lint its reason), copied because napi-derive's registration cannot
+# compile under `forbid`: each `#[napi]` item expands to a static constructor
+# (the `ctor` crate) that carries `#[allow(unsafe_code)]`, and `forbid` refuses
+# any `allow`. `unsafe_code` is `deny` here; this crate writes no `unsafe` of
+# its own (docs/internal/unsafe.md). xtask/tests/lint_policy.rs fails when this
+# copy differs from the workspace's table in anything else.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+needless_pass_by_value = "allow"
+unused_self = "allow"
+unnecessary_wraps = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+too_many_lines = "allow"
+match_same_arms = "allow"
+map_unwrap_or = "allow"
+redundant_closure_for_method_calls = "allow"
+format_push_string = "allow"
+needless_raw_string_hashes = "allow"
+items_after_statements = "allow"
+single_match_else = "allow"
+assert_is_empty = "allow"
+
+[lib]
+name = "opentide_node"
+# cdylib: the addon Node loads (opentide.<target>.node); rlib: the unit tests.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The facade, and only the facade (ADR 0005): the SDK and the command line.
+opentide = { path = "../../crates/opentide", features = ["cli"] }
+# napi-rs 3 (MIT): N-API without a C++ toolchain; napi-derive writes the
+# TypeScript declarations (index.d.ts) from the `#[napi]` items.
+# `dyn-symbols`: the N-API functions are looked up when Node loads the addon,
+# so the unit tests link without a Node to resolve them against.
+napi = { version = "3", default-features = false, features = ["napi4", "dyn-symbols", "serde-json"] }
+napi-derive = { version = "3", default-features = false, features = ["type-def"] }
+# The facade's documents, handed to JavaScript in their field order.
+serde.workspace = true
+
+[build-dependencies]
+# The link arguments an addon needs (macOS: `-undefined dynamic_lookup`).
+napi-build = "2"
+
+[dev-dependencies]
+# The unit tests read what the binding serialises.
+serde_json.workspace = true

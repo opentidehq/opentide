@@ -1,0 +1,82 @@
+{
+  "name": "@opentide/opentide",
+  "version": "0.0.0",
+  "description": "opentide for Node.js: the SDK and the opentide command line. Spec-driven development for agentic detection engineering.",
+  "license": "EUPL-1.2",
+  "homepage": "https://opentide.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opentidehq/opentide.git",
+    "directory": "bindings/node"
+  },
+  "bugs": {
+    "url": "https://github.com/opentidehq/opentide/issues"
+  },
+  "keywords": [
+    "opentide",
+    "detection-as-code",
+    "security",
+    "siem"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "opentide": "cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./cli": "./cli.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "cli.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">= 18"
+  },
+  "optionalDependencies": {
+    "@opentide/opentide-linux-x64-gnu": "0.0.0",
+    "@opentide/opentide-linux-arm64-gnu": "0.0.0",
+    "@opentide/opentide-linux-x64-musl": "0.0.0",
+    "@opentide/opentide-linux-arm64-musl": "0.0.0",
+    "@opentide/opentide-darwin-x64": "0.0.0",
+    "@opentide/opentide-darwin-arm64": "0.0.0",
+    "@opentide/opentide-win32-x64-msvc": "0.0.0",
+    "@opentide/opentide-win32-arm64-msvc": "0.0.0"
+  },
+  "napi": {
+    "binaryName": "opentide",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "aarch64-pc-windows-msvc"
+    ]
+  },
+  "scripts": {
+    "build": "node build.mjs --release",
+    "build:debug": "node build.mjs",
+    "check:types": "node build.mjs --check-types",
+    "test": "node --test test/*.test.mjs && tsc -p test/tsconfig.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3.10.12",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  }
+}

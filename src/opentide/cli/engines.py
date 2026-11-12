@@ -201,16 +201,20 @@ def platform_values(options: Sequence[str]) -> list[str]:
     return values
 
 
-#: The platforms with a Rust connector (``crates/opentide-connectors``, UC-4.2,
-#: #832) whose ``query`` and ``validate query --live`` run on Rust: the REST
-#: platforms with a query runner. Sysdig has no runner; Sentinel, Splunk and
-#: Carbon Black stay Python's until UC-4.3.
+#: The platforms with a Rust connector (``crates/opentide-connectors``) whose
+#: ``query`` runs on Rust: every platform with a query runner. The REST
+#: platforms came with UC-4.2 (#832); Sentinel, Splunk and Carbon Black Cloud,
+#: which Python reaches through vendor SDKs, with UC-4.3 (#833). Sysdig has no
+#: runner.
 RUST_QUERY_PLATFORMS: tuple[str, ...] = (
+    "carbon_black_cloud",
     "crowdstrike",
     "defender_for_endpoint",
     "elastic",
     "harfanglab",
+    "sentinel",
     "sentinel_one",
+    "splunk",
 )
 
 #: The platforms whose ``validate query --live`` runs on Rust: those whose
@@ -274,6 +278,7 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: query --live`` on those of :data:`RUST_LIVE_VALIDATION_PLATFORMS`, with
 #: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names; a
 #: rule's query (``--rule``, ``--file``: its tenants' exclusions) stays Python's.
+#: ``query`` on Sentinel, Splunk and Carbon Black Cloud with UC-4.3 (#833).
 #: A deploy that sends stays Python's.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),

@@ -1,0 +1,2 @@
+error: Environment variable missing · detail: Unset configuration variables: $CBC_TOKEN · advice: Set those environment variables before a live check.
+error: 1 of 1 queries failed on 1 carbon_black_cloud tenant: lab: CBC credentials are unset ($CBC_TOKEN). Set those environment variables before a live check.

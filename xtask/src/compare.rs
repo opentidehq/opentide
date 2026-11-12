@@ -148,19 +148,105 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
     })
 }
 
-/// The version the candidate reports (`opentide --version` prints
+/// The version a candidate reports (`opentide --version` prints
 /// `opentide <version>`): this repository's build, compared against the
 /// oracle's release version as [`opentide_compare::normalise::OPENTIDE_VERSION`].
-pub fn candidate_version(repo: &Path) -> Result<String> {
-    let opentide = repo.join(".venv").join("bin").join("opentide");
-    let output = std::process::Command::new(&opentide)
+/// `opentide` is the candidate's executable.
+pub fn candidate_version(opentide: &Path) -> Result<String> {
+    let output = std::process::Command::new(opentide)
         .arg("--version")
         .env("NO_COLOR", "1")
         .output()
-        .with_context(|| format!("run {} --version (uv sync --group dev)", opentide.display()))?;
+        .with_context(|| format!("run {} --version", opentide.display()))?;
     let printed = String::from_utf8_lossy(&output.stdout);
     version_of(&printed)
         .with_context(|| format!("read the candidate's version from `{}`", printed.trim()))
+}
+
+/// The candidate of `golden check --runner node` (UC-5.3, #838): the npm
+/// package's `opentide` bin, `bindings/node/cli.js`, which calls the same
+/// `main(argv)` as the console script in Node's process. It needs the addon
+/// `npm run build` writes beside it. The cases run it through a launcher in
+/// `target/golden-node/` that execs the `node` found on `PATH` now (a case's
+/// `PATH` is the harness's own); the commands it covers are those of
+/// [`candidate`], read from `.venv`'s dispatch table.
+#[cfg(unix)]
+pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
+    use std::os::unix::fs::PermissionsExt;
+    let package = repo.join("bindings").join("node");
+    let cli = package.join("cli.js");
+    let built = std::fs::read_dir(&package)
+        .with_context(|| format!("read {}", package.display()))?
+        .filter_map(std::result::Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().ends_with(".node"));
+    if !cli.is_file() || !built {
+        bail!(
+            "{} has no addon: run `npm ci && npm run build` there first",
+            package.display()
+        );
+    }
+    let node = std::env::var_os("PATH")
+        .iter()
+        .flat_map(std::env::split_paths)
+        .map(|dir| dir.join("node"))
+        .find(|path| path.is_file())
+        .context("no `node` on PATH")?;
+    let quoted = |path: &Path| -> Result<String> {
+        let text = path.to_string_lossy();
+        if text.contains('\'') {
+            bail!("{text}: a path with a quote cannot go in the launcher");
+        }
+        Ok(format!("'{text}'"))
+    };
+    let bin_dir = target.join("golden-node");
+    std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
+    let launcher = bin_dir.join("opentide");
+    std::fs::write(
+        &launcher,
+        format!(
+            "#!/bin/sh\nexec {} {} \"$@\"\n",
+            quoted(&node)?,
+            quoted(&cli)?
+        ),
+    )
+    .with_context(|| format!("write {}", launcher.display()))?;
+    std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755))
+        .with_context(|| format!("make {} executable", launcher.display()))?;
+    Ok(crate::golden::run::Engine {
+        name: "node".into(),
+        bin_dir,
+        install_dir: package,
+        env: BTreeMap::new(),
+        host_paths: Vec::new(),
+        known_uuids: std::sync::Arc::new(package_uuids(repo)?),
+    })
+}
+
+/// Why the Node runner leaves `case` out, if it does: a run the PyPI CLI
+/// still answers in Python although its command has a Rust implementation,
+/// which the npm bin (the Rust command line alone, with no Python) answers
+/// differently. `golden check --runner node` counts these cases and says why;
+/// `--engine compare` compares them.
+pub fn node_leaves_out(case: &crate::golden::case::Case) -> Option<&'static str> {
+    let mut options = case.argv.iter().skip(1).take_while(|arg| *arg != "--");
+    if options.any(|arg| arg == "--help" || arg == "-h") {
+        return Some(
+            "`--help`: the PyPI CLI prints Typer's help, the npm bin the Rust command line's",
+        );
+    }
+    if case.command == "doctor" {
+        return Some(
+            "`doctor`: its Python environment checks read the Python that started the PyPI CLI",
+        );
+    }
+    None
+}
+
+/// The Node runner launches through a shell script: Unix only, as the
+/// goldens are recorded.
+#[cfg(not(unix))]
+pub fn node_candidate(_repo: &Path, _target: &Path) -> Result<crate::golden::run::Engine> {
+    bail!("--runner node runs on Unix only")
 }
 
 /// The version in `opentide --version`'s output, `opentide <version>`.
@@ -464,6 +550,38 @@ pub fn golden(
 #[cfg(test)]
 mod tests {
     use super::version_of;
+
+    #[test]
+    fn the_node_runner_leaves_out_what_the_pypi_cli_answers_in_python() {
+        use crate::golden::case::{Case, Mode, Stdin, StdinKind};
+        let case = |command: &str, argv: &[&str]| Case {
+            id: format!("{command}/plain/none/x"),
+            command: command.into(),
+            variant: "x".into(),
+            mode: Mode::Plain,
+            fixture: "none".into(),
+            argv: argv.iter().map(|arg| (*arg).to_owned()).collect(),
+            cwd: ".".into(),
+            env: std::collections::BTreeMap::new(),
+            stdin: Stdin {
+                kind: StdinKind::Null,
+                input: String::new(),
+            },
+            timeout_secs: 60,
+            normalise: Vec::new(),
+            cassette: None,
+        };
+        let left_out = |command: &str, argv: &[&str]| super::node_leaves_out(&case(command, argv));
+        assert!(left_out("validate", &["opentide", "validate", "--help"]).is_some());
+        assert!(left_out("info", &["opentide", "-h", "info"]).is_some());
+        assert!(left_out("doctor", &["opentide", "doctor", "--offline"]).is_some());
+        assert_eq!(left_out("validate", &["opentide", "validate"]), None);
+        // After `--`, `--help` is an argument, not the option.
+        assert_eq!(
+            left_out("new rule", &["opentide", "new", "rule", "--", "--help"]),
+            None
+        );
+    }
 
     #[test]
     fn a_command_covers_the_runs_with_a_flag_it_requires_and_none_it_refuses() {

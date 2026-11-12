@@ -925,6 +925,47 @@ args = ["query", "--platform", "harfanglab", "--from", "2099-01-01T00:00:00Z", "
 fixtures = ["tenants"]
 modes = ["plain", "json"]
 
+# UC-4.3 (#833): the SDK platforms. Sentinel's sign-in and queries carry random
+# request ids, so its success path is proven by its connector's cassettes
+# (tests/cassettes/sentinel/), and here by its refusal without credentials.
+
+[[case]]
+command = "query"
+variant = "tenant-splunk"
+args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "index=main EventCode=4688"]
+fixtures = ["tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-splunk"
+
+[[case]]
+command = "query"
+variant = "tenant-carbon-black"
+args = ["query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "process_name:cmd.exe"]
+fixtures = ["tenants"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-carbon-black"
+
+[[case]]
+command = "query"
+variant = "unset-splunk"
+args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "index=main"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "unset-carbon-black-cloud"
+args = ["query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "process_name:cmd.exe"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "unset-sentinel"
+args = ["query", "--platform", "sentinel", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "SecurityEvent | take 1"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
 # ---- lint ----
 
 [[case]]

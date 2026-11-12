@@ -1,0 +1,7 @@
+[1mlab[0m  [2m2 rows (more matched; raise --limit)[0m
+[1m_time                        [0m[1m [0m┃[1m [0m[1mhost[0m[1m [0m┃[1m [0m[1mcount[0m
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━
+2026-10-27T07:51:00.000+00:00 │ ws-1 │ 1    
+2026-10-27T07:52:00.000+00:00 │ ws-2 │ 2    
+
+[1;32m✓[0m 2 rows from 1 splunk tenant (limited to 2 per tenant)

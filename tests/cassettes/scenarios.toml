@@ -211,3 +211,113 @@ tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
 routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
 secrets = ["ELASTIC_API_KEY"]
 cwd = "repo"
+
+# ---- UC-4.3 (#833): Splunk, Carbon Black Cloud, Sentinel ----
+# The platforms opentide reached through vendor SDKs (splunklib, cbc_sdk,
+# azure-identity and azure-monitor-query): each stand-in tenant answers as the
+# Python suite's stand-ins and mocks do, and client.py drives the oracle's own
+# client, runner or deployer, so the cassette is what the SDK sent.
+
+[[scenario]]
+name = "splunk/deploy"
+description = "Splunk: the tide corpus's rule through the deployer: looked up (404), created and its settings set in two updates; deployed again (found, updated); retired (deleted); retired again (absent)."
+client = ["{python}", "tests/cassettes/splunk/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "splunk/query"
+description = "Splunk: opentide query's one-shot searches: rows past the limit, a query that starts with a command, warnings, an ERROR message, a refusal, rows without fields, a gateway's page."
+client = ["{python}", "tests/cassettes/splunk/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "splunk/validate"
+description = "Splunk: validate query --live's parser checks: two parsed, a parse error, the gateway's 307 Network Error, a gateway's 504 page."
+client = ["{python}", "tests/cassettes/splunk/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "carbon_black/deploy"
+description = "Carbon Black Cloud: the deployer on the watchlist opentide: a new report added to it, the same rule's IOC replaced, a rule added to another rule's report and retired from it (report kept), the first rule retired (report deleted), a watchlist the org does not hold."
+client = ["{python}", "tests/cassettes/carbon_black/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "carbon_black/query"
+description = "Carbon Black Cloud: opentide query's process searches: validated, started, polled until complete and read past the limit; one that finds nothing; one the validation refuses; one the tenant forbids."
+client = ["{python}", "tests/cassettes/carbon_black/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "carbon_black/validate"
+description = "Carbon Black Cloud: validate query --live's search_validation of a query it accepts and one it refuses."
+client = ["{python}", "tests/cassettes/carbon_black/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/deploy"
+description = "Sentinel: sign in to Entra ID (OpenID configuration, client credentials), then ARM's alertRules: create a rule, replace it, list the rules (two pages), delete it, delete it again (404)."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/query"
+description = "Sentinel: opentide query's Log Analytics queries: rows past the limit, a partial result, two tables, a syntax error, a missing permission."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/validate"
+description = "Sentinel: validate query --live's one-row checks of two queries."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+# ---- UC-4.3 (#833): the cassettes of `opentide query`'s golden cases on the
+# SDK platforms. Sentinel has none: azure-core and MSAL stamp each request with
+# a random id, so a recording of the oracle's command line never replays; its
+# connector's cassettes (sentinel/*) fix the ids in client.py instead.
+
+[[scenario]]
+name = "golden/query-splunk"
+description = "opentide query on Splunk's stand-in, the golden cases' cassette: server/info read twice, then a one-shot search whose three rows pass --limit 2."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "index=main EventCode=4688"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-carbon-black"
+description = "opentide query on Carbon Black Cloud's stand-in, the golden cases' cassette: a process search validated, started, polled until complete and read past --limit 2."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "process_name:cmd.exe"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"

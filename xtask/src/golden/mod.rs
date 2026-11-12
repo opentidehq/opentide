@@ -49,11 +49,11 @@ commands:
              run every case through the oracle and write tests/golden/cases/
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
-  check [--engine python|rust|compare] [--filter GLOB] [--jobs N]
+  check [--engine python|rust|compare] [--runner python|node] [--filter GLOB] [--jobs N]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
-  diff [--engine ...] [--filter GLOB] [--jobs N]
+  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N]
              check, printing every difference in full
   lock       rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip compile)
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
@@ -64,6 +64,13 @@ commands:
                and tests/golden/APPROVED_DIFFS.toml, for every case whose command
                has a Rust implementation (UC-0.7); rust comes with UC-3
                and cannot start until then (exit status 2)
+--runner       how --engine compare's candidate is launched: python (the default),
+               the PyPI console script of .venv; node, the npm package's `opentide`
+               bin (bindings/node/cli.js, after `npm run build` there) under the
+               `node` on PATH, which runs the same command line in-process
+               (UC-5.3), leaving out and counting the runs the PyPI CLI still
+               answers in Python (--help, doctor). `--runner node` alone implies
+               --engine compare
 --report FILE  with --engine compare: write the JSON report (opentide-compare's RunReport)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
@@ -91,10 +98,20 @@ enum Verb {
     Help,
 }
 
+/// How the candidate of `--engine compare` is launched (`--runner`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Runner {
+    /// The PyPI console script of `.venv`, with `OPENTIDE_ENGINE=rust`.
+    Python,
+    /// The npm package's `opentide` bin (`bindings/node`), under Node.
+    Node,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Command {
     verb: Verb,
     engine: String,
+    runner: Runner,
     filter: Option<String>,
     determinism: bool,
     jobs: Option<usize>,
@@ -117,11 +134,13 @@ fn parse(args: &[String]) -> Result<Command> {
     let mut command = Command {
         verb,
         engine: "python".into(),
+        runner: Runner::Python,
         filter: None,
         determinism: false,
         jobs: None,
         report: None,
     };
+    let mut engine_given = false;
     let mut rest = rest.iter();
     while let Some(arg) = rest.next() {
         let mut value = || {
@@ -131,7 +150,17 @@ fn parse(args: &[String]) -> Result<Command> {
         };
         match arg.as_str() {
             "--filter" => command.filter = Some(value()?),
-            "--engine" => command.engine = value()?,
+            "--engine" => {
+                command.engine = value()?;
+                engine_given = true;
+            }
+            "--runner" => {
+                command.runner = match value()?.as_str() {
+                    "python" => Runner::Python,
+                    "node" => Runner::Node,
+                    other => bail!("unknown runner `{other}`: python or node"),
+                };
+            }
             "--report" if command.verb != Verb::Record => {
                 command.report = Some(PathBuf::from(value()?));
             }
@@ -143,8 +172,18 @@ fn parse(args: &[String]) -> Result<Command> {
             other => bail!("unknown option `{other}` for this command\n\n{USAGE}"),
         }
     }
-    if command.engine != "python" && command.verb == Verb::Record {
-        bail!("only the oracle records: `record` takes no --engine");
+    if command.verb == Verb::Record
+        && (command.engine != "python" || command.runner != Runner::Python)
+    {
+        bail!("only the oracle records: `record` takes no --engine or --runner");
+    }
+    if command.runner == Runner::Node {
+        if !engine_given {
+            command.engine = "compare".into();
+        }
+        if command.engine != "compare" {
+            bail!("--runner node launches the candidate of --engine compare");
+        }
     }
     Ok(command)
 }
@@ -229,7 +268,10 @@ impl Command {
             "compare" if self.verb == Verb::Record => {
                 bail!("golden record records the oracle: --engine compare is for check and diff")
             }
-            "compare" => crate::compare::candidate(&layout.repo)?,
+            "compare" => match self.runner {
+                Runner::Python => crate::compare::candidate(&layout.repo)?,
+                Runner::Node => crate::compare::node_candidate(&layout.repo, &layout.target)?,
+            },
             other => bail!("unknown engine `{other}`: python, rust or compare"),
         };
         self.run_with(&layout, &oracle, engine)
@@ -243,6 +285,14 @@ impl Command {
         let selected = select(&all, self.filter.as_deref())?;
         // Generated fixtures are generated once per run, then copied per case.
         let (fixtures, _generated) = prepare_fixtures(&spec.fixtures, &selected, &layout.repo)?;
+        // The version the candidate reports, before the engine moves in.
+        let candidate_version = if self.engine == "compare" && self.verb != Verb::Record {
+            Some(crate::compare::candidate_version(
+                &engine.bin_dir.join("opentide"),
+            )?)
+        } else {
+            None
+        };
         let ctx = RunContext {
             repo: layout.repo.clone(),
             fixtures,
@@ -266,19 +316,28 @@ impl Command {
                     .iter()
                     .cloned()
                     .partition(|case| crate::compare::covers(&rust, &case.command, &case.argv));
+                // The Node bin is the Rust command line alone: what the PyPI
+                // launcher still answers in Python is left out, and counted.
+                let (ported, left_out): (Vec<Case>, Vec<Case>) = if self.runner == Runner::Node {
+                    ported
+                        .into_iter()
+                        .partition(|case| crate::compare::node_leaves_out(case).is_none())
+                } else {
+                    (ported, Vec::new())
+                };
+                report_left_out(&left_out);
                 crate::compare::golden(
                     &layout.repo,
                     &layout.cases(),
                     &layout.blobs(),
                     &run_all(&ported, &ctx, jobs, "compare"),
                     python_only.len(),
-                    self.filter.is_none(),
+                    // Ledger entries for the cases left out would read as stale:
+                    // `--engine compare` (CI's `Golden compare`) finds stale ones.
+                    self.filter.is_none() && left_out.is_empty(),
                     self.report.as_deref(),
                     self.verb == Verb::Diff,
-                    (
-                        &oracle.version,
-                        &crate::compare::candidate_version(&layout.repo)?,
-                    ),
+                    (&oracle.version, candidate_version.as_deref().unwrap_or("")),
                 )
             }
             _ => self.check(layout, oracle, &all, &selected, &ctx, jobs),
@@ -455,6 +514,20 @@ impl Command {
             }
         );
         Ok(failed == 0)
+    }
+}
+
+/// Says how many cases the Node runner left out, and why
+/// ([`crate::compare::node_leaves_out`]).
+fn report_left_out(left_out: &[Case]) {
+    let mut reasons: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for case in left_out {
+        if let Some(reason) = crate::compare::node_leaves_out(case) {
+            *reasons.entry(reason).or_default() += 1;
+        }
+    }
+    for (reason, count) in reasons {
+        println!("golden node: {count} case(s) left out: {reason}");
     }
 }
 
@@ -701,6 +774,15 @@ mod tests {
         assert_eq!(c.jobs, Some(3));
         assert!(parse(&args(&["check", "--check-determinism"])).is_err());
         assert!(parse(&args(&["record", "--engine", "rust"])).is_err());
+        assert_eq!(c.runner, Runner::Python);
+        // The Node runner launches the candidate of `--engine compare`.
+        let c = parse(&args(&["check", "--runner", "node"])).unwrap();
+        assert_eq!((c.engine.as_str(), c.runner), ("compare", Runner::Node));
+        let c = parse(&args(&["diff", "--engine", "compare", "--runner", "node"])).unwrap();
+        assert_eq!((c.engine.as_str(), c.runner), ("compare", Runner::Node));
+        assert!(parse(&args(&["check", "--engine", "python", "--runner", "node"])).is_err());
+        assert!(parse(&args(&["check", "--runner", "deno"])).is_err());
+        assert!(parse(&args(&["record", "--runner", "node"])).is_err());
         assert!(parse(&args(&["nope"])).is_err());
         assert!(parse(&args(&["check", "--filter"])).is_err());
     }
@@ -799,6 +881,7 @@ fixtures = ["none", "empty"]
         Command {
             verb,
             engine: "python".into(),
+            runner: Runner::Python,
             filter: None,
             determinism,
             jobs: Some(2),

@@ -16,7 +16,14 @@ The workspace forbids `unsafe` (`unsafe_code = "forbid"` in the root `Cargo.toml
 Those two copy the workspace's lint table with `unsafe_code = "deny"` and allow it on each
 item with a reason; `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate
 leaves the workspace table. Every other member, the PyO3 binding (`analysis/`) included,
-inherits `forbid`.
+inherits `forbid`, but one:
+
+| Crate | Why it copies the table with `deny` |
+|-------|-------------------------------------|
+| `bindings/node` | napi-rs: each `#[napi]` item expands to a static constructor (the `ctor` crate) that registers it with Node and carries `#[allow(unsafe_code)]`, which `forbid` refuses whatever the item. The crate writes no `unsafe` of its own and has no row below; an `unsafe` there would need its own `allow`, `SAFETY:` comment and row, as in the two crates above |
+
+The `unsafe` napi-rs and PyO3 generate sits in their macros' expansions, which these lints do
+not report (code from an external macro); the crates that ship it (`napi`, `pyo3`) answer for it.
 
 Two clippy lints hold every block to account:
 
