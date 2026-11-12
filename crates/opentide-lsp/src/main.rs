@@ -241,6 +241,10 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
             serde_json::to_string_pretty(&generate_tm_language(LanguageId::Yara, &spec))?,
         ),
         (
+            root.join("exabeam.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Exabeam, &spec))?,
+        ),
+        (
             root.join("monaco.json"),
             serde_json::to_string_pretty(&generate_monaco(&spec))?,
         ),

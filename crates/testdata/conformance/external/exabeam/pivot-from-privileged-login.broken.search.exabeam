@@ -1,0 +1,2 @@
+FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:"network-connection" ] LIMIT 100
+| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host

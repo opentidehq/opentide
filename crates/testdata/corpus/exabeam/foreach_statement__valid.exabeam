@@ -1,0 +1,2 @@
+# prod:foreach_statement valid
+vendor:"Microsoft" | FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host ] LIMIT 10

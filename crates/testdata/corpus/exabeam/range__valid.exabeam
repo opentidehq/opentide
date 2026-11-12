@@ -1,0 +1,2 @@
+# prod:range valid
+count:[1 TO 5] AND bytes:{1 TO *} AND src_ip:[10.0.0.0/8] AND time:[2026-11-01T00:00:00Z TO *]

@@ -1,0 +1,160 @@
+# One query per line: `<profile><TAB><query>`. Written for opentide, to hold the
+# engine to the reference checker beyond the spec's fixtures (reference.json,
+# scripts/sync_exabeam_conformance.py). In a query, `⏎` is a line break and `⇥` a tab.
+rule	vendor:"a" and not user:"b"
+search	select user where vendor:"a"
+search	SELECT user Where vendor:"a"
+rule	process_name:RGX("^a+b$")
+rule	process_name:RGX("(?i)admin")
+rule	process_name:RGX("(a)\\1")
+rule	process_name:RGX("(a)\\\\1")
+rule	process_name:RGX("foo(?=bar)")
+rule	process_name:RGX("a{2,")
+rule	process_name:RGX("[a-")
+rule	process_name:RGX("(?<!x)y")
+rule	process_name:RGX("(?>a)")
+rule	process_name:RGX("a++")
+rule	process_name:RGX(".**")
+rule	process_name:RGX("${?input}?")
+rule	process_name:RGXi("\\d+\\.exe$")
+rule	count:[1 TO 5]
+rule	count:[1 TO *]
+rule	count:[* TO *]
+rule	count:[5 TO 1]
+rule	count:[1 TO 5}
+rule	count:{1 TO 5}
+rule	src_ip:[10.0.0.9 TO 10.0.0.1]
+rule	src_ip:[10.0.0.0/33]
+rule	count:[1 TO 10.0.0.1]
+rule	src_ip:[10.0.0.1 TO 10.0.0.9]
+rule	src_ip:[fd00::1 TO fd00::9]
+rule	src_ip:[fd00::/8]
+rule	src_ip:[10.0.0.0/8]
+rule	src_ip:[ 10.0.0.0/8 ]
+rule	src_ip:[010.0.0.0/8]
+rule	time:[2026-11-01T00:00:00Z TO 2026-11-08T00:00:00Z]
+rule	time:[2026-11-08T00:00:00Z TO 2026-11-01T00:00:00Z]
+rule	time:[2026-11-01T00:00:00.123+01:00 TO *]
+rule	time:[2026-11-01 TO *]
+rule	approxLogTime:[1730000000000 TO *]
+rule	approxLogTime:"1730000000000"
+rule	time:"2026-11-11T00:00:00Z"
+rule	raw_log_time:("2026-11-11T00:00:00Z")
+rule	count:["1" TO "5"]
+rule	vendor:"a" | SELECT vendor
+search	vendor:"a" | FOREACH host [ SELECT user WHERE src_host: @host ]
+search	src_host: @host
+rule	src_host: @host
+search	vendor:"a" | SELECT user
+search	SELECT user WHERE vendor:"a" | SELECT user WHERE user:"x"
+search	SELECT user WHERE vendor:"a" | SELECT src_ip WHERE src_ip:"x"
+search	SELECT * WHERE vendor:"a" | SELECT src_ip WHERE src_ip:"x"
+search	SELECT DISTINCT user, src_ip WHERE vendor:"a"
+search	SELECT COUNT(user, src_ip) AS n WHERE vendor:"a"
+search	SELECT MAX(*) AS n WHERE vendor:"a"
+search	SELECT Count(*) AS n WHERE vendor:"a"
+search	SELECT median(bytes) AS n WHERE vendor:"a"
+search	SELECT rgx_Extract("a(b)") AS x WHERE vendor:"a"
+search	SELECT RGX_EXTRACT(user) AS x WHERE vendor:"a"
+search	SELECT RGX_EXTRACT(user, "(a)\\1") AS x WHERE vendor:"a"
+search	SELECT user AS select WHERE vendor:"a"
+search	SELECT user FROM logs WHERE vendor:"a"
+search	FROM logs vendor:"a"
+search	SELECT user WHERE vendor:"a" AS results
+search	SELECT user WHERE vendor:"a" SELECT user
+search	SELECT user WHERE vendor:"a" LIMIT 0
+search	SELECT user WHERE vendor:"a" LIMIT 10
+search	vendor:"a" LIMIT 10
+search	vendor:"a" ORDER-BY user
+search	vendor:"a" order-by user desc
+search	SELECT user, COUNT(*) AS n GROUP-BY user ORDER-BY n Desc
+search	
+rule	
+rule	   
+search	vendor:"a" | | SELECT user
+search	vendor:"a" | FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host GROUP-BY src_host ]
+search	SELECT user WHERE (vendor:"a" OR vendor:"b") AND user:"c"
+rule	vendor:"a" AND (user:"b")
+rule	vendor:"a" AND NOT (user:"b")
+rule	vendor:"a" AND ((user:"b" OR user:"c"))
+rule	(vendor:"a" OR vendor:"b") AND user:"c"
+rule	vendor:"a" OR vendor:"b" AND user:"c"
+rule	vendor:"a" user:"b"
+rule	web application
+rule	"Admin login" Okta
+rule	web-north
+rule	10.228.200.3
+rule	web*
+rule	*
+rule	(*)
+rule	*foo
+rule	/admin
+rule	   /admin
+rule	user != "SYSTEM"
+rule	user:!="SYSTEM"
+rule	subject:"app" NOT vendor:"Exabeam"
+rule	process_command_line: contains("-enc")
+rule	process_command_line: startswith("powershell")
+rule	process_command_line: cidr("10.0.0.0/8")
+rule	src_ip: exists()
+rule	process_name:RGX(powershell)
+rule	process_name:WLD()
+rule	process_name:WLD("a", "b")
+rule	process_name:RGX("a"
+rule	user IN "Executives" OR src_ip IN "Admins"
+rule	user IN "A" AND src_ip IN "B" AND host IN "C"
+rule	user IN "A" AND NOT src_ip IN "B"."Column"
+rule	user IN Executives
+rule	user IN "A".Column
+rule	vendor:Microsoft
+rule	vendor:Microsoft (user:"a")
+rule	parsed:true
+rule	parsed:FALSE
+rule	dest_port:null
+rule	NOT dest_port:null
+rule	dest_port:"null"
+rule	src_ip:10.0.0.1
+rule	src_ip:fe80::1
+rule	src_ip:(0.0.0.0, 127.0.0.1, null)
+rule	dest_port:(139, 445)
+rule	event_code:4625
+rule	event_code:("4625", 4771)
+rule	user:("joe")
+rule	bytes_in > 1000
+rule	bytes_in: >1000
+rule	bytes_in:>=1000
+rule	bytes_in = <= 5
+rule	bytes_in > "1000"
+rule	bytes_in > "abc"
+rule	bytes_in > abc
+rule	product=="web application"
+rule	product:"`web application`"
+rule	subject:"W*b"
+rule	subject:"W?b"
+rule	process_command_line:"powershell * -enc"
+rule	process_command_line:"powershell \\* -enc"
+rule	file_path:"/tmp/"
+rule	user:"/[^0-9A-Za-z_]/"
+rule	user:"//"
+rule	file_name:WLDi("*resume*")
+rule	file_name:WLDi("resume")
+rule	c-uri:"/admin"
+rule	c_custom_field:"x" AND m_ingest:"y"
+rule	ScriptBlockText:"Invoke-Mimikatz"
+rule	src_ipp:"10.0.0.1"
+rule	geo_src_ip.country:"FR"
+rule	process_name:"cmd.exe
+rule	process_name:"a\\\\" AND user:"b"
+rule	vendor:"a" AND
+rule	vendor:"a" AND )
+rule	(vendor:"a"
+rule	vendor:
+rule	vendor:"a"⏎AND user:"b"⏎⇥AND NOT host:"c"
+search	SELECT user, src_ip, COUNT(*) AS logins WHERE activity_type:"app-login" GROUP-BY user
+search	SELECT * WHERE activity_type:"app-login" GROUP-BY user
+search	FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host ]
+search	SELECT user AS t1 WHERE vendor:"a" | SELECT t1 AS t2 WHERE t1:"x" | SELECT t2 AS t3 WHERE t2:"x" | SELECT t3 AS t4 WHERE t3:"x" | SELECT t4 AS t5 WHERE t4:"x" | SELECT t5 AS t6 WHERE t5:"x" | SELECT t6 WHERE t6:"x"
+search	SELECT RGX_EXTRACT("a(b)") AS x1, RGX_EXTRACT("c(d)") AS x2, RGX_EXTRACT("e(f)") AS x3, RGX_EXTRACT("g(h)") AS x4 WHERE vendor:"Microsoft"
+rule	process_command_line:RGX(".*\\ .*")
+rule	process_command_line:RGX("$?{?input}?")
+rule	user:"é" AND host:"日本" AND src_host:"😀" web-ñ

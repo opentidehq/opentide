@@ -1,0 +1,20 @@
+name: Query errors
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000119
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case query-errors.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: 'user != "SYSTEM" AND process_name:RGX("(?=a)")'
+      - query: 'SELECT user'
+    correlation: {within: 1h}

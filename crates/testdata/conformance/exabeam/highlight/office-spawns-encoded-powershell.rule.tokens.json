@@ -1,0 +1,226 @@
+[
+  {
+    "text": "activity_type",
+    "range": [
+      0,
+      13
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      13,
+      14
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "\"process-create\"",
+    "range": [
+      14,
+      30
+    ],
+    "capture": "string"
+  },
+  {
+    "text": "AND",
+    "range": [
+      31,
+      34
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "parent_process_name",
+    "range": [
+      35,
+      54
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      54,
+      55
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "(",
+    "range": [
+      55,
+      56
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "\"winword.exe\"",
+    "range": [
+      56,
+      69
+    ],
+    "capture": "string"
+  },
+  {
+    "text": ",",
+    "range": [
+      69,
+      70
+    ],
+    "capture": "punctuation.delimiter"
+  },
+  {
+    "text": "\"excel.exe\"",
+    "range": [
+      71,
+      82
+    ],
+    "capture": "string"
+  },
+  {
+    "text": ",",
+    "range": [
+      82,
+      83
+    ],
+    "capture": "punctuation.delimiter"
+  },
+  {
+    "text": "\"powerpnt.exe\"",
+    "range": [
+      84,
+      98
+    ],
+    "capture": "string"
+  },
+  {
+    "text": ")",
+    "range": [
+      98,
+      99
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "AND",
+    "range": [
+      100,
+      103
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "process_name",
+    "range": [
+      104,
+      116
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      116,
+      117
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "(",
+    "range": [
+      117,
+      118
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "\"powershell.exe\"",
+    "range": [
+      118,
+      134
+    ],
+    "capture": "string"
+  },
+  {
+    "text": ",",
+    "range": [
+      134,
+      135
+    ],
+    "capture": "punctuation.delimiter"
+  },
+  {
+    "text": "\"pwsh.exe\"",
+    "range": [
+      136,
+      146
+    ],
+    "capture": "string"
+  },
+  {
+    "text": ")",
+    "range": [
+      146,
+      147
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "AND",
+    "range": [
+      148,
+      151
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "process_command_line",
+    "range": [
+      152,
+      172
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      172,
+      173
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "RGXi",
+    "range": [
+      173,
+      177
+    ],
+    "capture": "function.builtin"
+  },
+  {
+    "text": "(",
+    "range": [
+      177,
+      178
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "\"\\\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\\\s\"",
+    "range": [
+      178,
+      238
+    ],
+    "capture": "string"
+  },
+  {
+    "text": ")",
+    "range": [
+      238,
+      239
+    ],
+    "capture": "punctuation.bracket"
+  }
+]

@@ -1,0 +1,20 @@
+name: Schedule week
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000125
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case schedule-week.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    schedule:
+      - {every: week, from: '08:00Z', to: '18:00Z', days: [monday, funday]}
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'

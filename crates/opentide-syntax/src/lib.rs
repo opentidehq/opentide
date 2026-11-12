@@ -13,6 +13,7 @@ unsafe extern "C" {
     fn tree_sitter_opentide_falco() -> *const ();
     fn tree_sitter_opentide_cql() -> *const ();
     fn tree_sitter_opentide_yara() -> *const ();
+    fn tree_sitter_opentide_exabeam() -> *const ();
 }
 
 fn from_raw(ptr: *const ()) -> Language {
@@ -33,6 +34,9 @@ pub fn language(id: LanguageId) -> Option<Language> {
         // Highlighting and structure only: YARA's verdict parser is
         // yara-x-parser (opentide-yara).
         LanguageId::Yara => Some(unsafe { from_raw(tree_sitter_opentide_yara()) }),
+        // Highlighting and structure only: the verdicts are opentide-exabeam's
+        // port of the specification's reference checker.
+        LanguageId::Exabeam => Some(unsafe { from_raw(tree_sitter_opentide_exabeam()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
