@@ -167,6 +167,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
 | HarfangLab | YARA (`yara.signature`, and the rule the decomposed form assembles) | ✅ |
 | Bitdefender GravityZone | YARA (`yara.signature`, Bitdefender profile: ASCII, 30,000 characters) | ✅ |
+| Google Security Operations | YARA-L 2.0 | ❌ not yet: `opentide validate query --platform google_secops --live` |
 | CrowdStrike | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp

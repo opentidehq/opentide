@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **Google Security Operations rules deploy from opentide.** A `configurations.google_secops` block (`platform::google_secops::1.0`) is a YARA-L 2.0 custom rule written as its sections: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, `match` and `options` as YAML. Deploy assembles the rule with a `meta` section derived from the rule (author, description, severity, priority, ATT&CK `tactic` and `technique`, `opentide_uuid`, `opentide_version`), verifies it with `verifyRuleText` before every create and text update, sends the text only when it changed, and keeps the `ru_` rule id in `.opentide/states/deployment/`. `PREVIEW` runs the rule without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, and `DELETION` archives the rule (or, with `deletion = "delete"`, deletes it without `force`, archiving it when Google refuses): detections are never deleted. Credentials are a service-account key in an environment variable, or Application Default Credentials. `deploy --dry-run` shows the assembled rule. Enable it with `opentide setup platforms --google-secops`.
+- **`validate` checks Google SecOps blocks.** It reports the constraint codes `google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule` and `google_secops_meta_key`, the YARA-L section codes `yaral_section_missing`, `yaral_section_empty` (with the reason a `condition: #e > 0` plain scalar loads as null), `yaral_section_header`, `yaral_section_alias`, `yaral_match_shape`, `yaral_match_window` and `yaral_option`, each at its field path, and two enabled blocks sharing a rule name, ignoring case (`google_secops_name_duplicate`). `validate` and `lint` warn, without failing, when `outcome` assigns no `$risk_score`, when a rule matches a producer by a literal `ru_` id, and on `run_frequency: LIVE` for a multi-event rule. Each code has an `opentide explain` page.
+- **`opentide validate query --platform google_secops --live` compiles each rule with Google's `verifyRuleText`**, which creates nothing, and reports `google_secops_compile_error` and `google_secops_compile_warning` at the section key and line they fall in, and `google_secops_run_frequency_not_allowed`. MCP `validate_query` takes `google_secops` with `live: true`. The offline YARA-L check comes with the analysis engine in a later release.
+- **`opentide query --platform google_secops` runs a YARA-L search** through `udmSearch` (`queryDialect=YL2`), returning events or statistics and warning when the result is truncated. `--rule` is not supported: a rule runs in the detection engine, not as a search.
+
+### Changed
+
+- **`google-auth` is a dependency**, for the Google SecOps OAuth 2.0 token.
+
 ## [0.25.0] — 2026-11-11
 
 Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.

@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Ten deployment platforms, six query validators (five offline), eight query runners, and where each platform block schema is specified.
+description: Eleven deployment platforms, seven query validators (five offline), nine query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **ten detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **eleven detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -21,6 +21,7 @@ opentide integrates with **ten detection platforms** through built-in adapters r
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 | Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
+| Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | not yet | yes (`udmSearch`) | YARA-L 2.0 |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -59,6 +60,36 @@ Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exc
 
 Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; The analysis engine checks `yara.signature` offline under its Bitdefender profile, as `opentide validate` (its `queries` check), `opentide validate query --platform bitdefender` and the editor do: a YARA error, a character that is not ASCII (`bitdefender_yara_ascii`) or a signature over 30,000 characters (`bitdefender_yara_size`) fails the rule, each reported once, at its place in the signature, and `opentide lint` warns on a module GravityZone has not confirmed (`yara_module_unconfirmed`). GravityZone has no dry run, so `validate query --platform bitdefender --live` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
 
+Google Security Operations (Google SecOps, formerly Chronicle) takes YARA-L 2.0 custom rules. A `google_secops` block carries the rule's sections as keys: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, written as block scalars, and `match` and `options` as YAML objects. Deploy assembles the rule from them: `rule <name> {`, a `meta` section it derives from the rule (author, description, severity, priority, ATT&CK `tactic` and `technique`, `opentide_uuid` and `opentide_version`, then the block's own `meta`), then each section under its label. The rule name is the block's `name`, else the rule's title in `snake_case`.
+
+```yaml
+configurations:
+  google_secops:
+    schema: platform::google_secops::1.0
+    status: PRODUCTION
+    run_frequency: LIVE_CUSTOMIZABLE
+    events: |
+      $fail.metadata.event_type = "USER_LOGIN"
+      $fail.security_result.action = "BLOCK"
+      $fail.target.user.userid = $user
+      $success.metadata.event_type = "USER_LOGIN"
+      $success.security_result.action = "ALLOW"
+      $success.target.user.userid = $user
+    match:
+      group_by: [$user]
+      window: 30m
+    outcome: |
+      $risk_score = max(80)
+    condition: |
+      #fail >= 10 and $success
+    options:
+      suppression_window: 1h
+```
+
+`condition` is a block scalar on purpose: `condition: #fail >= 10 and $success` as a plain scalar is a YAML comment, loads as null, and fails with `yaral_section_empty`. `opentide validate` checks the block's constraints (`google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`), the sections' structure (`yaral_section_missing`, `yaral_section_empty`, `yaral_section_header`, `yaral_section_alias`, `yaral_match_shape`, `yaral_match_window`, `yaral_option`), and that no two enabled blocks share a rule name, ignoring case (`google_secops_name_duplicate`). It warns, as `opentide lint` does, when `outcome` assigns no `$risk_score`, when a rule matches a producer by a literal `ru_…` id, and on `run_frequency: LIVE` for a multi-event rule.
+
+Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`: deploy never deletes a rule's detections. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. The analysis engine's offline YARA-L check is not wired in this release: `validate query --platform google_secops` without `--live` names `--live`. `deploy --dry-run` shows the assembled rule.
+
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
 ## Platform block schemas
@@ -76,6 +107,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed, checked offline." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
   <Card title="Bitdefender GravityZone" href="/docs/specifications/specs/platforms/bitdefender-1.0/" description="Custom detection rule: Basic criteria or a YARA signature, through the Incidents API." />
+  <Card title="Google Security Operations" href="/docs/specifications/specs/platforms/google-secops-1.0/" description="YARA-L 2.0 rule written as sections, assembled with derived meta, through the Chronicle API v1." />
 </Cards>
 
 ## Inspecting capabilities at runtime
@@ -102,9 +134,9 @@ Only platforms with `can_validate=True` run live validation. For CrowdStrike, Ha
 opentide validate query --platform crowdstrike   # reports unsupported
 ```
 
-For the six that can, `opentide validate query` checks each query offline with
+For the seven that can, `opentide validate query` checks each query offline with
 the analysis engine (every platform but SentinelOne, whose S1QL it does not
-parse), and `--live` submits the catalogue queries to the tenants, which
+parse, and Google SecOps, whose YARA-L check the engine does not run yet), and `--live` submits the catalogue queries to the tenants, which
 requires credentials; every vendor SDK ships with `pip install opentide`. A
 missing plan fails that check. Only the requested platform's engine is
 imported, so a Sentinel run never loads the CrowdStrike or HarfangLab modules.

@@ -57,8 +57,8 @@ opentide explain
 ```
 
 ```text output-of="opentide explain"
-analysis_engine                        The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
-api_key_literal                        A `sharing.toml` block holds its API key as a literal.
+analysis_engine                           The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
+api_key_literal                           A `sharing.toml` block holds its API key as a literal.
 ```
 
 With `--json` the codes are `codes`, a list of `{code, meaning}` in the same order (elided below), and `summary.codes` counts them:
