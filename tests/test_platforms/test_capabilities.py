@@ -17,6 +17,9 @@ _ALL_PLATFORMS = (
     "carbon_black_cloud",
     "harfanglab",
     "elastic",
+    "sysdig",
+    "bitdefender",
+    "exabeam",
 )
 
 
@@ -45,4 +48,4 @@ def test_bundled_platform_config_count() -> None:
 
     data_path = Path(str(files("opentide.data")))
     platforms = list((data_path / "configurations" / "platforms").glob("*.toml"))
-    assert len(platforms) == 10
+    assert len(platforms) == 11

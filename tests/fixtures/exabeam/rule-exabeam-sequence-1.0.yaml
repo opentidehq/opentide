@@ -1,0 +1,67 @@
+name: Office document drops encoded PowerShell that calls out
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000072
+  schema: rule::1.1
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  An Office application starts PowerShell with an encoded command, and the
+  same host then opens a network connection from PowerShell within fifteen
+  minutes.
+techniques:
+- T1059.001
+- T1566.001
+response:
+  alert_severity: Critical
+  procedure:
+    analysis: |
+      Decode the command, then find every host the source host reached.
+    searches:
+      - purpose: Hosts with the most encoded PowerShell this week
+        system: exabeam
+        query: |
+          SELECT host, COUNT(*) AS launches
+          WHERE activity_type:"process-create" AND process_name:("powershell.exe", "pwsh.exe")
+            AND process_command_line:RGXi("\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s")
+          GROUP-BY host
+          ORDER-BY launches DESC
+          LIMIT 20
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    delay: 15m
+    email:
+      recipients: [soc@example.com]
+      attach_csv: true
+    schedule:
+      - every: days
+        first: monday
+        last: friday
+        from: "06:00Z"
+        to: "20:00Z"
+    sequences:
+      - name: Office spawns encoded PowerShell
+        query: |
+          activity_type:"process-create"
+          AND parent_process_name:("winword.exe", "excel.exe", "powerpnt.exe")
+          AND process_name:("powershell.exe", "pwsh.exe")
+          AND process_command_line:RGXi("\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s")
+        group_by: [host]
+      - name: PowerShell connects out
+        query: |
+          activity_type:"network-connection" AND process_name:("powershell.exe", "pwsh.exe")
+          AND NOT dest_ip:[10.0.0.0/8] AND NOT dest_ip:[172.16.0.0/12] AND NOT dest_ip:[192.168.0.0/16]
+        group_by: [host]
+        threshold:
+          function: count
+          operator: more_than
+          value: 0
+          within: 10m
+    correlation:
+      within: 15m
+      group_by: [host]

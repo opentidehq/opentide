@@ -341,6 +341,14 @@ def test_platform_blocks_hold_detection_logic(workspace: Path) -> None:
     )
 
 
+def test_an_exabeam_block_holds_a_sequence_query(workspace: Path) -> None:
+    payload = parse_cli_json(_new(workspace, "rule", "--name", "Spray", "--platform", "exabeam"))
+    data = parse_yaml(Path(payload["file_path"]).read_text(encoding="utf-8"))
+    (sequence,) = data["configurations"]["exabeam"]["sequences"]
+    assert sequence["query"]
+    assert "configurations.exabeam.sequences.query" in payload["placeholders"]
+
+
 def test_new_objects_start_on_the_latest_revision(workspace: Path) -> None:
     from opentide.models.schema_registry import latest_identifier
 
