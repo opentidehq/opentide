@@ -1,10 +1,6 @@
 ---
 name: engine-release
-description: >-
-  Retired. The engine crates no longer release on their own (engine-v* tags, engine-release.yml):
-  since UC-5.5 the release train (.github/workflows/publish.yml) publishes them with opentide at
-  one product version. Use this only to read how an engine-v* release was cut or verified; to
-  release anything, use release-management.
+description: Retired since UC-5.5 - the release train (.github/workflows/publish.yml) publishes the engine crates with opentide at one product version, and the engine-v* tags and engine-release.yml are gone. Use when reading how an engine-v* release was cut or verified, or what changed for the engine; to release anything, use release-management.
 license: EUPL-1.2
 metadata:
   author: opentidehq
