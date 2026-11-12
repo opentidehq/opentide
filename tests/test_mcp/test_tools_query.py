@@ -164,7 +164,10 @@ def test_validate_query_truncates_the_preview() -> None:
 def test_validate_query_google_secops_is_checked_by_the_instance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """YARA-L is compiled by verifyRuleText with live true; offline names live (google-secops-1.0)."""
+    """YARA-L is compiled by verifyRuleText with live true; offline names live.
+
+    google-secops-1.0, Query validation.
+    """
     offline = tools.tool_validate_query('metadata.event_type = "USER_LOGIN"', "google_secops")
     assert offline["supported"] is True
     assert offline["valid"] is None
