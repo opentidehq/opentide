@@ -555,6 +555,7 @@ dependencies = [
  "opentide-spl",
  "opentide-tide",
  "opentide-yara",
+ "opentide-yaral",
  "regex",
  "serde",
  "serde_json",
@@ -779,6 +780,20 @@ dependencies = [
  "tree-sitter",
  "yara-x-fmt",
  "yara-x-parser",
+]
+
+[[package]]
+name = "opentide-yaral"
+version = "0.13.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "regex-syntax",
+ "serde",
+ "serde_json",
+ "toml",
+ "tree-sitter",
 ]
 
 [[package]]

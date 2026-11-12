@@ -70,6 +70,7 @@ fn main() {
         ("falco", LanguageId::Falco),
         ("cql", LanguageId::Cql),
         ("yara", LanguageId::Yara),
+        ("yaral", LanguageId::Yaral),
     ] {
         let texts = corpus(name);
         if texts.is_empty() {

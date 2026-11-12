@@ -3,11 +3,11 @@
 #   scripts/fuzz.sh <target> [seconds]     default 300
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-target="${1:?target: kql spl esql eql kuery lucene falco cql yara tide protocol}"
+target="${1:?target: kql spl esql eql kuery lucene falco cql yara yaral tide protocol}"
 seconds="${2:-300}"
 seeds=()
 case "$target" in
-  kql|spl|esql|eql|kuery|lucene|falco|cql|yara)
+  kql|spl|esql|eql|kuery|lucene|falco|cql|yara|yaral)
     [[ -d "$root/testdata/corpus/$target" ]] && seeds+=("$root/testdata/corpus/$target")
     [[ -d "$root/testdata/conformance/external/$target" ]] && seeds+=("$root/testdata/conformance/external/$target") ;;
   tide) seeds+=("$root/testdata/objects" "$root/testdata/workspaces/tide_corpus/objects") ;;

@@ -35,6 +35,14 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
+-- YARA-L (Google SecOps): `.yaral` and `.yl2`, filetype `yaral`.
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = { "*.yaral", "*.yl2" },
+  callback = function()
+    vim.bo.filetype = "yaral"
+  end,
+})
+
 for _, lang in ipairs({ "esql", "eql", "kuery", "lucene", "falco", "cql" }) do
   vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
     pattern = { "*." .. lang },
@@ -66,7 +74,7 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara" },
+  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "yaral" },
   callback = function()
     vim.lsp.start({
       name = "opentide-lsp",

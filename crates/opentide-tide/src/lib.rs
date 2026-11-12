@@ -1076,7 +1076,10 @@ fn analyze_injections(
                     .collect();
                 (r.diagnostics, r.tokens)
             }
-            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
+            // Google SecOps blocks are not injected yet.
+            LanguageId::Yaral | LanguageId::TideYaml | LanguageId::Config => {
+                (Vec::new(), Vec::new())
+            }
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.

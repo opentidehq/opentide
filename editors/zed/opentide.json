@@ -41,6 +41,10 @@
       "language_servers": ["opentide-lsp"],
       "path_suffixes": ["yar", "yara"]
     },
+    "yaral": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["yaral", "yl2"]
+    },
     "opentide-config": {
       "language_servers": ["opentide"],
       "path_globs": [".opentide/configurations/**/*.toml"],

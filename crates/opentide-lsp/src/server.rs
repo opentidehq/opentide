@@ -333,6 +333,11 @@ mod tests {
             lang("file:///q.yara", Some("plaintext")),
             Some(LanguageId::Yara)
         );
+        assert_eq!(lang("file:///q.yaral", None), Some(LanguageId::Yaral));
+        assert_eq!(
+            lang("file:///q.yl2", Some("plaintext")),
+            Some(LanguageId::Yaral)
+        );
     }
 
     #[test]

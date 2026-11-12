@@ -484,3 +484,31 @@ fn yara_corpus_gate() {
         ],
     });
 }
+
+#[test]
+fn yaral_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Yaral,
+        id: "yaral",
+        // Leaf tokens and the pieces of the tagged productions: every fixture
+        // that tags a production contains them.
+        structural: &[
+            "source_file",
+            "identifier",
+            "field_name",
+            "integer",
+            "float",
+            "string",
+            "boolean",
+            "window_bound",
+            "variable",
+            "count",
+            "arguments",
+            "function_name",
+            "match_clause",
+            "order_item",
+            "meta_entry",
+            "option_entry",
+        ],
+    });
+}

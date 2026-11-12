@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [kql, spl, esql, eql, kuery, lucene, falco, cql, yara, tide, protocol]
+        target: [kql, spl, esql, eql, kuery, lucene, falco, cql, yara, yaral, tide, protocol]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

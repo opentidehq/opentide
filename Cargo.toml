@@ -14,6 +14,7 @@ members = [
     "crates/opentide-cql",
     "crates/opentide-ecs",
     "crates/opentide-yara",
+    "crates/opentide-yaral",
     "crates/opentide-tide",
     "crates/opentide-analysis",
     "crates/opentide-lsp",
@@ -43,6 +44,7 @@ opentide-falco = { path = "crates/opentide-falco", version = "=0.13.0" }
 opentide-cql = { path = "crates/opentide-cql", version = "=0.13.0" }
 opentide-ecs = { path = "crates/opentide-ecs", version = "=0.13.0" }
 opentide-yara = { path = "crates/opentide-yara", version = "=0.13.0" }
+opentide-yaral = { path = "crates/opentide-yaral", version = "=0.13.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.13.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.13.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.13.0" }
@@ -59,6 +61,9 @@ lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
 regex = "1"
+# RE2 syntax checks of YARA-L regular expressions (opentide-yaral): the parser
+# `regex` already locks, without compiling.
+regex-syntax = "0.8"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"
