@@ -478,3 +478,23 @@ fn setup_cases_are_the_oracles() {
         48,
     );
 }
+
+#[test]
+fn a_case_root_keeps_the_recorded_length_behind_a_longer_tmp() {
+    use std::path::Path;
+    // Linux's `/tmp`: the name `cargo xtask golden check` gives.
+    assert_eq!(replay::root_name(Path::new("/tmp")), ("golden-", 6));
+    // macOS's `/tmp` is `/private/tmp`: `/private/tmp/goXXX` is as long as
+    // `/tmp/golden-XXXXXX`, so paths wrap where the recordings wrap.
+    let (prefix, random) = replay::root_name(Path::new("/private/tmp"));
+    assert_eq!(
+        "/private/tmp/".len() + prefix.len() + random,
+        "/tmp/golden-XXXXXX".len()
+    );
+    assert!(random >= 3);
+    // No room for three random characters: the recorded name, as before.
+    assert_eq!(
+        replay::root_name(Path::new("/a/very/long/temporary/folder")),
+        ("golden-", 6)
+    );
+}

@@ -40,17 +40,37 @@ pub fn generated(name: &str) -> Option<PathBuf> {
 /// length, so a root of another length (`tempfile::tempdir()`'s
 /// `.tmpXXXXXX`, or a `TMPDIR` elsewhere) wraps lines the real compare does
 /// not, and a ledger entry drafted from this replay would not apply there.
+///
+/// The replay reads the root by its canonical path, so where `/tmp` is a
+/// link (macOS: `/private/tmp`) the name is shortened to keep the canonical
+/// root as long as the recordings' `/tmp/golden-XXXXXX`.
 pub fn case_root() -> tempfile::TempDir {
     let parent = if Path::new("/tmp").is_dir() {
         PathBuf::from("/tmp")
     } else {
         std::env::temp_dir()
     };
+    let (prefix, random) = root_name(&std::fs::canonicalize(&parent).unwrap_or(parent.clone()));
     tempfile::Builder::new()
-        .prefix("golden-")
-        .rand_bytes(6)
+        .prefix(prefix)
+        .rand_bytes(random)
         .tempdir_in(parent)
         .unwrap()
+}
+
+/// The prefix and the count of random characters of a case root's name in
+/// *parent* (canonical): `golden-` and six, as `cargo xtask golden check`
+/// names it, cut to keep the root `/tmp/golden-XXXXXX`'s length when
+/// *parent* is longer than `/tmp` and leaves room for three random ones.
+pub fn root_name(parent: &Path) -> (&'static str, usize) {
+    const PREFIX: &str = "golden-";
+    const RECORDED: usize = "/tmp/golden-XXXXXX".len();
+    let name = RECORDED.saturating_sub(parent.as_os_str().len() + 1);
+    if name < 3 {
+        return (PREFIX, 6);
+    }
+    let prefix = (name - 3).min(PREFIX.len());
+    (&PREFIX[..prefix], name - prefix)
 }
 
 /// The fixtures this module lays out.
