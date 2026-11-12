@@ -7,8 +7,10 @@ profile ``uv sync`` already compiled), installs it into a fresh virtual
 environment, and beside it the sample plugin ``tests/fixtures/plugin_platform``
 as an installer lays it out: its package and a ``.dist-info`` with its
 ``opentide.platforms`` entry point. The console script of that environment,
-under the default engine, then plans a deploy on the plugin's platform and
-runs a query against the stand-in Acme tenant on 127.0.0.1.
+under the default engine, then plans a deploy on the plugin's platform, runs
+a query, checks a rule's query and deploys it against the stand-in Acme
+tenant on 127.0.0.1, and ``validate`` on the Rust core checks the plugin's
+blocks.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from tests.test_cli.e2e.test_wheel_install_regression import (
     _run,
     _venv_bin,
 )
-from tests.test_platforms.test_plugin_hook import CASSETTE, FIXTURE, TOKEN, StandIn
+from tests.test_platforms.test_plugin_hook import CASSETTE, FIXTURE, TOKEN, VALID_RULE, StandIn
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -144,3 +146,54 @@ def test_a_plugin_runs_on_opentide_installed_from_its_wheel(tmp_path: Path) -> N
     result = json.loads(queried.stdout)
     assert result["row_count"] == 2
     assert TOKEN not in queried.stdout + queried.stderr
+
+    with StandIn(CASSETTE["validate"]) as tenant:
+        env["ACME_URL"] = tenant.url
+        checked = _run(
+            [
+                *(str(opentide), "--json", "validate", "query", "--live"),
+                *("--platform", "acme", "--uuid", VALID_RULE),
+            ],
+            cwd=repo,
+            env=env,
+            timeout=120,
+        )
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert tenant.received == tenant.requests()
+    assert json.loads(checked.stdout)["valid"] is True
+
+    with StandIn(CASSETTE["deploy"]) as tenant:
+        env["ACME_URL"] = tenant.url
+        deployed = _run(
+            [
+                *(str(opentide), "--json", "deploy", "--platform", "acme"),
+                *("--strategy", "PREVIEW", "--uuid", VALID_RULE),
+            ],
+            cwd=repo,
+            env=env,
+            timeout=120,
+        )
+    assert deployed.returncode == 0, deployed.stdout + deployed.stderr
+    assert tenant.received == tenant.requests()
+    shard = repo / ".opentide" / "states" / "deployment" / f"{VALID_RULE}.json"
+    assert json.loads(shard.read_text(encoding="utf-8"))["platforms"] == {
+        "acme": {"lab": "acme-rule-17"}
+    }
+
+    # validate on the Rust core checks the block with the plugin's model.
+    validated = _run(
+        [str(opentide), "--json", "validate"],
+        cwd=repo,
+        env={**env, "OPENTIDE_ENGINE": "rust"},
+        timeout=120,
+    )
+    assert validated.returncode == 1, validated.stdout + validated.stderr
+    fields = {
+        tuple(issue["field_path"])
+        for issue in json.loads(validated.stdout)["report"]["issues"]
+        if issue["field_path"][:2] == ["configurations", "acme"]
+    }
+    assert fields == {
+        ("configurations", "acme", "severity"),
+        ("configurations", "acme", "colour"),
+    }
