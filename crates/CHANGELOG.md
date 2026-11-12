@@ -8,7 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [0.15.0] - 2026-11-12
 
-Exabeam New-Scale SIEM is a platform: the Exabeam Query Language is checked and highlighted as the specification exabeam-1.0 defines it, with Exabeam's field catalogue, and `configurations.exabeam` correlation rules are checked in the editor.
+Exabeam support: Exabeam queries and `configurations.exabeam` correlation rules are checked and highlighted as you type.
 
 ### Added
 
