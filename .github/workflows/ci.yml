@@ -646,6 +646,13 @@ jobs:
           export OPENTIDE_VERSION
           node build.mjs --profile develop
 
+      # rust-cache saves target/ and restores it on the next run without the
+      # marker of the runs' folder, target/conformance, which `conformance`
+      # then refuses to empty: a restored copy is no run of this job's.
+      - name: Drop a restored runs' folder
+        shell: bash
+        run: rm -rf target/conformance
+
       - name: Every operation on every corpus, byte for byte
         run: cargo xtask conformance --runners rust,python,node
 
