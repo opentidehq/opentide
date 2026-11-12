@@ -10,6 +10,7 @@
 
 pub mod cve;
 pub mod deploy;
+pub mod deploy_promote;
 pub mod deploy_send;
 pub mod deploy_state;
 pub mod doctor;
@@ -81,6 +82,10 @@ pub struct Report {
     /// The CI job summary's section (Markdown), appended in a text mode
     /// before the result is printed (`publish_summary`).
     pub ci_summary: Option<String>,
+    /// The run ends with its exit code and prints nothing more, in every
+    /// mode: no document, no outcome line (the oracle's `sys.exit` in the
+    /// middle of a run, `deploy`'s invalid promotion target).
+    pub bare_exit: bool,
 }
 
 /// One part of a body.
@@ -177,6 +182,7 @@ impl Report {
             stderr_first: String::new(),
             numbered_next: false,
             ci_summary: None,
+            bare_exit: false,
         }
     }
 
@@ -194,6 +200,7 @@ impl Report {
             stderr_first: String::new(),
             numbered_next: false,
             ci_summary: None,
+            bare_exit: false,
         }
     }
 

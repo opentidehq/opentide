@@ -143,6 +143,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |
 | `share-misp` | [`fixtures/share-misp/`](fixtures/share-misp/): three `[[misp]]` destinations (one served by the MISP stand-in of `tests/cassettes/misp/tenant.py`, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before, for `share` (UC-4.4b); a cassette's client copies it before a push or retract writes the ledger |
 | `share-misp-broken` | `share-misp` with one declared edit: a `max_tlp` that is no TLP name, the `sharing_config` preflight |
+| `deploy-push`, `deploy-push-production`, `deploy-push-anchor` | `deploy-tenants` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one rule, in `STAGING`, already in `PRODUCTION`, or with its status written as an anchor: the status promotion of a `RELEASE` deploy on a push (UC-4.6c). The commits' author and time are fixed, so their ids are the same on every host |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 

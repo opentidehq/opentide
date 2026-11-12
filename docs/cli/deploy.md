@@ -240,7 +240,9 @@ With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choo
 
 - a log line names no tenant (`tenant: ***`): the Rust CLI redacts tenant names and hosts from every line it logs; the document still names them;
 - a credential whose `$NAME` is unset is refused before any request, where the Python CLI sent the literal `$NAME` to the platform;
-- a status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is refused with `engine_not_ported`: run it with `OPENTIDE_ENGINE=python`. `OPENTIDE_ENGINE=compare` refuses a deploy that sends, since both runs would reach the tenant.
+- a status promotion whose rule file the Rust engine cannot read as the Python CLI reports it (YAML that does not parse, a file that is not a mapping or cannot be read) is refused with `engine_not_ported` before anything is written: run it with `OPENTIDE_ENGINE=python`.
+
+A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) runs on Rust too: the same `status promotion` step, the same rule files rewritten byte for byte (each block `status` replaced in place, a byte-order mark and line endings kept, the file written atomically), the same `rule_not_promoted` warning for a status written as an anchor, an alias or under a merge key, and the same exit codes. `OPENTIDE_ENGINE=compare` refuses a deploy that sends, since both runs would reach the tenant.
 
 ## Subcommands
 

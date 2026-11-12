@@ -115,6 +115,23 @@ kind = "copy"
 source = "tests/golden/fixtures/share-misp"
 about = "share-misp with a sharing.toml block whose max_tlp is not a TLP name: the `sharing_config` preflight (UC-4.4b)"
 edits = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"amber\"", replace = "max_tlp = \"purple\"" }]
+[fixtures.deploy-push]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, changed a rule in STAGING: the rule file a RELEASE deploy on a push in CI promotes (UC-4.6c)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "description: A rule the splunk", replace = "description: A changed rule the splunk" }]
+
+[fixtures.deploy-push-production]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, changed a rule already in PRODUCTION: nothing to promote (UC-4.6c)"
+pushed = [{ path = "objects/rules/crowdstrike-b-update.yaml", find = "description: A rule the crowdstrike", replace = "description: A changed rule the crowdstrike" }]
+
+[fixtures.deploy-push-anchor]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING rule's status as an anchor: a status promotion leaves alone, with a warning (UC-4.6c)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "    status: STAGING\n", replace = "    status: &status STAGING\n" }]
 
 [fixtures.empty]
 kind = "skeleton"
@@ -1660,6 +1677,37 @@ variant = "send-sentinel-no-rule"
 args = ["deploy", "--platform", "sentinel", "--strategy", "PREVIEW", "--uuid", "00000000-0000-4000-8047-000000000072"]
 fixtures = ["deploy-tenants"]
 modes = ["plain", "json"]
+
+# UC-4.6c (#979): a RELEASE deploy on a push in CI promotes the rules the push
+# changed (`status promotion`) before it plans: the rule file rewritten in
+# place, `--skip-promotion` leaving it, a push with nothing to promote, and a
+# status written as an anchor, left with a warning. The oracle's plan reads
+# the promoted rule's tenants from before the promotion, so none is reached
+# and nothing is sent.
+
+[[case]]
+command = "deploy"
+variant = "promote-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
+modes = ["plain", "json", "agent"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "promote-skip"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE", "--skip-promotion"]
+fixtures = ["deploy-push"]
+modes = ["plain", "json"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "promote-gitlab-progress-json"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push"]
+modes = ["json"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
 
 [[case]]
 command = "deploy migrate-state"

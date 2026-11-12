@@ -1634,6 +1634,7 @@ impl Run<'_> {
                 registry: &registry,
                 lines,
                 json: self.mode == Mode::Json,
+                debug: self.globals.debug,
             },
         );
         let mut report = sent.report();
@@ -1813,6 +1814,11 @@ impl Run<'_> {
         if KEEPING_DOCUMENT.with(std::cell::Cell::get) {
             let document = outcome.document(self.duration_ms());
             KEPT_DOCUMENT.with(|kept| *kept.borrow_mut() = Some(document));
+        }
+        if report.bare_exit {
+            out.flush()?;
+            err.flush()?;
+            return Ok(outcome.exit_code);
         }
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;
