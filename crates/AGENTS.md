@@ -13,17 +13,17 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | A `CHANGELOG.md` entry, or a release's notes | `skills/release-notes/SKILL.md` |
 | A release: `scripts/release.py`, `release.yml`, the opentide engine pin | `skills/release/SKILL.md` |
 | `catalogs/`, `highlights/spec.toml`, `testdata/conformance`, `testdata/oracles`, `scripts/oracles`, schema sync | `skills/catalogs/SKILL.md` |
-| A new query language (S1QL, Sigma, YARA) | `skills/add-language/SKILL.md` (then the rows above) |
+| A new query language (S1QL, Sigma, YARA, YARA-L) | `skills/add-language/SKILL.md` (then the rows above) |
 
 ## Product
 
-Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`), and **YARA** (libyara 4.5, with YARA-X 1.x as warnings: HarfangLab and Bitdefender `yara` blocks and `.yar` files, `docs/YARA.md`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
+Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`), **YARA** (libyara 4.5, with YARA-X 1.x as warnings: HarfangLab and Bitdefender `yara` blocks and `.yar` files, `docs/YARA.md`), and **YARA-L 2.0** (Google Security Operations: `configurations.google_secops` sections, Google SecOps hunts, `.yaral` and `.yl2` files, `docs/YARAL.md`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
 Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript packages) own the filesystem and the editor protocol. The CLI (`analyze`, `highlight`, `generate-highlights`) prints plain JSON. Only `--stdio` and `--listen` speak JSON-RPC.
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,cql,yara,ecs,tide,analysis}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,cql,yara,yaral,ecs,tide,analysis}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - CrowdStrike is CQL, checked against CrowdStrike's published grammar and function reference (`docs/CQL.md`). Never report an unknown field, saved search, lookup file or repository as a finding: they live in the tenant.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.

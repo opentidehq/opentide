@@ -1,8 +1,8 @@
 # opentide language server
 
-Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), and **Tide YAML** objects.
+Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), **YARA-L 2.0** (Google Security Operations), and **Tide YAML** objects.
 
-v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/FALCO.md](docs/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/CQL.md](docs/CQL.md)). SQL is out of scope. Names use `opentide`, never `otide`.
+v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/FALCO.md](docs/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/CQL.md](docs/CQL.md)). YARA-L covers `configurations.google_secops` and Google SecOps hunts, checked against Google's UDM field list and function reference ([docs/YARAL.md](docs/YARAL.md)). SQL is out of scope. Names use `opentide`, never `otide`.
 
 ## Product hierarchy
 
@@ -89,7 +89,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | --- | --- |
 | `opentide-core` | Shared types, diagnostic codes |
 | `opentide-highlight` | Frozen HighlightSpec, semantic tokens, tm/monaco/helix maps |
-| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL |
+| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL/YARA/YARA-L |
 | `opentide-kql` | Catalog, HIR, Sentinel/Defender profiles, `compile_kql_query` |
 | `opentide-spl` | searchbnf-informed catalog, `spl_unknown_command` |
 | `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
@@ -98,6 +98,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings |
 | `opentide-falco` | Falco rule conditions (Sysdig Secure): a port of libsinsp's filter parser and compiler checks, field and event catalogs, `falco_*` diagnostics |
 | `opentide-cql` | CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM): function, event and field catalogs, Next-Gen SIEM correlation-rule checks, `cql_*` diagnostics |
+| `opentide-yaral` | YARA-L 2.0 (Google Security Operations): rule and search profiles, UDM and function catalogs, `yaral_*` diagnostics |
 | `opentide-ecs` | Elastic Common Schema field catalog (completion, hover) and the ECS checks for queries on ECS indices (`ecs_type_mismatch`, near-miss `ecs_unknown_field`; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |

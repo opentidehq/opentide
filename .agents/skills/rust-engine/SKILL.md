@@ -28,6 +28,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-falco` | no | `Diagnostic` | Falco conditions: fields per event source, default macros and lists, events (`OnceLock`), output templates |
 | `opentide-cql` | no | `Diagnostic` | CrowdStrike Query Language: function signatures, Falcon events, LogScale/Falcon/CPS fields (`OnceLock`), Next-Gen SIEM correlation checks |
 | `opentide-yara` | no | `Diagnostic` | YARA signatures (yara-1.0): `yara-x-parser` is the verdict parser, `yara-x-fmt` formats `.yar` files |
+| `opentide-yaral` | no | `Diagnostic` | YARA-L 2.0 (yara-l-1.0, Google SecOps): the tree-sitter grammar is the verdict parser; UDM and function catalogs (`OnceLock`); `regex-syntax` checks RE2 patterns |
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
 | `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
@@ -61,7 +62,7 @@ Pinned stack (do not bump in passing):
 
 ## Types agents get wrong
 
-`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
+`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `yaral`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
 
 Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
 
