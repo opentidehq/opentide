@@ -19,6 +19,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **YARA-L editing: hover, completion and signature help.** Hover shows a UDM field's type, description and enum values, and a function's signature and availability; completion offers UDM fields after `$e.`, enum values after `metadata.event_type =`, and a namespace's functions after `strings.`.
 - **YARA-L is highlighted.** Semantic tokens use the existing HighlightSpec captures; `highlights/generated/yaral.tmLanguage.json` (`source.yaral`) is the TextMate grammar, the Tide grammar embeds a Google SecOps block's section texts as `meta.embedded.block.yaral`, and the Neovim, Helix, Zed and `@opentide/lsp-client` samples map `.yaral` and `.yl2` to `yaral`.
 - **API: `opentide_core::LanguageId::Yaral`** and the `opentide-yaral` crate.
+- **The Tide catalog knows `configurations.google_secops`.** Regenerated with opentide's generator from the opentide branch that adds the block, so editors complete and validate its keys and nested `match`, `options` and `schedule` objects.
 
 ## [0.13.0] - 2026-11-11
 
