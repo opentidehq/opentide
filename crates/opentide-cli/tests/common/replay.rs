@@ -505,6 +505,18 @@ fn package_uuids() -> &'static std::collections::BTreeSet<String> {
     })
 }
 
+thread_local! {
+    static LAST_FILES: std::cell::RefCell<BTreeMap<String, FileState>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+/// The files the last case [`replay`]ed on this thread wrote, normalised, by
+/// their recorded paths (`ws/...`): for a test that checks them beyond the
+/// comparison, such as loading them as data.
+pub fn last_files() -> BTreeMap<String, FileState> {
+    LAST_FILES.with(|last| last.borrow().clone())
+}
+
 /// Replays the recording in `dir`; the differences found, if any.
 pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<String> {
     let case: toml::Table = std::fs::read_to_string(dir.join("case.toml"))
@@ -742,6 +754,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         stderr: stderr.into_bytes(),
         files: written,
     };
+    LAST_FILES.with(|last| *last.borrow_mut() = candidate.files.clone());
     let command = case["command"].as_str().unwrap();
     if let Ok(dump) = std::env::var("OPENTIDE_REPLAY_DUMP") {
         // The candidate's run, for `scripts/golden/ledger_entries.py`.

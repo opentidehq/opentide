@@ -4,8 +4,11 @@
 //! the connectors and written as opentide rule files under `Imported/`.
 //!
 //! Defender's files are the oracle's template filled in, byte for byte;
-//! Elastic's are the rule document dumped as PyYAML's `IndentedYamlDumper`
-//! writes it ([`crate::pyyaml`]). The run is one checklist step,
+//! Elastic's are the rule document written by serde-saphyr's emitter
+//! ([`rule_yaml`]): the same data, keys in the importer's order, formatted
+//! as serde-saphyr formats YAML where the oracle used PyYAML's
+//! `IndentedYamlDumper` (the approved differences of #834). The run is one
+//! checklist step,
 //! `import from <platform>`, counting the YAML files it wrote under the
 //! repository.
 
@@ -1680,6 +1683,21 @@ fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
     ))
 }
 
+/// An extracted rule as YAML (#834), written by serde-saphyr's emitter, not
+/// a port of PyYAML's: keys in the importer's order, two-space indents with
+/// a list indented under its key (`IndentedYamlDumper`), a multi-line string
+/// as a `|` block, and every other scalar on one line, never folded.
+fn rule_yaml(document: &Object) -> Result<String, String> {
+    let options = serde_saphyr::ser_options! {
+        indent_step: 2,
+        compact_list_indent: false,
+        folded_wrap_chars: usize::MAX,
+        min_fold_chars: usize::MAX,
+    };
+    serde_saphyr::to_string_with_options(&CJson::Object(document.clone()), options)
+        .map_err(|error| format!("YAMLError: {error}"))
+}
+
 /// `sanitize_filename` of the Elastic importer: invalid characters as
 /// spaces, whitespace runs collapsed.
 fn elastic_filename(name: &str) -> String {
@@ -1769,10 +1787,7 @@ fn elastic_run(
                 continue;
             }
             let document = kibana_to_opentide(rule, true);
-            let text = crate::pyyaml::dump(
-                &CJson::Object(document.clone()),
-                crate::pyyaml::Options::INDENTED,
-            );
+            let text = rule_yaml(&document)?;
             let name = document.get("name").map(py).unwrap_or_default();
             if let Some(reason) = unwritable_reason(&document, &text) {
                 tracing::warn!(
@@ -1848,10 +1863,7 @@ mod elastic_tests {
             ),
             true,
         );
-        let text = crate::pyyaml::dump(
-            &CJson::Object(converted.clone()),
-            crate::pyyaml::Options::INDENTED,
-        );
+        let text = rule_yaml(&converted).unwrap();
         assert!(
             text.starts_with(
                 "name: Encoded\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n"
@@ -1859,12 +1871,12 @@ mod elastic_tests {
             "{text}"
         );
         assert!(text.contains("  contributors:\n    - Ops\n"), "{text}");
-        assert!(text.contains("techniques:\n  - T1059.001\n  - T1027\nreferences:\n  public:\n    '1': https://a\n"), "{text}");
+        assert!(text.contains("techniques:\n  - T1059.001\n  - T1027\nreferences:\n  public:\n    \"1\": https://a\n"), "{text}");
         assert!(
             text.contains("      lookback: 6d23h55m\n") || text.contains("lookback: 10075m"),
             "{text}"
         );
-        assert!(text.contains("      - field: a\n        value: '5'\n        negate: false\n      - meta: {}\n        query: {}\n"), "{text}");
+        assert!(text.contains("      - field: a\n        value: \"5\"\n        negate: false\n      - meta: {}\n        query: {}\n"), "{text}");
         assert!(text.contains("    integration:\n      - endpoint\n      - package: windows\n        version: ^1\n"), "{text}");
         assert!(
             text.contains("    exceptions:\n      endpoint: true\n"),
@@ -1875,5 +1887,35 @@ mod elastic_tests {
         assert!(!python_uuid("rule-1"));
         assert_eq!(elastic_filename("a:  b"), "a b");
         assert_eq!(uuid5(&migration_namespace(), "x").get_version_num(), 5);
+    }
+
+    /// serde-saphyr's YAML for an extracted rule (#834): keys in order, a
+    /// multi-line string as a `|` block, a long or non-ASCII string on one
+    /// plain line, a string that would read as another type quoted, and the
+    /// text loads back to the document.
+    #[test]
+    fn a_rule_is_written_as_serde_saphyr_writes_it() {
+        let long = "word ".repeat(30);
+        let document = rule(&format!(
+            r#"{{"name": "Process – résumé", "created": "2026-01-02", "empty": "",
+                "query": "sequence\n  [a]\n  [b]", "long": "{}", "list": ["x"], "map": {{}}}}"#,
+            long.trim_end()
+        ));
+        let CJson::Object(document) = document else {
+            panic!("an object")
+        };
+        let text = rule_yaml(&document).unwrap();
+        assert_eq!(
+            text,
+            format!(
+                "name: Process – résumé\ncreated: \"2026-01-02\"\nempty: \"\"\nquery: |-\n  sequence\n    [a]\n    [b]\nlong: {}\nlist:\n  - x\nmap: {{}}\n",
+                long.trim_end()
+            )
+        );
+        let loaded = opentide_schema::node::load(&text).unwrap();
+        assert_eq!(
+            CJson::from_node(loaded.root().unwrap()),
+            CJson::Object(document)
+        );
     }
 }

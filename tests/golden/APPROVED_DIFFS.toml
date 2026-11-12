@@ -11905,3 +11905,193 @@ candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \
 reason = "the import's checklist row is printed when it is done, without the spinner Python drew while it ran"
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+# UC-4.4b (#834, #994): the rules `generate extract elastic` writes, emitted by
+# serde-saphyr where the oracle used PyYAML; the same data (see each reason).
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/ES QL aggregation.yaml"
+rule = "text"
+oracle = "  created: '2026-01-01'"
+candidate = "  created: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/ES QL aggregation.yaml"
+rule = "text"
+oracle = "  modified: '2026-01-01'"
+candidate = "  modified: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "name: 'Encoded PowerShell: \"-enc\" flag'"
+candidate = "name: \"Encoded PowerShell: \\\"-enc\\\" flag\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "  created: '2026-01-01'"
+candidate = "  created: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "  modified: '2026-01-01'"
+candidate = "  modified: \"2026-01-01\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml"
+rule = "text"
+oracle = "    query: 'event.outcome : failure'"
+candidate = "    query: \"event.outcome : failure\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "name: 'Encoded PowerShell: \"-enc\" flag'"
+candidate = "name: \"Encoded PowerShell: \\\"-enc\\\" flag\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "  created: '2026-02-03'"
+candidate = "  created: \"2026-02-03\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "  modified: '2026-03-04'"
+candidate = "  modified: \"2026-03-04\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "    '1': https://attack.mitre.org/techniques/T1059/001/"
+candidate = "    \"1\": https://attack.mitre.org/techniques/T1059/001/"
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "    query: 'process.name : \"powershell.exe\" and process.args : \"-enc\"'"
+candidate = "    query: \"process.name : \\\"powershell.exe\\\" and process.args : \\\"-enc\\\"\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "          value: ''"
+candidate = "          value: \"\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "      - 'Domain: Endpoint'"
+candidate = "      - \"Domain: Endpoint\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Encoded PowerShell -enc flag.yaml"
+rule = "text"
+oracle = "      - 'OS: Windows'"
+candidate = "      - \"OS: Windows\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Process sequence – résumé.yaml"
+rule = "text"
+oracle = "name: \"Process sequence \\u2013 r\\xE9sum\\xE9\""
+candidate = "name: Process sequence – résumé"
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): non-ASCII characters are written as UTF-8 in a plain scalar, where PyYAML 6's `yaml.dump` (`allow_unicode=False`) wrote a double-quoted string with each escaped (`\\u2013`, `\\xE9`). Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Process sequence – résumé.yaml"
+rule = "text"
+oracle = "  created: '2026-02-03'"
+candidate = "  created: \"2026-02-03\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/tenants/tenant"
+target = "file:ws/Imported/Process sequence – résumé.yaml"
+rule = "text"
+oracle = "  modified: '2026-02-03'"
+candidate = "  modified: \"2026-02-03\""
+reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"

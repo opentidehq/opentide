@@ -188,6 +188,60 @@ fn generate_extract_cases_are_the_oracles() {
     );
 }
 
+/// The rules `generate extract elastic` writes (#834) are serde-saphyr's
+/// YAML, formatted differently from PyYAML's (`APPROVED_DIFFS.toml`): each
+/// file a stand-in tenant's case writes loads to the oracle's data, every
+/// value and every key in the oracle's order.
+#[test]
+fn extracted_elastic_rules_load_as_the_oracles_data() {
+    use opentide_compare::FileState;
+    let as_data = |path: &str, bytes: &[u8]| {
+        let text = std::str::from_utf8(bytes).unwrap();
+        let loaded = opentide_schema::node::load(text)
+            .unwrap_or_else(|error| panic!("{path}: {error:?}\n{text}"));
+        opentide_compile::json::Json::from_node(loaded.root().unwrap()).to_compact()
+    };
+    let cases = replay::repo().join("tests/golden/cases/generate.extract.elastic");
+    let ledger = replay::ledger();
+    let mut usage = opentide_compare::ledger::Usage::default();
+    let mut compared = 0;
+    for mode in std::fs::read_dir(&cases).unwrap() {
+        let mode = mode.unwrap().path();
+        let Ok(variants) = std::fs::read_dir(mode.join("tenants")) else {
+            continue;
+        };
+        for dir in variants {
+            let dir = dir.unwrap().path();
+            let id = dir.strip_prefix(&cases).unwrap().display().to_string();
+            // The comparison under the ledger is `generate_extract_cases_are_the_oracles`'.
+            let _ = replay::replay(&id, &dir, &ledger, &mut usage);
+            let outcome: toml::Table = std::fs::read_to_string(dir.join("outcome.toml"))
+                .unwrap()
+                .parse()
+                .unwrap();
+            let candidate = replay::last_files();
+            for (path, state) in replay::recorded_files(&dir, &outcome) {
+                let FileState::Written { bytes, .. } = state else {
+                    continue;
+                };
+                if !path.starts_with("ws/Imported/") {
+                    continue;
+                }
+                let Some(FileState::Written { bytes: written, .. }) = candidate.get(&path) else {
+                    panic!("{id}: Rust did not write {path}");
+                };
+                assert_eq!(
+                    as_data(&path, written),
+                    as_data(&path, &bytes),
+                    "{id}: {path} loads to other data than the oracle's"
+                );
+                compared += 1;
+            }
+        }
+    }
+    assert!(compared >= 12, "only {compared} files compared");
+}
+
 #[test]
 fn lint_cases_are_the_oracles() {
     check(&["lint"], 50);

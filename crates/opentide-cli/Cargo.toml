@@ -94,6 +94,9 @@ uuid = { workspace = true, features = ["v4"] }
 # `generate extract elastic --include-prebuilt` (UC-4.4b, #834): the UUID a
 # prebuilt rule's id derives (`uuid.uuid5`), from SHA-1 (RustCrypto).
 sha1 = "0.10"
+# `generate extract elastic` (UC-4.4b, #834): the extracted rule written as
+# YAML by serde-saphyr's emitter, as `opentide-compile` writes Sigma rules.
+serde-saphyr.workspace = true
 # `doctor`'s opentide_latest (UC-4.4, #834): PEP 440 versions ordered as
 # `packaging.version.Version` orders them.
 pep440_rs = { version = "0.7", default-features = false }
