@@ -361,7 +361,7 @@ def validate_query_cmd(
         "--file",
         help=(
             "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, "
-            ".lucene, .falco, .yar, .yara) offline (repeatable)"
+            ".lucene, .falco, .yar, .yara, .yaral, .yl2) offline (repeatable)"
         ),
     ),
     uuid: list[str] | None = typer.Option(

@@ -26,6 +26,8 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 #: Bitdefender's ``yara.signature`` is checked offline only, under the engine's
 #: bitdefender profile (ASCII, 30,000 characters; bitdefender-1.0): GravityZone has
 #: no dry run.
+#: Google SecOps' YARA-L sections are checked offline as the one rule deploy assembles
+#: (yara-l-1.0), and on the tenant with ``verifyRuleText`` (``--live``).
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
 #: CrowdStrike is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
@@ -37,5 +39,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "sysdig": ("falco",),
     "harfanglab": ("yara",),
     "bitdefender": ("yara",),
+    "google_secops": ("yaral",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

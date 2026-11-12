@@ -679,6 +679,8 @@ QUERY_FILE_SUFFIXES = (
     ".falco",
     ".yar",
     ".yara",
+    ".yaral",
+    ".yl2",
 )
 
 

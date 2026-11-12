@@ -165,3 +165,48 @@ def test_query_rule_is_refused_for_google_secops(invoke_cli) -> None:
     result = invoke_cli("query", "--platform", "google_secops", "--rule", UUID, "--since", "1h")
     assert result.exit_code == 2, result.output
     assert "--rule is not supported for google_secops" in result.output
+
+
+def test_validate_reports_the_engine_yaral_findings_at_the_section(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """The offline YARA-L check runs on the sections as the assembled rule."""
+    _rewrite(tide_corpus_repo, "metadata.event_type", "metadata.event_typ")
+    result = invoke_cli("validate", "--file", RULE)
+    assert result.exit_code == 1
+    (issue,) = [item for item in _issues(result) if item["code"] == "yaral_unknown_udm_field"]
+    assert issue["field_path"][:3] == ["configurations", "google_secops", "events"]
+
+
+def test_validate_query_checks_the_corpus_rule_offline(invoke_cli, tide_corpus_repo: Path) -> None:
+    payload = assert_json_ok(
+        invoke_cli("validate", "query", "--platform", "google_secops", "--file", RULE)
+    )
+    assert [item["language"] for item in payload["queries"]] == ["yaral"]
+
+
+@pytest.mark.parametrize("suffix", [".yaral", ".yl2"])
+def test_validate_query_checks_a_yaral_file(
+    invoke_cli, tide_corpus_repo: Path, tmp_path: Path, suffix: str
+) -> None:
+    rule = (
+        'rule logins {\n  meta:\n    author = "a"\n\n  events:\n'
+        '    $e.metadata.event_type = "USER_LOGIN"\n\n  outcome:\n    $risk_score = 40\n\n'
+        "  condition:\n    $e\n}\n"
+    )
+    good = tmp_path / f"good{suffix}"
+    good.write_text(rule)
+    assert_json_ok(invoke_cli("validate", "query", "--file", str(good)))
+    bad = tmp_path / f"bad{suffix}"
+    bad.write_text(rule.replace("USER_LOGIN", "USER_LOGGED_IN"))
+    result = invoke_cli("validate", "query", "--file", str(bad))
+    assert result.exit_code == 1
+    assert "yaral_enum_value" in result.output
+
+
+def test_lint_reports_each_advisory_once(invoke_cli, tide_corpus_repo: Path) -> None:
+    """The engine reports the block's advisories too; lint shows each once."""
+    _rewrite(tide_corpus_repo, "      $risk_score = 70\n", "")
+    payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", RULE))
+    codes = [item["code"] for item in payload["findings"]]
+    assert codes.count("google_secops_risk_score_missing") == 1

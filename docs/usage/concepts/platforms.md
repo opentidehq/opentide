@@ -21,7 +21,7 @@ opentide integrates with **eleven detection platforms** through built-in adapter
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 | Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
-| Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | not yet | yes (`udmSearch`) | YARA-L 2.0 |
+| Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -88,7 +88,7 @@ configurations:
 
 `condition` is a block scalar on purpose: `condition: #fail >= 10 and $success` as a plain scalar is a YAML comment, loads as null, and fails with `yaral_section_empty`. `opentide validate` checks the block's constraints (`google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`), the sections' structure (`yaral_section_missing`, `yaral_section_empty`, `yaral_section_header`, `yaral_section_alias`, `yaral_match_shape`, `yaral_match_window`, `yaral_option`), and that no two enabled blocks share a rule name, ignoring case (`google_secops_name_duplicate`). It warns, as `opentide lint` does, when `outcome` assigns no `$risk_score`, when a rule matches a producer by a literal `ru_…` id, and on `run_frequency: LIVE` for a multi-event rule.
 
-Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`: deploy never deletes a rule's detections. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. The analysis engine's offline YARA-L check is not wired in this release: `validate query --platform google_secops` without `--live` names `--live`. `deploy --dry-run` shows the assembled rule.
+Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`: deploy never deletes a rule's detections. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. The analysis engine checks the sections offline as the one rule deploy assembles (the `yaral_*` codes: UDM fields and enum values, functions, scope across sections, windows, outcomes, condition shape), in `opentide validate`, in `validate query --platform google_secops` without `--live`, and in editors; a `.yaral` or `.yl2` file is checked with `opentide validate query --file`. Hunts with `system: google_secops` are checked as YARA-L searches. `deploy --dry-run` shows the assembled rule.
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -136,7 +136,7 @@ opentide validate query --platform crowdstrike   # reports unsupported
 
 For the seven that can, `opentide validate query` checks each query offline with
 the analysis engine (every platform but SentinelOne, whose S1QL it does not
-parse, and Google SecOps, whose YARA-L check the engine does not run yet), and `--live` submits the catalogue queries to the tenants, which
+parse), and `--live` submits the catalogue queries to the tenants, which
 requires credentials; every vendor SDK ships with `pip install opentide`. A
 missing plan fails that check. Only the requested platform's engine is
 imported, so a Sentinel run never loads the CrowdStrike or HarfangLab modules.
