@@ -15,8 +15,15 @@ licensed under the Creative Commons Attribution 4.0 International License
 | `objects/valid/rule-exabeam-*.yaml` | `fixtures/valid/rule-exabeam-*.yaml` |
 | `objects/invalid/rule-exabeam-*.yaml` | `fixtures/invalid/rule-exabeam-*.yaml`; each names its expected code in its first lines |
 
-The files are unchanged. The reference checker (`scripts/exabeam_language.py`)
-has no field catalogue, so it never reports `exabeam_unknown_field` or
-`exabeam_string_field_number`; the engine does, and the conformance tests
-compare the other codes. `crates/opentide-exabeam/src/tests.rs` checks the
-language files and `crates/opentide-tide/tests/exabeam_spec.rs` the objects.
+The files are unchanged but for one value: upstream, `valid/` and
+`highlight/lateral-movement-pivot.search.exabeam` and
+`objects/valid/rule-exabeam-sequence-1.0.yaml` compare `activity_type` with
+`"network-connection"`, which is not an activity type of the CIM
+(`exabeam_unknown_value`). Here it is `"network-session"`, and the highlight
+golden `lateral-movement-pivot.search.tokens.json` is the reference checker's
+tokens on the edited query. The reference checker (`scripts/exabeam_language.py`)
+has no field catalogue, so it never reports `exabeam_unknown_field`,
+`exabeam_string_field_number` or `exabeam_unknown_value`; the engine does, and
+the conformance tests compare the other codes.
+`crates/opentide-exabeam/src/tests.rs` checks the language files and
+`crates/opentide-tide/tests/exabeam_spec.rs` the objects.
