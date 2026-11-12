@@ -93,6 +93,10 @@ pub const FIXTURES: &[&str] = &[
     "deploy-push",
     "deploy-push-production",
     "deploy-push-anchor",
+    "share-misp",
+    "share-misp-broken",
+    "share-misp-push",
+    "share-misp-push-config",
 ];
 
 pub fn repo() -> PathBuf {
@@ -221,6 +225,8 @@ pub fn fixture(name: &str, ws: &Path) {
             fixture("share-misp", ws);
             apply_edits(name, ws);
         }
+        // UC-4.4e (#834): `share-misp` as a checkout whose last commit is a push.
+        "share-misp-push" | "share-misp-push-config" => pushed_from_cases(name, ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -266,6 +272,34 @@ fn apply_edits(name: &str, ws: &Path) {
 /// one edit (`pushed` in `cases.toml`, laid out by `xtask/src/golden/fixture.rs`).
 fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws);
+    commit_push(
+        ws,
+        &[(path.to_owned(), find.to_owned(), replace.to_owned())],
+    );
+}
+
+/// The copy fixture `name` of `tests/golden/cases.toml` as a git checkout of
+/// two commits: its `source`, then its `pushed` edits.
+fn pushed_from_cases(name: &str, ws: &Path) {
+    let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
+    let spec: toml::Table = toml::from_str(&text).unwrap();
+    let fixture = &spec["fixtures"][name];
+    copy_tree(&repo().join(fixture["source"].as_str().unwrap()), ws);
+    let edits: Vec<(String, String, String)> = fixture["pushed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edit| {
+            let field = |key: &str| edit[key].as_str().unwrap().to_owned();
+            (field("path"), field("find"), field("replace"))
+        })
+        .collect();
+    commit_push(ws, &edits);
+}
+
+/// Commits `ws` as it is, then `edits` (path, find, replace) as a second
+/// commit, with the fixed author and time of `xtask/src/golden/fixture.rs`.
+fn commit_push(ws: &Path, edits: &[(String, String, String)]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .args([
@@ -298,10 +332,12 @@ fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     git(&["init", "-q"]);
     git(&["add", "-A"]);
     git(&["commit", "-q", "--no-verify", "-m", "The fixture"]);
-    let file = ws.join(path);
-    let text = std::fs::read_to_string(&file).unwrap();
-    assert_eq!(text.matches(find).count(), 1);
-    std::fs::write(&file, text.replacen(find, replace, 1)).unwrap();
+    for (path, find, replace) in edits {
+        let file = ws.join(path);
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(text.matches(find.as_str()).count(), 1);
+        std::fs::write(&file, text.replacen(find.as_str(), replace, 1)).unwrap();
+    }
     git(&["commit", "-q", "--no-verify", "-a", "-m", "A push"]);
 }
 
@@ -965,7 +1001,9 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
             // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            }) || entry.case.ends_with("/help");
+            }) || entry.case.ends_with("/help")
+                // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
+                || entry.case.starts_with("cassette:");
             if commands.contains(&entry.command.replace(' ', ".").as_str())
                 && !elsewhere
                 && !usage.is_used(index)

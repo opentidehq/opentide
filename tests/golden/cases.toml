@@ -145,6 +145,18 @@ source = "tests/golden/fixtures/share-misp"
 about = "share-misp with a sharing.toml block whose max_tlp is not a TLP name: the `sharing_config` preflight (UC-4.4b)"
 edits = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"amber\"", replace = "max_tlp = \"purple\"" }]
 
+[fixtures.share-misp-push]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout whose last commit, a push, changed one shared rule: the object `share push --changed` shares (UC-4.4e)"
+pushed = [{ path = "objects/rules/rule-b-update.yaml", find = "  A rule the MISP stand-in receives.\n", replace = "  A rule the MISP stand-in receives, changed by a push.\n" }]
+
+[fixtures.share-misp-push-config]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout whose last commit, a push, changed sharing.toml and no object: nothing for `share push --changed` to share (UC-4.4e)"
+pushed = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"clear\"", replace = "max_tlp = \"green\"" }]
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -2666,3 +2678,104 @@ args = ["generate", "extract", "elastic", "--space", "default"]
 fixtures = ["tenants"]
 modes = ["plain", "json"]
 
+# ---- UC-4.4e (#834): share push --changed on a git diff ----
+# `share-misp-push` is a checkout whose last commit, a push, changed rule-b;
+# `share-misp-push-config` one whose push changed sharing.toml alone. The diff
+# reads from the push's base (the trigger's first parent, GitLab's before
+# SHA) or `--since` up to HEAD.
+
+[[case]]
+command = "share push"
+variant = "changed-github-push"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json", "agent"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+cassette = "golden/share-push-changed"
+
+[[case]]
+command = "share push"
+variant = "changed-key-unset"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-no-object"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push-config"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-other-type"
+args = ["share", "push", "--changed", "--type", "threat"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0000000000000000000000000000000000000000", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-no-trigger"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-unknown-before"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0123456789abcdef0123456789abcdef01234567", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-head"
+args = ["share", "push", "--changed", "--since", "HEAD"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-revision"
+args = ["share", "push", "--changed", "--since", "HEAD~1"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-branch"
+args = ["share", "push", "--changed", "--since", "main", "--dry-run"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "changed-file-unchanged"
+args = ["share", "push", "--changed", "--file", "objects/rules/rule-a-create.yaml"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-file-key-unset"
+args = ["share", "push", "--changed", "--file", "objects/rules/rule-b-update.yaml"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-uuid"
+args = ["share", "push", "--changed", "--uuid", "00000000-0000-4000-8048-000000000011", "--uuid", "00000000-0000-4000-8048-000000000012"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY = "<WS>" }

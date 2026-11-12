@@ -12385,3 +12385,87 @@ candidate = "  modified: \"2026-02-03\""
 reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's decision on #994): a string that must be quoted (a date, a number, an empty string, `: ` inside) is double-quoted, a `\"` in it escaped as `\\\"`, where PyYAML 6's `yaml.dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `extracted_elastic_rules_load_as_the_oracles_data` (crates/opentide-cli/tests/command_goldens.rs) loads the oracle's file and Rust's and compares them as data."
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`generate extract elastic` formats the rules it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+# UC-4.4e (#834): generate extract sentinel on the Rust command line. Its one-line
+# values are emitted by serde-saphyr where the oracle used PyYAML; the same data.
+# The comparison is crates/opentide-cli/tests/extract_sentinel.rs', on the
+# connector's cassette (case `cassette:sentinel/extract`), not a golden case's.
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
+rule = "text"
+oracle = "        - key: '1' "
+candidate = "        - key: \"1\" "
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
+rule = "text"
+oracle = "          column: 'yes'"
+candidate = "          column: \"yes\""
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
+rule = "text"
+oracle = "          column: ''"
+candidate = "          column: \"\""
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc .yaml"
+rule = "text"
+oracle = "      title: '{{Computer}} ran PowerShell: encoded' "
+candidate = "      title: \"{{Computer}} ran PowerShell: encoded\" "
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "file:ws/Imported/ Quotes  and  back slash  a  name  - soc .yaml"
+rule = "text"
+oracle = "      title: 'Audit: {{OperationName}}' "
+candidate = "      title: \"Audit: {{OperationName}}\" "
+reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` quotes the one-line values it writes as serde-saphyr does, with the same data as 0.23.0**"
+
+# UC-4.4e (#834): generate extract sentinel's runs without a tenant, in human mode.
+
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/human/none/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from sentinel\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mSentinel tenants not configured · detail: You must first have Sentinel tenants configured to \ninitiate the import · advice: run 'opentide setup platforms --sentinel'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Sentinel tenants not configured · detail: You must first have Sentinel tenants configured to initiate the import · advice: run 'opentide setup platforms --sentinel'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` runs on the Rust command line**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/human/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from sentinel\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mSentinel tenants not configured · detail: You must first have Sentinel tenants configured to \ninitiate the import · advice: run 'opentide setup platforms --sentinel'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Sentinel tenants not configured · detail: You must first have Sentinel tenants configured to initiate the import · advice: run 'opentide setup platforms --sentinel'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from sentinel\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract sentinel` runs on the Rust command line**"

@@ -904,3 +904,182 @@ fn docs_compare_with_the_default_branch_origin_head_names() {
     );
     assert_eq!(changed_names(&root, "rules"), ["rules/a.yaml"]);
 }
+
+fn through_head(
+    root: &Path,
+    pairs: &[(&str, &str)],
+    since: Option<&str>,
+) -> Result<Vec<String>, GitError> {
+    let map: HashMap<String, String> = pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    let env = move |name: &str| map.get(name).cloned();
+    git::changed_through_head(root, root, &env, since)
+}
+
+/// `share push --changed` (#834): the push's diff up to HEAD, from the
+/// trigger's first parent, GitLab's before SHA, or `--since`.
+#[test]
+fn the_push_is_read_up_to_head_from_its_base() {
+    let h = history();
+    // A deploy's write-back after the push: HEAD moves past the trigger.
+    write(&h.root, "objects/rules/r3.yaml", "c: 1\n");
+    commit(&h.root, "write-back");
+    let github = [("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", h.m.as_str())];
+    assert_eq!(
+        through_head(&h.root, &github, None).unwrap(),
+        ["objects/rules/r2.yaml", "objects/rules/r3.yaml"]
+    );
+    // The event's `before` is not read: the trigger's first parent is the base.
+    let event = h.root.join("event.json");
+    std::fs::write(&event, format!("{{\"before\": \"{}\"}}", h.a)).unwrap();
+    let event = event.to_string_lossy().into_owned();
+    let with_event = [
+        ("GITHUB_ACTIONS", "true"),
+        ("GITHUB_SHA", h.m.as_str()),
+        ("GITHUB_EVENT_PATH", event.as_str()),
+    ];
+    assert_eq!(
+        through_head(&h.root, &with_event, None).unwrap(),
+        ["objects/rules/r2.yaml", "objects/rules/r3.yaml"]
+    );
+    // GitLab's before SHA, unless all zeros.
+    let gitlab = [
+        ("CI", "true"),
+        ("CI_COMMIT_SHA", h.m.as_str()),
+        ("CI_COMMIT_BEFORE_SHA", h.c.as_str()),
+    ];
+    assert_eq!(
+        through_head(&h.root, &gitlab, None).unwrap(),
+        ["objects/rules/r1.yaml", "objects/rules/r3.yaml"]
+    );
+    let zeros = [
+        ("CI", "true"),
+        ("CI_COMMIT_SHA", h.m.as_str()),
+        (
+            "CI_COMMIT_BEFORE_SHA",
+            "0000000000000000000000000000000000000000",
+        ),
+    ];
+    assert_eq!(
+        through_head(&h.root, &zeros, None).unwrap(),
+        ["objects/rules/r2.yaml", "objects/rules/r3.yaml"]
+    );
+    // Azure: the trigger's first parent.
+    let azure = [("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", "HEAD")];
+    assert_eq!(
+        through_head(&h.root, &azure, None).unwrap(),
+        ["objects/rules/r3.yaml"]
+    );
+    // The first commit has nothing to diff.
+    assert!(
+        through_head(
+            &h.root,
+            &[("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", &h.a)],
+            None
+        )
+        .unwrap()
+        .is_empty()
+    );
+}
+
+#[test]
+fn a_push_without_its_trigger_or_with_an_unknown_one_fails() {
+    let h = history();
+    assert_eq!(
+        through_head(&h.root, &[("GITHUB_ACTIONS", "true")], None).unwrap_err(),
+        GitError::Failed("GITHUB_SHA is required to compute the changed objects".into())
+    );
+    assert_eq!(
+        through_head(&h.root, &[("CI", "true"), ("CI_COMMIT_SHA", "")], None).unwrap_err(),
+        GitError::Failed("CI_COMMIT_SHA is required to compute the changed objects".into())
+    );
+    let unknown = "0123456789abcdef0123456789abcdef01234567";
+    assert_eq!(
+        through_head(
+            &h.root,
+            &[("TF_BUILD", "True"), ("BUILD_SOURCEVERSION", unknown)],
+            None
+        )
+        .unwrap_err(),
+        GitError::Failed(format!("Could not find git commit {unknown}"))
+    );
+    // A tree is no commit.
+    let tree = git_cmd(&h.root, &["rev-parse", "HEAD^{tree}"]);
+    assert_eq!(
+        through_head(
+            &h.root,
+            &[("GITHUB_ACTIONS", "true"), ("GITHUB_SHA", &tree)],
+            None
+        )
+        .unwrap_err(),
+        GitError::Failed(format!("Object {tree} is not a commit"))
+    );
+}
+
+/// `--since` names a commit as the oracle read it: a full id, a branch,
+/// `origin/<branch>`, `refs/...` (an annotated tag peeled); never a short id
+/// or a revision expression.
+#[test]
+fn since_names_a_commit_as_the_oracle_read_it() {
+    let h = history();
+    let local = |since: &str| through_head(&h.root, &[], Some(since));
+    assert_eq!(local(&h.b).unwrap(), ["objects/rules/r2.yaml"]);
+    assert_eq!(
+        local(&h.a).unwrap(),
+        ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]
+    );
+    assert!(local("main").unwrap().is_empty());
+    assert!(local("HEAD").unwrap().is_empty());
+    assert_eq!(local("feature").unwrap(), ["objects/rules/r1.yaml"]);
+    assert_eq!(
+        local("refs/heads/feature").unwrap(),
+        ["objects/rules/r1.yaml"]
+    );
+    git_cmd(&h.root, &["update-ref", "refs/remotes/origin/main", &h.b]);
+    assert_eq!(local("origin/main").unwrap(), ["objects/rules/r2.yaml"]);
+    git_cmd(&h.root, &["tag", "-a", "-m", "release", "v1", &h.a]);
+    assert_eq!(
+        local("refs/tags/v1").unwrap(),
+        ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]
+    );
+    for refused in ["v1", "HEAD~1", "HEAD^", &h.a[..12], "nope"] {
+        assert_eq!(
+            local(refused).unwrap_err(),
+            GitError::Failed(format!("Could not find git commit {refused}")),
+            "{refused}"
+        );
+    }
+    // A CI run takes --since in place of the push's base.
+    assert_eq!(
+        through_head(&h.root, &[("GITHUB_ACTIONS", "true")], Some(&h.a)).unwrap(),
+        ["objects/rules/r1.yaml", "objects/rules/r2.yaml"]
+    );
+}
+
+#[test]
+fn outside_ci_the_diff_needs_since_and_a_checkout_with_a_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    assert_eq!(
+        through_head(&root, &[], None).unwrap_err(),
+        GitError::Failed("Outside CI, --since must name the commit to diff from".into())
+    );
+    assert_eq!(
+        through_head(&root, &[], Some("HEAD")).unwrap_err(),
+        GitError::MissingCheckout(root.clone())
+    );
+    assert_eq!(
+        through_head(&root, &[("GITHUB_ACTIONS", "true")], None).unwrap_err(),
+        GitError::MissingCheckout(root.clone())
+    );
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    assert_eq!(
+        through_head(&root, &[], Some("HEAD")).unwrap_err(),
+        GitError::Failed(format!(
+            "The git repository at {} has no commits yet",
+            root.display()
+        ))
+    );
+}

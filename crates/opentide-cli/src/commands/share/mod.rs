@@ -108,6 +108,7 @@ pub const REDACTION_MARKER: &str = "[REDACTED]";
 
 const NO_ENABLED_TARGET: &str = "No enabled sharing target";
 const NO_TARGET: &str = "No sharing target is configured";
+const NO_CHANGED_OBJECTS: &str = "No changed objects to share";
 const ADD_TARGET: &str =
     "add a [[misp]] block to .opentide/configurations/sharing.toml (see docs/cli/share.md)";
 
@@ -147,8 +148,6 @@ struct Payload {
     outcome: Option<String>,
     /// The rows the text modes print.
     body: Vec<BodyBlock>,
-    /// The run needs what this engine does not do; the message says what.
-    unported: Option<String>,
 }
 
 impl Payload {
@@ -228,13 +227,6 @@ impl Payload {
     }
 
     fn report(self, command: &str) -> Report {
-        if let Some(message) = self.unported {
-            return Report::failed(
-                command,
-                1,
-                Failure::new(crate::envelope::code::ENGINE_NOT_PORTED, message),
-            );
-        }
         let mut report = Report::completed(command, self.data);
         report.outcome.message = self.message;
         report.outcome.status = self.status;
@@ -433,15 +425,14 @@ fn shared(args: &Args, cx: &Context<'_>, workspace: &Workspace, sharing: &Sharin
         .collect();
     let mut filters = filters(workspace.root(), &args.uuids, &args.types, &args.files);
     if args.changed && args.mode == Mode::Push {
-        // Reading the push's diff up to HEAD (`changed_through_head`) is not
-        // ported: the oracle runs it.
-        let _ = &mut filters;
-        return Payload {
-            unported: Some(
-                "share push --changed reads a git diff this engine does not read".into(),
-            ),
-            ..Payload::default()
-        };
+        match changed_files(workspace, cx, args.since.as_deref(), filters.as_ref()) {
+            Ok(Some(changed)) => filters = Some(changed),
+            Ok(None) => return Payload::quiet(NO_CHANGED_OBJECTS, sharing).with_warnings(&nested),
+            Err(message) => {
+                return Payload::preflight("changed_diff", sharing, &[], Some(&message))
+                    .with_warnings(&nested);
+            }
+        }
     }
     let ledger = ledger::Ledger::load(&ledger::path(workspace.root()));
     let mut validator = None;
@@ -510,6 +501,130 @@ fn select_blocks(blocks: &[Block], targets: &[String]) -> Option<Vec<Block>> {
         .cloned()
         .collect();
     (!enabled.is_empty()).then_some(enabled)
+}
+
+/// Narrows `filters` to the push's diff, read up to the checkout's HEAD
+/// (`_changed_files`): the diff starts where the production deploy's starts,
+/// or at `since`. `Ok(None)` when the diff selects nothing; the error is the
+/// message of the `changed_diff` preflight.
+fn changed_files(
+    workspace: &Workspace,
+    cx: &Context<'_>,
+    since: Option<&str>,
+    filters: Option<&Filters>,
+) -> Result<Option<Filters>, String> {
+    let root = workspace.root();
+    let env_get = |name: &str| cx.env.get(name).map(str::to_owned);
+    let changed = opentide_compile::git::changed_through_head(
+        &document::resolve(root),
+        cx.cwd,
+        &env_get,
+        since,
+    )
+    .map_err(|error| {
+        let text = match error {
+            // `MissingGitCheckout`'s own words, not deploy's advice.
+            opentide_compile::git::GitError::MissingCheckout(searched) => format!(
+                "no .git was found from {}",
+                document::resolve(&searched).display()
+            ),
+            opentide_compile::git::GitError::Failed(message) => message,
+        };
+        let text = text.trim().to_owned();
+        if text.is_empty() {
+            preflight_message("changed_diff").to_owned()
+        } else {
+            text
+        }
+    })?;
+    let directories = object_directories(workspace);
+    let mut paths = direct_object_files(root, &changed, &directories);
+    if let Some(filters) = filters {
+        if let Some(files) = &filters.files {
+            paths.retain(|path| files.contains(path));
+        }
+        if let Some(types) = &filters.types {
+            let allowed: Vec<&PathBuf> = types
+                .iter()
+                .filter_map(|kind| {
+                    directories
+                        .iter()
+                        .find(|(family, _)| family == kind)
+                        .map(|(_, dir)| dir)
+                })
+                .collect();
+            paths.retain(|path| {
+                path.parent()
+                    .is_some_and(|parent| allowed.iter().any(|dir| *dir == parent))
+            });
+        }
+        if let Some(uuids) = &filters.uuids {
+            paths.retain(|path| {
+                std::fs::read(path).is_ok_and(|raw| {
+                    document::load(&raw, Some(path.clone()))
+                        .uuid()
+                        .is_some_and(|uuid| uuids.iter().any(|wanted| wanted == uuid))
+                })
+            });
+        }
+    }
+    if paths.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(Filters {
+        uuids: filters.and_then(|filters| filters.uuids.clone()),
+        types: filters.and_then(|filters| filters.types.clone()),
+        files: Some(paths),
+    }))
+}
+
+/// The object folder of each family sharing knows, resolved
+/// (`_object_directories`).
+fn object_directories(workspace: &Workspace) -> Vec<(String, PathBuf)> {
+    let configuration = workspace.configuration();
+    OBJECT_FAMILIES
+        .iter()
+        .filter_map(|family| {
+            configuration
+                .folder(family)
+                .map(|dir| ((*family).to_owned(), document::resolve(dir)))
+        })
+        .collect()
+}
+
+/// The changed paths that are object files directly in an object folder,
+/// each once, resolved (`_direct_object_files`): a relative path is read from
+/// the workspace, as the oracle joined it.
+fn direct_object_files(
+    workspace: &Path,
+    changed: &[String],
+    directories: &[(String, PathBuf)],
+) -> Vec<PathBuf> {
+    let mut selected: Vec<PathBuf> = Vec::new();
+    for raw in changed {
+        if raw.is_empty() {
+            continue;
+        }
+        let path = PathBuf::from(raw);
+        let path = if path.is_absolute() {
+            path
+        } else {
+            workspace.join(path)
+        };
+        let resolved = document::resolve(&path);
+        let named = resolved
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(opentide_workspace::discover::is_object_file_name);
+        let in_folder = resolved
+            .parent()
+            .is_some_and(|parent| directories.iter().any(|(_, dir)| dir == parent));
+        if !named || !in_folder || !resolved.is_file() || selected.contains(&resolved) {
+            continue;
+        }
+        selected.push(resolved);
+    }
+    selected
 }
 
 /// The filters the run's options make (`_filters`); `None` when none narrows.

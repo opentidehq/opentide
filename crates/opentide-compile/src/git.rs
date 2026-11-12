@@ -665,6 +665,173 @@ pub fn changed_paths(
     changed_between(&repo, source_commit, latest)
 }
 
+// --- the push's diff up to HEAD (`changed_through_head`) -------------------
+
+/// What an object id or a reference names, as Dulwich's `repo[name]` finds
+/// it: 40 hex digits are an object id; anything else, or an id the store does
+/// not hold, is a reference's exact name, symbolic references followed and
+/// annotated tags peeled. `None` when neither finds an object.
+fn exact_object(repo: &Repo, name: &str) -> Option<ObjectId> {
+    let mut buf = Vec::new();
+    if name.len() == 40
+        && let Ok(id) = ObjectId::from_hex(name.as_bytes())
+        && matches!(repo.odb.try_find(&id, &mut buf), Ok(Some(_)))
+    {
+        return Some(id);
+    }
+    let mut reference = repo.refs.try_find(name).ok()??;
+    // A partial name searched under `refs/` is not the exact name Dulwich reads.
+    if reference.name.as_bstr() != name.as_bytes().as_bstr() {
+        return None;
+    }
+    reference.peel_to_id(&repo.refs, &repo.odb).ok()
+}
+
+/// Whether `id` is a commit the checkout holds.
+fn is_commit(repo: &Repo, id: ObjectId) -> bool {
+    repo.commit(id).is_some()
+}
+
+/// `DulwichRepo.commit(text)`: the commit an object id or a reference's exact
+/// name holds; `Could not find git commit <text>` when nothing is found, and
+/// `Object <text> is not a commit` for a tag, tree or blob.
+fn dulwich_commit(repo: &Repo, text: &str) -> Result<ObjectId, GitError> {
+    match exact_object(repo, text) {
+        Some(id) if is_commit(repo, id) => Ok(id),
+        Some(_) => Err(failed(format!("Object {text} is not a commit"))),
+        None => Err(failed(format!("Could not find git commit {text}"))),
+    }
+}
+
+/// The reference name Dulwich tries for `rev` (`_normalize_ref`): `refs/...`
+/// as written, `origin/<branch>` under `refs/remotes/`, `HEAD`, and anything
+/// else as a branch.
+fn normalized_ref(rev: &str) -> String {
+    if rev.starts_with("refs/") || rev == "HEAD" {
+        rev.to_owned()
+    } else if rev.starts_with("origin/") {
+        format!("refs/remotes/{rev}")
+    } else {
+        format!("refs/heads/{rev}")
+    }
+}
+
+/// The commit `--since` names (`_resolve_commit`): a full commit id, a
+/// reference's exact name, or a branch, `origin/<branch>` or `refs/...` name,
+/// an annotated tag peeled. Short ids and revision syntax (`HEAD~1`) name no
+/// commit here, as they named none for the oracle.
+fn since_commit(repo: &Repo, rev: &str) -> Result<ObjectId, GitError> {
+    if let Some(id) = exact_object(repo, rev).filter(|id| is_commit(repo, *id)) {
+        return Ok(id);
+    }
+    let normalized = normalized_ref(rev);
+    let id = [normalized.as_str(), rev]
+        .into_iter()
+        .find_map(|name| {
+            let mut reference = repo.refs.try_find(name).ok()??;
+            (reference.name.as_bstr() == name.as_bytes().as_bstr())
+                .then(|| reference.peel_to_id(&repo.refs, &repo.odb).ok())
+                .flatten()
+        })
+        .ok_or_else(|| failed(format!("Could not find git commit {rev}")))?;
+    if is_commit(repo, id) {
+        Ok(id)
+    } else {
+        Err(failed(format!("Object {id} is not a commit")))
+    }
+}
+
+/// The variable naming the commit that triggered a CI run
+/// (`TRIGGER_SHA_VARIABLES`).
+fn trigger_variable(ci: Ci) -> &'static str {
+    match ci {
+        Ci::GitHub => "GITHUB_SHA",
+        Ci::GitLab => "CI_COMMIT_SHA",
+        Ci::Azure => "BUILD_SOURCEVERSION",
+        Ci::Local => "",
+    }
+}
+
+/// Where the triggering push's diff starts (`_push_baseline`): on GitLab
+/// `CI_COMMIT_BEFORE_SHA` unless it is unset or all zeros, else the
+/// triggering commit's first parent; `None` when that commit is the first.
+fn push_baseline(repo: &Repo, ci: Ci, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {
+    let variable = trigger_variable(ci);
+    let trigger = set(env, variable).ok_or_else(|| {
+        failed(format!(
+            "{variable} is required to compute the changed objects"
+        ))
+    })?;
+    if ci == Ci::GitLab
+        && let Some(before) =
+            set(env, "CI_COMMIT_BEFORE_SHA").filter(|sha| !sha.trim_matches('0').is_empty())
+    {
+        return dulwich_commit(repo, &before).map(Some);
+    }
+    let commit = dulwich_commit(repo, &trigger)?;
+    let Some(parent) = parents(repo, commit).and_then(|parents| parents.first().copied()) else {
+        return Ok(None);
+    };
+    // A shallow clone names the parent without holding it: that fails here.
+    dulwich_commit(repo, &parent.to_string()).map(Some)
+}
+
+/// The paths a push changed, up to the checkout's HEAD rather than the
+/// pushed commit (`changed_through_head`), for a job that runs after the
+/// production deploy and checks out the default branch's tip. The diff starts
+/// where the triggering push's starts ([`push_baseline`]), or at `since`, a
+/// commit id or reference, which also works outside CI; it ends at HEAD.
+/// Added, renamed and modified files count, from the git top level.
+///
+/// Outside CI the checkout holds `workspace`; in CI it is found from the
+/// platform's checkout variable (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`,
+/// `BUILD_SOURCESDIRECTORY`), else from `cwd`. A missing checkout is
+/// [`GitError::MissingCheckout`] with the folder searched.
+pub fn changed_through_head(
+    workspace: &Path,
+    cwd: &Path,
+    env: Env<'_>,
+    since: Option<&str>,
+) -> Result<Vec<String>, GitError> {
+    let platform = ci(env);
+    let (repo, top) = if platform == Ci::Local {
+        if since.is_none() {
+            return Err(failed(
+                "Outside CI, --since must name the commit to diff from",
+            ));
+        }
+        let top = discover(workspace)
+            .map(|(top, _)| top)
+            .ok_or_else(|| GitError::MissingCheckout(workspace.to_path_buf()))?;
+        (open(workspace)?, top)
+    } else {
+        let variable = match platform {
+            Ci::GitHub => "GITHUB_WORKSPACE",
+            Ci::GitLab => "CI_PROJECT_DIR",
+            _ => "BUILD_SOURCESDIRECTORY",
+        };
+        let searched = set(env, variable).map_or_else(|| cwd.to_path_buf(), |dir| cwd.join(dir));
+        let top = discover(&searched)
+            .map(|(top, _)| top)
+            .ok_or_else(|| GitError::MissingCheckout(searched.clone()))?;
+        (open(&searched)?, top)
+    };
+    let head = head_commit(&repo).ok_or_else(|| {
+        failed(format!(
+            "The git repository at {} has no commits yet",
+            dunce::simplified(&top).display()
+        ))
+    })?;
+    let base = match since {
+        Some(since) => Some(since_commit(&repo, since)?),
+        None => push_baseline(&repo, platform, env)?,
+    };
+    match base {
+        None => Ok(Vec::new()),
+        Some(base) => changed_between(&repo, base, head),
+    }
+}
+
 /// Splits changed paths into the rule files directly in `folder` (the rules
 /// folder, workspace-relative) and those in its subfolders
 /// (`split_changed_rule_paths`): a path matches when `folder` is one of its

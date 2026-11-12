@@ -60,6 +60,7 @@ pub const PORTED: &[&str] = &[
     "share targets",
     "generate extract defender",
     "generate extract elastic",
+    "generate extract sentinel",
 ];
 
 /// The file in which a run refused with `engine_not_ported` records its
@@ -667,6 +668,17 @@ impl Run<'_> {
                         .map_or("default", String::as_str),
                     options.get_flag("include_prebuilt"),
                 );
+                self.emit_report(&report, out, err)
+            }
+            "generate extract sentinel" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report =
+                    crate::commands::extract::sentinel(&crate::commands::extract::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                    });
                 self.emit_report(&report, out, err)
             }
             "generate extract defender" => {
@@ -3314,21 +3326,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("refusal");
         let path = file.to_string_lossy().into_owned();
-        for line in [
-            "--json generate extract sentinel",
-            "generate extract sentinel",
-        ] {
-            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
-            assert_eq!(refused.code, 2, "{line}");
-            let recorded = std::fs::read_to_string(&file).unwrap();
-            assert!(
-                recorded.starts_with(
-                    "opentide generate extract sentinel has no Rust implementation yet"
-                ),
-                "{line}: {recorded}"
-            );
-            std::fs::remove_file(&file).unwrap();
-        }
         // A query runs here on the platforms with a query runner: on Sysdig,
         // compare runs Python alone on the refusal.
         for line in [
@@ -3348,7 +3345,6 @@ mod tests {
         assert_eq!(ran.code, 0);
         assert!(!file.exists());
         // Without the variable, nothing is written.
-        assert_eq!(dispatched("generate extract sentinel", &[], false).code, 2);
         assert_eq!(dispatched("query --platform sysdig q", &[], false).code, 2);
         assert!(!file.exists());
     }
@@ -3374,14 +3370,14 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json generate extract sentinel", &[], false);
+        let refused = dispatched("--json query --platform sysdig q", &[], false);
         assert_eq!(refused.code, 2);
         assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
         assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("generate extract sentinel", &[], false);
+        let plain = dispatched("query --platform sysdig q", &[], false);
         assert_eq!(
             plain.stderr,
-            "error: opentide generate extract sentinel has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide query on sysdig has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
         );
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
@@ -3605,16 +3601,20 @@ mod tests {
             "{}",
             nested.stdout
         );
-        // An unported subcommand after a separator is refused by its path.
-        let unported = dispatched("--json generate extract -- sentinel", &[], false);
+        // A subcommand after a separator runs by its path.
+        let separated = dispatched("--json generate extract -- sentinel", &[], false);
         assert!(
-            unported
+            separated
                 .stdout
                 .contains("\"command\":\"generate extract sentinel\""),
             "{}",
-            unported.stdout
+            separated.stdout
         );
-        assert!(unported.stdout.contains("engine_not_ported"));
+        assert!(
+            !separated.stdout.contains("\"code\":\"usage_"),
+            "{}",
+            separated.stdout
+        );
         // `validate -- --json`: an unknown option of validate, not a command.
         let option = dispatched("--json validate -- --json", &[], false);
         assert_eq!(option.code, 2);
@@ -3850,7 +3850,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json generate extract sentinel", &[], false);
+        let failed = dispatched("--json query --platform sysdig q", &[], false);
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",

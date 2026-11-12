@@ -352,9 +352,9 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``validate query --live`` refuses a run that names none, as Python does).
 #: ``share`` and its ``push``, ``preview``, ``status``, ``retract`` and
 #: ``targets`` over MISP's REST API, and ``generate extract defender`` and
-#: ``generate extract elastic`` through their connectors, with UC-4.4b (#834):
-#: a ``share push --changed`` that reads a git diff stays Python's (the Rust
-#: side refuses it with ``engine_not_ported``).
+#: ``generate extract elastic`` through their connectors, with UC-4.4b (#834);
+#: ``share push --changed`` reading its git diff, and ``generate extract
+#: sentinel`` through the Sentinel connector, with UC-4.4e (#834).
 #: ``deploy``, ``query`` and ``validate query --live`` on an installed platform
 #: plugin's platform run on Rust, the one engine with the plugin hook
 #: (*plugins*, UC-4.5, #835).
@@ -416,6 +416,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("share", "targets"): RustCommand(launch=RUST_CLI),
     ("generate", "extract", "defender"): RustCommand(launch=RUST_CLI, side_effects=True),
     ("generate", "extract", "elastic"): RustCommand(launch=RUST_CLI, side_effects=True),
+    ("generate", "extract", "sentinel"): RustCommand(launch=RUST_CLI, side_effects=True),
 }
 
 

@@ -13,6 +13,10 @@ ones the Python suite mocks (``tests/test_platforms/test_sentinel_deployer.py``,
 - ARM ``alertRules``: a rule ``PUT`` is created (201) or replaced (200), a
   ``DELETE`` of a rule it does not hold is a 404 with ARM's error body, the list
   comes in two pages (``nextLink``);
+- ARM ``alertRules`` of the workspace ``extract``: the analytics rules of
+  :data:`EXTRACT_RULES`, listed in two pages, for ``generate extract sentinel``
+  (UC-4.4e): scheduled rules with every block the importer writes, a
+  near-real-time one, a Fusion rule it skips, and two rules of one name;
 - Log Analytics ``query``: one table of the columns a ``| project`` names; a
   ``// partial`` query answers with its rows and an error (a partial result),
   ``// tables`` with two tables, ``whre`` is a syntax error (400) with the parser's
@@ -39,6 +43,165 @@ SCHEMA = [
     ("Computer", "string"),
     ("EventID", "int"),
 ]
+
+
+EXTRACT_RULES: list[dict[str, Any]] = [
+    {
+        "kind": "Scheduled",
+        "name": "00000000-0000-4000-8044-000000000001",
+        "etag": '"0300bf09-0000-0000-0000-5c37296e0001"',
+        "properties": {
+            "displayName": "Encoded PowerShell \u2014 \u00dcn\u00efcode",
+            "description": (
+                "A process ran PowerShell with an encoded command.\nSee the runbook: step 1."
+            ),
+            "severity": "High",
+            "enabled": True,
+            "query": 'SecurityEvent\n| where CommandLine has "-enc"\n| extend Host = Computer',
+            "queryFrequency": "PT1H",
+            "queryPeriod": "P1D",
+            "triggerOperator": "GreaterThan",
+            "triggerThreshold": 0,
+            "suppressionDuration": "PT5H",
+            "suppressionEnabled": True,
+            "tactics": ["Execution", "DefenseEvasion"],
+            "techniques": ["T1059", "T1027"],
+            "subTechniques": ["T1059.001", "T1564.003"],
+            "customDetails": {"Host": "Computer", "CommandLine": "CommandLine"},
+            "entityMappings": [
+                {
+                    "entityType": "Host",
+                    "fieldMappings": [{"identifier": "HostName", "columnName": "Computer"}],
+                },
+                {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                        {"identifier": "Name", "columnName": "Account"},
+                        {"identifier": "NTDomain", "columnName": "Domain"},
+                    ],
+                },
+            ],
+            "alertDetailsOverride": {
+                "alertDisplayNameFormat": "{{Computer}} ran PowerShell: encoded",
+                "alertDescriptionFormat": "PowerShell ran on {{Computer}}.\nCheck the parent.",
+                "alertDynamicProperties": [{"alertProperty": "AlertLink", "value": "Link"}],
+            },
+            "eventGroupingSettings": {"aggregationKind": "AlertPerResult"},
+            "incidentConfiguration": {
+                "createIncident": True,
+                "groupingConfiguration": {
+                    "enabled": True,
+                    "reopenClosedIncident": False,
+                    "lookbackDuration": "PT5H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": ["Host", "Account"],
+                    "groupByAlertDetails": ["DisplayName"],
+                    "groupByCustomDetails": ["Host"],
+                },
+            },
+            "lastModifiedUtc": "2026-03-04T05:06:07.1234567Z",
+            "templateVersion": "1.0.2",
+        },
+    },
+    {
+        "kind": "NRT",
+        "name": "00000000-0000-4000-8044-000000000002",
+        "properties": {
+            "displayName": "Sign-in from a new country",
+            "description": "  Indented: the first line starts with spaces.\nThe second does not.",
+            "severity": "Medium",
+            "enabled": False,
+            "query": "SigninLogs\n| where ResultType == 0",
+            "suppressionDuration": "PT1H",
+            "suppressionEnabled": False,
+            "tactics": [],
+            "techniques": None,
+            "incidentConfiguration": {
+                "createIncident": False,
+                "groupingConfiguration": {
+                    "enabled": False,
+                    "reopenClosedIncident": False,
+                    "lookbackDuration": "PT5H",
+                    "matchingMethod": "AllEntities",
+                },
+            },
+            "lastModifiedUtc": "2026-05-06T00:00:00Z",
+        },
+    },
+    {
+        "kind": "Fusion",
+        "name": "00000000-0000-4000-8044-000000000003",
+        "properties": {
+            "displayName": "Advanced Multistage Attack Detection",
+            "enabled": True,
+            "alertRuleTemplateName": "f71aba3d-28fb-450b-b192-4e76a83015c8",
+            "lastModifiedUtc": "2026-01-01T00:00:00Z",
+        },
+    },
+    {
+        "kind": "Scheduled",
+        "name": "00000000-0000-4000-8044-000000000004",
+        "properties": {
+            "displayName": "Encoded PowerShell \u2014 \u00dcn\u00efcode",
+            "description": "The same name: written beside the first, its file suffixed.",
+            "severity": "Informational",
+            "enabled": True,
+            "query": "  SecurityEvent\n  | take 1",
+            "queryFrequency": "PT30M",
+            "queryPeriod": "PT2H",
+            "triggerOperator": "Equal",
+            "triggerThreshold": 5,
+            "suppressionDuration": "PT1H",
+            "suppressionEnabled": False,
+            "subTechniques": ["T1003.001"],
+            "customDetails": {"1": "yes", "Empty": "", "Path": "C:\\Windows\\Temp"},
+            "alertDetailsOverride": {
+                "alertDisplayNameFormat": None,
+                "alertDescriptionFormat": "  {{Account}} signed in",
+                "alertDynamicProperties": [],
+            },
+            "incidentConfiguration": {
+                "createIncident": True,
+                "groupingConfiguration": {
+                    "enabled": True,
+                    "reopenClosedIncident": True,
+                    "lookbackDuration": "P1D",
+                    "matchingMethod": "AnyAlert",
+                    "groupByEntities": [],
+                },
+            },
+            "lastModifiedUtc": "2026-07-08T09:10:11Z",
+        },
+    },
+    {
+        "kind": "Scheduled",
+        "name": "00000000-0000-4000-8044-000000000005",
+        "properties": {
+            "displayName": 'Quotes "and" back\\slash: a <name>',
+            "description": "Characters a file name cannot hold, and a name that needs quoting.",
+            "severity": "Low",
+            "enabled": True,
+            "query": "AuditLogs",
+            "queryFrequency": "P1D",
+            "queryPeriod": "P14D",
+            "triggerOperator": "LessThan",
+            "triggerThreshold": 10,
+            "suppressionDuration": "PT5H",
+            "suppressionEnabled": False,
+            "alertDetailsOverride": {"alertDisplayNameFormat": "Audit: {{OperationName}}"},
+            "eventGroupingSettings": {"aggregationKind": "SingleAlert"},
+            "incidentConfiguration": {
+                "createIncident": False,
+                "groupingConfiguration": {"enabled": False},
+            },
+            "lastModifiedUtc": "2026-09-10T11:12:13Z",
+        },
+    },
+]
+
+
+def _extract_rules(path: str) -> list[dict[str, Any]]:
+    return [dict(rule, id=f"{path}/{rule['name']}") for rule in EXTRACT_RULES]
 
 
 def _openid(tenant: str) -> dict[str, Any]:
@@ -275,6 +438,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.command == "GET" and not rule_id:
                 skip = parse_qs(url.query).get("$skipToken", [""])[0]
                 items = [dict(value, id=f"{path}/{key}") for key, value in sorted(RULES.items())]
+                if "/workspaces/extract/" in path:
+                    items = _extract_rules(path)
+                    if not skip:
+                        next_link = f"https://management.azure.com{path}?api-version=2025-10-01-preview&$skipToken=page2"
+                        self._send(200, {"value": items[:3], "nextLink": next_link})
+                    else:
+                        self._send(200, {"value": items[3:]})
+                    return
                 if not skip:
                     next_link = f"https://management.azure.com{path}?api-version=2025-10-01-preview&$skipToken=page2"
                     self._send(200, {"value": items[:1], "nextLink": next_link})

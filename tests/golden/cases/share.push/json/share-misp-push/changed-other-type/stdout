@@ -1,0 +1,1 @@
+{"records":[],"ok":true,"status":"completed","message":"No changed objects to share","warnings":["[[misp]] block 'misp-lab' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."],"schema_version":1,"command":"share push","duration_ms":0,"exit_code":0,"summary":{},"next_actions":[],"failure":null}

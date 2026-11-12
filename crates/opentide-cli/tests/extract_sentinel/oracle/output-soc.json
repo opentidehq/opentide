@@ -1,0 +1,195 @@
+[
+    {
+        "kind": "Scheduled",
+        "name": "00000000-0000-4000-8044-000000000001",
+        "etag": "\"0300bf09-0000-0000-0000-5c37296e0001\"",
+        "id": "/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/extract/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8044-000000000001",
+        "display_name": "Encoded PowerShell \u2014 \u00dcn\u00efcode",
+        "description": "A process ran PowerShell with an encoded command.\nSee the runbook: step 1.",
+        "severity": "High",
+        "enabled": true,
+        "query": "SecurityEvent\n| where CommandLine has \"-enc\"\n| extend Host = Computer",
+        "query_frequency": "PT1H",
+        "query_period": "P1D",
+        "trigger_operator": "GreaterThan",
+        "trigger_threshold": 0,
+        "suppression_duration": "PT5H",
+        "suppression_enabled": true,
+        "tactics": [
+            "Execution",
+            "DefenseEvasion"
+        ],
+        "techniques": [
+            "T1059",
+            "T1027"
+        ],
+        "sub_techniques": [
+            "T1059.001",
+            "T1564.003"
+        ],
+        "custom_details": {
+            "Host": "Computer",
+            "CommandLine": "CommandLine"
+        },
+        "entity_mappings": [
+            {
+                "entity_type": "Host",
+                "field_mappings": [
+                    {
+                        "identifier": "HostName",
+                        "column_name": "Computer"
+                    }
+                ]
+            },
+            {
+                "entity_type": "Account",
+                "field_mappings": [
+                    {
+                        "identifier": "Name",
+                        "column_name": "Account"
+                    },
+                    {
+                        "identifier": "NTDomain",
+                        "column_name": "Domain"
+                    }
+                ]
+            }
+        ],
+        "alert_details_override": {
+            "alert_display_name_format": "{{Computer}} ran PowerShell: encoded",
+            "alert_description_format": "PowerShell ran on {{Computer}}.\nCheck the parent.",
+            "alert_dynamic_properties": [
+                {
+                    "alert_property": "AlertLink",
+                    "value": "Link"
+                }
+            ]
+        },
+        "event_grouping_settings": {
+            "aggregation_kind": "AlertPerResult"
+        },
+        "incident_configuration": {
+            "create_incident": true,
+            "grouping_configuration": {
+                "enabled": true,
+                "reopen_closed_incident": false,
+                "lookback_duration": "PT5H",
+                "matching_method": "Selected",
+                "group_by_entities": [
+                    "Host",
+                    "Account"
+                ],
+                "group_by_alert_details": [
+                    "DisplayName"
+                ],
+                "group_by_custom_details": [
+                    "Host"
+                ]
+            }
+        },
+        "last_modified_utc": "2026-03-04T05:06:07.1234567Z",
+        "template_version": "1.0.2"
+    },
+    {
+        "kind": "NRT",
+        "name": "00000000-0000-4000-8044-000000000002",
+        "id": "/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/extract/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8044-000000000002",
+        "display_name": "Sign-in from a new country",
+        "description": "  Indented: the first line starts with spaces.\nThe second does not.",
+        "severity": "Medium",
+        "enabled": false,
+        "query": "SigninLogs\n| where ResultType == 0",
+        "suppression_duration": "PT1H",
+        "suppression_enabled": false,
+        "tactics": [],
+        "techniques": null,
+        "incident_configuration": {
+            "create_incident": false,
+            "grouping_configuration": {
+                "enabled": false,
+                "reopen_closed_incident": false,
+                "lookback_duration": "PT5H",
+                "matching_method": "AllEntities"
+            }
+        },
+        "last_modified_utc": "2026-05-06T00:00:00Z"
+    },
+    {
+        "kind": "Fusion",
+        "name": "00000000-0000-4000-8044-000000000003",
+        "id": "/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/extract/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8044-000000000003",
+        "display_name": "Advanced Multistage Attack Detection",
+        "enabled": true,
+        "alert_rule_template_name": "f71aba3d-28fb-450b-b192-4e76a83015c8",
+        "last_modified_utc": "2026-01-01T00:00:00Z"
+    },
+    {
+        "kind": "Scheduled",
+        "name": "00000000-0000-4000-8044-000000000004",
+        "id": "/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/extract/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8044-000000000004",
+        "display_name": "Encoded PowerShell \u2014 \u00dcn\u00efcode",
+        "description": "The same name: written beside the first, its file suffixed.",
+        "severity": "Informational",
+        "enabled": true,
+        "query": "  SecurityEvent\n  | take 1",
+        "query_frequency": "PT30M",
+        "query_period": "PT2H",
+        "trigger_operator": "Equal",
+        "trigger_threshold": 5,
+        "suppression_duration": "PT1H",
+        "suppression_enabled": false,
+        "sub_techniques": [
+            "T1003.001"
+        ],
+        "custom_details": {
+            "1": "yes",
+            "Empty": "",
+            "Path": "C:\\Windows\\Temp"
+        },
+        "alert_details_override": {
+            "alert_display_name_format": null,
+            "alert_description_format": "  {{Account}} signed in",
+            "alert_dynamic_properties": []
+        },
+        "incident_configuration": {
+            "create_incident": true,
+            "grouping_configuration": {
+                "enabled": true,
+                "reopen_closed_incident": true,
+                "lookback_duration": "P1D",
+                "matching_method": "AnyAlert",
+                "group_by_entities": []
+            }
+        },
+        "last_modified_utc": "2026-07-08T09:10:11Z"
+    },
+    {
+        "kind": "Scheduled",
+        "name": "00000000-0000-4000-8044-000000000005",
+        "id": "/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/extract/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8044-000000000005",
+        "display_name": "Quotes \"and\" back\\slash: a <name>",
+        "description": "Characters a file name cannot hold, and a name that needs quoting.",
+        "severity": "Low",
+        "enabled": true,
+        "query": "AuditLogs",
+        "query_frequency": "P1D",
+        "query_period": "P14D",
+        "trigger_operator": "LessThan",
+        "trigger_threshold": 10,
+        "suppression_duration": "PT5H",
+        "suppression_enabled": false,
+        "alert_details_override": {
+            "alert_display_name_format": "Audit: {{OperationName}}"
+        },
+        "event_grouping_settings": {
+            "aggregation_kind": "SingleAlert"
+        },
+        "incident_configuration": {
+            "create_incident": false,
+            "grouping_configuration": {
+                "enabled": false
+            }
+        },
+        "last_modified_utc": "2026-09-10T11:12:13Z"
+    }
+]

@@ -105,6 +105,8 @@ twice: once per implementation). Cassettes are recorded from the oracle with `ca
 record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
+A command no golden case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is compared by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`); its approved differences name the case `cassette:<scenario>`, and that test, not `golden check`, applies them and finds them stale.
+
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
 of `docs/internal/cli-experience.md` ("Errors people and agents make": a typo in a command, an
 option or a choice, a missing option, a prompt without a terminal, `--json` after the subcommand,
@@ -145,6 +147,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `deploy-push`, `deploy-push-production`, `deploy-push-anchor` | `deploy-tenants` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one rule, in `STAGING`, already in `PRODUCTION`, or with its status written as an anchor: the status promotion of a `RELEASE` deploy on a push (UC-4.6c). The commits' author and time are fixed, so their ids are the same on every host |
 | `share-misp` | [`fixtures/share-misp/`](fixtures/share-misp/): three `[[misp]]` destinations (one served by the MISP stand-in of `tests/cassettes/misp/tenant.py`, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before, for `share` (UC-4.4b); a cassette's client copies it before a push or retract writes the ledger |
 | `share-misp-broken` | `share-misp` with one declared edit: a `max_tlp` that is no TLP name, the `sharing_config` preflight |
+| `share-misp-push`, `share-misp-push-config` | `share-misp` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one shared rule, or `sharing.toml` alone: `share push --changed` on a GitHub, GitLab or Azure push and with `--since` (UC-4.4e); the `golden/share-push-changed` cassette's client builds the same checkout |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 
