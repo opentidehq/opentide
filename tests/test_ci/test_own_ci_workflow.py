@@ -327,14 +327,18 @@ def _check_packaged_crates_avoid_excluded(text: str, root: Path = ROOT) -> None:
 
 def test_engine_package_scans_the_crates_it_does_not_package(workflow: dict[str, Any]) -> None:
     text = _engine_package_text(workflow)
-    assert "opentide-schema" in _package_and_scan(text)[0]
+    # The test harnesses are never published; the facade and its crates are.
+    assert "opentide-compare" in _package_and_scan(text)[0]
+    assert "opentide" not in _package_and_scan(text)[0]
     _check_excluded_crates_are_scanned(text)
     _check_packaged_crates_avoid_excluded(text)
 
 
 def test_local_ci_scans_the_crates_it_does_not_package() -> None:
     text = LOCAL_CI.read_text(encoding="utf-8")
-    assert "opentide-schema" in _package_and_scan(text)[0]
+    # The test harnesses are never published; the facade and its crates are.
+    assert "opentide-compare" in _package_and_scan(text)[0]
+    assert "opentide" not in _package_and_scan(text)[0]
     _check_excluded_crates_are_scanned(text)
     _check_packaged_crates_avoid_excluded(text)
 
@@ -380,7 +384,7 @@ def test_the_dependency_check_reads_the_bindings_too(tmp_path: Path) -> None:
 
 
 _EXCLUDED_UNSCANNED = (
-    "cargo package --workspace --exclude opentide-schema\n"
+    "cargo package --workspace --exclude opentide-compare\n"
     "bash scripts/engine/license-scan.sh target/package/*.crate\n"
 )
 _EXCLUDED_SCANNED = (
@@ -390,8 +394,15 @@ _EXCLUDED_SCANNED = (
 
 
 def test_the_scan_check_fails_for_an_excluded_crate_it_does_not_scan() -> None:
-    with pytest.raises(AssertionError, match="licence scan must read crates/opentide-schema"):
+    with pytest.raises(AssertionError, match="licence scan must read crates/opentide-compare"):
         _check_excluded_crates_are_scanned(_EXCLUDED_UNSCANNED)
+
+
+def test_the_published_crates_are_packaged_not_excluded() -> None:
+    """The release train publishes opentide-schema: leaving it out of the
+    package step would ship a crate CI never built from its package."""
+    with pytest.raises(AssertionError, match="opentide-schema is left out of `cargo package`"):
+        _check_excluded_crates_are_scanned(_EXCLUDED_SCANNED)
 
 
 @pytest.mark.parametrize("publish", ["", 'publish = ["crates-io"]\n'])

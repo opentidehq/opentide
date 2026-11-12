@@ -9,9 +9,7 @@ homepage.workspace = true
 authors.workspace = true
 description = "opentide engine component: deploy compile and plan (request bodies per platform, status strategies, rule selection). Internal: depend on the opentide facade."
 readme = "../COMPONENT.md"
-# Not published while opentide-workspace, which it builds on, is not
-# (crates/opentide-schema/Cargo.toml says when that changes).
-publish = false
+# Published by the release train (publish.yml, UC-5.5), for the facade.
 
 [lints]
 workspace = true

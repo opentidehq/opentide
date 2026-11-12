@@ -3,6 +3,12 @@
 //! `$OUT_DIR/explain_pages.rs` as `PAGES: &[(&str, &str)]` (code, Markdown),
 //! sorted by code. The pages are the package's data; the Python CLI reads
 //! the same files.
+//!
+//! Also points `include_str!` at that data (`OPENTIDE_ASSETS`, the MCP host
+//! templates of `setup`): the workspace root in a checkout, or else the
+//! `assets/` copy that `scripts/engine/release.py vendor` puts inside the
+//! published crate (`[package.metadata.opentide] assets`), as opentide-schema
+//! does. The checkout wins, so a copy left behind never shadows the real files.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -14,7 +20,16 @@ use std::path::PathBuf;
 )]
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let pages = manifest.join("../../src/opentide/data/diagnostics");
+    let workspace = manifest.join("../..");
+    // A packaged crate builds under target/package/ or the registry, where ../.. has no
+    // src/opentide/data/.
+    let root = if workspace.join("src/opentide/data/diagnostics").is_dir() {
+        workspace
+    } else {
+        manifest.join("assets")
+    };
+    println!("cargo:rustc-env=OPENTIDE_ASSETS={}", root.display());
+    let pages = root.join("src/opentide/data/diagnostics");
     let mut found: Vec<(String, PathBuf)> = Vec::new();
     // A folder that cannot be read is a build error: without its pages,
     // `explain` would list no code and SARIF would carry no rules.

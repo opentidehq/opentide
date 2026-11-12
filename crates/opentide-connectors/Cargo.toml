@@ -7,8 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-# Published with the facade (UC-5.1); internal until then.
-publish = false
+# Published by the release train (publish.yml, UC-5.5), for the facade.
 description = "opentide's tenant connectors: one HTTP client per tenant (TLS, CA, proxy, timeouts, retries), credentials, cancellation and progress"
 
 [lints]

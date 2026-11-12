@@ -12,10 +12,8 @@ readme = "README.md"
 keywords = ["lsp", "kql", "spl", "esql", "detection"]
 categories = ["development-tools", "command-line-utilities"]
 default-run = "opentide-lsp"
-# Not published while opentide-schema and opentide-workspace are not (ADR
-# 0010's addendum, UC-2.6 #821): the server reads its checks from them, in
-# this workspace. `cargo package` leaves it out (ci.yml).
-publish = false
+# Published by the release train (publish.yml, UC-5.5), with opentide-schema and
+# opentide-workspace, which its checks come from (ADR 0010's addendum).
 
 [lints]
 workspace = true

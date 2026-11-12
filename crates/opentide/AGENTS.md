@@ -7,10 +7,11 @@ UC-5.1, #836). Every binding is to wrap it and nothing else (UC-5.2, UC-5.3).
 ## Place
 
 facade (`xtask/layers.toml`), above the applications: its features reach opentide-cli (`queries`,
-`cli`) and opentide-lsp (`lsp`). `publish = false` while the engine crates it wraps are
-unpublished; `cargo package` leaves it out and the licence scan reads its source (`ci.yml`
-`engine-package`, `engine-release.yml`, `scripts/ci-local.sh`). The name on crates.io is held by
-`publishing/placeholders/crates/opentide` until then.
+`cli`) and opentide-lsp (`lsp`). Published with the crates it wraps by the release train
+(`.github/workflows/publish.yml`, UC-5.5), at the product version: `cargo install opentide
+--features cli` is the command line. `cargo package` builds it from its package (`ci.yml`
+`engine-package`, `scripts/ci-local.sh`, and the release's `checks`). crates.io's `opentide`
+0.0.0 was the name's placeholder (`publishing/placeholders/crates/opentide`).
 
 ## Layout
 

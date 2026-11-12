@@ -679,29 +679,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/engine/release.py vendor
-      # opentide-schema (publish = false) depends on opentide-schema-derive,
-      # which is not on crates.io yet, so it cannot be packaged until both
-      # are published (crates/opentide-schema/Cargo.toml says when). A crate
-      # left out of the package step is scanned as its source directory
-      # instead (tests/test_ci/test_own_ci_workflow.py holds both to it).
-      # opentide-cli (publish = false) depends on opentide-schema and
-      # opentide-workspace for the commands ported onto it (UC-2.4), so it
-      # cannot be packaged either: its scan reads the files `cargo package
-      # --list` names, as its package would hold them (its CI-only oracle
-      # data under tests/render/ is excluded from the package, as before).
-      # opentide-lsp and opentide-wasm (publish = false) take their checks
-      # from opentide-workspace and opentide-schema (UC-2.6, ADR 0010's
-      # addendum): left out of the package step too, their sources scanned.
-      # opentide-connectors (publish = false, UC-4.1) reads tenant settings
-      # through opentide-workspace: left out too, its sources scanned. So is
-      # the opentide facade (UC-5.1), which wraps all of them, and the Node.js
-      # binding (opentide-node, bindings/node, UC-5.3a), built on the facade.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --exclude opentide-connectors --exclude opentide --exclude opentide-node --allow-dirty
+      # Every crate the release train publishes (publish.yml, UC-5.5), built
+      # from its package. Left out: the members with `publish = false` (the
+      # PyO3 and Node.js bindings, xtask, the test harnesses opentide-compare
+      # and opentide-cassette, and opentide-wasm, which ships as a release
+      # asset), whose sources are scanned instead
+      # (tests/test_ci/test_own_ci_workflow.py holds both to it). opentide-cli
+      # carries opentide's package data, its explain pages, as the wheel does:
+      # scanned as a product (license-scan.sh --product).
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
       - name: license scan (no oracle references)
         run: |
-          bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide-connectors crates/opentide bindings/node
-          cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
+          set -euo pipefail
+          find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
+          bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
+          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second

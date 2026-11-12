@@ -12,13 +12,10 @@ readme = "README.md"
 documentation = "https://docs.rs/opentide"
 keywords = ["opentide", "detection-as-code", "security", "sigma", "siem"]
 categories = ["development-tools", "command-line-utilities"]
-# Not published while the engine crates it wraps (opentide-schema,
-# opentide-workspace, opentide-compile, opentide-cli) are not
-# (crates/opentide-schema/Cargo.toml says when that changes). Until then
-# publishing/placeholders/crates/opentide holds the name on crates.io, and
-# `cargo package` leaves this crate out (ci.yml, engine-release.yml,
-# scripts/ci-local.sh), which scan its source instead.
-publish = false
+# Published by the release train (publish.yml, UC-5.5) with the engine crates it
+# wraps, at the product version: `cargo install opentide --features cli`.
+# crates.io's `opentide` 0.0.0 was the name's placeholder
+# (publishing/placeholders/crates/opentide).
 
 [lints]
 workspace = true
