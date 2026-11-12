@@ -1474,7 +1474,7 @@ jobs:
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
 
-      # Ctrl-C through the console script (opentide._native:main, UC-3.8b, #960): a
+      # Ctrl-C through the console script (opentide.cli.launch:main, UC-3.8b, #960): a
       # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is POSIX's.
       - name: Ctrl-C through the console script
         run: >-

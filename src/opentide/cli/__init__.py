@@ -98,7 +98,7 @@ def launch_environment() -> dict[str, str]:
 def main(argv: Sequence[str] | None = None) -> None:
     """The Python CLI: run *argv* (``sys.argv[1:]`` when ``None``) and exit.
 
-    The console script, ``opentide._native:main``, comes here for every run
+    The console script, :func:`opentide.cli.launch.main`, comes here for every run
     the Python implementation answers (:mod:`opentide.cli.launch`).
     """
     global _launch_environment

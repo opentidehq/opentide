@@ -33,18 +33,23 @@ from __future__ import annotations
 import os
 import stat
 import sys
-from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
+
+from opentide.cli.engine_defaults import ENGINE_ENV, PYTHON, RUST, default_engine
+
+#: ``typing.TYPE_CHECKING`` without importing typing, which the console
+#: script would pay for on every Rust run (UC-3.8b, #960); type checkers
+#: read it as True.
+TYPE_CHECKING = False
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
     from pathlib import Path
+    from typing import Any, NoReturn
 
     from typer import _click
 
     from opentide.analysis import CompareRun
     from opentide.cli.context import CliContext
-
-from opentide.cli.engine_defaults import ENGINE_ENV, PYTHON, RUST, default_engine
 
 COMPARE = "compare"
 #: The values ``OPENTIDE_ENGINE`` accepts.
@@ -61,7 +66,7 @@ REFUSAL_ENV = "OPENTIDE_ENGINE_REFUSAL"
 WORKSPACE_PLACEHOLDER = "<WS>"
 
 
-class RustCommand(NamedTuple):
+class RustCommand:
     """A command's Rust implementation: the command line that runs it.
 
     The command's arguments follow *launch*. It runs with ``OPENTIDE_ENGINE``
@@ -84,11 +89,37 @@ class RustCommand(NamedTuple):
     until UC-4.1, so a run with it is one with no Rust implementation.
     """
 
-    launch: tuple[str, ...]
-    rules: tuple[str, ...] = ()
-    side_effects: bool = False
-    requires: tuple[str, ...] = ()
-    refuses: tuple[str, ...] = ()
+    __slots__ = ("launch", "refuses", "requires", "rules", "side_effects")
+
+    def __init__(
+        self,
+        launch: tuple[str, ...],
+        rules: tuple[str, ...] = (),
+        side_effects: bool = False,
+        requires: tuple[str, ...] = (),
+        refuses: tuple[str, ...] = (),
+    ) -> None:
+        self.launch = launch
+        self.rules = rules
+        self.side_effects = side_effects
+        self.requires = requires
+        self.refuses = refuses
+
+    def _key(self) -> tuple[object, ...]:
+        return (self.launch, self.rules, self.side_effects, self.requires, self.refuses)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, RustCommand) and self._key() == other._key()
+
+    def __hash__(self) -> int:
+        return hash(self._key())
+
+    def __repr__(self) -> str:
+        return (
+            f"RustCommand(launch={self.launch!r}, rules={self.rules!r}, "
+            f"side_effects={self.side_effects!r}, requires={self.requires!r}, "
+            f"refuses={self.refuses!r})"
+        )
 
     def covers(self, args: Sequence[str]) -> bool:
         """Whether the Rust implementation runs the command with *args*."""
@@ -309,6 +340,14 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         os.environ[ENGINE_ENV] = PYTHON
         return
     if engine == RUST:
+        if rust.launch == RUST_CLI:
+            from opentide.analysis import EngineUnavailableError, engine
+
+            try:
+                engine()
+            except EngineUnavailableError as exc:
+                # The command line is compiled into the engine, which does not load.
+                _fail(cli_ctx, path, str(exc), code=exc.code, exit_code=1)
         raise SystemExit(_run_rust(rust, args))
     _compare(cli_ctx, path, args, rust)
 
@@ -427,11 +466,14 @@ def _environment(engine: str, base: Mapping[str, str] | None = None) -> dict[str
     return env
 
 
-class _Copy(NamedTuple):
+class _Copy:
     """One implementation's copy of the workspace."""
 
-    original: Path
-    root: Path
+    __slots__ = ("original", "root")
+
+    def __init__(self, original: Path, root: Path) -> None:
+        self.original = original
+        self.root = root
 
     def map_path(self, value: str) -> str:
         """*value* inside the copy when it is an absolute path inside the workspace."""
@@ -596,11 +638,14 @@ def _copy_workspace(workspace: Path, root: Path) -> _Copy:
     return copy
 
 
-class _Side(NamedTuple):
+class _Side:
     """What one implementation did, and the copy it did it in."""
 
-    run: CompareRun
-    copy: _Copy
+    __slots__ = ("copy", "run")
+
+    def __init__(self, run: CompareRun, copy: _Copy) -> None:
+        self.run = run
+        self.copy = copy
 
 
 def _run_side(

@@ -51,9 +51,10 @@ sources or compiled-in data change (`cache-keys` in `pyproject.toml`). `scripts/
 
 - UC-1.9 (#815): the Tide model's pyclasses and `.pyi` exposed through it.
 - UC-2.7 (#822): `validate`, `lint`, `info` and MCP read tools call Rust through it.
-- UC-3.8 (#830): the console script, `opentide = "opentide._native:main"` (UC-3.8b, #960): `main` hands
-  its arguments to `opentide.cli.launch`, which reads the command path with `command_words` and
-  runs a Rust command through `cli_main`.
+- UC-3.8 (#830): the console script, `opentide = "opentide.cli.launch:main"` (UC-3.8b, #960), loads
+  this module and calls `main`, which hands its arguments to `opentide.cli.launch.run`; that reads
+  the command path with `command_words` and runs a Rust command through `cli_main`. When this
+  module does not load, the console script runs the Python CLI alone.
 - UC-5.2 (#837) and UC-5.5 (#840): the Python SDK and the wheels.
 
 Lints, tests and the layer rule: [`crates/AGENTS.md`](../crates/AGENTS.md).

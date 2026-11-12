@@ -60,7 +60,7 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     rules unreviewed, generate exports navigator, generate
                     docs, deploy --dry-run), built --release; startup
                     (opentide --version) and explain through the launcher,
-                    opentide._native:main, with OPENTIDE_ENGINE=rust; every
+                    opentide.cli.launch:main, with OPENTIDE_ENGINE=rust; every
                     other command reports \"no Rust yet\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
@@ -658,7 +658,7 @@ enum Program {
 }
 
 /// The scenarios `--engine rust` measures through the console script,
-/// `opentide._native:main` (UC-3.8b, #960): the plan's startup budgets,
+/// `opentide.cli.launch:main` (UC-3.8b, #960): the plan's startup budgets,
 /// `opentide --version` in 20 ms and `explain` in 30 ms (section 11; #830),
 /// are what `pip install opentide` gives a person, launcher included.
 const LAUNCHER: &[&str] = &["startup", "explain"];
@@ -686,7 +686,7 @@ struct Programs<'a> {
     load: Option<&'a Path>,
     /// opentide-workspace's `validate` example (`rust`).
     validate: Option<&'a Path>,
-    /// The console script, `opentide._native:main` (`rust`, [`LAUNCHER`]).
+    /// The console script, `opentide.cli.launch:main` (`rust`, [`LAUNCHER`]).
     launcher: Option<&'a Path>,
 }
 
@@ -721,7 +721,7 @@ fn program(
     match (engine, scenario.kind) {
         (Engine::Python, Kind::Version) => Program::Missing(
             "not held to a budget for the oracle: startup measures the launcher, \
-             opentide._native:main (UC-3.8b), under --engine rust"
+             opentide.cli.launch:main (UC-3.8b), under --engine rust"
                 .into(),
         ),
         (Engine::Rust, _) if LAUNCHER.contains(&scenario.id) => match launcher {

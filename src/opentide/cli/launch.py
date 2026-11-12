@@ -1,9 +1,16 @@
 """The ``opentide`` console script and ``python -m opentide``: one process for every engine.
 
-Both are ``opentide._native:main`` (UC-3.8b, #960), which hands its
-arguments to :func:`main`. Before Typer, Rich or anything else heavy is
-imported, :func:`runs_on_rust` decides which implementation answers, as the
-root callback's dispatcher (:func:`opentide.cli.engines.dispatch`) would:
+Both are :func:`main` (UC-3.8b, #960). Unless the environment and the root
+options alone give the run to Python, it loads the engine,
+``opentide._native``, and hands its arguments to ``opentide._native.main``,
+which hands them back to :func:`run`. When the engine does not load (a
+damaged install, a platform whose wheel's module fails to load), the Python
+CLI answers every run, as it did before this launcher: the commands that need
+the engine fail with ``engine_unavailable``, and the others work.
+
+Before Typer, Rich or anything else heavy is imported, :func:`runs_on_rust`
+decides which implementation answers, as the root callback's dispatcher
+(:func:`opentide.cli.engines.dispatch`) would:
 
 - a run the dispatcher would give the Rust command line runs it here, in
   this process (:func:`opentide.cli.rust.run_in_process`), with the GIL
@@ -37,10 +44,46 @@ if TYPE_CHECKING:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run ``opentide`` with *argv* (``sys.argv[1:]`` when ``None``); the exit code.
+    """The console script: run ``opentide`` with *argv* (``sys.argv[1:]`` when ``None``).
 
-    A ``SystemExit`` the Python CLI raises with a message rather than a code
-    propagates, as it did from the old console script.
+    Through the engine (``opentide._native.main``, then :func:`run`) when the
+    run may be Rust's and the engine loads, else on the Python CLI alone; the
+    exit code. A run the environment and the root options alone give to
+    Python (the default engine, ``--version``, ``--help``) does not load the
+    engine first.
+    """
+    import importlib
+
+    args = list(sys.argv[1:] if argv is None else argv)
+    try:
+        maybe = _may_run_on_rust(args, os.environ)
+    except KeyboardInterrupt:
+        from opentide.cli.ui.crash import report_interrupt
+
+        return report_interrupt()
+    except Exception:
+        # Not a failure turned into success: the Python CLI answers the run.
+        maybe = False
+    if not maybe:
+        return run_python(argv)
+    try:
+        # Through the import system, not the package attribute, as
+        # opentide.analysis.engine does: a module that fails to load (or is
+        # hidden) is seen as such.
+        native = importlib.import_module("opentide._native")
+    except ImportError:
+        # The engine is missing or does not load: the Python CLI answers, and
+        # a command that needs the engine fails with engine_unavailable.
+        return run_python(argv)
+    return native.main(None if argv is None else list(argv))
+
+
+def run(argv: Sequence[str] | None = None) -> int:
+    """Run ``opentide`` with *argv* on Rust or Python, as the dispatcher would; the exit code.
+
+    ``opentide._native.main`` calls it. A ``SystemExit`` the Python CLI raises
+    with a message rather than a code propagates, as it did from the old
+    console script.
     """
     args = list(sys.argv[1:] if argv is None else argv)
     try:
@@ -60,6 +103,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # As the root callback's dispatcher starts the Rust command line: with
         # this environment, the engine named (a default of rust included).
         return run_in_process(args, {**os.environ, ENGINE_ENV: RUST})
+    return run_python(argv)
+
+
+def run_python(argv: Sequence[str] | None = None) -> int:
+    """Run ``opentide`` with *argv* on the Python CLI (:func:`opentide.cli.main`); the exit code."""
     from opentide.cli import main as python_main
 
     try:
@@ -82,6 +130,29 @@ def runs_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
     option it does not know, completion, a ``--repo`` that is not a folder)
     or instead of it (``compare``, a refusal) does not.
     """
+    if not _may_run_on_rust(args, env):
+        return False
+    from opentide._native import command_words
+    from opentide.cli.engine_defaults import RUST
+    from opentide.cli.engines import RUST_CLI, RUST_COMMANDS, selected
+
+    options = args[: args.index("--")] if "--" in args else args
+    words = tuple(command_words(list(args)))
+    if not words or selected(words, env) != RUST:
+        return False
+    rust = RUST_COMMANDS.get(words)
+    if rust is None or rust.launch != RUST_CLI or not rust.covers(args):
+        return False
+    # setup is the one command that may name a folder it is about to create.
+    return words[:1] == ("setup",) or _repo_is_a_folder(options)
+
+
+def _may_run_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
+    """What :func:`runs_on_rust` reads from the environment and the root options alone.
+
+    False: Python answers, whatever the command. It needs neither the engine
+    nor the command tree.
+    """
     from opentide.cli.engine_defaults import DEFAULT_ENGINES, ENGINE_ENV, RUST
 
     written = env.get(ENGINE_ENV, "").strip()
@@ -92,19 +163,7 @@ def runs_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
         # Click's shell completion.
         return False
     options = args[: args.index("--")] if "--" in args else args
-    if "--help" in options or not _plain_root_options(options):
-        return False
-    from opentide._native import command_words
-    from opentide.cli.engines import RUST_CLI, RUST_COMMANDS, selected
-
-    words = tuple(command_words(list(args)))
-    if not words or selected(words, env) != RUST:
-        return False
-    rust = RUST_COMMANDS.get(words)
-    if rust is None or rust.launch != RUST_CLI or not rust.covers(args):
-        return False
-    # setup is the one command that may name a folder it is about to create.
-    return words[:1] == ("setup",) or _repo_is_a_folder(options)
+    return "--help" not in options and _plain_root_options(options)
 
 
 def _plain_root_options(options: Sequence[str]) -> bool:

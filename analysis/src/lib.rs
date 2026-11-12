@@ -282,14 +282,16 @@ fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
     })
 }
 
-/// `opentide`'s console script and `python -m opentide` (UC-3.8b, #960):
-/// runs `opentide` with *argv* (`sys.argv[1:]` when `None`) in this process,
-/// on Rust or on Python as `opentide.cli.launch` decides; the exit code.
+/// What `opentide`'s console script and `python -m opentide`
+/// (`opentide.cli.launch.main`) call once the engine has loaded (UC-3.8b,
+/// #960): runs `opentide` with *argv* (`sys.argv[1:]` when `None`) in this
+/// process, on Rust or on Python as `opentide.cli.launch.run` decides; the
+/// exit code.
 #[pyfunction]
 #[pyo3(name = "main", signature = (argv=None))]
 fn launch_main(py: Python<'_>, argv: Option<Vec<String>>) -> PyResult<i32> {
     py.import("opentide.cli.launch")?
-        .call_method1("main", (argv,))?
+        .call_method1("run", (argv,))?
         .extract()
 }
 

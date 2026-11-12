@@ -1,4 +1,4 @@
-"""Ctrl-C and SIGTERM through the console script, ``opentide._native:main`` (UC-3.8b, #960).
+"""Ctrl-C and SIGTERM through the console script (UC-3.8b, #960).
 
 Under ``OPENTIDE_ENGINE=rust`` the console script runs the Rust command line in
 its own process. The Python launcher it replaced started a child for each Rust

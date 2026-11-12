@@ -1,4 +1,4 @@
-"""``opentide._native:main``: the console script decides what runs before Typer (UC-3.8b, #960)."""
+"""``opentide.cli.launch:main``: the console script decides what runs before Typer (#960)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,22 @@ from opentide.cli.lazy import command_words as python_command_words
 from opentide.cli.root import app
 
 RUST = {"OPENTIDE_ENGINE": "rust"}
+
+
+@pytest.fixture(autouse=True)
+def _keep_the_process_as_it_was(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """A run in this process records its launch environment and exports the workspace.
+
+    Both outlive the test (``opentide serve`` starts each run from the launch
+    environment): put them back.
+    """
+    import opentide.cli as cli_package
+
+    monkeypatch.setattr(cli_package, "_launch_environment", None)
+    saved = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(saved)
 
 
 @pytest.mark.parametrize(
@@ -195,7 +212,7 @@ def _timeless(run: subprocess.CompletedProcess[bytes]) -> tuple[bytes, bytes]:
 def test_the_console_script_answers_as_the_typer_entry_point(
     tmp_path: Path, engine: str | None, argv: list[str]
 ) -> None:
-    """``opentide._native:main`` prints and exits as ``opentide.cli:main``, the old script.
+    """The console script prints and exits as ``opentide.cli:main``, the old script.
 
     Wall time (``duration_ms``) is the one thing two runs may not share.
     """
@@ -303,3 +320,43 @@ def test_the_engine_runs_in_the_environment_it_is_given_and_puts_this_one_back(
     assert code == 3
     assert seen == {"engine": "rust", "kept": None, "added": "1"}
     assert dict(os.environ) == before
+
+
+def test_without_the_engine_the_python_cli_answers(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The console script falls back to the Python CLI when ``_native`` does not import."""
+    from opentide.analysis import engine
+
+    engine.cache_clear()
+    monkeypatch.setitem(sys.modules, "opentide._native", None)
+    monkeypatch.setattr(
+        launch, "run", lambda argv=None: pytest.fail("the engine's path ran without the engine")
+    )
+    monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    try:
+        assert launch.main(["--json", "explain", "vocab_unknown"]) == 1
+    finally:
+        engine.cache_clear()
+    assert json.loads(capsys.readouterr().out)["failure"]["code"] == "engine_unavailable"
+
+
+def test_a_run_python_answers_alone_does_not_load_the_engine(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setitem(sys.modules, "opentide._native", None)
+    for env in ({}, RUST):
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        assert launch.main(["--version"]) == 0
+        assert capsys.readouterr().out == f"opentide {__version__}\n"
+
+
+def test_with_the_engine_the_console_script_goes_through_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[list[str] | None] = []
+    monkeypatch.setattr("opentide._native.main", lambda argv=None: seen.append(argv) or 7)
+    monkeypatch.setenv("OPENTIDE_ENGINE", "rust")
+    assert launch.main(["info"]) == 7
+    assert seen == [["info"]]

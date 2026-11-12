@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING
+
+#: ``typing.TYPE_CHECKING`` without importing typing, which every Rust run
+#: would pay for (UC-3.8b, #960); type checkers read it as True.
+TYPE_CHECKING = False
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
