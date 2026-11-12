@@ -348,7 +348,9 @@ fn emit(node: &Arc<Node>, source: &str, offsets: &ByteOffsets, found: &mut Vec<S
         Value::Map(_) => {}
         value => {
             let start = offsets.byte(node.start.index);
-            let end = offsets.byte(node.end.index).max(start);
+            // A quoted value ends at its closing quote: the parser's end
+            // runs on over a comment after it, which the rewrite would drop.
+            let end = node::scalar_end(source, start, offsets.byte(node.end.index).max(start));
             let text = source.get(start..end).unwrap_or_default();
             // A string is its value; another scalar (`null`, `12`, an empty
             // value) is the text it is written as.
@@ -686,6 +688,41 @@ platforms:
         );
         // The Sentinel block's `entities` is not the field.
         assert!(updated.contains("    entities: Process\n"));
+        assert_eq!(verify(&document, &updated, &plan), None);
+    }
+
+    #[test]
+    fn a_comment_after_a_quoted_value_stays() {
+        // The parser's end mark for a quoted scalar runs on over a comment
+        // that follows it on the line; the span stops at the closing quote.
+        let text = "\
+objective:
+  signals:
+    - entities:
+        - 'host::process'  # single
+        - \"Process\" # double
+        - 'it''s'   # escaped quote
+        - \"a \\\" b\"  # escaped double
+";
+        let document = node::load(text).unwrap();
+        let found = scalars(&document, SCOPED_FIELDS[0].path);
+        let spans: Vec<&str> = found.iter().map(|s| &text[s.start..s.end]).collect();
+        assert_eq!(
+            spans,
+            ["'host::process'", "\"Process\"", "'it''s'", "\"a \\\" b\""]
+        );
+        let mapping = BTreeMap::from([
+            ("host::process".to_owned(), "Host::Process".to_owned()),
+            ("Process".to_owned(), "Host::Process".to_owned()),
+        ]);
+        let plan = plan_of(&mapping);
+        let (updated, changes) = rewrite(&document, &plan);
+        assert_eq!(changes, 2);
+        assert_eq!(
+            updated,
+            text.replace("'host::process'  #", "'Host::Process'  #")
+                .replace("\"Process\" #", "\"Host::Process\" #")
+        );
         assert_eq!(verify(&document, &updated, &plan), None);
     }
 
