@@ -61,6 +61,7 @@ const SAMPLES: Record<string, string> = {
   lucene: "event.category:process AND process.name:/power.*/",
   falco: "spawned_process and container and proc.name in (shell_binaries)",
   cql: "#event_simpleName=ProcessRollup2 | groupBy([aid, ComputerName], function=count())",
+  exabeam: 'activity_type:"process-create" AND process_name:("powershell.exe", "pwsh.exe")',
   yara: 'import "pe"\nrule r : t {\n  strings:\n    $a = "mutex-7731" wide\n  condition:\n    $a and pe.is_dll() and uint16(0) == 0x5A4D\n}\n',
   "opentide-yaml": TIDE_RULE,
 };
@@ -98,7 +99,7 @@ async function using<T>(client: OpentideClient, body: (c: OpentideClient) => Pro
 
 test("document selector covers every language", () => {
   const ids = LANGUAGES.map((l) => l.id);
-  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "opentide-config"]);
+  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "exabeam", "opentide-config"]);
   for (const selector of [DOCUMENT_SELECTOR, WEB_DOCUMENT_SELECTOR]) {
     for (const id of ids) {
       assert.ok(selector.some((s) => "language" in s && s.language === id), id);

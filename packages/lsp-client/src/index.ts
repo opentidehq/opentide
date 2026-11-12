@@ -41,6 +41,9 @@ export interface OpentideLanguage {
  * Cassandra scripts, leave out the `.cql` file pattern and match `cql` by
  * language id alone.
  *
+ * `exabeam` is the Exabeam Query Language (New-Scale SIEM), which Exabeam's
+ * guides call "EQL"; `eql` stays Elastic's. A `.exabeam` file is a search.
+ *
  * `opentide-config` is configuration TOML (`.opentide/configurations/`). The
  * host that runs the server checks it (`opentide lsp start`); `opentide-lsp`
  * on its own reports nothing for it, so `analyze` and `highlight` refuse it.
@@ -57,6 +60,7 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "falco", name: "Falco", patterns: ["**/*.falco"] },
   { id: "cql", name: "CrowdStrike Query Language", patterns: ["**/*.cql"] },
   { id: "yara", name: "YARA", patterns: ["**/*.yar", "**/*.yara"] },
+  { id: "exabeam", name: "Exabeam Query Language", patterns: ["**/*.exabeam"] },
   { id: "opentide-config", name: "opentide configuration", patterns: ["**/.opentide/configurations/**/*.toml"] },
 ];
 

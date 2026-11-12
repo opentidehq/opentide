@@ -159,6 +159,16 @@ fn falco_golden() {
 }
 
 #[test]
+fn exabeam_golden() {
+    exact_golden(
+        "exabeam",
+        "hunt",
+        LanguageId::Exabeam,
+        "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND NOT src_ip:[10.0.0.0/8] ]\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host ORDER-BY connections DESC LIMIT 10",
+    );
+}
+
+#[test]
 fn cql_golden() {
     exact_golden(
         "cql",

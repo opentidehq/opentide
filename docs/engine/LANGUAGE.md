@@ -1,6 +1,6 @@
 # Languages
 
-SQL is out of scope. There is no `opentide-sql`.
+SQL is out of scope. There is no `opentide-sql`. (Exabeam's SQL-like advanced operators are part of the specified `exabeam` language, not a SQL dialect: see [Exabeam](#exabeam).)
 
 ## KQL
 
@@ -364,6 +364,39 @@ Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike'
 | cql.link-constraint | `link_constraint` | `link_constraint__valid`, `link_constraint__invalid` | `property`, `operator` |
 | cql.line-comment | `line_comment` | `line_comment__valid`, `line_comment__invalid` | `comment` |
 | cql.block-comment | `block_comment` | `block_comment__valid`, `block_comment__invalid` | `comment` |
+
+
+## Exabeam
+
+Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-Scale SIEM ([exabeam-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md)): `configurations.exabeam.sequences[].query` (profile `rule`), hunts with `system: exabeam` and `.exabeam` files (profile `search`). Exabeam's guides call it "EQL"; the id is never `eql`, which is Elastic's. `docs/EXABEAM.md` has the profiles, the codes and the conformance results.
+
+- **Verdicts** come from `crates/opentide-exabeam/src/check.rs`, a port of the specification's reference checker, which agrees with it on every conformance query and on Exabeam's 2,371 published rules but for three RE2 differences (`docs/EXABEAM.md`).
+- **The tree-sitter grammar** (`grammars/tree-sitter-opentide-exabeam`) colours and structures the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query but one, listed in `tests/reference.rs`.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| exabeam.statement | `statement` | `statement__valid`, `statement__invalid` | by clause |
+| exabeam.foreach | `foreach_statement` | `foreach_statement__valid`, `foreach_statement__invalid` | `keyword`, `property` |
+| exabeam.select | `select_clause` | `select_clause__valid`, `select_clause__invalid` | `keyword` |
+| exabeam.column | `column` | `column__valid`, `column__invalid` | `property`, `operator` (`*`), `variable` (alias) |
+| exabeam.aggregate | `aggregate` | `aggregate__valid`, `aggregate__invalid` | `function.builtin`, `error` (unknown) |
+| exabeam.from | `from_clause` | `from_clause__valid`, `from_clause__invalid` | `keyword`, `type` |
+| exabeam.where | `where_clause` | `where_clause__valid`, `where_clause__invalid` | `keyword` |
+| exabeam.as | `as_clause` | `as_clause__valid`, `as_clause__invalid` | `keyword`, `type` |
+| exabeam.group-by | `group_by_clause` | `group_by_clause__valid`, `group_by_clause__invalid` | `keyword`, `property` |
+| exabeam.order-by | `order_by_clause` | `order_by_clause__valid`, `order_by_clause__invalid` | `keyword`, `property` |
+| exabeam.limit | `limit_clause` | `limit_clause__valid`, `limit_clause__invalid` | `keyword`, `number` |
+| exabeam.or | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| exabeam.and | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| exabeam.not | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| exabeam.group | `group` | `group__valid`, `group__invalid` | `punctuation.bracket` |
+| exabeam.field-term | `field_term` | `field_term__valid`, `field_term__invalid` | `property`, `operator`, by value; `error` (`!=`) |
+| exabeam.context-term | `context_term` | `context_term__valid`, `context_term__invalid` | `property`, `keyword`, `type`, `punctuation.delimiter` |
+| exabeam.call | `call` | `call__valid`, `call__invalid` | `function.builtin`, `error` (unknown, non-string argument) |
+| exabeam.free-text | `free_text` | `free_text__valid`, `free_text__invalid` | `string`, `error` (bare `*`) |
+| exabeam.list | `list` | `list__valid`, `list__invalid` | `punctuation.bracket`, by value |
+| exabeam.range | `range` | `range__valid`, `range__invalid` | `keyword` (`TO`), `number`, `constant` |
+| exabeam.pipe | `"\|"` | `foreach_statement__valid` | `operator.pipe` |
 
 ## YARA
 

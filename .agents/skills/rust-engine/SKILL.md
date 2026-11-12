@@ -27,6 +27,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-lucene` | no | `Diagnostic` | Lucene `query_string` checks |
 | `opentide-falco` | no | `Diagnostic` | Falco conditions: fields per event source, default macros and lists, events (`OnceLock`), output templates |
 | `opentide-cql` | no | `Diagnostic` | CrowdStrike Query Language: function signatures, Falcon events, LogScale/Falcon/CPS fields (`OnceLock`), Next-Gen SIEM correlation checks |
+| `opentide-exabeam` | no | `Diagnostic` | Exabeam Query Language: the verdict parser (a port of the spec's reference checker), RE2 checks over `regex-syntax`, CIM fields (`OnceLock`) |
 | `opentide-yara` | no | `Diagnostic` | YARA signatures (yara-1.0): `yara-x-parser` is the verdict parser, `yara-x-fmt` formats `.yar` files |
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
@@ -53,6 +54,7 @@ Pinned stack (do not bump in passing):
 | `anyhow` 1 | 1.0.104 | `opentide-lsp` binary only |
 | `clap` 4 | derive | `opentide-lsp` CLI only |
 | `regex` 1 | lockfile | compile once |
+| `regex-syntax` 0.8 | lockfile (`regex`'s own parser) | `opentide-exabeam` only: RE2 syntax checks of Exabeam patterns, parsed, never compiled |
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
 | `yara-x-parser`, `yara-x-fmt` | `=1.23.0` | `opentide-yara` only. Never the `yara-x` compiler crate (wasmtime, no WASI): it is an oracle (`scripts/oracles`) |
@@ -61,7 +63,7 @@ Pinned stack (do not bump in passing):
 
 ## Types agents get wrong
 
-`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
+`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `exabeam`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. `exabeam` is the Exabeam Query Language, which Exabeam calls EQL; `eql` stays Elastic's. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
 
 Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
 

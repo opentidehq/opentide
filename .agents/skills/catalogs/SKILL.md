@@ -118,6 +118,15 @@ A difference from either engine is a `[[yara]]` entry of `testdata/oracles/excep
 
 `scripts/sync_bitdefender_criteria.py --cache <dir>` regenerates it from Bitdefender's "Detection and exclusion criteria for Basic rules" page (`--offline` reads only the cached page; `--check` compares and makes no request); never hand-edit. The page is all rights reserved: facts only, no sentence copied (`catalogs/bitdefender/NOTICE`). Every note in the page's table must match a pattern in the script or be listed in `IGNORED_NOTES` with its reason, so a page change fails the run until someone reads it. `closed` marks the four targets whose field list bitdefender-1.0 states (process, file, connection, registry): an unknown field there is `bitdefender_criterion_field` as an error, on another target a warning. `crates/opentide-tide/tests/bitdefender_spec.rs` holds the catalogue to the spec's EDR and enum tables (`testdata/conformance/bitdefender/spec-tables.md`, pasted verbatim) and the spec's fixtures; when the spec changes, paste its new sections there. The checks themselves are `crates/opentide-tide/src/bitdefender.rs`.
 
+## Exabeam catalogue
+
+| Path | Contents |
+| --- | --- |
+| `catalogs/exabeam/fields.toml` | the 1,130 fields of Exabeam's Common Information Model with type and description, the platform fields the CIM table omits (`platform = true`), and the prefixes never reported (`c_`, `m_`) |
+| `catalogs/exabeam/values.toml` | the CIM's subjects, activity types (`<subject>-<activity>`, with their outcomes) and outcomes |
+
+`scripts/sync_exabeam_catalog.py --source <ExabeamLabs/CIMLibrary checkout>` regenerates them from the pinned commit (`--check` compares); never hand-edit. Apache-2.0 (`catalogs/exabeam/NOTICE`). Nothing is a closed list: an unknown field is `exabeam_unknown_field` and a number on a string field `exabeam_string_field_number`, both warnings (exabeam-1.0). The reference checker's verdicts on the conformance queries and block cases are recorded by `scripts/sync_exabeam_conformance.py --specifications <checkout>` (`testdata/conformance/exabeam/reference.json`, `--check` compares); never hand-edit it. Exabeam's published rules may not be redistributed: measure them with `crates/opentide-exabeam/tests/content_hub.rs`, never vendor them.
+
 ## Tide objects
 
 `scripts/sync_opentide_schemas.py` runs opentide's own generator (`python -m opentide.generation.lsp_catalog`) and writes `catalogs/tide/generated/`, the reference schemas and the highlights key list; it needs an opentide that ships the generator (`uv run --project ../opentide python scripts/sync_opentide_schemas.py` from a checkout). Rows are keyed by schema id; lookups resolve an object's `metadata.schema`, a bare family or unknown revision taking the newest, and a family-keyed catalog (an older workspace one) applying to every revision. Required fields, closed objects and legacy keys come from the catalog: never hard-code a revision check in Rust. `scripts/requirements-opentide.txt` pins the opentide release `pydantic_object_issues.py` uses as its oracle. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
@@ -138,6 +147,7 @@ Injection, from `language_for_field_path`:
 | `response.procedure.searches[].query` with `system:` a platform identifier above | that platform's language and profile, in any key order (`hunt_query_language`) |
 | `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |
 | `configurations.crowdstrike.query`, hunts with `system: crowdstrike` | CQL (Next-Gen SIEM correlation checks on the rule block) |
+| `configurations.exabeam.sequences[].query`, hunts with `system: exabeam` | Exabeam Query Language, profile `rule` for a sequence and `search` for a hunt; the block's constraint codes are `crates/opentide-tide/src/exabeam.rs` |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
 Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), not from line prefixes, and carry their real path and their platform. The analysed text is the scalar's value (folded, unquoted, escapes decoded, block indent stripped). Tokens are remapped onto the original YAML coordinates through the byte map. Do not highlight the dedented buffer's offsets. `scripts/oracles/oracle.py` extracts the same paths with PyYAML, and `crates/opentide-tide/tests/query_extraction.rs` holds every `testdata/` object to it.
