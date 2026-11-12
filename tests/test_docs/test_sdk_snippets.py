@@ -7,7 +7,9 @@ noticed: the golden runner reads shell fences only, never Python ones.
 
 The pages of the SDK's ``Workspace`` (UC-5.2, #837: ``RUN_PAGES``) run whole,
 every statement of every fence in order, from a copy of the tide corpus: nothing
-they do leaves it or reaches a vendor API. On the other pages, which document
+they do leaves it or reaches a vendor API. Their tenant operations (UC-5.2b) reach
+the tenant the Workspace page's TOML fence configures, which the run points at the
+SentinelOne stand-in of ``tests/cassettes/`` on loopback. On the other pages, which document
 the deprecated registry and the platform plugins, only statements without side
 effects run — imports, and expressions or name assignments that contain no
 call — so every attribute path a page prints is resolved without deploying,
@@ -21,6 +23,7 @@ from __future__ import annotations
 import ast
 import inspect
 import io
+import os
 import re
 import tokenize
 from collections.abc import Iterator
@@ -31,6 +34,7 @@ from typing import Any
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS
 from tests.docs_commands import DOCS, ROOT, _iter_fenced
+from tests.stand_in_support import S1_TOKEN, sentinel_one
 
 SDK_PAGES = sorted((DOCS / "sdk").glob("*.md"))
 #: The pages whose Python fences run whole, calls included.
@@ -191,7 +195,34 @@ def sdk_namespace(tide_corpus_repo: Path) -> Iterator[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
+def _toml_fence(page: Path) -> str:
+    """The lines of *page*'s ``toml`` fences, in order."""
+    text = page.read_text(encoding="utf-8")
+    toml = [raw for language, _, raw in _iter_fenced(text) if language == "toml"]
+    assert toml, f"{page.name} has no toml fence"
+    return "\n".join(toml) + "\n"
+
+
+@pytest.fixture
+def stand_in_tenant(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The tenant the Workspace page configures, as its TOML fence writes it, on the
+    SentinelOne stand-in; no proxy of the process applies."""
+    config = tide_corpus_repo / ".opentide" / "configurations" / "platforms" / "sentinel_one.toml"
+    page = DOCS / "sdk" / "workspace.md"
+    config.write_text(
+        config.read_text(encoding="utf-8") + "\n" + _toml_fence(page), encoding="utf-8"
+    )
+    for name in list(os.environ):
+        if name.lower().endswith("_proxy"):
+            monkeypatch.delenv(name)
+    with sentinel_one() as url:
+        monkeypatch.setenv("S1_URL", url)
+        monkeypatch.setenv("S1_API_TOKEN", S1_TOKEN)
+        yield
+
+
 @pytest.mark.parametrize("page", sorted(RUN_PAGES))
+@pytest.mark.usefixtures("stand_in_tenant")
 def test_the_workspace_pages_run_whole(
     page: str, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

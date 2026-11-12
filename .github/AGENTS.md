@@ -187,14 +187,14 @@ removed from the rule too, or every pull request that does not run it waits for 
   request (`tests/test_ci/test_supply_chain.py`).
 - [`schema.yml`](workflows/schema.yml), on every push to `main`, `development` and
   `integration/unified-core`, nightly, on demand, and on a pull request that changes
-  `crates/opentide-schema*`, `crates/opentide-core`, `src/opentide/_native/`,
+  `crates/opentide-schema*`, `crates/opentide-core`, `src/opentide/_native/`, `bindings/python/`,
   `xtask/src/stubs.rs`, the Cargo manifests, lock or toolchain, `.cargo/` or schema.yml:
   `opentide-schema` (UC-1.1)
   built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
   (feature `wasm`), clippy on the last two (ci.yml's engine jobs build no features), and its tests
   with the Python class on CPython 3.10, the abi3 floor; clippy with feature `stubs`, and
   `cargo xtask stubs --check`, which fails when the generated `src/opentide/_native/models.pyi`
-  differs from the extension (UC-1.9). Written before ci.yml became one workflow; not a required
+  or `src/opentide/_native/sdk.pyi` differs from the extension (UC-1.9, UC-5.2b). Written before ci.yml became one workflow; not a required
   check.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`) on every push to
