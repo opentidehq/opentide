@@ -13,7 +13,7 @@ text can be put back on its key in the YAML (:meth:`AssembledRule.locate`).
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -22,7 +22,7 @@ import structlog
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.platform import GoogleSecopsConfig
 from opentide.models.rule import DetectionRule
-from opentide.platforms.google_secops.checks import RUN_FREQUENCIES, duration_seconds
+from opentide.platforms.google_secops.checks import duration_seconds
 from opentide.platforms.google_secops.yaral import (
     SECTION_KEYS,
     render_match,
@@ -235,11 +235,6 @@ def assemble(rule: DetectionRule, block: GoogleSecopsConfig | None = None) -> As
 # --- run state ---------------------------------------------------------------------
 
 
-def preferred_frequency(allowed: Sequence[str]) -> str | None:
-    """The first of ``LIVE``, ``LIVE_CUSTOMIZABLE``, ``HOURLY_CUSTOMIZABLE``, ``DAILY`` allowed."""
-    return next((item for item in RUN_FREQUENCIES if item in allowed), None)
-
-
 def schedule_customizations(block: GoogleSecopsConfig) -> dict[str, Any] | None:
     """``scheduleCustomizations`` for the block's ``schedule``, or ``None``."""
     schedule = block.schedule
@@ -255,6 +250,21 @@ def schedule_customizations(block: GoogleSecopsConfig) -> dict[str, Any] | None:
     return custom
 
 
+def _settled_schedule(custom: object) -> tuple[bool, float]:
+    """A ``scheduleCustomizations`` as Google stores it: an absent boolean is ``false``, an
+    absent or zero adjustment ``0``, and a ``Duration`` in seconds (``"1800.000s"`` is 1800)."""
+    from opentide.platforms.google_secops.client import duration_seconds as protobuf_seconds
+
+    if not isinstance(custom, Mapping):
+        return False, 0.0
+    seconds = protobuf_seconds(custom.get("lateArrivingDataAdjustment"))
+    return bool(custom.get("ensureEnrichmentCompleteness", False)), seconds or 0.0
+
+
+#: ``RuleDeployment`` fields deploy sets, in ``updateMask`` order.
+_RUN_STATE_FIELDS = ("enabled", "alerting", "runFrequency")
+
+
 @dataclass(frozen=True)
 class RunState:
     """A ``RuleDeployment`` update: its ``updateMask`` and body."""
@@ -262,34 +272,47 @@ class RunState:
     mask: str
     body: Mapping[str, Any]
 
+    def changes(self, remote: Mapping[str, Any]) -> RunState | None:
+        """The part of this update *remote* (a ``RuleDeployment``) does not hold yet, or ``None``.
+
+        Google leaves a false boolean out of its answer. ``runFrequency`` carries
+        ``scheduleCustomizations``: the schedule is compared as Google stores it,
+        and a block with no ``schedule`` wants none, so one left on the remote
+        rule is cleared by sending ``runFrequency`` alone.
+        """
+        changed: list[str] = []
+        for key in _RUN_STATE_FIELDS:
+            if key not in self.body:
+                continue
+            value = self.body[key]
+            if key == "runFrequency":
+                wanted = _settled_schedule(self.body.get("scheduleCustomizations"))
+                current = _settled_schedule(remote.get("scheduleCustomizations"))
+                if remote.get(key) != value or wanted != current:
+                    changed.append(key)
+            elif bool(remote.get(key, False)) != value:
+                changed.append(key)
+        if not changed:
+            return None
+        body = {key: self.body[key] for key in changed}
+        if "runFrequency" in changed and "scheduleCustomizations" in self.body:
+            body["scheduleCustomizations"] = self.body["scheduleCustomizations"]
+        return RunState(",".join(changed), body)
+
     def differs_from(self, remote: Mapping[str, Any]) -> bool:
-        """Whether *remote* (a ``RuleDeployment``) holds another value for a field sent."""
-        for key, value in self.body.items():
-            if key == "scheduleCustomizations":
-                current = remote.get(key) or {}
-                if not isinstance(current, Mapping) or any(
-                    current.get(name) != item for name, item in value.items()
-                ):
-                    return True
-            elif isinstance(value, bool):
-                # Google leaves a false boolean out of the answer.
-                if bool(remote.get(key, False)) != value:
-                    return True
-            elif remote.get(key) != value:
-                return True
-        return False
+        """Whether *remote* holds another value for a field this update sends."""
+        return self.changes(remote) is not None
 
 
 DISABLED = RunState("enabled,alerting", {"enabled": False, "alerting": False})
 
 
-def run_state(
-    block: GoogleSecopsConfig, strategy: StatusStrategy, frequency: str | None
-) -> RunState:
+def run_state(block: GoogleSecopsConfig, strategy: StatusStrategy) -> RunState:
     """The deployment update for *strategy* (google-secops-1.0, Run state by strategy).
 
-    *frequency* is the run frequency to send: the block's, or the first one
-    Google allows; ``None`` sends none.
+    ``runFrequency`` is sent only when the block names one: without it Google
+    keeps the rule's frequency, or gives a new rule its default, and never moves
+    a legacy schedule, which Google cannot move back.
     """
     if strategy in (StatusStrategy.DISABLEMENT, StatusStrategy.DELETION):
         return DISABLED
@@ -297,9 +320,9 @@ def run_state(
         block.alerting if block.alerting is not None else strategy is not StatusStrategy.PREVIEW
     )
     body: dict[str, Any] = {"enabled": True, "alerting": alerting}
-    if frequency is None:
+    if block.run_frequency is None:
         return RunState("enabled,alerting", body)
-    body["runFrequency"] = frequency
+    body["runFrequency"] = block.run_frequency
     custom = schedule_customizations(block)
     if custom is not None:
         body["scheduleCustomizations"] = custom

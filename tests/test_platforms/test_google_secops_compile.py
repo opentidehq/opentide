@@ -21,7 +21,6 @@ from opentide.platforms.google_secops.compile import (
     assemble,
     meta_entries,
     meta_value,
-    preferred_frequency,
     rule_name,
     run_state,
     severity,
@@ -32,7 +31,6 @@ RULES = {
     "rule-google-secops-process-1.0": StatusStrategy.PREVIEW,
     "rule-google-secops-spray-1.0": StatusStrategy.RELEASE,
 }
-ALL = ["LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY"]
 
 
 def load_fixture_rule(stem: str, **block: Any) -> DetectionRule:
@@ -64,12 +62,11 @@ def test_the_run_state_is_the_golden(stem: str, strategy: StatusStrategy) -> Non
     rule = load_fixture_rule(stem)
     block = rule.platform_configs().google_secops
     assert block is not None
-    frequency = block.run_frequency or preferred_frequency(ALL)
-    state = run_state(block, strategy, frequency)
+    state = run_state(block, strategy)
     golden = _golden(f"{stem}.deployment.api.json")
     assert {"updateMask": state.mask} == golden["query"]
     assert dict(state.body) == golden["body"]
-    disabled = run_state(block, StatusStrategy.DISABLEMENT, frequency)
+    disabled = run_state(block, StatusStrategy.DISABLEMENT)
     assert {"updateMask": disabled.mask} == _golden(f"{stem}.disable.api.json")["query"]
     assert dict(disabled.body) == _golden(f"{stem}.disable.api.json")["body"]
 
@@ -174,18 +171,16 @@ def test_tumbling_window_renders_by() -> None:
     assert "    $h by 1h\n" in assemble(rule).text
 
 
-def test_alerting_and_a_missing_frequency() -> None:
-    _, block = _rule_and_block("rule-google-secops-process-1.0", alerting=True)
-    state = run_state(block, StatusStrategy.PREVIEW, None)
+def test_alerting_and_no_frequency_unless_the_block_names_one() -> None:
+    _, block = _rule_and_block("rule-google-secops-process-1.0", alerting=True, run_frequency=None)
+    state = run_state(block, StatusStrategy.PREVIEW)
     assert state.mask == "enabled,alerting"
     assert dict(state.body) == {"enabled": True, "alerting": True}
-    assert preferred_frequency(["DAILY", "HOURLY_CUSTOMIZABLE"]) == "HOURLY_CUSTOMIZABLE"
-    assert preferred_frequency([]) is None
 
 
 def test_the_run_state_compares_with_the_remote() -> None:
     _, block = _rule_and_block("rule-google-secops-spray-1.0")
-    state = run_state(block, StatusStrategy.RELEASE, "LIVE_CUSTOMIZABLE")
+    state = run_state(block, StatusStrategy.RELEASE)
     same = {
         "enabled": True,
         "alerting": True,
@@ -198,6 +193,40 @@ def test_the_run_state_compares_with_the_remote() -> None:
     assert not state.differs_from(same)
     assert state.differs_from({**same, "alerting": False})
     assert state.differs_from({**same, "scheduleCustomizations": {}})
-    disabled = run_state(block, StatusStrategy.DISABLEMENT, None)
+    disabled = run_state(block, StatusStrategy.DISABLEMENT)
     # Google leaves false booleans out of its answer.
     assert not disabled.differs_from({})
+    # A Duration in another spelling is the same number of seconds.
+    stored = {"lateArrivingDataAdjustment": "1800.000s", "ensureEnrichmentCompleteness": True}
+    assert not state.differs_from({**same, "scheduleCustomizations": stored})
+    changes = state.changes({**same, "enabled": False})
+    assert changes is not None
+    assert (changes.mask, dict(changes.body)) == ("enabled", {"enabled": True})
+
+
+def test_a_false_schedule_boolean_settles_against_an_absent_one() -> None:
+    _, block = _rule_and_block(
+        "rule-google-secops-spray-1.0",
+        schedule={"ensure_enrichment_completeness": False},
+    )
+    state = run_state(block, StatusStrategy.RELEASE)
+    remote = {"enabled": True, "alerting": True, "runFrequency": "LIVE_CUSTOMIZABLE"}
+    assert not state.differs_from(remote)
+    assert not state.differs_from({**remote, "scheduleCustomizations": {}})
+
+
+def test_a_removed_schedule_wants_the_remote_one_cleared() -> None:
+    _, block = _rule_and_block("rule-google-secops-spray-1.0", schedule=None)
+    state = run_state(block, StatusStrategy.RELEASE)
+    remote = {
+        "enabled": True,
+        "alerting": True,
+        "runFrequency": "LIVE_CUSTOMIZABLE",
+        "scheduleCustomizations": {"ensureEnrichmentCompleteness": True},
+    }
+    changes = state.changes(remote)
+    assert changes is not None
+    assert (changes.mask, dict(changes.body)) == (
+        "runFrequency",
+        {"runFrequency": "LIVE_CUSTOMIZABLE"},
+    )

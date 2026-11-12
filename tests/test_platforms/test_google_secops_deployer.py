@@ -81,10 +81,12 @@ class FakeChronicle(TenantSession):
         #: Answers queued ahead of the normal behaviour, each a callable of the call.
         self.script: list[Callable[[dict[str, Any]], Any]] = []
         self.allowed = list(ALL)
+        self.sent_headers: list[dict[str, str]] = []
 
     def request(self, method: str, url: str, **kwargs: Any) -> Any:  # type: ignore[override]
         assert kwargs.get("timeout"), "every request has a timeout"
-        assert kwargs["headers"]["Authorization"] == "Bearer token"
+        assert kwargs["headers"]["authorization"] == "Bearer token"
+        self.sent_headers.append(dict(kwargs["headers"]))
         assert url.startswith(ENDPOINT + BASE)
         call: dict[str, Any] = {"method": method, "path": url[len(ENDPOINT) :]}
         if kwargs.get("params"):
@@ -120,7 +122,9 @@ class FakeChronicle(TenantSession):
         if method == "PATCH":
             if call["body"].get("etag") != self.rules[rule_id]["etag"]:
                 return _error(409, "ABORTED", "etag mismatch")
-            self.rules[rule_id] = {"text": call["body"]["text"], "etag": "e2"}
+            (field,) = call["query"]["updateMask"].split(",")
+            etag = f"e{int(self.rules[rule_id]['etag'][1:]) + 1}"
+            self.rules[rule_id] = {**self.rules[rule_id], field: call["body"][field], "etag": etag}
             return _response(200, self.rules[rule_id])
         if method == "DELETE":
             del self.rules[rule_id]
@@ -132,11 +136,19 @@ class FakeChronicle(TenantSession):
 
 
 class FakeCredentials:
+    """What the client reads of google-auth credentials; ``apply`` as google-auth applies it."""
+
     token: str | None = "token"
     valid = True
+    quota_project_id: str | None = None
 
     def refresh(self, request: Any) -> None:
         raise AssertionError("valid credentials are not refreshed")
+
+    def apply(self, headers: dict[str, str], token: str | None = None) -> None:
+        headers["authorization"] = f"Bearer {token or self.token}"
+        if self.quota_project_id:
+            headers["x-goog-user-project"] = self.quota_project_id
 
 
 @pytest.fixture(autouse=True)
@@ -144,6 +156,23 @@ def _deployment_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("DEPLOYMENT_ERROR_RAISED", "DEPLOYMENT_WARNING_RAISED"):
         monkeypatch.setenv(name, "")
         monkeypatch.delenv(name)
+
+
+@pytest.fixture
+def codes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The error and warning codes deploy reports, in order."""
+    import opentide.platforms.google_secops.deployer as deployer
+
+    seen: list[str] = []
+    for name in ("_deployment_error", "_deployment_warning"):
+        original = getattr(deployer, name)
+
+        def record(code: str, _original: Any = original, **kwargs: Any) -> None:
+            seen.append(code)
+            _original(code, **kwargs)
+
+        monkeypatch.setattr(deployer, name, record)
+    return seen
 
 
 def _tenant(**setup: Any) -> Any:
@@ -282,10 +311,20 @@ def test_a_frequency_google_does_not_allow_fails_before_any_write(
     assert _failed()
 
 
-def test_the_first_allowed_frequency_is_the_default(run: Run) -> None:
+def test_no_run_frequency_is_sent_unless_the_block_names_one(
+    run: Run, tide_corpus_repo: Path
+) -> None:
+    """Google keeps or defaults the frequency, and never moves a legacy schedule unasked."""
     run.fake.allowed = ["HOURLY_CUSTOMIZABLE", "DAILY"]
     fake = run(_rule(run_frequency=None))
-    assert fake.calls[-1]["body"]["runFrequency"] == "HOURLY_CUSTOMIZABLE"
+    assert fake.calls[-1]["query"] == {"updateMask": "enabled,alerting"}
+    assert "runFrequency" not in fake.calls[-1]["body"]
+    rule = _rule(run_frequency=None, status="PRODUCTION")
+    fake.rules[RULE_ID]["text"] = assemble(rule).text
+    fake.deployments[RULE_ID] = {"enabled": True, "alerting": True, "runFrequency": "DAILY"}
+    fake.calls.clear()
+    run(rule)
+    assert fake.paths() == [("GET", RULE_ID), ("GET", "deployment")]
 
 
 def test_a_create_without_an_id_fails(run: Run, tide_corpus_repo: Path) -> None:
@@ -298,6 +337,56 @@ def test_a_create_without_an_id_fails(run: Run, tide_corpus_repo: Path) -> None:
     run()
     assert _bound(tide_corpus_repo) is None
     assert _failed()
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
+def test_a_create_answering_a_server_error_is_unconfirmed_and_not_resent(
+    run: Run, tide_corpus_repo: Path, codes: list[str], status: int
+) -> None:
+    """The rule may have been written before the 5xx: never resent, never bound."""
+    run.fake.script.extend(
+        [
+            lambda call: run.fake._answer(call),
+            lambda _call: _error(status, "UNAVAILABLE", "backend error"),
+        ]
+    )
+    fake = run()
+    assert [call["path"].rsplit("/", 1)[-1] for call in fake.calls] == [
+        "3f0ac524-5ae1-4bfd-b86d-53afc953e7e6:verifyRuleText",
+        "rules",
+    ]
+    assert run.slept == []
+    assert codes == ["google_secops_create_unconfirmed"]
+    assert _bound(tide_corpus_repo) is None
+
+
+def test_a_rate_limited_create_is_resent(run: Run, tide_corpus_repo: Path) -> None:
+    """A 429 was not executed, so the create is sent again."""
+    run.fake.script.extend(
+        [
+            lambda call: run.fake._answer(call),
+            lambda _call: _error(429, "RESOURCE_EXHAUSTED", "quota"),
+        ]
+    )
+    fake = run()
+    assert [call["method"] for call in fake.calls] == ["POST", "POST", "POST", "PATCH"]
+    assert _bound(tide_corpus_repo) == RULE_ID
+
+
+def test_a_create_answering_no_json_has_no_id(
+    run: Run, tide_corpus_repo: Path, codes: list[str]
+) -> None:
+    def html(_call: dict[str, Any]) -> Any:
+        response = requests.Response()
+        response.status_code = 200
+        response._content = b"<html><title>ok</title></html>"
+        response.headers["Content-Type"] = "text/html"
+        return response
+
+    run.fake.script.extend([lambda call: run.fake._answer(call), html])
+    run()
+    assert codes == ["google_secops_create_no_id"]
+    assert _bound(tide_corpus_repo) is None
 
 
 def test_a_create_with_no_answer_is_unconfirmed_and_not_resent(
@@ -349,8 +438,8 @@ def test_a_changed_text_is_verified_then_patched_with_the_etag(
     rule = _rule(status="PRODUCTION")
     fake = run(rule)
     text = assemble(rule).text
-    assert fake.calls[1] == _golden(PROCESS, "verify")
-    assert fake.calls[2] == {
+    assert fake.calls[2] == _golden(PROCESS, "verify")
+    assert fake.calls[3] == {
         "method": "PATCH",
         "path": f"{BASE}/rules/{RULE_ID}",
         "query": {"updateMask": "text"},
@@ -360,31 +449,112 @@ def test_a_changed_text_is_verified_then_patched_with_the_etag(
     assert not _failed()
 
 
-def test_the_scope_is_sent_with_an_update(run: Run, tide_corpus_repo: Path) -> None:
+SCOPE = f"{INSTANCE}/dataAccessScopes/soc"
+
+
+def test_the_scope_is_updated_on_its_own_with_the_new_etag(
+    run: Run, tide_corpus_repo: Path
+) -> None:
     _bind(tide_corpus_repo, run.fake)
     fake = run(tenant=_tenant(data_access_scope="soc"))
-    patch = next(call for call in fake.calls if call["method"] == "PATCH")
-    assert patch["query"] == {"updateMask": "text,scope"}
-    assert patch["body"]["scope"] == f"{INSTANCE}/dataAccessScopes/soc"
+    patches = [call for call in fake.calls if call["path"] == f"{BASE}/rules/{RULE_ID}"]
+    text, scope = [call for call in patches if call["method"] == "PATCH"]
+    assert text["query"] == {"updateMask": "text"} and "scope" not in text["body"]
+    assert scope == {
+        "method": "PATCH",
+        "path": f"{BASE}/rules/{RULE_ID}",
+        "query": {"updateMask": "scope"},
+        "body": {"scope": SCOPE, "etag": "e2"},
+    }
+    assert fake.rules[RULE_ID]["scope"] == SCOPE
+
+
+def test_a_changed_or_removed_scope_reaches_an_unchanged_rule(
+    run: Run, tide_corpus_repo: Path
+) -> None:
+    rule = _rule(status="PRODUCTION")
+    _bind(tide_corpus_repo, run.fake, text=assemble(rule).text)
+    run.fake.rules[RULE_ID]["scope"] = f"{INSTANCE}/dataAccessScopes/old"
+    fake = run(rule)  # the tenant names no scope: the rule becomes global
+    (patch,) = [call for call in fake.calls if call["method"] == "PATCH"]
+    assert patch["body"] == {"scope": "", "etag": "e1"}
+    fake.calls.clear()
+    run(rule, tenant=_tenant(data_access_scope=SCOPE))  # a full name is used as given
+    (patch,) = [call for call in fake.calls if call["method"] == "PATCH"]
+    assert patch["body"]["scope"] == SCOPE
+    fake.calls.clear()
+    run(rule, tenant=_tenant(data_access_scope="soc"))
+    assert [call["method"] for call in fake.calls] == ["GET", "GET"]
+
+
+def test_a_scope_is_named_by_id_or_full_name(run: Run) -> None:
+    client = run.client()
+    assert client.scope_resource("soc") == SCOPE
+    assert client.scope_resource(SCOPE) == SCOPE
+    assert client.scope_resource(f"/{SCOPE}/") == SCOPE
+    assert client.scope_resource(None) is None
 
 
 def test_a_preview_rule_runs_without_alerting(run: Run, tide_corpus_repo: Path) -> None:
     _bind(tide_corpus_repo, run.fake)
     fake = run(strategies=(StatusStrategy.PREVIEW,))
-    assert fake.calls[-1] == _golden(PROCESS, "deployment")
+    # Only the field that differs is sent.
+    assert fake.calls[-1]["query"] == {"updateMask": "alerting"}
+    assert fake.calls[-1]["body"] == {"alerting": False}
     assert fake.deployments[RULE_ID]["alerting"] is False
 
 
-def test_an_archived_rule_is_unarchived_first(run: Run, tide_corpus_repo: Path) -> None:
+def test_the_schedule_settles_as_google_stores_it(run: Run, tide_corpus_repo: Path) -> None:
+    rule = _rule(SPRAY, status="PRODUCTION")
+    record_external_id(UUID[SPRAY], "google_secops", TENANT, RULE_ID, tide_corpus_repo)
+    run.fake.rules[RULE_ID] = {"text": assemble(rule).text, "etag": "e1"}
+    run.fake.deployments[RULE_ID] = {
+        "enabled": True,
+        "alerting": True,
+        "runFrequency": "LIVE_CUSTOMIZABLE",
+        "scheduleCustomizations": {
+            "ensureEnrichmentCompleteness": True,
+            "lateArrivingDataAdjustment": "1800.000s",
+        },
+    }
+    fake = run(rule)
+    assert fake.paths() == [("GET", RULE_ID), ("GET", "deployment")]
+
+
+def test_a_removed_schedule_is_cleared_with_run_frequency_alone(
+    run: Run, tide_corpus_repo: Path
+) -> None:
+    rule = _rule(SPRAY, status="PRODUCTION", schedule=None)
+    record_external_id(UUID[SPRAY], "google_secops", TENANT, RULE_ID, tide_corpus_repo)
+    run.fake.rules[RULE_ID] = {"text": assemble(rule).text, "etag": "e1"}
+    run.fake.deployments[RULE_ID] = {
+        "enabled": True,
+        "alerting": True,
+        "runFrequency": "LIVE_CUSTOMIZABLE",
+        "scheduleCustomizations": {"lateArrivingDataAdjustment": "1800s"},
+    }
+    fake = run(rule)
+    assert fake.calls[-1]["query"] == {"updateMask": "runFrequency"}
+    assert fake.calls[-1]["body"] == {"runFrequency": "LIVE_CUSTOMIZABLE"}
+
+
+def test_an_archived_rule_is_unarchived_before_its_text_is_updated(
+    run: Run, tide_corpus_repo: Path
+) -> None:
     _bind(tide_corpus_repo, run.fake)
     run.fake.deployments[RULE_ID] = {"archived": True}
     fake = run(_rule(status="PRODUCTION"))
-    patches = [call for call in fake.calls if call["path"].endswith("/deployment")]
-    assert [call.get("query") for call in patches if call["method"] == "PATCH"] == [
-        {"updateMask": "archived"},
-        {"updateMask": "enabled,alerting,runFrequency"},
+    writes = [
+        (call["path"].rsplit("/", 1)[-1], call["query"]["updateMask"])
+        for call in fake.calls
+        if call["method"] == "PATCH"
     ]
-    assert patches[1]["body"] == {"archived": False}
+    assert writes == [
+        ("deployment", "archived"),
+        (RULE_ID, "text"),
+        ("deployment", "enabled,alerting,runFrequency"),
+    ]
+    assert fake.calls[3]["body"] == {"archived": False}
 
 
 def test_a_verify_error_on_update_fails_the_rule_only(run: Run, tide_corpus_repo: Path) -> None:
@@ -392,11 +562,12 @@ def test_a_verify_error_on_update_fails_the_rule_only(run: Run, tide_corpus_repo
     run.fake.script.extend(
         [
             lambda call: run.fake._answer(call),
+            lambda call: run.fake._answer(call),
             lambda _call: _error(400, "INVALID_ARGUMENT", "rule text too long"),
         ]
     )
     fake = run()
-    assert [call["method"] for call in fake.calls] == ["GET", "POST"]
+    assert [call["method"] for call in fake.calls] == ["GET", "GET", "POST"]
     assert _bound(tide_corpus_repo) == RULE_ID
     assert _failed()
 
@@ -437,6 +608,56 @@ def test_disablement_keeps_the_text_current_and_disables(run: Run, tide_corpus_r
     assert not _failed()
 
 
+def _verify_refuses(run: Run) -> None:
+    run.fake.script.extend(
+        [
+            lambda call: run.fake._answer(call),
+            lambda call: run.fake._answer(call),
+            lambda _call: _response(
+                200,
+                {"compilationDiagnostics": [{"message": "list x not found", "severity": "ERROR"}]},
+            ),
+        ]
+    )
+
+
+def test_disablement_disables_even_when_verify_fails(
+    run: Run, tide_corpus_repo: Path, codes: list[str]
+) -> None:
+    _bind(tide_corpus_repo, run.fake)  # the remote text differs
+    _verify_refuses(run)
+    fake = run(_rule(status="DISABLED"))
+    assert fake.deployments[RULE_ID] == {
+        "enabled": False,
+        "alerting": False,
+        "runFrequency": "LIVE",
+    }
+    assert fake.rules[RULE_ID]["text"] == "old text"
+    assert codes == ["google_secops_verify_failed"]
+    assert _failed()
+
+
+def test_disablement_disables_even_when_the_text_update_fails(
+    run: Run, tide_corpus_repo: Path, codes: list[str]
+) -> None:
+    _bind(tide_corpus_repo, run.fake)
+    run.fake.script.append(
+        lambda _call: _response(200, {"text": "old", "etag": "e0", "allowedRunFrequencies": ALL})
+    )
+    fake = run(_rule(status="DISABLED"))
+    assert fake.calls[-1] == _golden(PROCESS, "disable")
+    assert codes == ["google_secops_rule_conflict"]
+    assert _failed()
+
+
+def test_disablement_leaves_an_archived_rule_as_it_is(run: Run, tide_corpus_repo: Path) -> None:
+    _bind(tide_corpus_repo, run.fake)
+    run.fake.deployments[RULE_ID] = {"archived": True}
+    fake = run(_rule(status="DISABLED"))
+    assert fake.paths() == [("GET", RULE_ID), ("GET", "deployment")]
+    assert not _failed()
+
+
 def test_disabling_a_rule_gone_forgets_it(run: Run, tide_corpus_repo: Path) -> None:
     record_external_id(UUID[PROCESS], "google_secops", TENANT, OTHER_ID, tide_corpus_repo)
     fake = run(_rule(status="DISABLED"))
@@ -472,10 +693,17 @@ def test_deletion_deletes_without_force_when_the_tenant_asks(
     assert not _failed()
 
 
-def test_a_refused_delete_archives_instead(run: Run, tide_corpus_repo: Path) -> None:
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [(400, "FAILED_PRECONDITION"), (400, "INVALID_ARGUMENT"), (409, "ABORTED"), (412, "")],
+)
+def test_a_refused_delete_archives_instead(
+    run: Run, tide_corpus_repo: Path, codes: list[str], status: int, code: str
+) -> None:
     _bind(tide_corpus_repo, run.fake)
-    run.fake.script.append(lambda _call: _error(400, "FAILED_PRECONDITION", "rule has detections"))
+    run.fake.script.append(lambda _call: _error(status, code, "rule has detections"))
     fake = run(_rule(status="REMOVED"), tenant=_tenant(deletion="delete"))
+    assert codes == ["google_secops_delete_refused"]
     assert [call for call in fake.calls if call["method"] == "PATCH"] == _golden(PROCESS, "archive")
     assert _bound(tide_corpus_repo) == RULE_ID
     assert _warned() and not _failed()
@@ -536,6 +764,42 @@ def test_a_retry_after_on_every_answer_still_gives_up(run: Run) -> None:
     assert len(run.fake.calls) == 4
 
 
+def test_the_backoff_is_five_fifteen_sixty_seconds() -> None:
+    assert BACKOFF == (5.0, 15.0, 60.0)
+
+
+def test_a_retry_info_delay_is_waited_and_a_long_retry_after_is_capped(run: Run) -> None:
+    retry_info = {
+        "error": {
+            "code": 429,
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "quota",
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "RATE_LIMIT"},
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "30s"},
+            ],
+        }
+    }
+    run.fake.script.extend(
+        [
+            lambda _call: _response(429, retry_info),
+            lambda _call: _response(429, None, {"Retry-After": "900"}),
+        ]
+    )
+    run.client().verify("rule x {}")
+    assert run.slept == [30.0, 300.0]
+
+
+def test_a_503_is_resent_on_any_call_but_create(run: Run) -> None:
+    run.fake.script.append(lambda _call: _error(503, "UNAVAILABLE", "try again"))
+    run.client().verify("rule x {}")
+    assert len(run.fake.calls) == 2 and run.slept == [BACKOFF[0]]
+    run.fake.script.append(lambda _call: _error(503, "UNAVAILABLE", "try again"))
+    with pytest.raises(GoogleSecopsApiError):
+        run.client().create("rule x {}")
+    assert len(run.fake.calls) == 3
+
+
 def test_an_answer_that_is_not_json_names_its_status(run: Run) -> None:
     def html(_call: dict[str, Any]) -> Any:
         response = requests.Response()
@@ -564,6 +828,78 @@ def test_expired_credentials_are_refreshed_on_the_tenant_session() -> None:
     )
     client.verify("rule x {}")
     assert len(fake.calls) == 1
+
+
+def test_the_credentials_apply_their_quota_project(run: Run) -> None:
+    """User ADC carries a quota project; Google refuses the call without it."""
+
+    class UserCredentials(FakeCredentials):
+        quota_project_id = "acme-billing"
+
+    client = GoogleSecopsClient(
+        endpoint=ENDPOINT,
+        instance=INSTANCE,
+        credentials=UserCredentials(),
+        tenant=TENANT,
+        session=run.fake,
+    )
+    client.verify("rule x {}")
+    assert run.fake.sent_headers[-1]["x-goog-user-project"] == "acme-billing"
+
+
+def test_a_token_endpoint_failure_before_create_stops_the_tenant(
+    run: Run, tide_corpus_repo: Path, codes: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No request left: it is never reported as an unanswered create."""
+    from google.auth.exceptions import TransportError
+
+    class Expiring(FakeCredentials):
+        def refresh(self, request: Any) -> None:
+            raise TransportError("oauth2.googleapis.com: connection reset")
+
+    credentials = Expiring()
+    fake = FakeChronicle()
+
+    class AfterVerify(FakeChronicle):
+        def request(self, method: str, url: str, **kwargs: Any) -> Any:
+            answer = fake.request(method, url, **kwargs)
+            credentials.valid = False  # the token expires after the verify
+            return answer
+
+    client = GoogleSecopsClient(
+        endpoint=ENDPOINT,
+        instance=INSTANCE,
+        credentials=credentials,
+        tenant=TENANT,
+        session=AfterVerify(),
+    )
+    events: list[str] = []
+    import opentide.platforms.google_secops.deployer as deployer
+
+    monkeypatch.setattr(
+        deployer, "_tenant_failed", lambda tenant, exc: events.append(getattr(exc, "code", ""))
+    )
+    GoogleSecopsDeploy().deploy_tenant([_rule()], _tenant(), (StatusStrategy.RELEASE,), client)
+    assert [call["path"].rsplit(":", 1)[-1] for call in fake.calls] == ["verifyRuleText"]
+    assert "google_secops_create_unconfirmed" not in codes
+    assert events == ["google_secops_tenant_unauthorized"]
+    assert _bound(tide_corpus_repo) is None
+
+
+def test_rule_health_is_warned_and_deploy_goes_on(
+    run: Run, tide_corpus_repo: Path, codes: list[str]
+) -> None:
+    rule = _rule(status="PRODUCTION")
+    _bind(tide_corpus_repo, run.fake, text=assemble(rule).text)
+    run.fake.rules[RULE_ID]["compilationState"] = "FAILED"
+    run.fake.deployments[RULE_ID] = {"executionState": "PAUSED", "runFrequency": "LIVE"}
+    fake = run(rule)
+    assert codes == [
+        "google_secops_rule_execution_limited",
+        "google_secops_rule_compilation_failed",
+    ]
+    assert fake.deployments[RULE_ID]["enabled"] is True
+    assert _warned() and not _failed()
 
 
 def test_a_refused_refresh_is_unauthorized() -> None:

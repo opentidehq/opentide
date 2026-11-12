@@ -8,17 +8,25 @@ Application Default Credentials. Requests run on a
 :class:`~opentide.platforms.transport.TenantSession`, so TLS follows the
 tenant's ``ssl`` and nothing waits forever.
 
-HTTP 401 and 403 stop the tenant (:class:`GoogleSecopsTenantError`). HTTP 429
-and 503 are waited out, ``Retry-After`` when Google sends one, else 2, 4 and
-8 seconds, and the same request is sent again; then the call fails. Any other
-error is a :class:`GoogleSecopsApiError` with Google's ``error.status`` and
-``error.message``. No transport-level retry is mounted: a create that got no
-answer is not sent again (``google_secops_create_unconfirmed``).
+The token is applied as google-auth applies it (:meth:`Credentials.apply`), so
+user credentials from Application Default Credentials also send their quota
+project (``x-goog-user-project``). A token that cannot be obtained is a
+:class:`GoogleSecopsTokenError`: no request was sent, and the tenant stops.
+
+HTTP 401 and 403 stop the tenant (:class:`GoogleSecopsTenantError`). HTTP 429,
+and 503 on any call but a create, are waited out: ``Retry-After`` (at most
+300 seconds), else the ``RetryInfo.retryDelay`` of ``error.details``, else 5,
+15 and 60 seconds, and the same request is sent again, at most three times;
+then the call fails. Any other error is a :class:`GoogleSecopsApiError` with
+Google's ``error.status`` and ``error.message``. No transport-level retry is
+mounted, and ``POST rules`` is never resent after a 5xx or no answer: the rule
+may exist (``google_secops_create_unconfirmed``).
 """
 
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -33,12 +41,15 @@ from opentide.platforms.transport import TenantSession, not_json_detail
 SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 #: Seconds each request may take.
 DEFAULT_TIMEOUT = 60.0
-#: Waits after a 429 or 503 that names no ``Retry-After``. A request is resent at
-#: most this many times, whether or not Google names the wait; then the call fails.
-BACKOFF = (2.0, 4.0, 8.0)
-#: The most one ``Retry-After`` is honoured for, in seconds.
+#: Waits after a 429 or 503 whose answer names none (no ``Retry-After``, no
+#: ``RetryInfo``). A request is resent at most this many times, whether or not
+#: Google names the wait; then the call fails.
+BACKOFF = (5.0, 15.0, 60.0)
+#: The most one named wait (``Retry-After`` or ``RetryInfo``) is honoured for, in seconds.
 MAX_RETRY_AFTER = 300.0
-RETRY_STATUSES = frozenset({429, 503})
+#: ``error.details`` entry that names how long to wait.
+RETRY_INFO = "type.googleapis.com/google.rpc.RetryInfo"
+_DURATION = re.compile(r"\s*(\d+(?:\.\d+)?)s\s*")
 
 
 class Credentials(Protocol):
@@ -51,6 +62,8 @@ class Credentials(Protocol):
 
     def refresh(self, request: Any) -> None: ...
 
+    def apply(self, headers: dict[str, str], token: str | None = None) -> None: ...
+
 
 class GoogleSecopsTenantError(RuntimeError):
     """The instance cannot take any request: refused or missing credentials."""
@@ -59,6 +72,17 @@ class GoogleSecopsTenantError(RuntimeError):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+
+
+class GoogleSecopsTokenError(GoogleSecopsTenantError):
+    """No access token: Google refused the credentials, or its token endpoint did not answer.
+
+    Raised before the request it was for was sent, so a create that hits it
+    cannot have happened.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__("google_secops_tenant_unauthorized", message)
 
 
 class GoogleSecopsApiError(RuntimeError):
@@ -82,8 +106,23 @@ class GoogleSecopsApiError(RuntimeError):
         return self.http_status == 409 or self.status == "ABORTED"
 
     @property
-    def failed_precondition(self) -> bool:
-        return self.status == "FAILED_PRECONDITION"
+    def server_error(self) -> bool:
+        return self.http_status >= 500
+
+    @property
+    def refused_delete(self) -> bool:
+        """A ``DELETE`` Google refused: any 4xx but 401, 403, 404 and 429.
+
+        Google does not document which status a rule with detections or
+        retrohunts gets (google-secops-1.0, Deletion).
+        """
+        return 400 <= self.http_status < 500 and self.http_status not in (401, 403, 404, 429)
+
+
+def duration_seconds(value: object) -> float | None:
+    """A protobuf ``Duration`` in JSON (``"1800s"``, ``"1800.000s"``) in seconds, or ``None``."""
+    found = _DURATION.fullmatch(value) if isinstance(value, str) else None
+    return float(found.group(1)) if found else None
 
 
 def load_credentials(value: str | None) -> Credentials:
@@ -142,13 +181,25 @@ def load_credentials(value: str | None) -> Credentials:
 
 
 def _retry_after(response: requests.Response) -> float | None:
+    """The wait the answer names: ``Retry-After``, else ``RetryInfo.retryDelay``; capped."""
     value = response.headers.get("Retry-After")
-    if value is None:
-        return None
+    if value is not None:
+        try:
+            return min(max(float(value), 0.0), MAX_RETRY_AFTER)
+        except ValueError:
+            pass
     try:
-        return min(max(float(value), 0.0), MAX_RETRY_AFTER)
+        payload = response.json()
     except ValueError:
         return None
+    error = payload.get("error") if isinstance(payload, dict) else None
+    details = error.get("details") if isinstance(error, dict) else None
+    for detail in details if isinstance(details, list) else []:
+        if isinstance(detail, dict) and detail.get("@type") == RETRY_INFO:
+            seconds = duration_seconds(detail.get("retryDelay"))
+            if seconds is not None:
+                return min(seconds, MAX_RETRY_AFTER)
+    return None
 
 
 def _error_of(response: requests.Response) -> tuple[str, str]:
@@ -214,29 +265,31 @@ class GoogleSecopsClient:
 
     # --- transport -----------------------------------------------------------------
 
-    def _token(self) -> str:
+    def _authorise(self, headers: dict[str, str]) -> None:
+        """Put the access token, and a user credential's quota project, on *headers*.
+
+        Raises :class:`GoogleSecopsTokenError` when no token can be obtained.
+        """
+        from google.auth.exceptions import RefreshError, TransportError
+
         if not self._credentials.valid:
-            from google.auth.exceptions import RefreshError, TransportError
             from google.auth.transport.requests import Request
 
             try:
                 self._credentials.refresh(Request(session=self.session))
             except RefreshError as exc:
-                raise GoogleSecopsTenantError(
-                    "google_secops_tenant_unauthorized",
-                    f"tenant {self.tenant}: Google refused the credentials ({exc})",
+                raise GoogleSecopsTokenError(
+                    f"tenant {self.tenant}: Google refused the credentials ({exc})"
                 ) from exc
-            except TransportError as exc:
-                raise requests.ConnectionError(
-                    f"cannot reach Google's token endpoint: {exc}"
+            except (TransportError, requests.RequestException) as exc:
+                raise GoogleSecopsTokenError(
+                    f"tenant {self.tenant}: Google's token endpoint did not answer ({exc})"
                 ) from exc
-        token = self._credentials.token
-        if not token:
-            raise GoogleSecopsTenantError(
-                "google_secops_tenant_unauthorized",
-                f"tenant {self.tenant}: the credentials gave no access token",
+        if not self._credentials.token:
+            raise GoogleSecopsTokenError(
+                f"tenant {self.tenant}: the credentials gave no access token"
             )
-        return token
+        self._credentials.apply(headers)
 
     def request(
         self,
@@ -245,18 +298,22 @@ class GoogleSecopsClient:
         *,
         params: Mapping[str, str] | None = None,
         body: Mapping[str, Any] | None = None,
+        resend_unavailable: bool = True,
     ) -> dict[str, Any]:
         """Send one request and return its JSON answer.
 
         *path* is relative to the instance resource: ``"rules"``,
-        ``":verifyRuleText"``. Raises :class:`GoogleSecopsTenantError`,
+        ``":verifyRuleText"``. A 429 is resent; a 503 only with
+        *resend_unavailable*. Raises :class:`GoogleSecopsTenantError`,
         :class:`GoogleSecopsApiError`, or a :class:`requests.RequestException`
         when the request got no answer.
         """
         url = self.base + path if path.startswith(":") else f"{self.base}/{path}"
+        resent = {429, 503} if resend_unavailable else {429}
         retries = 0
         while True:
-            headers = {"Authorization": f"Bearer {self._token()}"}
+            headers: dict[str, str] = {}
+            self._authorise(headers)
             if body is not None:
                 headers["Content-Type"] = "application/json"
             response = self.session.request(
@@ -267,7 +324,7 @@ class GoogleSecopsClient:
                 headers=headers,
                 timeout=self.timeout,
             )
-            if response.status_code in RETRY_STATUSES and retries < len(BACKOFF):
+            if response.status_code in resent and retries < len(BACKOFF):
                 # Retry-After counts against the same budget: a tenant that keeps
                 # naming a wait must not hold the run forever.
                 wait = _retry_after(response)
@@ -308,25 +365,30 @@ class GoogleSecopsClient:
         return self.request("POST", ":verifyRuleText", body={"ruleText": text})
 
     def create(self, text: str, scope: str | None = None) -> dict[str, Any]:
+        """``POST rules``, never resent after a 5xx: the rule may have been created.
+
+        A 429 is resent: Google did not execute it.
+        """
         body: dict[str, Any] = {"text": text}
         if scope:
             body["scope"] = scope
-        return self.request("POST", "rules", body=body)
+        return self.request("POST", "rules", body=body, resend_unavailable=False)
 
     def get_rule(self, rule_id: str) -> dict[str, Any]:
         return self.request("GET", self._rule(rule_id), params={"view": "FULL"})
 
-    def update_text(
-        self, rule_id: str, text: str, etag: str | None, scope: str | None = None
-    ) -> dict[str, Any]:
+    def update_text(self, rule_id: str, text: str, etag: str | None) -> dict[str, Any]:
         body: dict[str, Any] = {"text": text}
-        mask = "text"
         if etag:
             body["etag"] = etag
-        if scope:
-            body["scope"] = scope
-            mask = "text,scope"
-        return self.request("PATCH", self._rule(rule_id), params={"updateMask": mask}, body=body)
+        return self.request("PATCH", self._rule(rule_id), params={"updateMask": "text"}, body=body)
+
+    def update_scope(self, rule_id: str, scope: str, etag: str | None) -> dict[str, Any]:
+        """``PATCH rules/<id>?updateMask=scope``; an empty *scope* makes the rule global."""
+        body: dict[str, Any] = {"scope": scope}
+        if etag:
+            body["etag"] = etag
+        return self.request("PATCH", self._rule(rule_id), params={"updateMask": "scope"}, body=body)
 
     def get_deployment(self, rule_id: str) -> dict[str, Any]:
         return self.request("GET", f"{self._rule(rule_id)}/deployment")
@@ -345,6 +407,15 @@ class GoogleSecopsClient:
     def udm_search(self, params: Mapping[str, str]) -> dict[str, Any]:
         return self.request("GET", ":udmSearch", params=params)
 
-    def scope_resource(self, scope_id: str | None) -> str | None:
-        """``<instance>/dataAccessScopes/<id>`` for a tenant's ``data_access_scope``."""
-        return f"{self.instance}/dataAccessScopes/{scope_id}" if scope_id else None
+    def scope_resource(self, scope: str | None) -> str | None:
+        """The ``scope`` for a tenant's ``data_access_scope``: an id or a full resource name.
+
+        A full name (``projects/…/dataAccessScopes/<id>``) is used as given; an
+        id becomes ``<instance>/dataAccessScopes/<id>``.
+        """
+        if not scope:
+            return None
+        scope = scope.strip().strip("/")
+        if "/dataAccessScopes/" in f"/{scope}":
+            return scope
+        return f"{self.instance}/dataAccessScopes/{scope}"
