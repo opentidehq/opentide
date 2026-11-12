@@ -22,7 +22,8 @@ behaviour only on purpose, with a test and a changelog entry.
 | `platforms/` | A module and a package per platform (`client`, `deployer`, `runner`, `validator`, `compile` where it has one); `transport.py` holds `TenantSession`, which the clients build their HTTP session from |
 | `deployment/`, `states/`, `sharing/`, `extraction/`, `query/` | Deploy plans and state, MISP sharing, extraction, `opentide query` |
 | `generation/`, `documentation/`, `export/`, `ci/` | Generated schemas, docs, exports, CI templates |
-| `analysis.py`, `_native/` | The one door to the Rust engine (`opentide._native`, built from `analysis/`); `_native/__init__.pyi` is its stub, `_native/models.pyi` the generated stub of the Rust models (`opentide._native.models`, ADR 0011) |
+| `analysis.py`, `_native/` | The one door to the Rust engine (`opentide._native`, built from `bindings/python/`); `_native/__init__.pyi` is its stub, `_native/models.pyi` the generated stub of the Rust models (`opentide._native.models`, ADR 0011), `_native/sdk.pyi` the SDK core's |
+| `sdk.py`, `_deprecation.py` | The SDK (UC-5.2): `opentide.Workspace` and `run_json` over `opentide._native.sdk`, loaded through `analysis.engine()`; docs in `docs/sdk/`. `_deprecation.warn_external` warns code outside opentide that calls a deprecated entry point (`Opentide.initialise()`, `run_validation`, the documentation writers); opentide's own callers never warn |
 | `data/` | Bundled data: vocabularies, pins, configuration and log-source defaults, the `opentide explain` pages (`diagnostics/`), setup templates and skills |
 
 ## Rules of the package
@@ -32,7 +33,7 @@ behaviour only on purpose, with a test and a changelog entry.
 - **The engine:** Python reaches it only through `src/opentide/analysis.py`. A missing engine is
   `engine_unavailable`, never a skipped check. After a change to the binding, update
   `_native/__init__.pyi`; after a change to a Rust model, `cargo xtask stubs` regenerates
-  `_native/models.pyi` ([`analysis/AGENTS.md`](../analysis/AGENTS.md)).
+  `_native/models.pyi` ([`bindings/python/AGENTS.md`](../bindings/python/AGENTS.md)).
 - **Object models, vocabulary or pins:** regenerate the engine's bundled Tide catalog in the same
   change, `uv run python scripts/engine/sync_opentide_schemas.py`;
   `tests/test_generation/test_bundled_tide_catalog.py` fails otherwise. Model field docstrings

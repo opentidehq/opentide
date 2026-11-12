@@ -24,19 +24,19 @@ Programmatic live deploy and query validation work for every platform on the bas
 
 ## Environment
 
-Library code respects the same environment variables as the CLI:
+`Workspace.open` takes the workspace's folder. `run_json` and the deprecated registry read the same environment variables as the CLI:
 
 ```python
 import os
 os.environ["OPENTIDE_REPO_ROOT"] = "/path/to/detection-repo"
 
-from opentide import Opentide
-Opentide.initialise()
+from opentide import run_json
+info = run_json(["info"])
 ```
 
 ## Typing
 
-The wheel includes `opentide/py.typed`. Import typed models directly:
+The wheel includes `opentide/py.typed` and the stubs of the compiled core (`opentide/_native/*.pyi`). `Workspace`'s options are typed with the choices the command line accepts. Import typed models directly:
 
 ```python
 from opentide.models.rule import DetectionRule

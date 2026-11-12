@@ -41,7 +41,7 @@ A GitHub Release whose `--target` is not the tagged commit is a failed release. 
 
 ## The engine is part of the wheels
 
-opentide compiles its analysis engine (the Cargo workspace: `analysis/` and the engine crates in `crates/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries the workspace's manifests, sources and embedded data, and refuses to publish when a platform's wheel is missing. The engine builds from this repository by path: there is no engine version to pin before tagging, and the engine's bundled Tide catalog is checked on every pull request (`tests/test_generation/test_bundled_tide_catalog.py`).
+opentide compiles its analysis engine (the Cargo workspace: `bindings/python/` and the engine crates in `crates/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries the workspace's manifests, sources and embedded data, and refuses to publish when a platform's wheel is missing. The engine builds from this repository by path: there is no engine version to pin before tagging, and the engine's bundled Tide catalog is checked on every pull request (`tests/test_generation/test_bundled_tide_catalog.py`).
 
 ## Patch vs minor
 

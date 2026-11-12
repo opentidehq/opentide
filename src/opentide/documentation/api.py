@@ -74,7 +74,17 @@ def write_rules(
     ctx: DocumentationContext | None = None,
     catalog: DocumentationCatalog | None = None,
 ) -> int:
-    """Write all rule pages."""
+    """Write all rule pages.
+
+    Deprecated outside opentide (UC-5.2, #837): run ``generate docs`` with
+    :meth:`opentide.Workspace.run_json`.
+    """
+    from opentide._deprecation import warn_external
+
+    warn_external(
+        "opentide.documentation.write_rules()",
+        'opentide.Workspace.run_json(["generate", "docs", ...])',
+    )
     context = ctx or _context()
     cat = catalog or build_catalog()
     pub = targets(context)
@@ -96,7 +106,17 @@ def write_rules(
 def write_objectives(
     ctx: DocumentationContext | None = None, catalog: DocumentationCatalog | None = None
 ) -> int:
-    """Write all objective pages."""
+    """Write all objective pages.
+
+    Deprecated outside opentide (UC-5.2, #837): run ``generate docs`` with
+    :meth:`opentide.Workspace.run_json`.
+    """
+    from opentide._deprecation import warn_external
+
+    warn_external(
+        "opentide.documentation.write_objectives()",
+        'opentide.Workspace.run_json(["generate", "docs", ...])',
+    )
     context = ctx or _context()
     cat = catalog or build_catalog()
     pub = targets(context)
@@ -119,7 +139,17 @@ def write_threats(
     ctx: DocumentationContext | None = None,
     catalog: DocumentationCatalog | None = None,
 ) -> int:
-    """Write all threat pages."""
+    """Write all threat pages.
+
+    Deprecated outside opentide (UC-5.2, #837): run ``generate docs`` with
+    :meth:`opentide.Workspace.run_json`.
+    """
+    from opentide._deprecation import warn_external
+
+    warn_external(
+        "opentide.documentation.write_threats()",
+        'opentide.Workspace.run_json(["generate", "docs", ...])',
+    )
     context = ctx or _context()
     cat = catalog or build_catalog()
     pub = targets(context)
@@ -149,8 +179,17 @@ def write_all(
     Generated pages that no object writes any more, after a rename or a
     deletion, are removed. Open pull requests' inflight shards are previewed,
     as ``opentide generate docs`` does.
+
+    Deprecated outside opentide (UC-5.2, #837): run ``generate docs`` with
+    :meth:`opentide.Workspace.run_json`.
     """
+    from opentide._deprecation import warn_external
     from opentide.indexing.inflight import inflight_preview
+
+    warn_external(
+        "opentide.documentation.write_all()",
+        'opentide.Workspace.run_json(["generate", "docs", ...])',
+    )
 
     with inflight_preview():
         return _write_all(include_index=include_index, output=output, flavor=flavor)

@@ -135,14 +135,16 @@ def test_macos_wheels_target_rustcs_floor() -> None:
 
 
 def test_the_engine_crate_is_a_member_of_the_root_workspace() -> None:
-    """``analysis/`` builds the engine crates of this repository by path, in the one Cargo
+    """``bindings/python/`` builds the engine crates of this repository by path, in the one Cargo
     workspace and lock at the root (#800): a ``[workspace]`` table or a lock of its own
     would resolve the engine apart from ``crates/``, as the crates.io pin used to."""
     root = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
-    manifest = tomllib.loads((ROOT / "analysis" / "Cargo.toml").read_text(encoding="utf-8"))
-    assert "analysis" in root["workspace"]["members"]
+    manifest = tomllib.loads(
+        (ROOT / "bindings" / "python" / "Cargo.toml").read_text(encoding="utf-8")
+    )
+    assert "bindings/python" in root["workspace"]["members"]
     assert "workspace" not in manifest
-    assert not (ROOT / "analysis" / "Cargo.lock").exists()
+    assert not (ROOT / "bindings" / "python" / "Cargo.lock").exists()
     for crate in ("opentide-analysis", "opentide-lsp"):
         assert manifest["dependencies"][crate] == {"workspace": True}
         assert root["workspace"]["dependencies"][crate]["path"] == f"crates/{crate}"

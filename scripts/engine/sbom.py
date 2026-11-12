@@ -8,7 +8,7 @@
 
 - `opentide-wheel.cdx.json`: the PyPI wheel. The Python dependencies
   (`uv export`) and the Rust crates compiled into `opentide._native`
-  (`analysis/`, every target).
+  (`bindings/python/`, every target).
 - `opentide-lsp.cdx.json`: the `opentide-lsp` binaries and its WASI build
   (the crate, every target).
 - `opentide-wasm.cdx.json`: the browser build (the `opentide-wasm-web` zip):
@@ -56,7 +56,7 @@ RUST_SBOMS = (
     ("crates/opentide-lsp", "all", "opentide-lsp.cdx.json"),
     ("crates/opentide-wasm", "wasm32-unknown-unknown", "opentide-wasm.cdx.json"),
 )
-NATIVE = "analysis"
+NATIVE = "bindings__python"
 NPM_PACKAGES = ("lsp-client", "lsp-worker")
 
 Bom = dict[str, Any]
@@ -233,7 +233,7 @@ def _cargo_sboms(target: str, scratch: Path) -> Path:
     )
     out = scratch / target
     out.mkdir(parents=True)
-    members = [ROOT / "analysis", ROOT / "xtask", *sorted(ROOT.glob("crates/*"))]
+    members = [ROOT / "bindings" / "python", ROOT / "xtask", *sorted(ROOT.glob("crates/*"))]
     for path in (member / f"{name}.json" for member in members):
         if not path.is_file():
             continue

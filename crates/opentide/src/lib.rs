@@ -38,7 +38,7 @@
 //! | Feature | Default | What it adds |
 //! |---------|:-------:|--------------|
 //! | `schema` | yes | [`models`]: the Tide models, every revision, schema identifiers |
-//! | `workspace` | yes | [`Workspace`]: open, [`Workspace::validate`], [`Workspace::lint`], [`Workspace::info`], [`Workspace::catalog`], [`Workspace::coverage`] |
+//! | `workspace` | yes | [`Workspace`]: open, [`Workspace::validate`], [`Workspace::lint`], [`Workspace::info`], [`Workspace::rules`], [`Workspace::objectives`], [`Workspace::threats`], [`Workspace::catalog`], [`Workspace::coverage`] |
 //! | `compile` | yes | [`Workspace::deploy_plan`] and [`deploy`] |
 //! | `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 //! | `cli` | no | `cli::main(argv)`, `cli::run_json(argv)` and the `opentide` binary (`cargo install opentide --features cli`); implies `compile` and `queries` |

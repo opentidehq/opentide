@@ -3398,6 +3398,7 @@ dependencies = [
 name = "opentide-native"
 version = "0.0.0"
 dependencies = [
+ "opentide",
  "opentide-analysis",
  "opentide-cli",
  "opentide-compare",
@@ -3405,6 +3406,8 @@ dependencies = [
  "opentide-schema",
  "pyo3",
  "pyo3-build-config",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
