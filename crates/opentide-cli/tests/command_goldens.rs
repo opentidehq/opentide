@@ -468,8 +468,9 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
 
 /// The replay reads `RUST_COMMANDS` as the dispatch does: every entry, with
 /// its `requires`, `refuses` and `platforms`, so it tolerates a refusal only
-/// of a run the table does not cover (a bare `generate`, `query` of a rule)
-/// and fails on any other.
+/// of a run the table does not cover and fails on any other. Every run of
+/// every command is covered since the full pipeline, a bare `generate`, was
+/// ported (UC-6.0, #841).
 #[test]
 fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_run() {
     let words =
@@ -490,10 +491,7 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "deploy",
         &words("deploy --strategy PREVIEW --all")
     ));
-    assert_eq!(
-        table["generate"].requires,
-        ["schemas", "templates", "vocabs", "snippets"]
-    );
+    assert_eq!(table["generate"], replay::Coverage::default());
     assert_eq!(table["generate docs rules"], replay::Coverage::default());
     // Agent skills install on Rust (UC-4.4d, #834): setup refuses nothing.
     assert_eq!(table["setup"], replay::Coverage::default());
@@ -517,9 +515,8 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "generate",
         &words("--json generate schemas")
     ));
-    assert!(!replay::covers("generate", &words("--json generate")));
-    assert!(!replay::covers("generate", &words("generate --help")));
-    assert!(!replay::covers("generate", &words("generate -- schemas")));
+    assert!(replay::covers("generate", &words("--json generate")));
+    assert!(replay::covers("generate", &words("generate -- schemas")));
     assert!(replay::covers("new threat", &words("new threat --name x")));
     assert!(replay::covers("doctor", &words("doctor --offline")));
     // doctor's network checks run on Rust too (UC-4.4, #834).
@@ -598,16 +595,17 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
 }
 
 /// `generate <phase>...` (UC-3.5d, #933): the `schemas`, `templates`,
-/// `vocabs` and `snippets` phases run in Rust; the full pipeline is refused
-/// with `engine_not_ported` (Python runs it alone under `compare`).
+/// `vocabs` and `snippets` phases; and a bare `generate`, the full pipeline
+/// (UC-6.0, #841), every case run in Rust and none refused.
 #[test]
 fn generate_phase_cases_are_the_oracles() {
     let refused = replay::refused();
-    check(&["generate"], 4);
-    let refused = replay::refused() - refused;
-    if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
-        assert!(refused >= 8, "only {refused} refused");
-    }
+    check(&["generate"], 12);
+    assert_eq!(
+        replay::refused() - refused,
+        0,
+        "a generate case was refused"
+    );
 }
 
 /// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and

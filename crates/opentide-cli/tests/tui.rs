@@ -399,7 +399,7 @@ fn deploy_runs_as_a_dry_run_and_shows_the_plan() {
 }
 
 #[test]
-fn generate_runs_the_command_line_and_says_what_it_cannot_do() {
+fn generate_runs_the_full_pipeline_on_the_command_line() {
     let (_base, repo) = tutorial();
     let mut app = open(&repo);
     let before = files(&repo);
@@ -407,15 +407,11 @@ fn generate_runs_the_command_line_and_says_what_it_cannot_do() {
     app.settle();
     let outcome = app.outcomes.last().unwrap();
     assert_eq!(outcome.command, "opentide generate");
-    // The full pipeline has no Rust implementation yet: the run says so, as
-    // `opentide generate` on the Rust command line does, and writes nothing.
-    assert_eq!(outcome.exit_code, 2, "{}", outcome.output);
-    assert!(
-        results(&app).contains("no Rust implementation yet"),
-        "{}",
-        results(&app)
-    );
-    assert_eq!(files(&repo), before);
+    // The full pipeline (UC-6.0, #841): the six phases, as `opentide
+    // generate` on the Rust command line runs them, and the files they write.
+    assert_eq!(outcome.exit_code, 0, "{}", outcome.output);
+    assert!(results(&app).contains("6 phases"), "{}", results(&app));
+    assert_ne!(files(&repo), before);
 }
 
 // -- one command at a time, and quitting --------------------------------------

@@ -1934,7 +1934,34 @@ impl Run<'_> {
             err.write_all(report.stderr_first.as_bytes())?;
             err.flush()?;
         }
+        // Each finished step's `OPENTIDE_PROGRESS=json` event, in every mode:
+        // before its row where the rows print one by one, else all at once.
+        let events = report
+            .step_events
+            .filter(|_| crate::render::progress::Progress::from_env(self.env).enabled());
+        let step_event = |done: usize, step: &crate::render::progress::Step, total: usize| {
+            crate::render::progress::event_line(&crate::render::progress::progress_event(
+                &step.name,
+                done,
+                Some(total),
+            ))
+        };
+        let rows_one_by_one = !report.steps.is_empty()
+            && !matches!(self.mode, Mode::Json | Mode::Mcp)
+            && !self.globals.quiet
+            && (self.mode != Mode::Human || !self.host.stderr_tty);
+        if let Some(total) = events
+            && !rows_one_by_one
+        {
+            for (index, step) in report.steps.iter().enumerate() {
+                err.write_all(step_event(index + 1, step, total).as_bytes())?;
+            }
+            err.flush()?;
+        }
         if self.mode == Mode::Json {
+            for line in &report.after_steps {
+                line.log();
+            }
             let mut document = outcome.document(self.duration_ms());
             if !report.warnings.is_empty()
                 && let crate::json::Json::Object(members) = &mut document
@@ -1957,9 +1984,16 @@ impl Run<'_> {
             out.flush()?;
             return Ok(outcome.exit_code);
         }
+        let mut logged = false;
         if !report.steps.is_empty() && self.mode != Mode::Mcp && !self.globals.quiet {
             let console = self.console(self.host.stderr_tty);
             if self.mode == Mode::Human && self.host.stderr_tty {
+                // The oracle's live display keeps its rows below the lines
+                // logged while it runs: they end up above the checklist.
+                for line in &report.after_steps {
+                    line.log();
+                }
+                logged = true;
                 err.write_all(
                     crate::render::progress::checklist(
                         &report.steps,
@@ -1969,13 +2003,23 @@ impl Run<'_> {
                     .as_bytes(),
                 )?;
             } else {
-                for step in &report.steps {
+                for (index, step) in report.steps.iter().enumerate() {
+                    if let Some(total) = events {
+                        err.write_all(step_event(index + 1, step, total).as_bytes())?;
+                    }
                     err.write_all(
                         console
                             .line(&crate::render::progress::step_line(step))
                             .as_bytes(),
                     )?;
                 }
+            }
+        }
+        if !logged && !report.after_steps.is_empty() {
+            // Log lines go to the log sink: the rows above reach it first.
+            err.flush()?;
+            for line in &report.after_steps {
+                line.log();
             }
         }
         if let Some(markdown) = &report.ci_summary
@@ -3846,9 +3890,9 @@ mod tests {
     }
 
     /// `generate <phase>...`: the words after `generate` that are no
-    /// subcommand are its phases. An unknown phase is a usage error; the full
-    /// pipeline is refused for the Python engine; the subcommands still run
-    /// as subcommands.
+    /// subcommand are its phases. An unknown phase is a usage error; with no
+    /// phase it is the full pipeline; the subcommands still run as
+    /// subcommands.
     #[test]
     fn generate_takes_its_phases_as_words() {
         let unknown = dispatched("--json generate schemas explrer", &[], false);
@@ -3862,9 +3906,24 @@ mod tests {
         );
         assert!(unknown.stdout.contains("\"code\":\"usage_invalid_choice\""));
         assert!(unknown.stdout.contains("\"argument\":\"phase\""));
-        let refused = dispatched("--json generate", &[], false);
-        assert_eq!(refused.code, 2);
-        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
+        // The full pipeline runs here (UC-6.0): its six phases, in a folder
+        // of its own.
+        let folder = tempfile::tempdir().unwrap();
+        let line = format!("--json --repo {} generate", folder.path().display());
+        let pipeline = dispatched(&line, &[], false);
+        assert_eq!(pipeline.code, 0, "{}", pipeline.stdout);
+        assert!(
+            pipeline.stdout.starts_with(
+                "{\"phases\":[\"docs\",\"exports\",\"vocabs\",\"templates\",\"schemas\",\"snippets\"],"
+            ),
+            "{}",
+            pipeline.stdout
+        );
+        assert!(
+            pipeline.stdout.contains("· 6 phases"),
+            "{}",
+            pipeline.stdout
+        );
         // The phases end at the first `-` word: what follows is
         // `generate`'s own options (`GeneratePhaseGroup`).
         for (argv, option) in [

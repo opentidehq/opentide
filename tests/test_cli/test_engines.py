@@ -42,14 +42,17 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
-#: A command line with no Rust implementation: a bare ``generate``, the full
-#: pipeline (``setup --plugin``, the last ``setup`` run on Python, moved to Rust
-#: with UC-4.4d, and ``share targets`` with UC-4.4b, both #834).
-UNPORTED = ("generate",)
-UNPORTED_MESSAGE = (
-    "opentide generate without schemas or templates or vocabs or snippets "
-    "has no Rust implementation yet"
-)
+#: A command line with no Rust implementation. Every command has one since
+#: the full pipeline, a bare ``generate``, was ported (UC-6.0, #841), so the
+#: tests that use it take ``info`` out of the dispatch table (:func:`unported`).
+UNPORTED = ("info",)
+UNPORTED_MESSAGE = "opentide info has no Rust implementation yet"
+
+
+@pytest.fixture
+def unported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """:data:`UNPORTED` without its Rust implementation, for this test."""
+    monkeypatch.delitem(engines.RUST_COMMANDS, UNPORTED)
 
 
 def fake(mode: str) -> RustCommand:
@@ -74,7 +77,9 @@ def test_the_engine_is_python_unless_set() -> None:
     assert engines.requested({"OPENTIDE_ENGINE": "compare"}) == "compare"
 
 
-def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_engine_is_read_per_process(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, unported: None
+) -> None:
     """Read when the command runs, not when opentide is imported."""
     args = ["--json", "--repo", str(workspace), *UNPORTED]
     assert invoke(args, "rust")[0] == 2
@@ -82,12 +87,14 @@ def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.Mon
     assert invoke(args, None)[0] != 2
 
 
-def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) -> None:
+def test_rust_on_a_command_without_rust_is_engine_not_ported(
+    workspace: Path, unported: None
+) -> None:
     code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "generate"
+    assert doc["command"] == "info"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
     message = doc["failure"]["message"]
@@ -103,7 +110,7 @@ def test_rust_on_a_subcommand_names_its_path(workspace: Path) -> None:
     assert document(stdout)["command"] == "validate query"
 
 
-def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
+def test_rust_without_json_is_one_error_line(workspace: Path, unported: None) -> None:
     code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
@@ -120,7 +127,9 @@ def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -
 
 
 @pytest.mark.parametrize("engine", [None, "", "python", "compare"])
-def test_python_runs_where_rust_does_not_exist(workspace: Path, engine: str | None) -> None:
+def test_python_runs_where_rust_does_not_exist(
+    workspace: Path, engine: str | None, unported: None
+) -> None:
     """``compare`` on a command with no Rust implementation runs Python alone."""
     code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], engine)
     assert code == 0
@@ -154,33 +163,17 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     assert doctor.covers(["doctor"])
 
 
-def test_generate_is_rust_only_with_a_phase_named() -> None:
-    """``generate <phase>`` runs on Rust; a bare ``generate`` (the full pipeline) stays Python's."""
+def test_generate_is_rust_with_or_without_a_phase_named() -> None:
+    """``generate <phase>`` and a bare ``generate`` (the full pipeline, UC-6.0) run on Rust."""
     generate = engines.RUST_COMMANDS[("generate",)]
-    assert generate.requires == ("schemas", "templates", "vocabs", "snippets")
+    assert generate.requires == ()
     assert generate.covers(["generate", "schemas"])
     assert generate.covers(["generate", "templates", "vocabs"])
     assert generate.covers(["generate", "snippets", "--json"])
-    assert not generate.covers(["generate"])
-    assert not generate.covers(["generate", "--help"])
-    # After ``--`` it is an argument, not a phase.
-    assert not generate.covers(["generate", "--", "schemas"])
-    # The named subcommands have their own entries, without requires.
+    assert generate.covers(["generate"])
+    assert generate.covers(["generate", "--", "schemas"])
     assert engines.RUST_COMMANDS[("generate", "docs")].requires == ()
-
-
-def test_a_bare_generate_stays_python(workspace: Path) -> None:
-    """``OPENTIDE_ENGINE=rust`` refuses a bare ``generate`` by name: it is not ported."""
-    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "generate"], "rust")
-    assert code == 2
-    doc = document(stdout)
-    assert doc["command"] == "generate"
-    assert doc["failure"]["code"] == "engine_not_ported"
-    assert (
-        "opentide generate without schemas or templates or vocabs or snippets "
-        "has no Rust implementation yet" in doc["failure"]["message"]
-    )
-    # Unset, Python runs it: no refusal.
+    # Unset, Python still runs it: no default has flipped.
     assert engines.selected(("generate",), {}) == engines.PYTHON
 
 
@@ -859,8 +852,12 @@ def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
     rust = {"OPENTIDE_ENGINE": "rust"}
     generate = engines.RUST_COMMANDS[("generate",)]
     assert engines.rust_command(("generate",), rust, ["generate", "schemas"]) is generate
-    assert engines.rust_command(("generate",), rust, ["generate"]) is None
-    assert engines.rust_command(("generate",), rust, ["generate", "--", "schemas"]) is None
+    assert engines.rust_command(("generate",), rust, ["generate"]) is generate
+    flagged = RustCommand(launch=("x",), requires=("--dry-run",))
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(engines.RUST_COMMANDS, ("generate",), flagged)
+        assert engines.rust_command(("generate",), rust, ["generate"]) is None
+        assert engines.rust_command(("generate",), rust, ["generate", "--", "--dry-run"]) is None
     deploy = engines.RUST_COMMANDS[("deploy",)]
     assert engines.rust_command(("deploy",), rust, ["deploy", "--dry-run"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy"]) is deploy

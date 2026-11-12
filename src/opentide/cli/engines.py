@@ -306,8 +306,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``setup skills`` (the install), ``setup --skills`` and ``--plugin`` with
 #: UC-4.4d (#834): the skill trees through the connectors' HTTP client.
 #: ``new threat|objective|rule`` and ``generate`` with phases named
-#: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
-#: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
+#: (``generate schemas templates``) with UC-3.5d (#933); a bare ``generate``,
+#: the full pipeline, with UC-6.0 (#841).
 #: ``serve`` with UC-3.8 (#830): the Rust host, which runs each command with a
 #: Rust implementation itself and hands every other run to this package's
 #: runner in its own process (``opentide.cli.services.serve_bridge``).
@@ -375,9 +375,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("setup", "repo"): RustCommand(launch=RUST_CLI),
     ("setup", "vscode"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
-    ("generate",): RustCommand(
-        launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
-    ),
+    ("generate",): RustCommand(launch=RUST_CLI),
     ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
