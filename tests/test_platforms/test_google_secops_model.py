@@ -230,6 +230,8 @@ def test_each_code_at_its_field_path(
         {"events": '$e.metadata.description = "condition: none" // match: in a comment\n'},
         {"events": "$e.metadata.description = /rule x \\{/\n"},
         {"name": "my_rule", "meta": {"data_source": "Okta"}},
+        # tactic is not derived (google-secops-1.1): a block may set its own.
+        {"meta": {"tactic": "TA0006"}},
         {"severity": "Info", "priority": "Critical", "alerting": True},
     ],
 )

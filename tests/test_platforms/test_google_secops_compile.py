@@ -88,11 +88,11 @@ def test_the_rule_name() -> None:
 def test_the_meta_derivations() -> None:
     process = dict(meta_entries(*_rule_and_block("rule-google-secops-process-1.0")))
     assert process["author"] == "Detection Engineering, Threat Hunting"
-    assert process["tactic"] == "TA0001,TA0002"
+    assert "tactic" not in process
     assert process["technique"] == "T1059.001,T1566.001"
     assert list(process)[-1] == "data_source"
     spray = dict(meta_entries(*_rule_and_block("rule-google-secops-spray-1.0")))
-    assert spray["tactic"] == "TA0001,TA0003,TA0004,TA0005,TA0006"
+    assert spray["technique"] == "T1078,T1110.003"
     assert spray["severity"] == spray["priority"] == "High"
 
 

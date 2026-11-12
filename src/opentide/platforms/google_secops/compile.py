@@ -3,7 +3,7 @@
 The author writes the rule's sections (``events``, ``match``, ``outcome``,
 ``condition``, ``options``, ``setup``, ``export``); this module derives the
 rest from the opentide rule: the rule name, the ``meta`` section (author,
-description, severity, priority, ATT&CK tactics and techniques, the opentide
+description, severity, priority, ATT&CK techniques, the opentide
 uuid and version, then the block's own meta) and the run state a status
 strategy deploys. :func:`assemble` writes the text deploy sends, and records
 the line of each section label so a position Google reports in the assembled
@@ -99,21 +99,6 @@ def techniques(rule: DetectionRule) -> list[str]:
     return sorted(set(found))
 
 
-def tactics(technique_ids: Sequence[str]) -> list[str]:
-    """ATT&CK tactic ids of *technique_ids*' stages, in the Elastic tactic table's order."""
-    from opentide.generation.framework import get_vocab_entry
-    from opentide.platforms.elastic.attack import TACTIC_MAP, TACTIC_ORDER
-
-    stages: set[str] = set()
-    for technique in technique_ids:
-        raw = get_vocab_entry("att&ck", technique, "tide.vocab.stages") or []
-        for stage in [raw] if isinstance(raw, str) else raw:
-            mapped = TACTIC_MAP.get(str(stage).strip().lower())
-            if mapped is not None:
-                stages.add(mapped[0])
-    return [tactic for stage, tactic in TACTIC_ORDER if stage in stages]
-
-
 def meta_value(text: str) -> str:
     """*text* as a YARA-L double-quoted string: ``\\`` and ``"`` escaped, controls as spaces."""
     escaped = text.replace("\\", "\\\\").replace('"', '\\"')
@@ -133,10 +118,9 @@ def meta_entries(rule: DetectionRule, block: GoogleSecopsConfig) -> list[tuple[s
         ("severity", level),
         ("priority", block.priority or level),
     ]
+    # ``technique`` only: Google's coverage matrix reads it as a comma-separated list and
+    # places each technique under its tactics; no list form of ``tactic`` is documented.
     technique_ids = techniques(rule)
-    tactic_ids = tactics(technique_ids)
-    if tactic_ids:
-        entries.append(("tactic", ",".join(tactic_ids)))
     if technique_ids:
         entries.append(("technique", ",".join(technique_ids)))
     entries.append(("opentide_uuid", str(rule.metadata.uuid)))

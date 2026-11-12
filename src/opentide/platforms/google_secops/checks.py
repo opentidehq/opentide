@@ -37,7 +37,6 @@ DERIVED_META = (
     "description",
     "severity",
     "priority",
-    "tactic",
     "technique",
     "opentide_uuid",
     "opentide_version",

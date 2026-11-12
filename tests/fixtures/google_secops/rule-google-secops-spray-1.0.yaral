@@ -4,7 +4,6 @@ rule password_spray_then_success {
     description = "Ten or more blocked logins for one user from one address, then an allowed login for that user from that address, within 30 minutes."
     severity = "High"
     priority = "High"
-    tactic = "TA0001,TA0003,TA0004,TA0005,TA0006"
     technique = "T1078,T1110.003"
     opentide_uuid = "00000000-0000-4000-8003-000000000062"
     opentide_version = "1"
