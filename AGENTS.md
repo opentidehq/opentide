@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across twelve security platforms.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across thirteen security platforms.
 
 **Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
 
@@ -107,6 +107,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | Bitdefender GravityZone | ✅ | ❌ | ✅ YARA | ❌ |
 | Graylog | ✅ | ✅ Graylog search (`/api/search/validate`) | ✅ Lucene, Graylog dialect | ✅ Lucene (`/api/search/messages`) |
 | Exabeam New-Scale SIEM | ✅ | ✅ the filter, via Search | ✅ Exabeam Query Language | ✅ Exabeam Query Language |
+| Google Security Operations | ✅ | ✅ YARA-L (`verifyRuleText`) | ✅ YARA-L | ✅ YARA-L (`udmSearch`) |
 
 CrowdStrike, HarfangLab, Sysdig and Bitdefender: `can_validate is False` — return `supported: False` for `--live`, never fake validation. HarfangLab's and Bitdefender's YARA (the engine's bitdefender profile) and Sysdig's Falco are checked offline only; Bitdefender's criteria are checked by `opentide validate`.
 Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
@@ -122,6 +123,10 @@ rule UUID (lower-case) in deployment state; a name check before each create refu
 requests are paced to 100 a minute across all Exabeam tenants. `--live` checks each sequence filter through
 Search; the engine checks the `exabeam` language offline (sequence queries under the `rule` profile,
 hunts and `.exabeam` files under `search`).
+Google SecOps (`src/opentide/platforms/google_secops/`) assembles a YARA-L rule from the block's
+sections and derived meta, and deploys it through the Chronicle API v1 (`verifyRuleText` first,
+then `rules` and `rules/{id}/deployment`), the `ru_` rule id in deployment state; `DELETION`
+archives, or deletes without `force`. `--live` is `verifyRuleText`, which creates nothing.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
 search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
 `kuery` is the one write: its rule preview's alerts, in the preview index.

@@ -45,6 +45,7 @@ PLATFORM_LANGUAGES: dict[str, tuple[str, ...]] = {
     "elastic": ("esql", "eql", "lucene", "kuery"),
     "graylog": ("lucene",),
     "exabeam": ("exabeam",),
+    "google_secops": ("yaral",),
 }
 
 #: The address a transport failure is reported against, for tenants configured without a URL.
@@ -53,6 +54,17 @@ _DEFAULT_HOSTS = {
     "defender_for_endpoint": "https://graph.microsoft.com",
     "crowdstrike": "https://api.crowdstrike.com",
 }
+
+
+def _tenant_host(platform: str, setup: object) -> str:
+    """The address a "cannot reach" error names for *setup*'s tenant."""
+    if platform == "google_secops":
+        from opentide.platforms.google_secops.compile import default_endpoint
+
+        endpoint = getattr(setup, "endpoint", None)
+        location = getattr(setup, "location", "") or ""
+        return str(endpoint or (default_endpoint(location) if location else ""))
+    return str(getattr(setup, "url", "") or _DEFAULT_HOSTS.get(platform, ""))
 
 
 class QueryUsageError(ValueError):
@@ -252,7 +264,7 @@ def run_on_tenant(
     outcome = TenantOutcome(tenant=tenant.name, label=request.label)
     began = time.monotonic()
     setup = getattr(tenant, "setup", None)
-    host = str(getattr(setup, "url", "") or _DEFAULT_HOSTS.get(request.platform, ""))
+    host = _tenant_host(request.platform, setup)
     logger.info("query_sent", platform=request.platform, tenant=tenant.name, label=request.label)
     try:
         with reaching_tenant(request.platform, tenant.name, host):

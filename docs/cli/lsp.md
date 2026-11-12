@@ -131,17 +131,18 @@ Only `opentide lsp start` checks configuration files. The `opentide-lsp` binary 
 
 ### Configuring an editor
 
-Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`), and for `.opentide/configurations/**/*.toml`. The completion triggers are `|`, space, `:`, `.`, `(`, `,`, `` ` `` and `=`; signature help opens on `(`, `,`, `=` and `` ` ``. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
+Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.yar`, `.yara`, `.yaral`, `.yl2`), and for `.opentide/configurations/**/*.toml`. The completion triggers are `|`, space, `:`, `.`, `(`, `,`, `` ` `` and `=`; signature help opens on `(`, `,`, `=` and `` ` ``. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
 
 Neovim (0.11 or later):
 
 ```lua
 vim.lsp.config("opentide", {
   cmd = { "opentide", "lsp", "start" },
-  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco" },
+  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "yara", "yaral" },
   root_markers = { ".opentide" },
 })
 vim.lsp.enable("opentide")
+vim.filetype.add({ extension = { yaral = "yaral", yl2 = "yaral" } })
 ```
 
 Helix (`languages.toml`):
@@ -169,6 +170,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Bitdefender GravityZone | YARA (`yara.signature`, Bitdefender profile: ASCII, 30,000 characters) | ✅ |
 | Graylog | Lucene (Graylog dialect) | ✅ |
 | Exabeam New-Scale SIEM | Exabeam Query Language (`sequences[].query`, profile `rule`; `system: exabeam` hunts and `.exabeam` files, profile `search`) | ✅ |
+| Google Security Operations | YARA-L 2.0 (the block's sections as the assembled rule; `system: google_secops` hunts as searches; `.yaral` and `.yl2` files) | ✅ |
 | CrowdStrike | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp

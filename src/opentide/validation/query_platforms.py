@@ -1,7 +1,8 @@
 """Platforms whose queries can be checked against a tenant.
 
 CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check, so their capability entry is
-``can_validate False``. HarfangLab's YARA is checked offline.
+``can_validate False``. HarfangLab's YARA is checked offline. Google SecOps is
+checked by its own compiler, ``verifyRuleText``, which creates nothing.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
         "elastic",
         "graylog",
         "exabeam",
+        "google_secops",
     }
 )
 
@@ -29,6 +31,8 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 #: Graylog's query is Lucene, checked in the engine's Graylog dialect (graylog-1.0).
 #: Exabeam's sequence queries are the Exabeam Query Language (``exabeam``, profile
 #: ``rule``), checked offline and, the filter only, live through Search (exabeam-1.0).
+#: Google SecOps' YARA-L sections are checked offline as the one rule deploy assembles
+#: (yara-l-1.0), and on the tenant with ``verifyRuleText`` (``--live``).
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
 #: CrowdStrike is never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
@@ -42,5 +46,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "bitdefender": ("yara",),
     "graylog": ("lucene",),
     "exabeam": ("exabeam",),
+    "google_secops": ("yaral",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

@@ -137,7 +137,7 @@ def test_catalog_lists_every_object_with_its_location(
     assert rule["load_error"] is None
     summary = catalog["summary"]
     assert summary["threats"] == 2 and summary["objectives"] == 1
-    assert summary["rules"] == 15  # the corpus thirteen, and two added here
+    assert summary["rules"] == 16  # the corpus fourteen, and two added here
     assert summary["signals"] == 2
     assert summary["edges"] == len(catalog["edges"])
     assert summary["objects"] == len(catalog["objects"])
@@ -262,7 +262,7 @@ def test_info_catalog_human_summary(cli_runner, tide_corpus_repo: Path) -> None:
     assert result.exit_code == 0, result.stdout
     rows = [" ".join(line.split()) for line in result.stdout.splitlines()]
     assert any(row.startswith("objects ") and "2 threats" in row for row in rows)
-    assert "edges 37" in rows
+    assert "edges 39" in rows
     assert "2 chains" in rows
     assert "2 missing: name no object" in rows
     assert "load errors 1" in rows

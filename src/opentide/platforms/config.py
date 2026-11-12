@@ -37,6 +37,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "bitdefender": ConfigurationModels.Systems.Bitdefender,
     "graylog": ConfigurationModels.Systems.Graylog,
     "exabeam": ConfigurationModels.Systems.Exabeam,
+    "google_secops": ConfigurationModels.Systems.GoogleSecops,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -353,6 +354,44 @@ def _check_exabeam_setup(setup: dict[str, Any], *, where: str) -> None:
         raise ValueError(f"{where} setup: test_mode must be true or false")
 
 
+#: ``[tenants.setup]`` keys of a Google SecOps tenant (google-secops-1.0, Tenant setup).
+_GOOGLE_SECOPS_SETUP_KEYS = frozenset(
+    {
+        "ssl",
+        "project",
+        "location",
+        "instance",
+        "endpoint",
+        "credentials",
+        "data_access_scope",
+        "deletion",
+    }
+)
+
+
+def _check_google_secops_setup(setup: dict[str, Any], *, where: str) -> None:
+    """google-secops-1.0 tenant setup: known keys, `credentials` as `$VAR`, a known deletion."""
+    unknown = sorted(set(setup) - _GOOGLE_SECOPS_SETUP_KEYS)
+    if unknown:
+        raise ValueError(f"{where} setup has unknown key(s): {', '.join(unknown)}")
+    missing = [key for key in ("project", "location", "instance") if not setup.get(key)]
+    if missing:
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
+    credentials = setup.get("credentials")
+    if credentials is not None:
+        reference = _ENV_REFERENCE.fullmatch(credentials) if isinstance(credentials, str) else None
+        if reference is None:
+            raise ValueError(
+                f"{where} setup: credentials must be an environment variable reference "
+                "($VAR or ${VAR}, e.g. $GOOGLE_SECOPS_CREDENTIALS) whose value is a "
+                "service-account key or the path to one; leave it out to use Application "
+                "Default Credentials"
+            )
+        setup["credentials"] = f"${reference.group(1) or reference.group(2)}"
+    if setup.get("deletion", "archive") not in ("archive", "delete"):
+        raise ValueError(f"{where} setup: deletion must be archive or delete")
+
+
 def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
     """Typed tenants for any system without a bespoke loader."""
     from opentide.core.debug import DebugHelpers
@@ -392,6 +431,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
             _check_graylog_setup(supplied_setup, where=where)
         if system == "exabeam":
             _check_exabeam_setup(supplied_setup, where=where)
+        if system == "google_secops":
+            _check_google_secops_setup(supplied_setup, where=where)
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)

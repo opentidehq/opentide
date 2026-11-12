@@ -647,6 +647,13 @@ def _exabeam_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     return _platform_advisory_findings(records, "exabeam", exabeam_advisories)
 
 
+def _google_secops_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Google SecOps advisories (google-secops-1.0), at the value each points at."""
+    from opentide.platforms.google_secops.advisories import google_secops_advisories
+
+    return _platform_advisory_findings(records, "google_secops", google_secops_advisories)
+
+
 def _platform_advisory_findings(
     records: list[_ObjectRecord],
     platform: str,
@@ -980,12 +987,13 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
-        # The HarfangLab YARA, Bitdefender, Graylog and Exabeam advisories need no engine:
-        # reported whether it loads or not.
+        # The HarfangLab YARA, Bitdefender, Graylog, Exabeam and Google SecOps advisories
+        # need no engine: reported whether it loads or not.
         advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
         advisories.extend(_bitdefender_findings(shown))
         advisories.extend(_graylog_findings(shown))
         advisories.extend(_exabeam_findings(shown))
+        advisories.extend(_google_secops_findings(shown))
         findings.extend(advisories)
         try:
             findings.extend(_query_findings(target, shown))

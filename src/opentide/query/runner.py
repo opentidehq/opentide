@@ -27,6 +27,7 @@ QUERY_PLATFORMS: frozenset[str] = frozenset(
         "elastic",
         "graylog",
         "exabeam",
+        "google_secops",
     }
 )
 

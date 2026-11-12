@@ -16,7 +16,7 @@ import re
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -52,6 +52,9 @@ from opentide.models.platform_configs import (
     ExabeamRecurrence,
     ExabeamSequence,
     ExabeamSuppression,
+    GoogleSecopsMatch,
+    GoogleSecopsOptions,
+    GoogleSecopsSchedule,
     GraylogAggregation,
     GraylogEventField,
     GraylogSchedule,
@@ -1032,6 +1035,101 @@ class ExabeamConfig(PlatformConfigBase):
         return raw
 
 
+def _without_none(raw: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in raw.items() if value is not None}
+
+
+#: A YARA-L section text, written in the block as a block scalar.
+_YARAL_TEXT = {"tide.template.multiline": True}
+_YARAL_REQUIRED = {"tide.template.multiline": True, "tide.template.required": True}
+
+
+class GoogleSecopsConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::google_secops::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    setup: str | None = TideField(None, schema_extra=_YARAL_TEXT)
+    """YARA-L `setup` section text."""
+    events: str = TideField(schema_extra=_YARAL_REQUIRED)
+    """YARA-L `events` section text."""
+    match: GoogleSecopsMatch | None = None
+    """`group_by`, `window`, and `type` (`hop`, `tumbling`, `sliding` with `pivot` and
+    `direction`). Required with two or more event variables."""
+    outcome: str | None = TideField(None, schema_extra=_YARAL_TEXT)
+    """YARA-L `outcome` section text."""
+    condition: str = TideField(schema_extra=_YARAL_REQUIRED)
+    """YARA-L `condition` section text."""
+    options: GoogleSecopsOptions | None = None
+    """`allow_zero_values`, `suppression_window`."""
+    export: str | None = TideField(None, schema_extra=_YARAL_TEXT)
+    """YARA-L `export` section text."""
+    severity: Literal["Info", "Low", "Medium", "High", "Critical"] | None = None
+    """`Info`, `Low`, `Medium`, `High`, or `Critical`. Written as meta `severity`. Derived from
+    `response.alert_severity` when omitted."""
+    priority: Literal["Info", "Low", "Medium", "High", "Critical"] | None = None
+    """Same values. Written as meta `priority`. Default: the severity."""
+    alerting: bool | None = Field(default=None, strict=True)
+    """Whether detections become alerts (`RuleDeployment.alerting`). Default: `false` under
+    `PREVIEW`, `true` under `RELEASE` and `UNIVERSAL`."""
+    run_frequency: Literal["LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY"] | None = (
+        None
+    )
+    """`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Not sent when omitted: a new
+    rule gets Google's default, and an existing rule keeps its own."""
+    schedule: GoogleSecopsSchedule | None = None
+    """Schedule customizations, for `LIVE_CUSTOMIZABLE` and `HOURLY_CUSTOMIZABLE` only."""
+    meta: dict[str, str] | None = None
+    """Extra meta keys, written after the derived meta in the order given."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_google_secops_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        # Nested models (SDK callers) are checked as the mappings YAML would give.
+        raw = {
+            key: value.model_dump(by_alias=True, exclude_none=True)
+            if isinstance(value, BaseModel)
+            else value
+            for key, value in data.items()
+        }
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.google_secops.checks import block_findings
+
+        # A block dumped and loaded again (deploy's modifiers, model_dump with or
+        # without aliases) carries every field, unset ones as None: only an
+        # authored null is a section with no text.
+        dumped = all(
+            name in raw or (info.alias is not None and info.alias in raw)
+            for name, info in cls.model_fields.items()
+        )
+        authored = _without_none(raw) if dumped else raw
+        findings = block_findings(authored)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code),
+                        "{message}",
+                        {"message": finding.message},
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -1045,6 +1143,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "bitdefender": BitdefenderConfig,
     "graylog": GraylogConfig,
     "exabeam": ExabeamConfig,
+    "google_secops": GoogleSecopsConfig,
 }
 
 
@@ -1082,6 +1181,8 @@ class RuleConfigurations(TideModel):
     """Graylog event definition (`platform::graylog::1.0`)."""
     exabeam: ExabeamConfig | None = None
     """Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."""
+    google_secops: GoogleSecopsConfig | None = None
+    """Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

@@ -63,6 +63,7 @@ PLATFORMS = (
     "bitdefender",
     "graylog",
     "exabeam",
+    "google_secops",
 )
 
 #: ``--strategy`` values and what each deploys, as

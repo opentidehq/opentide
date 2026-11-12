@@ -213,6 +213,32 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`filename_slug`](#filename_slug) | The file name is not the one lint.toml's [filenames] style derives from the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
+| [`google_secops_compile_error`](#google_secops_compile_error) | Google SecOps's compiler refuses a rule in a live query check. |
+| [`google_secops_compile_warning`](#google_secops_compile_warning) | Google SecOps's compiler accepts a rule with a warning in a live query check. |
+| [`google_secops_create_no_id`](#google_secops_create_no_id) | A Google SecOps create answered without a rule id. |
+| [`google_secops_create_unconfirmed`](#google_secops_create_unconfirmed) | A Google SecOps create got no answer or a server error, so the rule may exist without a binding. |
+| [`google_secops_credentials_missing`](#google_secops_credentials_missing) | opentide has no usable Google credentials for a Google SecOps tenant. |
+| [`google_secops_delete_refused`](#google_secops_delete_refused) | Google SecOps refused to delete a rule, so deploy archived it. |
+| [`google_secops_deployment_failed`](#google_secops_deployment_failed) | A Google SecOps rule exists, but its run state could not be set. |
+| [`google_secops_live_frequency_unavailable`](#google_secops_live_frequency_unavailable) | A Google SecOps rule with two or more event variables asks for `run_frequency: LIVE`. |
+| [`google_secops_meta_key`](#google_secops_meta_key) | A Google SecOps block's `meta` holds a key deploy cannot write. |
+| [`google_secops_name_duplicate`](#google_secops_name_duplicate) | Two enabled Google SecOps blocks resolve to one YARA-L rule name. |
+| [`google_secops_request_failed`](#google_secops_request_failed) | A Chronicle API request for one Google SecOps rule failed. |
+| [`google_secops_risk_score_missing`](#google_secops_risk_score_missing) | A Google SecOps rule's `outcome` assigns no `$risk_score`. |
+| [`google_secops_rule_compilation_failed`](#google_secops_rule_compilation_failed) | Google reports that a deployed Google SecOps rule no longer compiles. |
+| [`google_secops_rule_conflict`](#google_secops_rule_conflict) | A Google SecOps rule changed between deploy's read and its update. |
+| [`google_secops_rule_execution_limited`](#google_secops_rule_execution_limited) | Google reports that it limits or pauses a Google SecOps rule's runs. |
+| [`google_secops_rule_id_literal`](#google_secops_rule_id_literal) | A Google SecOps rule matches a producer rule by a literal `ru_…` id. |
+| [`google_secops_rule_missing`](#google_secops_rule_missing) | The Google SecOps rule a binding names no longer exists, and the rule is being retired. |
+| [`google_secops_rule_name`](#google_secops_rule_name) | A Google SecOps block's `name` is not a YARA-L rule name. |
+| [`google_secops_rule_recreated`](#google_secops_rule_recreated) | The Google SecOps rule a binding names no longer exists, so deploy created it again. |
+| [`google_secops_run_frequency`](#google_secops_run_frequency) | A Google SecOps block's `run_frequency` is not one opentide deploys. |
+| [`google_secops_run_frequency_not_allowed`](#google_secops_run_frequency_not_allowed) | A Google SecOps block's `run_frequency` is not one Google allows for the rule. |
+| [`google_secops_schedule`](#google_secops_schedule) | A Google SecOps block's `schedule` cannot be sent with its run frequency, or holds a duration that is not one. |
+| [`google_secops_severity`](#google_secops_severity) | A Google SecOps block's `severity` or `priority` is not one of Google's values. |
+| [`google_secops_tenant_unauthorized`](#google_secops_tenant_unauthorized) | A Google SecOps instance refused opentide's credentials. |
+| [`google_secops_tenant_unreachable`](#google_secops_tenant_unreachable) | A Google SecOps instance did not answer, so no rule was deployed to it. |
+| [`google_secops_verify_failed`](#google_secops_verify_failed) | Google SecOps does not compile a rule, so deploy neither creates nor updates it. |
 | [`graylog_aggregation`](#graylog_aggregation) | A Graylog aggregation condition does not parse, or a call has the wrong arguments. |
 | [`graylog_alias_unknown`](#graylog_alias_unknown) | A Graylog block names a stream or notification alias the tenant does not define. |
 | [`graylog_all_streams`](#graylog_all_streams) | A Graylog definition names no stream, so it searches every stream. |
@@ -417,6 +443,39 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
 | [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which libyara refuses unless the condition uses them. |
 | [`yara_x_incompatible`](#yara_x_incompatible) | libyara 4.5 compiles this YARA but YARA-X 1.x refuses it. |
+| [`yaral_condition_shape`](#yaral_condition_shape) | The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event. |
+| [`yaral_deprecated_field`](#yaral_deprecated_field) | The UDM field is deprecated. |
+| [`yaral_enum_value`](#yaral_enum_value) | The value is not one of the enumerated UDM field's values. |
+| [`yaral_export_value`](#yaral_export_value) | An `export` `write_row` value is not an outcome variable: Google exports outcome variables only. |
+| [`yaral_function_unavailable`](#yaral_function_unavailable) | The function exists, but not in this profile (rules or search). |
+| [`yaral_leading_wildcard_regex`](#yaral_leading_wildcard_regex) | The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time. |
+| [`yaral_match_shape`](#yaral_match_shape) | A YARA-L `match` is not a `YaraLMatch` object. |
+| [`yaral_match_variable`](#yaral_match_variable) | A `match` name is not a placeholder bound in `events`. |
+| [`yaral_match_window`](#yaral_match_window) | A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows. |
+| [`yaral_meta_duplicate`](#yaral_meta_duplicate) | A meta key appears twice, or a meta value is not a double-quoted string. |
+| [`yaral_multi_event_match`](#yaral_multi_event_match) | A rule with two or more event variables has no `match` section. |
+| [`yaral_nocase_on_enum`](#yaral_nocase_on_enum) | `nocase` is applied to a comparison with an enumerated UDM field. |
+| [`yaral_option`](#yaral_option) | A YARA-L `options` key is unknown, or its value is of the wrong kind. |
+| [`yaral_outcome_aggregation`](#yaral_outcome_aggregation) | With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable. |
+| [`yaral_outcome_limit`](#yaral_outcome_limit) | A rule or search assigns more than 20 outcome variables. |
+| [`yaral_parse_error`](#yaral_parse_error) | The YARA-L text does not parse, or a text holds a second rule. |
+| [`yaral_reference_list_deprecated`](#yaral_reference_list_deprecated) | Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`). |
+| [`yaral_reference_list_limit`](#yaral_reference_list_limit) | More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2). |
+| [`yaral_regex`](#yaral_regex) | The regular expression is not valid RE2. |
+| [`yaral_reserved_identifier`](#yaral_reserved_identifier) | A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`. |
+| [`yaral_section_alias`](#yaral_section_alias) | A YARA-L section key is a YAML alias instead of its own text. |
+| [`yaral_section_empty`](#yaral_section_empty) | A YARA-L section key is present with no text. |
+| [`yaral_section_header`](#yaral_section_header) | A YARA-L section text holds a section label, a `rule` header or a rule's braces. |
+| [`yaral_section_missing`](#yaral_section_missing) | A YARA-L rule has no `events` or no `condition` section. |
+| [`yaral_section_order`](#yaral_section_order) | A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export). |
+| [`yaral_section_unavailable`](#yaral_section_unavailable) | The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections. |
+| [`yaral_string_escape`](#yaral_string_escape) | A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles. |
+| [`yaral_type`](#yaral_type) | An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number. |
+| [`yaral_undefined_variable`](#yaral_undefined_variable) | A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`. |
+| [`yaral_unfiltered_event`](#yaral_unfiltered_event) | An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event. |
+| [`yaral_unknown_function`](#yaral_unknown_function) | The function is not in Google's YARA-L function list, or it takes a different number of arguments. |
+| [`yaral_unknown_udm_field`](#yaral_unknown_udm_field) | The field path is not in the Unified Data Model. |
+| [`yaral_window_bound`](#yaral_window_bound) | `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window. |
 
 ## analysis_engine
 
@@ -3869,6 +3928,451 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 ### How to fix
 
 Run the command it prints: `git init` for a new repository, or `git remote set-head origin --auto` when `origin/HEAD` is unset.
+
+## google_secops_compile_error
+
+Google SecOps's compiler refuses a rule in a live query check.
+
+Severity: error. Reported by `opentide validate query --platform google_secops --live` (google-secops-1.0). The rule's assembled text is compiled by `verifyRuleText`, which resolves the instance's reference lists and data tables and creates nothing. Each `ERROR` diagnostic is placed on the section key and line it falls in, with Google's message and documentation link.
+
+### Example
+
+```text illustrative
+google_secops_compile_error: configurations.google_secops.condition line 1, column 1: event variable $success is not used
+```
+
+### How to fix
+
+Fix the section and line the finding names, then run the check again.
+
+## google_secops_compile_warning
+
+Google SecOps's compiler accepts a rule with a warning in a live query check.
+
+Severity: warning. Reported by `opentide validate query --platform google_secops --live`, and logged by `opentide deploy` (google-secops-1.0): `verifyRuleText` answered `success` with a `WARNING` diagnostic, placed on the section key and line it falls in. The rule still deploys.
+
+### Example
+
+```text illustrative
+google_secops_compile_warning: configurations.google_secops.events line 2, column 5: reference lists are deprecated
+```
+
+### How to fix
+
+Read Google's message and its documentation link; change the section when the warning applies.
+
+## google_secops_create_no_id
+
+A Google SecOps create answered without a rule id.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered 2xx with a `name` that does not end in a rule id, or with a body that is not JSON. The `name` of the created rule must end in `rules/ru_<uuid>`, the id deploy records in `.opentide/states/deployment/`. Without it the rule may exist on the instance with no binding.
+
+### Example
+
+```text illustrative
+google_secops_create_no_id: rules.create for password_spray answered name None, which does not end in a rule id
+```
+
+### How to fix
+
+Find the rule in Google SecOps (Detection, Rules) by its name. Delete it, or record its `ru_` id under `platforms.google_secops.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## google_secops_create_unconfirmed
+
+A Google SecOps create got no answer or a server error, so the rule may exist without a binding.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The `rules.create` request timed out, its connection was reset, or Google answered a 5xx (`503` included), which can come after the rule was written. Google may have created the rule, but its id never reached opentide, so nothing was recorded, and deploy does not send the create again: a second rule with the same name would follow.
+
+### Example
+
+```text illustrative
+google_secops_create_unconfirmed: the create of rule password_spray got no answer (read timed out)
+```
+
+### How to fix
+
+Find the rule in Google SecOps (Detection, Rules) by its name. Delete it and deploy again, or record its `ru_` id under `platforms.google_secops.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## google_secops_credentials_missing
+
+opentide has no usable Google credentials for a Google SecOps tenant.
+
+Severity: error. Reported by `opentide deploy`, `opentide validate query --live` and `opentide query` on a `google_secops` tenant (google-secops-1.0). The tenant's `credentials` variable is unset, names no file, or holds no service-account key; or the tenant names no `credentials` and Application Default Credentials are not set up.
+
+### Example
+
+```text illustrative
+google_secops_credentials_missing: the credentials variable GOOGLE_SECOPS_CREDENTIALS is not set
+```
+
+### How to fix
+
+Set the variable to a service-account key (its JSON, or the path to the file), or leave `credentials` out and set up Application Default Credentials (`gcloud auth application-default login`, or workload identity in CI).
+
+## google_secops_delete_refused
+
+Google SecOps refused to delete a rule, so deploy archived it.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant with `deletion = "delete"` (google-secops-1.0). `DELETE` without `force` fails when the rule has detections or retrohunts. Google does not document the status it answers, so any 4xx but 401, 403, 404 and 429 counts as a refusal, and the warning carries Google's message. opentide never sends `force=true`, which deletes the detections too. The rule was disabled and archived instead, and its binding kept.
+
+### Example
+
+```text illustrative
+google_secops_delete_refused: Google refused to delete rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 because it has detections or retrohunts; it is archived instead
+```
+
+### How to fix
+
+Nothing to do: an archived rule keeps its detections as the audit trail of what it found. Delete it in the console when they are no longer needed.
+
+## google_secops_deployment_failed
+
+A Google SecOps rule exists, but its run state could not be set.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The rule text was created or updated and its id is recorded, but the update of its deployment (`enabled`, `alerting`, `runFrequency`, `archived`) failed. The binding is kept: the next deploy repairs the run state.
+
+### Example
+
+```text illustrative
+google_secops_deployment_failed: rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 is bound, but its run state could not be set
+```
+
+### How to fix
+
+Read Google's error in the message (a permission such as `chronicle.ruleDeployments.update`, a run frequency) and deploy again.
+
+## google_secops_live_frequency_unavailable
+
+A Google SecOps rule with two or more event variables asks for `run_frequency: LIVE`.
+
+Severity: warning (an advisory). Reported by `opentide validate` and `opentide lint` on a `google_secops` block (google-secops-1.0). Google allows `LIVE` for single-event rules only: `verifyRuleText` does not list it for this rule, so deploy refuses it with `google_secops_run_frequency_not_allowed` before writing anything. Google also counts a single event variable with `match` and a count or outcome condition as multi-event; the advisory does not try to decide that, and deploy still refuses.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    run_frequency: LIVE
+    events: |
+      $fail.metadata.event_type = "USER_LOGIN"
+      $success.metadata.event_type = "USER_LOGIN"
+```
+
+### How to fix
+
+Write `run_frequency: LIVE_CUSTOMIZABLE`, or remove `run_frequency`: deploy then sends none, and Google gives the rule its default frequency.
+
+## google_secops_meta_key
+
+A Google SecOps block's `meta` holds a key deploy cannot write.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `google_secops` block (google-secops-1.0). Each extra meta key is written after the derived meta as `key = "value"`: it must be an identifier that is not a YARA-L keyword, it must not be a key deploy derives (`author`, `description`, `severity`, `priority`, `technique`, `opentide_uuid`, `opentide_version`), and its value is a string. The finding is on `meta.<key>`.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    meta:
+      severity: Low        # deploy writes severity itself
+      data_source: Okta
+```
+
+### How to fix
+
+Remove the derived key (set `severity` on the block instead) or rename it; quote a value YAML would read as a number or a boolean.
+
+## google_secops_name_duplicate
+
+Two enabled Google SecOps blocks resolve to one YARA-L rule name.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `google_secops` block (google-secops-1.0). The rule name is the block's `name`, else the rule's title lower-cased with runs of other characters as `_`. Names are compared case-insensitively: a composite rule that matches a producer by `detection.detection.rule_name` would match both, and Google's own tooling treats names as unique regardless of case.
+
+### Example
+
+```yaml
+# rule-a.yaml: name: Password spray
+# rule-b.yaml:
+configurations:
+  google_secops:
+    name: PASSWORD_SPRAY
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.google_secops.name`, or rename one of the rules.
+
+## google_secops_request_failed
+
+A Chronicle API request for one Google SecOps rule failed.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED` or HTTP 503) after three waits: `Retry-After` (at most 300 seconds), else the `RetryInfo` delay Google names, else 5, 15 and 60 seconds. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
+
+### Example
+
+```text illustrative
+google_secops_request_failed: INVALID_ARGUMENT: the rule text is too long
+```
+
+### How to fix
+
+Read Google's status and message; deploy again once the cause is fixed.
+
+## google_secops_risk_score_missing
+
+A Google SecOps rule's `outcome` assigns no `$risk_score`.
+
+Severity: warning (an advisory: the rule still validates and deploys). Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `google_secops` block (google-secops-1.0). Without `$risk_score`, Google gives every detection of the rule the instance's default score, 40 for an alert and 15 otherwise unless the instance's settings change them, whatever it detects.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    outcome: |
+      $host = $e.principal.hostname
+```
+
+### How to fix
+
+Add a `$risk_score` line to `outcome`, an integer from 0 to 100 (`$risk_score = 70`), or an aggregation in a rule with `match` (`$risk_score = max(70)`).
+
+## google_secops_rule_compilation_failed
+
+Google reports that a deployed Google SecOps rule no longer compiles.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0), from the rule it reads before an update. `compilationState` `FAILED` happens after a backwards-incompatible change to Google's compiler, or when a reference list or data table the rule uses is gone; the rule then does not run. Deploy goes on: a changed text is verified and sent as usual.
+
+### Example
+
+```text illustrative
+google_secops_rule_compilation_failed: Google reports the rule's compilation as FAILED
+```
+
+### How to fix
+
+Run `opentide validate query --platform google_secops --live` to see Google's diagnostics for the rule, fix the sections they name, and deploy again.
+
+## google_secops_rule_conflict
+
+A Google SecOps rule changed between deploy's read and its update.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). The text update carried the `etag` of the rule deploy had just read, and Google refused it (HTTP 409, `ABORTED`): someone or something changed the rule in between. Nothing was written, and deploy does not retry in the same run.
+
+### Example
+
+```text illustrative
+google_secops_rule_conflict: rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 changed between its read and the update (etag mismatch)
+```
+
+### How to fix
+
+Deploy again. When it keeps happening, find what else edits the rule in Google SecOps.
+
+## google_secops_rule_execution_limited
+
+Google reports that it limits or pauses a Google SecOps rule's runs.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0), from the rule deployment it reads before an update. `executionState` `LIMITED` means Google does not guarantee the rule's runs, usually because it is expensive or produces too many detections; `PAUSED` means Google does not run it at all. Deploy goes on: the text and run state are still updated.
+
+### Example
+
+```text illustrative
+google_secops_rule_execution_limited: Google reports the rule's execution as PAUSED: it is not run at all
+```
+
+### How to fix
+
+Open the rule in Google SecOps (Detection, Rules) to see why. Narrow `events` (filter on `metadata.event_type` or `metadata.log_type`), shorten the `match` window, or reduce the detections it produces, then deploy again.
+
+## google_secops_rule_id_literal
+
+A Google SecOps rule matches a producer rule by a literal `ru_…` id.
+
+Severity: warning (an advisory). Reported by `opentide validate` and `opentide lint` on a `google_secops` block (google-secops-1.0). A rule id differs on every instance and changes when the rule is recreated, so a composite rule that compares `detection.detection.rule_id` with a literal stops matching after a redeploy or on another tenant.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    events: |
+      $d.detection.detection.rule_id = "ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1"
+```
+
+### How to fix
+
+Match the producer by its name, which opentide derives the same way on every instance: `$d.detection.detection.rule_name = "password_spray_then_success"`.
+
+## google_secops_rule_missing
+
+The Google SecOps rule a binding names no longer exists, and the rule is being retired.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Under `DISABLEMENT` or `DELETION`, reading or updating the recorded rule answered 404. Deploy created nothing and removed the binding.
+
+### Example
+
+```text illustrative
+google_secops_rule_missing: the recorded rule no longer exists on the instance; its id is removed
+```
+
+### How to fix
+
+Nothing to do: commit `.opentide/states/deployment/`.
+
+## google_secops_rule_name
+
+A Google SecOps block's `name` is not a YARA-L rule name.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `google_secops` block (google-secops-1.0). The name is written as `rule <name> {`: it must be an identifier, `[A-Za-z_][A-Za-z0-9_]*`, and not a YARA-L keyword such as `match` or `rule`. An empty `name` is derived from the rule's title instead.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    name: password-spray   # a hyphen is not allowed
+```
+
+### How to fix
+
+Write the name with letters, digits and underscores (`password_spray`), or remove `name` to use the one derived from the rule's title.
+
+## google_secops_rule_recreated
+
+The Google SecOps rule a binding names no longer exists, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Reading or updating the recorded rule answered 404. Deploy verified and created the rule again and replaced the binding with the new id. Detections of the old rule are not carried over.
+
+### Example
+
+```text illustrative
+google_secops_rule_recreated: the recorded rule no longer exists on the instance; creating it again
+```
+
+### How to fix
+
+Nothing to do: commit `.opentide/states/deployment/` with the new id. Find out who deleted the rule if that was not intended.
+
+## google_secops_run_frequency
+
+A Google SecOps block's `run_frequency` is not one opentide deploys.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `google_secops` block (google-secops-1.0). `run_frequency` is `LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE` or `DAILY`. Google's legacy `HOURLY` is refused: Google remaps it, so the stored rule would never match the block.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    run_frequency: HOURLY
+```
+
+### How to fix
+
+Write `HOURLY_CUSTOMIZABLE` (or another of the four values), or remove `run_frequency`: deploy then sends none, and Google keeps the rule's frequency, or gives a new rule its default.
+
+## google_secops_run_frequency_not_allowed
+
+A Google SecOps block's `run_frequency` is not one Google allows for the rule.
+
+Severity: error. Reported by `opentide deploy` before any write, and by `opentide validate query --platform google_secops --live` (google-secops-1.0). `verifyRuleText` answers the frequencies the rule can run at (`allowedRunFrequencies`): `LIVE` is for single-event rules, `LIVE_CUSTOMIZABLE` for multi-event windows under an hour, `HOURLY_CUSTOMIZABLE` up to two days, `DAILY` beyond.
+
+### Example
+
+```text illustrative
+google_secops_run_frequency_not_allowed: run_frequency LIVE is not one Google allows for this rule (LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, DAILY); nothing was written
+```
+
+### How to fix
+
+Set `run_frequency` to one of the frequencies the message lists, or remove it: deploy then sends no `runFrequency`, and Google keeps the rule's frequency, or gives a new rule its default.
+
+## google_secops_schedule
+
+A Google SecOps block's `schedule` cannot be sent with its run frequency, or holds a duration that is not one.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `google_secops` block (google-secops-1.0). Schedule customizations apply to `LIVE_CUSTOMIZABLE` and `HOURLY_CUSTOMIZABLE` rules only, and `late_arriving_data_adjustment` is a positive duration with unit `s`, `m`, `h` or `d` (`30m`, `2h`). The finding is on `schedule`, or on `schedule.late_arriving_data_adjustment`.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    run_frequency: LIVE
+    schedule:
+      late_arriving_data_adjustment: half an hour
+```
+
+### How to fix
+
+Set `run_frequency` to `LIVE_CUSTOMIZABLE` or `HOURLY_CUSTOMIZABLE`, or remove `schedule`; write the adjustment as a duration such as `30m`.
+
+## google_secops_severity
+
+A Google SecOps block's `severity` or `priority` is not one of Google's values.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `google_secops` block (google-secops-1.0). Both are written into the rule's meta and must be `Info`, `Low`, `Medium`, `High` or `Critical`, Google's community spelling. `Informational` is opentide's alert severity, not Google's.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    severity: Informational
+```
+
+### How to fix
+
+Use `Info`, `Low`, `Medium`, `High` or `Critical`, or remove the key: `severity` is derived from `response.alert_severity`, and `priority` defaults to the severity.
+
+## google_secops_tenant_unauthorized
+
+A Google SecOps instance refused opentide's credentials.
+
+Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or its token endpoint did not answer): no rule on that tenant is deployed or checked. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
+
+### Example
+
+```text illustrative
+google_secops_tenant_unauthorized: tenant secops-eu refused the request (HTTP 403 PERMISSION_DENIED): Permission 'chronicle.rules.create' denied
+```
+
+### How to fix
+
+Give the service account (or the Application Default Credentials principal) the permissions on the instance: `chronicle.rules.verifyRuleText`, `.create`, `.get`, `.update`, `.delete`, `chronicle.ruleDeployments.get`, `.update`, and `chronicle.events.udmSearch` for `opentide query`. Check `project`, `location` and `instance` in `platforms/google_secops.toml`. With user Application Default Credentials, set a quota project: `gcloud auth application-default set-quota-project <project>`.
+
+## google_secops_tenant_unreachable
+
+A Google SecOps instance did not answer, so no rule was deployed to it.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
+
+### Example
+
+```text illustrative
+google_secops_tenant_unreachable: HTTPSConnectionPool(host='eu-chronicle.googleapis.com', port=443): Read timed out
+```
+
+### How to fix
+
+Check the tenant's `location` (or `endpoint`), the network and proxy between the runner and Google, and `ssl`; then deploy again.
+
+## google_secops_verify_failed
+
+Google SecOps does not compile a rule, so deploy neither creates nor updates it.
+
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Deploy sends the assembled rule to `verifyRuleText` before every create and every text update. Each of Google's diagnostics is reported at the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), or on the block when it falls in the generated header or meta.
+
+### Example
+
+```text illustrative
+google_secops_verify_failed: Google SecOps does not compile rule password_spray: configurations.google_secops.events line 3, column 5: field principal.nope does not exist
+```
+
+### How to fix
+
+Fix the section the diagnostic names and run `opentide validate query --platform google_secops --live`, which asks the same compiler without deploying.
 
 ## graylog_aggregation
 
@@ -7347,3 +7851,594 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+
+## yaral_condition_shape
+
+The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_deprecated_field
+
+The UDM field is deprecated.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_enum_value
+
+The value is not one of the enumerated UDM field's values.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_export_value
+
+An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_function_unavailable
+
+The function exists, but not in this profile (rules or search).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_leading_wildcard_regex
+
+The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_match_shape
+
+A YARA-L `match` is not a `YaraLMatch` object.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). `match` takes `group_by` (a non-empty list of distinct `$placeholders`), `window`, `type` (`hop`, `tumbling` or `sliding`), and, for `sliding` only, `pivot` (an `$event`) and `direction` (`before` or `after`). The finding is on `match` or on the field at fault.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    match:
+      group_by: [$user]
+      window: 5m
+      type: sliding
+```
+
+### How to fix
+
+Add the event the sliding window is anchored on and its direction, or use a hop window:
+
+```yaml
+configurations:
+  google_secops:
+    match:
+      group_by: [$user]
+      window: 5m
+      type: sliding
+      pivot: $login
+      direction: after
+```
+
+## yaral_match_variable
+
+A `match` name is not a placeholder bound in `events`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_match_window
+
+A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). A hop or sliding window in a rule is 1 minute to 14 days; a tumbling window (`type: tumbling`) at most 72 hours. Seconds are not a window unit.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    match:
+      group_by: [$user]
+      window: 15d
+```
+
+### How to fix
+
+Write a window within the bounds, such as `30m`, `12h` or `14d`.
+
+## yaral_meta_duplicate
+
+A meta key appears twice, or a meta value is not a double-quoted string.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_multi_event_match
+
+A rule with two or more event variables has no `match` section.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_nocase_on_enum
+
+`nocase` is applied to a comparison with an enumerated UDM field.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_option
+
+A YARA-L `options` key is unknown, or its value is of the wrong kind.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). `options` takes `allow_zero_values` (`true` or `false`) and `suppression_window` (a duration in `m`, `h` or `d`). The finding is on `options.<key>`.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    options:
+      suppression_window: 1 hour
+```
+
+### How to fix
+
+Write `suppression_window: 1h`, and `allow_zero_values: true` without quotes.
+
+## yaral_outcome_aggregation
+
+With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_outcome_limit
+
+A rule or search assigns more than 20 outcome variables.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_parse_error
+
+The YARA-L text does not parse, or a text holds a second rule.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_reference_list_deprecated
+
+Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_reference_list_limit
+
+More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_regex
+
+The regular expression is not valid RE2.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_reserved_identifier
+
+A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_alias
+
+A YARA-L section key is a YAML alias instead of its own text.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
+
+### Example
+
+```yaml
+description: &shared |
+  $e
+configurations:
+  google_secops:
+    condition: *shared
+```
+
+### How to fix
+
+Write the section text under its key with a block scalar (`|`).
+
+## yaral_section_empty
+
+A YARA-L section key is present with no text.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). The key loaded as YAML `null` or blank text, or as a YAML list or mapping instead of text. A plain YAML scalar that starts with `#` is a YAML comment, so `condition: #fail > 3` loads as null.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    condition: #e > 5
+```
+
+### How to fix
+
+Write each section as a block scalar (`|`), which YAML keeps verbatim:
+
+```yaml
+configurations:
+  google_secops:
+    condition: |
+      #e > 5
+```
+
+## yaral_section_header
+
+A YARA-L section text holds a section label, a `rule` header or a rule's braces.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). Each section is its own key, and deploy writes the `rule <name> {` header, the `meta` section and the labels itself. A label or a header inside a comment or a string does not count.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    events: |
+      rule office_powershell {
+        events:
+          $e.metadata.event_type = "PROCESS_LAUNCH"
+        condition:
+          $e
+      }
+```
+
+### How to fix
+
+Move each section's lines under its own key and drop the header, `meta` and braces:
+
+```yaml
+configurations:
+  google_secops:
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    condition: |
+      $e
+```
+
+## yaral_section_missing
+
+A YARA-L rule has no `events` or no `condition` section.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). A rule needs both: `events` names what to match, `condition` when it fires. The finding is on the missing key.
+
+### Example
+
+```yaml
+configurations:
+  google_secops:
+    events: |
+      $e.metadata.event_type = "NETWORK_DNS"
+```
+
+### How to fix
+
+Add the missing key, as a block scalar:
+
+```yaml
+configurations:
+  google_secops:
+    condition: |
+      $e
+```
+
+## yaral_section_order
+
+A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_unavailable
+
+The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_string_escape
+
+A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_type
+
+An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_undefined_variable
+
+A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_unfiltered_event
+
+An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_unknown_function
+
+The function is not in Google's YARA-L function list, or it takes a different number of arguments.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_unknown_udm_field
+
+The field path is not in the Unified Data Model.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_window_bound
+
+`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.

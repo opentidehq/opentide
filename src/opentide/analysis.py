@@ -735,6 +735,8 @@ QUERY_FILE_SUFFIXES = (
     ".yar",
     ".yara",
     ".exabeam",
+    ".yaral",
+    ".yl2",
 )
 
 #: The language of a query file extension the compiled engine may not name yet.

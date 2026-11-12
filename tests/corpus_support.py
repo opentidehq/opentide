@@ -34,6 +34,7 @@ CORPUS_RULE_UUIDS = {
     "bitdefender": "00000000-0000-4000-8003-0000b1d0f001",
     "graylog": "00000000-0000-4000-8003-00000091a7e0",
     "exabeam": "00000000-0000-4000-8003-0000e8ab0001",
+    "google_secops": "00000000-0000-4000-8003-00000000ec01",
 }
 #: Rules deploy skips because they sit in subfolders (#312). One shares a
 #: top-level file name, which a lookup by file name would resolve wrongly.

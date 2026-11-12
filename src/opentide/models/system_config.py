@@ -322,6 +322,24 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class GoogleSecops(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    project: str = ""
+                    location: str = ""
+                    instance: str = ""
+                    endpoint: str | None = None
+                    credentials: str | None = None
+                    data_access_scope: str | None = None
+                    deletion: str = "archive"
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -392,6 +410,10 @@ class TenantDeployment:
     @dataclass
     class Exabeam(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Exabeam.Tenant
+
+    @dataclass
+    class GoogleSecops(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.GoogleSecops.Tenant
 
 
 def tenant_skip_reason(name: str, *, manual: bool, listed: Sequence[str]) -> str | None:

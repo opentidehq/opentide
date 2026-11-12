@@ -1,0 +1,38 @@
+name: Google SecOps YARA-L Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-00000000ec01
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Engineering
+
+description: |
+  Simulated Google SecOps YARA-L rule for CLI E2E corpus: an Office
+  application starting an encoded PowerShell.
+status: STAGING
+severity: High
+techniques:
+  - T1059.003
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    run_frequency: LIVE
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+      $e.principal.process.file.full_path = /\\(winword|excel)\.exe$/ nocase
+      $e.target.process.command_line = /\s-enc\s/ nocase
+    outcome: |
+      $risk_score = 70
+      $host = $e.principal.hostname
+    condition: |
+      $e

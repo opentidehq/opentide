@@ -161,6 +161,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--bitdefender` | Bitdefender GravityZone |
 | `--graylog` | Graylog |
 | `--exabeam` | Exabeam New-Scale SIEM |
+| `--google-secops` | Google Security Operations (YARA-L) |
 
 ### setup ci
 

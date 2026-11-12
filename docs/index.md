@@ -1,6 +1,6 @@
 ---
 title: opentide
-description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across twelve security platforms.
+description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across thirteen security platforms.
 ---
 
 # opentide
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ## Platform coverage
 
-opentide supports **twelve deployment platforms** and **eight query validators**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but do not support live query validation — opentide never fakes validation for those platforms.
+opentide supports **thirteen deployment platforms** and **nine query validators**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but do not support live query validation — opentide never fakes validation for those platforms.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 

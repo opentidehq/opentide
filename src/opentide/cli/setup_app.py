@@ -627,6 +627,9 @@ def setup_platforms_cmd(
     bitdefender: bool = typer.Option(False, "--bitdefender", help="Enable Bitdefender GravityZone"),
     graylog: bool = typer.Option(False, "--graylog", help="Enable Graylog"),
     exabeam: bool = typer.Option(False, "--exabeam", help="Enable Exabeam New-Scale SIEM"),
+    google_secops: bool = typer.Option(
+        False, "--google-secops", help="Enable Google Security Operations (YARA-L)"
+    ),
     plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
@@ -661,6 +664,8 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.graylog)
     if exabeam:
         platforms.append(DetectionPlatform.exabeam)
+    if google_secops:
+        platforms.append(DetectionPlatform.google_secops)
     if not platforms:
         raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
     if _planning(ctx, plan):

@@ -20,6 +20,7 @@ SYSTEM_KEYS = (
     "bitdefender",
     "graylog",
     "exabeam",
+    "google_secops",
 )
 
 

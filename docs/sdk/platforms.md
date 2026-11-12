@@ -50,6 +50,7 @@ Eight platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `openti
 - `elastic` → Kuery, Lucene, EQL, ES|QL (live tenant check only)
 - `graylog` → Lucene, through `POST /api/search/validate`
 - `exabeam` → Exabeam Query Language (each sequence filter, through Search)
+- `google_secops` → YARA-L 2.0 (`verifyRuleText`, live only)
 
 CrowdStrike, HarfangLab, Sysdig and Bitdefender have deployers only.
 

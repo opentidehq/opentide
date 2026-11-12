@@ -20,7 +20,7 @@ import structlog
 from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 
-# CrowdStrike and HarfangLab ship no validator module: `can_validate is False`.
+# CrowdStrike, HarfangLab, Sysdig and Bitdefender ship no validator module: `can_validate is False`.
 from opentide.validation.query_platforms import QUERY_VALIDATION_PLATFORMS
 
 if TYPE_CHECKING:
@@ -302,6 +302,7 @@ _PLATFORM_PKG: dict[str, str] = {
     "bitdefender": "bitdefender",
     "graylog": "graylog",
     "exabeam": "exabeam",
+    "google_secops": "google_secops",
 }
 
 

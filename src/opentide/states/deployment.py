@@ -35,6 +35,7 @@ STATE_PLATFORMS: tuple[str, ...] = (
     "defender_for_endpoint",
     "graylog",
     "exabeam",
+    "google_secops",
     "sentinel_one",
     "sysdig",
 )
@@ -63,6 +64,18 @@ _OBJECT_ID = re.compile(r"[0-9a-f]{24}")
 #: Platforms whose external id is a canonical lower-case UUID (Exabeam).
 UUID_ID_PLATFORMS: frozenset[str] = frozenset({"exabeam"})
 _CANONICAL_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+#: Platforms whose external id is a string of a fixed shape, and what that shape is.
+_PATTERNED_IDS: dict[str, tuple[re.Pattern[str], str]] = {
+    **dict.fromkeys(OBJECT_ID_PLATFORMS, (_OBJECT_ID, "24 lower-case hex digits")),
+    **dict.fromkeys(
+        UUID_ID_PLATFORMS, (_CANONICAL_UUID, "a canonical lower-case UUID (8-4-4-4-12 hex digits)")
+    ),
+    # google-secops-1.0: the rule id, never a revision (``@v_…``) or a resource name.
+    "google_secops": (
+        re.compile(r"ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
+        "ru_ and a lower-case UUID (ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1)",
+    ),
+}
 _ROOT_KEYS = ("object_uuid", "platforms", "schema")
 
 
@@ -128,7 +141,8 @@ def normalise_external_id(platform: str, value: object) -> str:
     refused rather than rewritten to a different number. A Bitdefender or Graylog id
     is 24 lower-case hex digits, an Exabeam id a canonical lower-case UUID (a writer
     lower-cases the id Exabeam returns; a shard that holds another spelling is
-    refused). CrowdStrike ids are copied verbatim.
+    refused), a Google SecOps id ``ru_`` and a lower-case UUID. CrowdStrike ids are
+    copied verbatim.
     """
     if isinstance(value, bool) or not isinstance(value, (int, str)):
         raise DeploymentStateError(
@@ -137,16 +151,10 @@ def normalise_external_id(platform: str, value: object) -> str:
             platform=platform,
         )
     if isinstance(value, int):
-        if platform in OBJECT_ID_PLATFORMS:
+        if platform in _PATTERNED_IDS:
             raise DeploymentStateError(
                 "external_id_shape",
-                f"{platform} external id {value} is a number, not 24 lower-case hex digits",
-                platform=platform,
-            )
-        if platform in UUID_ID_PLATFORMS:
-            raise DeploymentStateError(
-                "external_id_shape",
-                f"{platform} external id {value} is a number, not a UUID",
+                f"{platform} external id {value} is a number, not {_PATTERNED_IDS[platform][1]}",
                 platform=platform,
             )
         if value < 0:
@@ -167,17 +175,11 @@ def normalise_external_id(platform: str, value: object) -> str:
             "(no sign, no leading zeroes)",
             platform=platform,
         )
-    if platform in OBJECT_ID_PLATFORMS and not _OBJECT_ID.fullmatch(value):
+    patterned = _PATTERNED_IDS.get(platform)
+    if patterned is not None and not patterned[0].fullmatch(value):
         raise DeploymentStateError(
             "external_id_shape",
-            f"{platform} external id {value!r} is not 24 lower-case hex digits",
-            platform=platform,
-        )
-    if platform in UUID_ID_PLATFORMS and not _CANONICAL_UUID.fullmatch(value):
-        raise DeploymentStateError(
-            "external_id_shape",
-            f"{platform} external id {value!r} is not a canonical lower-case UUID "
-            "(8-4-4-4-12 hex digits)",
+            f"{platform} external id {value!r} is not {patterned[1]}",
             platform=platform,
         )
     return value
