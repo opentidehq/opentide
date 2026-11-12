@@ -32,7 +32,7 @@ ESQL = CodeLanguage("ES|QL", "esql")
 YARA = CodeLanguage("YARA", "yara")
 FALCO = CodeLanguage("Falco condition", "text")
 GRAYLOG = CodeLanguage("Graylog search", "lucene")
-YARAL = CodeLanguage("YARA-L", "text")
+YARAL = CodeLanguage("YARA-L", "yaral")
 MARKDOWN = CodeLanguage("Markdown", "markdown")
 TEXT = CodeLanguage("Text", "text")
 
