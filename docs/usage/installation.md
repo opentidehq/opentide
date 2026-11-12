@@ -49,7 +49,7 @@ The latest release is **0.25.0** (11 November 2026). The first public release wa
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==0.25.0'     # pin the current release
+pip install 'opentide==0.26.0'     # pin the current release
 ```
 
 </Tab>
@@ -58,7 +58,7 @@ pip install 'opentide==0.25.0'     # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==0.25.0'    # pin the current release
+uv pip install 'opentide==0.26.0'    # pin the current release
 ```
 
 </Tab>
