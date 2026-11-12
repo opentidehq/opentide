@@ -23,7 +23,7 @@ because napi-derive's registration (a `ctor` static constructor per `#[napi]` it
 | `build.mjs` | `napi build --platform` for this machine, with `OPENTIDE_VERSION` the package's version unless set |
 | `npm/<platform>/` | The native package of each of the eight targets (`napi create-npm-dirs`), the package's optional dependencies; only linux-x64-gnu is built in CI today |
 | `alias/` | The `opentide` package: depends on `@opentide/opentide`, re-exports it, the same bin |
-| `test/` | `node --test`: the SDK against `runJson`, the bin (exit codes, Ctrl-C), the packages, `docs/sdk/typescript.md`'s snippets; `consumer.ts` type-checks against `index.d.ts` |
+| `test/` | `node --test`: the SDK against `runJson`, the bin (exit codes, Ctrl-C), the packages, `docs/sdk/typescript.md`'s snippets; `consumer.ts` type-checks against `index.d.ts`; `conformance.test.mjs` is the Node runner of the cross-SDK conformance suite (UC-5.4, `tests/conformance/README.md`) |
 
 ## Rules
 
@@ -46,4 +46,5 @@ cargo clippy -p opentide-node --all-targets -- -D warnings
 cargo test -p opentide-node
 cd bindings/node && npm ci && npm run build && npm test
 cargo xtask golden check --runner node     # after `uv sync --group dev`
+cargo xtask conformance                    # the same documents as the Rust and Python SDKs
 ```

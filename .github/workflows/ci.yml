@@ -9,7 +9,8 @@ name: CI
 # - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
 #   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 #   Windows CLI smoke, the facade crate's every feature and semver checks, the
-#   Node package, LSP clients and benchmarks. It runs nightly, on every push
+#   Node package, the cross-SDK conformance suite on three OSes, LSP clients
+#   and benchmarks. It runs nightly, on every push
 #   to development and integration/unified-core, on Run workflow, and on
 #   a pull request that carries the `full-ci` label (read at each push: add
 #   the label, then push, or Run workflow on the branch). Each of these jobs
@@ -573,6 +574,92 @@ jobs:
         with:
           name: golden-node
           path: golden-node.json
+          if-no-files-found: ignore
+
+  # The cross-SDK conformance suite (UC-5.4, #839): every operation of
+  # tests/conformance/manifest.json on the tide corpus, the heavy workspace,
+  # the fault workspace and each configuration fault, through the Rust, Python
+  # and Node SDKs, byte for byte (`cargo xtask conformance`); then the suite's
+  # own test, a deliberate divergence of one runner that it must catch. On the
+  # three operating systems. It builds the facade three times (the Python and
+  # Node bindings, the Rust runner), so it is in the full set.
+  conformance:
+    name: SDK conformance (${{ matrix.os }})
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: conformance
+          key: ${{ matrix.os }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/node/package-lock.json
+
+      # The Python SDK: opentide._native, the develop profile.
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # The Node SDK, the develop profile as the Python binding's, reporting
+      # the workspace's version as the Rust and Python builds do (the npm
+      # package's own is 0.0.0 until the release sets it).
+      - name: Build the addon
+        working-directory: bindings/node
+        shell: bash
+        run: |
+          OPENTIDE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' ../../Cargo.toml | head -n 1)"
+          export OPENTIDE_VERSION
+          node build.mjs --profile develop
+
+      - name: Every operation on every corpus, byte for byte
+        run: cargo xtask conformance --runners rust,python,node
+
+      - name: A divergence in one runner is caught
+        run: cargo xtask conformance --runners rust,python,node --corpus tide_corpus --diverge node
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: conformance-${{ matrix.os }}
+          path: target/conformance/report.json
           if-no-files-found: ignore
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
