@@ -137,6 +137,21 @@ pub enum ConnectorError {
         /// The timeout.
         timeout: std::time::Duration,
     },
+    /// A gateway or proxy in front of the tenant answered for it (HTTP 502,
+    /// 503 or 504, or a page that is not the API's after a slow request:
+    /// Python's `GatewayTimeoutError`): one query timed out there, the tenant
+    /// is not down.
+    #[error("{message}")]
+    Gateway {
+        /// The platform's identifier.
+        platform: String,
+        /// The tenant's name.
+        tenant: String,
+        /// What answered, and what to do about it.
+        message: String,
+        /// The status the gateway answered.
+        status: u16,
+    },
     /// The run was cancelled (Ctrl-C, `$/cancelRequest`).
     #[error("interrupted")]
     Cancelled,

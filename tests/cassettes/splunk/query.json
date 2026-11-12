@@ -1,0 +1,283 @@
+{
+  "format": 1,
+  "scenario": "splunk/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/splunk/client.py",
+    "query"
+  ],
+  "digest": "sha256:2954568718d8b3681a93d3ebcc5aa505505bc8be8f8079692ed54d2c4a3448e3",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/services/server/info",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>server-info</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/server-info</id><link href=\"/servicesNS/nobody/search/saved/searches/server-info\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"version\">9.3.0</s:key><s:key name=\"instance_type\">download</s:key><s:key name=\"serverName\">stand-in</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/services/server/info",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>server-info</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/server-info</id><link href=\"/servicesNS/nobody/search/saved/searches/server-info\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"version\">9.3.0</s:key><s:key name=\"instance_type\">download</s:key><s:key name=\"serverName\">stand-in</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=search+index%3Dmain+sourcetype%3DWinEventLog%3ASecurity+EventCode%3D4688&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=3&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=UTF-8"
+          ]
+        ],
+        "body": "{\"preview\": false, \"init_offset\": 0, \"messages\": [], \"fields\": [{\"name\": \"_time\"}, {\"name\": \"host\"}, {\"name\": \"count\"}], \"results\": [{\"_time\": \"2026-10-27T07:51:00.000+00:00\", \"host\": \"ws-1\", \"count\": \"1\"}, {\"_time\": \"2026-10-27T07:52:00.000+00:00\", \"host\": \"ws-2\", \"count\": \"2\"}, {\"_time\": \"2026-10-27T07:53:00.000+00:00\", \"host\": \"ws-3\", \"count\": \"3\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=%7C+makeresults+count%3D3+%7C+eval+host%3D%22ws-%C3%A9%22&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=101&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=UTF-8"
+          ]
+        ],
+        "body": "{\"preview\": false, \"init_offset\": 0, \"messages\": [], \"fields\": [{\"name\": \"_time\"}, {\"name\": \"host\"}, {\"name\": \"count\"}], \"results\": [{\"_time\": \"2026-10-27T07:51:00.000+00:00\", \"host\": \"ws-1\", \"count\": \"1\"}, {\"_time\": \"2026-10-27T07:52:00.000+00:00\", \"host\": \"ws-2\", \"count\": \"2\"}, {\"_time\": \"2026-10-27T07:53:00.000+00:00\", \"host\": \"ws-3\", \"count\": \"3\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=search+index%3Dmissing_index&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=101&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=UTF-8"
+          ]
+        ],
+        "body": "{\"fields\": [{\"name\": \"_time\"}, {\"name\": \"host\"}], \"messages\": [{\"type\": \"WARN\", \"text\": \"Search filters specified using splunk_server/splunk_server_group do not match any search peer.\"}, {\"type\": \"INFO\", \"text\": \"Your timerange was substituted\"}], \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=search+index%3Dmain+%7C+lookup+errors+x&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=101&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=UTF-8"
+          ]
+        ],
+        "body": "{\"messages\": [{\"type\": \"ERROR\", \"text\": \"Error in 'lookup' command: The lookup table 'x' does not exist.\"}], \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=search+index%3Dmain+%7C+badcommand&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=101&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=UTF-8"
+          ]
+        ],
+        "body": "{\"messages\": [{\"type\": \"FATAL\", \"text\": \"Unknown search command 'badcommand'.\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=search+index%3Dmain+nofields&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=101&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=UTF-8"
+          ]
+        ],
+        "body": "{\"results\": [{\"host\": \"ws-1\", \"b\": \"1\"}, {\"a\": \"x\", \"host\": \"ws-2\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/search/v2/jobs/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=search+index%3Dmain+gateway&exec_mode=oneshot&earliest_time=1793001600.000&latest_time=1793088000.250&count=101&output_mode=json&segmentation=none"
+      },
+      "response": {
+        "status": 502,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/html"
+          ]
+        ],
+        "body": "<html><head><title>502 Bad Gateway</title></head><body></body></html>"
+      }
+    }
+  ]
+}
