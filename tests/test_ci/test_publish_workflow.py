@@ -1,10 +1,13 @@
-"""Contract for ``publish-pypi.yml``: a retry after a PyPI 5xx must be safe.
+"""Contract for ``publish.yml``, the release train (#840): its PyPI job, its
+guard, and the modes Run workflow starts (a release, a release candidate, a dry
+run, resuming a tag).
 
-On 0.4.0 the wheel upload got ``502 Bad Gateway`` but PyPI kept the file, so
-the version briefly had a wheel and no sdist. The ``repository_dispatch`` retry
-only worked because the rebuilt wheel was byte-identical; with
-``skip-existing: false`` any difference would have failed with ``400 File
-already exists`` and the sdist could never be published (#289).
+A retry after a PyPI 5xx must be safe. On 0.4.0 the wheel upload got ``502 Bad
+Gateway`` but PyPI kept the file, so the version briefly had a wheel and no
+sdist. The ``repository_dispatch`` retry only worked because the rebuilt wheel
+was byte-identical; with ``skip-existing: false`` any difference would have
+failed with ``400 File already exists`` and the sdist could never be published
+(#289). scripts/engine/test_release.py holds the rest of the workflow's shape.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "publish-pypi.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 VERIFY_STEP = "Verify PyPI lists every built file"
 WEBSITE_WARNING_STEP = "Warn when the website was not notified"
 WHEEL = "opentide-9.9.9-py3-none-any.whl"
@@ -42,7 +45,7 @@ def _triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
 
 
 def _steps() -> list[dict[str, Any]]:
-    return _workflow()["jobs"]["publish"]["steps"]
+    return _workflow()["jobs"]["pypi"]["steps"]
 
 
 def _step_index(predicate: Any) -> int:
@@ -51,9 +54,12 @@ def _step_index(predicate: Any) -> int:
     return matches[0]
 
 
-def _publish_index() -> int:
+def _publish_index(name: str = "Publish to PyPI") -> int:
     return _step_index(
-        lambda step: str(step.get("uses", "")).startswith("pypa/gh-action-pypi-publish@")
+        lambda step: (
+            str(step.get("uses", "")).startswith("pypa/gh-action-pypi-publish@")
+            and step.get("name") == name
+        )
     )
 
 
@@ -62,55 +68,79 @@ def _verify_index() -> int:
 
 
 def test_publish_step_skips_files_pypi_already_has() -> None:
-    publish = _steps()[_publish_index()]
-    assert publish["with"]["packages-dir"] == "dist/"
-    assert publish["with"].get("skip-existing") is True
+    for name in ("Publish to PyPI", "Publish to TestPyPI"):
+        publish = _steps()[_publish_index(name)]
+        assert publish["with"]["packages-dir"] == "dist/"
+        assert publish["with"].get("skip-existing") is True
+    uploads = [s for s in _steps() if "pypa/gh-action-pypi-publish@" in str(s.get("uses", ""))]
+    assert len(uploads) == 2
+
+
+def test_a_release_goes_to_pypi_and_a_candidate_to_testpypi() -> None:
+    steps = _steps()
+    pypi = steps[_publish_index("Publish to PyPI")]
+    test = steps[_publish_index("Publish to TestPyPI")]
+    assert pypi["if"] == "env.CHANNEL == 'release'"
+    assert "repository-url" not in pypi["with"]
+    assert test["if"] == "env.CHANNEL == 'rc'"
+    assert test["with"]["repository-url"] == "https://test.pypi.org/legacy/"
+    job = _workflow()["jobs"]["pypi"]
+    # The trusted publishers name the environment: pypi, or testpypi.
+    assert job["environment"]["name"] == (
+        "${{ needs.guard.outputs.channel == 'rc' && 'testpypi' || 'pypi' }}"
+    )
+    assert job["permissions"] == {"contents": "read", "id-token": "write"}
+    verify = steps[_verify_index()]
+    assert "test.pypi.org/pypi" in verify["env"]["PYPI_JSON_BASE"]
 
 
 def test_verify_step_runs_after_upload_and_before_website_notify() -> None:
     steps = _steps()
     verify = _verify_index()
-    assert verify == _publish_index() + 1
+    assert verify == _publish_index("Publish to TestPyPI") + 1
+    assert _publish_index("Publish to PyPI") + 1 == _publish_index("Publish to TestPyPI")
     assert "continue-on-error" not in steps[verify]
     assert "if" not in steps[verify]
     website = _step_index(lambda step: step.get("id") == "website")
     assert verify < website
 
 
-def test_retry_triggers_and_checkout_ref_stay_wired() -> None:
+def test_the_triggers_are_run_workflow_and_the_resume_dispatch() -> None:
     workflow = _workflow()
     triggers = _triggers(workflow)
-    assert triggers["release"]["types"] == ["published"]
-    # Optional: empty releases development, a tag re-publishes it.
-    checkout_ref_input = triggers["workflow_dispatch"]["inputs"]["checkout_ref"]
-    assert checkout_ref_input["required"] is False
-    assert checkout_ref_input["default"] == ""
-    assert triggers["repository_dispatch"]["types"] == ["publish-pypi"]
-    assert workflow["permissions"] == {"contents": "read", "id-token": "write"}
+    # No `release: published` and no tag push: the train creates its tag.
+    assert set(triggers) == {"workflow_dispatch", "repository_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"release_candidate", "dry_run", "checkout_ref"}
+    for name in ("release_candidate", "checkout_ref"):
+        assert inputs[name]["required"] is False
+        assert inputs[name]["default"] == ""
+    assert inputs["dry_run"]["type"] == "boolean"
+    assert inputs["dry_run"]["default"] is False
+    assert triggers["repository_dispatch"]["types"] == ["publish"]
+    assert workflow["permissions"] == {"contents": "read"}
 
-    # The publish job uploads what the build jobs built: every checkout, in
-    # the guard and the wheel and sdist builds, takes the retry's tag.
-    checkouts = {
-        name: step
-        for name, job in workflow["jobs"].items()
-        for step in job["steps"]
-        if str(step.get("uses", "")).startswith("actions/checkout@")
-    }
-    assert set(checkouts) == {"guard", "wheels", "sdist", "release"}
-    for name in ("guard", "wheels", "sdist"):
-        ref = checkouts[name]["with"]["ref"]
-        assert "github.event.client_payload.checkout_ref" in ref
-        assert "github.event.inputs.checkout_ref" in ref
-        # Releasing development builds the commit the run started on.
-        assert ref.endswith("|| github.sha }}")
-    # The Release is tagged on that same commit; it only reads the notes.
-    assert checkouts["release"]["with"] == {
-        "ref": "${{ github.sha }}",
-        "sparse-checkout": ".github/release-notes",
-    }
+    # Everything a registry receives is built from one commit: the run's, or
+    # the resumed tag's.
+    jobs = workflow["jobs"]
+    ref = (
+        "${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref"
+        " || github.sha }}"
+    )
+    for name, job in jobs.items():
+        for step in job.get("steps", []):
+            if not str(step.get("uses", "")).startswith("actions/checkout@"):
+                continue
+            assert step["with"]["persist-credentials"] is False, name
+            if name in ("release", "verify-assets"):
+                # They read scripts only; the Release targets GITHUB_SHA.
+                assert "ref" not in step["with"], name
+            else:
+                assert step["with"]["ref"] == ref, name
     # The guard compares the checkout with the tag, so it needs the tags.
-    assert checkouts["guard"]["with"]["fetch-depth"] == 0
-    assert workflow["jobs"]["publish"]["needs"] == ["guard", "wheels", "sdist", "release"]
+    guard = next(s for s in jobs["guard"]["steps"] if "actions/checkout@" in str(s.get("uses")))
+    assert guard["with"]["fetch-depth"] == 0
+    assert jobs["pypi"]["needs"] == ["guard", "verify-assets"]
 
 
 def test_publish_job_does_not_run_scripts_from_the_checkout() -> None:
@@ -141,7 +171,7 @@ def test_warns_last_whenever_the_website_was_not_notified() -> None:
     assert warn == len(steps) - 1
     # No status function: GitHub prepends success(), so a failed publish does
     # not also report a website warning.
-    assert steps[warn]["if"] == "steps.notify.outcome != 'success'"
+    assert steps[warn]["if"] == "steps.notify.outcome != 'success' && env.CHANNEL == 'release'"
     assert "continue-on-error" not in steps[warn]
 
 
@@ -150,7 +180,7 @@ def test_website_warning_step_gets_every_variable_it_reads() -> None:
     # continue-on-error, so a variable the workflow stops passing would turn a
     # release that is already on PyPI red. _run_website_warning sets them all
     # itself and cannot notice.
-    job = _workflow()["jobs"]["publish"]
+    job = _workflow()["jobs"]["pypi"]
     step = job["steps"][_step_index(lambda step: step.get("name") == WEBSITE_WARNING_STEP)]
     read = set(re.findall(r"\$\{?([A-Z][A-Z0-9_]*)", step["run"]))
     assert {"RELEASE_TAG", "HAS_WEBSITE_APP", "WEBSITE_TOKEN_OUTCOME", "NOTIFY_OUTCOME"} <= read
@@ -283,8 +313,8 @@ def test_verify_fails_with_retry_command_when_sdist_is_missing(dist: Path) -> No
     with _FakePyPI([(200, [WHEEL])]) as pypi:
         result = _run_verify(dist, pypi.base)
     assert result.returncode == 1
-    assert f"PyPI is missing ['{SDIST}']" in result.stdout
-    assert "event_type=publish-pypi" in result.stdout
+    assert f"The index is missing ['{SDIST}']" in result.stdout
+    assert "event_type=publish" in result.stdout
     assert "client_payload[checkout_ref]=v9.9.9" in result.stdout
 
 
@@ -304,10 +334,10 @@ def test_verify_rejects_a_dist_without_an_sdist(dist: Path) -> None:
     assert pypi.requests == []
 
 
-# --- Releasing from development (Run workflow, checkout_ref empty) -----------
+# --- The guard: what a run releases ------------------------------------------
 
 GUARD_STEP_ID = "version"
-REJECT_STEP = "Reject untagged / dev versions, and missing platforms"
+REJECT_STEP = "Reject another version, and missing platforms"
 _REPOSITORY = "https://github.com/opentidehq/opentide"
 
 
@@ -315,47 +345,40 @@ def _job(name: str) -> dict[str, Any]:
     return _workflow()["jobs"][name]
 
 
-def test_the_release_job_tags_the_built_commit_before_pypi() -> None:
-    workflow = _workflow()
+def test_the_release_job_tags_the_built_commit_before_any_registry() -> None:
     release = _job("release")
-    # Only a run that releases development creates a Release; a published
-    # Release or a checkout_ref retry already has its tag.
     assert release["if"] == "needs.guard.outputs.create_release == 'true'"
-    # Built first, so a failed build leaves no tag; PyPI, which is permanent, after.
-    assert release["needs"] == ["guard", "wheels", "sdist"]
-    assert "release" in workflow["jobs"]["publish"]["needs"]
-    # Write access on this job only; the publish job keeps contents: read.
+    # Built, smoke-tested and attested first, so a failed build leaves no tag;
+    # the registries, which are permanent, after.
+    assert release["needs"] == ["guard", "attest"]
     assert release["permissions"] == {"contents": "write"}
-    assert workflow["permissions"] == {"contents": "read", "id-token": "write"}
-    assert "permissions" not in workflow["jobs"]["publish"]
     command = " ".join(release["steps"][-1]["run"].replace("\\\n", " ").split())
-    assert 'gh release create "${RELEASE_TAG}"' in command
+    assert 'gh release create "${TAG}" dist/*' in command
     assert '--target "${GITHUB_SHA}"' in command
-    assert '--notes-file ".github/release-notes/${RELEASE_TAG}.md"' in command
-    # The newest version must become Latest (0.4.0 was cut with --latest=false).
-    assert "--latest" not in command
-    assert release["env"]["RELEASE_TAG"] == "${{ needs.guard.outputs.tag }}"
+    assert 'python3 scripts/build/release.py notes "${TAG}"' in command
+    # A release is Latest by default (0.4.0 was cut with --latest=false); a
+    # candidate is a pre-release that never is.
+    assert "flags+=(--prerelease --latest=false)" in command
+    assert command.count("--latest") == 1
+    assert release["env"]["TAG"] == "${{ needs.guard.outputs.tag }}"
 
 
-def test_publish_runs_after_a_skipped_release_job_but_not_a_failed_one() -> None:
-    condition = " ".join(_job("publish")["if"].split())
-    assert condition.startswith("!cancelled()")
-    assert "needs.wheels.result == 'success'" in condition
-    assert "needs.sdist.result == 'success'" in condition
-    assert "(needs.release.result == 'success' || needs.release.result == 'skipped')" in condition
-    # Every tag the publish job names comes from the guard, in every mode.
-    assert _job("publish")["env"]["RELEASE_TAG"] == "${{ needs.guard.outputs.tag }}"
-
-
-def test_the_guard_decides_the_mode_from_an_empty_checkout_ref() -> None:
+def test_the_guard_reads_every_mode_from_the_inputs() -> None:
     guard = _job("guard")
-    assert guard["env"]["FROM_BRANCH"] == (
-        "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref == '' }}"
-    )
-    assert guard["outputs"] == {
-        "version": "${{ steps.version.outputs.version }}",
-        "tag": "${{ steps.version.outputs.tag }}",
-        "create_release": "${{ steps.version.outputs.create_release }}",
+    assert guard["env"] == {
+        "CHECKOUT_REF": (
+            "${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref }}"
+        ),
+        "RELEASE_CANDIDATE": "${{ github.event.inputs.release_candidate }}",
+        "DRY_RUN": "${{ github.event.inputs.dry_run }}",
+    }
+    assert set(guard["outputs"]) == {
+        "tag",
+        "version",
+        "base",
+        "pypi_version",
+        "channel",
+        "create_release",
     }
 
 
@@ -376,25 +399,36 @@ def _git(cwd: Path, *args: str) -> None:
     )
 
 
+def _cargo(version: str) -> str:
+    return (
+        f'[workspace.package]\nversion = "{version}"\n\n[workspace.dependencies]\n'
+        f'opentide-core = {{ path = "crates/opentide-core", version = "={version}" }}\n'
+        'opentide-compare = { path = "crates/opentide-compare" }\n'
+    )
+
+
 @pytest.fixture
 def development(tmp_path: Path) -> Path:
-    """A checkout of development whose notes PR for 1.2.0 has merged."""
+    """A checkout of development whose notes PR for 1.2.0 has merged, the
+    crates bumped to it."""
     if shutil.which("git") is None:
         pytest.skip("git is required")
     repo = tmp_path / "repo"
     files = {
-        "CHANGELOG.md": "## [Unreleased]\n\n## [1.2.0] — 2026-11-02\n\n"
+        "CHANGELOG.md": "## [Unreleased]\n\n- **A change.**\n\n## [1.2.0] — 2026-11-02\n\n"
         f"[Unreleased]: {_REPOSITORY}/compare/v1.2.0...HEAD\n"
         f"[1.2.0]: {_REPOSITORY}/releases/tag/v1.2.0\n",
         ".github/release-notes/v1.2.0.md": "# 1.2.0\n",
         "docs/usage/releases.md": "## 1.2.0 — 2 November 2026\n",
         "README.md": "pip install opentide==1.2.0\n",
+        "Cargo.toml": _cargo("1.2.0"),
     }
     for name, text in files.items():
         (repo / name).parent.mkdir(parents=True, exist_ok=True)
         (repo / name).write_text(text, encoding="utf-8")
-    (repo / "scripts" / "build").mkdir(parents=True)
-    shutil.copy(ROOT / "scripts" / "build" / "release.py", repo / "scripts" / "build")
+    for script in ("build", "engine"):
+        (repo / "scripts" / script).mkdir(parents=True)
+        shutil.copy(ROOT / "scripts" / script / "release.py", repo / "scripts" / script)
     _git(repo, "init", "-q")
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "notes")
@@ -418,17 +452,20 @@ def _run_guard(
         (stubs / "python").symlink_to(sys.executable)
     output = repo.parent / "github_output"
     output.write_text("", encoding="utf-8")
+    summary = repo.parent / "summary"
     result = subprocess.run(
         [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
         cwd=repo,
         env={
             "PATH": f"{stubs}{os.pathsep}{os.environ.get('PATH', '')}",
             "GITHUB_OUTPUT": str(output),
+            "GITHUB_STEP_SUMMARY": str(summary),
             "GITHUB_REPOSITORY": "opentidehq/opentide",
             "GITHUB_REF": "refs/heads/development",
             "GITHUB_REF_NAME": "development",
-            "RELEASE_TAG": "development",
-            "FROM_BRANCH": "true",
+            "CHECKOUT_REF": "",
+            "RELEASE_CANDIDATE": "",
+            "DRY_RUN": "false",
             **env,
         },
         capture_output=True,
@@ -445,7 +482,24 @@ def _run_guard(
 def test_the_guard_releases_the_version_the_changelog_names(development: Path) -> None:
     result, outputs = _run_guard(development)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert outputs == {"tag": "v1.2.0", "create_release": "true", "version": "1.2.0"}
+    assert outputs == {
+        "tag": "v1.2.0",
+        "version": "1.2.0",
+        "base": "1.2.0",
+        "pypi_version": "1.2.0",
+        "channel": "release",
+        "create_release": "true",
+    }
+
+
+def test_the_guard_refuses_crates_at_another_version(development: Path) -> None:
+    """Lockstep: one product version, or nothing is released."""
+    (development / "Cargo.toml").write_text(_cargo("1.1.0"), encoding="utf-8")
+    result, outputs = _run_guard(development)
+    assert result.returncode == 1
+    assert "the workspace version in Cargo.toml is 1.1.0, not 1.2.0" in result.stderr
+    assert "release.py bump 1.2.0" in result.stderr
+    assert outputs == {}
 
 
 def test_the_guard_releases_only_from_development(development: Path) -> None:
@@ -482,14 +536,52 @@ def test_the_guard_refuses_before_the_notes_pr_merges(development: Path) -> None
     assert outputs == {}
 
 
-def test_the_guard_still_requires_the_tag_of_a_published_release(development: Path) -> None:
-    result, _ = _run_guard(development, FROM_BRANCH="false", RELEASE_TAG="v1.2.0")
-    assert result.returncode == 1
-    assert "HEAD is not the release tag v1.2.0" in result.stderr
-    _git(development, "tag", "v1.2.0")
-    result, outputs = _run_guard(development, FROM_BRANCH="false", RELEASE_TAG="v1.2.0")
+def test_a_candidate_is_of_the_bumped_workspace_version(development: Path) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(development, RELEASE_CANDIDATE="2")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert outputs == {"tag": "v1.2.0", "create_release": "false", "version": "1.2.0"}
+    assert outputs == {
+        "tag": "v1.3.0-rc.2",
+        "version": "1.3.0-rc.2",
+        "base": "1.3.0",
+        "pypi_version": "1.3.0rc2",
+        "channel": "rc",
+        "create_release": "true",
+    }
+
+
+def test_a_candidate_of_a_released_version_is_refused(development: Path) -> None:
+    result, outputs = _run_guard(development, RELEASE_CANDIDATE="1")
+    assert result.returncode == 1
+    assert "1.2.0 is not newer than 1.2.0" in result.stderr
+    assert outputs == {}
+    result, _ = _run_guard(development, RELEASE_CANDIDATE="x")
+    assert result.returncode == 1
+    assert "release_candidate is a number from 1" in result.stderr
+
+
+def test_a_dry_run_runs_anywhere_and_creates_nothing(development: Path) -> None:
+    result, outputs = _run_guard(
+        development, DRY_RUN="true", GITHUB_REF="refs/heads/feature", GITHUB_REF_NAME="feature"
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outputs["channel"] == "dry-run"
+    assert outputs["create_release"] == "false"
+    assert outputs["tag"] == "v1.2.0"
+
+
+def test_resuming_needs_the_tag_and_its_release(development: Path) -> None:
+    result, _ = _run_guard(development, CHECKOUT_REF="v1.2.0")
+    assert result.returncode == 1
+    assert "must be an existing release tag" in result.stderr
+    _git(development, "tag", "v1.2.0")
+    result, _ = _run_guard(development, CHECKOUT_REF="v1.2.0")
+    assert result.returncode == 1
+    assert "has no GitHub Release to resume" in result.stderr
+    result, outputs = _run_guard(development, CHECKOUT_REF="v1.2.0", gh_has_release=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outputs["channel"] == "release"
+    assert outputs["create_release"] == "false"
 
 
 def _run_reject(cwd: Path, expected: str) -> subprocess.CompletedProcess[str]:
@@ -497,7 +589,7 @@ def _run_reject(cwd: Path, expected: str) -> subprocess.CompletedProcess[str]:
     if bash is None:
         pytest.skip("bash is required to run the workflow step")
     step = _steps()[_step_index(lambda step: step.get("name") == REJECT_STEP)]
-    assert step["env"]["EXPECTED_VERSION"] == "${{ needs.guard.outputs.version }}"
+    assert step["env"]["EXPECTED_VERSION"] == "${{ needs.guard.outputs.pypi_version }}"
     return subprocess.run(
         [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", step["run"]],
         cwd=cwd,
@@ -517,7 +609,8 @@ def platform_dist(tmp_path: Path) -> Path:
     (tmp_path / "dist").mkdir()
     for platform in (
         "manylinux_2_28_x86_64",
-        "musllinux_1_2_x86_64",
+        "manylinux_2_28_aarch64",
+        "macosx_10_12_x86_64",
         "macosx_11_0_arm64",
         "win_amd64",
         "win_arm64",
@@ -545,7 +638,33 @@ def test_publish_refuses_a_release_without_a_windows_on_arm_wheel(platform_dist:
     (platform_dist / "dist" / "opentide-1.2.0-cp310-abi3-win_arm64.whl").unlink()
     result = _run_reject(platform_dist, "1.2.0")
     assert result.returncode == 1
-    assert "Refusing to publish: no win_arm64 wheel" in result.stdout
+    assert "Refusing to publish: no win arm64 wheel" in result.stdout
+
+
+def test_publish_refuses_a_release_without_a_linux_arm_wheel(platform_dist: Path) -> None:
+    (platform_dist / "dist" / "opentide-1.2.0-cp310-abi3-manylinux_2_28_aarch64.whl").unlink()
+    result = _run_reject(platform_dist, "1.2.0")
+    assert result.returncode == 1
+    assert "Refusing to publish: no manylinux aarch64 wheel" in result.stdout
+
+
+def test_publish_refuses_a_musllinux_wheel(platform_dist: Path) -> None:
+    """No musl builds: the maintainer's decision (docs/internal/publishing.md)."""
+    (platform_dist / "dist" / "opentide-1.2.0-cp310-abi3-musllinux_1_2_x86_64.whl").write_bytes(b"")
+    result = _run_reject(platform_dist, "1.2.0")
+    assert result.returncode == 1
+    assert "a musllinux wheel" in result.stdout
+
+
+def test_cibuildwheel_builds_no_musllinux_wheel() -> None:
+    from opentide.core.io import load_toml
+
+    config = load_toml(ROOT / "pyproject.toml")["tool"]["cibuildwheel"]
+    assert "*-musllinux_*" in config["skip"]
+    assert config["linux"]["manylinux-x86_64-image"] == "manylinux_2_28"
+    assert config["linux"]["manylinux-aarch64-image"] == "manylinux_2_28"
+    # One stable-ABI build: the free-threaded CPython (3.14t) builds the sdist.
+    assert config["build"] == "cp310-*"
 
 
 def _wheel_steps() -> list[dict[str, Any]]:

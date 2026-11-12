@@ -1,7 +1,8 @@
 # Rehearses every publish this repository makes, without publishing anything:
 # the opentide crate placeholder (crates.io), the @opentide/opentide and
 # opentide placeholders (npm), and the wheels and sdist (PyPI), built the way
-# publish-pypi.yml builds them.
+# publish.yml builds them. publish.yml's own `dry_run` input rehearses the
+# whole release train (every platform, every package, the smoke tests).
 #
 # Nothing here can publish. The token is read-only (contents: read), no job may
 # mint an OIDC token (no id-token: write), which trusted publishing on all
@@ -13,7 +14,7 @@
 # `check_engine_pin.py --release`). Between releases the newest version in
 # CHANGELOG.md is already tagged, and development may pin the engine to a git
 # revision, so those checks would fail most pull requests without saying
-# anything about the packages. publish-pypi.yml still runs them.
+# anything about the packages. publish.yml still runs them.
 #
 # docs/internal/publishing.md lists every name, owner and trusted publisher,
 # and the steps a maintainer takes to publish the placeholders.
@@ -156,12 +157,14 @@ jobs:
             echo "::endgroup::"
           done
 
-  # The artifacts publish-pypi.yml uploads, built the same way: cibuildwheel
+  # The artifacts publish.yml uploads to PyPI, built the same way: cibuildwheel
   # (hatchling and hatch_build.py, which compiles analysis/) at the version the
   # release guard reads from CHANGELOG.md, and `uv build --sdist`. One runner:
-  # the Linux x86_64 wheels (manylinux and musllinux) and the sdist. The
-  # release builds the other platforms itself and refuses to publish when one
-  # is missing. maturin replaces this build in UC-5.5.
+  # the Linux x86_64 wheel (manylinux_2_28; no musllinux, the maintainer's
+  # decision) and the sdist. The release builds the other platforms itself and
+  # refuses to publish when one is missing. The release train kept this build
+  # (cibuildwheel and hatch_build.py) rather than move to maturin
+  # (docs/internal/publishing.md, "The release train").
   pypi:
     name: PyPI (wheels and sdist)
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
@@ -231,9 +234,10 @@ jobs:
               problems.append(f"expected one release version, found {sorted(versions)}")
           elif versions != {os.environ["EXPECTED_VERSION"]}:
               problems.append(f"built {sorted(versions)}, expected {os.environ['EXPECTED_VERSION']}")
-          for platform in ("manylinux", "musllinux"):
-              if not any(platform in name for name in wheels):
-                  problems.append(f"no {platform} wheel")
+          if not any("manylinux" in name for name in wheels):
+              problems.append("no manylinux wheel")
+          if any("musllinux" in name for name in wheels):
+              problems.append(f"a musllinux wheel: {wheels}")
           if not all("-cp310-abi3-" in name for name in wheels):
               problems.append(f"a wheel is not cp310-abi3: {wheels}")
           for problem in problems:

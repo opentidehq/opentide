@@ -134,7 +134,7 @@ def test_the_workflows_install_rust() -> None:
     assert {
         "ci.yml",
         "oracle.yml",
-        "engine-release.yml",
+        "publish.yml",
         "engine-release-build.yml",
         "engine-fuzz.yml",
     } <= names

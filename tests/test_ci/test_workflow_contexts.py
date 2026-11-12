@@ -3,7 +3,7 @@
 GitHub rejects the whole workflow when ``secrets`` appears in a job-level or
 step-level ``if``. Nothing reports that on the pull request: every push records
 a 0-second failed run and the file's ``schedule``/``workflow_dispatch``/
-``release`` triggers never register. ``publish-pypi.yml`` documents the same
+``release`` triggers never register. ``publish.yml`` documents the same
 trap; ``vocab-upstream.yml`` fell into it and never ran its weekly ingest (#287).
 """
 

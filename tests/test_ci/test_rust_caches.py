@@ -13,7 +13,7 @@ reader whose environment or runner differs from the producer's computes another
 key and never restores anything. Its key does not hold the matrix: two cells of
 one job on the same runner share a cache unless ``key`` tells them apart.
 
-A release builds from nothing: engine-release.yml restores no cache, and the
+A release builds from nothing: publish.yml restores no cache, and the
 asset build it shares with ci.yml's dry run (engine-release-build.yml) restores
 one only under ``inputs.dry-run``.
 """
@@ -206,7 +206,7 @@ def test_the_python_jobs_build_the_binding_once() -> None:
 
 
 def test_a_release_restores_no_cache() -> None:
-    assert not _in("engine-release.yml"), "the release builds from nothing"
+    assert not _in("publish.yml"), "the release builds from nothing"
     build = _in("engine-release-build.yml")
     assert build, "the dry run of the asset build is cached"
     for cache in build:
@@ -215,7 +215,7 @@ def test_a_release_restores_no_cache() -> None:
 
 def test_a_release_restores_no_other_cache() -> None:
     """Nor any cache of another kind: actions/cache, or a setup action's own."""
-    for name in ("engine-release.yml", "engine-release-build.yml"):
+    for name in ("publish.yml", "engine-release-build.yml"):
         workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
         for job_id, job in workflow["jobs"].items():
             for step in job.get("steps") or []:

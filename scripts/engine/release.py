@@ -1,30 +1,43 @@
 #!/usr/bin/env python3
-"""Release helpers for the opentide language server.
+"""The release train's helpers: crates, npm packages and the GitHub Release assets.
 
     release.py version              print the workspace version
-    release.py tag                  print the release tag of the workspace version
-    release.py check TAG            the tag, every crate pin, and CHANGELOG.md agree
+    release.py tag                  print the release tag of the workspace version (vX.Y.Z)
+    release.py check TAG            the tag and every crate pin agree with the workspace version
+    release.py lockstep VERSION [--npm NPM_VERSION]
+                                    the crates, their pins and the npm packages carry one version
+    release.py npm-version VERSION  write VERSION into every npm package of the release
     release.py prerelease TAG       print true for a release candidate tag, else false
     release.py asset-version TAG    print the version the asset names carry (vX.Y.Z[-rc.N])
     release.py assets TAG           print the name of every asset the tag's release carries
     release.py check-assets DIR TAG DIR holds exactly the tag's assets
     release.py bump X.Y.Z           set the workspace version and the internal pins
-    release.py notes TAG|X.Y.Z      print the CHANGELOG.md section for a version
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
-    release.py publish              publish every crate to crates.io, dependencies first
+    release.py publish [--dry-run]  publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
+    release.py crate-patch DIR OUT  unpack DIR's .crate files into OUT, with a cargo config
+                                    that resolves them in place of crates.io's
     release.py sums DIR             write DIR/SHA256SUMS for every file in DIR
     release.py verify-sums DIR      DIR/SHA256SUMS lists exactly DIR's files, each digest right
     release.py unpublished TAG      fail when the tag's GitHub Release already has assets
 
-An engine release is tagged `engine-vX.Y.Z` (or `engine-vX.Y.Z-rc.N`, a release
-candidate): opentide's own releases (PyPI) own the `v*` tags of this repository.
-The assets keep the names language-server gave them, `v` and the version
-(`highlights-v0.11.0.zip`), so an editor that pinned one finds the next by
-version. A release candidate checks the workspace version and the crate pins
-like a release; it needs no CHANGELOG.md section of its own (its notes fall back
-to `[Unreleased]`), and the Release workflow publishes it as a GitHub pre-release
-without crates.io or npm.
+opentide releases one product version (UC-5.5, #840): the Python wheel, the
+crates, the npm packages and the binaries all carry it, and one tag, `vX.Y.Z`
+(or `vX.Y.Z-rc.N`, a release candidate), publishes them all from
+`.github/workflows/publish.yml`. The engine's own tag series (`engine-v*`,
+`engine-release.yml`) ended there. The assets keep the names language-server
+gave them, `v` and the version (`highlights-v0.24.0.zip`), so an editor that
+pinned one finds the next by version.
+
+`lockstep` is the check that keeps the one version: the workspace version in
+Cargo.toml is the release's (`bump` sets it with the internal pins), and every
+npm package of the release (`@opentide/opentide`, its native packages, the
+`opentide` alias, `@opentide/lsp-client` and `@opentide/lsp-worker`) carries
+one version, its dependencies on each other included. The tree keeps the npm
+packages at a placeholder version, `npm-version` writes the release's into
+them in the workflow, and `lockstep --npm` checks the result. The Python
+package's version is the tag's (hatch-vcs), which `scripts/build/release.py`
+checks against CHANGELOG.md.
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -33,16 +46,24 @@ crate reads (every `OPENTIDE_ASSETS` path in its sources, plus the directories i
 looks when the workspace root is not there. `vendor --clean` removes the copies.
 
 `publish` uploads each crate's package with `cargo publish --no-verify`: it builds
-nothing where the publishing tokens are (the Release workflow's `verify` job built
-every package, with no token). It can be re-run: it skips each crate whose version
-crates.io already has, and waits out the rate limit crates.io puts on brand-new
-crates, so a first release that stops partway resumes where it stopped.
+nothing where the publishing tokens are (the release workflow's `checks` job
+built every package, with no token). It can be re-run: it skips each crate
+whose version crates.io already has, and waits out the rate limit crates.io puts
+on brand-new crates, so a first release that stops partway resumes where it
+stopped. `publish --dry-run`, a release candidate's, runs `cargo publish
+--workspace --dry-run`: every package, resolved against the others, uploaded
+nowhere.
 
-`trust` registers this repository's WORKFLOW (engine-release.yml) as the trusted
+`trust` registers this repository's WORKFLOW (publish.yml) as the trusted
 publisher of every published crate, with a crates.io token that has the
 trusted-publishing scope in CRATES_IO_TOKEN, so later releases publish with the
 workflow's OIDC identity instead of a stored token. Crates already registered are
 left alone; without a token it does nothing.
+
+`crate-patch` lets `cargo install` build the facade from its package before any
+crate of the version is on crates.io (the release workflow's smoke test): it
+unpacks every `.crate` and writes `OUT/config.toml`, whose `[patch.crates-io]`
+names each unpacked crate.
 
 `sums` writes `SHA256SUMS` in DIR, in `sha256sum` format, for every file DIR holds
 (the GitHub Release's assets), so `sha256sum -c SHA256SUMS` checks a download. It
@@ -54,7 +75,7 @@ every file in DIR and no other, and each digest matches. `sha256sum -c` checks
 only the names the file lists, so an asset with no line passes it.
 
 `unpublished` fails when the GitHub Release of the tag (in GITHUB_REPOSITORY)
-already carries assets, a draft's included: the Release workflow never uploads
+already carries assets, a draft's included: the release workflow never uploads
 over them. A rebuild does not reproduce the zips byte for byte, and consumers
 pin the published digests (SHA256SUMS, an editor's pinned highlights). No
 release, or one with notes only, passes.
@@ -69,6 +90,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -81,43 +103,68 @@ except ModuleNotFoundError:  # Python 3.10, which opentide's tests also run on
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = ROOT / "Cargo.toml"
-CHANGELOG = ROOT / "crates" / "CHANGELOG.md"
 ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
 SUMS = "SHA256SUMS"
-TAG_PREFIX = "engine-"
-TAG = re.compile(r"engine-v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
-# The targets the Release workflow builds opentide-lsp for (engine-release-build.yml,
-# job `native`): one binary each, `.exe` on Windows.
+TAG = re.compile(r"v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
+# The targets the release builds its binaries for (engine-release-build.yml, job
+# `native`): one `opentide` and one `opentide-lsp` each, `.exe` on Windows. No musl
+# target: the maintainer decided against musl builds (docs/internal/publishing.md,
+# "The release train"), so neither the binaries, the wheels (no musllinux) nor the
+# npm packages ship one.
 TARGETS = [
     "x86_64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
     "aarch64-unknown-linux-gnu",
-    "aarch64-unknown-linux-musl",
     "aarch64-apple-darwin",
     "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
     "aarch64-pc-windows-msvc",
 ]
-# Every release carries these besides the binaries and the versioned zips.
+# The standalone binaries, each built for every target: the command line
+# (`cargo install opentide --features cli`) and the language server.
+BINARIES = ["opentide", "opentide-lsp"]
+# Every release carries these besides the binaries and the versioned zips: the
+# licences, the WASI build, the installers of the binaries (scripts/install/),
+# and SHA256SUMS.
 FIXED_ASSETS = [
     "LICENSE",
     "NOTICE",
     "THIRD-PARTY-LICENSES.html",
     "WASI-LIBC-LICENSES.txt",
     "opentide-lsp-wasm32-wasip1.wasm",
+    "opentide-installer.sh",
+    "opentide-installer.ps1",
     SUMS,
 ]
-# The CycloneDX SBOMs scripts/engine/sbom.py writes for the engine's artifacts
-# (#843): added to the set language-server's releases carried, which editors
-# pin by name. The wheel's SBOM is not an engine asset (engine-release-build.yml).
+# The CycloneDX SBOMs scripts/engine/sbom.py writes, one per artifact (#843):
+# the opentide-lsp binaries and WASI build, the browser build, the two lsp npm
+# packages, the `opentide` binaries and crate, the @opentide/opentide npm
+# package, and the PyPI wheel.
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
     "opentide-wasm.cdx.json",
     "opentide-lsp-client.cdx.json",
     "opentide-lsp-worker.cdx.json",
+    "opentide.cdx.json",
+    "opentide-node.cdx.json",
+    "opentide-wheel.cdx.json",
 ]
+# The npm packages a release publishes, each directory with its package.json:
+# @opentide/opentide's native packages first (it depends on them), then the
+# package, its `opentide` alias, and the language server's two packages.
+NPM_NODE = ROOT / "bindings" / "node"
+NPM_LSP = [ROOT / "packages" / "lsp-client", ROOT / "packages" / "lsp-worker"]
+
+
+def npm_native_dirs() -> list[Path]:
+    """The native packages of @opentide/opentide, one per target (`bindings/node/npm/`)."""
+    return sorted(path for path in (NPM_NODE / "npm").iterdir() if path.is_dir())
+
+
+def npm_packages() -> list[Path]:
+    """Every npm package of the release, in the order it is published."""
+    return [*npm_native_dirs(), NPM_NODE, NPM_NODE / "alias", *NPM_LSP]
 
 
 def workspace_version() -> str:
@@ -125,50 +172,51 @@ def workspace_version() -> str:
 
 
 def internal_pins() -> dict[str, str]:
+    """The workspace's dependencies on its own crates, with their version
+    requirement. A path dependency without a version (the test harnesses,
+    `opentide-compare` and `opentide-cassette`, which are never published) is
+    left out: cargo strips it from a published manifest, and a published
+    crate that needed it would fail `cargo package`."""
     deps = tomllib.loads(WORKSPACE.read_text())["workspace"]["dependencies"]
     return {
-        name: spec.get("version", "")
+        name: spec["version"]
         for name, spec in deps.items()
-        if isinstance(spec, dict) and "path" in spec
+        if isinstance(spec, dict) and "path" in spec and "version" in spec
     }
 
 
-def changelog_section(version: str) -> str | None:
-    text = CHANGELOG.read_text()
-    match = re.search(
-        rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## |^\[[^\]]+\]: |\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    return match.group(1).strip() if match else None
-
-
 def parse_tag(tag: str) -> tuple[str, int | None]:
-    """The version of an engine tag and its release-candidate number (None for a
-    release). Anything but `engine-vX.Y.Z` or `engine-vX.Y.Z-rc.N` is an error:
-    `vX.Y.Z` is an opentide release here."""
+    """The version of a release tag and its release-candidate number (None for a
+    release). Anything but `vX.Y.Z` or `vX.Y.Z-rc.N` is an error, the engine's
+    old `engine-vX.Y.Z` included: that series ended with the release train."""
     match = TAG.fullmatch(tag)
     if not match:
-        raise ValueError(f"{tag!r} is not an engine tag (engine-vX.Y.Z or engine-vX.Y.Z-rc.N)")
+        raise ValueError(f"{tag!r} is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)")
     rc = match.group("rc")
     return match.group("version"), int(rc) if rc else None
 
 
 def asset_version(tag: str) -> str:
-    """What the asset names carry: the tag without its prefix (`v0.11.0`, `v0.11.1-rc.1`)."""
+    """What the asset names carry: the tag (`v0.24.0`, `v0.24.0-rc.1`)."""
     parse_tag(tag)
-    return tag.removeprefix(TAG_PREFIX)
+    return tag
+
+
+def binary_asset(binary: str, tag: str, target: str) -> str:
+    """The asset name of `binary` built for `target`: `opentide-lsp-v0.24.0-<target>`."""
+    ext = ".exe" if "windows" in target else ""
+    return f"{binary}-{asset_version(tag)}-{target}{ext}"
 
 
 def expected_assets(tag: str) -> list[str]:
     """Every asset of the tag's GitHub Release, sorted: what language-server's
-    releases carried, with this tag's version in the versioned names, and the
+    releases carried (but the musl binaries), with this tag's version in the
+    versioned names, the `opentide` binaries and their installers, and the
     SBOMs."""
     v = asset_version(tag)
     names = [*FIXED_ASSETS, *SBOM_ASSETS, f"highlights-{v}.zip", f"opentide-wasm-web-{v}.zip"]
-    for target in TARGETS:
-        ext = ".exe" if "windows" in target else ""
-        names.append(f"opentide-lsp-{v}-{target}{ext}")
+    for binary in BINARIES:
+        names.extend(binary_asset(binary, tag, target) for target in TARGETS)
     return sorted(names)
 
 
@@ -186,35 +234,81 @@ def check_assets(directory: Path, tag: str) -> list[str]:
     return problems
 
 
-def check(tag: str) -> list[str]:
-    version = workspace_version()
-    try:
-        tagged, rc = parse_tag(tag)
-    except ValueError as error:
-        return [str(error)]
+def crate_problems(version: str) -> list[str]:
+    """What keeps the crates from releasing `version` (X.Y.Z): the workspace
+    version and every internal pin are the release's."""
     problems = []
-    if tagged != version:
-        problems.append(f"tag {tag} does not match workspace version {version}")
+    workspace = workspace_version()
+    if workspace != version:
+        problems.append(
+            f"the workspace version in Cargo.toml is {workspace}, not {version}: "
+            f"run `scripts/engine/release.py bump {version}` in the release's pull request"
+        )
     for name, pin in internal_pins().items():
         if pin != f"={version}":
-            problems.append(f"{name} is pinned to {pin or 'no version'}, not ={version}")
-    if rc is None and not changelog_section(version):
-        problems.append(f"CHANGELOG.md has no section for {version}")
+            problems.append(f"{name} is pinned to {pin}, not ={version}")
     return problems
 
 
-def notes(tag_or_version: str) -> str | None:
-    """The CHANGELOG.md section of a version, or of a tag's version; a release
-    candidate without a section of its own gets `[Unreleased]`."""
-    if tag_or_version.startswith(TAG_PREFIX):
-        version, rc = parse_tag(tag_or_version)
-    else:
-        version, rc = tag_or_version.removeprefix("v"), None
-    section = changelog_section(version)
-    if not section and rc is not None:
-        unreleased = changelog_section("Unreleased")
-        section = f"Release candidate {rc} of {version}.\n\n{unreleased or ''}".strip()
-    return section
+def check(tag: str) -> list[str]:
+    """The tag's version is the workspace version, and every pin agrees."""
+    try:
+        tagged, _ = parse_tag(tag)
+    except ValueError as error:
+        return [str(error)]
+    return crate_problems(tagged)
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def npm_problems(expected: str | None = None) -> list[str]:
+    """What breaks the npm packages' one version: a package at another version
+    than @opentide/opentide (or than `expected`), or a dependency between them
+    that names another."""
+    main = read_json(NPM_NODE / "package.json")
+    version = expected if expected is not None else main["version"]
+    problems = []
+    for directory in npm_packages():
+        manifest = read_json(directory / "package.json")
+        if manifest["version"] != version:
+            problems.append(f"{manifest['name']} is at {manifest['version']}, not {version}")
+    natives = {read_json(d / "package.json")["name"] for d in npm_native_dirs()}
+    optional = main.get("optionalDependencies", {})
+    if set(optional) != natives:
+        problems.append(
+            f"{main['name']}'s optionalDependencies {sorted(optional)} are not its "
+            f"native packages {sorted(natives)}"
+        )
+    for name, wanted in sorted(optional.items()):
+        if wanted != version:
+            problems.append(f"{main['name']} depends on {name}@{wanted}, not {version}")
+    alias = read_json(NPM_NODE / "alias" / "package.json")
+    if alias.get("dependencies") != {main["name"]: version}:
+        problems.append(
+            f"{alias['name']} depends on {alias.get('dependencies')}, not {main['name']}@{version}"
+        )
+    return problems
+
+
+def set_npm_version(version: str) -> None:
+    """Write `version` into every npm package of the release and their
+    dependencies on each other (what the tree holds is a placeholder)."""
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?", version):
+        sys.exit(f"npm-version: not a release version: {version}")
+    main_name = read_json(NPM_NODE / "package.json")["name"]
+    for directory in npm_packages():
+        path = directory / "package.json"
+        manifest = read_json(path)
+        manifest["version"] = version
+        if "optionalDependencies" in manifest:
+            manifest["optionalDependencies"] = dict.fromkeys(
+                manifest["optionalDependencies"], version
+            )
+        if main_name in manifest.get("dependencies", {}):
+            manifest["dependencies"][main_name] = version
+        path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def bump(version: str) -> None:
@@ -223,7 +317,7 @@ def bump(version: str) -> None:
     text = WORKSPACE.read_text()
     text = re.sub(r'(\[workspace\.package\]\nversion = )"[^"]+"', rf'\1"{version}"', text, count=1)
     text = re.sub(
-        r'(opentide-[a-z]+ = \{ path = "[^"]+", version = )"=[^"]+"', rf'\1"={version}"', text
+        r'(opentide-[a-z-]+ = \{ path = "[^"]+", version = )"=[^"]+"', rf'\1"={version}"', text
     )
     WORKSPACE.write_text(text)
     subprocess.run(["cargo", "update", "--workspace"], cwd=ROOT, check=True)
@@ -310,7 +404,7 @@ def index_path(name: str) -> str:
 
 def on_crates_io(name: str, version: str) -> bool:
     url = f"https://index.crates.io/{index_path(name)}"
-    request = urllib.request.Request(url, headers={"User-Agent": "opentide-lsp release.py"})
+    request = urllib.request.Request(url, headers={"User-Agent": "opentide release.py"})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             lines = response.read().decode().splitlines()
@@ -337,6 +431,53 @@ def use_new_crate_token(env: dict[str, str]) -> bool:
     """
     token = env.get("NEW_CRATE_TOKEN", "")
     return bool(token) and env.get("CARGO_REGISTRY_TOKEN") != token
+
+
+def publish_dry_run() -> None:
+    """A release candidate's crates: `cargo publish --workspace --dry-run`
+    packages every publishable crate, resolves each against the others'
+    packages (none of this version is on crates.io yet) and uploads nothing.
+    `--no-verify`: the `checks` job built every package already."""
+    subprocess.run(
+        [
+            "cargo",
+            "publish",
+            "--workspace",
+            "--dry-run",
+            "--locked",
+            "--allow-dirty",
+            "--no-verify",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def crate_patch(packages: Path, out: Path) -> Path:
+    """Unpack every `.crate` in `packages` into `out` and write `out/config.toml`,
+    whose `[patch.crates-io]` resolves each crate to its unpacked package: what
+    `cargo install --config out/config.toml --path out/opentide-X.Y.Z` builds
+    is the packages, before crates.io has them. The config's path."""
+    crates = sorted(packages.glob("*.crate"))
+    if not crates:
+        raise ValueError(f"{packages} holds no .crate file")
+    out.mkdir(parents=True, exist_ok=True)
+    lines = ["[patch.crates-io]"]
+    for crate in crates:
+        with tarfile.open(crate, "r:gz") as archive:
+            # Each package is one directory, `<name>-<version>/`.
+            top = {member.name.split("/", 1)[0] for member in archive.getmembers()}
+            if len(top) != 1:
+                raise ValueError(f"{crate.name} is not one package directory: {sorted(top)}")
+            archive.extractall(out, filter="data")
+        directory = out / top.pop()
+        name = tomllib.loads((directory / "Cargo.toml").read_text(encoding="utf-8"))["package"][
+            "name"
+        ]
+        lines.append(f"{name} = {{ path = {json.dumps(directory.resolve().as_posix())} }}")
+    config = out / "config.toml"
+    config.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return config
 
 
 def publish() -> None:
@@ -388,7 +529,7 @@ def crates_io(method: str, path: str, token: str, body: dict | None = None) -> d
             "Authorization": token,
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "opentide-lsp release.py (https://github.com/opentidehq/language-server)",
+            "User-Agent": "opentide release.py (https://github.com/opentidehq/opentide)",
         },
     )
     try:
@@ -538,7 +679,24 @@ def main(argv: list[str]) -> None:
         case ["version"]:
             print(workspace_version())
         case ["tag"]:
-            print(f"{TAG_PREFIX}v{workspace_version()}")
+            print(f"v{workspace_version()}")
+        case ["lockstep", version]:
+            problems = crate_problems(version)
+            for problem in problems:
+                print(f"error: {problem}", file=sys.stderr)
+            if problems:
+                sys.exit(1)
+            print(f"the crates are at {version}")
+        case ["lockstep", version, "--npm", npm_version]:
+            problems = crate_problems(version) + npm_problems(npm_version)
+            for problem in problems:
+                print(f"error: {problem}", file=sys.stderr)
+            if problems:
+                sys.exit(1)
+            print(f"the crates are at {version}, the npm packages at {npm_version}")
+        case ["npm-version", version]:
+            set_npm_version(version)
+            print(f"the npm packages are at {version}")
         case ["prerelease", tag]:
             try:
                 print("false" if parse_tag(tag)[1] is None else "true")
@@ -573,20 +731,19 @@ def main(argv: list[str]) -> None:
             print(f"{tag} is consistent")
         case ["bump", version]:
             bump(version)
-        case ["notes", version]:
-            try:
-                section = notes(version)
-            except ValueError as error:
-                sys.exit(f"notes: {error}")
-            if section is None:
-                sys.exit(f"CHANGELOG.md has no section for {version}")
-            print(section)
         case ["vendor"]:
             vendor(clean=False)
         case ["vendor", "--clean"]:
             vendor(clean=True)
         case ["publish"]:
             publish()
+        case ["publish", "--dry-run"]:
+            publish_dry_run()
+        case ["crate-patch", packages, out]:
+            try:
+                print(crate_patch(Path(packages), Path(out)))
+            except (OSError, ValueError) as error:
+                sys.exit(f"crate-patch: {error}")
         case ["trust", workflow]:
             trust(workflow)
         case ["sums", directory]:
@@ -613,9 +770,9 @@ def main(argv: list[str]) -> None:
             if names:
                 sys.exit(
                     f"error: {tag} is already released with {len(names)} assets; a rebuild would "
-                    "replace the digests consumers pinned. Resume crates.io and npm with Run "
-                    "workflow and publish_only; fix anything else with a patch release. A draft "
-                    "that never published can be deleted, then released again."
+                    "replace the digests consumers pinned. Resume the registries with Run "
+                    f"workflow and checkout_ref={tag}; fix anything else with a patch release. "
+                    "A draft that never published can be deleted, then released again."
                 )
             print(f"{tag} has no published assets")
         case _:

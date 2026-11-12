@@ -147,3 +147,57 @@ def test_the_script_runs_with_the_standard_library_only() -> None:
         if line.startswith(("import ", "from "))
     }
     assert imports <= {"__future__", "argparse", "re", "sys", "pathlib"}
+
+
+# --- Release candidates and Release bodies (the release train, #840) ----------
+
+
+def test_a_candidate_is_of_a_version_newer_than_the_last_release(repo: Path) -> None:
+    script = _script()
+    assert script.candidate_problems(repo, "v1.3.0-rc.1") == []
+    assert script.candidate_problems(repo, "v1.2.10-rc.2") == []
+    (problem,) = script.candidate_problems(repo, "v1.2.0-rc.1")
+    assert "1.2.0 is not newer than 1.2.0" in problem
+    assert "release.py bump" in problem
+    assert script.candidate_problems(repo, "v1.1.9-rc.1")
+    for tag in ("v1.3.0", "v1.3.0-rc.0", "engine-v1.3.0-rc.1"):
+        assert script.candidate_problems(repo, tag) == [
+            f"{tag!r} is not a release candidate tag (vX.Y.Z-rc.N)"
+        ]
+
+
+def test_a_candidate_needs_the_unreleased_heading(repo: Path) -> None:
+    _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", "")
+    problems = _script().candidate_problems(repo, "v1.3.0-rc.1")
+    assert problems == [
+        "CHANGELOG.md has no ## [Unreleased] heading, which a candidate's notes quote"
+    ]
+
+
+def test_a_releases_notes_are_the_notes_prs_file(repo: Path) -> None:
+    script = _script()
+    assert script.notes(repo, "v1.2.0") == "# 1.2.0\n"
+    with pytest.raises(script.ReleaseError, match=r"v1\.3\.0\.md is missing"):
+        script.notes(repo, "v1.3.0")
+    with pytest.raises(script.ReleaseError, match="not a release tag"):
+        script.notes(repo, "engine-v1.2.0")
+
+
+def test_a_candidates_notes_quote_unreleased(repo: Path) -> None:
+    fixed = "## [Unreleased]\n\n### Fixed\n\n- **A fix.**\n"
+    _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", fixed)
+    notes = _script().notes(repo, "v1.3.0-rc.2")
+    assert notes.startswith("Release candidate 2 of 1.3.0, for testing")
+    assert "TestPyPI" in notes and "`next`" in notes
+    assert "- **A fix.**" in notes
+    # Nothing of the released version leaks in.
+    assert "Minor." not in notes
+
+
+def test_the_cli_prints_a_candidates_notes(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    script = _script()
+    script.ROOT = repo
+    assert script.main(["notes", "v1.3.0-rc.1"]) == 0
+    assert capsys.readouterr().out.startswith("Release candidate 1 of 1.3.0")
+    assert script.main(["check-candidate", "v1.3.0-rc.1"]) == 0
+    assert script.main(["check-candidate", "v1.2.0-rc.1"]) == 1
