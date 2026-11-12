@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://opentide.dev/schemas/opentide.schema.json",
   "title": "opentide Object Router",
-  "description": "Generated from opentide 0.25.1.dev9+g4076a2e19.",
+  "description": "Generated from opentide 0.25.1.dev38+g236789472.",
   "oneOf": [
     {
       "if": {
