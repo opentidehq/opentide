@@ -206,11 +206,24 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
     let mut planned = Vec::new();
     for path in files {
         let unported = |why: &str| Stop::Unported(format!("{}: {why}", path.display()));
-        let bytes = std::fs::read(path).map_err(|error| unported(&error.to_string()))?;
-        let document = node::load_bytes(&bytes).map_err(|error| unported(&error.problem))?;
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let failed = Stop::Failed(os_error(&error, path));
+                return Ok((events, Vec::new(), Some(failed)));
+            }
+        };
+        // A file that does not read as YAML fails the run, as the oracle's
+        // parser's exception does; the words are this loader's (UC-6.0d).
+        let document = match node::load_bytes(&bytes) {
+            Ok(document) => document,
+            Err(error) => {
+                let failed = Stop::Failed(unreadable(path, &error));
+                return Ok((events, Vec::new(), Some(failed)));
+            }
+        };
         let root = document.root().map(AsRef::as_ref);
         if let Err(message) = promotion::name_error(root) {
-            let message = message.ok_or_else(|| unported("not a mapping"))?;
             return Ok((events, Vec::new(), Some(Stop::Failed(message))));
         }
         let name = root
@@ -261,6 +274,40 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
         }
     }
     Ok((events, planned, None))
+}
+
+/// The message of a rule file this loader cannot read as YAML: the oracle
+/// fails the run with its parser's exception, which names the problem and
+/// where it is (`in "<file>", line N, column M`).
+fn unreadable(path: &Path, error: &node::LoadError) -> String {
+    match &error.mark {
+        Some(mark) => format!(
+            "{}\n  in \"{}\", line {}, column {}",
+            error.problem,
+            path.display(),
+            mark.line,
+            mark.column
+        ),
+        None => format!("{}\n  in \"{}\"", error.problem, path.display()),
+    }
+}
+
+/// An I/O error as Python words an `OSError` on `path`
+/// (`[Errno 2] No such file or directory: 'x.yaml'`).
+fn os_error(error: &std::io::Error, path: &Path) -> String {
+    let text = error.to_string();
+    match error.raw_os_error() {
+        Some(code) => {
+            let words = text
+                .strip_suffix(&format!(" (os error {code})"))
+                .unwrap_or(&text);
+            format!(
+                "[Errno {code}] {words}: {}",
+                crate::serve::runner::python_repr(&path.display().to_string())
+            )
+        }
+        None => text,
+    }
 }
 
 /// Replaces `path` with `bytes` through a temporary file beside it
@@ -512,18 +559,34 @@ mod tests {
         assert_eq!(result[1].1, Json::str("'name'"));
     }
 
+    /// A rule file that is not YAML, or whose root is no mapping, fails the
+    /// run as the oracle's exception does, and nothing is written (UC-6.0d).
     #[test]
-    fn what_the_port_cannot_report_is_refused_before_anything_is_drawn() {
-        for bytes in [&b"name: [\n"[..], b"just text\n", b"\xff\n"] {
+    fn a_file_that_does_not_read_or_is_no_mapping_fails_the_run() {
+        for (bytes, expected) in [
+            (&b"name: [\n"[..], None),
+            (b"\xff\n", None),
+            (
+                b"just text\n",
+                Some("string indices must be integers, not 'str'"),
+            ),
+            (b"42\n", Some("'int' object is not subscriptable")),
+        ] {
             let (outcome, drawn, after) = promote(
                 &settings(true, "PRODUCTION"),
-                &[("a.yaml", bytes)],
+                &[("a.yaml", RULE.as_bytes()), ("b.yaml", bytes)],
                 false,
                 false,
             );
-            assert!(matches!(outcome, Err(Stop::Unported(_))), "{bytes:?}");
-            assert_eq!(drawn, "");
-            assert_eq!(after[0], bytes);
+            let Err(Stop::Failed(message)) = outcome else {
+                panic!("{bytes:?}: {outcome:?}");
+            };
+            match expected {
+                Some(expected) => assert_eq!(message, expected),
+                None => assert!(message.contains("b.yaml\""), "{bytes:?}: {message}"),
+            }
+            assert!(drawn.contains("status promotion"), "{drawn}");
+            assert_eq!(after, [RULE.as_bytes(), bytes]);
         }
         let result = stopped(&Stop::Unported("why".into()));
         assert!(result.contains(&(

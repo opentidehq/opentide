@@ -911,6 +911,11 @@ impl Run<'_> {
             threats: many("threat"),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
+        let can_prompt = self.mode == Mode::Human && stdin_is_terminal();
+        // The questions are the setup wizards': drawn on stderr.
+        let prompter = std::cell::RefCell::new(crate::commands::setup::wizard::Inquire::new(
+            self.terminal().stderr.colour,
+        ));
         run(
             &parsed,
             &Context {
@@ -918,7 +923,9 @@ impl Run<'_> {
                 env: self.env,
                 cwd: &cwd,
                 version: &self.host.version,
-                can_prompt: self.mode == Mode::Human && stdin_is_terminal(),
+                can_prompt,
+                prompter: Some(&prompter),
+                interrupt: Some(&self.host.interrupt),
             },
         )
     }
