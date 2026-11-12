@@ -356,9 +356,8 @@ def test_offline_query_validation_needs_no_tenant(
     assert payload["mode"] == "offline"
     assert payload["supported"] is True
     assert "missing_tenants" not in payload
-    if platform in (DetectionPlatform.sentinel_one, DetectionPlatform.google_secops):
-        # S1QL has no offline engine, and the engine's YARA-L check is not wired yet:
-        # the tenant check is the only one, and it says so.
+    if platform is DetectionPlatform.sentinel_one:
+        # S1QL has no offline engine: the tenant check is the only one, and it says so.
         assert result.exit_code == 2, output
         assert "--live" in payload["message"]
     else:
