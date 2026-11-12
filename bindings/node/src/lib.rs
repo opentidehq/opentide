@@ -772,6 +772,49 @@ mod tests {
             .map(drop));
     }
 
+    /// `from` copied to `to`, folders and files.
+    fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).unwrap();
+            }
+        }
+    }
+
+    /// A run that plans carries the command line's counts (`summary`), which
+    /// the in-memory workspace above, with no platform, never reaches.
+    #[test]
+    fn a_plan_of_the_corpus_carries_its_summary() {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current");
+        let dir = tempfile::tempdir().unwrap();
+        copy_tree(
+            &source.join("Configurations"),
+            &dir.path().join(".opentide/configurations"),
+        );
+        for (family, legacy) in [
+            ("threats", "Objects/Threat Vectors"),
+            ("objectives", "Objects/Detection Objectives"),
+            ("rules", "Objects/Detection Rules"),
+        ] {
+            copy_tree(
+                &source.join(legacy),
+                &dir.path().join("objects").join(family),
+            );
+        }
+        let ws = open_workspace(dir.path().to_string_lossy().into_owned(), None).unwrap();
+        let plan = ws.plan(None).unwrap();
+        assert!(plan.ok, "{}", plan.document);
+        let summary: serde_json::Value =
+            serde_json::from_str(plan.summary.as_deref().unwrap()).unwrap();
+        assert!(summary.is_object(), "{summary}");
+    }
+
     #[test]
     fn a_workspace_whose_configuration_does_not_parse_fails_with_its_code() {
         let dir = tempfile::tempdir().unwrap();
