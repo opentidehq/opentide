@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 42 |
+| Commands with a Rust implementation | 51 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 716 |
-| … no Rust yet | 128 (17.8%) |
+| Recordings (command × corpus × mode) | 765 |
+| … no Rust yet | 40 (5.2%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 588 (82.1%) |
+| … compare not run | 725 (94.7%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1022 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1069 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -48,7 +48,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy`
 
-102 approved diff(s).
+114 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -56,6 +56,8 @@ No compare results were given: every command with a Rust implementation that is 
 | deploy-push-anchor | compare not run | not recorded | compare not run | compare not run |
 | deploy-push-production | compare not run | not recorded | compare not run | compare not run |
 | deploy-tenants | compare not run | not recorded | compare not run | compare not run |
+| deploy-tenants-sysdig | compare not run | not recorded | compare not run | compare not run |
+| empty | compare not run | compare not run | compare not run | compare not run |
 | fault | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
@@ -216,17 +218,23 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate extract defender`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tenants | compare not run | not recorded | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate extract elastic`
 
+19 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tenants | compare not run | not recorded | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate extract sentinel`
 
@@ -371,6 +379,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
+| live-tenants | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
 | tenants | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
@@ -405,12 +414,13 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup`
 
-6 approved diff(s).
+12 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | empty | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
+| skills-merge | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup ci`
@@ -466,10 +476,13 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup skills`
 
+8 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| skills-merge | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup skills discover`
 
@@ -504,47 +517,54 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| share-misp | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share preview`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| share-misp | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share push`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| share-misp | compare not run | not recorded | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share retract`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| share-misp | compare not run | not recorded | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share status`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| share-misp | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share targets`
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| share-misp | compare not run | compare not run | compare not run | compare not run |
+| share-misp-broken | not recorded | not recorded | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide tui`
 

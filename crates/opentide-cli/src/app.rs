@@ -3329,19 +3329,17 @@ mod tests {
             );
             std::fs::remove_file(&file).unwrap();
         }
-        // A deploy that sends runs here when it names its --platform: without
-        // one, compare runs Python alone on the refusal.
+        // A query runs here on the platforms with a query runner: on Sysdig,
+        // compare runs Python alone on the refusal.
         for line in [
-            "--json deploy --strategy PREVIEW",
-            "deploy --strategy PREVIEW",
+            "--json query --platform sysdig q",
+            "query --platform sysdig q",
         ] {
             let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
             assert_eq!(refused.code, 2, "{line}");
             let recorded = std::fs::read_to_string(&file).unwrap();
             assert!(
-                recorded.starts_with(
-                    "opentide deploy without --platform has no Rust implementation yet"
-                ),
+                recorded.starts_with("opentide query on sysdig has no Rust implementation yet"),
                 "{line}: {recorded}"
             );
             std::fs::remove_file(&file).unwrap();
@@ -3351,7 +3349,7 @@ mod tests {
         assert!(!file.exists());
         // Without the variable, nothing is written.
         assert_eq!(dispatched("generate extract sentinel", &[], false).code, 2);
-        assert_eq!(dispatched("deploy --strategy PREVIEW", &[], false).code, 2);
+        assert_eq!(dispatched("query --platform sysdig q", &[], false).code, 2);
         assert!(!file.exists());
     }
 
@@ -3852,7 +3850,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json share push", &[], false);
+        let failed = dispatched("--json generate extract sentinel", &[], false);
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",

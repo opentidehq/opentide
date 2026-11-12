@@ -499,7 +499,14 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "query",
         &words("query --platform splunk --rule r")
     ));
-    assert_eq!(table["validate query"], replay::Coverage::default());
+    // Every run, and a platform plugin's (UC-4.5) live check.
+    assert_eq!(
+        table["validate query"],
+        replay::Coverage {
+            plugins: true,
+            ..replay::Coverage::default()
+        }
+    );
     assert!(replay::covers(
         "generate",
         &words("--json generate schemas")
@@ -559,12 +566,11 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         &words("validate query --live --platform sysdig")
     ));
     // A platform plugin's run (UC-4.5): with no plugin host here, a platform
-    // that is not built in is no plugin, and the run is not covered.
+    // that is not built in is no plugin, and a query on it is not covered (a
+    // deploy is, whatever its platform, since UC-4.4c).
     assert!(replay::rust_commands()["deploy"].plugins);
-    assert!(!replay::covers(
-        "deploy",
-        &words("deploy --platform acme --all")
-    ));
+    assert!(replay::rust_commands()["query"].plugins);
+    assert!(!replay::covers("query", &words("query --platform acme q")));
     // A multi-line entry, a tuple named by a constant, and one the parser
     // cannot read, which is no table.
     let source = "x = 1\nPLATFORMS: tuple[str, ...] = (\n    \"p\",\n    \"q\",\n)\n\
