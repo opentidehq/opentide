@@ -18,6 +18,23 @@ image="${ES_IMAGE:-mirror.gcr.io/library/elasticsearch}:$version"
 port="${ES_PORT:-9200}"
 name="opentide-es-oracle-$port"
 
+# A registry answers a burst of pulls with 429 Too Many Requests: pull with
+# backoff first, so a rate limit is a wait rather than a failed job.
+# ES_PULL_DELAY is the first wait in seconds (doubled after each failure).
+delay="${ES_PULL_DELAY:-15}"
+for attempt in 1 2 3 4; do
+  if docker pull --quiet "$image" >&2; then
+    break
+  fi
+  if [ "$attempt" -eq 4 ]; then
+    echo "could not pull $image after $attempt attempts" >&2
+    exit 1
+  fi
+  echo "pull $attempt of $image failed; retrying in ${delay}s" >&2
+  sleep "$delay"
+  delay=$((delay * 2))
+done
+
 docker rm -f "$name" >/dev/null 2>&1 || true
 docker run -d --name "$name" -p "127.0.0.1:$port:9200" \
   -e discovery.type=single-node \
