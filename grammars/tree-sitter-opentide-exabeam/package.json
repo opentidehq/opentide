@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-exabeam",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for the Exabeam Query Language (Exabeam New-Scale SIEM) (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.exabeam",
+      "file-types": ["exabeam"]
+    }
+  ]
+}

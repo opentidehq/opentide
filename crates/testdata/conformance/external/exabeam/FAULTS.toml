@@ -1,0 +1,101 @@
+# One entry per query in this directory: the fault injected into its
+# `.broken.exabeam` twin and the code the twin must report. The queries are
+# written for opentide (EUPL-1.2): Exabeam's published rules may not be
+# redistributed (../SOURCES.md, docs/EXABEAM.md). See
+# crates/opentide-analysis/tests/external_exabeam.rs.
+
+[[query]]
+file = "bytes-out-by-host.search.exabeam"
+profile = "search"
+fault = "time-exact"
+code = "exabeam_time_exact"
+
+[[query]]
+file = "dns-tunnel-length.rule.exabeam"
+profile = "rule"
+fault = "dangling-operator"
+code = "exabeam_parse_error"
+
+[[query]]
+file = "encoded-powershell.rule.exabeam"
+profile = "rule"
+fault = "lookahead-regex"
+code = "exabeam_regex"
+
+[[query]]
+file = "extract-encoded-command.search.exabeam"
+profile = "search"
+fault = "keyword-case"
+code = "exabeam_keyword_case"
+
+[[query]]
+file = "failed-logins-external.rule.exabeam"
+profile = "rule"
+fault = "ipv6-cidr"
+code = "exabeam_ipv6_range"
+
+[[query]]
+file = "lsass-dump-tools.rule.exabeam"
+profile = "rule"
+fault = "implicit-not"
+code = "exabeam_implicit_operator"
+
+[[query]]
+file = "mailbox-forward-rule.rule.exabeam"
+profile = "rule"
+fault = "bare-wildcard"
+code = "exabeam_bare_wildcard"
+
+[[query]]
+file = "office-macro-child.rule.exabeam"
+profile = "rule"
+fault = "unbalanced-paren"
+code = "exabeam_parse_error"
+
+[[query]]
+file = "pivot-from-privileged-login.search.exabeam"
+profile = "search"
+fault = "foreach-first"
+code = "exabeam_foreach_position"
+
+[[query]]
+file = "privileged-login-outside-jump-hosts.rule.exabeam"
+profile = "rule"
+fault = "context-table-or"
+code = "exabeam_context_table_or"
+
+[[query]]
+file = "run-key-written.rule.exabeam"
+profile = "rule"
+fault = "unterminated-string"
+code = "exabeam_parse_error"
+
+[[query]]
+file = "service-created-from-temp.rule.exabeam"
+profile = "rule"
+fault = "foreign-function"
+code = "exabeam_unknown_function"
+
+[[query]]
+file = "smb-fan-out.rule.exabeam"
+profile = "rule"
+fault = "reversed-range"
+code = "exabeam_range"
+
+[[query]]
+file = "top-failed-logins.search.exabeam"
+profile = "search"
+fault = "group-by-column"
+code = "exabeam_group_by_column"
+
+[[query]]
+file = "web-shell-response.rule.exabeam"
+profile = "rule"
+fault = "function-arity"
+code = "exabeam_function_arity"
+
+[[query]]
+file = "windows-log-cleared.rule.exabeam"
+profile = "rule"
+fault = "not-equal"
+code = "exabeam_not_equal"

@@ -1,0 +1,23 @@
+[package]
+name = "opentide-exabeam"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: I/O-free Exabeam Query Language engine (Exabeam New-Scale SIEM). Depend on opentide-analysis."
+readme = "../COMPONENT.md"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+tree-sitter.workspace = true
+regex-syntax.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

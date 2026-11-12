@@ -6,6 +6,16 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- **`.exabeam` files are the Exabeam Query Language, language id `exabeam`.** The search language of Exabeam's New-Scale SIEM, which Exabeam's guides call "EQL" (`eql` stays Elastic's), is checked as the specification exabeam-1.0 defines it: the filter and the advanced operators (`SELECT`, `WHERE`, `GROUP-BY`, `ORDER-BY`, `LIMIT`, pipes, `FOREACH`, the aggregations, `RGX_EXTRACT`), every `exabeam_*` error and warning of the spec, and `RGX` patterns as RE2 reads them. A `.exabeam` file is a search. `opentide explain` describes each code; `docs/EXABEAM.md` lists them with the conformance results ([specifications RFC 0018](https://github.com/opentidehq/specifications/blob/main/rfcs/0018-exabeam-platform.md)).
+- **Exabeam correlation rules and hunts are checked.** `configurations.exabeam.sequences[].query` is analysed under the spec's `rule` profile, where the advanced operators are `exabeam_advanced_in_rule`, and hunts with `system: exabeam` under `search`; `analyze_query` with `platform: exabeam` is the `rule` profile. On Exabeam's 2,371 published correlation rules the engine agrees with the specification's reference checker on every rule: 75 of the 2,294 Sigma conversions have errors, and none of Exabeam's 77 own rules.
+- **Exabeam fields come from Exabeam's Common Information Model.** Hover and completion know its 1,130 fields, subjects, activity types and outcomes (`catalogs/exabeam/`, `scripts/sync_exabeam_catalog.py`). A field it lacks is the warning `exabeam_unknown_field` (never for `c_` and `m_` fields or an earlier `AS` name), and an unquoted number on a string field (`event_code:4625`) the warning `exabeam_string_field_number`.
+- **The `configurations.exabeam` block is checked as exabeam-1.0 says.** Its constraint codes and advisories are reported on their fields, from the YAML itself, and the bundled Tide catalog, regenerated from the opentide that models the block, knows `configurations.exabeam` (its keys, `status`, and the threshold and outcome values):
+  - Errors: `exabeam_sequences`, `exabeam_correlation`, `exabeam_threshold_function`, `exabeam_threshold_operator`, `exabeam_threshold_value`, `exabeam_group_by`, `exabeam_duration`, `exabeam_severity`, `exabeam_outcome`, `exabeam_email`, `exabeam_schedule`, `exabeam_name_length`, `exabeam_context_table_trigger`, and `exabeam_name_duplicate` across the workspace
+  - Warnings: `exabeam_outcome_silent`, `exabeam_correlation_window`
+- **Exabeam queries are highlighted.** Semantic tokens follow the spec's highlight table with the existing captures; `highlights/generated/exabeam.tmLanguage.json` (`source.exabeam`) is the TextMate grammar, and the Neovim, Helix, Zed and `@opentide/lsp-client` samples map `.exabeam` to `exabeam`.
+
 ## [0.14.0] - 2026-11-12
 
 Graylog is a platform: Graylog queries are checked in a Graylog dialect of Lucene, as live Graylog 6.3 and 7.2 read them, and `configurations.graylog` event definitions are checked as graylog-1.1 says, aggregation conditions included.

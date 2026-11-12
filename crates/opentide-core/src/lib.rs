@@ -44,6 +44,11 @@ pub enum LanguageId {
     /// second opinion (yara-1.0; HarfangLab and Bitdefender `yara` blocks).
     #[serde(rename = "yara", alias = "opentide-yara")]
     Yara,
+    /// The Exabeam Query Language of the New-Scale SIEM (exabeam-1.0;
+    /// `configurations.exabeam`, `system: exabeam` hunts). Exabeam's guides
+    /// call it "EQL"; opentide never does, because `eql` is Elastic's.
+    #[serde(rename = "exabeam", alias = "opentide-exabeam")]
+    Exabeam,
 }
 
 impl LanguageId {
@@ -60,6 +65,7 @@ impl LanguageId {
             Self::Falco => "falco",
             Self::Cql => "cql",
             Self::Yara => "yara",
+            Self::Exabeam => "exabeam",
         }
     }
 
@@ -76,6 +82,7 @@ impl LanguageId {
             "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
             "cql" | "opentide-cql" | "CQL" | "logscale" | "crowdstrike" => Some(Self::Cql),
             "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
+            "exabeam" | "opentide-exabeam" | "Exabeam" => Some(Self::Exabeam),
             _ => None,
         }
     }
@@ -93,12 +100,13 @@ impl LanguageId {
             "falco" => Some(Self::Falco),
             "cql" => Some(Self::Cql),
             "yar" | "yara" => Some(Self::Yara),
+            "exabeam" => Some(Self::Exabeam),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 9] = [
+    pub const QUERY_LANGUAGES: [Self; 10] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -108,6 +116,7 @@ impl LanguageId {
         Self::Falco,
         Self::Cql,
         Self::Yara,
+        Self::Exabeam,
     ];
 }
 
@@ -723,6 +732,59 @@ pub mod codes {
     pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
     pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
 
+    // The Exabeam Query Language (specifications exabeam-1.0, language).
+    pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
+    pub const EXABEAM_IMPLICIT_OPERATOR: &str = "exabeam_implicit_operator";
+    pub const EXABEAM_NOT_EQUAL: &str = "exabeam_not_equal";
+    pub const EXABEAM_BARE_WILDCARD: &str = "exabeam_bare_wildcard";
+    pub const EXABEAM_LEADING_SLASH: &str = "exabeam_leading_slash";
+    pub const EXABEAM_FREE_TEXT_SPECIAL: &str = "exabeam_free_text_special";
+    pub const EXABEAM_UNKNOWN_FUNCTION: &str = "exabeam_unknown_function";
+    pub const EXABEAM_FUNCTION_ARITY: &str = "exabeam_function_arity";
+    pub const EXABEAM_REGEX: &str = "exabeam_regex";
+    pub const EXABEAM_RANGE: &str = "exabeam_range";
+    pub const EXABEAM_IPV6_RANGE: &str = "exabeam_ipv6_range";
+    pub const EXABEAM_TIME_EXACT: &str = "exabeam_time_exact";
+    pub const EXABEAM_CONTEXT_TABLE_OR: &str = "exabeam_context_table_or";
+    pub const EXABEAM_CONTEXT_TABLE_LIMIT: &str = "exabeam_context_table_limit";
+    pub const EXABEAM_ADVANCED_IN_RULE: &str = "exabeam_advanced_in_rule";
+    pub const EXABEAM_KEYWORD_CASE: &str = "exabeam_keyword_case";
+    pub const EXABEAM_CLAUSE_ORDER: &str = "exabeam_clause_order";
+    pub const EXABEAM_PIPE_LIMIT: &str = "exabeam_pipe_limit";
+    pub const EXABEAM_RGX_EXTRACT_LIMIT: &str = "exabeam_rgx_extract_limit";
+    pub const EXABEAM_RESERVED_ALIAS: &str = "exabeam_reserved_alias";
+    pub const EXABEAM_GROUP_BY_SELECT_STAR: &str = "exabeam_group_by_select_star";
+    pub const EXABEAM_GROUP_BY_COLUMN: &str = "exabeam_group_by_column";
+    pub const EXABEAM_FOREACH_CLAUSE: &str = "exabeam_foreach_clause";
+    pub const EXABEAM_FOREACH_REFERENCE: &str = "exabeam_foreach_reference";
+    pub const EXABEAM_FOREACH_POSITION: &str = "exabeam_foreach_position";
+    pub const EXABEAM_MIXED_BOOLEAN: &str = "exabeam_mixed_boolean";
+    pub const EXABEAM_IMPLICIT_AND: &str = "exabeam_implicit_and";
+    pub const EXABEAM_SINGLE_GROUP: &str = "exabeam_single_group";
+    pub const EXABEAM_PIPE_MISUSE: &str = "exabeam_pipe_misuse";
+    pub const EXABEAM_WILDCARD_IN_PHRASE: &str = "exabeam_wildcard_in_phrase";
+    pub const EXABEAM_UNQUOTED_VALUE: &str = "exabeam_unquoted_value";
+    pub const EXABEAM_LEGACY_REGEX: &str = "exabeam_legacy_regex";
+    pub const EXABEAM_UNKNOWN_FIELD: &str = "exabeam_unknown_field";
+    pub const EXABEAM_STRING_FIELD_NUMBER: &str = "exabeam_string_field_number";
+    // Exabeam block constraint codes and advisories (platform exabeam-1.0).
+    pub const EXABEAM_SEQUENCES: &str = "exabeam_sequences";
+    pub const EXABEAM_CORRELATION: &str = "exabeam_correlation";
+    pub const EXABEAM_THRESHOLD_FUNCTION: &str = "exabeam_threshold_function";
+    pub const EXABEAM_THRESHOLD_OPERATOR: &str = "exabeam_threshold_operator";
+    pub const EXABEAM_THRESHOLD_VALUE: &str = "exabeam_threshold_value";
+    pub const EXABEAM_GROUP_BY: &str = "exabeam_group_by";
+    pub const EXABEAM_DURATION: &str = "exabeam_duration";
+    pub const EXABEAM_SEVERITY: &str = "exabeam_severity";
+    pub const EXABEAM_OUTCOME: &str = "exabeam_outcome";
+    pub const EXABEAM_EMAIL: &str = "exabeam_email";
+    pub const EXABEAM_SCHEDULE: &str = "exabeam_schedule";
+    pub const EXABEAM_NAME_LENGTH: &str = "exabeam_name_length";
+    pub const EXABEAM_CONTEXT_TABLE_TRIGGER: &str = "exabeam_context_table_trigger";
+    pub const EXABEAM_NAME_DUPLICATE: &str = "exabeam_name_duplicate";
+    pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
+    pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
+
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
         SCHEMA_VALIDATION,
@@ -940,6 +1002,56 @@ pub mod codes {
         HARFANGLAB_YARA_CONTEXT,
         BITDEFENDER_YARA_ASCII,
         BITDEFENDER_YARA_SIZE,
+        EXABEAM_PARSE_ERROR,
+        EXABEAM_IMPLICIT_OPERATOR,
+        EXABEAM_NOT_EQUAL,
+        EXABEAM_BARE_WILDCARD,
+        EXABEAM_LEADING_SLASH,
+        EXABEAM_FREE_TEXT_SPECIAL,
+        EXABEAM_UNKNOWN_FUNCTION,
+        EXABEAM_FUNCTION_ARITY,
+        EXABEAM_REGEX,
+        EXABEAM_RANGE,
+        EXABEAM_IPV6_RANGE,
+        EXABEAM_TIME_EXACT,
+        EXABEAM_CONTEXT_TABLE_OR,
+        EXABEAM_CONTEXT_TABLE_LIMIT,
+        EXABEAM_ADVANCED_IN_RULE,
+        EXABEAM_KEYWORD_CASE,
+        EXABEAM_CLAUSE_ORDER,
+        EXABEAM_PIPE_LIMIT,
+        EXABEAM_RGX_EXTRACT_LIMIT,
+        EXABEAM_RESERVED_ALIAS,
+        EXABEAM_GROUP_BY_SELECT_STAR,
+        EXABEAM_GROUP_BY_COLUMN,
+        EXABEAM_FOREACH_CLAUSE,
+        EXABEAM_FOREACH_REFERENCE,
+        EXABEAM_FOREACH_POSITION,
+        EXABEAM_MIXED_BOOLEAN,
+        EXABEAM_IMPLICIT_AND,
+        EXABEAM_SINGLE_GROUP,
+        EXABEAM_PIPE_MISUSE,
+        EXABEAM_WILDCARD_IN_PHRASE,
+        EXABEAM_UNQUOTED_VALUE,
+        EXABEAM_LEGACY_REGEX,
+        EXABEAM_UNKNOWN_FIELD,
+        EXABEAM_STRING_FIELD_NUMBER,
+        EXABEAM_SEQUENCES,
+        EXABEAM_CORRELATION,
+        EXABEAM_THRESHOLD_FUNCTION,
+        EXABEAM_THRESHOLD_OPERATOR,
+        EXABEAM_THRESHOLD_VALUE,
+        EXABEAM_GROUP_BY,
+        EXABEAM_DURATION,
+        EXABEAM_SEVERITY,
+        EXABEAM_OUTCOME,
+        EXABEAM_EMAIL,
+        EXABEAM_SCHEDULE,
+        EXABEAM_NAME_LENGTH,
+        EXABEAM_CONTEXT_TABLE_TRIGGER,
+        EXABEAM_NAME_DUPLICATE,
+        EXABEAM_OUTCOME_SILENT,
+        EXABEAM_CORRELATION_WINDOW,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -1382,6 +1494,136 @@ pub mod codes {
             CQL_REGEX_GROUP_UNDER_OR => {
                 "A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields."
             }
+            EXABEAM_PARSE_ERROR => {
+                "The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number."
+            }
+            EXABEAM_IMPLICIT_OPERATOR => {
+                "An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT."
+            }
+            EXABEAM_NOT_EQUAL => "Exabeam filters have no != operator; write NOT field:value.",
+            EXABEAM_BARE_WILDCARD => "A * alone is not an Exabeam query term.",
+            EXABEAM_LEADING_SLASH => "An Exabeam query cannot start with /.",
+            EXABEAM_FREE_TEXT_SPECIAL => {
+                "Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes."
+            }
+            EXABEAM_UNKNOWN_FUNCTION => {
+                "The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT."
+            }
+            EXABEAM_FUNCTION_ARITY => {
+                "An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern."
+            }
+            EXABEAM_REGEX => {
+                "The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier."
+            }
+            EXABEAM_RANGE => {
+                "The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network."
+            }
+            EXABEAM_IPV6_RANGE => {
+                "An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only."
+            }
+            EXABEAM_TIME_EXACT => {
+                "An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only."
+            }
+            EXABEAM_CONTEXT_TABLE_OR => {
+                "An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only."
+            }
+            EXABEAM_CONTEXT_TABLE_LIMIT => {
+                "An Exabeam query has more than two context table lookups."
+            }
+            EXABEAM_ADVANCED_IN_RULE => {
+                "A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only."
+            }
+            EXABEAM_KEYWORD_CASE => {
+                "An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case."
+            }
+            EXABEAM_CLAUSE_ORDER => {
+                "Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT."
+            }
+            EXABEAM_PIPE_LIMIT => "An Exabeam query has more than five pipes.",
+            EXABEAM_RGX_EXTRACT_LIMIT => "An Exabeam query has more than three RGX_EXTRACT calls.",
+            EXABEAM_RESERVED_ALIAS => {
+                "An Exabeam AS name is one of the Search guide's reserved words."
+            }
+            EXABEAM_GROUP_BY_SELECT_STAR => "An Exabeam GROUP-BY is combined with SELECT *.",
+            EXABEAM_GROUP_BY_COLUMN => {
+                "An Exabeam selected column is neither in GROUP-BY nor aggregated."
+            }
+            EXABEAM_FOREACH_CLAUSE => "An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.",
+            EXABEAM_FOREACH_REFERENCE => {
+                "An Exabeam @field reference is outside a FOREACH sub-query."
+            }
+            EXABEAM_FOREACH_POSITION => {
+                "An Exabeam FOREACH is the first statement; it runs on the result of a preceding query."
+            }
+            EXABEAM_MIXED_BOOLEAN => {
+                "Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence."
+            }
+            EXABEAM_IMPLICIT_AND => {
+                "Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND."
+            }
+            EXABEAM_SINGLE_GROUP => {
+                "Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them."
+            }
+            EXABEAM_PIPE_MISUSE => {
+                "An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE."
+            }
+            EXABEAM_WILDCARD_IN_PHRASE => {
+                "A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase."
+            }
+            EXABEAM_UNQUOTED_VALUE => {
+                "An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes."
+            }
+            EXABEAM_LEGACY_REGEX => {
+                "An Exabeam value between slashes may be read as a regular expression; write RGX(\"...\") for a pattern, or drop the slashes for a path."
+            }
+            EXABEAM_UNKNOWN_FIELD => {
+                "The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it."
+            }
+            EXABEAM_STRING_FIELD_NUMBER => {
+                "An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes."
+            }
+            EXABEAM_SEQUENCES => {
+                "An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query."
+            }
+            EXABEAM_CORRELATION => {
+                "An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by."
+            }
+            EXABEAM_THRESHOLD_FUNCTION => {
+                "An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing."
+            }
+            EXABEAM_THRESHOLD_OPERATOR => {
+                "An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value."
+            }
+            EXABEAM_THRESHOLD_VALUE => {
+                "An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer."
+            }
+            EXABEAM_GROUP_BY => {
+                "An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty)."
+            }
+            EXABEAM_DURATION => {
+                "An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes."
+            }
+            EXABEAM_SEVERITY => "An Exabeam severity is not none, low, medium, high or critical.",
+            EXABEAM_OUTCOME => "An Exabeam outcome is not alert, case or none.",
+            EXABEAM_EMAIL => {
+                "An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank."
+            }
+            EXABEAM_SCHEDULE => {
+                "An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take."
+            }
+            EXABEAM_NAME_LENGTH => "The Exabeam rule name is longer than 128 characters.",
+            EXABEAM_CONTEXT_TABLE_TRIGGER => {
+                "An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match."
+            }
+            EXABEAM_NAME_DUPLICATE => {
+                "Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case."
+            }
+            EXABEAM_OUTCOME_SILENT => {
+                "An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event."
+            }
+            EXABEAM_CORRELATION_WINDOW => {
+                "An Exabeam correlation window is shorter than the longest sequence threshold window."
+            }
             YARA_PARSE_ERROR => "The YARA signature does not parse as libyara 4.5 reads it.",
             YARA_INCLUDE => {
                 "A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it."
@@ -1628,6 +1870,13 @@ mod tests {
         assert_eq!(LanguageId::from_extension("yara"), Some(LanguageId::Yara));
         assert_eq!(LanguageId::parse("logscale"), Some(LanguageId::Cql));
         assert_eq!(LanguageId::from_extension("cql"), Some(LanguageId::Cql));
+        // Exabeam's guides call it EQL; opentide's id is `exabeam`.
+        assert_eq!(LanguageId::parse("exabeam"), Some(LanguageId::Exabeam));
+        assert_eq!(
+            LanguageId::from_extension("exabeam"),
+            Some(LanguageId::Exabeam)
+        );
+        assert_eq!(LanguageId::parse("EQL"), Some(LanguageId::Eql));
     }
 
     #[test]

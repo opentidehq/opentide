@@ -547,6 +547,7 @@ dependencies = [
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
+ "opentide-exabeam",
  "opentide-falco",
  "opentide-highlight",
  "opentide-kql",
@@ -617,6 +618,20 @@ dependencies = [
  "opentide-lucene",
  "opentide-syntax",
  "serde",
+ "toml",
+ "tree-sitter",
+]
+
+[[package]]
+name = "opentide-exabeam"
+version = "0.14.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "regex-syntax",
+ "serde",
+ "serde_json",
  "toml",
  "tree-sitter",
 ]
@@ -737,6 +752,7 @@ dependencies = [
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
+ "opentide-exabeam",
  "opentide-falco",
  "opentide-highlight",
  "opentide-kql",

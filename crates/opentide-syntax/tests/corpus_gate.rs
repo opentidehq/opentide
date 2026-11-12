@@ -484,3 +484,26 @@ fn yara_corpus_gate() {
         ],
     });
 }
+
+#[test]
+fn exabeam_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Exabeam,
+        id: "exabeam",
+        // Leaf tokens and names: every fixture that tags a production
+        // contains them.
+        structural: &[
+            "source_file",
+            "filter",
+            "field_name",
+            "alias",
+            "table_name",
+            "string",
+            "number",
+            "identifier",
+            "bare_word",
+            "text_word",
+            "bound",
+        ],
+    });
+}

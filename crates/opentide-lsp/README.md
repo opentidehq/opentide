@@ -1,8 +1,8 @@
 # opentide language server
 
-Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), and **Tide YAML** objects.
+Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), **YARA**, the **Exabeam Query Language** (`exabeam`), and **Tide YAML** objects.
 
-v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/FALCO.md](docs/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/CQL.md](docs/CQL.md)). SQL is out of scope. Names use `opentide`, never `otide`.
+v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/FALCO.md](docs/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/CQL.md](docs/CQL.md)). The Exabeam Query Language covers `configurations.exabeam` (Exabeam New-Scale SIEM correlation rules) and `system: exabeam` hunts, checked as the specification's reference checker checks it, with Exabeam's Common Information Model ([docs/EXABEAM.md](docs/EXABEAM.md)). SQL is out of scope. Names use `opentide`, never `otide`.
 
 ## Product hierarchy
 
@@ -76,6 +76,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 - I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`). No `std::fs`.
 - HighlightSpec capture rename is a **major**.
 - Never report a CQL field, saved search, lookup file or repository as unknown: they live in the tenant.
+- An Exabeam field the CIM catalogue lacks is a warning (`exabeam_unknown_field`), never an error; context tables are never checked: they live in the tenant.
 - Control commands (`.show` / `.create`) → `kql_control_command_unsupported`.
 - Highlight tokenizes **authored** SPL (implicit `| search` is semantic, not a rewrite).
 - opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
@@ -89,7 +90,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | --- | --- |
 | `opentide-core` | Shared types, diagnostic codes |
 | `opentide-highlight` | Frozen HighlightSpec, semantic tokens, tm/monaco/helix maps |
-| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL |
+| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL/YARA/Exabeam |
 | `opentide-kql` | Catalog, HIR, Sentinel/Defender profiles, `compile_kql_query` |
 | `opentide-spl` | searchbnf-informed catalog, `spl_unknown_command` |
 | `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
@@ -98,6 +99,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings, the Carbon Black and Graylog dialects |
 | `opentide-falco` | Falco rule conditions (Sysdig Secure): a port of libsinsp's filter parser and compiler checks, field and event catalogs, `falco_*` diagnostics |
 | `opentide-cql` | CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM): function, event and field catalogs, Next-Gen SIEM correlation-rule checks, `cql_*` diagnostics |
+| `opentide-exabeam` | Exabeam Query Language (New-Scale SIEM): a port of the specification's reference checker with the `rule` and `search` profiles, RE2 pattern checks, the Common Information Model catalogue, `exabeam_*` diagnostics |
 | `opentide-ecs` | Elastic Common Schema field catalog (completion, hover) and the ECS checks for queries on ECS indices (`ecs_type_mismatch`, near-miss `ecs_unknown_field`; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |

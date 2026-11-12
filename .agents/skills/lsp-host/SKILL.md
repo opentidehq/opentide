@@ -91,13 +91,13 @@ Semantic tokens are `[deltaLine, deltaStartChar, length, tokenType, tokenModifie
 
 Diagnostics carry `source: "opentide"`, the stable `code`, an LSP severity, and `data: { field_path, suggestion }`, which a code action reads back from `context.diagnostics`. Tide object checks match the Pydantic issue's `{code, field_path, severity}` and add a range. Do not drop a code to make a fixture quiet; fix the document or the engine. `DIAGNOSTICS_DOCS` is where every code has a section (opentide's `docs/cli/diagnostics.md`).
 
-CrowdStrike queries are CQL (`opentide-cql`). Falcon FQL (the API filter language) is not CQL and is never parsed.
+CrowdStrike queries are CQL (`opentide-cql`). Falcon FQL (the API filter language) is not CQL and is never parsed. Exabeam queries are `exabeam` (`opentide-exabeam`), never `eql`: a `.exabeam` file is a search.
 
 ## Editors in this repo
 
 `editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is a separate repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
-Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara` (`.yar`, `.yara`), `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
+Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara` (`.yar`, `.yara`), `exabeam` (`.exabeam`), `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
 
 ## Tests
 

@@ -5,6 +5,7 @@
 
 pub mod bitdefender;
 mod elastic;
+mod exabeam;
 mod falco;
 pub mod graylog;
 mod injection;
@@ -65,7 +66,9 @@ const THREAT_TEMPLATE: &str = include_str!(concat!(
 ));
 
 /// Map a `configurations` field path to an injected query language.
-/// CrowdStrike Next-Gen SIEM correlation rules are CQL. Elastic is not a
+/// CrowdStrike Next-Gen SIEM correlation rules are CQL; an Exabeam
+/// correlation rule's sequence queries (`configurations.exabeam.sequences.<n>.query`)
+/// are the Exabeam Query Language. Elastic is not a
 /// path: its language comes from the block's `type` and `language`
 /// ([`elastic_query_language`]). A hunt's query
 /// (`response.procedure.searches.<n>.query`) takes the language its `system`
@@ -80,6 +83,12 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "carbon_black_cloud" | "graylog", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
+        // A correlation-rule sequence (exabeam-1.0): the `rule` profile.
+        ["configurations", "exabeam", "sequences", n, "query"]
+            if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            Some(LanguageId::Exabeam)
+        }
         // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
         // one rule assembled from several fields ([`yara`]).
         [
@@ -875,6 +884,27 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         ));
     }
 
+    // The block as opentide loads it: `<<` merge keys resolved.
+    if object
+        .configurations
+        .as_ref()
+        .and_then(|c| c.get("exabeam"))
+        .is_some_and(|b| b.is_mapping())
+        && let Some(rule) = merged_yaml(input.source)
+        && let Some(block) = rule
+            .get("configurations")
+            .and_then(|c| c.get("exabeam"))
+            .filter(|b| b.is_mapping())
+    {
+        diagnostics.extend(exabeam::constraint_diagnostics(
+            input.source,
+            input.path,
+            &rule,
+            block,
+            input.workspace,
+        ));
+    }
+
     if let Some(block) = object
         .configurations
         .as_ref()
@@ -1057,6 +1087,16 @@ fn analyze_injections(
                 } else {
                     opentide_falco::analyze_with(&inj.inner, &ctx)
                 };
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Exabeam => {
+                // A sequence query is a filter (`rule`); a hunt is a search.
+                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    opentide_exabeam::Context::RULE
+                } else {
+                    opentide_exabeam::Context::SEARCH
+                };
+                let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Cql => {
