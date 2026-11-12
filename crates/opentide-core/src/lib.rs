@@ -822,6 +822,7 @@ pub mod codes {
     pub const EXABEAM_LEGACY_REGEX: &str = "exabeam_legacy_regex";
     pub const EXABEAM_UNKNOWN_FIELD: &str = "exabeam_unknown_field";
     pub const EXABEAM_STRING_FIELD_NUMBER: &str = "exabeam_string_field_number";
+    pub const EXABEAM_UNKNOWN_VALUE: &str = "exabeam_unknown_value";
     // Exabeam block constraint codes and advisories (platform exabeam-1.0).
     pub const EXABEAM_SEQUENCES: &str = "exabeam_sequences";
     pub const EXABEAM_CORRELATION: &str = "exabeam_correlation";
@@ -1091,6 +1092,7 @@ pub mod codes {
         EXABEAM_LEGACY_REGEX,
         EXABEAM_UNKNOWN_FIELD,
         EXABEAM_STRING_FIELD_NUMBER,
+        EXABEAM_UNKNOWN_VALUE,
         EXABEAM_SEQUENCES,
         EXABEAM_CORRELATION,
         EXABEAM_THRESHOLD_FUNCTION,
@@ -1677,6 +1679,9 @@ pub mod codes {
             }
             EXABEAM_STRING_FIELD_NUMBER => {
                 "An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes."
+            }
+            EXABEAM_UNKNOWN_VALUE => {
+                "An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it."
             }
             EXABEAM_SEQUENCES => {
                 "An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query."

@@ -5,7 +5,9 @@
 //! with their types, the platform fields the CIM table omits, and the
 //! subjects, activity types and outcomes. Fields come from the tenant's
 //! parsers too, so the catalogue never makes an error: an unknown field is
-//! the warning `exabeam_unknown_field` (exabeam-1.0, "Field catalogue").
+//! the warning `exabeam_unknown_field` (exabeam-1.0, "Field catalogue"), and
+//! an `activity_type`, `subject` or `outcome` value it lacks the warning
+//! `exabeam_unknown_value`.
 
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -202,6 +204,96 @@ impl Catalog {
             .iter()
             .find(|a| a.name.eq_ignore_ascii_case(name))
     }
+
+    /// The values the catalogue lists for `field`.
+    pub fn values(&self, field: ValueField) -> Vec<&str> {
+        match field {
+            ValueField::ActivityType => self
+                .activity_types
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect(),
+            ValueField::Subject => self.subjects.iter().map(|s| s.name.as_str()).collect(),
+            ValueField::Outcome => self.outcomes.iter().map(String::as_str).collect(),
+        }
+    }
+
+    /// Whether `value` is one of `field`'s values, compared without regard
+    /// to case.
+    pub fn knows_value(&self, field: ValueField, value: &str) -> bool {
+        match field {
+            ValueField::ActivityType => self.activity_type(value).is_some(),
+            ValueField::Subject => self.subject(value).is_some(),
+            ValueField::Outcome => self.outcomes.iter().any(|o| o.eq_ignore_ascii_case(value)),
+        }
+    }
+
+    /// A value of `field` one edit (two for values of 12 characters or more)
+    /// from `value`, for the warning's message; none under 3 characters.
+    pub fn suggest_value(&self, field: ValueField, value: &str) -> Option<&str> {
+        let chars: Vec<char> = value.to_lowercase().chars().collect();
+        if chars.len() < 3 {
+            return None;
+        }
+        let limit = if chars.len() >= 12 { 2 } else { 1 };
+        self.values(field)
+            .into_iter()
+            .filter_map(|candidate| {
+                let lower: Vec<char> = candidate.to_lowercase().chars().collect();
+                Some((edit_distance(&chars, &lower, limit)?, candidate))
+            })
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, v)| v)
+    }
+
+    /// The activity types of the subject `value` starts with
+    /// (`network-connection` → `network-close`, `network-listen`, …), in
+    /// catalogue order; empty when its first part is not a subject.
+    pub fn activity_types_of(&self, value: &str) -> Vec<&str> {
+        let Some((head, _)) = value.split_once('-') else {
+            return Vec::new();
+        };
+        self.activity_types
+            .iter()
+            .filter(|a| a.subject.eq_ignore_ascii_case(head))
+            .map(|a| a.name.as_str())
+            .collect()
+    }
+}
+
+/// A field whose values the catalogue lists: `exabeam_unknown_value` checks
+/// the literals a filter compares it with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ValueField {
+    ActivityType,
+    Subject,
+    Outcome,
+}
+
+impl ValueField {
+    /// The value field named `name`, compared without regard to case.
+    pub fn of(name: &str) -> Option<Self> {
+        [Self::ActivityType, Self::Subject, Self::Outcome]
+            .into_iter()
+            .find(|f| f.name().eq_ignore_ascii_case(name))
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ActivityType => "activity_type",
+            Self::Subject => "subject",
+            Self::Outcome => "outcome",
+        }
+    }
+
+    /// What one value is called in a message: "an activity type".
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::ActivityType => "an activity type",
+            Self::Subject => "a subject",
+            Self::Outcome => "an outcome",
+        }
+    }
 }
 
 /// Levenshtein distance between `a` and `b`, or `None` when it exceeds
@@ -269,5 +361,33 @@ mod tests {
         let c = Catalog::cached();
         assert_eq!(c.suggest("src_ipp"), Some("src_ip"));
         assert_eq!(c.suggest("zzzzzzzz"), None);
+    }
+
+    #[test]
+    fn values_compare_without_case_and_near_misses_are_suggested() {
+        let c = Catalog::cached();
+        assert_eq!(
+            ValueField::of("Activity_Type"),
+            Some(ValueField::ActivityType)
+        );
+        assert_eq!(ValueField::of("activity"), None);
+        assert!(c.knows_value(ValueField::ActivityType, "Process-Create"));
+        assert!(c.knows_value(ValueField::Subject, "PROCESS"));
+        assert!(c.knows_value(ValueField::Outcome, "Fail"));
+        assert!(!c.knows_value(ValueField::ActivityType, "network-connection"));
+        assert_eq!(
+            c.suggest_value(ValueField::ActivityType, "proces-create"),
+            Some("process-create")
+        );
+        assert_eq!(
+            c.suggest_value(ValueField::Subject, "proces"),
+            Some("process")
+        );
+        assert_eq!(c.suggest_value(ValueField::Outcome, "failed"), None);
+        assert_eq!(
+            c.activity_types_of("dns-query"),
+            ["dns-request", "dns-response", "dns-traffic"]
+        );
+        assert!(c.activity_types_of("nosuchsubject-x").is_empty());
     }
 }

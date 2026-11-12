@@ -91,6 +91,157 @@ fn numbers_on_string_fields() {
     assert!(codes_of("event_code > 4000", Profile::Rule).is_empty());
 }
 
+/// The `exabeam_unknown_value` findings of `query`: (value as written, message).
+fn unknown_values(query: &str, profile: Profile) -> Vec<(String, String)> {
+    check(query, profile)
+        .findings
+        .into_iter()
+        .filter(|f| f.code == codes::EXABEAM_UNKNOWN_VALUE)
+        .map(|f| (query[f.start..f.end].to_string(), f.message))
+        .collect()
+}
+
+#[test]
+fn unknown_values_are_warnings_with_a_near_miss() {
+    let r = analyze_with(r#"activity_type:"proces-create""#, &Context::RULE);
+    assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
+    let d = &r.diagnostics[0];
+    assert_eq!(d.code, codes::EXABEAM_UNKNOWN_VALUE);
+    assert_eq!(d.severity, Severity::Warning);
+    assert!(
+        d.message.contains("did you mean `process-create`"),
+        "{}",
+        d.message
+    );
+    // The range is the value, quotes included.
+    assert_eq!(d.range.start.character, 14);
+    assert_eq!(d.range.end.character, 29);
+
+    let found = unknown_values(r#"subject:"proces""#, Profile::Rule);
+    assert!(found[0].1.contains("did you mean `process`"), "{found:?}");
+    // No near miss: the subject's activity types, or the outcomes.
+    let found = unknown_values(r#"activity_type:"dns-query""#, Profile::Rule);
+    assert!(
+        found[0]
+            .1
+            .contains("its `dns` activity types are `dns-request`, `dns-response`, `dns-traffic`"),
+        "{found:?}"
+    );
+    let found = unknown_values(r#"activity_type:"user-frobnicate""#, Profile::Rule);
+    assert!(found[0].1.contains(" and 30 more"), "{found:?}");
+    let found = unknown_values(r#"outcome:"failure""#, Profile::Rule);
+    assert!(
+        found[0].1.contains("the outcomes are `fail`, `success`"),
+        "{found:?}"
+    );
+    let found = unknown_values(r#"subject:"web""#, Profile::Rule);
+    assert!(
+        found[0].1.ends_with("a tenant's parsers may still emit it"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn unknown_values_in_every_value_form() {
+    for (query, profile, values) in [
+        (
+            r#"activity_type="dns-query""#,
+            Profile::Rule,
+            &["\"dns-query\""][..],
+        ),
+        (
+            r#"activity_type == 'dns-query'"#,
+            Profile::Rule,
+            &["'dns-query'"],
+        ),
+        (
+            r#"NOT activity_type:"dns-query""#,
+            Profile::Rule,
+            &["\"dns-query\""],
+        ),
+        (
+            r#"activity_type != "dns-query""#,
+            Profile::Rule,
+            &["\"dns-query\""],
+        ),
+        (r#"activity_type:dns-query"#, Profile::Rule, &["dns-query"]),
+        (r#"outcome:true"#, Profile::Rule, &["true"]),
+        (
+            r#"activity_type:("process-create", "dns-query", registry-write)"#,
+            Profile::Rule,
+            &["\"dns-query\"", "registry-write"],
+        ),
+        (
+            r#"subject:"web" OR SUBJECT:"web""#,
+            Profile::Rule,
+            &["\"web\"", "\"web\""],
+        ),
+        (
+            r#"SELECT user WHERE activity_type:"dns-query""#,
+            Profile::Search,
+            &["\"dns-query\""],
+        ),
+        (
+            r#"vendor:"a" | FOREACH host [ SELECT user WHERE host: @host AND activity_type:"network-connection" ]"#,
+            Profile::Search,
+            &["\"network-connection\""],
+        ),
+    ] {
+        let found: Vec<String> = unknown_values(query, profile)
+            .into_iter()
+            .map(|(v, _)| v)
+            .collect();
+        assert_eq!(found, values, "{query}");
+    }
+}
+
+#[test]
+fn known_and_unchecked_values_are_silent() {
+    for (query, profile) in [
+        // Known, in any case.
+        (
+            r#"Activity_Type:"PROCESS-CREATE" AND subject:"Process""#,
+            Profile::Rule,
+        ),
+        (r#"outcome:("Success", "FAIL")"#, Profile::Rule),
+        (
+            r#"activity_type:"network-session" AND outcome:"fail""#,
+            Profile::Rule,
+        ),
+        // Wildcards, patterns, slashes, null and empty values.
+        (
+            r#"activity_type:"process-*" AND subject:"proc?ss""#,
+            Profile::Rule,
+        ),
+        (
+            r#"activity_type:WLD("network-*") AND subject:RGXi("^proc")"#,
+            Profile::Rule,
+        ),
+        (r#"activity_type:"/process-.*/""#, Profile::Rule),
+        (
+            r#"activity_type:null AND NOT outcome:"null" AND subject:"""#,
+            Profile::Rule,
+        ),
+        // A context table, a FOREACH value, a number, a comparison.
+        (r#"activity_type IN "Watched Activities""#, Profile::Rule),
+        (
+            r#"vendor:"a" | FOREACH activity_type [ SELECT user WHERE activity_type: @activity_type ]"#,
+            Profile::Search,
+        ),
+        (r#"outcome:1 AND subject > 2"#, Profile::Rule),
+        // Other fields take any value.
+        (r#"activity:"frobnicate" AND vendor:"web""#, Profile::Rule),
+        // An `AS` name defined earlier is not the CIM field.
+        (
+            r#"SELECT user AS outcome WHERE vendor:"a" | SELECT outcome WHERE outcome:"many""#,
+            Profile::Search,
+        ),
+    ] {
+        let found = unknown_values(query, profile);
+        assert!(found.is_empty(), "{query}: {found:?}");
+    }
+}
+
 #[test]
 fn foreign_functions_name_the_exabeam_form() {
     for (query, form) in [
