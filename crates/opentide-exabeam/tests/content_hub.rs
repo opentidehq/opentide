@@ -76,11 +76,10 @@ fn published_correlation_rules() {
                 *totals.entry(f.code.to_string()).or_default() += 1;
             }
             let tree = opentide_syntax::parse(opentide_core::LanguageId::Exabeam, query).unwrap();
-            let parse_error = checked
-                .findings
-                .iter()
-                .any(|f| f.code == "exabeam_parse_error");
-            if tree.root_node().has_error() && !parse_error {
+            // A query the verdict parser finds no error in must parse, and
+            // highlight as the verdict parser tokenizes it.
+            let clean = errors == 0;
+            if tree.root_node().has_error() && clean {
                 tree_sitter_errors += 1;
             }
             let highlighted: Vec<(usize, usize, String)> =
@@ -94,7 +93,7 @@ fn published_correlation_rules() {
                 .map(|t| (t.start, t.end, t.capture.to_string()))
                 .collect();
             let tokens_agree = highlighted == verdict;
-            if !tokens_agree && !parse_error {
+            if !tokens_agree && clean {
                 token_disagreements += 1;
             }
             results.push(serde_json::json!({
@@ -111,8 +110,8 @@ fn published_correlation_rules() {
     eprintln!("rules: {}", paths.len());
     eprintln!("queries with errors (group: queries, with errors): {with_errors:?}");
     eprintln!("findings by code: {totals:#?}");
-    eprintln!("tree-sitter errors where the verdict parser has none: {tree_sitter_errors}");
-    eprintln!("queries without a parse error whose highlighting differs: {token_disagreements}");
+    eprintln!("error-free queries with a tree-sitter error: {tree_sitter_errors}");
+    eprintln!("error-free queries whose highlighting differs: {token_disagreements}");
     if let Ok(out) = std::env::var("EXABEAM_RESULTS") {
         std::fs::write(out, serde_json::to_string(&results).unwrap()).unwrap();
     }

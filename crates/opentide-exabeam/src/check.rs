@@ -296,6 +296,13 @@ struct Statement {
 /// A word at the cursor: text, start, end.
 type Word<'a> = (&'a str, usize, usize);
 
+/// A selected column: its name (the function's for an aggregation), whether
+/// it is aggregated, its span.
+type Column<'a> = (&'a str, bool, usize, usize);
+
+/// What `SELECT` lists: the span of `*` if there is one, and the columns.
+type SelectList<'a> = (Option<(usize, usize)>, Vec<Column<'a>>);
+
 /// A field name the catalogue is asked about once the whole query is read
 /// (an `AS` name later in the query does not count).
 struct FieldUse {
@@ -1434,7 +1441,7 @@ impl<'a> Parser<'a> {
         let start = self.pos;
         self.expect(open, "punctuation.bracket")?;
         if open == '['
-            && let Some((net_start, net_end, close)) = cidr_at(self.text, self.pos)
+            && let Some((net_start, net_end)) = cidr_at(self.text, self.pos)
         {
             self.tok(net_start, net_end, "constant");
             let net = &self.text[net_start..net_end];
@@ -1454,7 +1461,6 @@ impl<'a> Parser<'a> {
                 Some(_) => {}
             }
             self.pos = net_end;
-            let _ = close;
             self.expect(']', "punctuation.bracket")?;
             return Ok(());
         }
@@ -1783,7 +1789,7 @@ impl<'a> Parser<'a> {
             return Ok(info);
         }
         let mut seen: Vec<&'static str> = Vec::new();
-        let mut select_items: Vec<(&'a str, bool, usize, usize)> = Vec::new();
+        let mut select_items: Vec<Column<'a>> = Vec::new();
         let mut select_star: Option<(usize, usize)> = None;
         let mut group_by: Vec<&'a str> = Vec::new();
         let mut first = true;
@@ -1935,10 +1941,9 @@ impl<'a> Parser<'a> {
         Ok(inner)
     }
 
-    #[allow(clippy::type_complexity)]
-    fn select_list(
-        &mut self,
-    ) -> Parsed<(Option<(usize, usize)>, Vec<(&'a str, bool, usize, usize)>)> {
+    /// The columns of `SELECT`: the span of `*` if there is one, and each
+    /// other column with whether it is aggregated.
+    fn select_list(&mut self) -> Parsed<SelectList<'a>> {
         let mut star = None;
         let mut items = Vec::new();
         self.take_keyword(&["DISTINCT"], true);
@@ -2174,9 +2179,8 @@ fn trailing_limit(text: &str) -> bool {
             .is_empty()
 }
 
-/// `\s*([0-9A-Fa-f:.]+)/(\d{1,3})\s*\]` at `at`: the network's span and the
-/// position of `]`.
-fn cidr_at(text: &str, at: usize) -> Option<(usize, usize, usize)> {
+/// `\s*([0-9A-Fa-f:.]+)/(\d{1,3})\s*\]` at `at`: the network's span.
+fn cidr_at(text: &str, at: usize) -> Option<(usize, usize)> {
     let rest = &text[at..];
     let lead = rest.len() - rest.trim_start_matches(char::is_whitespace).len();
     let start = at + lead;
@@ -2198,7 +2202,7 @@ fn cidr_at(text: &str, at: usize) -> Option<(usize, usize, usize)> {
     }
     let after = &text[j..];
     let close = j + (after.len() - after.trim_start_matches(char::is_whitespace).len());
-    (b.get(close) == Some(&b']')).then_some((start, j, close))
+    (b.get(close) == Some(&b']')).then_some((start, j))
 }
 
 /// Python's `ipaddress.ip_network(net, strict=False)`: the IP version of a

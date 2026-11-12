@@ -203,6 +203,11 @@ fn hover_and_completion_from_the_catalogue() {
     let h = hover(r#"approxLogTime:[1 TO *]"#, 3).unwrap();
     assert!(h.contains("platform field"), "{h}");
     assert!(hover(r#"c_my_field:"x""#, 3).unwrap().contains("custom"));
+    assert!(
+        hover("src_host: @dest_host", 13)
+            .unwrap()
+            .contains("dest_host")
+    );
 
     let items = completions(r#"activity_type:""#, 15);
     assert!(items.iter().any(|i| i.label == "process-create"));

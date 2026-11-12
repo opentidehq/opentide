@@ -210,7 +210,8 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     if let Some((keyword, doc)) = KEYWORDS.iter().find(|(k, _)| *k == upper) {
         return Some(format!("`{keyword}`: {doc}"));
     }
-    if let Some(f) = catalog.field(word) {
+    // `@field` in a FOREACH sub-query is the iterated field's value.
+    if let Some(f) = catalog.field(word.trim_start_matches('@')) {
         return Some(field_markdown(f));
     }
     if let Some((prefix, rest)) = word.split_at_checked(2)
