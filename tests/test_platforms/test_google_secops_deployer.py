@@ -526,6 +526,16 @@ def test_the_rate_limit_gives_up_after_three_waits(run: Run) -> None:
     assert run.slept == list(BACKOFF)
 
 
+def test_a_retry_after_on_every_answer_still_gives_up(run: Run) -> None:
+    """Regression: Retry-After waits used to be unbounded, so a tenant that kept
+    answering 429 with Retry-After held deploy forever."""
+    run.fake.script.extend([lambda _call: _response(429, None, {"Retry-After": "1"})] * 5)
+    with pytest.raises(GoogleSecopsApiError):
+        run.client().verify("rule x {}")
+    assert run.slept == [1.0, 1.0, 1.0]
+    assert len(run.fake.calls) == 4
+
+
 def test_an_answer_that_is_not_json_names_its_status(run: Run) -> None:
     def html(_call: dict[str, Any]) -> Any:
         response = requests.Response()

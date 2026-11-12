@@ -33,7 +33,8 @@ from opentide.platforms.transport import TenantSession, not_json_detail
 SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 #: Seconds each request may take.
 DEFAULT_TIMEOUT = 60.0
-#: Waits after a 429 or 503 that names no ``Retry-After``; then the call fails.
+#: Waits after a 429 or 503 that names no ``Retry-After``. A request is resent at
+#: most this many times, whether or not Google names the wait; then the call fails.
 BACKOFF = (2.0, 4.0, 8.0)
 #: The most one ``Retry-After`` is honoured for, in seconds.
 MAX_RETRY_AFTER = 300.0
@@ -253,7 +254,7 @@ class GoogleSecopsClient:
         when the request got no answer.
         """
         url = self.base + path if path.startswith(":") else f"{self.base}/{path}"
-        waits = iter(BACKOFF)
+        retries = 0
         while True:
             headers = {"Authorization": f"Bearer {self._token()}"}
             if body is not None:
@@ -266,13 +267,13 @@ class GoogleSecopsClient:
                 headers=headers,
                 timeout=self.timeout,
             )
-            if response.status_code in RETRY_STATUSES:
+            if response.status_code in RETRY_STATUSES and retries < len(BACKOFF):
+                # Retry-After counts against the same budget: a tenant that keeps
+                # naming a wait must not hold the run forever.
                 wait = _retry_after(response)
-                if wait is None:
-                    wait = next(waits, None)
-                if wait is not None:
-                    self._sleep(wait)
-                    continue
+                self._sleep(BACKOFF[retries] if wait is None else wait)
+                retries += 1
+                continue
             if response.status_code in (401, 403):
                 status, message = _error_of(response)
                 raise GoogleSecopsTenantError(
