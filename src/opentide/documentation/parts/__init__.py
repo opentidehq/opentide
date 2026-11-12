@@ -1,5 +1,1 @@
-"""Documentation section renderers."""
-
-from opentide.documentation.parts import sections
-
-__all__ = ["sections"]
+"""Section bodies for object pages: :mod:`.common` and one module per object family."""

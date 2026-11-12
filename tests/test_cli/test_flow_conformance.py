@@ -333,7 +333,7 @@ def test_no_log_event_says_mdr() -> None:
 
 def test_generated_text_says_rule_not_mdr() -> None:
     for path in (
-        SRC / "documentation" / "parts" / "sections.py",
+        *sorted((SRC / "documentation").rglob("*.py")),
         SRC / "export" / "attack_navigator_layer.py",
         SRC / "data" / "configurations" / "deployment.toml",
     ):

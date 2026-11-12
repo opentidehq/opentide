@@ -20,14 +20,34 @@ def test_gitlab_strike_and_index_table() -> None:
     assert '"items"' in table
 
 
-def test_azure_flowchart_downgrade_and_toc() -> None:
+def test_azure_toc_fence_and_dialect() -> None:
     formatter = AzureDevOpsFormatter()
-    rendered = formatter.diagram_flowchart("flowchart TD\nA ----> B")
-    assert rendered.startswith("graph TD")
-    assert "-->" in rendered
-    assert "---->" not in rendered
     assert formatter.table_of_contents() == "[[_TOC_]]\n"
     assert formatter.mermaid_fence("graph TD") == "::: mermaid\ngraph TD\n:::\n"
+    dialect = formatter.mermaid_dialect()
+    assert dialect.keyword == "graph"
+    assert not (dialect.lanes or dialect.styles or dialect.accessibility)
+
+
+def test_gitlab_uses_its_native_toc() -> None:
+    assert GitLabFormatter().table_of_contents() == "[[_TOC_]]\n"
+
+
+def test_github_callout_is_an_alert_and_others_a_labelled_quote() -> None:
+    assert GitHubFormatter().callout("warning", "Mind the gap.") == (
+        "> [!WARNING]\n> Mind the gap.\n\n"
+    )
+    for formatter in (GitLabFormatter(), AzureDevOpsFormatter(), GenericFormatter()):
+        assert formatter.callout("note", "Read this.\n\nTwice.") == (
+            "> **Note:** Read this.\n>\n> Twice.\n\n"
+        )
+
+
+def test_generic_dialect_leaves_out_accessibility_lines() -> None:
+    dialect = GenericFormatter().mermaid_dialect()
+    assert dialect.keyword == "flowchart"
+    assert dialect.lanes and dialect.styles
+    assert not dialect.accessibility
 
 
 def test_generic_mermaid_fence() -> None:
