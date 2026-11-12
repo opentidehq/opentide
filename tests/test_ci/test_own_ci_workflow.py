@@ -269,19 +269,36 @@ def _engine_package_text(workflow: dict[str, Any]) -> str:
     return "\n".join(str(step.get("run", "")) for step in steps)
 
 
+def _workspace_crates(root: Path = ROOT) -> dict[str, Path]:
+    """Each workspace crate's package name and its directory, relative to *root*.
+
+    The crates under ``crates/`` and the language bindings under ``bindings/``
+    (``opentide-node``, UC-5.3a): ``cargo package --workspace`` reaches both.
+    """
+    crates: dict[str, Path] = {}
+    for manifest_path in sorted(
+        [*root.glob("crates/*/Cargo.toml"), *root.glob("bindings/*/Cargo.toml")]
+    ):
+        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        name = manifest.get("package", {}).get("name", manifest_path.parent.name)
+        crates[name] = manifest_path.parent.relative_to(root)
+    return crates
+
+
 def _check_excluded_crates_are_scanned(text: str, root: Path = ROOT) -> None:
     excluded, scan = _package_and_scan(text)
-    crates = [
-        name for name in sorted(excluded) if (root / "crates" / name / "Cargo.toml").is_file()
-    ]
-    for name in crates:
-        manifest = (root / "crates" / name / "Cargo.toml").read_text(encoding="utf-8")
+    crates = _workspace_crates(root)
+    for name in sorted(excluded):
+        if name not in crates:
+            continue
+        directory = crates[name].as_posix()
+        manifest = (root / directory / "Cargo.toml").read_text(encoding="utf-8")
         assert re.search(r"^publish\s*=\s*false\s*$", manifest, re.MULTILINE), (
             f"{name} is left out of `cargo package` but is published: package it, "
             "and drop the --exclude, before it is released"
         )
-        assert f"crates/{name}" in scan.split(), (
-            f"{name} is left out of `cargo package`: the licence scan must read crates/{name}"
+        assert directory in scan.split(), (
+            f"{name} is left out of `cargo package`: the licence scan must read {directory}"
         )
 
 
@@ -296,9 +313,8 @@ def _check_packaged_crates_avoid_excluded(text: str, root: Path = ROOT) -> None:
     on opentide-workspace, UC-4.1).
     """
     excluded, _ = _package_and_scan(text)
-    for manifest_path in sorted((root / "crates").glob("*/Cargo.toml")):
-        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-        name = manifest.get("package", {}).get("name", manifest_path.parent.name)
+    for name, directory in _workspace_crates(root).items():
+        manifest = tomllib.loads((root / directory / "Cargo.toml").read_text(encoding="utf-8"))
         if name in excluded:
             continue
         for section in _DEPENDENCY_SECTIONS:
@@ -340,6 +356,27 @@ def test_the_dependency_check_fails_for_a_packaged_crate_on_an_excluded_one(
         "--exclude opentide-schema", "--exclude opentide-schema --exclude opentide-connectors"
     )
     _check_packaged_crates_avoid_excluded(excluded_too, tmp_path)
+
+
+def test_the_dependency_check_reads_the_bindings_too(tmp_path: Path) -> None:
+    # opentide-node (bindings/node, UC-5.3a) depends on the opentide facade,
+    # which the package step leaves out: packaging it failed the step.
+    crate = tmp_path / "bindings" / "node"
+    crate.mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        '[package]\nname = "opentide-node"\npublish = false\n'
+        '[dependencies]\nopentide = { path = "../../crates/opentide" }\n',
+        encoding="utf-8",
+    )
+    text = "cargo package --workspace --exclude opentide\nbash scripts/engine/license-scan.sh x\n"
+    with pytest.raises(AssertionError, match="opentide-node is packaged"):
+        _check_packaged_crates_avoid_excluded(text, tmp_path)
+    excluded_too = text.replace(
+        "--exclude opentide\n", "--exclude opentide --exclude opentide-node\n"
+    )
+    with pytest.raises(AssertionError, match="licence scan must read bindings/node"):
+        _check_excluded_crates_are_scanned(excluded_too, tmp_path)
+    _check_excluded_crates_are_scanned(excluded_too.replace(" x\n", " bindings/node\n"), tmp_path)
 
 
 _EXCLUDED_UNSCANNED = (
