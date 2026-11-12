@@ -131,8 +131,9 @@ A new platform also needs a platform skill in [opentidehq/skills](https://github
 whose `coverage.json` CI checks against `opentide --json info` daily; a platform the skills do not
 cover fails that check and opens an issue there.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
-search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
-`kuery` is the one write: its rule preview's alerts, in the preview index.
+search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). An Elastic
+rule preview is the one write: its alerts land in the preview index. Both `opentide query` with `kuery` and
+`validate query --platform elastic --live`, which previews every rule, make one.
 
 ## Analysis engine (`analysis/`)
 
