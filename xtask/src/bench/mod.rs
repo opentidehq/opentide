@@ -366,7 +366,8 @@ pub struct Options {
     pub opentide: Option<PathBuf>,
     /// A language server to run for `rust`.
     pub lsp: Option<PathBuf>,
-    /// The console script to run for `rust`'s [`LAUNCHER`] scenarios.
+    /// The console script to run for `rust`'s `startup` and `explain` scenarios
+    /// (`LAUNCHER`).
     pub launcher: Option<PathBuf>,
 }
 
@@ -1620,7 +1621,11 @@ mod tests {
         else {
             panic!("not a run");
         };
-        assert_eq!(options.launcher.as_deref(), Some(Path::new("/x/opentide")));
+        // Resolved as the other paths are: on Windows, onto the current drive.
+        let launcher = options.launcher.expect("--launcher is kept");
+        assert!(launcher.is_absolute(), "{}", launcher.display());
+        assert_eq!(launcher, std::path::absolute("/x/opentide").unwrap());
+        assert!(launcher.ends_with(Path::new("x").join("opentide")));
     }
 
     fn args_of(text: &str) -> Vec<String> {
