@@ -773,8 +773,9 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
     if refusal.exists() {
         // Python runs alone only where `RUST_COMMANDS` does not cover the run
-        // (a bare `generate`): a refusal of a run it covers is a failure, as
-        // `cargo xtask golden check --engine compare` counts it.
+        // (none since UC-6.0 ported the last, a bare `generate`): a refusal of a
+        // run it covers is a failure, as `cargo xtask golden check --engine compare`
+        // counts it.
         let command = case["command"].as_str().unwrap();
         if covers(command, &argv) {
             return vec![format!(

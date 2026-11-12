@@ -30,7 +30,7 @@ from tests.test_cli.test_serve import (
     spawned_document,
 )
 
-from opentide.cli import engine_defaults
+from opentide.cli import engine_defaults, engines
 from opentide.cli.services.serve import CommandRunner
 from opentide.core import progress_events
 
@@ -309,14 +309,16 @@ def test_a_flipped_default_runs_rust_and_python_still_runs_python(
 
 
 def test_help_and_unported_commands_go_through_python(
-    rust_client: Client, rust_runs: list[list[str]]
+    rust_client: Client, rust_runs: list[list[str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     help_text = rust_client.run("info", "--help")
     assert help_text["exit_code"] == 0
     assert "Usage" in help_text["document"]["text"]
-    # validate has a Rust implementation (UC-3.5); a bare generate (the full
-    # pipeline) has none: only generate with its phases named runs on Rust.
-    refused = rust_client.run("generate")
+    # Every command has a Rust implementation since the full pipeline, a bare
+    # generate, was ported (UC-6.0, #841): one taken out of the table stands
+    # for a command without one.
+    monkeypatch.delitem(engines.RUST_COMMANDS, ("rules", "unreviewed"))
+    refused = rust_client.run("rules", "unreviewed")
     assert refused["exit_code"] == 2
     assert refused["document"]["failure"]["code"] == "engine_not_ported"
     assert rust_runs == []

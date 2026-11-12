@@ -1178,11 +1178,115 @@ pub fn run_phases(
     }
 }
 
-/// `opentide generate <phase>...` (`generate_all` with named phases): the
-/// `schemas`, `templates`, `vocabs` and `snippets` phases. The full pipeline
-/// (no phase) is the Python engine's: refused with `engine_not_ported`, and
-/// the dispatch table sends it to Python (`requires`).
+/// The full pipeline's phases, in the oracle's order (`_PHASE_ORDER`): what
+/// a person reads first (the pages, the exports), then the framework's own
+/// files.
+pub const PIPELINE: [&str; 6] = [
+    "docs",
+    "exports",
+    "vocabs",
+    "templates",
+    "schemas",
+    "snippets",
+];
+
+/// `opentide generate` with no phase (`run_generate_all`): every phase of
+/// [`PIPELINE`] as one checklist step each, on the workspace opened once,
+/// until one fails; then the nested-file warning (`report_nested_object_files`).
+fn pipeline(cx: &Context<'_>, version: &str) -> Report {
+    let command = "generate";
+    let leading = || {
+        vec![(
+            "phases".to_owned(),
+            Json::Array(PIPELINE.iter().map(|phase| Json::str(*phase)).collect()),
+        )]
+    };
+    // The oracle reads the configuration inside the first phase.
+    let workspace = match workspace_in_step(command, "docs", "docs", Vec::new(), cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let mut steps = Vec::new();
+    let mut run = DocsRun::default();
+    let docs = run_phase(
+        "docs",
+        &[root.clone(), output_base(&workspace)],
+        cx.cwd,
+        &root,
+        || docs_phase(&DocsArgs::default(), &workspace, cx, &mut run),
+    );
+    steps.push(docs.step);
+    if let Some(detail) = docs.error {
+        return phase_failed(command, "docs", &detail, Vec::new(), steps);
+    }
+    let settings = Settings::new(workspace.configuration(), &root);
+    let vocabularies = Vocabularies::bundled();
+    let exports = run_phase(
+        "exports",
+        std::slice::from_ref(&root),
+        cx.cwd,
+        &root,
+        || {
+            let mut outputs = Vec::new();
+            for target in Target::ALL {
+                match export(target, workspace.index(), &settings, &vocabularies) {
+                    Ok(output) => outputs.push(output),
+                    Err(PhaseError { detail }) => {
+                        write(&outputs)?;
+                        return Err(detail);
+                    }
+                }
+            }
+            write(&outputs)
+        },
+    );
+    steps.push(exports.step);
+    if let Some(detail) = exports.error {
+        return phase_failed(command, "exports", &detail, Vec::new(), steps);
+    }
+    let named: Vec<String> = PIPELINE[2..]
+        .iter()
+        .map(|phase| (*phase).to_owned())
+        .collect();
+    let run = run_phases(&named, &workspace, cx.cwd, version);
+    steps.extend(run.steps);
+    if let Some((phase, detail)) = run.failed {
+        return phase_failed(command, &phase, &detail, Vec::new(), steps);
+    }
+    let mut report = generated(command, leading(), steps);
+    if let Some(detail) = nested_warning(&workspace) {
+        let files = workspace
+            .index()
+            .nested
+            .iter()
+            .map(|nested| {
+                let shown = nested.path.strip_prefix(&root).unwrap_or(&nested.path);
+                shown.to_string_lossy().replace('\\', "/")
+            })
+            .collect();
+        report
+            .after_steps
+            .push(super::AfterSteps::NestedObjectFiles { detail, files });
+    }
+    report
+}
+
+/// `opentide generate <phase>...` (`run_generate` with named phases): the
+/// `schemas`, `templates`, `vocabs` and `snippets` phases; with none, the full
+/// pipeline ([`pipeline`]). Each finished phase writes its
+/// `OPENTIDE_PROGRESS=json` event, out of the phases the run names.
 pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
+    let mut report = named_phases(names, cx, version);
+    report.step_events = Some(if names.is_empty() {
+        PIPELINE.len()
+    } else {
+        names.len()
+    });
+    report
+}
+
+fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
     let command = "generate";
     let unknown: Vec<&str> = names
         .iter()
@@ -1204,13 +1308,7 @@ pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
         );
     }
     if names.is_empty() {
-        let mut failure = Failure::new(
-            crate::envelope::code::ENGINE_NOT_PORTED,
-            "opentide generate without schemas, templates, vocabs or snippets has no Rust \
-             implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.",
-        );
-        failure.argument = Some("OPENTIDE_ENGINE".into());
-        return Report::failed(command, crate::envelope::USAGE_EXIT_CODE, failure);
+        return pipeline(cx, version);
     }
     let workspace = match workspace(command, cx) {
         Ok(workspace) => workspace,

@@ -9836,6 +9836,28 @@ changelog = "**`opentide new` and `generate schemas`, `templates`, `vocabs` and 
 
 [[diff]]
 command = "generate"
+case = "generate/human/tide-corpus/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m          \u001b[2m16 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m          \u001b[2m16 files\u001b[0m \u001b[2m<SECONDS>\u001b[0m \u001b[2mdocs/\u001b[0m"
+reason = "the full pipeline's rows are printed when it is done, as each phase's command prints its own (generate docs, generate exports, generate schemas), without the spinner Python drew while the pages were written"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**A bare `opentide generate`, the full pipeline, runs on the Rust command line**"
+
+[[diff]]
+command = "generate"
+case = "generate/human/vscode/default"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mdocs\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mdocs\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the full pipeline's rows are printed when it is done, as each phase's command prints its own (generate docs, generate exports, generate schemas), without the spinner Python drew while the pages were written"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**A bare `opentide generate`, the full pipeline, runs on the Rust command line**"
+
+[[diff]]
+command = "generate"
 case = "generate/*/tide-corpus/*"
 target = "file:ws/.opentide/schemas/objective.1.0.schema.json"
 rule = "sha256"
