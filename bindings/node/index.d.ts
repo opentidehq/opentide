@@ -10,6 +10,91 @@
 export declare const __napiBindingTarget: 'native' | 'wasm32-wasi' | 'wasm32-wasip1'
 
 /**
+ * Cancels a connection's operations: the one running rejects with the code
+ * `interrupted`, and so does every later one.
+ */
+export declare class Canceller {
+  /** Cancels. */
+  cancel(): void
+  /** Whether `cancel` was called. */
+  get isCancelled(): boolean
+}
+
+/**
+ * One tenant's client, built from that tenant's own settings (TLS, CA
+ * bundle, proxy, timeout, credentials). Secrets never reach a message.
+ *
+ * `query`, `validateQuery` and `deploy` return promises: each operation
+ * runs off Node's thread, so one connection serves many at once.
+ */
+export declare class Connection {
+  /**
+   * Connects to `tenant`: resolves its credentials and builds its client.
+   * Nothing is sent until an operation runs. Throws `credential_unset`
+   * (naming the variable), `tenant_setup_invalid`,
+   * `operation_unsupported` (a platform without a connector) or
+   * `usage_invalid_value` (a timeout that is not a number of seconds).
+   */
+  static open(tenant: TenantConfig, options?: ConnectOptions | undefined | null): Connection
+  /** The platform's identifier. */
+  get platform(): string
+  /** The tenant's name. */
+  get tenant(): string
+  /** What this tenant's connector can do. */
+  get capabilities(): Capabilities
+  /**
+   * A handle that cancels this connection's operations from elsewhere (a
+   * signal handler, a timer).
+   */
+  canceller(): Canceller
+  /**
+   * Runs `text` on the tenant (`opentide query`) and resolves to at most
+   * `limit` rows. Nothing is saved on the tenant. Rejects with
+   * `tenant_refused` (the vendor's words in `detail`), `query_timed_out`,
+   * `tenant_unreachable`, `authentication_failed`, `interrupted`,
+   * `operation_unsupported`, ...
+   */
+  query(text: string, options?: QueryOptions | undefined | null): Promise<QueryResult>
+  /**
+   * Checks `text` on the tenant (`opentide validate query --live`): by
+   * default a search for one row over the minute before now. Resolves for
+   * a query the tenant accepts; rejects with `tenant_refused` for one it
+   * refuses, and with `operation_unsupported` on a platform that cannot
+   * check a query live (CrowdStrike, HarfangLab, Sysdig).
+   */
+  validateQuery(text: string, options?: QueryOptions | undefined | null): Promise<LiveCheck>
+  /**
+   * Applies `operation` to the rule `ruleId` on the tenant, sending `body`
+   * (the request `opentide deploy` compiles for this tenant) as its
+   * bytes, and resolves to the platform's identifier of the rule. Rejects
+   * with `tenant_refused`, the other codes of `query`, and
+   * `operation_unsupported` on a platform whose rules deploy only through
+   * `opentide deploy` (Elastic).
+   */
+  deploy(ruleId: string, operation: 'create' | 'update' | 'disable' | 'delete', body: string | Uint8Array): Promise<DeployOutcome>
+}
+
+/**
+ * A tenant as the workspace configures it (`Workspace.tenants`), or as code
+ * configures it: its platform, its name and its `setup`, whose `$NAME`
+ * credentials are read when it connects. Its setup's values never leave it.
+ */
+export declare class TenantConfig {
+  /**
+   * The tenant `name` of `platform` with its `setup`: each key and its
+   * value, a `$NAME` value read from the environment when it connects
+   * (`{ url: 'https://s1.example', api_token: '$S1_API_TOKEN' }`).
+   */
+  constructor(platform: string, name: string, setup: Record<string, string>)
+  /** The platform's identifier (`splunk`, `sentinel_one`). */
+  get platform(): string
+  /** The tenant's name. */
+  get name(): string
+  /** The keys of its `setup`, in name order; never their values. */
+  get setupKeys(): Array<string>
+}
+
+/**
  * A Tide workspace: its configuration, resolved once, and every object file,
  * read and parsed once into one index. Each method reads that index.
  */
@@ -71,6 +156,61 @@ export declare class Workspace {
    * `deploy --dry-run --json`'s `result`.
    */
   deployPlan(options?: DeployPlanOptions | undefined | null): { document: any; summary: any | null; ok: boolean }
+  /**
+   * The tenants the workspace configures for `platform` (the
+   * `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
+   * in file order; empty when it configures none. Open one with
+   * `Connection.open`.
+   */
+  tenants(platform: string): Array<TenantConfig>
+}
+
+/**
+ * What the connector of `platform` can do; `null` for a platform without
+ * one.
+ */
+export declare function capabilities(platform: string): Capabilities | null
+
+/**
+ * What a platform's connector can do: `Connection.deploy`,
+ * `Connection.validateQuery` (`validate query --live`) and
+ * `Connection.query` (`opentide query`).
+ */
+export interface Capabilities {
+  /** `Connection.deploy`. */
+  deploy: boolean
+  /** `Connection.validateQuery`. */
+  liveValidation: boolean
+  /** `Connection.query`. */
+  query: boolean
+}
+
+/** How `Connection.open` reaches a tenant. */
+export interface ConnectOptions {
+  /**
+   * Replaces the process's environment for the tenant's `$NAME`
+   * credentials, its CA bundles (`SSL_CERT_FILE`, ...) and its proxies
+   * (`HTTPS_PROXY`, `NO_PROXY`, ...).
+   */
+  environment?: Record<string, string>
+  /** The proxy every request goes through, before the environment's. */
+  proxy?: string
+  /**
+   * How long, in seconds, the tenant may take to answer a read (Elastic,
+   * Splunk, Carbon Black Cloud, Sentinel); default 120.
+   */
+  timeout?: number
+}
+
+/** What `deploy` resolves to. */
+export interface DeployOutcome {
+  /**
+   * The platform's identifier of the rule, which a deploy keeps in its
+   * deployment state.
+   */
+  remoteId: string | null
+  /** What was done. */
+  operation: 'create' | 'update' | 'disable' | 'delete'
 }
 
 /** What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options. */
@@ -103,6 +243,16 @@ export interface LintOptions {
   files?: Array<string>
 }
 
+/** What `validateQuery` resolves to, for a query the tenant accepted. */
+export interface LiveCheck {
+  /** The search's answer, when the check ran one. */
+  result: QueryResult | null
+  /** Why validation still fails the query (Defender's required columns). */
+  errors: Array<string>
+  /** The tenant's reservations about the verdict. */
+  warnings: Array<string>
+}
+
 /**
  * Runs `opentide` with `argv` (without the program name) in this process,
  * on its environment, working directory and standard streams, and returns
@@ -120,6 +270,74 @@ export interface OpenOptions {
    * workspace's own folder).
    */
   cwd?: string
+}
+
+/** The platforms with a connector, in the order opentide lists them. */
+export declare function platforms(): Array<string>
+
+/** A column of a query's rows. */
+export interface QueryColumn {
+  /** Its name (`process.name`). */
+  name: string
+  /** The vendor's type name; `null` when the platform names none. */
+  type: string | null
+}
+
+/** What `query` and `validateQuery` run: `opentide query`'s options. */
+export interface QueryOptions {
+  /**
+   * The query's language (`kql`, `esql`, `s1ql`); empty or unset takes the
+   * platform's first.
+   */
+  language?: string
+  /**
+   * Where the search starts: an RFC 3339 instant (`date.toISOString()`).
+   * Default: 24 hours before `end` for `query`, the minute before `end`
+   * for `validateQuery`.
+   */
+  start?: string
+  /** Where the search ends: an RFC 3339 instant. Default: now. */
+  end?: string
+  /**
+   * The most rows to return (default 100); `truncated` says there were
+   * more.
+   */
+  limit?: number
+  /**
+   * The Elastic indices, the HarfangLab telemetry source or the
+   * CrowdStrike repository.
+   */
+  index?: Array<string>
+  /** Elastic's data view. */
+  dataView?: string
+  /** How long, in seconds, an asynchronous search may run (default 120). */
+  timeout?: number
+}
+
+/** What `query` resolves to. */
+export interface QueryResult {
+  /** The columns, in order. */
+  columns: Array<QueryColumn>
+  /**
+   * The rows, at most the request's `limit`: each an object of its
+   * columns in the order they came.
+   */
+  rows: Array<Record<string, any>>
+  /** More rows matched than the limit let through. */
+  truncated: boolean
+  /** The platform stopped early and says the rows are incomplete. */
+  partial: boolean
+  /** The platform's reservations about the result. */
+  warnings: Array<string>
+  /** The platform's id of the search (CrowdStrike's job id). */
+  vendorQueryId: string | null
+  /**
+   * What was sent, when the connector changed the query (a limit it
+   * added).
+   */
+  sent: string | null
+  /** The language the connector used. */
+  language: string | null
 }
 
 /**

@@ -27,6 +27,13 @@ use serde::Serialize;
 use opentide::lint::{LintCheck, LintFinding, LintReport, LintStatus, LintSummary, NextAction};
 use opentide::validate::{Check, QueriesMode, Report, Summary};
 
+mod tenants;
+
+pub use tenants::{
+    Canceller, Capabilities, ConnectOptions, Connection, DeployOutcome, LiveCheck, QueryColumn,
+    QueryOptions, QueryResult, TenantConfig, capabilities, platforms,
+};
+
 /// The version the command line reports (`opentide --version`): the npm
 /// package's, which the build passes as `OPENTIDE_VERSION`.
 #[napi]
@@ -255,6 +262,19 @@ impl Workspace {
         object.set_named_property("ok", plan.ok)?;
         Ok(object.to_unknown())
     }
+
+    /// The tenants the workspace configures for `platform` (the
+    /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
+    /// in file order; empty when it configures none. Open one with
+    /// `Connection.open`.
+    #[napi]
+    pub fn tenants(&self, platform: String) -> Vec<TenantConfig> {
+        self.inner
+            .tenants(&platform)
+            .into_iter()
+            .map(TenantConfig::from)
+            .collect()
+    }
 }
 
 /// What each `#[napi]` method computes, before its result becomes a
@@ -411,33 +431,51 @@ fn parse<'env>(env: &'env Env, text: &str) -> napi::Result<Unknown<'env>> {
 }
 
 /// Why a call failed: a stable code (`configuration_invalid`, `io_error`,
-/// `no_json_document`, `usage_invalid_choice`, ...) and a message.
+/// `no_json_document`, `usage_invalid_choice`, `tenant_refused`, ...), a
+/// message, and the vendor's own words when a tenant gave a reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Failure {
     code: String,
     message: String,
+    detail: Option<String>,
 }
 
 impl Failure {
-    fn usage(message: String) -> Self {
+    fn new(code: &str, message: String) -> Self {
         Self {
-            code: "usage_invalid_choice".to_owned(),
+            code: code.to_owned(),
             message,
+            detail: None,
         }
+    }
+
+    /// A choice the command line would refuse: `usage_invalid_choice`.
+    fn usage(message: String) -> Self {
+        Self::new("usage_invalid_choice", message)
+    }
+
+    /// A value the command line would refuse: `usage_invalid_value`.
+    fn invalid(message: String) -> Self {
+        Self::new("usage_invalid_value", message)
     }
 }
 
 impl From<opentide::Error> for Failure {
     fn from(error: opentide::Error) -> Self {
+        let detail = match &error {
+            opentide::Error::Connector { detail, .. } => detail.clone(),
+            _ => None,
+        };
         Self {
             code: error.code().to_owned(),
             message: error.to_string(),
+            detail,
         }
     }
 }
 
-/// `failure` as the JavaScript `Error` the call throws: its `message`, and
-/// its `code` the failure's code.
+/// `failure` as the JavaScript `Error` the call throws: its `message`, its
+/// `code` the failure's code, and its `detail` the vendor's words or `null`.
 fn throw(env: Env, failure: Failure) -> napi::Error {
     let built = env
         .create_error(napi::Error::new(
@@ -446,6 +484,10 @@ fn throw(env: Env, failure: Failure) -> napi::Error {
         ))
         .and_then(|mut object| {
             object.set_named_property("code", failure.code.as_str())?;
+            match failure.detail.as_deref() {
+                Some(detail) => object.set_named_property("detail", detail)?,
+                None => object.set_named_property("detail", Null)?,
+            }
             Ok(napi::Error::from(object.to_unknown()))
         });
     built.unwrap_or_else(|error| error)
