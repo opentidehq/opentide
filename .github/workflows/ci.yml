@@ -455,12 +455,17 @@ jobs:
 
       # Against the first parent until the crate is on crates.io; then the
       # last published version is the baseline (docs/sdk/rust.md, Stability).
-      # A commit that adds the crate has no baseline to compare with.
+      # A commit that adds the crate has no baseline to compare with. The
+      # baseline is checked out on its own and only its crates/opentide is
+      # handed over: --baseline-rev searches the whole tree for the package,
+      # and publishing/placeholders/crates/opentide is a second `opentide`.
       - name: API against the base (cargo semver-checks)
         run: |
           baseline="$(git rev-parse HEAD^1)"
           if git cat-file -e "${baseline}:crates/opentide/Cargo.toml" 2>/dev/null; then
-            cargo semver-checks -p opentide --all-features --baseline-rev "${baseline}"
+            git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${baseline}"
+            cargo semver-checks --manifest-path crates/opentide/Cargo.toml --all-features \
+              --baseline-root "${RUNNER_TEMP}/opentide-baseline/crates/opentide"
           else
             echo "::notice::crates/opentide is new in this change: no baseline API to check against"
           fi
