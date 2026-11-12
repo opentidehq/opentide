@@ -4102,9 +4102,11 @@ mod tests {
         assert!(bad.stdout.contains("\"code\":\"usage_invalid_value\""));
         let home = tempfile::tempdir().unwrap();
         let home_text = home.path().display().to_string();
+        // The home folder is USERPROFILE on Windows, as Python's Path.home().
+        let home_variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
         let installed = dispatched(
             "--json --install-completion bash",
-            &[("HOME", home_text.as_str())],
+            &[(home_variable, home_text.as_str())],
             false,
         );
         assert_eq!(installed.code, 0, "{}", installed.stdout);
@@ -4123,7 +4125,7 @@ mod tests {
             installed.stdout
         );
         assert!(home.path().join(".bash_completions/opentide.sh").is_file());
-        let homeless = dispatched("--install-completion fish", &[("HOME", "")], false);
+        let homeless = dispatched("--install-completion fish", &[(home_variable, "")], false);
         assert_eq!(homeless.code, 1, "{}", homeless.stderr);
         assert!(
             homeless
