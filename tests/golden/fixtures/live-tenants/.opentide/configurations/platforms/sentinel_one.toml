@@ -1,0 +1,12 @@
+[platform]
+enabled = true
+name = "Sentinel One"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "https://s1.invalid"
+account_id = 1001
+api_token = "$S1_API_TOKEN"

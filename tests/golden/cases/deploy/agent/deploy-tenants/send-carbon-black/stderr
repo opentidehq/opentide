@@ -1,0 +1,9 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 1 to delete
+
+Deploying to carbon_black_cloud / lab · 2 rules
+  [1/2] ✓ deleted   Carbon Black retire rule <SECONDS>
+  [2/2] ✗ failed    Carbon Black rule in a missing watchlist  RuntimeError: The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.
+✗ carbon_black_cloud · 1 deployed, 1 failed, 0 not attempted · <SECONDS>
+✗ Deployment failed · 1 deleted, 1 failed, 0 not attempted · <SECONDS>
+tip: add --json for machine-readable output

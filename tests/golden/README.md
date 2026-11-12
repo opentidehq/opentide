@@ -139,6 +139,8 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
 | `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
+| `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
+| `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 

@@ -1,0 +1,1 @@
+{"detail":"Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant lab","reason":"Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces","event":"query_rejected","logger":"opentide.platforms.live_validation","level":"critical","timestamp":"0000-00-00 00:00:00"}

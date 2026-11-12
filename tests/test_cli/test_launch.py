@@ -108,7 +108,7 @@ def test_rust_runs_what_the_dispatcher_would_give_it(argv: list[str]) -> None:
         (["--repo"], "a root option without its value"),
         (["--repo", "missing", "validate"], "the root refuses a --repo that is no folder"),
         (["--repo=missing", "validate"], "the same, written with ="),
-        (["deploy", "--all"], "a deploy that sends is Python's"),
+        (["deploy", "--all"], "a deploy that sends to no named platform is Python's"),
         (["validate", "query", "--live"], "--live is Python's"),
         (["doctor"], "doctor without --offline"),
         (["generate"], "the full pipeline"),

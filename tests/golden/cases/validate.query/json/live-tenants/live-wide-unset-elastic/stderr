@@ -1,0 +1,2 @@
+{"detail":"Assembling plan without status filtering.","event":"wide_scope_enabled","logger":"opentide.deployment.utils","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"detail":"Unset configuration variables: $ELASTIC_API_KEY","advice":"Set those environment variables before a live check.","event":"environment_variable_missing","logger":"opentide.core.environment","level":"critical","timestamp":"0000-00-00 00:00:00"}

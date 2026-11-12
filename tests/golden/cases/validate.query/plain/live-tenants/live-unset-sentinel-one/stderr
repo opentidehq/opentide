@@ -1,0 +1,3 @@
+error: Environment variable missing · detail: Unset configuration variables: $S1_API_TOKEN · advice: Set those environment variables before a live check.
+✗ Sentinel One queries · 1 rule · <SECONDS>
+error: SentinelOne credentials are unset ($S1_API_TOKEN). Set those environment variables before a live check.

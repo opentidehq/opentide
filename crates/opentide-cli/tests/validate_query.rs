@@ -456,7 +456,22 @@ fn platforms_the_engine_cannot_parse_are_refused() {
 fn live_is_handed_back_and_tenant_options_need_it() {
     let (_scratch, ws) = corpus();
     let path = ws.join("refusal");
+    // A run that names no platform reaches the workspace's: Python's.
     let live = opentide(
+        &ws,
+        &["--json", "validate", "query", "--live"],
+        &[("OPENTIDE_ENGINE_REFUSAL", path.to_str().unwrap())],
+    );
+    assert_eq!(live.code, 2);
+    assert_eq!(failure_code(&live.json()), "engine_not_ported");
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("--live without --platform")
+    );
+    // One that names it runs here (UC-4.6): the corpus's Elastic tenant has
+    // no credential set.
+    let elastic = opentide(
         &ws,
         &[
             "--json",
@@ -466,11 +481,16 @@ fn live_is_handed_back_and_tenant_options_need_it() {
             "--platform",
             "elastic",
         ],
-        &[("OPENTIDE_ENGINE_REFUSAL", path.to_str().unwrap())],
+        &[],
     );
-    assert_eq!(live.code, 2);
-    assert_eq!(failure_code(&live.json()), "engine_not_ported");
-    assert!(std::fs::read_to_string(&path).unwrap().contains("--live"));
+    assert_eq!(elastic.code, 1);
+    assert_eq!(elastic.json()["mode"], "live");
+    assert!(
+        elastic.json()["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("Elastic credentials are unset")
+    );
     for (flag, value) in [
         ("--strategy", Some("PREVIEW")),
         ("--wide", None),

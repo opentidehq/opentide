@@ -1,0 +1,159 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-splunk",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform splunk --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:9d7310b6069849546def5f5fe5e7368a9ab61f0cc61e010303c0c176db2887c6",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+create+rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\n  </messages>\n</response>\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "name=Splunk+create+rule&search=index%3Dmain+EventCode%3D4688%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8047-000000000041%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk create rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=index%3Dmain+EventCode%3D4688%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8047-000000000041%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&cron_schedule=0+%2A+%2A+%2A+%2A&alert.severity=5&alert.managedBy=&description=A+rule+the+splunk+stand-in+tenant+receives+in+a+deploy+that+sends."
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk create rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">A rule the splunk stand-in tenant receives in a deploy that sends.</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=index%3Dmain+EventCode%3D4688%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8047-000000000041%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&is_scheduled=1"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk create rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main EventCode=4688\n| eval MDR_UUID=\"00000000-0000-4000-8047-000000000041\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">A rule the splunk stand-in tenant receives in a deploy that sends.</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+retire+rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\n  </messages>\n</response>\n"
+      }
+    }
+  ]
+}

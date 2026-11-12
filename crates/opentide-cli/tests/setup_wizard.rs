@@ -46,7 +46,7 @@ fn spawn(cwd: &Path, args: &[&str]) -> Session {
             pixel_height: 0,
         })
         .expect("open a pseudo-terminal");
-    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_opentide"));
+    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_opentide-cli"));
     command.args(args);
     command.cwd(cwd);
     command.env("OPENTIDE_OUTPUT", "human");

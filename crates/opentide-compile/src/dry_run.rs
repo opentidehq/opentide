@@ -135,11 +135,11 @@ pub const STRATEGY_REQUIRED: &str = "Pass --strategy: PREVIEW deploys the rules 
      maps to UNIVERSAL are deployed by both. See 'opentide deploy --help'.";
 
 /// Nothing matched the run's strategies.
-const NO_RULES_MATCHED: &str = "No rule this run read has a status that maps to its strategies";
+pub const NO_RULES_MATCHED: &str = "No rule this run read has a status that maps to its strategies";
 
 /// The deployable strategy closest to the first `--strategy` value that is
 /// not one (`strategy_suggestion`).
-fn strategy_suggestion(values: &[String]) -> Option<String> {
+pub fn strategy_suggestion(values: &[String]) -> Option<String> {
     let names: Vec<&str> = strategy::DEPLOYABLE.iter().map(|s| s.name()).collect();
     for raw in values {
         for part in raw.split(',') {
@@ -394,6 +394,7 @@ pub fn run(
             keep_deprecated,
             enabled: &enabled,
             folder: &folder,
+            log: false,
         },
     );
     let mut selection = match selection {
@@ -880,7 +881,7 @@ fn finish_failure(
 
 /// Object files the index could not read, shown from the working directory
 /// when inside it, else from the workspace.
-fn unread_files(workspace: &Workspace, cwd: &Path) -> Vec<String> {
+pub fn unread_files(workspace: &Workspace, cwd: &Path) -> Vec<String> {
     let root = workspace.root().to_path_buf();
     workspace
         .index()

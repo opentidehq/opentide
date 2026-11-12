@@ -1,0 +1,97 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-defender",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:c7768fd428c8e65731d02e54cb2664e1e94fd3ee8ff5b1e0f99e83371d3f0dc4",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=00000000-0000-4000-8000-00000000c11d&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\": \"Defender create rule\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender create rule\", \"description\": \"A rule the defender stand-in tenant receives in a deploy that sends.\", \"severity\": \"high\", \"category\": \"Execution\", \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"device_id\"}], \"recommendedActions\": null}, \"responseActions\": [], \"organizationalScope\": null}, \"isEnabled\": true}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"42\", \"displayName\": \"Defender create rule\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/7001",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\": \"Defender update rule\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"period\": \"1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender update rule\", \"description\": \"A rule the defender stand-in tenant receives in a deploy that sends.\", \"severity\": \"high\", \"category\": \"Execution\", \"mitreTechniques\": [], \"impactedAssets\": [{\"@odata.type\": \"#microsoft.graph.security.impactedDeviceAsset\", \"identifier\": \"device_id\"}], \"recommendedActions\": null}, \"responseActions\": [], \"organizationalScope\": null}, \"isEnabled\": true}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    }
+  ]
+}

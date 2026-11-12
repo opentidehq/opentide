@@ -1,0 +1,13 @@
+[platform]
+enabled = true
+name = "Carbon Black Cloud Enterprise EDR"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW", "RELEASE"]
+[tenants.setup]
+ssl = true
+url = "https://cbc.invalid"
+org_key = "ORGKEY01"
+token = "$CBC_TOKEN"
+watchlist = "opentide"

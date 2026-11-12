@@ -1,0 +1,12 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 0 to disable, 1 to delete
+warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000001 · platform: defender_for_endpoint · tenant: lab · external_id: 42
+
+Deploying to defender_for_endpoint / lab · 3 rules
+  [1/3] ✓ created   Defender create rule <SECONDS>
+error: Fatal error · detail: Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 · context: (empty body, HTTP 404) · advice: {'displayName': 'Defender update rule', 'queryCondition': {'queryText': 'DeviceProcessEvents\n| take 1\n'}, 'schedule': {'period': '1H'}, 'detectionAction': {'alertTemplate': {'title': 'Defender update rule', 'description': 'A rule the defender stand-in tenant receives in a deploy that sends.', 'severity': 'high', 'category': 'Execution', 'mitreTechniques': [], 'impactedAssets': [{'@odata.type': '#microsoft.graph.security.impactedDeviceAsset', 'identifier': 'device_id'}], 'recommendedActions': None}, 'responseActions': [], 'organizationalScope': None}, 'isEnabled': True}
+  [2/3] ✗ failed    Defender update rule  DetectionRuleUpdateFailed
+  [3/3] · skipped   Defender retire rule  not attempted after a failure
+✗ defender_for_endpoint · 1 deployed, 1 failed, 1 not attempted · <SECONDS>
+✗ Deployment failed · 1 created, 1 failed, 1 not attempted · <SECONDS>
+tip: add --json for machine-readable output

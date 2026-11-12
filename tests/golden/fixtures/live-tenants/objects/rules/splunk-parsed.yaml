@@ -1,0 +1,15 @@
+name: Splunk parsed rule
+metadata:
+  uuid: 00000000-0000-4000-8046-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A search the stand-in tenant's parser accepts.
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: STAGING
+    query: index=main EventCode=4688 | stats count by host

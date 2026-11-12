@@ -1,0 +1,3 @@
+{"detail":"Received HTTP Error Code 404 Not Found","context":"b'<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n<response>\\n  <messages>\\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\\n  </messages>\\n</response>\\n'","event":"fatal_error","logger":"opentide.platforms.splunk.client","level":"critical","timestamp":"0000-00-00 00:00:00"}
+{"detail":"Received HTTP Error Code 404 Not Found","context":"b'<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n<response>\\n  <messages>\\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\\n  </messages>\\n</response>\\n'","event":"fatal_error","logger":"opentide.platforms.splunk.client","level":"critical","timestamp":"0000-00-00 00:00:00"}
+{"event":"progress","step":"splunk","done":1,"total":1}

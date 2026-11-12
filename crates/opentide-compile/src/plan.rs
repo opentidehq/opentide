@@ -130,6 +130,16 @@ pub fn nested_warning(nested: &[String], folder: &str) -> String {
     )
 }
 
+/// Python's `repr` of a list of strings (`['a', 'b']`), as a log field
+/// prints it.
+fn python_list(items: &[String]) -> String {
+    let quoted: Vec<String> = items
+        .iter()
+        .map(|item| crate::strategy::python_repr(item))
+        .collect();
+    format!("[{}]", quoted.join(", "))
+}
+
 /// The platforms the configuration enables, in [`PLATFORMS`] order
 /// (`enabled_systems`).
 pub fn enabled(config: &Json) -> Vec<String> {
@@ -232,6 +242,11 @@ pub struct SelectOptions<'a> {
     pub enabled: &'a [String],
     /// The rules folder as the workspace spells it, for the nested warning.
     pub folder: &'a str,
+    /// Log what the plan leaves out as warnings, as `make_deploy_plan` does
+    /// when its caller passes no list to report through (`validate query
+    /// --live`): `--wide`, the subfolder files, a block of a disabled
+    /// platform, a block no run strategy deploys, a rule with vendor ids.
+    pub log: bool,
 }
 
 /// The legacy vendor-id keys a rule still carries on its blocks.
@@ -280,7 +295,31 @@ pub fn select(
     options: &SelectOptions<'_>,
 ) -> Result<Selection, PlanError> {
     let mut selection = Selection::default();
+    let run_names = {
+        let names: Vec<&str> = options.runs.iter().map(|run| run.name()).collect();
+        if names.is_empty() {
+            "none".to_owned()
+        } else {
+            names.join(", ")
+        }
+    };
+    if options.log && options.wide {
+        tracing::warn!(
+            detail = "Assembling plan without status filtering.",
+            logger = "opentide.deployment.utils",
+            "wide_scope_enabled"
+        );
+    }
     if !scope.nested.is_empty() {
+        if options.log {
+            tracing::warn!(
+                count = scope.nested.len(),
+                files = python_list(&scope.nested).as_str(),
+                issue = NESTED_RULES_ISSUE,
+                logger = "opentide.deployment.utils",
+                "deploy_nested_rules_skipped"
+            );
+        }
         selection
             .warnings
             .push(nested_warning(&scope.nested, options.folder));
@@ -338,6 +377,19 @@ pub fn select(
                         )))
                     })?;
                 if !options.enabled.iter().any(|known| known == platform) {
+                    if options.log {
+                        tracing::warn!(
+                            system = platform.to_uppercase().as_str(),
+                            rule = name.as_str(),
+                            advice = format!(
+                                "enable it with 'opentide setup platforms --{}'",
+                                platform.replace('_', "-")
+                            )
+                            .as_str(),
+                            logger = "opentide.deployment.utils",
+                            "system_disabled_for_deploy"
+                        );
+                    }
                     continue;
                 }
                 let strategy = statuses.strategy(&status).map_err(|error| {
@@ -357,6 +409,27 @@ pub fn select(
                 if options.wide || options.runs.iter().any(|run| deploys(strategy, *run)) {
                     chosen.push(platform.clone());
                 } else {
+                    if options.log {
+                        let deployed: Vec<&str> = crate::strategy::deployed_by(strategy)
+                            .iter()
+                            .map(|run| run.name())
+                            .collect();
+                        let deployed = if deployed.is_empty() {
+                            "no run".to_owned()
+                        } else {
+                            deployed.join(", ")
+                        };
+                        tracing::warn!(
+                            system = platform.to_uppercase().as_str(),
+                            status = status.as_str(),
+                            strategy = strategy.name(),
+                            run_strategies = run_names.as_str(),
+                            deployed_by = deployed.as_str(),
+                            rule = name.as_str(),
+                            logger = "opentide.deployment.utils",
+                            "rule_skipped_for_strategy"
+                        );
+                    }
                     selection.skipped.push(Skipped {
                         rule: name.clone(),
                         uuid: uuid.clone(),
@@ -374,6 +447,23 @@ pub fn select(
                     .iter()
                     .map(|(platform, key)| format!("configurations.{platform}.{key}"))
                     .collect();
+                if options.log {
+                    let detail = format!(
+                        "rule {uuid} still carries vendor ids on the rule ({}); deploy reads \
+                         them only from .opentide/states/deployment/",
+                        keys.join(", ")
+                    );
+                    tracing::error!(
+                        detail = detail.as_str(),
+                        code = "external_id_in_rule",
+                        uuid = uuid.as_str(),
+                        platform = "*",
+                        tenant = "",
+                        advice = MIGRATE_ADVICE,
+                        logger = "opentide.deployment.external_ids",
+                        "external_id_in_rule"
+                    );
+                }
                 selection.warnings.push(format!(
                     "external_id_in_rule: rule {uuid} still carries vendor ids on the rule ({}); \
                      deploy reads them only from .opentide/states/deployment/ -- {} was not \

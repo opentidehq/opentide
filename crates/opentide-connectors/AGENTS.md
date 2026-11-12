@@ -24,7 +24,7 @@ adds the Python plugin hook to its registry.
 | `crowdstrike.rs` | CrowdStrike (UC-4.2): the OAuth2 token (once per tenant for a deploy), correlation rules, Next-Gen SIEM query jobs stopped when the runner stops waiting | `platforms/crowdstrike/` |
 | `harfanglab.rs` | HarfangLab (UC-4.2): Sigma rules (`PUT`, `POST` on a 404), YARA files, telemetry searches (`shlex` words) | `platforms/harfanglab/` |
 | `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes | `platforms/sysdig/client.py`, `deployer.py` |
-| `splunk.rs` | Splunk (UC-4.3, #833): splunklib's requests on opentide's urllib handler: saved searches (`_apply_saved_search`: looked up, created, set in two updates, deleted), one-shot searches, `search/parser`, the `server/info` reads that choose the v1 or v2 search endpoints; an HTML page in place of the API is a gateway's (`ConnectorError::Gateway`) or a proxy's | `platforms/splunk/`, `splunklib` |
+| `splunk.rs` | Splunk (UC-4.3, #833): the Python Splunk client's requests on opentide's urllib handler: saved searches (`_apply_saved_search`: looked up, created, set in two updates, deleted), one-shot searches, `search/parser`, the `server/info` reads that choose the v1 or v2 search endpoints; an HTML page in place of the API is a gateway's (`ConnectorError::Gateway`) or a proxy's | `platforms/splunk/`, the Python Splunk client |
 | `carbon_black.rs` | Carbon Black Cloud (UC-4.3): cbc_sdk's requests: watchlist reports (`_deploy_to_org`), process searches (validated, started, polled, read in pages), `search_validation`; the SDK's error texts | `platforms/carbon_black/`, `cbc_sdk` |
 | `sentinel.rs` | Sentinel (UC-4.3): ARM `alertRules` (create or replace, delete, list with `nextLink`), `ClientSecretCredential`'s sign-in through MSAL (OpenID configuration, client credentials, one token per tenant and scope), Log Analytics queries as one REST call; MSAL's and azure-core's request ids from a source the caller can fix (`Sentinel::with_identity`) | `platforms/sentinel/`, `azure-identity`, `azure-monitor-query` |
 | `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check (`LiveValidator`) and query runner (`QueryRunner`) of each, request for request, on the shared query types (UC-4.2c); Elastic's Elasticsearch checks, rule preview, query text and advisories. Elastic has no `Deployer`: its deploy takes the rule's block (`deploy_rule`) | `platforms/<platform>/` |
@@ -33,9 +33,9 @@ adds the Python plugin hook to its registry.
 
 domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and on
 `opentide-compile` (its ordered `Json` for bodies and rows; the platforms send the bodies it
-compiles). `opentide-cli` uses it (`setup skills`, and `query` on every platform with a runner,
-UC-4.2c and UC-4.3);
-`deploy` routes to the platforms once every platform is ported.
+compiles). `opentide-cli` uses it (`setup skills`, `query` on every platform with a runner,
+UC-4.2c and UC-4.3, and `validate query --live` through each `LiveValidator`, Elastic's rule
+checks through `Elastic::checks` and `preview_rule`, and `deploy` that sends through each platform's deploy calls, UC-4.6);
 
 ## Invariants
 

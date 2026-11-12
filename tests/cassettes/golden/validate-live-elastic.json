@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "scenario": "golden/validate-live-elastic",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/live-tenants",
+    "--json",
+    "validate",
+    "query",
+    "--live",
+    "--platform",
+    "elastic"
+  ],
+  "digest": "sha256:40373dc7a4bc3d11ac19be48ce77fb121141f818b19c71b46a9234866f7708f9",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM logs-* | parse error\\n| LIMIT 0\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"error\": {\"root_cause\": [{\"type\": \"parsing_exception\", \"reason\": \"line 1:20: mismatched input 'error'\"}], \"type\": \"parsing_exception\", \"reason\": \"line 1:20: mismatched input 'error'\"}, \"status\": 400}"
+      }
+    }
+  ]
+}

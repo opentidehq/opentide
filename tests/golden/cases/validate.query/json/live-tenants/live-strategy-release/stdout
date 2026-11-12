@@ -1,0 +1,1 @@
+{"platform":"splunk","mode":"live","strategies":["RELEASE"],"ok":true,"status":"skipped","message":"No rule for this platform has a status that maps to the run's strategies","schema_version":1,"command":"validate query","duration_ms":0,"exit_code":0,"summary":{},"next_actions":[],"failure":null}

@@ -40,17 +40,37 @@ pub fn generated(name: &str) -> Option<PathBuf> {
 /// length, so a root of another length (`tempfile::tempdir()`'s
 /// `.tmpXXXXXX`, or a `TMPDIR` elsewhere) wraps lines the real compare does
 /// not, and a ledger entry drafted from this replay would not apply there.
+///
+/// The replay reads the root by its canonical path, so where `/tmp` is a
+/// link (macOS: `/private/tmp`) the name is shortened to keep the canonical
+/// root as long as the recordings' `/tmp/golden-XXXXXX`.
 pub fn case_root() -> tempfile::TempDir {
     let parent = if Path::new("/tmp").is_dir() {
         PathBuf::from("/tmp")
     } else {
         std::env::temp_dir()
     };
+    let (prefix, random) = root_name(&std::fs::canonicalize(&parent).unwrap_or(parent.clone()));
     tempfile::Builder::new()
-        .prefix("golden-")
-        .rand_bytes(6)
+        .prefix(prefix)
+        .rand_bytes(random)
         .tempdir_in(parent)
         .unwrap()
+}
+
+/// The prefix and the count of random characters of a case root's name in
+/// *parent* (canonical): `golden-` and six, as `cargo xtask golden check`
+/// names it, cut to keep the root `/tmp/golden-XXXXXX`'s length when
+/// *parent* is longer than `/tmp` and leaves room for three random ones.
+pub fn root_name(parent: &Path) -> (&'static str, usize) {
+    const PREFIX: &str = "golden-";
+    const RECORDED: usize = "/tmp/golden-XXXXXX".len();
+    let name = RECORDED.saturating_sub(parent.as_os_str().len() + 1);
+    if name < 3 {
+        return (PREFIX, 6);
+    }
+    let prefix = (name - 3).min(PREFIX.len());
+    (&PREFIX[..prefix], name - prefix)
 }
 
 /// The fixtures this module lays out.
@@ -63,6 +83,8 @@ pub const FIXTURES: &[&str] = &[
     "setup-merge",
     "vscode-docs-folder",
     "tenants",
+    "live-tenants",
+    "deploy-tenants",
 ];
 
 pub fn repo() -> PathBuf {
@@ -137,6 +159,8 @@ pub fn fixture(name: &str, ws: &Path) {
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
         // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
+        "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
+        "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -286,6 +310,9 @@ pub struct Coverage {
     pub platforms: Vec<String>,
     /// The flags under which `platforms` applies (none: every run).
     pub platform_scope: Vec<String>,
+    /// Flags under which a run reaches no tenant (`deploy --dry-run`):
+    /// `platforms` does not apply to it.
+    pub offline: Vec<String>,
 }
 
 /// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
@@ -335,13 +362,23 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
         if let Some(listed) = found.get(1) {
             return words(listed.as_str());
         }
-        let constant = &found[2];
-        let defined =
-            regex::Regex::new(&format!(r"(?s)\n{constant}\s*:[^=\n]*=\s*\(([^)]*)\)")).unwrap();
-        let defined = defined
-            .captures(source)
-            .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
-        words(&defined[1])
+        // A constant may name another (`RUST_DEPLOY_PLATFORMS =
+        // RUST_LIVE_VALIDATION_PLATFORMS`): follow it to its tuple.
+        let mut constant = found[2].to_owned();
+        for _ in 0..8 {
+            let defined = regex::Regex::new(&format!(
+                r"(?s)\n{constant}\s*:[^=\n]*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*)\s*\n)"
+            ))
+            .unwrap();
+            let defined = defined
+                .captures(source)
+                .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
+            if let Some(listed) = defined.get(1) {
+                return words(listed.as_str());
+            }
+            constant = defined[2].to_owned();
+        }
+        panic!("engines.py: {constant}: aliases nest too deep")
     };
     let keys: Vec<_> = key.captures_iter(body).collect();
     let mut table = BTreeMap::new();
@@ -359,6 +396,7 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
                 refuses: tuple(arguments, "refuses"),
                 platforms: tuple(arguments, "platforms"),
                 platform_scope: tuple(arguments, "platform_scope"),
+                offline: tuple(arguments, "offline"),
             },
         );
     }
@@ -384,6 +422,7 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
     let platforms = coverage.platforms.is_empty()
+        || coverage.offline.iter().any(|flag| options.contains(flag))
         || (!coverage.platform_scope.is_empty()
             && !coverage
                 .platform_scope
@@ -745,8 +784,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                         dir.file_name().unwrap().to_string_lossy()
                     );
                     let case = std::fs::read_to_string(dir.join("case.toml")).unwrap();
-                    let live = *command == "validate.query" && case.contains("\"--live\"");
-                    if case.contains("\"--help\"") || live || !id.contains(&filter) {
+                    if case.contains("\"--help\"") || !id.contains(&filter) {
                         continue;
                     }
                     problems.extend(replay(&id, &dir, &ledger, &mut usage));

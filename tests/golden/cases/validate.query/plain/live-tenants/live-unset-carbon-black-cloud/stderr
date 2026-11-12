@@ -1,0 +1,3 @@
+error: Environment variable missing · detail: Unset configuration variables: $CBC_TOKEN · advice: Set those environment variables before a live check.
+✗ Carbon Black Cloud Enterprise EDR queries · 2 rules · <SECONDS>
+error: CBC credentials are unset ($CBC_TOKEN). Set those environment variables before a live check.

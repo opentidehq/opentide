@@ -1,0 +1,22 @@
+name: Elastic create rule
+metadata:
+  uuid: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A rule the elastic stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  elastic:
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: query
+    language: kuery
+    query: |
+      process.name: "powershell.exe"
+    scheduling:
+      interval: 5m
+      lookback: 1m

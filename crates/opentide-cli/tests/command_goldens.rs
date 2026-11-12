@@ -30,16 +30,30 @@ fn check(commands: &[&str], at_least: usize) {
 /// A replayed case's root is named and placed as `cargo xtask golden
 /// check` places it (`/tmp/golden-XXXXXX`): a frame wraps a message by the
 /// length of the path in it, so a root of another length (`tempfile`'s
-/// `.tmpXXXXXX`) let a replay pass where the real compare differed.
+/// `.tmpXXXXXX`) let a replay pass where the real compare differed. Where
+/// `/tmp` is a link to a longer folder (macOS), the name is shortened to
+/// keep the canonical root, the path the replay reads, that length.
 #[test]
 fn a_case_root_is_as_long_as_the_golden_checks() {
     let root = replay::case_root();
     let name = root.path().file_name().unwrap().to_str().unwrap();
+    let canonical = std::fs::canonicalize(root.path()).unwrap();
+    let (prefix, random) = replay::root_name(canonical.parent().unwrap());
     assert!(
-        name.starts_with("golden-") && name.len() == "golden-".len() + 6,
+        name.starts_with(prefix) && name.len() == prefix.len() + random,
         "{name}"
     );
     assert_eq!(root.path().parent().unwrap(), std::path::Path::new("/tmp"));
+    if canonical.parent() == Some(std::path::Path::new("/tmp")) {
+        assert_eq!((prefix, random), ("golden-", 6));
+    } else if cfg!(unix) {
+        assert_eq!(
+            canonical.as_os_str().len(),
+            "/tmp/golden-XXXXXX".len(),
+            "{}",
+            canonical.display()
+        );
+    }
 }
 
 /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
@@ -68,7 +82,17 @@ fn tui_cases_are_the_oracles() {
     check(&["tui"], 6);
 }
 
-/// Offline `validate query` (UC-3.5b, #927); its `--live` cases are Python's.
+/// `deploy` (UC-3.1c, #896; UC-4.6, #979): the dry runs, and the deploys
+/// that send, each platform's tenant served from its cassette and the
+/// deployment state it writes compared with the oracle's.
+#[test]
+fn deploy_cases_are_the_oracles() {
+    check(&["deploy"], 60);
+}
+
+/// `validate query` offline (UC-3.5b, #927) and `--live` (UC-4.2c, #832;
+/// UC-4.6, #979): Splunk's, Carbon Black Cloud's and Elastic's tenants served
+/// from their cassettes.
 #[test]
 fn validate_query_cases_are_the_oracles() {
     check(&["validate.query"], 20);
@@ -346,7 +370,19 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         |text: &str| -> Vec<String> { text.split_whitespace().map(str::to_owned).collect() };
     let table = replay::rust_commands();
     assert_eq!(table["validate"], replay::Coverage::default());
-    assert_eq!(table["deploy"].requires, ["--dry-run"]);
+    assert_eq!(table["deploy"].requires, Vec::<String>::new());
+    assert_eq!(table["deploy"].offline, ["--dry-run"]);
+    assert!(table["deploy"].platforms.contains(&"sysdig".to_owned()));
+    assert!(replay::covers("deploy", &words("deploy --dry-run --all")));
+    assert!(replay::covers(
+        "deploy",
+        &words("deploy --platform sysdig --all")
+    ));
+    assert!(!replay::covers(
+        "deploy",
+        &words("deploy --strategy PREVIEW --all")
+    ));
+    assert!(!replay::covers("deploy", &words("deploy -- --dry-run")));
     assert_eq!(
         table["generate"].requires,
         ["schemas", "templates", "vocabs", "snippets"]
@@ -393,9 +429,15 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "validate query",
         &words("validate query --file q.kql")
     ));
-    assert!(!replay::covers(
+    // Every platform's live validation is Rust's since UC-4.6 (#979); a
+    // `--live` run that names no platform stays Python's.
+    assert!(replay::covers(
         "validate query",
         &words("validate query --live --platform elastic")
+    ));
+    assert!(!replay::covers(
+        "validate query",
+        &words("validate query --live")
     ));
     assert!(replay::covers(
         "validate query",
@@ -448,5 +490,25 @@ fn setup_cases_are_the_oracles() {
             "setup.vscode",
         ],
         48,
+    );
+}
+
+#[test]
+fn a_case_root_keeps_the_recorded_length_behind_a_longer_tmp() {
+    use std::path::Path;
+    // Linux's `/tmp`: the name `cargo xtask golden check` gives.
+    assert_eq!(replay::root_name(Path::new("/tmp")), ("golden-", 6));
+    // macOS's `/tmp` is `/private/tmp`: `/private/tmp/goXXX` is as long as
+    // `/tmp/golden-XXXXXX`, so paths wrap where the recordings wrap.
+    let (prefix, random) = replay::root_name(Path::new("/private/tmp"));
+    assert_eq!(
+        "/private/tmp/".len() + prefix.len() + random,
+        "/tmp/golden-XXXXXX".len()
+    );
+    assert!(random >= 3);
+    // No room for three random characters: the recorded name, as before.
+    assert_eq!(
+        replay::root_name(Path::new("/a/very/long/temporary/folder")),
+        ("golden-", 6)
     );
 }

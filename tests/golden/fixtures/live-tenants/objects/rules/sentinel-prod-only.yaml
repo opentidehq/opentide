@@ -1,0 +1,27 @@
+name: Sentinel production-only rule
+metadata:
+  uuid: 00000000-0000-4000-8046-000000000009
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A rule that lists a tenant this workspace does not configure.
+response:
+  alert_severity: High
+configurations:
+  sentinel:
+    status: STAGING
+    tenants: [prod]
+    query: |
+      SecurityEvent
+      | where EventID == 4688
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Sentinel production-only rule
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

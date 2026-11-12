@@ -28,9 +28,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Command paths with a Rust implementation; every other one is refused with
 /// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-/// `deploy` runs here with `--dry-run` only (UC-3.1c); a deploy that sends is
-/// refused as unported, and `validate query` offline only (UC-3.5b): a
-/// `--live` run is refused the same way.
+/// `deploy` runs here with `--dry-run` (UC-3.1c), and a deploy that sends
+/// when it names its `--platform` (UC-4.6); one that names none is refused as
+/// unported, as `validate query --live` without `--platform` is.
 pub const PORTED: &[&str] = &[
     "commands",
     "explain",
@@ -763,13 +763,22 @@ impl Run<'_> {
                 self.emit_deploy(&run, out, err)
             }
             "deploy" => {
-                let message = "opentide deploy without --dry-run has no Rust implementation yet: \
-                     unset OPENTIDE_ENGINE, or set it to python or compare."
-                    .to_owned();
-                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                failure.argument = Some("OPENTIDE_ENGINE".into());
-                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                self.emit(&outcome, &[], &[], out, err)
+                let parsed = self.deploy_args(&matches);
+                if let Some(refused) = crate::commands::deploy::refusal(&parsed) {
+                    return self.emit_deploy(&refused, out, err);
+                }
+                if parsed.platform.is_none() {
+                    // The workspace's platforms are Python's (`RustCommand.platforms`).
+                    let message = "opentide deploy without --platform has no Rust implementation \
+                         yet: unset OPENTIDE_ENGINE, or set it to python or compare."
+                        .to_owned();
+                    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
+                    failure.argument = Some("OPENTIDE_ENGINE".into());
+                    let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
+                    return self.emit(&outcome, &[], &[], out, err);
+                }
+                let report = self.deploy_send(&matches, parsed);
+                self.emit_report(&report, out, err)
             }
             _ => {
                 let message = format!(
@@ -1321,6 +1330,9 @@ impl Run<'_> {
             check_timeout: args.get_one::<String>("check_timeout").cloned(),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
+        if parsed.live {
+            return self.validate_query_live(&parsed, &cwd);
+        }
         let terminal = self.terminal();
         run(
             &parsed,
@@ -1331,6 +1343,49 @@ impl Run<'_> {
                 terminal: &terminal,
             },
         )
+    }
+
+    /// `opentide validate query --live`: the usage checks, then a platform
+    /// whose tenants check no query answers `supported: false`, and the
+    /// others run on the connectors (`validate_live`). Every run that is
+    /// not a usage error adds its section to the CI job summary.
+    fn validate_query_live(
+        &self,
+        parsed: &crate::commands::validate_query::Args,
+        cwd: &std::path::Path,
+    ) -> crate::commands::Report {
+        use crate::commands::{validate_live, validate_query};
+        use crate::render::summary;
+        if let Some(report) = validate_query::live_usage(parsed, self.env) {
+            return report;
+        }
+        if let Some(mut report) = validate_query::unsupported(parsed) {
+            let result = report.outcome.document(0);
+            report.ci_summary = Some(summary::query_summary(&result, None));
+            return report;
+        }
+        if parsed.platform.is_none() {
+            // The workspace's platforms are Python's (`RustCommand.platforms`).
+            return validate_query::live_not_ported_without_platform();
+        }
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        let registry = opentide_connectors::builtin();
+        let live = validate_live::run(
+            parsed,
+            &validate_live::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd,
+                proxy: self.globals.proxy.as_deref(),
+                interrupted: &interrupted,
+                now: jiff::Timestamp::now(),
+                registry: &registry,
+            },
+        );
+        let mut report = live.report(self.env);
+        report.ci_summary = Some(summary::query_summary(&live.result_json(), None));
+        report
     }
 
     /// `opentide lint`, from its parsed arguments.
@@ -1445,6 +1500,79 @@ impl Run<'_> {
 
     /// `opentide deploy --dry-run`, from its parsed arguments.
     fn deploy(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::DryRun {
+        let parsed = self.deploy_args(matches);
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        crate::commands::deploy::run(
+            &parsed,
+            &crate::commands::deploy::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+            },
+        )
+    }
+
+    /// `opentide deploy` without `--dry-run` (UC-4.6, #979): the plan, then
+    /// each rule sent through its platform's connector, its line printed as
+    /// it ends; the CI job summary's section.
+    fn deploy_send(
+        &self,
+        matches: &clap::ArgMatches,
+        parsed: crate::commands::deploy::Args,
+    ) -> crate::commands::Report {
+        use crate::commands::deploy_send::{Args, Context, Lines, run};
+        let args = leaf(matches);
+        let send_args = Args {
+            strategies: parsed.strategies,
+            all: parsed.all,
+            uuids: parsed.uuids,
+            files: parsed.files,
+            platform: parsed.platform,
+            wide: parsed.wide,
+            keep_deprecated: parsed.keep_deprecated,
+            skip_promotion: args.get_flag("skip_promotion"),
+            skip_unconfigured: args.get_flag("skip_unconfigured"),
+            persist_state_externally: args.get_flag("persist_state_externally"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        let registry = opentide_connectors::builtin();
+        let lines = Lines {
+            sink: self.host.log_sink.clone(),
+            console: self.console(self.host.stderr_tty),
+            silent: matches!(self.mode, Mode::Json | Mode::Mcp),
+            quiet: self.globals.quiet,
+            progress: crate::render::progress::Progress::from_env(self.env).enabled(),
+            terminal: self.mode == Mode::Human && self.host.stderr_tty,
+            live: (self.mode == Mode::Human && self.host.stderr_tty)
+                .then(|| self.host.width.unwrap_or(80)),
+        };
+        let sent = run(
+            &send_args,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                proxy: self.globals.proxy.as_deref(),
+                interrupted: &interrupted,
+                now: jiff::Timestamp::now(),
+                registry: &registry,
+                lines,
+                json: self.mode == Mode::Json,
+            },
+        );
+        let mut report = sent.report();
+        report.ci_summary = Some(crate::render::summary::deploy_summary(
+            &sent.result_json(),
+            None,
+            Some(false),
+        ));
+        report
+    }
+
+    /// `opentide deploy`'s parsed arguments.
+    fn deploy_args(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::Args {
         use clap::ValueEnum;
         let args = leaf(matches);
         let strings = |id: &str| -> Vec<String> {
@@ -1459,7 +1587,7 @@ impl Run<'_> {
         } else {
             None
         };
-        let parsed = crate::commands::deploy::Args {
+        crate::commands::deploy::Args {
             strategies: strings("strategy"),
             all: args.get_flag("all_files"),
             uuids: strings("uuids"),
@@ -1471,16 +1599,7 @@ impl Run<'_> {
             plan: args.get_one::<String>("plan").cloned(),
             wide: args.get_flag("wide"),
             keep_deprecated,
-        };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        crate::commands::deploy::run(
-            &parsed,
-            &crate::commands::deploy::Context {
-                repo: self.globals.repo.as_deref(),
-                env: self.env,
-                cwd: &cwd,
-            },
-        )
+        }
     }
 
     /// Prints a dry run in this run's mode, in the oracle's order: the
@@ -1667,6 +1786,18 @@ impl Run<'_> {
                             .as_bytes(),
                     )?;
                 }
+            }
+        }
+        if let Some(markdown) = &report.ci_summary
+            && outcome.exit_code != USAGE_EXIT_CODE
+        {
+            use crate::render::{ci, summary};
+            let markdown = summary::fit(markdown, summary::MAX_SUMMARY_BYTES);
+            let cwd = self.host.cwd.clone().unwrap_or_default();
+            let written =
+                ci::append_summary(&markdown, &outcome.command, self.mode, self.env, &cwd);
+            for line in &written.stdout {
+                out.write_all(format!("{line}\n").as_bytes())?;
             }
         }
         let stdout = self.console(self.host.stdout_tty);

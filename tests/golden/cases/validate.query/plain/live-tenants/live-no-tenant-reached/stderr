@@ -1,0 +1,1 @@
+error: Environment variable missing · detail: Unset configuration variables: $AZURE_CLIENT_SECRET · advice: Set those environment variables before a live check.

@@ -22,8 +22,12 @@ workspace = true
 name = "opentide_cli"
 path = "src/lib.rs"
 
+# Named `opentide-cli`, not `opentide`: the facade's binary (crates/opentide,
+# with `cli`) is `opentide`, and on Windows two packages linking one
+# `target/debug/deps/opentide.exe` at once fail with LNK1104 (cargo#6313).
+# It runs the same `main(argv)`, so it prints `opentide` as its name.
 [[bin]]
-name = "opentide"
+name = "opentide-cli"
 path = "src/main.rs"
 # Not documented: its page would take the path of the opentide facade's
 # library (target/doc/opentide, cargo#6313), whose docs are the binary's too.

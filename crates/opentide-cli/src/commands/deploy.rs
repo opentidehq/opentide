@@ -3,8 +3,7 @@
 //! `dry_run`), as the envelope, the plan view, the compile failures' frames,
 //! the CI job summary and the progress events.
 //!
-//! A deploy that sends (no `--dry-run`) is not ported: the command line
-//! refuses it with `engine_not_ported`, and the Python CLI runs it.
+//! A deploy that sends (no `--dry-run`) is `deploy_send`'s (UC-4.6).
 
 use std::path::Path;
 
@@ -164,17 +163,18 @@ impl DryRun {
     }
 }
 
-/// Runs `deploy --dry-run`.
-pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
+/// The usage refusal of a run, dry or not, before it starts: the removed
+/// `--plan`, or `--all` with a selection.
+pub fn refusal(args: &Args) -> Option<DryRun> {
     if let Some(plan) = &args.plan {
-        return refused(
+        return Some(refused(
             opentide_compile::strategy::removed_plan_message(Some(plan), true),
             code::USAGE_INVALID_VALUE,
             "--plan",
-        );
+        ));
     }
     if args.all && (!args.uuids.is_empty() || !args.files.is_empty()) {
-        return refused(
+        return Some(refused(
             "--all reads every rule file; --uuid and --file select rules instead. Pass one or \
              the other"
                 .to_owned(),
@@ -184,7 +184,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
             } else {
                 "--uuid"
             },
-        );
+        ));
+    }
+    None
+}
+
+/// Runs `deploy --dry-run`.
+pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
+    if let Some(refused) = refusal(args) {
+        return refused;
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     let workspace = match open(options) {

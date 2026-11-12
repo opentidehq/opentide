@@ -95,10 +95,14 @@ class RustCommand:
     applies to every run. The Rust side refuses with ``engine_not_ported``
     any run whose tenants it does not reach, as a second check
     (:data:`REFUSAL_ENV`).
+
+    *offline* names flags under which a run reaches no tenant (``deploy
+    --dry-run``): neither *platforms* nor *side_effects* applies to it.
     """
 
     __slots__ = (
         "launch",
+        "offline",
         "platform_scope",
         "platforms",
         "refuses",
@@ -116,6 +120,7 @@ class RustCommand:
         refuses: tuple[str, ...] = (),
         platforms: tuple[str, ...] = (),
         platform_scope: tuple[str, ...] = (),
+        offline: tuple[str, ...] = (),
     ) -> None:
         self.launch = launch
         self.rules = rules
@@ -124,6 +129,7 @@ class RustCommand:
         self.refuses = refuses
         self.platforms = platforms
         self.platform_scope = platform_scope
+        self.offline = offline
 
     def _key(self) -> tuple[object, ...]:
         return (
@@ -134,6 +140,7 @@ class RustCommand:
             self.refuses,
             self.platforms,
             self.platform_scope,
+            self.offline,
         )
 
     def __eq__(self, other: object) -> bool:
@@ -147,7 +154,7 @@ class RustCommand:
             f"RustCommand(launch={self.launch!r}, rules={self.rules!r}, "
             f"side_effects={self.side_effects!r}, requires={self.requires!r}, "
             f"refuses={self.refuses!r}, platforms={self.platforms!r}, "
-            f"platform_scope={self.platform_scope!r})"
+            f"platform_scope={self.platform_scope!r}, offline={self.offline!r})"
         )
 
     def covers(self, args: Sequence[str]) -> bool:
@@ -180,6 +187,8 @@ class RustCommand:
         ``None`` when the run's platforms are covered, or *platforms* does not apply.
         """
         if not self.platforms:
+            return None
+        if any(flag in options for flag in self.offline):
             return None
         if self.platform_scope and not any(flag in options for flag in self.platform_scope):
             return None
@@ -217,12 +226,29 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
     "splunk",
 )
 
-#: The platforms whose ``validate query --live`` runs on Rust: those whose
-#: tenants cannot check a query (CrowdStrike, HarfangLab, Sysdig), which
-#: answer ``supported: False`` before any request. Defender, Elastic and
-#: SentinelOne check on the tenant, and stay Python's until their live
-#: validation is ported onto the connectors' ``LiveValidator``.
-RUST_LIVE_VALIDATION_PLATFORMS: tuple[str, ...] = ("crowdstrike", "harfanglab", "sysdig")
+#: The platforms whose ``validate query --live`` runs on Rust: every platform.
+#: CrowdStrike, HarfangLab and Sysdig, whose tenants cannot check a query,
+#: answer ``supported: False`` before any request (UC-4.2c, #832); Carbon
+#: Black Cloud, Defender for Endpoint, Elastic, Sentinel, SentinelOne and
+#: Splunk check each rule's queries through their connector's
+#: ``LiveValidator``, Elastic each rule as a whole (UC-4.6, #979).
+RUST_LIVE_VALIDATION_PLATFORMS: tuple[str, ...] = (
+    "carbon_black_cloud",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "elastic",
+    "harfanglab",
+    "sentinel",
+    "sentinel_one",
+    "splunk",
+    "sysdig",
+)
+
+
+#: The platforms whose ``deploy`` that sends runs on Rust: every platform,
+#: each through its connector's deploy calls (UC-4.6, #979). A run without
+#: --platform stays Python's: the platforms it would touch are the workspace's.
+RUST_DEPLOY_PLATFORMS: tuple[str, ...] = RUST_LIVE_VALIDATION_PLATFORMS
 
 
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
@@ -279,7 +305,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: UC-4.2c (#832): *platforms* routes each run by the ``--platform`` it names; a
 #: rule's query (``--rule``, ``--file``: its tenants' exclusions) stays Python's.
 #: ``query`` on Sentinel, Splunk and Carbon Black Cloud with UC-4.3 (#833).
-#: A deploy that sends stays Python's.
+#: ``validate query --live`` on the six platforms whose tenants check queries
+#: with UC-4.6 (#979), and ``deploy`` that sends on those of
+#: :data:`RUST_DEPLOY_PLATFORMS`: *offline* keeps ``--dry-run`` covered whatever
+#: its ``--platform``.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -290,7 +319,12 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
         launch=RUST_CLI, platforms=RUST_LIVE_VALIDATION_PLATFORMS, platform_scope=("--live",)
     ),
     ("rules", "unreviewed"): RustCommand(launch=RUST_CLI),
-    ("deploy",): RustCommand(launch=RUST_CLI, requires=("--dry-run",)),
+    ("deploy",): RustCommand(
+        launch=RUST_CLI,
+        side_effects=True,
+        platforms=RUST_DEPLOY_PLATFORMS,
+        offline=("--dry-run",),
+    ),
     ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
     ("migrate", "vocab-scope"): RustCommand(launch=RUST_CLI),
     ("generate", "exports"): RustCommand(launch=RUST_CLI),
@@ -851,7 +885,8 @@ def _compare(cli_ctx: CliContext, path: str, args: Sequence[str], rust: RustComm
         USAGE_EXIT_CODE,
     )
 
-    if rust.side_effects:
+    options = list(args[: args.index("--")] if "--" in args else args)
+    if rust.side_effects and not any(flag in options for flag in rust.offline):
         _fail(
             cli_ctx,
             path,

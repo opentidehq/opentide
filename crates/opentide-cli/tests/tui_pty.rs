@@ -29,7 +29,7 @@ fn spawn(repo: &Path, home: &Path, extra: &[(&str, &str)]) -> PtySession {
         .arg(format!(
             "stty cols {COLUMNS} rows {ROWS} && exec \"$0\" tui"
         ))
-        .arg(env!("CARGO_BIN_EXE_opentide"))
+        .arg(env!("CARGO_BIN_EXE_opentide-cli"))
         .current_dir(repo)
         .env_clear()
         .env("PATH", std::env::var("PATH").unwrap_or_default())

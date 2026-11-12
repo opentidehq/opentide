@@ -24,7 +24,7 @@ use napi::{Env, JSON};
 use napi_derive::napi;
 use serde::Serialize;
 
-use opentide::lint::{LintCheck, LintFinding, LintStatus, LintSummary, NextAction};
+use opentide::lint::{LintCheck, LintFinding, LintReport, LintStatus, LintSummary, NextAction};
 use opentide::validate::{Check, QueriesMode, Report, Summary};
 
 /// The version the command line reports (`opentide --version`): the npm
@@ -55,8 +55,13 @@ pub fn main(argv: Vec<String>) -> i32 {
 /// wrote no document (`--version`).
 #[napi(ts_return_type = "any")]
 pub fn run_json(env: &Env, argv: Vec<String>) -> napi::Result<Unknown<'_>> {
-    let document = opentide::cli::run_json(argv).map_err(|e| throw(*env, e.into()))?;
-    parse(env, document.as_str())
+    let document = json_document(argv).map_err(|e| throw(*env, e))?;
+    parse(env, &document)
+}
+
+/// [`run_json`]'s document as the command line wrote it.
+fn json_document(argv: Vec<String>) -> Result<String, Failure> {
+    Ok(opentide::cli::run_json(argv)?.as_str().to_owned())
 }
 
 /// How `Workspace.open` opens a workspace.
@@ -136,13 +141,7 @@ impl Workspace {
     /// `.opentide/` or `objects/`, or a folder inside one.
     #[napi(factory)]
     pub fn open(env: &Env, path: String, options: Option<OpenOptions>) -> napi::Result<Self> {
-        let mut open = opentide::Options::default();
-        if let Some(cwd) = options.and_then(|options| options.cwd) {
-            open = open.cwd(cwd);
-        }
-        Ok(Self {
-            inner: opentide::Workspace::open(path, &open).map_err(|e| throw(*env, e.into()))?,
-        })
+        open_workspace(path, options).map_err(|e| throw(*env, e))
     }
 
     /// Opens a workspace held in memory, rooted at `root`: each key of
@@ -154,10 +153,7 @@ impl Workspace {
         root: String,
         files: HashMap<String, String>,
     ) -> napi::Result<Self> {
-        Ok(Self {
-            inner: opentide::Workspace::from_files(root, files)
-                .map_err(|e| throw(*env, e.into()))?,
-        })
+        workspace_from_files(root, files).map_err(|e| throw(*env, e))
     }
 
     /// The workspace folder: the one that holds `.opentide/` and `objects/`.
@@ -177,16 +173,8 @@ impl Workspace {
         env: &'env Env,
         options: Option<ValidateOptions>,
     ) -> napi::Result<Unknown<'env>> {
-        let options = validate_options(options.unwrap_or_default()).map_err(|e| throw(*env, e))?;
-        let validation = self.inner.validate(&options);
-        env.to_js_value(&ValidationJs {
-            checks: Checks(&validation.checks),
-            report: &validation.report,
-            summary: &validation.summary,
-            failed: validation.failed,
-            warned: validation.warned,
-            exit_code: validation.exit_code(),
-        })
+        let validation = self.validation(options).map_err(|e| throw(*env, e))?;
+        env.to_js_value(&ValidationJs::of(&validation))
     }
 
     /// Runs `opentide lint` (its `lint.toml`, or the checks `options` names)
@@ -200,22 +188,8 @@ impl Workspace {
         env: &'env Env,
         options: Option<LintOptions>,
     ) -> napi::Result<Unknown<'env>> {
-        let options = lint_options(options.unwrap_or_default()).map_err(|e| throw(*env, e))?;
-        let report = self.inner.lint(&options);
-        env.to_js_value(&LintJs {
-            path: report.path.to_string_lossy().into_owned(),
-            checks: report.checks.iter().map(|check| check.name()).collect(),
-            findings: &report.findings,
-            status: report.status,
-            message: &report.message,
-            exit_code: report.exit_code,
-            failure_code: report.failure_code,
-            summary: report.summary.as_ref(),
-            outcome: report.outcome.as_deref(),
-            unmatched: &report.unmatched,
-            warnings: &report.warnings,
-            next_actions: &report.next_actions,
-        })
+        let report = self.lint_report(options).map_err(|e| throw(*env, e))?;
+        env.to_js_value(&LintJs::of(&report))
     }
 
     /// What `opentide info` reports: the object counts, the files that did
@@ -252,21 +226,71 @@ impl Workspace {
         env: &'env Env,
         options: Option<DeployPlanOptions>,
     ) -> napi::Result<Unknown<'env>> {
-        let options =
-            deploy_plan_options(options.unwrap_or_default()).map_err(|e| throw(*env, e))?;
-        let plan = self
-            .inner
-            .deploy_plan(&options)
-            .map_err(|e| throw(*env, e.into()))?;
+        let plan = self.plan(options).map_err(|e| throw(*env, e))?;
         let mut object = Object::new(env)?;
-        object.set_named_property("document", parse(env, plan.document().as_str())?)?;
-        match plan.summary() {
-            Some(summary) => object.set_named_property("summary", parse(env, summary.as_str())?)?,
+        object.set_named_property("document", parse(env, &plan.document)?)?;
+        match &plan.summary {
+            Some(summary) => object.set_named_property("summary", parse(env, summary)?)?,
             None => object.set_named_property("summary", Null)?,
         }
-        object.set_named_property("ok", plan.ok())?;
+        object.set_named_property("ok", plan.ok)?;
         Ok(object.to_unknown())
     }
+}
+
+/// What each `#[napi]` method computes, before its result becomes a
+/// JavaScript value: plain Rust, so the crate's own tests run it.
+impl Workspace {
+    fn validation(
+        &self,
+        options: Option<ValidateOptions>,
+    ) -> Result<opentide::Validation, Failure> {
+        let options = validate_options(options.unwrap_or_default())?;
+        Ok(self.inner.validate(&options))
+    }
+
+    fn lint_report(&self, options: Option<LintOptions>) -> Result<LintReport, Failure> {
+        let options = lint_options(options.unwrap_or_default())?;
+        Ok(self.inner.lint(&options))
+    }
+
+    fn plan(&self, options: Option<DeployPlanOptions>) -> Result<PlanText, Failure> {
+        let options = deploy_plan_options(options.unwrap_or_default())?;
+        let plan = self.inner.deploy_plan(&options)?;
+        Ok(PlanText {
+            document: plan.document().as_str().to_owned(),
+            summary: plan.summary().map(|summary| summary.as_str().to_owned()),
+            ok: plan.ok(),
+        })
+    }
+}
+
+/// `Workspace.open`'s workspace.
+fn open_workspace(path: String, options: Option<OpenOptions>) -> Result<Workspace, Failure> {
+    let mut open = opentide::Options::default();
+    if let Some(cwd) = options.and_then(|options| options.cwd) {
+        open = open.cwd(cwd);
+    }
+    Ok(Workspace {
+        inner: opentide::Workspace::open(path, &open)?,
+    })
+}
+
+/// `Workspace.fromFiles`'s workspace.
+fn workspace_from_files(
+    root: String,
+    files: HashMap<String, String>,
+) -> Result<Workspace, Failure> {
+    Ok(Workspace {
+        inner: opentide::Workspace::from_files(root, files)?,
+    })
+}
+
+/// `Workspace.deployPlan`'s documents, as the command line writes them.
+struct PlanText {
+    document: String,
+    summary: Option<String>,
+    ok: bool,
 }
 
 /// `Workspace.validate`'s result, in this order.
@@ -279,6 +303,19 @@ struct ValidationJs<'a> {
     failed: bool,
     warned: bool,
     exit_code: i32,
+}
+
+impl<'a> ValidationJs<'a> {
+    fn of(validation: &'a opentide::Validation) -> Self {
+        Self {
+            checks: Checks(&validation.checks),
+            report: &validation.report,
+            summary: &validation.summary,
+            failed: validation.failed,
+            warned: validation.warned,
+            exit_code: validation.exit_code(),
+        }
+    }
 }
 
 /// `checks` as `validate --json` writes it, in the order the checks ran:
@@ -326,6 +363,25 @@ struct LintJs<'a> {
     unmatched: &'a [String],
     warnings: &'a [String],
     next_actions: &'a [NextAction],
+}
+
+impl<'a> LintJs<'a> {
+    fn of(report: &'a LintReport) -> Self {
+        Self {
+            path: report.path.to_string_lossy().into_owned(),
+            checks: report.checks.iter().map(|check| check.name()).collect(),
+            findings: &report.findings,
+            status: report.status,
+            message: &report.message,
+            exit_code: report.exit_code,
+            failure_code: report.failure_code,
+            summary: report.summary.as_ref(),
+            outcome: report.outcome.as_deref(),
+            unmatched: &report.unmatched,
+            warnings: &report.warnings,
+            next_actions: &report.next_actions,
+        }
+    }
 }
 
 /// `text` (a JSON document) through `JSON.parse`, which keeps its key order.
@@ -544,5 +600,184 @@ mod tests {
         });
         assert_eq!(converted.code, "no_json_document");
         assert!(converted.message.contains("wrote no JSON document"));
+    }
+
+    const RULE: &str = "objects/rules/a.yaml";
+    const UUID: &str = "11111111-1111-4111-8111-111111111111";
+
+    fn workspace() -> Workspace {
+        let files = HashMap::from([(
+            RULE.to_owned(),
+            format!("name: A\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.1\n"),
+        )]);
+        workspace_from_files("/ws".to_owned(), files).unwrap()
+    }
+
+    #[test]
+    fn a_workspace_in_memory_validates_lints_and_plans() {
+        let ws = workspace();
+        // As a path: on Windows the root reads `\ws`.
+        assert_eq!(
+            std::path::Path::new(&ws.root()),
+            std::path::Path::new("/ws")
+        );
+
+        let validation = ws
+            .validation(Some(ValidateOptions {
+                check: Some("id-uniqueness".into()),
+                queries: Some("off".into()),
+                ..ValidateOptions::default()
+            }))
+            .unwrap();
+        // The keys in `validate --json`'s order: read from the text, since a
+        // `serde_json::Value` sorts them.
+        let text = serde_json::to_string(&ValidationJs::of(&validation)).unwrap();
+        let at = |key: &str| text.find(&format!("\"{key}\":")).unwrap();
+        let order = [
+            "checks", "report", "summary", "failed", "warned", "exitCode",
+        ]
+        .map(at);
+        assert!(order.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
+        let js: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(js["exitCode"], validation.exit_code());
+        assert_eq!(js["failed"], validation.failed);
+
+        let report = ws.lint_report(None).unwrap();
+        let js = serde_json::to_value(LintJs::of(&report)).unwrap();
+        assert_eq!(js["exitCode"], report.exit_code);
+        assert_eq!(js["message"], report.message.as_str());
+        assert!(js["nextActions"].is_array());
+        assert!(js.get("failureCode").is_some());
+
+        assert!(serde_json::to_value(ws.inner.info()).unwrap().is_object());
+        assert!(
+            serde_json::to_value(ws.inner.catalog())
+                .unwrap()
+                .is_object()
+        );
+
+        let plan = ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["PREVIEW".into(), "RELEASE".into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&plan.document).unwrap();
+        assert!(document.is_object(), "{document}");
+        if let Some(summary) = &plan.summary {
+            serde_json::from_str::<serde_json::Value>(summary).unwrap();
+        }
+        let _ = plan.ok;
+    }
+
+    #[test]
+    fn every_option_reaches_the_facade() {
+        let ws = workspace();
+        let lint = lint_options(LintOptions {
+            checks: Some(vec!["filenames".into(), "metadata".into()]),
+            strict: Some(false),
+            files: Some(vec![RULE.into()]),
+        })
+        .unwrap();
+        assert_eq!(lint.files, [RULE]);
+        assert_eq!(lint.checks, [LintCheck::Filenames, LintCheck::Metadata]);
+        let report = ws
+            .lint_report(Some(LintOptions {
+                files: Some(vec![RULE.into()]),
+                ..LintOptions::default()
+            }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(LintJs::of(&report)).unwrap()["exitCode"],
+            report.exit_code
+        );
+
+        let plan = deploy_plan_options(DeployPlanOptions {
+            strategies: Some(vec!["PREVIEW".into()]),
+            uuids: Some(vec![UUID.into()]),
+            files: Some(vec![RULE.into()]),
+            platform: Some("splunk".into()),
+            keep_deprecated: None,
+        })
+        .unwrap();
+        assert_eq!(plan.strategies, [opentide::Strategy::Preview]);
+        assert_eq!(plan.uuids, [UUID]);
+        assert_eq!(plan.files, [RULE]);
+        let planned = ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["RELEASE".into()]),
+                uuids: Some(vec![UUID.into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&planned.document).unwrap();
+        assert!(document.is_object(), "{document}");
+
+        let validation = ws
+            .validation(Some(ValidateOptions {
+                files: Some(vec![RULE.into()]),
+                uuids: Some(vec![UUID.into()]),
+                types: Some(vec!["rule".into()]),
+                queries: Some("warn".into()),
+                ..ValidateOptions::default()
+            }))
+            .unwrap();
+        let js = serde_json::to_value(ValidationJs::of(&validation)).unwrap();
+        assert_eq!(js["warned"], validation.warned);
+        let coverage = serde_json::to_value(ws.inner.coverage("T1059")).unwrap();
+        assert_eq!(coverage["technique"], "T1059");
+    }
+
+    #[test]
+    fn a_bad_option_fails_before_the_workspace_runs() {
+        let ws = workspace();
+        let bad =
+            |code: Result<(), Failure>| assert_eq!(code.unwrap_err().code, "usage_invalid_choice");
+        bad(ws
+            .validation(Some(ValidateOptions {
+                queries: Some("loud".into()),
+                ..ValidateOptions::default()
+            }))
+            .map(drop));
+        bad(ws
+            .lint_report(Some(LintOptions {
+                checks: Some(vec!["nope".into()]),
+                ..LintOptions::default()
+            }))
+            .map(drop));
+        bad(ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["LATER".into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .map(drop));
+    }
+
+    #[test]
+    fn a_workspace_whose_configuration_does_not_parse_fails_with_its_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let configurations = dir.path().join(".opentide/configurations");
+        std::fs::create_dir_all(&configurations).unwrap();
+        std::fs::create_dir_all(dir.path().join("objects/rules")).unwrap();
+        std::fs::write(configurations.join("paths.toml"), "this is = = not toml").unwrap();
+        let failure = open_workspace(
+            dir.path().to_string_lossy().into_owned(),
+            Some(OpenOptions {
+                cwd: Some(dir.path().to_string_lossy().into_owned()),
+            }),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(failure.code, "config_parse", "{failure:?}");
+        assert!(!failure.message.is_empty());
+    }
+
+    #[test]
+    fn run_json_returns_the_command_lines_document() {
+        let document = json_document(vec!["commands".into()]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&document).unwrap();
+        assert!(parsed.is_object() || parsed.is_array(), "{parsed}");
+        let failure = json_document(vec!["--version".into()]).unwrap_err();
+        assert_eq!(failure.code, "no_json_document");
     }
 }

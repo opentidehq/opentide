@@ -1,0 +1,6 @@
+warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on lab · warning: Splunk's parser timed out behind a gateway; the query is assumed valid
+error: Query rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant lab · reason: Splunk refused the query on lab: Unknown search command 'badcommand'.
+✓ Splunk Enterprise queries · 3 rules · <SECONDS>
+warning: Query validation reported warnings for splunk
+error: Queries rejected on splunk · 3 checked on 1 tenant
+tip: add --json for machine-readable output

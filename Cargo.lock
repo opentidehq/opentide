@@ -3236,6 +3236,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "toml 0.8.23",
+ "tracing",
  "url",
  "uuid",
  "wiremock",
@@ -3418,6 +3419,7 @@ dependencies = [
  "opentide",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

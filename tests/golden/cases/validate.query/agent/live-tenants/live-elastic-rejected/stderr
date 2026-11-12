@@ -1,0 +1,7 @@
+warning: Lookback zero · code: lookback_zero · legacy_event: elastic_lookback_zero_warning · rule: Elastic parse error rule · lookback: 0m · advice: scheduling.lookback is 0m; Elastic recommends at least 1m overlap
+warning: Esql metadata id · code: esql_metadata_id · legacy_event: elastic_esql_metadata_id_warning · rule: Elastic parse error rule · advice: Non-aggregating ES|QL query lacks METADATA _id; alerts will not be deduplicated
+error: Elastic rule validation failed · rule: Elastic parse error rule · uuid: 00000000-0000-4000-8046-000000000006 · error: ES|QL parsing exception: line 1:20: mismatched input 'error'
+✓ Elastic Security queries · 1 rule · <SECONDS>
+warning: Query validation reported warnings for elastic
+error: Queries rejected on elastic · 1 checked on 1 tenant
+tip: add --json for machine-readable output
