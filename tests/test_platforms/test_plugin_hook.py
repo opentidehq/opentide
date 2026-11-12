@@ -69,6 +69,7 @@ class StandIn:
 
             do_PUT = _answer
             do_POST = _answer
+            do_DELETE = _answer
 
             def log_message(self, format: str, *args: object) -> None:
                 return
@@ -125,12 +126,18 @@ def workspace(tmp_path: Path) -> Path:
     return repo
 
 
+_CI_VARIABLES = frozenset({"CI", "GITHUB_ACTIONS", "TF_BUILD", "GITLAB_CI"})
+
+
 def _env(site: Path | None, repo: Path, url: str = "http://127.0.0.1:9") -> dict[str, str]:
     env = {
         name: value
         for name, value in os.environ.items()
         if name.lower() not in ("http_proxy", "https_proxy", "all_proxy", "no_proxy")
         and not name.startswith(("OPENTIDE_", "PYTEST_"))
+        # A run in CI would refuse a create outside the production job
+        # (deployment_state_unpersisted): these runs are local ones.
+        and name not in _CI_VARIABLES
     }
     if site is not None:
         env["PYTHONPATH"] = os.pathsep.join([str(site), env.get("PYTHONPATH", "")]).rstrip(
@@ -208,43 +215,151 @@ def test_validate_reports_the_plugin_models_findings_at_their_positions(
     assert not any("acme" in warning for warning in document.get("warnings", []))
 
 
-def test_the_sample_plugin_deploys_what_the_cassette_recorded(
+def _deploy(
+    site: Path, repo: Path, url: str, strategy: str = "PREVIEW", *extra: str
+) -> tuple[int, dict[str, Any]]:
+    return _run(
+        ["deploy", "--platform", "acme", "--strategy", strategy, "--uuid", VALID_RULE, *extra],
+        _env(site, repo, url),
+        repo,
+    )
+
+
+def _shard(repo: Path) -> Path:
+    return repo / ".opentide" / "states" / "deployment" / f"{VALID_RULE}.json"
+
+
+def _record(repo: Path, remote_id: str) -> None:
+    """Deployment state holding *remote_id* for the sample rule on the ``lab`` tenant."""
+    shard = _shard(repo)
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    shard.write_text(
+        json.dumps(
+            {
+                "object_uuid": VALID_RULE,
+                "platforms": {"acme": {"lab": remote_id}},
+                "schema": "deployment.state::1.0",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _set_status(repo: Path, status: str) -> None:
+    rule = repo / "Objects" / "Detection Rules" / "rule-acme-process.yaml"
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(
+        text.replace("acme:\n    status: STAGING", f"acme:\n    status: {status}"),
+        encoding="utf-8",
+    )
+
+
+_SDK_VALIDATE = """
+import json, sys
+import opentide
+validation = opentide.Workspace.open(sys.argv[1]).validate(check="schema", queries="off")
+print(json.dumps(validation.report))
+"""
+
+
+@pytest.mark.parametrize("installed", [True, False])
+def test_the_sdk_validate_checks_a_plugin_block_with_the_plugins_model(
+    plugin_site: Path, workspace: Path, installed: bool
+) -> None:
+    # opentide.Workspace.validate runs the CLI's check of plugin blocks
+    # (UC-4.5b): with the plugin, its findings inside the block; without it,
+    # the block is an extra key, as before.
+    done = subprocess.run(
+        [sys.executable, "-c", _SDK_VALIDATE, str(workspace)],
+        cwd=workspace,
+        env=_env(plugin_site if installed else None, workspace),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    issues = json.loads(done.stdout)["issues"]
+    acme = {
+        (issue["object_uuid"], tuple(issue["field_path"])): issue["message"]
+        for issue in issues
+        if issue["field_path"][:2] == ["configurations", "acme"]
+    }
+    if installed:
+        assert acme[(INVALID_RULE, ("configurations", "acme", "severity"))].startswith(
+            "acme: Input should be a valid integer"
+        )
+        assert acme[(INVALID_RULE, ("configurations", "acme", "colour"))] == (
+            "acme: Extra inputs are not permitted"
+        )
+        assert not any(uuid == VALID_RULE for uuid, _ in acme), acme
+    else:
+        assert {uuid for uuid, _ in acme} == {VALID_RULE, INVALID_RULE}
+        assert all(field == ("configurations", "acme") for _, field in acme)
+
+
+def test_the_sample_plugin_creates_a_rule_and_records_its_id(
     plugin_site: Path, workspace: Path
 ) -> None:
     with StandIn(CASSETTE["deploy"]) as tenant:
-        code, document = _run(
-            ["deploy", "--platform", "acme", "--uuid", VALID_RULE],
-            _env(plugin_site, workspace, tenant.url),
-            workspace,
-        )
+        code, document = _deploy(plugin_site, workspace, tenant.url)
     assert code == 0, document
     assert tenant.received == tenant.requests()
     [result] = document["results"]
-    assert result == {
-        "uuid": VALID_RULE,
-        "name": "Acme Suspicious Shell",
+    assert {key: result[key] for key in ("platform", "tenant", "id", "status")} == {
+        "platform": "acme",
         "tenant": "lab",
+        "id": VALID_RULE,
         "status": "deployed",
-        "remote_id": "acme-rule-17",
     }
-    assert document["message"] == "Deployed 1 rule to 1 acme tenant"
+    assert [change["action"] for change in document["changes"]] == ["create"]
+    state = json.loads(_shard(workspace).read_text(encoding="utf-8"))
+    assert state["platforms"] == {"acme": {"lab": "acme-rule-17"}}
+
+
+@pytest.mark.parametrize(
+    ("scenario", "status", "strategy", "action"),
+    [
+        ("deploy_update", "STAGING", "PREVIEW", "update"),
+        ("deploy_disable", "DISABLED", "RELEASE", "disable"),
+        ("deploy_delete", "REMOVED", "RELEASE", "delete"),
+    ],
+)
+def test_the_sample_plugin_changes_the_rule_deployment_state_names(
+    plugin_site: Path, workspace: Path, scenario: str, status: str, strategy: str, action: str
+) -> None:
+    _record(workspace, "acme-rule-17")
+    _set_status(workspace, status)
+    with StandIn(CASSETTE[scenario]) as tenant:
+        code, document = _deploy(plugin_site, workspace, tenant.url, strategy)
+    assert code == 0, document
+    assert tenant.received == tenant.requests()
+    assert [change["action"] for change in document["changes"]] == [action]
+    if action == "delete":
+        # The id is forgotten, and the shard with it.
+        assert not _shard(workspace).exists()
+    else:
+        state = json.loads(_shard(workspace).read_text(encoding="utf-8"))
+        assert state["platforms"] == {"acme": {"lab": "acme-rule-17"}}
 
 
 def test_a_refused_deploy_fails_the_run_with_the_tenants_reason(
     plugin_site: Path, workspace: Path
 ) -> None:
     with StandIn(CASSETTE["deploy_refused"]) as tenant:
-        code, document = _run(
-            ["deploy", "--platform", "acme", "--uuid", VALID_RULE],
-            _env(plugin_site, workspace, tenant.url),
-            workspace,
-        )
+        code, document = _deploy(plugin_site, workspace, tenant.url)
     assert code == 1
     assert tenant.received == tenant.requests()
     [result] = document["results"]
     assert result["status"] == "failed"
-    assert result["error"] == 'Acme answered 422: {"error": "severity 3 needs a playbook"}'
-    assert document["failure"]["code"] == "command_failed"
+    assert result["error"] == (
+        'PlatformRefused: Acme answered 422: {"error": "severity 3 needs a playbook"}'
+    )
+    assert not _shard(workspace).exists()
     # The token reaches the tenant, never the report.
     assert TOKEN not in json.dumps(document)
 
@@ -252,14 +367,15 @@ def test_a_refused_deploy_fails_the_run_with_the_tenants_reason(
 def test_a_dry_run_sends_nothing(plugin_site: Path, workspace: Path) -> None:
     with StandIn([]) as tenant:
         code, document = _run(
-            ["deploy", "--platform", "acme", "--all", "--dry-run"],
+            ["deploy", "--platform", "acme", "--strategy", "PREVIEW", "--all", "--dry-run"],
             _env(plugin_site, workspace, tenant.url),
             workspace,
         )
     assert code == 0, document
     assert tenant.received == []
-    assert {result["status"] for result in document["results"]} == {"planned"}
-    assert document["message"] == "Would deploy 2 rules to 1 acme tenant"
+    assert set(document["plan"]) == {"acme"}
+    assert {change["action"] for change in document["changes"]} == {"create"}
+    assert not _shard(workspace).exists()
 
 
 @pytest.mark.parametrize(("scenario", "valid"), [("validate", True), ("validate_invalid", False)])
@@ -310,21 +426,72 @@ def test_the_sample_plugin_runs_a_query(plugin_site: Path, workspace: Path) -> N
     assert document["row_count"] == 2
 
 
+@pytest.mark.parametrize("engine", ["rust", "", None])
 def test_the_console_script_routes_a_plugin_run_to_the_rust_core(
-    plugin_site: Path, workspace: Path
+    plugin_site: Path, workspace: Path, engine: str | None
 ) -> None:
+    # OPENTIDE_ENGINE=rust, blank or unset (the default engine): only the
+    # Rust core reaches a plugin, so a plugin run goes there (UC-4.5b).
     env = _env(plugin_site, workspace)
-    env["OPENTIDE_ENGINE"] = "rust"
+    if engine is not None:
+        env["OPENTIDE_ENGINE"] = engine
     with StandIn(CASSETTE["deploy"]) as tenant:
         env["ACME_URL"] = tenant.url
         code, document = _run(
-            ["deploy", "--platform", "acme", "--uuid", VALID_RULE],
+            ["deploy", "--platform", "acme", "--strategy", "PREVIEW", "--uuid", VALID_RULE],
             env,
             workspace,
             module="opentide",
         )
     assert code == 0, document
     assert tenant.received == tenant.requests()
+
+
+def test_the_python_engine_keeps_the_python_command_line(
+    plugin_site: Path, workspace: Path
+) -> None:
+    # OPENTIDE_ENGINE=python is the Python command line, which knows the
+    # built-in platforms only: it refuses the plugin's name, and sends nothing.
+    env = _env(plugin_site, workspace)
+    env["OPENTIDE_ENGINE"] = "python"
+    with StandIn([]) as tenant:
+        env["ACME_URL"] = tenant.url
+        code, document = _run(
+            ["deploy", "--platform", "acme", "--strategy", "PREVIEW", "--uuid", VALID_RULE],
+            env,
+            workspace,
+            module="opentide",
+        )
+    assert code == 2, document
+    assert tenant.received == []
+
+
+def test_the_default_engine_queries_a_plugin_through_python_m_opentide(
+    plugin_site: Path, workspace: Path
+) -> None:
+    # `python -m opentide` (the console script's launcher) under the default
+    # engine: a query on the plugin's platform runs on Rust.
+    with StandIn(CASSETTE["query"]) as tenant:
+        code, document = _run(
+            [
+                "query",
+                "--platform",
+                "acme",
+                "--from",
+                "2026-11-01T00:00:00Z",
+                "--to",
+                "2026-11-02T00:00:00Z",
+                "--limit",
+                "2",
+                "process | head",
+            ],
+            _env(plugin_site, workspace, tenant.url),
+            workspace,
+            module="opentide",
+        )
+    assert code == 0, document
+    assert tenant.received == tenant.requests()
+    assert document["row_count"] == 2
 
 
 def test_without_the_plugin_installed_the_workspace_is_told(workspace: Path) -> None:

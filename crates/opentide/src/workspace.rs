@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use opentide_workspace::lint::LintCheck;
-use opentide_workspace::validate::{Check, QueriesMode, Selection, Validation};
+use opentide_workspace::validate::{
+    Check, PlatformConfigurations, QueriesMode, Selection, Validation,
+};
 use opentide_workspace::{FileSystem, MemoryFs, OsFs, RootOptions};
 use serde::Serialize;
 
@@ -149,6 +151,29 @@ impl Workspace {
     /// # Ok::<(), opentide::Error>(())
     /// ```
     pub fn validate(&self, options: &ValidateOptions) -> Validation {
+        self.run_validate(options, None)
+    }
+
+    /// [`validate`](Self::validate), with the configuration blocks of
+    /// platform plugins checked by `platforms` (UC-4.5b, #835): a rule's
+    /// `configurations.<platform>` block for a platform it names is not an
+    /// extra key, and each finding it reports is a `schema_validation`
+    /// finding inside the block. The Python package passes its plugins' own
+    /// checks; [`validate`](Self::validate) knows the built-in platforms
+    /// alone.
+    pub fn validate_with_platforms(
+        &self,
+        options: &ValidateOptions,
+        platforms: &dyn PlatformConfigurations,
+    ) -> Validation {
+        self.run_validate(options, Some(platforms))
+    }
+
+    fn run_validate(
+        &self,
+        options: &ValidateOptions,
+        platforms: Option<&dyn PlatformConfigurations>,
+    ) -> Validation {
         let selection = Selection {
             files: options.files.clone(),
             uuids: options.uuids.clone(),
@@ -161,7 +186,7 @@ impl Workspace {
             queries: options.queries,
             query_check: Some(queries::validate_check()),
             cve_check: None,
-            platform_configurations: None,
+            platform_configurations: platforms,
         })
     }
 

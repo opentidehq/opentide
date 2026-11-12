@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import codecs
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -70,6 +72,22 @@ def test_the_file_keeps_its_line_endings_and_byte_order_mark(
     assert written.startswith(codecs.BOM_UTF8) is bom
     assert written.count(b"\r\n") == original.count(b"\r\n")
     assert written.count(b"PRODUCTION") == 2
+    assert [p.name for p in tmp_path.iterdir()] == ["rule.yaml"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows files have no permission bits to keep")
+@pytest.mark.parametrize("mode", [0o644, 0o640, 0o755])
+def test_the_promoted_file_keeps_its_permission_bits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: int
+) -> None:
+    """mkstemp makes the rewritten file 0600: a committed 0644 rule came back owner-only (#987)."""
+    monkeypatch.setattr(promotion, "PROMOTION_TARGET", "PRODUCTION")
+    path = tmp_path / "rule.yaml"
+    path.write_text(_RULE, encoding="utf-8")
+    path.chmod(mode)
+    promotion.PromoteMDR().edit_mdr_statuses(path, ["STAGING"])
+    assert "status: PRODUCTION" in path.read_text(encoding="utf-8")
+    assert stat.S_IMODE(path.stat().st_mode) == mode
     assert [p.name for p in tmp_path.iterdir()] == ["rule.yaml"]
 
 

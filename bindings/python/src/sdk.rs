@@ -154,7 +154,12 @@ impl Workspace {
         for family in types {
             options = options.object_type(family);
         }
-        let validation = py.detach(|| self.inner.validate(&options));
+        // The platform plugins' own checks of their blocks, as the command
+        // line's validate runs them (UC-4.5b).
+        let validation = py.detach(|| match opentide_cli::plugins::configurations() {
+            Some(platforms) => self.inner.validate_with_platforms(&options, platforms),
+            None => self.inner.validate(&options),
+        });
         to_json(&ValidationJson::from(&validation))
     }
 

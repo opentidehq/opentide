@@ -99,18 +99,27 @@ class DeployRequest:
     """One rule to deploy on one tenant.
 
     ``body`` is ``{"rule": <the rule document>, "configuration": <its block
-    under configurations.<platform>>}``. ``operation`` is ``create``: the
-    plugin creates the rule or replaces it.
+    under configurations.<platform>>}``, the tenant's ``[[modifiers]]``
+    applied. ``operation`` is what deployment state and the block's status
+    plan (``opentide deploy --strategy``): ``create`` for a rule the state
+    holds no id for on this tenant, else ``update``, ``disable`` or
+    ``delete`` of ``remote_id``, the id an earlier create returned.
     """
 
     rule_id: str
     operation: Operation
     body: Any
+    remote_id: str | None = None
 
 
 @dataclass(frozen=True)
 class DeployResult:
-    """What a deploy did: the platform's identifier of the rule, and the operation."""
+    """What a deploy did: the platform's identifier of the rule, and the operation.
+
+    A ``create`` must return ``remote_id``: deployment state records it, and
+    the next deploy updates, disables or deletes the rule by it. A platform
+    that addresses rules by the rule's UUID returns ``request.rule_id``.
+    """
 
     remote_id: str | None = None
     operation: Operation | None = None
@@ -327,9 +336,18 @@ def _result(result: QueryResult) -> dict[str, Any]:
 
 def _deploy(plugin: PlatformPlugin, tenant: str, request: str) -> dict[str, Any]:
     data = json.loads(request)
+    body = data["body"]
+    # The core sends the stored id inside the body (deploy_send.rs's
+    # plugin_body); the plugin reads it as the request's own field.
+    remote_id = body.pop("remote_id", None) if isinstance(body, dict) else None
     result = plugin.deploy(
         _tenant(tenant),
-        DeployRequest(rule_id=data["rule_id"], operation=data["operation"], body=data["body"]),
+        DeployRequest(
+            rule_id=data["rule_id"],
+            operation=data["operation"],
+            body=body,
+            remote_id=remote_id,
+        ),
     )
     if not isinstance(result, DeployResult):
         raise TypeError(f"deploy returned {type(result).__name__}, not DeployResult")

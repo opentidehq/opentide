@@ -3,6 +3,7 @@
 import codecs
 import json
 import os
+import stat
 import sys
 import tempfile
 from collections.abc import Collection
@@ -290,10 +291,18 @@ def promote_block_statuses(text: str, statuses: Collection[str], target: str) ->
 
 
 def _write_atomically(path: Path, data: bytes) -> None:
+    """Replace *path* with *data* through a temporary file beside it.
+
+    ``mkstemp`` creates the temporary file owner-only (0600); it takes the
+    permission bits of the file it replaces before the rename, so a rule
+    committed as 0644 stays 0644 (#987). Windows has no such bits to keep.
+    """
     handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(data)
+        if os.name != "nt":
+            os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
         os.replace(temporary, path)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)

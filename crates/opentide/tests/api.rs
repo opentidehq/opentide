@@ -10,7 +10,7 @@
 mod common;
 
 use opentide::lint::{LintCheck, LintStatus};
-use opentide::validate::{Check, QueriesMode};
+use opentide::validate::{Check, PlatformConfigurations, PlatformFinding, QueriesMode};
 use opentide::{
     DeployPlanOptions, Error, LintOptions, Options, Strategy, ValidateOptions, Workspace,
 };
@@ -76,6 +76,63 @@ fn validate_runs_every_default_check() {
         validation.report.issues
     );
     assert!(!validation.failed);
+}
+
+/// A platform plugin's own check of its blocks, as the Python package
+/// passes it (UC-4.5b).
+struct AcmeBlocks;
+
+impl PlatformConfigurations for AcmeBlocks {
+    fn platforms(&self) -> Vec<String> {
+        vec!["acme".to_owned()]
+    }
+
+    fn check(&self, platform: &str, block: &serde_json::Value) -> Vec<PlatformFinding> {
+        assert_eq!(platform, "acme");
+        if block["severity"].is_u64() {
+            return Vec::new();
+        }
+        vec![PlatformFinding {
+            field_path: vec!["severity".to_owned()],
+            message: "Input should be a valid integer".to_owned(),
+            warning: false,
+        }]
+    }
+}
+
+#[test]
+fn validate_with_platforms_checks_a_plugins_block_with_the_plugin() {
+    let (dir, _) = corpus();
+    let rule = dir.path().join("objects/rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    std::fs::write(
+        &rule,
+        text.replacen(
+            "configurations:\n",
+            "configurations:\n  acme:\n    severity: high\n",
+            1,
+        ),
+    )
+    .unwrap();
+    let ws = Workspace::open(dir.path(), &Options::default()).unwrap();
+    let options = ValidateOptions::default()
+        .check(Check::Schema)
+        .file("rule-0001-sentinel-kql.yaml");
+    let at = |validation: &opentide::Validation| -> Vec<Vec<String>> {
+        validation
+            .report
+            .issues
+            .iter()
+            .filter(|d| d.field_path.get(1).is_some_and(|key| key == "acme"))
+            .map(|d| d.field_path.clone())
+            .collect()
+    };
+    // Without the plugin, the block is an extra key; with it, the plugin's
+    // finding sits inside the block.
+    assert_eq!(at(&ws.validate(&options)), [["configurations", "acme"]]);
+    let checked = ws.validate_with_platforms(&options, &AcmeBlocks);
+    assert_eq!(at(&checked), [["configurations", "acme", "severity"]]);
+    assert!(checked.failed);
 }
 
 #[test]

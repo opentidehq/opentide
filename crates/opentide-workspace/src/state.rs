@@ -21,6 +21,21 @@ pub const STATE_PLATFORMS: [&str; 4] = [
     "sentinel_one",
     "sysdig",
 ];
+/// Whether a shard may bind *platform*'s rules to ids: a built-in platform
+/// whose deployer addresses the remote rule by a vendor id
+/// ([`STATE_PLATFORMS`]), or a platform plugin's (UC-4.5b, #835): an
+/// identifier (lower case letters, digits and `_`, starting with a letter)
+/// that no built-in platform has. Whether that plugin is installed where the
+/// shard is read does not matter: the shard is the deploying run's record.
+pub fn stores_ids(platform: &str) -> bool {
+    STATE_PLATFORMS.contains(&platform)
+        || (!crate::validate::objects::PLATFORMS.contains(&platform)
+            && platform.starts_with(|ch: char| ch.is_ascii_lowercase())
+            && platform
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'))
+}
+
 /// Platforms whose external id is a canonical decimal integer.
 const INTEGER_ID_PLATFORMS: [&str; 3] = ["defender_for_endpoint", "sentinel_one", "sysdig"];
 
@@ -76,7 +91,7 @@ fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
     let platforms = shard.platforms?;
     let mut bindings = Vec::new();
     for (platform, tenants) in platforms {
-        if !STATE_PLATFORMS.contains(&platform.as_str()) {
+        if !stores_ids(&platform) {
             return None;
         }
         for (tenant, id) in tenants {
@@ -173,6 +188,28 @@ mod tests {
             .collect();
         assert_eq!(tenants, [("prod", "17"), ("dev", "4")]);
         assert!(bindings(&fs, Path::new("/nowhere")).is_empty());
+    }
+
+    #[test]
+    fn a_plugins_ids_may_be_kept_but_not_a_builtin_platforms_without_state() {
+        for platform in ["crowdstrike", "sysdig", "acme", "acme_2"] {
+            assert!(stores_ids(platform), "{platform}");
+        }
+        for platform in [
+            "sentinel", "splunk", "elastic", "Acme", "2acme", "ac-me", "",
+        ] {
+            assert!(!stores_ids(platform), "{platform}");
+        }
+        let fs = MemoryFs::new();
+        fs.write(
+            format!("/ws/.opentide/states/deployment/{UUID}.json"),
+            format!(
+                r#"{{"schema": "deployment.state::1.0", "object_uuid": "{UUID}", "platforms": {{"acme": {{"lab": "acme-rule-17"}}}}}}"#
+            ),
+        );
+        let found = bindings(&fs, Path::new("/ws"));
+        assert_eq!(found[UUID][0].platform, "acme");
+        assert_eq!(found[UUID][0].rule_id, "acme-rule-17");
     }
 
     #[test]
