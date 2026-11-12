@@ -200,7 +200,7 @@ def _run(
 ) -> Any:
     runner = GoogleSecopsQueryRunner()
     tenant = _tenant()
-    runner.secops_client = lambda _tenant, timeout: _client(fake)  # type: ignore[method-assign]
+    runner.secops_client = lambda _tenant, timeout: _client(fake)  # type: ignore[method-assign]  # the test swaps in a fake client
     request = QueryRequest(platform="google_secops", text=text, window=WINDOW, limit=limit)
     return runner.run(request, tenant)
 

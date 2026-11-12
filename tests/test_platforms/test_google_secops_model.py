@@ -367,3 +367,36 @@ def test_a_section_alias_is_found(tmp_path: Path) -> None:
     ]
     assert aliased_sections("configurations: {google_secops: {events: x}}\n") == []
     assert aliased_sections(": [") == []
+
+
+@pytest.mark.parametrize(
+    ("keys", "code"),
+    [
+        ({"match": {"group_by": ["$h"], "window": "10m", "type": ["hop"]}}, "yaral_match_shape"),
+        ({"run_frequency": ["LIVE"]}, "google_secops_run_frequency"),
+        (
+            {"run_frequency": ["LIVE"], "schedule": {"late_arriving_data_adjustment": "30m"}},
+            "google_secops_schedule",
+        ),
+        ({"severity": {"High": 1}}, "google_secops_severity"),
+    ],
+)
+def test_an_unhashable_value_is_a_finding_not_a_crash(keys: dict[str, Any], code: str) -> None:
+    with pytest.raises(ValidationError) as caught:
+        GoogleSecopsConfig.model_validate(_block(**keys))
+    assert code in {error["type"] for error in caught.value.errors()}
+
+
+def test_sdk_models_and_dumps_validate() -> None:
+    from opentide.models.platform import GoogleSecopsMatch, GoogleSecopsOptions
+
+    two_events = EVENTS + '$e.principal.hostname = $h\n$f.metadata.event_type = "USER_LOGIN"\n'
+    block = GoogleSecopsConfig(
+        status="STAGING",
+        events=two_events + "$f.principal.hostname = $h\n",
+        condition="$e and $f\n",
+        match=GoogleSecopsMatch(group_by=["$h"], window="10m"),
+        options=GoogleSecopsOptions(allow_zero_values=True),
+    )
+    assert GoogleSecopsConfig.model_validate(block.model_dump()) == block
+    assert GoogleSecopsConfig.model_validate(block.model_dump(by_alias=True)) == block

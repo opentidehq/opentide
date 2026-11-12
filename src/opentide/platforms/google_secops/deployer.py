@@ -343,7 +343,9 @@ class GoogleSecopsDeploy(RuleDeployer):
                 etag = _etag(patched) or etag
                 logger.info("google_secops_rule_updated", uuid=fields["uuid"], rule_id=rule_id)
         wanted_scope = client.scope_resource(tenant.setup.data_access_scope) or ""
-        if str(remote.get("scope") or "") != wanted_scope:
+        # Compared by scope id: Google may name the project by number where the
+        # tenant names it by id, and a rule's scope is always in its own instance.
+        if _scope_id(str(remote.get("scope") or "")) != _scope_id(wanted_scope):
             try:
                 client.update_scope(rule_id, wanted_scope, etag)
             except GoogleSecopsApiError as exc:
@@ -539,6 +541,11 @@ class GoogleSecopsDeploy(RuleDeployer):
 
 def _fields(rule: DetectionRule, tenant: Any) -> dict[str, Any]:
     return {"uuid": str(rule.metadata.uuid), "tenant": tenant.name, "name": rule.name}
+
+
+def _scope_id(scope: str) -> str:
+    """The data access scope id of a scope resource name, ``""`` for none."""
+    return scope.rsplit("/dataAccessScopes/", 1)[-1] if scope else ""
 
 
 def _etag(remote: Mapping[str, Any]) -> str | None:

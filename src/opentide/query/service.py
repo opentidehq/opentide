@@ -55,6 +55,17 @@ _DEFAULT_HOSTS = {
 }
 
 
+def _tenant_host(platform: str, setup: object) -> str:
+    """The address a "cannot reach" error names for *setup*'s tenant."""
+    if platform == "google_secops":
+        from opentide.platforms.google_secops.compile import default_endpoint
+
+        endpoint = getattr(setup, "endpoint", None)
+        location = getattr(setup, "location", "") or ""
+        return str(endpoint or (default_endpoint(location) if location else ""))
+    return str(getattr(setup, "url", "") or _DEFAULT_HOSTS.get(platform, ""))
+
+
 class QueryUsageError(ValueError):
     """The call cannot run as given: ``argument`` names the flag at fault."""
 
@@ -252,7 +263,7 @@ def run_on_tenant(
     outcome = TenantOutcome(tenant=tenant.name, label=request.label)
     began = time.monotonic()
     setup = getattr(tenant, "setup", None)
-    host = str(getattr(setup, "url", "") or _DEFAULT_HOSTS.get(request.platform, ""))
+    host = _tenant_host(request.platform, setup)
     logger.info("query_sent", platform=request.platform, tenant=tenant.name, label=request.label)
     try:
         with reaching_tenant(request.platform, tenant.name, host):

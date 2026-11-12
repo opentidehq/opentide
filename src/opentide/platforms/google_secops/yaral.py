@@ -326,7 +326,7 @@ def match_findings(match: Any) -> list[Finding]:
             )
         )
     kind = match.get("type", "hop")
-    if kind not in MATCH_TYPES:
+    if not isinstance(kind, str) or kind not in MATCH_TYPES:
         found.append(
             Finding(
                 "yaral_match_shape",
@@ -370,12 +370,12 @@ def match_findings(match: Any) -> list[Finding]:
         bound_key = "by" if kind == "tumbling" else "over"
         if minutes > _RULE_WINDOW_MAX[bound_key]:
             bound = "72h" if kind == "tumbling" else "14d"
+            label = kind if isinstance(kind, str) and kind in MATCH_TYPES else "hop"
             found.append(
                 Finding(
                     "yaral_match_window",
                     ("match", "window"),
-                    f"window {window}: a {kind if kind in MATCH_TYPES else 'hop'} window in a "
-                    f"rule is at most {bound}",
+                    f"window {window}: a {label} window in a rule is at most {bound}",
                 )
             )
     return found

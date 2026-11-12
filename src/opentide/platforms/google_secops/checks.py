@@ -27,7 +27,7 @@ from opentide.platforms.google_secops.yaral import (
 
 #: Severity and priority values (google-secops-1.0, Constraints).
 SEVERITIES = ("Info", "Low", "Medium", "High", "Critical")
-#: Run frequencies opentide accepts, in the order deploy prefers them when the block names none.
+#: Run frequencies opentide accepts. Deploy sends one only when the block names it.
 RUN_FREQUENCIES = ("LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY")
 #: The run frequencies that take schedule customizations.
 CUSTOMIZABLE = frozenset({"LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE"})
@@ -74,7 +74,8 @@ def _schedule_findings(raw: Mapping[str, Any]) -> list[Finding]:
     if schedule is None:
         return []
     found: list[Finding] = []
-    if raw.get("run_frequency") not in CUSTOMIZABLE:
+    frequency = raw.get("run_frequency")
+    if not isinstance(frequency, str) or frequency not in CUSTOMIZABLE:
         found.append(
             Finding(
                 "google_secops_schedule",
@@ -139,7 +140,7 @@ def block_findings(block: Mapping[str, Any]) -> list[Finding]:
         )
     for key in ("severity", "priority"):
         value = block.get(key)
-        if value is not None and value not in SEVERITIES:
+        if value is not None and (not isinstance(value, str) or value not in SEVERITIES):
             found.append(
                 Finding(
                     "google_secops_severity",
@@ -148,7 +149,9 @@ def block_findings(block: Mapping[str, Any]) -> list[Finding]:
                 )
             )
     frequency = block.get("run_frequency")
-    if frequency is not None and frequency not in RUN_FREQUENCIES:
+    if frequency is not None and (
+        not isinstance(frequency, str) or frequency not in RUN_FREQUENCIES
+    ):
         legacy = " (Google's legacy HOURLY is refused)" if frequency == "HOURLY" else ""
         found.append(
             Finding(

@@ -24,6 +24,7 @@ from opentide.models.platform import GoogleSecopsConfig
 from opentide.models.rule import DetectionRule
 from opentide.platforms.google_secops.checks import duration_seconds
 from opentide.platforms.google_secops.yaral import (
+    KEYWORDS,
     SECTION_KEYS,
     render_match,
     render_options,
@@ -71,7 +72,8 @@ def rule_name(rule_title: str, block_name: str | None, uuid: str) -> str:
     name = _NOT_NAME.sub("_", rule_title.lower()).strip("_")
     if not name:
         return "opentide_" + uuid.replace("-", "_")
-    return "r_" + name if name[0].isdigit() else name
+    # A leading digit or a YARA-L keyword (a rule titled "Any") is not a rule name.
+    return "r_" + name if name[0].isdigit() or name in KEYWORDS else name
 
 
 def severity(rule: DetectionRule, block: GoogleSecopsConfig) -> str:

@@ -77,6 +77,9 @@ def test_the_rule_name() -> None:
     assert rule_name("2FA bypass!", None, "u") == "r_2fa_bypass"
     assert rule_name("!!!", None, "0000-11") == "opentide_0000_11"
     assert rule_name("anything", "explicit_name", "u") == "explicit_name"
+    # A title that lower-cases to a YARA-L keyword is not a rule name either.
+    assert rule_name("Any", None, "u") == "r_any"
+    assert rule_name("Events", None, "u") == "r_events"
     assert assemble(load_fixture_rule("rule-google-secops-spray-1.0")).name == (
         "password_spray_then_success"
     )

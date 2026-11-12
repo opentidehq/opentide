@@ -16,7 +16,7 @@ import re
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -1007,8 +1007,8 @@ class GoogleSecopsConfig(PlatformConfigBase):
     run_frequency: Literal["LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY"] | None = (
         None
     )
-    """`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Default: the first one
-    Google allows."""
+    """`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Not sent when omitted: a new
+    rule gets Google's default, and an existing rule keeps its own."""
     schedule: GoogleSecopsSchedule | None = None
     """Schedule customizations, for `LIVE_CUSTOMIZABLE` and `HOURLY_CUSTOMIZABLE` only."""
     meta: dict[str, str] | None = None
@@ -1019,7 +1019,13 @@ class GoogleSecopsConfig(PlatformConfigBase):
     def _validate_raw_google_secops_block(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
-        raw = dict(data)
+        # Nested models (SDK callers) are checked as the mappings YAML would give.
+        raw = {
+            key: value.model_dump(by_alias=True, exclude_none=True)
+            if isinstance(value, BaseModel)
+            else value
+            for key, value in data.items()
+        }
         if "status" not in raw or raw["status"] is None:
             return raw
         from pydantic import ValidationError
@@ -1027,10 +1033,14 @@ class GoogleSecopsConfig(PlatformConfigBase):
 
         from opentide.platforms.google_secops.checks import block_findings
 
-        fields = {info.alias or name for name, info in cls.model_fields.items()}
-        # A block dumped and loaded again (deploy's modifiers) carries every field,
-        # unset ones as None: only an authored null is a section with no text.
-        authored = raw if not fields <= raw.keys() else _without_none(raw)
+        # A block dumped and loaded again (deploy's modifiers, model_dump with or
+        # without aliases) carries every field, unset ones as None: only an
+        # authored null is a section with no text.
+        dumped = all(
+            name in raw or (info.alias is not None and info.alias in raw)
+            for name, info in cls.model_fields.items()
+        )
+        authored = _without_none(raw) if dumped else raw
         findings = block_findings(authored)
         if findings:
             # One error per finding, typed by its code and placed at the path the

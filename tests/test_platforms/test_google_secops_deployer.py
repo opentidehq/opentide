@@ -83,7 +83,7 @@ class FakeChronicle(TenantSession):
         self.allowed = list(ALL)
         self.sent_headers: list[dict[str, str]] = []
 
-    def request(self, method: str, url: str, **kwargs: Any) -> Any:  # type: ignore[override]
+    def request(self, method: str, url: str, **kwargs: Any) -> Any:  # type: ignore[override]  # a fake session takes any keyword
         assert kwargs.get("timeout"), "every request has a timeout"
         assert kwargs["headers"]["authorization"] == "Bearer token"
         self.sent_headers.append(dict(kwargs["headers"]))
@@ -484,6 +484,18 @@ def test_a_changed_or_removed_scope_reaches_an_unchanged_rule(
     assert patch["body"]["scope"] == SCOPE
     fake.calls.clear()
     run(rule, tenant=_tenant(data_access_scope="soc"))
+    assert [call["method"] for call in fake.calls] == ["GET", "GET"]
+
+
+def test_a_scope_google_names_by_project_number_is_unchanged(
+    run: Run, tide_corpus_repo: Path
+) -> None:
+    rule = _rule(status="PRODUCTION")
+    _bind(tide_corpus_repo, run.fake, text=assemble(rule).text)
+    run.fake.rules[RULE_ID]["scope"] = (
+        "projects/123456789/locations/eu/instances/i/dataAccessScopes/soc"
+    )
+    fake = run(rule, tenant=_tenant(data_access_scope="soc"))
     assert [call["method"] for call in fake.calls] == ["GET", "GET"]
 
 
