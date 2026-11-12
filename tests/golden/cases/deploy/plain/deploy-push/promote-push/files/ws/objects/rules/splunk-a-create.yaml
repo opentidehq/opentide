@@ -1,0 +1,18 @@
+name: Splunk create rule
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000041
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A changed rule the splunk stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: PRODUCTION
+    query: index=main EventCode=4688
+    scheduling:
+      schedule:
+        cron: "0 * * * *"

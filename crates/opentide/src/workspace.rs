@@ -9,7 +9,7 @@ use opentide_workspace::validate::{Check, QueriesMode, Selection, Validation};
 use opentide_workspace::{FileSystem, MemoryFs, OsFs, RootOptions};
 use serde::Serialize;
 
-use crate::catalog::{Catalogue, Coverage, PlatformInfo};
+use crate::catalog::{Catalogue, Coverage, ObjectRow, PlatformInfo, Row};
 use crate::lint::LintReport;
 use crate::{Error, queries};
 
@@ -160,6 +160,7 @@ impl Workspace {
             strict: options.strict,
             queries: options.queries,
             query_check: Some(queries::validate_check()),
+            cve_check: None,
         })
     }
 
@@ -216,6 +217,47 @@ impl Workspace {
     /// the ATT&CK matrix.
     pub fn catalog(&self) -> Catalogue {
         opentide_workspace::catalogue::build(&self.inner)
+    }
+
+    /// The detection rules: their rows of the catalogue's `objects`, in the
+    /// order the index met them (UC-5.2).
+    ///
+    /// ```
+    /// let ws = opentide::Workspace::from_files(
+    ///     "/ws",
+    ///     [(
+    ///         "objects/rules/example.yaml",
+    ///         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
+    ///     )],
+    /// )?;
+    /// let rules = ws.rules();
+    /// assert_eq!(rules[0].name, "Example");
+    /// assert!(ws.threats().is_empty());
+    /// # Ok::<(), opentide::Error>(())
+    /// ```
+    pub fn rules(&self) -> Vec<ObjectRow> {
+        self.objects("rule")
+    }
+
+    /// The detection objectives: their rows of the catalogue's `objects`.
+    pub fn objectives(&self) -> Vec<ObjectRow> {
+        self.objects("objective")
+    }
+
+    /// The threat vectors: their rows of the catalogue's `objects`.
+    pub fn threats(&self) -> Vec<ObjectRow> {
+        self.objects("threat")
+    }
+
+    fn objects(&self, family: &str) -> Vec<ObjectRow> {
+        self.catalog()
+            .objects
+            .into_iter()
+            .filter_map(|row| match row {
+                Row::Object(row) if row.family == family => Some(*row),
+                _ => None,
+            })
+            .collect()
     }
 
     /// The rules that cover the ATT&CK `technique` (`opentide info coverage

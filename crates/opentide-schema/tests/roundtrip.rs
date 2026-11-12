@@ -3,12 +3,22 @@
 
 use garde::Validate;
 use opentide_schema::Pins;
+use opentide_schema::configuration::merge::to_json;
+use opentide_schema::node;
 use opentide_schema::sample::{Sample, SampleExample, SampleV1_0, SampleV1_1};
 
 const FIXTURE: &str = include_str!("fixtures/sample-1.1.yaml");
 
-fn read<T: serde::de::DeserializeOwned>(yaml: &str) -> Result<T, serde_yaml::Error> {
-    serde_yaml::from_str(yaml)
+/// `yaml` read with the workspace's YAML reader, then into `T` by its serde
+/// derive.
+fn read<T: serde::de::DeserializeOwned>(yaml: &str) -> Result<T, String> {
+    let document = node::load(yaml).map_err(|error| error.to_string())?;
+    let root = document.root().ok_or("no document")?;
+    serde_json::from_value(to_json(root)).map_err(|error| error.to_string())
+}
+
+fn write<T: serde::Serialize>(value: &T) -> Result<String, node::DumpError> {
+    node::to_yaml(value)
 }
 
 fn minimal() -> String {
@@ -24,7 +34,7 @@ fn round_trips_byte_for_byte() {
     let sample: Sample = read(FIXTURE).unwrap();
     assert_eq!(sample.examples.as_ref().unwrap().len(), 2);
     assert_eq!(sample.examples.as_ref().unwrap()[1].language, None);
-    let written = serde_yaml::to_string(&sample).unwrap();
+    let written = write(&sample).unwrap();
     assert_eq!(written, FIXTURE);
     let again: Sample = read(&written).unwrap();
     assert_eq!(again, sample);
@@ -33,7 +43,7 @@ fn round_trips_byte_for_byte() {
 #[test]
 fn field_order_is_declaration_order() {
     let sample: Sample = read(FIXTURE).unwrap();
-    let written = serde_yaml::to_string(&sample).unwrap();
+    let written = write(&sample).unwrap();
     let keys: Vec<&str> = written
         .lines()
         .filter(|line| !line.starts_with([' ', '-']))
@@ -62,7 +72,7 @@ fn optional_missing_and_null_read_as_none_and_are_not_written() {
     assert_eq!(missing, null);
     assert_eq!(missing.effort, None);
     assert_eq!(missing.examples, None);
-    let written = serde_yaml::to_string(&missing).unwrap();
+    let written = write(&missing).unwrap();
     assert!(!written.contains("effort"), "{written}");
     assert!(!written.contains("examples"), "{written}");
 }
@@ -72,7 +82,7 @@ fn defaulted_missing_reads_as_the_default_which_is_written() {
     let sample: Sample = read(&minimal()).unwrap();
     assert!(sample.enabled);
     assert!(sample.tags.is_empty());
-    let written = serde_yaml::to_string(&sample).unwrap();
+    let written = write(&sample).unwrap();
     assert!(written.contains("enabled: true\n"), "{written}");
     assert!(written.contains("tags: []\n"), "{written}");
 }
@@ -80,23 +90,19 @@ fn defaulted_missing_reads_as_the_default_which_is_written() {
 #[test]
 fn required_missing_is_an_error() {
     let yaml = minimal().replace("severity: Low\n", "");
-    let error = read::<Sample>(&yaml).unwrap_err().to_string();
+    let error = read::<Sample>(&yaml).unwrap_err();
     assert!(error.contains("missing field `severity`"), "{error}");
 }
 
 #[test]
 fn unknown_keys_are_rejected_at_every_level() {
-    let error = read::<Sample>(&(minimal() + "colour: blue\n"))
-        .unwrap_err()
-        .to_string();
+    let error = read::<Sample>(&(minimal() + "colour: blue\n")).unwrap_err();
     assert!(error.contains("unknown field `colour`"), "{error}");
     let nested = minimal() + "examples:\n- description: d\n  link: l\n  colour: blue\n";
-    let error = read::<Sample>(&nested).unwrap_err().to_string();
+    let error = read::<Sample>(&nested).unwrap_err();
     assert!(error.contains("unknown field `colour`"), "{error}");
     // `tags` is a 1.1 field: revision 1.0 does not know it.
-    let error = read::<SampleV1_0>(&(minimal() + "tags: []\n"))
-        .unwrap_err()
-        .to_string();
+    let error = read::<SampleV1_0>(&(minimal() + "tags: []\n")).unwrap_err();
     assert!(error.contains("unknown field `tags`"), "{error}");
 }
 
@@ -105,7 +111,7 @@ fn the_alias_is_read_and_the_serialised_name_written() {
     let yaml = minimal().replace("schema:", "schema_id:");
     let sample: Sample = read(&yaml).unwrap();
     assert_eq!(sample.schema_id, "sample::1.1");
-    let written = serde_yaml::to_string(&sample).unwrap();
+    let written = write(&sample).unwrap();
     assert!(written.contains("\nschema: sample::1.1\n"), "{written}");
     assert!(!written.contains("schema_id"), "{written}");
 }
@@ -193,8 +199,8 @@ fn an_overridden_field_keeps_its_position_in_every_revision() {
         enabled: new.enabled,
         examples: new.examples.clone(),
     };
-    let old_keys = keys(&serde_yaml::to_string(&old).unwrap());
-    let new_keys = keys(&serde_yaml::to_string(&new).unwrap());
+    let old_keys = keys(&write(&old).unwrap());
+    let new_keys = keys(&write(&new).unwrap());
     assert_eq!(old_keys[4..6], ["severity", "effort"]);
     // 1.1 has the same keys in the same order, then its new field.
     assert_eq!(new_keys[..old_keys.len()], old_keys[..]);

@@ -23,7 +23,7 @@
 #   depends on the facade alone is the facade's rule (UC-5.1, #836).
 # - xtask is Tooling, the top layer: it may read any crate, and no crate may
 #   depend on it.
-# - analysis/ is the package `opentide-native` (bindings/python in the plan).
+# - bindings/python is the package `opentide-native` (the plan's bindings/python, UC-5.2, #837).
 # - bindings/node is the package `opentide-node` (UC-5.3, #838), compiled into
 #   the npm package @opentide/opentide: it depends on the facade alone.
 # - opentide-compare (UC-0.7, #805) is foundation tier 0: the differential

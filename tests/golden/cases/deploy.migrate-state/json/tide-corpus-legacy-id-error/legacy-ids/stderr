@@ -1,0 +1,1 @@
+{"detail":"sentinel_one tenant 'soc': sentinel_one external id '0901' is not a canonical decimal integer (no sign, no leading zeroes)","file":"Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml","uuid":"00000000-0000-4000-8003-000000000004","event":"external_id_shape","logger":"opentide.cli.services.migrate_state","level":"error","timestamp":"0000-00-00 00:00:00"}

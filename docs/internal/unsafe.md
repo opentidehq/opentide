@@ -15,7 +15,7 @@ The workspace forbids `unsafe` (`unsafe_code = "forbid"` in the root `Cargo.toml
 
 Those two copy the workspace's lint table with `unsafe_code = "deny"` and allow it on each
 item with a reason; `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate
-leaves the workspace table. Every other member, the PyO3 binding (`analysis/`) included,
+leaves the workspace table. Every other member, the PyO3 binding (`bindings/python/`) included,
 inherits `forbid`, but one:
 
 | Crate | Why it copies the table with `deny` |

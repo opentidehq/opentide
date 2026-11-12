@@ -1,0 +1,11 @@
+[1;33mwarning[cve_lookup_unavailable][0m[1m: [0m[1mCould not check CVE references on Vulnerability-Lookup:[0m
+  [1mCVE-2024-3094, GHSA-rxwq-x6h5-qc8m (Vulnerability-Lookup request failed for GHSA-rxwq-x6h5-qc8m)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/Objects/Threat%20Vectors/threat-0001-simulated-actor.yaml\Objects/Threat Vectors/threat-0001-simulated-actor.yaml:14:3]8;;\
+[34m   [0m[34m│[0m
+[34m13 [0m[34m│[0m   description: Simulated threat actor for CLI E2E corpus
+[34m14 [0m[34m│[0m   cve:
+[34m   [0m[34m│[0m   [1;33m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m Run `opentide validate --check cve` again once it is reachable.
+
+[1;32m✓[0m Validation passed · <SECONDS>

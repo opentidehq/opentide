@@ -99,7 +99,7 @@ Each placeholder carries a copy of the repository's `LICENSE`: the EUPL asks for
 
 ## Dry run
 
-[`.github/workflows/publish-dry-run.yml`](../../.github/workflows/publish-dry-run.yml) rehearses every publish on pull requests that change what is published (the placeholders, the workflow, `pyproject.toml`, `hatch_build.py`, `analysis/`, and from UC-0.2 `crates/`, the root `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml`; `README.md`, `LICENSE`, `CHANGELOG.md` and `scripts/build/release.py`), on pushes to `development` that change them, and on **Run workflow**.
+[`.github/workflows/publish-dry-run.yml`](../../.github/workflows/publish-dry-run.yml) rehearses every publish on pull requests that change what is published (the placeholders, the workflow, `pyproject.toml`, `hatch_build.py`, `bindings/python/`, and from UC-0.2 `crates/`, the root `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml`; `README.md`, `LICENSE`, `CHANGELOG.md` and `scripts/build/release.py`), on pushes to `development` that change them, and on **Run workflow**.
 
 `CHANGELOG.md` is in the filter because a release notes pull request changes the version the next release builds, and that pull request is the one whose rehearsal matters most. The filter cannot tell it from an `[Unreleased]` entry, so the file about doubles how often the PyPI job runs, at about nine minutes a run: 102 of the 161 first-parent commits on `development` from 2026-10-07 to 2026-11-07 would have run it, against 52 without the file. Without it in the `pull_request` paths, a new version is first built by the run after the merge ([decision 7](#decisions-for-the-maintainer)).
 

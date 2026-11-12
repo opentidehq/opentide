@@ -13,8 +13,9 @@
 //! | `queries` | the query engines' codes, from the host's [`QueryCheck`] (UC-2.5, #820) |
 //! | every run | `nested_object_file` (warning), `scope_no_match` |
 //!
-//! Not here yet: the compile check (`compile_*`, the deploy payload's;
-//! Phase 3, `opentide-compile`) and the online part of `cve`.
+//! The online part of `cve` asks the host's [`CveCheck`] (UC-4.4, #834);
+//! without one it reports nothing. Not here yet: the compile check
+//! (`compile_*`, the deploy payload's; Phase 3, `opentide-compile`).
 
 pub mod annotate;
 pub mod objects;
@@ -244,6 +245,28 @@ pub trait QueryCheck: Sync {
     ) -> QueryFindings;
 }
 
+/// What Vulnerability-Lookup answered for one identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CveLookup {
+    /// It knows the identifier.
+    Found,
+    /// It does not.
+    NotFound,
+    /// It could not be asked: why.
+    Unavailable(String),
+}
+
+/// The online CVE lookup, which the host supplies: the HTTP client sits
+/// above this crate (`opentide-connectors`' `vulnerability`, UC-4.4, #834).
+pub trait CveCheck: Sync {
+    /// `text` as a canonical identifier (`CVE-2024-3094`), empty when blank
+    /// (`canonicalize_identifier`).
+    fn canonical(&self, text: &str) -> String;
+
+    /// Whether Vulnerability-Lookup knows `id`, which threat `threat` names.
+    fn lookup(&self, threat: &str, id: &str) -> CveLookup;
+}
+
 /// What a `validate` run does.
 #[derive(Clone, Copy, Default)]
 pub struct Options<'a> {
@@ -257,6 +280,8 @@ pub struct Options<'a> {
     pub queries: QueriesMode,
     /// The query analysis; without one the queries check reports nothing.
     pub query_check: Option<&'a dyn QueryCheck>,
+    /// The CVE lookup; without one the cve check reports nothing.
+    pub cve_check: Option<&'a dyn CveCheck>,
 }
 
 impl std::fmt::Debug for Options<'_> {
@@ -267,6 +292,7 @@ impl std::fmt::Debug for Options<'_> {
             .field("strict", &self.strict)
             .field("queries", &self.queries)
             .field("query_check", &self.query_check.is_some())
+            .field("cve_check", &self.cve_check.is_some())
             .finish()
     }
 }
@@ -600,6 +626,107 @@ fn clock_start() -> Option<Instant> {
     None
 }
 
+/// A YAML scalar as Python's `str` writes the value PyYAML built.
+fn python_text(node: &Node) -> String {
+    match &node.value {
+        Value::Null => "None".to_owned(),
+        Value::Bool(true) => "True".to_owned(),
+        Value::Bool(false) => "False".to_owned(),
+        other => other.to_string(),
+    }
+}
+
+/// The identifiers of a `cve` field, canonical, each once
+/// (`normalize_identifiers`).
+pub fn cve_identifiers(field: Option<&Node>, canonical: &dyn Fn(&str) -> String) -> Vec<String> {
+    let Some(field) = field else {
+        return Vec::new();
+    };
+    match &field.value {
+        Value::Null => Vec::new(),
+        Value::Seq(items) => {
+            let mut ids: Vec<String> = Vec::new();
+            for item in items {
+                let id = canonical(&python_text(item));
+                if !id.is_empty() && !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+            ids
+        }
+        _ => {
+            let id = canonical(&python_text(field));
+            if id.is_empty() { Vec::new() } else { vec![id] }
+        }
+    }
+}
+
+/// The findings of one threat's CVE references (`check_cve_issues`): an
+/// error naming those Vulnerability-Lookup does not know, a warning naming
+/// those it could not be asked about.
+fn cve_findings(threat: &crate::index::Object, lookup: &dyn CveCheck) -> Vec<Diagnostic> {
+    let ids = cve_identifiers(
+        threat
+            .root()
+            .and_then(|root| root.get("threat"))
+            .filter(|block| matches!(block.value, Value::Map(_)))
+            .and_then(|block| block.get("cve"))
+            .map(AsRef::as_ref),
+        &|text| lookup.canonical(text),
+    );
+    let mut broken: Vec<String> = Vec::new();
+    let mut unchecked: Vec<String> = Vec::new();
+    let mut error = String::new();
+    for id in ids {
+        match lookup.lookup(&threat.uuid, &id) {
+            CveLookup::Found => {}
+            CveLookup::NotFound => broken.push(id),
+            CveLookup::Unavailable(why) => {
+                unchecked.push(id);
+                error = why;
+            }
+        }
+    }
+    let mut found = Vec::new();
+    if !broken.is_empty() {
+        found.push(
+            Diagnostic::error(
+                "invalid_cve",
+                format!("Invalid CVE references: {}", broken.join(", ")),
+            )
+            .object(threat.uuid.as_str(), "threat")
+            .file(&threat.path)
+            .at(["threat", "cve"])
+            .suggest(Some(
+                "Confirm each identifier on Vulnerability-Lookup (https://vulnerability.circl.lu)."
+                    .to_owned(),
+            ))
+            .with("threat_id", threat.uuid.as_str())
+            .with("broken_cve", broken),
+        );
+    }
+    if !unchecked.is_empty() {
+        found.push(
+            Diagnostic::warning(
+                "cve_lookup_unavailable",
+                format!(
+                    "Could not check CVE references on Vulnerability-Lookup: {} ({error})",
+                    unchecked.join(", ")
+                ),
+            )
+            .object(threat.uuid.as_str(), "threat")
+            .file(&threat.path)
+            .at(["threat", "cve"])
+            .suggest(Some(
+                "Run `opentide validate --check cve` again once it is reachable.".to_owned(),
+            ))
+            .with("threat_id", threat.uuid.as_str())
+            .with("unchecked_cve", unchecked),
+        );
+    }
+    found
+}
+
 /// Runs `validate` over `ws`.
 #[expect(
     clippy::too_many_lines,
@@ -713,6 +840,25 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
 
     if has(Check::IdUniqueness) {
         issues.extend(id_uniqueness(index, &scope, ws));
+    }
+
+    if has(Check::Cve)
+        && let Some(lookup) = options.cve_check
+    {
+        for threat in index.family("threat") {
+            if !scope.includes_object_with(&threat.uuid, &threat.family, &threat.path, || {
+                listed.resolve(&threat.path)
+            }) {
+                continue;
+            }
+            for diagnostic in cve_findings(threat, lookup) {
+                if diagnostic.is_error() {
+                    issues.push(diagnostic);
+                } else {
+                    warnings.push(diagnostic);
+                }
+            }
+        }
     }
 
     for nested in &index.nested {

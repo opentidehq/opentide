@@ -114,6 +114,6 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 
 ## The analysis engine
 
-There is one project on PyPI, `opentide`, and one trusted publisher. The engine (`analysis/` and the engine crates in `crates/`, one Cargo workspace, Rust) is compiled into the package (`hatch_build.py`), so the workflow publishes one `cp310-abi3` wheel per platform, built with cibuildwheel (Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64), and an sdist that carries the workspace's manifests, sources and embedded data. It refuses to publish when a platform's wheel is missing or a wheel is not `cp310-abi3`.
+There is one project on PyPI, `opentide`, and one trusted publisher. The engine (`bindings/python/` and the engine crates in `crates/`, one Cargo workspace, Rust) is compiled into the package (`hatch_build.py`), so the workflow publishes one `cp310-abi3` wheel per platform, built with cibuildwheel (Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64), and an sdist that carries the workspace's manifests, sources and embedded data. It refuses to publish when a platform's wheel is missing or a wheel is not `cp310-abi3`.
 
 The engine builds from this repository by path, so a release needs no engine published first.

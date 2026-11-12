@@ -5,6 +5,10 @@ description: Programmatic validation with ValidationScope, ValidateCheck, and Va
 
 # Validation API
 
+<Callout type="warn">
+`run_validation` and `ValidationScope` are deprecated: they warn when your code calls them, and 0.25 removes them. Use [`Workspace.validate`](./workspace.md#validate), which takes the same checks and narrowing (`files`, `uuids`, `types`); see [Migration](./migration.md#validate).
+</Callout>
+
 Headless validation for scripts, services, and MCP tools.
 
 ## Full registry validation

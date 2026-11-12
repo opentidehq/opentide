@@ -1078,70 +1078,89 @@ fn docs_preview_shards_refresh_signals_and_references() {
     );
 }
 
+/// A stand-in Vulnerability-Lookup on the loopback: each request's line is
+/// recorded, and the record of `CVE-2024-3094` is known, every other
+/// identifier is not (`{}`).
+fn vulnerability_lookup() -> (String, Arc<Mutex<Vec<String>>>) {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&seen);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let mut header = String::new();
+            while reader.read_line(&mut header).unwrap() > 2 {
+                header.clear();
+            }
+            log.lock().unwrap().push(line.trim().to_owned());
+            let body = if line.contains("/CVE-2024-3094") {
+                r#"{"cveMetadata": {"cveId": "CVE-2024-3094", "datePublished": "2024-03-29T16:51:12Z", "state": "PUBLISHED"}, "containers": {"cna": {"title": "xz | backdoor", "metrics": [{"cvssV3_1": {"baseSeverity": "CRITICAL", "baseScore": 10.0}}]}}, "vulnerability-lookup:linked": {"github": [{"id": "GHSA-rxwq-x6h5-qc8m"}]}}"#
+            } else {
+                "{}"
+            };
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    (base, seen)
+}
+
 /// A threat that lists CVEs, with `[cve] retrieve_details` on (the default):
-/// its page needs each record's details, which only the Python engine
-/// fetches, so every run that writes it is refused with `engine_not_ported`
-/// before any page is written (`OPENTIDE_ENGINE=compare` then runs Python
-/// alone); a run that does not write it, and every run with the setting off,
-/// writes as before, the CVEs as links.
+/// its page is a table of each record's details, asked of Vulnerability-Lookup
+/// once per identifier with its linked records (UC-4.4, #834); with the
+/// setting off, the CVEs are links.
 #[test]
-fn docs_with_cve_details_are_left_to_python() {
+fn docs_with_cve_details_fetch_each_record() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     fixture("tide-corpus", &ws);
     let threat = ws.join("Objects/Threat Vectors/threat-0001-simulated-actor.yaml");
     let mut text = std::fs::read_to_string(&threat).unwrap();
-    text.push_str("  cve:\n    - CVE-2024-3094\n");
+    text.push_str("  cve:\n    - CVE-2024-3094\n    - cve-2024-9999\n    - GCVE-0-2024-3094\n");
     std::fs::write(&threat, text).unwrap();
-    for words in [
-        &["--json", "generate", "docs"][..],
-        &["--json", "generate", "docs", "--threats"],
-        &["--json", "generate", "docs", "--rules", "--threats"],
-        &["--json", "generate", "docs", "threats"],
-    ] {
-        let (code, stdout) = run_at(&ws, words);
-        assert_eq!(code, 2, "{words:?}: {stdout}");
-        let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-        assert_eq!(
-            document["failure"]["code"], "engine_not_ported",
-            "{words:?}: {stdout}"
-        );
-        assert_eq!(document["failure"]["argument"], "OPENTIDE_ENGINE");
-        let message = document["failure"]["message"].as_str().unwrap();
-        assert!(
-            message.starts_with("The CVE details of Simulated Actor ([cve] retrieve_details)"),
-            "{message}"
-        );
-        assert!(!ws.join("docs").exists(), "{words:?} wrote pages");
-    }
-    // Rules and the index carry no CVE section.
-    for words in [
-        &["--json", "generate", "docs", "rules"][..],
-        &["--json", "generate", "docs", "index"],
-    ] {
-        let (code, stdout) = run_at(&ws, words);
-        assert_eq!(code, 0, "{words:?}: {stdout}");
-    }
-    assert!(!ws.join("docs/threats/simulated-actor.md").exists());
-    // --changed: refused when a changed object's pages include the threat's.
-    git_at(&ws, &["init", "-q", "-b", "main"]);
-    git_at(&ws, &["add", "-A"]);
-    git_at(&ws, &["commit", "-q", "-m", "base"]);
-    let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
-    let text = std::fs::read_to_string(&rule).unwrap();
+    let (base, seen) = vulnerability_lookup();
     std::fs::write(
-        &rule,
-        text.replacen("name: Sentinel KQL Rule", "name: Renamed Sentinel Rule", 1),
+        ws.join(".opentide/configurations/documentation.toml"),
+        format!("[cve]\nbase_url = \"{base}\"\n"),
     )
     .unwrap();
-    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "--changed"]);
-    assert_eq!(code, 2, "{stdout}");
-    assert!(
-        stdout.contains("\"code\":\"engine_not_ported\""),
-        "{stdout}"
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "threats"]);
+    assert_eq!(code, 0, "{stdout}");
+    let page = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
+    let section = &page[page.find("## CVE").unwrap()..];
+    let section = &section[..section.find("\n## ").unwrap()];
+    // The bundled documentation.toml's `default_db_link` places the pages.
+    const PAGES: &str = "https://vulnerability.circl.lu/vuln/";
+    assert_eq!(
+        section,
+        format!(
+            "## CVE\nIdentifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
+             which aggregates CVE, GHSA, CSAF, NVD, and related feeds.\n\n\
+             | Identifier | Published | Severity | Summary |\n\
+             | --- | --- | --- | --- |\n\
+             | [CVE-2024-3094]({PAGES}CVE-2024-3094)<br>[GHSA-rxwq-x6h5-qc8m]({PAGES}GHSA-rxwq-x6h5-qc8m) \
+             | 2024-03-29 | CRITICAL (10.0) | xz \\| backdoor |\n\
+             | [CVE-2024-9999]({PAGES}CVE-2024-9999) | - | - | Not found in Vulnerability-Lookup. |\n\n\
+             Could not resolve: `CVE-2024-9999`.\n"
+        )
     );
-    assert!(!ws.join("docs/rules/renamed-sentinel-rule.md").exists());
-    // With the setting off, the page lists the CVE as a link.
+    // GCVE-0-2024-3094 is CVE-2024-3094: one row, one request each.
+    assert_eq!(
+        *seen.lock().unwrap(),
+        [
+            "GET /api/vulnerability/CVE-2024-3094?with_linked=true HTTP/1.1",
+            "GET /api/vulnerability/CVE-2024-9999?with_linked=true HTTP/1.1"
+        ]
+    );
+    // With the setting off, the page lists the CVEs as links, and asks nothing.
     std::fs::write(
         ws.join(".opentide/configurations/documentation.toml"),
         "[cve]\nretrieve_details = false\n",
@@ -1154,6 +1173,7 @@ fn docs_with_cve_details_are_left_to_python() {
         page.contains("- [CVE-2024-3094](https://vulnerability.circl.lu/vuln/CVE-2024-3094)\n"),
         "{page}"
     );
+    assert_eq!(seen.lock().unwrap().len(), 2);
 }
 
 /// `[paths.core] docs_folder` (CoreTIDE's docs folder) is not a key of

@@ -1,3 +1,3 @@
-# The round-trip test compares serde_yaml's output, which is always LF, with
+# The round-trip test compares the YAML writer's output, which is always LF, with
 # these files byte for byte: check them out with LF on every OS, Windows too.
 * text eol=lf

@@ -5,6 +5,10 @@ description: opentide registry lifecycle, typed object access, configuration acc
 
 # Registry API
 
+<Callout type="warn">
+The registry is deprecated: `Opentide.initialise()` and `from opentide import Opentide` warn when your code calls them, and 0.25 removes them. Open a [`Workspace`](./workspace.md) instead; [Migration](./migration.md) maps each accessor to its replacement.
+</Callout>
+
 `Opentide` is a module-level singleton of `OpentideRegistry` with explicit initialisation.
 
 ```python

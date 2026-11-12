@@ -1,6 +1,6 @@
 ---
 title: Rust SDK
-description: The opentide crate — open a Tide workspace from Rust, validate and lint it, read its catalogue and coverage, plan a deploy, and run the command line.
+description: The opentide crate — open a Tide workspace from Rust, validate and lint it, read its catalogue and coverage, plan a deploy, query and deploy to tenants, and run the command line.
 ---
 
 # Rust SDK
@@ -34,8 +34,9 @@ cargo install --git https://github.com/opentidehq/opentide opentide --features c
 | `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
 | `lsp` | no | `opentide::lsp`: the language server, on stdio or one message at a time |
+| `connectors` | no | `opentide::connectors`: the tenants a workspace configures (`Workspace::tenants`), and on each a query run, a live query check and a rule deploy; async, on tokio; implies `compile` |
 
-Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. Turn the check off (`QueriesMode::Off`) to validate without it. The platform connectors (deploy, live query validation, query runs) will come behind a `connectors` feature once the platforms run on them.
+Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. Turn the check off (`QueriesMode::Off`) to validate without it.
 
 ## Open a workspace
 
@@ -143,6 +144,70 @@ fn main() -> Result<(), opentide::Error> {
 }
 ```
 
+## Query, check and deploy on tenants
+
+With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment (an unset `$NAME` is an error naming the variable, never sent). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`); `TenantConfig::new` describes one in code.
+
+| Operation | Command line | Returns |
+|-----------|--------------|---------|
+| `Connection::query(&QueryRequest)` | `opentide query` | `QueryOutcome`: columns, rows (at most `limit`), `truncated`, the vendor's warnings |
+| `Connection::validate_query(&QueryRequest)` | `opentide validate query --live` | `LiveCheck`: the one-row search's result, and the `errors` that still fail the query |
+| `Connection::deploy(&DeployRequest)` | one rule of `opentide deploy` | `DeployOutcome`: the platform's identifier of the rule |
+
+The operations are `async`, as the connectors are: run them on a [tokio](https://tokio.rs) runtime (`connection.query(&request).await`), or from synchronous code with `opentide::connectors::block_on`, which starts a runtime of its own (never call it inside one). A query saves nothing on the tenant. `Connection::canceller()` stops a running operation from elsewhere (the error's code is then `interrupted`), and a search the connector stops waiting for is stopped on the tenant where the API allows it (CrowdStrike). `crates/opentide/examples/query.rs`:
+
+```bash
+cargo run -p opentide --features connectors --example query -- path/to/workspace splunk spl 'index=main | head 5'
+```
+
+```rust ignore
+use std::io::Write;
+use std::path::Path;
+
+use opentide::connectors::{self, ConnectOptions, Connection, QueryRequest, TimeWindow, Timestamp};
+use opentide::{Options, Workspace};
+
+/// Runs `query`, written in `language` (`spl`, `kql`, `esql`, `powerquery`,
+/// ...), on the first tenant the workspace at `path` configures for
+/// `platform`, over the last 24 hours, and writes each row to `out` as one
+/// JSON line.
+pub fn run(
+    path: &Path,
+    platform: &str,
+    language: &str,
+    query: &str,
+    options: &ConnectOptions,
+    out: &mut dyn Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let ws = Workspace::open(path, &Options::default())?;
+    let Some(tenant) = ws.tenants(platform).into_iter().next() else {
+        return Err(format!("{} configures no {platform} tenant", path.display()).into());
+    };
+    let connection = Connection::open(&tenant, options)?;
+    let now = Timestamp::now();
+    let window = TimeWindow {
+        start: now.checked_sub(std::time::Duration::from_secs(24 * 60 * 60))?,
+        end: now,
+    };
+    let mut request = QueryRequest::new(query, language, window);
+    request.limit = 10;
+    // A synchronous caller runs the async operation on a runtime of its own;
+    // in a tokio task, `connection.query(&request).await?` instead.
+    let outcome = connectors::block_on(connection.query(&request))??;
+    for row in &outcome.rows {
+        writeln!(out, "{}", serde_json::to_string(row)?)?;
+    }
+    if outcome.truncated {
+        writeln!(out, "(more than {} rows)", request.limit)?;
+    }
+    Ok(())
+}
+```
+
+A platform whose connector cannot do an operation answers `operation_unsupported`, never a faked result: CrowdStrike, HarfangLab and Sysdig cannot check a query live, Sysdig runs no queries, and Elastic and Sysdig rules deploy through `opentide deploy` only (`opentide::connectors::capabilities(platform)` says which). A `DeployRequest` carries one rule's compiled body for one tenant, as `deploy_plan`'s payloads hold it, sent as its bytes; a whole deploy run (the plan, the deployment state, the retirements) is the command line's `deploy` (`cli::run_json`).
+
+Failures are `Error::Connector`, with the platform, the tenant and, when the tenant gave a reason, the vendor's words in `detail`. Messages name a tenant by its address (scheme, host and port), never a path, a query string or a credential, and no `Debug` prints a secret.
+
 ## Run the command line
 
 With the `cli` feature, `opentide::cli::run_json` runs one command in the process and returns its `--json` document, and `opentide::cli::main` is the whole program:
@@ -157,7 +222,7 @@ fn main() -> Result<(), opentide::Error> {
 
 ## Errors
 
-Every fallible call returns `opentide::Error`. Its variants each map to a stable code (`Error::code`): `configuration_invalid` or the configuration check's own code, `io_error`, the command line's usage codes, `no_json_document`, `lsp_failed`. Match on the code, not the message. New variants can come in a minor release, so a `match` needs a wildcard arm. Findings about the workspace are not errors: they are `Diagnostic`s in a report.
+Every fallible call returns `opentide::Error`. Its variants each map to a stable code (`Error::code`): `configuration_invalid` or the configuration check's own code, `io_error`, the command line's usage codes, `no_json_document`, `lsp_failed`, and with `connectors` `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported` and `runtime_unavailable`. Match on the code, not the message. New variants can come in a minor release, so a `match` needs a wildcard arm. Findings about the workspace are not errors: they are `Diagnostic`s in a report.
 
 ## Stability
 

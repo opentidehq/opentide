@@ -109,7 +109,13 @@ def run_validation(
     that fails is a difference too, never the call's failure. A run no
     ``validate`` command line can make (a given *index*, a set of checks
     that is neither the defaults nor one check) runs Python.
+
+    Deprecated outside opentide (UC-5.2, #837): use
+    :meth:`opentide.Workspace.validate`.
     """
+    from opentide._deprecation import warn_external
+
+    warn_external("opentide.validation.session.run_validation()", "opentide.Workspace.validate()")
     from opentide.validation import engine as engines
 
     selected = engines.validation_engine()

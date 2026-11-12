@@ -11,7 +11,7 @@
 //! `model_validate` reports every error with Pydantic's type, location and
 //! message, raised as [`ValidationError`] (a `ValueError`, as Pydantic's is).
 //!
-//! The binding (`analysis/`, `opentide._native`) exports [`models`] as its
+//! The binding (`bindings/python/`, `opentide._native`) exports [`models`] as its
 //! submodule `opentide._native.models`; the stubs are generated from it
 //! (`cargo xtask stubs`).
 

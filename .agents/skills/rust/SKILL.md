@@ -1,6 +1,6 @@
 ---
 name: rust
-description: The working loop for opentide's Cargo workspace - the pinned toolchain, clippy under the workspace lints, nextest's fast and ci profiles, insta snapshot review, trycmd cases, cargo xtask check-layers, and worktrees with one Cargo target pool each. Use when building, linting or testing any Rust crate here (crates/, analysis/, xtask/, a new unified-core crate), when clippy, nextest or the layer check fails, or when running several agents in parallel. The engine crates' coding rules are in rust-engine.
+description: The working loop for opentide's Cargo workspace - the pinned toolchain, clippy under the workspace lints, nextest's fast and ci profiles, insta snapshot review, trycmd cases, cargo xtask check-layers, and worktrees with one Cargo target pool each. Use when building, linting or testing any Rust crate here (crates/, bindings/python/, xtask/, a new unified-core crate), when clippy, nextest or the layer check fails, or when running several agents in parallel. The engine crates' coding rules are in rust-engine.
 ---
 
 # Rust workspace: the loop

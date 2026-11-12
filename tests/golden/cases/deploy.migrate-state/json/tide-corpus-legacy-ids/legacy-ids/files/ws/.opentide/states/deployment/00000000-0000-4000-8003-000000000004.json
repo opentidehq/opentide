@@ -1,0 +1,9 @@
+{
+  "object_uuid": "00000000-0000-4000-8003-000000000004",
+  "platforms": {
+    "sentinel_one": {
+      "soc": "901"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

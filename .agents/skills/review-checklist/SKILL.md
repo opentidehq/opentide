@@ -101,7 +101,7 @@ triggers it; drop anything you cannot tie to a trigger.
 - [ ] **Caches have an invalidation story.** The MCP server lives for hours: tools that answer
       "is this valid now?" must not serve the index from start-up.
 
-## Rust (crates/, analysis/, xtask/)
+## Rust (crates/, bindings/python/, xtask/)
 
 The workspace's lints catch most of these at compile time; review what they cannot see. The loop
 and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../crates/AGENTS.md).
