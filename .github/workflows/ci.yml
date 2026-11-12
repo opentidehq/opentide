@@ -464,7 +464,9 @@ jobs:
           baseline="$(git rev-parse HEAD^1)"
           if git cat-file -e "${baseline}:crates/opentide/Cargo.toml" 2>/dev/null; then
             git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${baseline}"
-            cargo semver-checks --manifest-path crates/opentide/Cargo.toml --all-features \
+            # -p names the crate: semver-checks skips a `publish = false`
+            # crate it is not asked for by name, and still exits 0.
+            cargo semver-checks -p opentide --manifest-path crates/opentide/Cargo.toml --all-features \
               --baseline-root "${RUNNER_TEMP}/opentide-baseline/crates/opentide"
           else
             echo "::notice::crates/opentide is new in this change: no baseline API to check against"

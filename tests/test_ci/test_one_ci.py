@@ -486,3 +486,20 @@ def test_only_report_uploads_may_fail_without_failing_their_job() -> None:
                 label = step.get("name") or step.get("run")
                 assert "continue-on-error" not in step, (job_id, label)
     assert uploads >= 7
+
+
+def test_the_facade_semver_check_names_the_crate_and_isolates_the_baseline() -> None:
+    """The facade is ``publish = false`` and its name is also held by a placeholder.
+
+    cargo-semver-checks skips a crate with ``publish = false`` unless ``-p``
+    names it (and exits 0, so the check would pass without running), and
+    ``--baseline-rev`` searches the whole tree, where
+    ``publishing/placeholders/crates/opentide`` is a second ``opentide``.
+    """
+    steps = _ci_jobs()["facade"]["steps"]
+    run = next(str(step["run"]) for step in steps if "semver-checks" in str(step.get("run", "")))
+    command = " ".join(run.replace("\\\n", " ").split())
+    assert "cargo semver-checks -p opentide " in command
+    assert "--baseline-root" in command
+    assert "/crates/opentide" in command.split("--baseline-root", 1)[1]
+    assert "--baseline-rev" not in command
