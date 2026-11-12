@@ -409,7 +409,7 @@ url = "https://cloud.google.com/chronicle/docs/yara-l/functions#mathrandom"
 name = "math.round"
 namespace = "math"
 signature = "math.round(numericExpression, decimalPlaces)"
-min_args = 2
+min_args = 1
 max_args = 2
 params = ["NUMBER"]
 result = "NUMBER"
@@ -439,6 +439,16 @@ availability = ["rules", "search", "dashboards"]
 aggregation = true
 summary = "Largest value in the match window or group."
 url = "https://cloud.google.com/chronicle/docs/yara-l/outcome-syntax"
+
+[[functions]]
+name = "metrics.alert_event_name_count"
+namespace = "metrics"
+signature = "metrics.alert_event_name_count(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
 
 [[functions]]
 name = "metrics.auth_attempts_fail"
@@ -471,9 +481,179 @@ summary = "A Risk Analytics metric over the period and window, aggregated as `ag
 url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
 
 [[functions]]
+name = "metrics.dns_bytes_outbound"
+namespace = "metrics"
+signature = "metrics.dns_bytes_outbound(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.dns_queries_fail"
+namespace = "metrics"
+signature = "metrics.dns_queries_fail(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.dns_queries_success"
+namespace = "metrics"
+signature = "metrics.dns_queries_success(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.dns_queries_total"
+namespace = "metrics"
+signature = "metrics.dns_queries_total(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.file_executions_fail"
+namespace = "metrics"
+signature = "metrics.file_executions_fail(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.file_executions_success"
+namespace = "metrics"
+signature = "metrics.file_executions_success(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.file_executions_total"
+namespace = "metrics"
+signature = "metrics.file_executions_total(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.http_queries_fail"
+namespace = "metrics"
+signature = "metrics.http_queries_fail(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.http_queries_success"
+namespace = "metrics"
+signature = "metrics.http_queries_success(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.http_queries_total"
+namespace = "metrics"
+signature = "metrics.http_queries_total(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.network_bytes_inbound"
+namespace = "metrics"
+signature = "metrics.network_bytes_inbound(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
 name = "metrics.network_bytes_outbound"
 namespace = "metrics"
 signature = "metrics.network_bytes_outbound(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.network_bytes_total"
+namespace = "metrics"
+signature = "metrics.network_bytes_total(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.resource_creation_success"
+namespace = "metrics"
+signature = "metrics.resource_creation_success(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.resource_creation_total"
+namespace = "metrics"
+signature = "metrics.resource_creation_total(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.resource_deletion_success"
+namespace = "metrics"
+signature = "metrics.resource_deletion_success(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.resource_read_fail"
+namespace = "metrics"
+signature = "metrics.resource_read_fail(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
+min_args = 1
+result = "NUMBER"
+availability = ["rules"]
+summary = "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments)."
+url = "https://cloud.google.com/chronicle/docs/detection/metrics-functions"
+
+[[functions]]
+name = "metrics.resource_read_success"
+namespace = "metrics"
+signature = "metrics.resource_read_success(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)"
 min_args = 1
 result = "NUMBER"
 availability = ["rules"]
@@ -938,7 +1118,7 @@ min_args = 1
 max_args = 2
 params = ["INT|FLOAT"]
 result = "FLOAT"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "Returns the average of the input values (which can be Integers or Floats)."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowavg"
 
@@ -950,7 +1130,7 @@ min_args = 2
 max_args = 2
 params = ["INT", "STRING"]
 result = "STRING"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "This aggregation function returns a string value derived from an event with the lowest correlated int value in the match window."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowfirst"
 
@@ -962,7 +1142,7 @@ min_args = 2
 max_args = 2
 params = ["INT", "STRING"]
 result = "STRING"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "This aggregation function returns a string value derived from an event with the highest correlated int value in the match window."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowlast"
 
@@ -974,7 +1154,7 @@ min_args = 1
 max_args = 2
 params = ["INT|FLOAT", "BOOL"]
 result = "FLOAT"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "Return the median of the input values."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowmedian"
 
@@ -986,7 +1166,7 @@ min_args = 1
 max_args = 1
 params = ["INT|FLOAT|STRING"]
 result = "STRING"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "Return the mode of the input values."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowmode"
 
@@ -1010,7 +1190,7 @@ min_args = 1
 max_args = 1
 params = ["INT|FLOAT"]
 result = "FLOAT"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "Returns the standard deviation of input values in a match window."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowstddev"
 
@@ -1022,6 +1202,6 @@ min_args = 1
 max_args = 1
 params = ["INT|FLOAT"]
 result = "FLOAT"
-availability = ["rules"]
+availability = ["rules", "search"]
 summary = "This function returns the specified variance of the input values."
 url = "https://cloud.google.com/chronicle/docs/yara-l/functions#windowvariance"

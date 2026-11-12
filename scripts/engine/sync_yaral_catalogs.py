@@ -120,7 +120,16 @@ ARITY_FIXES = {
     "window.median": (1, 2),
     # "The default delimiter is a comma", with an example that omits it.
     "strings.split": (1, 2),
+    # "rounded to the nearest integer or to the specified number of decimal
+    # places", with `math.round(10.7)` and `math.round(4)` as examples.
+    "math.round": (1, 2),
 }
+# Functions the functions page marks "Rules" only that Google's own searches
+# call (yara-l-1.0 1.1, "Function catalogue"): investigation/multi-stage-yaral
+# (`window.avg`, `window.stddev`, `window.median`), yara-l/transition_spl_yaral
+# (`window.first`, `window.last`), reference/sample-yaral-for-native-dashboard
+# (`window.avg`). Every `window.*` function is offered in search.
+SEARCH_TOO = ("window.",)
 AVAILABILITY = {"Rules": "rules", "Search": "search", "Dashboards": "dashboards"}
 # Field names the Markdown export mangles: it reads `_key_` in
 # `registry_key` as emphasis. The HTML page and Google's rules spell them so.
@@ -369,12 +378,16 @@ def parse_functions(page: str, metrics: str) -> list[dict]:
                 "max_args": max_args,
                 "params": param_types,
                 "result": clean(result).split(" ")[0] if result else "",
-                "availability": chips,
+                "availability": chips
+                + (["search"] if name.startswith(SEARCH_TOO) and "search" not in chips else []),
                 "summary": first_sentence(clean(description)),
                 "url": f"{CITED['functions.html']}#{heading.group(1)}",
             }
         )
-    for fn in sorted(set(re.findall(r"metrics\.([a-z_]+)\(", metrics))):
+    # Every function the page documents, under its "Functions" heading, not
+    # only those an example happens to call.
+    documented = metrics.split("\n## Functions", 1)[-1]
+    for fn in sorted(set(re.findall(r"`metrics\.([a-z_]+)`", documented))):
         out.append(
             {
                 "name": f"metrics.{fn}",
