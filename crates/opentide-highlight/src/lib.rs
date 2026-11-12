@@ -972,7 +972,11 @@ pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
         LanguageId::Kql,
     ),
     (&["splunk"], &["query", "search"], LanguageId::Spl),
-    (&["carbon_black_cloud"], &["query"], LanguageId::Lucene),
+    (
+        &["carbon_black_cloud", "graylog"],
+        &["query"],
+        LanguageId::Lucene,
+    ),
     // The rule's condition; a macro's (`macros[].condition`) is a level
     // deeper and is left to semantic tokens.
     (&["sysdig"], &["condition"], LanguageId::Falco),

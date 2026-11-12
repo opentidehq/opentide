@@ -6,6 +6,7 @@
 pub mod bitdefender;
 mod elastic;
 mod falco;
+pub mod graylog;
 mod injection;
 mod intel;
 mod lint;
@@ -76,7 +77,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "splunk", "query"] | ["configurations", "splunk", "search"] => {
             Some(LanguageId::Spl)
         }
-        ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
+        ["configurations", "carbon_black_cloud" | "graylog", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
         // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
@@ -874,6 +875,15 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         ));
     }
 
+    if let Some(block) = object
+        .configurations
+        .as_ref()
+        .and_then(|c| c.get("graylog"))
+        .filter(|b| b.is_mapping())
+    {
+        diagnostics.extend(graylog::constraint_diagnostics(input.source, block));
+    }
+
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
         diagnostics.extend(falco::source_diagnostics(input.source, block));
         diagnostics.extend(falco::tuning_diagnostics(input.source, block));
@@ -1024,11 +1034,7 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Lucene => {
-                let dialect = if inj.platform == "carbon_black_cloud" {
-                    opentide_lucene::Dialect::CarbonBlack
-                } else {
-                    opentide_lucene::Dialect::Elastic
-                };
+                let dialect = opentide_lucene::Dialect::for_platform(&inj.platform);
                 let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
                 let indices = (dialect == opentide_lucene::Dialect::Elastic)
                     .then(|| elastic::ecs_indices(configurations, &inj.field_path))
@@ -2853,6 +2859,14 @@ threat:
             Some(LanguageId::Lucene)
         );
         assert_eq!(
+            language_for_field_path(&["configurations", "graylog", "query"]),
+            Some(LanguageId::Lucene)
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "graylog", "aggregation", "condition"]),
+            None
+        );
+        assert_eq!(
             language_for_field_path(&["configurations", "sysdig", "condition"]),
             Some(LanguageId::Falco)
         );
@@ -3338,6 +3352,86 @@ configurations:
                 .iter()
                 .all(|d| d.severity != opentide_core::Severity::Error),
             "{lucene:?}"
+        );
+    }
+
+    #[test]
+    fn graylog_query_is_lucene_in_its_dialect() {
+        let src = r#"name: Graylog rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000067
+  schema: rule::1.0
+configurations:
+  graylog:
+    enabled: true
+    schema: platform::graylog::1.0
+    status: STAGING
+    query: |
+      EventID:1 AND Image:*cmd.exe
+      AND CommandLine_lc:/(?i).*whoami.*/ AND _exists_:User
+"#;
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/graylog-rule.yaml",
+            source: src,
+            workspace: &[],
+            elastic_tenants: &[],
+        });
+        let path: Vec<String> = ["configurations", "graylog", "query"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let at = |code: &str| {
+            r.diagnostics
+                .iter()
+                .find(|d| d.code == code)
+                .unwrap_or_else(|| panic!("{code}: {:?}", r.diagnostics))
+        };
+        let wildcard = at(codes::GRAYLOG_LEADING_WILDCARD);
+        assert_eq!(wildcard.field_path.as_ref(), Some(&path));
+        assert_eq!(wildcard.severity, opentide_core::Severity::Error);
+        // The range is `*cmd.exe` on the query's first line.
+        assert_eq!(
+            (wildcard.range.start.line, wildcard.range.start.character),
+            (10, 26)
+        );
+        assert_eq!(wildcard.range.end.character, 34);
+        let unsupported = at(codes::GRAYLOG_REGEX_UNSUPPORTED);
+        assert_eq!(
+            (
+                unsupported.range.start.line,
+                unsupported.range.start.character
+            ),
+            (11, 26)
+        );
+        // Graylog takes `_exists_`, and the PCRE group is reported once.
+        assert!(
+            r.diagnostics
+                .iter()
+                .all(|d| d.code != codes::LUCENE_ELASTICSEARCH_ONLY
+                    && d.code != codes::LUCENE_REGEXP),
+            "{:?}",
+            r.diagnostics
+        );
+        // The same query on Elastic has no Graylog code.
+        let elastic = src
+            .replace("graylog:", "elastic:")
+            .replace("platform::graylog::1.0", "platform::elastic::1.0")
+            .replace(
+                "status: STAGING",
+                "status: STAGING\n    type: query\n    language: lucene",
+            );
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/elastic-rule.yaml",
+            source: &elastic,
+            workspace: &[],
+            elastic_tenants: &[],
+        });
+        assert!(
+            r.diagnostics
+                .iter()
+                .all(|d| !d.code.starts_with("graylog_")),
+            "{:?}",
+            r.diagnostics
         );
     }
 

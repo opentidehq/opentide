@@ -49,8 +49,8 @@ enum Command {
         #[arg(long)]
         language: Option<String>,
         /// The detection platform a query file is for, as a `configurations`
-        /// key: `carbon_black_cloud` checks Lucene in the Carbon Black
-        /// dialect, `defender_for_endpoint` KQL against the Defender schema.
+        /// key: `carbon_black_cloud` and `graylog` check Lucene in their
+        /// dialects, `defender_for_endpoint` KQL against the Defender schema.
         #[arg(long)]
         platform: Option<String>,
     },

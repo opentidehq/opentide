@@ -1,0 +1,23 @@
+# An event key that is not an event field. Expected constraint code: graylog_event_key.
+name: Graylog invalid block (rule-graylog-event-key.yaml)
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000065
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Invalid Graylog block fixture.
+response:
+  alert_severity: Medium
+configurations:
+  graylog:
+    enabled: true
+    schema: platform::graylog::1.0
+    status: STAGING
+    query: 'EventID:1'
+    event_fields:
+      host: source
+    event_key: [host, user]

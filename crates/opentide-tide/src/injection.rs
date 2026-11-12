@@ -17,10 +17,10 @@
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
-//! (`sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`, or
-//! `elastic` with the entry's `language`). Any other `system` (`Sentinel`,
-//! `Splunk ES`, `MDE`) is not analysed: the language is never guessed
-//! (specifications#58).
+//! (`sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`,
+//! `graylog`, or `elastic` with the entry's `language`). Any other `system`
+//! (`Sentinel`, `Splunk ES`, `MDE`) is not analysed: the language is never
+//! guessed (specifications#58).
 //!
 //! Nothing else is a query. A Splunk notable's drilldown search
 //! (`configurations.splunk.actions.notable.drilldown.search`) is a template

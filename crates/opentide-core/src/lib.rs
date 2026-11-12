@@ -554,6 +554,14 @@ pub mod codes {
     pub const LUCENE_BARE_TERM: &str = "lucene_bare_term";
     pub const LUCENE_LOOKS_LIKE_KUERY: &str = "lucene_looks_like_kuery";
     pub const LUCENE_ELASTICSEARCH_ONLY: &str = "lucene_elasticsearch_only";
+    // The Graylog dialect of Lucene (graylog-1.0, "Query diagnostics").
+    pub const GRAYLOG_LEADING_WILDCARD: &str = "graylog_leading_wildcard";
+    pub const GRAYLOG_REGEX_UNSUPPORTED: &str = "graylog_regex_unsupported";
+    pub const GRAYLOG_REGEX_OPERATOR: &str = "graylog_regex_operator";
+    pub const GRAYLOG_REGEX_QUOTE: &str = "graylog_regex_quote";
+    pub const GRAYLOG_OPEN_RANGE: &str = "graylog_open_range";
+    pub const GRAYLOG_DOUBLE_BACKSLASH: &str = "graylog_double_backslash";
+    pub const GRAYLOG_ANALYZED_FIELD: &str = "graylog_analyzed_field";
     pub const KUERY_QUESTION_MARK: &str = "kuery_question_mark";
     pub const KUERY_FREE_TEXT: &str = "kuery_free_text";
     pub const KUERY_LOOKS_LIKE_LUCENE: &str = "kuery_looks_like_lucene";
@@ -643,6 +651,18 @@ pub mod codes {
     pub const BITDEFENDER_REGISTRY_FULL_HIVE: &str = "bitdefender_registry_full_hive";
     pub const BITDEFENDER_CONTAINS_NO_WILDCARD: &str = "bitdefender_contains_no_wildcard";
     pub const BITDEFENDER_SEVERITY_COLLAPSED: &str = "bitdefender_severity_collapsed";
+    // Graylog block codes (graylog-1.0, Constraints and Advisories), as
+    // opentide names them.
+    pub const GRAYLOG_QUERY_BLANK: &str = "graylog_query_blank";
+    pub const GRAYLOG_LIST_SHAPE: &str = "graylog_list_shape";
+    pub const GRAYLOG_SCHEDULE: &str = "graylog_schedule";
+    pub const GRAYLOG_EVENT_LIMIT: &str = "graylog_event_limit";
+    pub const GRAYLOG_AGGREGATION: &str = "graylog_aggregation";
+    pub const GRAYLOG_EVENT_FIELD: &str = "graylog_event_field";
+    pub const GRAYLOG_EVENT_KEY: &str = "graylog_event_key";
+    pub const GRAYLOG_PRIORITY: &str = "graylog_priority";
+    pub const GRAYLOG_FIELD_NAME: &str = "graylog_field_name";
+    pub const GRAYLOG_OVERLAPPING_WINDOW: &str = "graylog_overlapping_window";
 
     // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
     pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
@@ -772,6 +792,13 @@ pub mod codes {
         LUCENE_BARE_TERM,
         LUCENE_LOOKS_LIKE_KUERY,
         LUCENE_ELASTICSEARCH_ONLY,
+        GRAYLOG_LEADING_WILDCARD,
+        GRAYLOG_REGEX_UNSUPPORTED,
+        GRAYLOG_REGEX_OPERATOR,
+        GRAYLOG_REGEX_QUOTE,
+        GRAYLOG_OPEN_RANGE,
+        GRAYLOG_DOUBLE_BACKSLASH,
+        GRAYLOG_ANALYZED_FIELD,
         KUERY_QUESTION_MARK,
         KUERY_FREE_TEXT,
         KUERY_LOOKS_LIKE_LUCENE,
@@ -850,6 +877,16 @@ pub mod codes {
         BITDEFENDER_REGISTRY_FULL_HIVE,
         BITDEFENDER_CONTAINS_NO_WILDCARD,
         BITDEFENDER_SEVERITY_COLLAPSED,
+        GRAYLOG_QUERY_BLANK,
+        GRAYLOG_LIST_SHAPE,
+        GRAYLOG_SCHEDULE,
+        GRAYLOG_EVENT_LIMIT,
+        GRAYLOG_AGGREGATION,
+        GRAYLOG_EVENT_FIELD,
+        GRAYLOG_EVENT_KEY,
+        GRAYLOG_PRIORITY,
+        GRAYLOG_FIELD_NAME,
+        GRAYLOG_OVERLAPPING_WINDOW,
         CQL_PARSE_ERROR,
         CQL_UNKNOWN_FUNCTION,
         CQL_REMOVED_FUNCTION,
@@ -1041,6 +1078,27 @@ pub mod codes {
             }
             LUCENE_ELASTICSEARCH_ONLY => {
                 "The syntax works in Elasticsearch but not in Carbon Black Cloud."
+            }
+            GRAYLOG_LEADING_WILDCARD => {
+                "A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form."
+            }
+            GRAYLOG_REGEX_UNSUPPORTED => {
+                "A Graylog regex uses an inline flag, a `(?…)` group, `\\b`, `\\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query."
+            }
+            GRAYLOG_REGEX_OPERATOR => {
+                "A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character."
+            }
+            GRAYLOG_REGEX_QUOTE => {
+                "A Graylog regex holds an unescaped `\"`, which Lucene reads as a quoted literal, not the character: escape it as `\\\"`."
+            }
+            GRAYLOG_OPEN_RANGE => {
+                "A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`."
+            }
+            GRAYLOG_DOUBLE_BACKSLASH => {
+                "A Graylog query holds four backslashes in a row: `\\\\` is already one literal backslash, so `\\\\\\\\` matches two."
+            }
+            GRAYLOG_ANALYZED_FIELD => {
+                "A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value."
             }
             KUERY_QUESTION_MARK => {
                 "? is a literal in Kibana KQL (kuery), not a single-character wildcard."
@@ -1240,6 +1298,32 @@ pub mod codes {
             }
             BITDEFENDER_SEVERITY_COLLAPSED => {
                 "`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`."
+            }
+            GRAYLOG_QUERY_BLANK => "A Graylog block's `query` is missing or blank.",
+            GRAYLOG_LIST_SHAPE => {
+                "A Graylog list field is not one string or a list of distinct non-blank strings."
+            }
+            GRAYLOG_SCHEDULE => {
+                "A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`."
+            }
+            GRAYLOG_EVENT_LIMIT => {
+                "A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation."
+            }
+            GRAYLOG_AGGREGATION => {
+                "A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments."
+            }
+            GRAYLOG_EVENT_FIELD => {
+                "A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`."
+            }
+            GRAYLOG_EVENT_KEY => "A Graylog `event_key` item is not an `event_fields` name.",
+            GRAYLOG_PRIORITY => {
+                "A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            GRAYLOG_FIELD_NAME => {
+                "A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`)."
+            }
+            GRAYLOG_OVERLAPPING_WINDOW => {
+                "A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."
