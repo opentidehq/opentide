@@ -415,9 +415,15 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         "validate query",
         &words("validate query --file q.kql")
     ));
-    assert!(!replay::covers(
+    // Every platform's live validation is Rust's since UC-4.6 (#979); a
+    // `--live` run that names no platform stays Python's.
+    assert!(replay::covers(
         "validate query",
         &words("validate query --live --platform elastic")
+    ));
+    assert!(!replay::covers(
+        "validate query",
+        &words("validate query --live")
     ));
     assert!(replay::covers(
         "validate query",

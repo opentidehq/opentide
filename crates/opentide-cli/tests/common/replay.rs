@@ -342,13 +342,23 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
         if let Some(listed) = found.get(1) {
             return words(listed.as_str());
         }
-        let constant = &found[2];
-        let defined =
-            regex::Regex::new(&format!(r"(?s)\n{constant}\s*:[^=\n]*=\s*\(([^)]*)\)")).unwrap();
-        let defined = defined
-            .captures(source)
-            .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
-        words(&defined[1])
+        // A constant may name another (`RUST_DEPLOY_PLATFORMS =
+        // RUST_LIVE_VALIDATION_PLATFORMS`): follow it to its tuple.
+        let mut constant = found[2].to_owned();
+        for _ in 0..8 {
+            let defined = regex::Regex::new(&format!(
+                r"(?s)\n{constant}\s*:[^=\n]*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*)\s*\n)"
+            ))
+            .unwrap();
+            let defined = defined
+                .captures(source)
+                .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
+            if let Some(listed) = defined.get(1) {
+                return words(listed.as_str());
+            }
+            constant = defined[2].to_owned();
+        }
+        panic!("engines.py: {constant}: aliases nest too deep")
     };
     let keys: Vec<_> = key.captures_iter(body).collect();
     let mut table = BTreeMap::new();
