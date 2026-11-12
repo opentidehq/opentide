@@ -16,7 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
-- **The analysis engine is language-server at the head of its YARA-L work**, pinned by git revision until language-server 0.16.0 ships it.
+- **The analysis engine is [language-server 0.16.0](https://github.com/opentidehq/language-server/releases/tag/v0.16.0), from crates.io.** It checks YARA-L against Google's event fields and functions in Google SecOps sections, `system: google_secops` hunts and `.yaral` files, the same way in the editor, `opentide tui` and `validate`. Building opentide from source still needs Rust 1.95 or later.
 - **`google-auth` is a dependency**, for the Google SecOps OAuth 2.0 token.
 
 ## [0.27.0] — 2026-11-12
