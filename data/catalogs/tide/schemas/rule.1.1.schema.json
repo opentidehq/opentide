@@ -9300,9 +9300,9 @@
             }
           ],
           "default": null,
-          "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Default: the first one Google allows.",
+          "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Not sent when omitted: a new rule gets Google's default, and an existing rule keeps its own.",
           "title": "Run Frequency",
-          "markdownDescription": "`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Default: the first one\nGoogle allows."
+          "markdownDescription": "`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Not sent when omitted: a new\nrule gets Google's default, and an existing rule keeps its own."
         },
         "schedule": {
           "anyOf": [

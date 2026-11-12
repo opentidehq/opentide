@@ -87,7 +87,8 @@ fn is_identifier(text: &str) -> bool {
 }
 
 /// google-secops-1.0 "Rule name": the block's `name`, else the rule's,
-/// lower-cased, runs of other characters as one `_`, `r_` before a digit,
+/// lower-cased, runs of other characters as one `_`, `r_` before a digit or
+/// a YARA-L keyword,
 /// `opentide_<uuid>` when nothing is left.
 pub fn derived_rule_name(block_name: Option<&str>, rule_name: &str, uuid: &str) -> String {
     if let Some(name) = block_name.filter(|n| !n.is_empty()) {
@@ -105,7 +106,7 @@ pub fn derived_rule_name(block_name: Option<&str>, rule_name: &str, uuid: &str) 
     if out.is_empty() {
         return format!("opentide_{}", uuid.replace('-', "_"));
     }
-    if out.starts_with(|c: char| c.is_ascii_digit()) {
+    if out.starts_with(|c: char| c.is_ascii_digit()) || is_keyword(&out) {
         return format!("r_{out}");
     }
     out
@@ -1227,6 +1228,8 @@ mod tests {
         );
         assert_eq!(derived_rule_name(None, "2FA bypass!", "u"), "r_2fa_bypass");
         assert_eq!(derived_rule_name(None, "!!!", "a-b"), "opentide_a_b");
+        assert_eq!(derived_rule_name(None, "Any", "u"), "r_any");
+        assert_eq!(derived_rule_name(None, "Events", "u"), "r_events");
         assert_eq!(derived_rule_name(Some("x"), "y", "u"), "x");
     }
 

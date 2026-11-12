@@ -1,5 +1,5 @@
 {
-  "opentide": "0.25.1.dev38+g236789472",
+  "opentide": "0.25.1.dev41+g9e13469e6",
   "generator": "opentide.generation.lsp_catalog",
   "ref_leaves": {
     "threats": "threat",
@@ -7191,7 +7191,7 @@
       "path": "configurations.google_secops.run_frequency",
       "name": "run_frequency",
       "title": "Run Frequency",
-      "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Default: the first one Google allows.",
+      "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Not sent when omitted: a new rule gets Google's default, and an existing rule keeps its own.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -19175,7 +19175,7 @@
       "path": "configurations.google_secops.run_frequency",
       "name": "run_frequency",
       "title": "Run Frequency",
-      "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Default: the first one Google allows.",
+      "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Not sent when omitted: a new rule gets Google's default, and an existing rule keeps its own.",
       "type": "string",
       "required": false,
       "markdown": false,
