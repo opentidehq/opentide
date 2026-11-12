@@ -66,9 +66,8 @@ def _cross_object_ref_type(field_path: tuple[str, ...]) -> str | None:
 def _platform_constraint_codes() -> frozenset[str]:
     """Codes a platform block's validator raises as the error's type."""
     from opentide.platforms.bitdefender.catalog import CONSTRAINT_CODES
-    from opentide.platforms.graylog.constraints import CONSTRAINT_CODES as GRAYLOG_CODES
-
     from opentide.platforms.exabeam.constraints import CONSTRAINT_CODES as EXABEAM_CODES
+    from opentide.platforms.graylog.constraints import CONSTRAINT_CODES as GRAYLOG_CODES
 
     return CONSTRAINT_CODES | GRAYLOG_CODES | EXABEAM_CODES
 
