@@ -1449,4 +1449,547 @@ mod tests {
             None
         );
     }
+
+    /// A row of `(column, value)` pairs, in order.
+    fn row(pairs: &[(&str, opentide_compile::Json)]) -> opentide_connectors::connector::Row {
+        pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
+            .collect()
+    }
+
+    /// A result with `columns` (untyped) and `rows`.
+    fn answered(columns: &[&str], rows: Vec<opentide_connectors::connector::Row>) -> QueryOutcome {
+        QueryOutcome {
+            columns: columns
+                .iter()
+                .map(|name| opentide_connectors::connector::QueryColumn::named(*name))
+                .collect(),
+            rows,
+            ..QueryOutcome::default()
+        }
+    }
+
+    fn ok(tenant: &str, result: QueryOutcome) -> TenantResult {
+        TenantResult {
+            tenant: tenant.into(),
+            result: Some(result),
+            error: None,
+            detail: None,
+            elapsed_ms: 7,
+        }
+    }
+
+    fn failed(tenant: &str, error: &str, detail: Option<&str>) -> TenantResult {
+        TenantResult {
+            tenant: tenant.into(),
+            result: None,
+            error: Some(error.into()),
+            detail: detail.map(str::to_owned),
+            elapsed_ms: 3,
+        }
+    }
+
+    fn window() -> TimeWindow {
+        TimeWindow {
+            start: at("2099-01-01T00:00:00Z"),
+            end: at("2099-01-01T01:00:00Z"),
+        }
+    }
+
+    fn compact_of(json: &Json) -> String {
+        crate::json::document_text(json, false)
+            .trim_end()
+            .to_owned()
+    }
+
+    fn text_of(blocks: &[Block]) -> (String, String) {
+        let (mut out, mut err) = (String::new(), String::new());
+        for block in blocks {
+            match block {
+                Block::Raw(text) => out.push_str(text),
+                Block::Stderr(text) => err.push_str(text),
+                other => panic!("query lays its text out itself: {other:?}"),
+            }
+        }
+        (out, err)
+    }
+
+    #[test]
+    fn a_tenants_entry_is_written_as_tenant_outcome_writes_it() {
+        use opentide_compile::Json as J;
+        let mut result = answered(&["n"], vec![row(&[("n", J::Int(1))])]);
+        result.columns[0].kind = Some("long".into());
+        result.truncated = true;
+        result.partial = true;
+        result.warnings = vec!["slow".into()];
+        result.language = Some("esql".into());
+        result.sent = Some("FROM x | LIMIT 2".into());
+        result.vendor_query_id = Some("job-1".into());
+        assert_eq!(
+            compact_of(&ok("soc", result).to_json()),
+            r#"{"tenant":"soc","status":"ok","columns":[{"name":"n","type":"long"}],"rows":[{"n":1}],"row_count":1,"truncated":true,"partial":true,"language":"esql","sent":"FROM x | LIMIT 2","vendor_query_id":"job-1","warnings":["slow"],"elapsed_ms":7}"#
+        );
+        assert_eq!(
+            compact_of(&failed("lab", "refused", Some("bad field")).to_json()),
+            r#"{"tenant":"lab","status":"failed","error":"refused","detail":"bad field","warnings":[],"elapsed_ms":3}"#
+        );
+        // An empty detail is left out, as `TenantOutcome.to_dict` leaves it.
+        assert_eq!(
+            compact_of(&failed("lab", "refused", Some("")).to_json()),
+            r#"{"tenant":"lab","status":"failed","error":"refused","warnings":[],"elapsed_ms":3}"#
+        );
+    }
+
+    #[test]
+    fn a_failed_tenant_fails_the_run_with_the_first_failure_and_its_detail() {
+        use opentide_compile::Json as J;
+        let outcomes = [
+            ok("prod", answered(&["n"], vec![row(&[("n", J::Int(1))])])),
+            failed(
+                "lab",
+                "Elastic refused the ES|QL query on lab (HTTP 400)",
+                Some("bad"),
+            ),
+            failed("qa", "unreachable", None),
+        ];
+        let names: Vec<String> = ["prod", "lab", "qa"].map(str::to_owned).to_vec();
+        let report = payload("elastic", &window(), 100, &names, &outcomes, "FROM x");
+        let outcome = &report.outcome;
+        assert_eq!(outcome.exit_code, 1);
+        assert_eq!(outcome.status, "failed");
+        assert_eq!(
+            outcome.message,
+            "2 of 3 queries failed on 3 elastic tenants: lab: Elastic refused the ES|QL query \
+             on lab (HTTP 400)"
+        );
+        let failure = outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, super::super::COMMAND_FAILED);
+        assert_eq!(failure.message, outcome.message);
+        let keys: Vec<&str> = outcome.data.iter().map(|(key, _)| key.as_str()).collect();
+        assert_eq!(
+            keys,
+            [
+                "platform",
+                "source",
+                "window",
+                "limit",
+                "tenants",
+                "results",
+                "row_count",
+                "query",
+                "detail"
+            ]
+        );
+        assert_eq!(outcome.data[8].1, Json::str("bad"));
+        assert_eq!(
+            compact_of(&outcome.data[2].1),
+            r#"{"from":"2099-01-01T00:00:00.000Z","to":"2099-01-01T01:00:00.000Z"}"#
+        );
+        assert_eq!(outcome.data[6].1, Json::Int(1));
+        let summary: Vec<String> = outcome
+            .summary
+            .iter()
+            .map(|(key, value)| format!("{key}={}", compact_of(value)))
+            .collect();
+        assert_eq!(summary, ["tenants=3", "rows=1", "failed=2"]);
+        // A failure without a detail adds none.
+        let report = payload("elastic", &window(), 100, &names[2..], &outcomes[2..], "q");
+        assert_eq!(
+            report.outcome.message,
+            "1 of 1 queries failed on 1 elastic tenant: qa: unreachable"
+        );
+        assert!(report.outcome.data.iter().all(|(key, _)| key != "detail"));
+    }
+
+    #[test]
+    fn a_completed_run_counts_its_rows_and_says_when_a_tenant_was_limited() {
+        use opentide_compile::Json as J;
+        let one = answered(&["n"], vec![row(&[("n", J::Int(1))])]);
+        let names = vec!["soc".to_owned()];
+        let report = payload("elastic", &window(), 5, &names, &[ok("soc", one)], "q");
+        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.status, "completed");
+        assert!(report.outcome.failure.is_none());
+        assert_eq!(report.outcome.message, "1 row from 1 elastic tenant");
+        let mut two = answered(
+            &["n"],
+            vec![row(&[("n", J::Int(1))]), row(&[("n", J::Int(2))])],
+        );
+        two.truncated = true;
+        let names = vec!["a".to_owned(), "b".to_owned()];
+        let report = payload(
+            "crowdstrike",
+            &window(),
+            2,
+            &names,
+            &[ok("a", two), ok("b", answered(&[], Vec::new()))],
+            "q",
+        );
+        assert_eq!(
+            report.outcome.message,
+            "2 rows from 2 crowdstrike tenants (limited to 2 per tenant)"
+        );
+    }
+
+    /// Two tenants' rows, one failed tenant, and a run's report.
+    fn two_tenants_and_a_failure() -> Vec<TenantResult> {
+        use opentide_compile::Json as J;
+        let mut first = answered(
+            &["host", "note"],
+            vec![
+                row(&[
+                    ("host", J::Str("pc-1".into())),
+                    ("note", J::Str("a, \"b\"".into())),
+                ]),
+                row(&[("host", J::Str("pc-2".into())), ("note", J::Null)]),
+            ],
+        );
+        first.warnings = vec!["the search was sampled".into()];
+        let second = answered(
+            &["host", "count"],
+            vec![row(&[
+                ("host", J::Str("pc-3".into())),
+                ("count", J::Int(4)),
+                ("_tenant", J::Str("shadowed".into())),
+            ])],
+        );
+        vec![
+            ok("prod", first),
+            ok("lab", second),
+            failed("qa", "unreachable", None),
+        ]
+    }
+
+    #[test]
+    fn json_lines_put_the_tenant_first_and_go_to_stdout_whole_on_success() {
+        let args = Args {
+            format: RowFormat::Jsonl,
+            ..Args::default()
+        };
+        let outcomes = two_tenants_and_a_failure();
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let mut report = Report::failed(COMMAND, 0, Failure::new("", ""));
+        report.outcome.exit_code = 0;
+        let blocks = body(&args, &outcomes, &terminal, &mut report);
+        assert!(blocks.is_empty());
+        let expected = "{\"_tenant\": \"prod\", \"host\": \"pc-1\", \"note\": \"a, \\\"b\\\"\"}\n\
+                        {\"_tenant\": \"prod\", \"host\": \"pc-2\", \"note\": null}\n\
+                        {\"_tenant\": \"shadowed\", \"host\": \"pc-3\", \"count\": 4}\n";
+        assert_eq!(report.whole_stdout.as_deref(), Some(expected));
+        // A failed run prints the rows it has in the body, before the outcome.
+        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let blocks = body(&args, &outcomes, &terminal, &mut report);
+        assert!(report.whole_stdout.is_none());
+        assert_eq!(text_of(&blocks), (expected.to_owned(), String::new()));
+    }
+
+    #[test]
+    fn csv_has_one_header_of_every_tenants_columns() {
+        let args = Args {
+            format: RowFormat::Csv,
+            ..Args::default()
+        };
+        let outcomes = two_tenants_and_a_failure();
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let expected = "_tenant,host,note,count\n\
+                        prod,pc-1,\"a, \"\"b\"\"\",\n\
+                        prod,pc-2,,\n\
+                        shadowed,pc-3,,4\n";
+        let mut report = Report::failed(COMMAND, 0, Failure::new("", ""));
+        report.outcome.exit_code = 0;
+        assert!(body(&args, &outcomes, &terminal, &mut report).is_empty());
+        assert_eq!(report.whole_stdout.as_deref(), Some(expected));
+        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let blocks = body(&args, &outcomes, &terminal, &mut report);
+        assert_eq!(text_of(&blocks), (expected.to_owned(), String::new()));
+        // No tenant answered: the header alone.
+        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let blocks = body(&args, &outcomes[2..], &terminal, &mut report);
+        assert_eq!(text_of(&blocks).0, "_tenant\n");
+    }
+
+    #[test]
+    fn tables_show_each_tenant_its_failures_and_its_warnings() {
+        let outcomes = two_tenants_and_a_failure();
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let (out, err) = text_of(&tables(&Args::default(), &outcomes, &terminal));
+        assert_eq!(
+            out,
+            "prod  2 rows\n\
+             host ┃ note  \n\
+             ━━━━━╇━━━━━━━\n\
+             pc-1 │ a, \"b\"\n\
+             pc-2 │       \n\
+             \n\
+             lab  1 row\n\
+             host ┃ count\n\
+             ━━━━━╇━━━━━━\n\
+             pc-3 │ 4    \n\
+             \n"
+        );
+        assert_eq!(
+            err,
+            "warning: the search was sampled\nqa  failed: unreachable\n"
+        );
+        // --quiet drops the warnings, not the failures.
+        let quiet = Terminal {
+            quiet: true,
+            ..Terminal::plain(crate::mode::Mode::Plain)
+        };
+        let (_, err) = text_of(&tables(&Args::default(), &outcomes, &quiet));
+        assert_eq!(err, "qa  failed: unreachable\n");
+        // One tenant that failed: the outcome line says it, no table.
+        assert!(tables(&Args::default(), &outcomes[2..], &terminal).is_empty());
+    }
+
+    #[test]
+    fn tables_show_the_named_columns_or_the_first_eight() {
+        use opentide_compile::Json as J;
+        let names: Vec<String> = (0..10).map(|at| format!("c{at}")).collect();
+        let columns: Vec<&str> = names.iter().map(String::as_str).collect();
+        let pairs: Vec<(&str, J)> = columns
+            .iter()
+            .enumerate()
+            .map(|(at, name)| (*name, J::Int(i64::try_from(at).unwrap())))
+            .collect();
+        let mut result = answered(&columns, vec![row(&pairs)]);
+        result.truncated = true;
+        let outcomes = [ok("soc", result)];
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let (out, _) = text_of(&tables(&Args::default(), &outcomes, &terminal));
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "soc  1 row (more matched; raise --limit)");
+        assert_eq!(lines[1], "c0 ┃ c1 ┃ c2 ┃ c3 ┃ c4 ┃ c5 ┃ c6 ┃ c7");
+        assert_eq!(
+            lines[4],
+            "2 more columns: name them with --columns, or use --format jsonl"
+        );
+        // --columns: those named that the result has, in the order named,
+        // and no hint about the others.
+        let args = Args {
+            columns: Some(" c9, nope ,,c1".into()),
+            ..Args::default()
+        };
+        let (out, _) = text_of(&tables(&args, &outcomes, &terminal));
+        assert_eq!(
+            out,
+            "soc  1 row (more matched; raise --limit)\n\
+             c9 ┃ c1\n\
+             ━━━╇━━━\n\
+             9  │ 1 \n\
+             \n"
+        );
+        // No rows: the heading alone.
+        let empty = [ok("soc", answered(&["a"], Vec::new()))];
+        let (out, _) = text_of(&tables(&Args::default(), &empty, &terminal));
+        assert_eq!(out, "soc  0 rows\n\n");
+    }
+
+    #[test]
+    fn the_query_is_read_from_its_argument_a_file_or_stdin() {
+        let scratch = tempfile::tempdir().unwrap();
+        std::fs::write(scratch.path().join("q.kql"), "\u{feff}FROM logs-*\n").unwrap();
+        let env = Env::from_pairs::<&str, &str>([]);
+        let terminal = Terminal::plain(crate::mode::Mode::Json);
+        let never = || false;
+        let stdin = || "from stdin".to_owned();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: scratch.path(),
+            proxy: None,
+            terminal: &terminal,
+            interrupted: &never,
+            stdin: &stdin,
+            now: at("2026-10-27T08:00:00Z"),
+        };
+        assert!(format!("{cx:?}").starts_with("Context { repo: None, cwd: "));
+        let args = |query: Option<&str>, file: Option<&str>| Args {
+            query: query.map(str::to_owned),
+            query_file: file.map(str::to_owned),
+            platform: "elastic".into(),
+            ..Args::default()
+        };
+        assert_eq!(
+            query_text(&args(None, Some("q.kql")), &cx)
+                .unwrap()
+                .as_deref(),
+            Some("FROM logs-*\n")
+        );
+        assert_eq!(
+            query_text(&args(Some("-"), None), &cx).unwrap().as_deref(),
+            Some("from stdin")
+        );
+        assert_eq!(
+            query_text(&args(Some("x"), None), &cx).unwrap().as_deref(),
+            Some("x")
+        );
+        assert_eq!(query_text(&args(None, None), &cx).unwrap(), None);
+        let refused = |args: Args| {
+            let report = query_text(&args, &cx).unwrap_err();
+            let failure = report.outcome.failure.clone().unwrap();
+            (
+                report.outcome.exit_code,
+                failure.code,
+                failure.message,
+                failure.argument,
+            )
+        };
+        assert_eq!(
+            refused(args(None, Some("nope.kql"))),
+            (
+                USAGE_EXIT_CODE,
+                code::USAGE_INVALID_VALUE.to_owned(),
+                "cannot read --query-file nope.kql: No such file or directory".to_owned(),
+                Some("--query-file".to_owned())
+            )
+        );
+        assert_eq!(
+            refused(args(Some("x"), Some("q.kql"))).2,
+            "QUERY and --query-file cannot be combined: give one query"
+        );
+    }
+
+    #[test]
+    fn a_usage_error_names_the_platform_and_its_choices() {
+        let choices = vec!["esql".to_owned(), "eql".to_owned()];
+        let report = usage_with("elastic", "no", "--language", Some("eql".into()), &choices);
+        assert_eq!(
+            compact_of(&Json::Object(report.outcome.data.clone())),
+            r#"{"platform":"elastic","choices":["esql","eql"]}"#
+        );
+        let failure = report.outcome.failure.unwrap();
+        assert_eq!(failure.suggestion.as_deref(), Some("eql"));
+        assert_eq!(failure.argument.as_deref(), Some("--language"));
+        assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
+        let refused = not_ported("query on splunk");
+        let failure = refused.outcome.failure.unwrap();
+        assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
+        assert_eq!(failure.argument.as_deref(), Some("OPENTIDE_ENGINE"));
+        assert_eq!(
+            failure.message,
+            "opentide query on splunk has no Rust implementation yet: unset OPENTIDE_ENGINE, \
+             or set it to python or compare."
+        );
+    }
+
+    #[test]
+    fn each_platform_has_its_languages_credentials_and_address() {
+        for platform in QUERY_PLATFORMS {
+            assert!(!languages(platform).is_empty(), "{platform}");
+        }
+        assert_eq!(languages("elastic"), ["esql", "eql", "lucene", "kuery"]);
+        assert_eq!(languages("sentinel"), ["kql"]);
+        assert_eq!(languages("splunk"), ["spl"]);
+        assert_eq!(languages("carbon_black_cloud"), ["lucene"]);
+        assert!(languages("sysdig").is_empty());
+        assert_eq!(
+            credential_keys("harfanglab"),
+            ("HarfangLab", &["url", "api_token"][..])
+        );
+        assert_eq!(credential_keys("elastic").1, ["api_key"]);
+        assert_eq!(credential_keys("crowdstrike").0, "CrowdStrike");
+        assert_eq!(credential_keys("defender_for_endpoint").1.len(), 3);
+        assert_eq!(credential_keys("splunk"), ("", &[][..]));
+        let tenant = |url: Option<&str>| Configured {
+            name: "lab".into(),
+            setup: url
+                .map(|url| {
+                    [("url".to_owned(), opentide_compile::Json::Str(url.into()))]
+                        .into_iter()
+                        .collect()
+                })
+                .unwrap_or_default(),
+        };
+        assert_eq!(
+            setup_host("sentinel_one", &tenant(Some("https://s1.invalid:8443/x"))),
+            "s1.invalid"
+        );
+        assert_eq!(
+            setup_host("crowdstrike", &tenant(None)),
+            "api.crowdstrike.com"
+        );
+        assert_eq!(
+            setup_host("defender_for_endpoint", &tenant(None)),
+            "graph.microsoft.com"
+        );
+        assert_eq!(
+            setup_host("harfanglab", &tenant(Some("not a url"))),
+            "not a url"
+        );
+        assert_eq!(setup_host("elastic", &tenant(None)), "");
+        assert_eq!(seconds_g(120.0), "120");
+        assert_eq!(seconds_g(0.25), "0.25");
+        for platform in PLATFORMS {
+            let settings = http_settings(platform, Duration::from_secs(30));
+            assert!(settings.timeout > Duration::ZERO, "{platform}");
+        }
+        assert_eq!(
+            http_settings("splunk", Duration::from_secs(5)).timeout,
+            HttpSettings::default().timeout
+        );
+    }
+
+    #[test]
+    fn setup_values_become_toml_and_references_are_named() {
+        use opentide_compile::Json as J;
+        assert_eq!(
+            toml_value(&J::Str("x".into())),
+            Some(toml::Value::String("x".into()))
+        );
+        assert_eq!(toml_value(&J::Int(3)), Some(toml::Value::Integer(3)));
+        assert_eq!(toml_value(&J::Float(1.5)), Some(toml::Value::Float(1.5)));
+        assert_eq!(toml_value(&J::Bool(true)), Some(toml::Value::Boolean(true)));
+        assert_eq!(
+            toml_value(&J::Array(vec![J::Int(1), J::Null, J::Str("a".into())])),
+            Some(toml::Value::Array(vec![
+                toml::Value::Integer(1),
+                toml::Value::String("a".into())
+            ]))
+        );
+        assert_eq!(toml_value(&J::Null), None);
+        assert_eq!(
+            toml_value(&J::Object(opentide_compile::json::Object::new())),
+            None
+        );
+        assert_eq!(reference(&J::Str("$TOKEN".into())), Some("TOKEN"));
+        assert_eq!(reference(&J::Str("${TOKEN}".into())), Some("TOKEN"));
+        assert_eq!(reference(&J::Str("plain".into())), None);
+        assert_eq!(reference(&J::Int(1)), None);
+    }
+
+    #[test]
+    fn instants_read_as_parse_instant_reads_them() {
+        let utc = |text: &str| TimeWindow::utc_z(parse_instant(text, "--from").unwrap());
+        assert_eq!(utc("2026-10-27"), "2026-10-27T00:00:00.000Z");
+        assert_eq!(utc(" 2026-10-27T08:00:00z "), "2026-10-27T08:00:00.000Z");
+        assert_eq!(utc("2026-10-27T10:00:00+02:00"), "2026-10-27T08:00:00.000Z");
+        assert_eq!(utc("2026-10-27T08:00:00"), "2026-10-27T08:00:00.000Z");
+        assert_eq!(
+            parse_instant("27/10/2026", "--to").unwrap_err(),
+            "--to '27/10/2026' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+        );
+        let missing = std::io::Error::from_raw_os_error(2);
+        assert_eq!(strerror(&missing), "No such file or directory");
+        assert_eq!(strerror(&std::io::Error::other("plain")), "plain");
+    }
+
+    #[test]
+    fn credentials_of_a_platform_without_a_runner_are_never_unset() {
+        let mut setup = opentide_compile::json::Object::new();
+        setup.insert("api_key".into(), opentide_compile::Json::Str("$KEY".into()));
+        let tenant = Configured {
+            name: "soc".into(),
+            setup,
+        };
+        let env = Env::from_pairs::<&str, &str>([]);
+        assert_eq!(
+            unset_credentials("elastic", &tenant, &env).as_deref(),
+            Some(
+                "Elastic credentials are unset ($KEY). Set those environment variables before a live check."
+            )
+        );
+        assert_eq!(unset_credentials("splunk", &tenant, &env), None);
+    }
 }
