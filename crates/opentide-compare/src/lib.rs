@@ -369,6 +369,33 @@ impl Comparison<'_> {
                 applied.push(index);
             }
         }
+        // Then the arrays the candidate drops elements from: each named
+        // element put back where the oracle has it, so `json:` entries
+        // address the array by the oracle's indices here too.
+        let mut drops: Vec<Extend<'_>> = entries
+            .iter()
+            .filter_map(|(index, rule)| match rule {
+                Rule::JsonDrop {
+                    pointer,
+                    candidate_len,
+                    dropped,
+                } => Some((
+                    *index,
+                    pointer.as_slice(),
+                    *candidate_len,
+                    dropped.as_slice(),
+                )),
+                _ => None,
+            })
+            .collect();
+        drops.sort_by_key(|(index, pointer, ..)| (pointer.len(), *index));
+        for (index, pointer, candidate_len, dropped) in drops {
+            if let Some(full) = put_back(oracle_doc, &aligned, pointer, candidate_len, dropped)
+                && aligned.set(pointer, Some(Json::Array(full)), None)
+            {
+                applied.push(index);
+            }
+        }
         let mut patched = aligned.clone();
         for (index, rule) in entries {
             let Rule::Json {
@@ -643,8 +670,49 @@ fn set_aside(
     named.peek().is_none().then_some(rest)
 }
 
-/// A `json-extend:` entry: its index, pointer, the oracle array's length
-/// and the added elements by candidate index.
+/// The candidate's array at `pointer` with the `dropped` elements put back
+/// at their oracle indices, where a `json-drop:` entry applies: the
+/// candidate's array there has `candidate_len` elements, and the oracle's
+/// has each dropped element, exactly, at its index, and `candidate_len`
+/// others. `None` where it does not apply.
+fn put_back(
+    oracle: &Json,
+    candidate: &Json,
+    pointer: &[String],
+    candidate_len: usize,
+    dropped: &[(usize, Json)],
+) -> Option<Vec<Json>> {
+    let (Some(Json::Array(oracle)), Some(Json::Array(candidate))) =
+        (oracle.get(pointer), candidate.get(pointer))
+    else {
+        return None;
+    };
+    if candidate.len() != candidate_len || oracle.len() != candidate_len + dropped.len() {
+        return None;
+    }
+    if dropped
+        .iter()
+        .any(|(index, value)| oracle.get(*index) != Some(value))
+    {
+        return None;
+    }
+    let mut named = dropped.iter().peekable();
+    let mut kept = candidate.iter();
+    let mut full = Vec::with_capacity(oracle.len());
+    for at in 0..oracle.len() {
+        match named.peek() {
+            Some((index, value)) if *index == at => {
+                full.push(value.clone());
+                named.next();
+            }
+            _ => full.push(kept.next()?.clone()),
+        }
+    }
+    Some(full)
+}
+
+/// A `json-extend:` (or `json-drop:`) entry: its index, pointer, the other
+/// array's length and the elements it names by index.
 type Extend<'a> = (usize, &'a [String], usize, &'a [(usize, Json)]);
 
 /// A `lines` entry: its index, the oracle's lines and the candidate's.
@@ -1495,6 +1563,98 @@ changelog = "**x**"
             assert!(report.equal, "{report:?}");
             assert!(usage.is_used(0) && usage.is_used(1));
         }
+    }
+
+    const DROP: &str = r#"
+[[diff]]
+command = "doctor"
+case = "json/*"
+target = "stdout"
+rule = "json-drop:/rules"
+oracle = '{"0": {"id": "a"}, "2": {"id": "c", "level": "error"}}'
+candidate = "2"
+reason = "checks the candidate no longer runs"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**x**"
+"#;
+
+    fn drop_compare(ledger: &str, candidate: &str) -> (CaseReport, Usage) {
+        let ledger = Ledger::parse(ledger).unwrap();
+        let oracle =
+            extend_run(r#"[{"id": "a"}, {"id": "b"}, {"id": "c", "level": "error"}, {"id": "d"}]"#);
+        let mut usage = Usage::default();
+        let case = Case {
+            command: "doctor",
+            id: "json/ws/default",
+        };
+        let report = compare(case, &oracle, &extend_run(candidate), &ledger, &mut usage);
+        (report, usage)
+    }
+
+    /// A `json-drop:` entry approves the oracle's elements it names, where
+    /// the candidate has the others, unchanged and in order.
+    #[test]
+    fn a_json_drop_entry_approves_the_named_elements() {
+        let (report, usage) = drop_compare(DROP, r#"[{"id": "b"}, {"id": "d"}]"#);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+    }
+
+    /// Each way a candidate's array can be other than the oracle's without
+    /// the named elements is still a difference.
+    #[test]
+    fn a_json_drop_entry_approves_nothing_else() {
+        for (mutant, candidate) in [
+            ("a kept element changed", r#"[{"id": "B"}, {"id": "d"}]"#),
+            (
+                "the kept elements reordered",
+                r#"[{"id": "d"}, {"id": "b"}]"#,
+            ),
+            (
+                "an element dropped the entry does not name",
+                r#"[{"id": "b"}]"#,
+            ),
+            (
+                "an element added",
+                r#"[{"id": "b"}, {"id": "d"}, {"id": "e"}]"#,
+            ),
+            (
+                "a named element kept",
+                r#"[{"id": "a"}, {"id": "b"}, {"id": "d"}]"#,
+            ),
+        ] {
+            let (report, _) = drop_compare(DROP, candidate);
+            assert!(!report.equal, "{mutant}: approved");
+        }
+        // A named element the oracle does not have there: nothing applies.
+        let other = DROP.replace(r#""level": "error""#, r#""level": "note""#);
+        let (report, usage) = drop_compare(&other, r#"[{"id": "b"}, {"id": "d"}]"#);
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+    }
+
+    /// A `json:` entry under an array the candidate drops from addresses it
+    /// by the oracle's indices.
+    #[test]
+    fn a_json_entry_under_a_dropped_from_array_uses_the_oracle_indices() {
+        let ledger = format!(
+            "{DROP}{}",
+            r#"
+[[diff]]
+command = "doctor"
+case = "json/*"
+target = "stdout"
+rule = "json:/rules/3/id"
+oracle = '"d"'
+candidate = '"D"'
+reason = "renamed"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**x**"
+"#
+        );
+        let (report, usage) = drop_compare(&ledger, r#"[{"id": "b"}, {"id": "D"}]"#);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0) && usage.is_used(1));
     }
 
     /// Two `lines` entries of one case and target approve two blocks, each

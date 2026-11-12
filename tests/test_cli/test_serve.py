@@ -5,12 +5,14 @@ feeding it lines as the reading thread does and reading what it writes. The
 last ones spawn the console script and speak the protocol over its stdio.
 
 Every test runs on both engines (#927): ``OPENTIDE_ENGINE`` unset runs each
-command's Python implementation, ``rust`` the Rust one where the command has
-it (``validate``, ``info``, ``lint``, ``explain``, ...), in the server and in
+command's Python implementation, ``rust`` the Rust one, in the server and in
 the fresh run it is compared with. Under ``rust`` the server is the Rust host
 (UC-3.8, #830; ``opentide._native.ServeHost`` in this process, the
-``opentide serve`` child over stdio), which hands the runs the engine
-selection gives to Python to :mod:`opentide.cli.services.serve_bridge`.
+``opentide serve`` child over stdio), which runs every request on Rust
+(UC-6.0d, #841). The tests that replace or reach into the Python runner
+(:func:`through_python`) run on the Python host under either engine; the
+Rust host's own cancels, crashes and queued runs are
+``crates/opentide-cli/tests/serve.rs``'s.
 """
 
 from __future__ import annotations
@@ -34,9 +36,9 @@ from typer.testing import CliRunner
 
 from opentide import __version__
 from opentide.cli import app
+from opentide.cli.engines import rust_command
 from opentide.cli.services import serve as serve_mod
-from opentide.cli.services import serve_bridge
-from opentide.cli.services.serve import CommandRunner, Server, commands_digest
+from opentide.cli.services.serve import CommandRunner, Server, Writer, commands_digest
 
 RULE_FILE = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
 #: How long a test waits for an answer before it fails.
@@ -51,12 +53,6 @@ def engine(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> s
     else:
         monkeypatch.delenv("OPENTIDE_ENGINE", raising=False)
     return str(request.param)
-
-
-#: A request's environment for a command with no Rust implementation yet:
-#: ``OPENTIDE_ENGINE=rust`` refuses it by contract (``engine_not_ported``), so
-#: it takes the per-request escape hatch and runs Python's on either engine.
-PYTHON_ONLY = {"OPENTIDE_ENGINE": "python"}
 
 
 #: Wall-clock times, which differ between any two runs of the same command.
@@ -80,6 +76,46 @@ def spawned_document(argv: list[str], *, env: dict[str, str] | None = None) -> t
     return json.loads(result.stdout), result.exit_code
 
 
+class RustServer:
+    """The Rust host (``opentide._native.ServeHost``) in this process, driven as
+    :class:`~opentide.cli.services.serve.Server` is.
+
+    Its runs start from *runner*'s environment and directory; *runner* is
+    kept for the tests that ask it what it would keep, and runs nothing.
+    """
+
+    def __init__(self, write: Writer, *, runner: CommandRunner) -> None:
+        from opentide.analysis import engine
+
+        self.runner = runner
+
+        def line(text: str) -> None:
+            write(json.loads(text))
+
+        self._host = engine().ServeHost(
+            line, __version__, list(runner.base_env.items()), str(runner.cwd)
+        )
+
+    def receive(self, line: bytes | str) -> None:
+        self._host.receive(line.encode("utf-8") if isinstance(line, str) else bytes(line))
+
+    def close_input(self) -> None:
+        self._host.close_input()
+
+    def serve(self) -> int:
+        return int(self._host.serve())
+
+    def pending_cancels(self) -> int:
+        return int(self._host.pending_cancels())
+
+
+def server_for(write: Writer, *, runner: CommandRunner) -> Server | RustServer:
+    """The host ``opentide serve`` runs under this process's engine selection."""
+    if rust_command(("serve",)) is not None:
+        return RustServer(write, runner=runner)
+    return Server(write, runner=runner)
+
+
 class Client:
     """A client of an in-process server, with its loop on a thread.
 
@@ -90,10 +126,10 @@ class Client:
     def __init__(self, runner: CommandRunner, *, python_host: bool = False) -> None:
         self.messages: queue.Queue[dict[str, Any]] = queue.Queue()
         self.notifications: list[dict[str, Any]] = []
-        self.server: Server | serve_bridge.RustServer = (
+        self.server: Server | RustServer = (
             Server(self._received, runner=runner)
             if python_host
-            else serve_bridge.server_for(self._received, runner=runner)
+            else server_for(self._received, runner=runner)
         )
         self.code: int | None = None
         self._next = 0
@@ -148,11 +184,16 @@ class Client:
 
 
 @pytest.fixture
-def client(tide_corpus_repo: Path, tmp_path: Path) -> Iterator[Client]:
+def client(
+    tide_corpus_repo: Path, tmp_path: Path, request: pytest.FixtureRequest
+) -> Iterator[Client]:
+    """The host ``opentide serve`` runs, or the Python host for a test that
+    replaces or reaches into its runner (:func:`through_python`)."""
     env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
     elsewhere = tmp_path / "server-cwd"
     elsewhere.mkdir()
-    client = Client(CommandRunner(base_env=env, cwd=elsewhere))
+    python_host = bool({"through_python", "validate_runs"} & set(request.fixturenames))
+    client = Client(CommandRunner(base_env=env, cwd=elsewhere), python_host=python_host)
     yield client
     client.stop()
     clear_runtime_caches()
@@ -255,7 +296,7 @@ def test_a_command_failure_is_a_result_not_an_error(client: Client) -> None:
 
 
 def test_a_command_that_would_prompt_needs_input(client: Client) -> None:
-    result = client.run("setup", env=PYTHON_ONLY)
+    result = client.run("setup")
     assert result["exit_code"] == 2
     assert result["document"]["failure"]["code"] == "usage_needs_input"
 
@@ -423,7 +464,7 @@ def test_a_command_that_writes_keeps_nothing(
     client.run("info")
     client.run("info")
     assert len(builds) == 1
-    result = client.run("new", "threat", "--name", "Served Threat", env=PYTHON_ONLY)
+    result = client.run("new", "threat", "--name", "Served Threat")
     assert result["exit_code"] == 0, result["document"]
     after_new = len(builds)
     counts = client.run("info")["document"]["counts"]
@@ -454,6 +495,7 @@ def validate_runs(
 
     Python's ``run_validate``; on Rust, the engine's ``run_cli`` for a
     ``validate`` run (*work* returning is exit 0, ``SystemExit`` its code).
+    The client is then the Python host, whose runs go through both.
     """
 
     def install(work: Callable[[], Any]) -> None:
@@ -464,9 +506,7 @@ def validate_runs(
             return
         from opentide.analysis import engine as native_engine
 
-        # The Rust host hands the run to this process's runner, whose Rust
-        # run is the fake below.
-        monkeypatch.setattr(serve_bridge.Bridge, "rust_run", lambda *_: None)
+        # The Python host's Rust run is the fake below.
         native = native_engine()
         real = native.run_cli
 
@@ -485,14 +525,13 @@ def validate_runs(
 
 
 @pytest.fixture
-def through_python(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every run goes through this process's :class:`CommandRunner`, on either host.
+def through_python() -> None:
+    """The test reaches into the Python runner (or replaces it): its server is the
+    Python host, whose runs go through this process's :class:`CommandRunner`.
 
-    The Rust host runs a ported command itself; these tests reach into the
-    Python runner (or replace it), so the Rust host hands it every run, as
-    it does a command with no Rust implementation.
+    The Rust host runs every request itself (UC-6.0d, #841); its own cancels,
+    crashes and queued runs are ``crates/opentide-cli/tests/serve.rs``'s.
     """
-    monkeypatch.setattr(serve_bridge.Bridge, "rust_run", lambda *_: None)
 
 
 def test_cancel_stops_the_run_with_130_and_cleanup_runs(
@@ -573,16 +612,10 @@ def test_a_cancel_after_the_command_returned_keeps_its_answer(
 
 
 def test_a_cancelled_run_names_its_command(
-    client: Client, monkeypatch: pytest.MonkeyPatch, engine: str
+    client: Client, monkeypatch: pytest.MonkeyPatch, through_python: None
 ) -> None:
     # Cancelled before the run thread started: the fallback document still
     # carries the command.
-    if engine == "rust":
-        pytest.skip(
-            "the Python host's run thread; the Rust host's queued and unstarted runs are "
-            "crates/opentide-cli/tests/serve.rs's cancelling_a_queued_run_* and "
-            "a_rust_run_cancelled_before_it_started_*"
-        )
 
     def cancelled_work(self: Server, work: Any, *, job: Any = None, argv: Any = ()) -> Any:
         assert job is not None
@@ -614,7 +647,7 @@ def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(
 ) -> None:
     written: list[dict[str, Any]] = []
     runner = RecordingRunner()
-    server = serve_bridge.server_for(written.append, runner=runner)
+    server = Server(written.append, runner=runner)
     for request_id in (1, 2, 3):
         message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
         message["params"] = {"argv": ["deploy", "--strategy", "PRODUCTION"]}
@@ -703,7 +736,7 @@ def test_a_client_that_disconnects_ends_the_session_with_zero(through_python: No
         writes.append(message)
 
     runner = RecordingRunner()
-    server = serve_bridge.server_for(write, runner=runner)
+    server = Server(write, runner=runner)
     for request_id in (1, 2, 3):
         message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
         message["params"] = {"argv": ["validate"]}
@@ -912,7 +945,7 @@ def test_over_stdio_a_run_that_reads_stdin_reads_nothing_of_the_protocol(
             {
                 "id": 1,
                 "method": "run",
-                "params": {"argv": ["query", "-", "--platform", "sentinel"], "env": PYTHON_ONLY},
+                "params": {"argv": ["query", "-", "--platform", "sentinel"]},
             }
         )
         client.send({"id": 2, "method": "run", "params": {"argv": ["explain", "vocab_unknown"]}})

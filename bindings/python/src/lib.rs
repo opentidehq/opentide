@@ -273,7 +273,6 @@ fn analyze_query(
 #[pyfunction]
 fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
     opentide_cli::mcp::set_delegate(Box::new(McpBridge));
-    opentide_cli::serve::set_delegate_factory(Box::new(serve::BridgeFactory));
     py.detach(|| {
         let code = opentide_cli::main(&argv, &version);
         // The process may end in Python's exit, which never flushes Rust's

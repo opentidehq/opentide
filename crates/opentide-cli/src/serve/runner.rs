@@ -1,18 +1,12 @@
 //! One `run`: which implementation runs it, and the document it answers with.
 //!
 //! [`HostRunner`] runs a request as `opentide --json <argv>` would in a new
-//! process. A command the engine selection gives to Rust runs here, in this
-//! process ([`crate::embed::run_captured`]), with the run's environment and
-//! working directory; a read-only run keeps its workspace warm in the
-//! session ([`opentide_workspace::session`]) for the next one. Every other
-//! run goes to the [`Delegate`], the Python package's runner in this
-//! process, which runs the Python implementation exactly as the Python host
-//! did (`opentide.cli.services.serve_bridge`). Which is which is the
-//! delegate's to say ([`Delegate::plan`]): the selection
-//! (`OPENTIDE_ENGINE`, each command's default) is the Python package's until
-//! every command is ported. Without a delegate (the standalone binary) every
-//! run is Rust's, and a command it has not ported is refused as at a
-//! terminal (`engine_not_ported`).
+//! process: every run is Rust's, in this process
+//! ([`crate::embed::run_captured`]), with the run's environment and working
+//! directory, whatever `OPENTIDE_ENGINE` the server or the request names
+//! (UC-6.0d, #841: the Python side that chose an engine per request and ran
+//! Python's choices is gone). A read-only run keeps its workspace warm in the
+//! session ([`opentide_workspace::session`]) for the next one.
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -54,8 +48,6 @@ pub enum RunOutcome {
         /// The exit code.
         exit_code: i32,
     },
-    /// `{"document": ..., "exit_code": ...}` as JSON text, from the delegate.
-    Delegated(String),
 }
 
 impl RunOutcome {
@@ -69,18 +61,13 @@ impl RunOutcome {
                 "{{\"document\":{},\"exit_code\":{exit_code}}}",
                 compact(document)
             ),
-            RunOutcome::Delegated(text) => text.clone(),
         }
     }
 
-    /// The document, parsed when it came from the delegate.
+    /// The document.
     pub fn document(&self) -> Json {
         match self {
             RunOutcome::Built { document, .. } => document.clone(),
-            RunOutcome::Delegated(text) => Json::parse(text)
-                .ok()
-                .and_then(|result| result.get("document").cloned())
-                .unwrap_or(Json::Null),
         }
     }
 }
@@ -134,7 +121,7 @@ impl Job {
     }
 }
 
-/// A run the delegate gives to Rust: the variables and directory it runs with.
+/// A run's variables and directory.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RustRun {
     /// Every variable the run sees.
@@ -152,42 +139,8 @@ pub struct Plan {
     pub refused: Option<String>,
     /// Whether it only reads, so its workspace stays warm.
     pub keep: bool,
-    /// Its Rust run, or `None` when the delegate runs it.
+    /// Its run; [`HostRunner`] always plans one, a test's runner may not.
     pub rust: Option<RustRun>,
-}
-
-/// The Python package's side of the host (`opentide.cli.services.serve_bridge`).
-pub trait Delegate: Send + Sync {
-    /// How `request` goes.
-    ///
-    /// # Errors
-    ///
-    /// Why the Python side could not say.
-    fn plan(&self, request: &RunRequest) -> Result<Plan, String>;
-
-    /// Runs `request` on the Python implementation: `run`'s result as JSON
-    /// text. `event` takes each progress event (JSON text) as it comes;
-    /// `finished` is called once the command has returned.
-    ///
-    /// # Errors
-    ///
-    /// Why the Python side could not answer.
-    fn run(
-        &self,
-        request: &RunRequest,
-        event: EventSink,
-        finished: Arc<dyn Fn() + Send + Sync>,
-    ) -> Result<String, String>;
-
-    /// Interrupts the Python run in progress, as Ctrl-C would.
-    fn interrupt(&self);
-
-    /// `invalidate`'s paths, for the registries the Python side keeps.
-    fn invalidate(&self, paths: &[String]);
-
-    /// Forgets the registries the Python side keeps: a Rust run may have
-    /// written a workspace.
-    fn forget(&self);
 }
 
 /// What runs the requests: [`HostRunner`], or a test's.
@@ -217,27 +170,17 @@ pub struct HostRunner {
     base_env: Vec<(String, String)>,
     cwd: PathBuf,
     version: String,
-    delegate: Option<Arc<dyn Delegate>>,
     root: clap::Command,
-    /// Whether the run in progress is the delegate's.
-    delegated: Mutex<bool>,
 }
 
 impl HostRunner {
     /// A runner whose runs start from `base_env` and `cwd`.
-    pub fn new(
-        base_env: Vec<(String, String)>,
-        cwd: PathBuf,
-        version: &str,
-        delegate: Option<Arc<dyn Delegate>>,
-    ) -> HostRunner {
+    pub fn new(base_env: Vec<(String, String)>, cwd: PathBuf, version: &str) -> HostRunner {
         HostRunner {
             base_env,
             cwd,
             version: version.to_owned(),
-            delegate,
             root: crate::catalog::root(),
-            delegated: Mutex::new(false),
         }
     }
 
@@ -246,10 +189,12 @@ impl HostRunner {
         run_environment(&self.base_env, request)
     }
 
-    /// The plan this process makes without a delegate.
+    /// How `request` goes: on Rust, with the request's environment over the
+    /// server's, `OPENTIDE_ENGINE=rust` and progress events on stderr.
     fn own_plan(&self, request: &RunRequest) -> Plan {
         let words = crate::hoist::command_words(&self.root, &request.argv);
         let mut env = self.run_environment(request);
+        env.retain(|(name, _)| name != "OPENTIDE_ENGINE" && name != "OPENTIDE_PROGRESS");
         env.push(("OPENTIDE_ENGINE".into(), "rust".into()));
         env.push(("OPENTIDE_PROGRESS".into(), "json".into()));
         let cwd = request
@@ -296,9 +241,6 @@ impl HostRunner {
         if !plan.keep {
             // It may have written any workspace (`--repo` names one): keep none.
             crate::embed::clear_workspaces();
-            if let Some(delegate) = &self.delegate {
-                delegate.forget();
-            }
         }
         let captured = match captured {
             Some(Ok(captured)) if !cancelled => captured,
@@ -320,13 +262,7 @@ impl HostRunner {
 
 impl Runner for HostRunner {
     fn plan(&self, request: &RunRequest) -> Plan {
-        match &self.delegate {
-            Some(delegate) => delegate.plan(request).unwrap_or_else(|problem| {
-                tracing::error!(problem = %problem, "serve: the Python side could not plan a run");
-                self.own_plan(request)
-            }),
-            None => self.own_plan(request),
-        }
+        self.own_plan(request)
     }
 
     fn run(
@@ -339,61 +275,17 @@ impl Runner for HostRunner {
         if let Some(message) = &plan.refused {
             return usage(&plan.words, message);
         }
-        match (&plan.rust, &self.delegate) {
-            (Some(rust), _) => self.run_rust(request, plan, rust, job, &event),
-            (None, Some(delegate)) => {
-                if job.cancelled() {
-                    job.finish();
-                    return failure(&plan.words, "Interrupted", INTERRUPTED_EXIT_CODE);
-                }
-                *self
-                    .delegated
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner) = true;
-                let returned = Arc::clone(job);
-                let finished = Arc::new(move || {
-                    returned.finish();
-                });
-                let answer = delegate.run(request, event, finished);
-                *self
-                    .delegated
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner) = false;
+        match &plan.rust {
+            Some(rust) => self.run_rust(request, plan, rust, job, &event),
+            None => {
                 job.finish();
-                if !plan.keep {
-                    crate::embed::clear_workspaces();
-                }
-                match answer {
-                    Ok(text) => RunOutcome::Delegated(text),
-                    Err(problem) => {
-                        let outcome = Outcome::failed(
-                            &plan.words.join(" "),
-                            1,
-                            Failure::new(code::INTERNAL, problem),
-                        );
-                        RunOutcome::Built {
-                            document: outcome.document(0),
-                            exit_code: 1,
-                        }
-                    }
-                }
+                failure(&plan.words, "No implementation runs this command", 1)
             }
-            (None, None) => failure(&plan.words, "No implementation runs this command", 1),
         }
     }
 
     fn interrupt(&self) {
-        let delegated = *self
-            .delegated
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if delegated {
-            if let Some(delegate) = &self.delegate {
-                delegate.interrupt();
-            }
-        } else {
-            crate::embed::interrupt();
-        }
+        crate::embed::interrupt();
     }
 
     fn invalidate(&self, paths: &[String]) {
@@ -403,9 +295,6 @@ impl Runner for HostRunner {
         let resolved: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
         // Taken into account at each warm workspace's next run.
         crate::embed::invalidate_workspaces(&resolved);
-        if let Some(delegate) = &self.delegate {
-            delegate.invalidate(paths);
-        }
     }
 }
 
@@ -658,6 +547,44 @@ mod tests {
             &words("deploy"),
             &words("deploy --dry-run")
         ));
+    }
+
+    /// No request runs on Python, whatever engine the server or the request
+    /// names (UC-6.0d, #841).
+    #[test]
+    fn every_run_is_planned_on_rust() {
+        let runner = HostRunner::new(
+            vec![("OPENTIDE_ENGINE".into(), "python".into())],
+            PathBuf::from("/w"),
+            "0.0.0",
+        );
+        let request = RunRequest {
+            argv: words("--repo r validate --file x"),
+            env: Some(vec![
+                ("OPENTIDE_ENGINE".into(), "compare".into()),
+                ("OPENTIDE_PROGRESS".into(), "off".into()),
+            ]),
+            ..RunRequest::default()
+        };
+        let plan = runner.plan(&request);
+        assert_eq!(plan.words, words("validate"));
+        assert!(plan.keep);
+        let rust = plan.rust.unwrap();
+        assert_eq!(rust.cwd, "/w");
+        let named = |variable: &str| -> Vec<&str> {
+            rust.env
+                .iter()
+                .filter(|(name, _)| name == variable)
+                .map(|(_, value)| value.as_str())
+                .collect()
+        };
+        assert_eq!(named("OPENTIDE_ENGINE"), ["rust"]);
+        assert_eq!(named("OPENTIDE_PROGRESS"), ["json"]);
+        let refused = runner.plan(&RunRequest {
+            argv: words("tui"),
+            ..RunRequest::default()
+        });
+        assert!(refused.refused.is_some());
     }
 
     #[test]

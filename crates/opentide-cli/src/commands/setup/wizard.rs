@@ -48,6 +48,19 @@ pub trait Prompter {
         checked: &[usize],
         required: bool,
     ) -> Answer<Vec<usize>>;
+    /// [`Prompter::checkbox`], with `hint` in place of the prompt's own
+    /// key help (`ask_checkbox`'s `instruction`).
+    fn checkbox_hinted(
+        &mut self,
+        message: &str,
+        choices: &[&str],
+        checked: &[usize],
+        required: bool,
+        hint: &str,
+    ) -> Answer<Vec<usize>> {
+        let _ = hint;
+        self.checkbox(message, choices, checked, required)
+    }
 }
 
 // ---------------------------------------------------------------- the choices
@@ -672,10 +685,38 @@ impl Prompter for Inquire {
         checked: &[usize],
         required: bool,
     ) -> Answer<Vec<usize>> {
+        self.multi_select(message, choices, checked, required, None)
+    }
+
+    fn checkbox_hinted(
+        &mut self,
+        message: &str,
+        choices: &[&str],
+        checked: &[usize],
+        required: bool,
+        hint: &str,
+    ) -> Answer<Vec<usize>> {
+        self.multi_select(message, choices, checked, required, Some(hint))
+    }
+}
+
+impl Inquire {
+    /// A checkbox question, with `hint` as its help line when given.
+    fn multi_select(
+        &self,
+        message: &str,
+        choices: &[&str],
+        checked: &[usize],
+        required: bool,
+        hint: Option<&str>,
+    ) -> Answer<Vec<usize>> {
         let mut prompt = inquire::MultiSelect::new(message, choices.to_vec())
             .with_default(checked)
             .without_filtering()
             .with_render_config(self.config);
+        if let Some(hint) = hint {
+            prompt = prompt.with_help_message(hint);
+        }
         if required {
             prompt =
                 prompt.with_validator(|picked: &[inquire::list_option::ListOption<&&str>]| {

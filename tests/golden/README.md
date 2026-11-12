@@ -53,7 +53,11 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    adds to the oracle's array at one pointer, each by its index in the candidate's array: the
    rest must be the oracle's elements, in order, compared as any value is, so it fixes the
    candidate's array as a whole-value entry would without quoting the oracle's elements, and a
-   JSON rule under it addresses the array by the oracle's indices; a `sha256` rule approves one
+   JSON rule under it addresses the array by the oracle's indices; a `json-drop:` rule is its
+   mirror, naming the oracle's elements the candidate drops from the array, each by its index in
+   the oracle's array, with the candidate's array length: the dropped elements are put back where
+   the oracle has them and the array is compared as any value is (a check a port no longer runs);
+   a `sha256` rule approves one
    whole file by the digests of both sides' normalised bytes, for a generated file compared by
    another check (each editor schema `generate schemas` writes, judged by verdict in `cargo
    xtask codegen --check`); a mode rule (`oracle = "0600"`, `candidate = "0644"`) approves one

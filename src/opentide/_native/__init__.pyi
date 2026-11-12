@@ -105,9 +105,19 @@ def interrupt_cli() -> bool: ...
 
 @final
 class ServeHost:
-    """``opentide serve``'s Rust host (UC-3.8): *write* takes each message line."""
+    """``opentide serve``'s Rust host (UC-3.8): *write* takes each message line.
 
-    def __new__(cls, write: Callable[[str], object], bridge: object, version: str) -> ServeHost: ...
+    Every run is Rust's, starting from *env* (the server's variables, in
+    order) and *cwd* (UC-6.0d).
+    """
+
+    def __new__(
+        cls,
+        write: Callable[[str], object],
+        version: str,
+        env: Sequence[tuple[str, str]],
+        cwd: str | os.PathLike[str],
+    ) -> ServeHost: ...
     def receive(self, line: bytes) -> None: ...
     def close_input(self) -> None: ...
     def serve(self) -> int: ...

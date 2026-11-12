@@ -90,3 +90,153 @@ fn a_workspace_root_has_its_folder_or_a_catalogue() {
     std::fs::create_dir(dir.path().join(".opentide")).unwrap();
     assert!(is_workspace_root(dir.path()));
 }
+
+// -- the questions at a terminal (UC-6.0d) -----------------------------------
+
+use crate::commands::setup::wizard::tests::{Reply, Script};
+use std::cell::RefCell;
+
+/// A workspace that enables Sentinel and Splunk, in a temporary folder.
+fn prompted_workspace() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let platforms = dir.path().join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    for platform in ["sentinel", "splunk"] {
+        std::fs::write(
+            platforms.join(format!("{platform}.toml")),
+            "[platform]\nenabled = true\n",
+        )
+        .unwrap();
+    }
+    std::fs::create_dir_all(dir.path().join("objects")).unwrap();
+    dir
+}
+
+/// `new <family>` in `dir`, its questions answered by `answers`, at a
+/// terminal when `can_prompt`: the report and the questions asked.
+fn prompted(
+    dir: &Path,
+    family: &str,
+    platforms: &[&str],
+    answers: Vec<Reply>,
+    can_prompt: bool,
+) -> (Report, Vec<String>) {
+    let script = RefCell::new(Script::new(answers));
+    let env = Env::from_pairs([("TZ", "UTC")]);
+    let interrupt = crate::app::Interrupt::default();
+    let report = run(
+        &NewArgs {
+            family: family.into(),
+            name: None,
+            path: None,
+            platforms: platforms.iter().map(|p| (*p).to_owned()).collect(),
+            objective: None,
+            threats: Vec::new(),
+        },
+        &Context {
+            repo: Some(&dir.to_string_lossy()),
+            env: &env,
+            cwd: dir,
+            version: "9.9.9",
+            can_prompt,
+            prompter: Some(&script),
+            interrupt: Some(&interrupt),
+        },
+    );
+    let asked = script.into_inner().asked;
+    (report, asked)
+}
+
+fn written(report: &Report, dir: &Path) -> String {
+    let data = Json::Object(report.outcome.data.clone());
+    let Some(Json::Str(path)) = data.get("path") else {
+        panic!("no path: {:?}", report.outcome);
+    };
+    std::fs::read_to_string(dir.join(path)).unwrap()
+}
+
+/// At a terminal a missing name is asked for, as `_ask_name` asks.
+#[test]
+fn a_missing_name_is_asked_for_at_a_terminal() {
+    let dir = prompted_workspace();
+    let (report, asked) = prompted(
+        dir.path(),
+        "threat",
+        &[],
+        vec![Reply::Text(Some("  Served Threat  "))],
+        true,
+    );
+    assert_eq!(asked, ["text Threat name [] None"]);
+    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
+    assert!(written(&report, dir.path()).contains("name: Served Threat"));
+}
+
+/// A rule without `--platform` asks which enabled platforms get a block;
+/// the blocks are the ones picked, and none when none is.
+#[test]
+fn a_rule_asks_for_its_platform_blocks() {
+    let dir = prompted_workspace();
+    let (report, asked) = prompted(
+        dir.path(),
+        "rule",
+        &[],
+        vec![Reply::Text(Some("Watch")), Reply::Checkbox(Some(vec![1]))],
+        true,
+    );
+    assert_eq!(asked[0], "text Rule name [] None");
+    assert_eq!(
+        asked[1],
+        "checkbox Platform blocks [\"Microsoft Sentinel\", \"Splunk Enterprise Security\"] [] required=false"
+    );
+    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
+    let text = written(&report, dir.path());
+    assert!(text.contains("  splunk:"), "{text}");
+    assert!(!text.contains("  sentinel:"), "{text}");
+    // `--platform` given: nothing asked.
+    let (_, asked) = prompted(
+        dir.path(),
+        "rule",
+        &["sentinel"],
+        vec![Reply::Text(Some("Other"))],
+        true,
+    );
+    assert_eq!(asked, ["text Rule name [] None"]);
+}
+
+/// An empty answer needs input; Ctrl-C stops the run; and nobody is asked
+/// anything away from a terminal.
+#[test]
+fn an_unanswered_question_stops_the_run() {
+    let dir = prompted_workspace();
+    let (report, _) = prompted(
+        dir.path(),
+        "objective",
+        &[],
+        vec![Reply::Text(Some("  "))],
+        true,
+    );
+    let failure = report.outcome.failure.unwrap();
+    assert_eq!(failure.code, USAGE_NEEDS_INPUT);
+    assert_eq!(failure.argument.as_deref(), Some("--name"));
+    let (report, _) = prompted(dir.path(), "threat", &[], vec![Reply::CtrlC], true);
+    assert_eq!(report.outcome.exit_code, 130);
+    let (report, _) = prompted(
+        dir.path(),
+        "rule",
+        &[],
+        vec![Reply::Text(Some("Watch")), Reply::CtrlC],
+        true,
+    );
+    assert_eq!(report.outcome.exit_code, 130);
+    assert!(
+        !dir.path().join("objects/rules").exists()
+            || std::fs::read_dir(dir.path().join("objects/rules"))
+                .unwrap()
+                .next()
+                .is_none(),
+        "nothing is written"
+    );
+    let (report, asked) = prompted(dir.path(), "threat", &[], Vec::new(), false);
+    assert!(asked.is_empty());
+    assert_eq!(report.outcome.failure.unwrap().code, USAGE_NEEDS_INPUT);
+}

@@ -752,6 +752,12 @@ def test_pill_is_white_on_reflex_blue() -> None:
 
 # -- the command ------------------------------------------------------------
 
+#: The Python UI, behind the escape hatch: ``opentide tui`` opens the Rust UI
+#: by default (UC-6.0d, #841). The tests that replace what the Python command
+#: reads (``_interactive``, ``OpentideTui.run``) run it; the Rust command's
+#: refusals and UI are ``crates/opentide-cli/tests/tui*.rs``'s.
+PYTHON_UI = {"OPENTIDE_ENGINE": "python"}
+
 
 def test_refused_outside_a_terminal(tmp_path: Path) -> None:
     result = CliRunner().invoke(cli_app, ["--repo", str(tmp_path), "tui"])
@@ -793,7 +799,9 @@ def test_at_a_terminal_in_plain_mode_the_refusal_names_the_setting(
     monkeypatch.setattr(tui_command, "_interactive", lambda: True)
     for name in ("NO_COLOR", "CI", "GITHUB_ACTIONS", "GITLAB_CI", "TF_BUILD", "TERM"):
         monkeypatch.delenv(name, raising=False)
-    result = CliRunner().invoke(cli_app, ["--repo", str(tmp_path), *argv, "tui"], env=env)
+    result = CliRunner().invoke(
+        cli_app, ["--repo", str(tmp_path), *argv, "tui"], env={**env, **PYTHON_UI}
+    )
     assert result.exit_code == 2
     assert _plain(result.stderr).splitlines()[:2] == [
         "error: opentide tui runs only in the human output mode; "
@@ -807,7 +815,7 @@ def test_at_a_terminal_the_json_refusal_carries_the_advice(
 ) -> None:
     monkeypatch.setattr(tui_command, "_interactive", lambda: True)
     result = CliRunner().invoke(
-        cli_app, ["--repo", str(tmp_path), "--json", "tui"], env={"NO_COLOR": "1"}
+        cli_app, ["--repo", str(tmp_path), "--json", "tui"], env={"NO_COLOR": "1", **PYTHON_UI}
     )
     payload = json.loads(result.stdout)
     # --json is not a setting a person can be told to drop: the plain wording.
@@ -833,7 +841,7 @@ def test_human_mode_on_a_terminal_runs_the_app(
     monkeypatch.setattr(tui_command, "_interactive", lambda: True)
     monkeypatch.setattr(OpentideTui, "run", lambda self: started.append(self.cli))
     result = CliRunner().invoke(
-        cli_app, ["--repo", str(tmp_path), "tui"], env={"OPENTIDE_OUTPUT": "human"}
+        cli_app, ["--repo", str(tmp_path), "tui"], env={"OPENTIDE_OUTPUT": "human", **PYTHON_UI}
     )
     assert result.exit_code == 0, result.output
     assert [ctx.repo for ctx in started] == [tmp_path]

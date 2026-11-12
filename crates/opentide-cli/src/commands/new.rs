@@ -9,9 +9,11 @@
 //! allows, or `...` for free text. Those stand-ins are the result's
 //! `placeholders`. When the template or the schema is missing, the
 //! `templates` and `schemas` phases of `generate` write them first
-//! ([`super::generate::run_phases`]). A prompt for a missing name or the
-//! platforms (`human` mode at an interactive terminal) is the Python
-//! engine's: refused with `engine_not_ported`.
+//! ([`super::generate::run_phases`]). At an interactive terminal (`human`
+//! mode, stdin a terminal) a missing name is asked for (`<Family> name`),
+//! and a rule without `--platform` asks which of the enabled platforms get
+//! a block (`Platform blocks`), as the Python CLI does (`_ask_name`,
+//! `_ask_platforms`), through the setup wizards' [`Prompter`] (UC-6.0d).
 
 pub mod scaffold;
 
@@ -32,6 +34,7 @@ use opentide_workspace::lint::stems::{expected_stem, object_stem, slugify, split
 use serde_json::Value;
 
 use self::scaffold::{FieldPath, Fill, Model, Scalar, collect_fields, fill_template};
+use super::setup::wizard::{Prompter, Stop};
 use super::{COMMAND_FAILED, Report, open, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, USAGE_EXIT_CODE, code};
@@ -125,6 +128,45 @@ pub struct Context<'a> {
     /// Whether a person could answer a prompt: `human` mode with a terminal
     /// on stdin.
     pub can_prompt: bool,
+    /// Asks the questions when [`Context::can_prompt`]; without one, a run
+    /// that would prompt is refused as needing input.
+    pub prompter: Option<&'a std::cell::RefCell<dyn Prompter + 'a>>,
+    /// Ctrl-C at a question stops the run as Ctrl-C does (exit 130).
+    pub interrupt: Option<&'a crate::app::Interrupt>,
+}
+
+/// What the platform question says under itself (`_ask_platforms`).
+pub const PLATFORMS_HINT: &str = "(space selects, enter for none, arrows move)";
+
+/// The report of a question that was not answered: Ctrl-C stops the run,
+/// which the command line reports (`error: interrupted`, exit 130).
+fn stopped(command: &str, stop: Stop, cx: &Context<'_>) -> Report {
+    match stop {
+        Stop::Interrupted => {
+            if let Some(interrupt) = cx.interrupt {
+                interrupt.request();
+            }
+            let mut report = Report::failed(
+                command,
+                crate::envelope::INTERRUPTED_EXIT_CODE,
+                Failure::new("interrupted", "Interrupted"),
+            );
+            report.outcome.message = "Interrupted".into();
+            report
+        }
+        Stop::Failed(message) => Report::error(command, message),
+    }
+}
+
+/// `family` with its first letter in upper case (`str.capitalize`).
+fn capitalised(family: &str) -> String {
+    let mut chars = family.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first
+            .to_uppercase()
+            .chain(chars.flat_map(char::to_lowercase))
+            .collect()
+    })
 }
 
 /// Whether stdin is a terminal.
@@ -404,19 +446,6 @@ fn path(parts: &[&str]) -> FieldPath {
     parts.iter().map(|part| (*part).to_owned()).collect()
 }
 
-/// A refusal: the run needs what only the Python engine does (a prompt).
-fn not_ported(command: &str, what: &str) -> Report {
-    let mut failure = Failure::new(
-        code::ENGINE_NOT_PORTED,
-        format!(
-            "opentide {command} {what} has no Rust implementation yet: unset OPENTIDE_ENGINE, or \
-             set it to python or compare."
-        ),
-    );
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(command, USAGE_EXIT_CODE, failure)
-}
-
 fn needs_input(command: &str, family: &str, missing: &str) -> Report {
     let mut failure = Failure::new(
         USAGE_NEEDS_INPUT,
@@ -479,8 +508,20 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         .filter(|name| !name.is_empty())
     {
         Some(name) => name.to_owned(),
-        None if cx.can_prompt => return not_ported(&command, "with a prompt for --name"),
-        None => return needs_input(&command, family, "--name"),
+        None => match cx.prompter.filter(|_| cx.can_prompt) {
+            Some(prompter) => {
+                let asked =
+                    prompter
+                        .borrow_mut()
+                        .text(&format!("{} name", capitalised(family)), "", None);
+                match asked {
+                    Ok(answer) if !answer.trim().is_empty() => answer.trim().to_owned(),
+                    Ok(_) => return needs_input(&command, family, "--name"),
+                    Err(stop) => return stopped(&command, stop, cx),
+                }
+            }
+            None => return needs_input(&command, family, "--name"),
+        },
     };
     let workspace = match open(options) {
         Ok(workspace) => workspace,
@@ -491,12 +532,39 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         .into_iter()
         .map(|(key, _)| key)
         .collect();
-    if family == "rule" && args.platforms.is_empty() && cx.can_prompt && !enabled.is_empty() {
-        return not_ported(&command, "with a prompt for the platforms");
+    let mut chosen = args.platforms.clone();
+    if family == "rule" && args.platforms.is_empty() && !enabled.is_empty() {
+        if let Some(prompter) = cx.prompter.filter(|_| cx.can_prompt) {
+            let labels: Vec<&str> = enabled
+                .iter()
+                .map(|key| {
+                    super::setup::wizard::PLATFORMS
+                        .iter()
+                        .find(|(name, _)| name == key)
+                        .map_or(key.as_str(), |(_, label)| *label)
+                })
+                .collect();
+            let asked = prompter.borrow_mut().checkbox_hinted(
+                "Platform blocks",
+                &labels,
+                &[],
+                false,
+                PLATFORMS_HINT,
+            );
+            match asked {
+                Ok(picked) => {
+                    chosen = picked
+                        .iter()
+                        .filter_map(|&index| enabled.get(index).cloned())
+                        .collect();
+                }
+                Err(stop) => return stopped(&command, stop, cx),
+            }
+        }
     }
     let mut platforms: Vec<String> = Vec::new();
     if family == "rule" {
-        for platform in &args.platforms {
+        for platform in &chosen {
             if !platforms.contains(platform) {
                 platforms.push(platform.clone());
             }

@@ -96,20 +96,27 @@ pub enum Error {
 
 /// What `data["name"]` gives for a rule file read as `root`: `Ok` when the
 /// file is a mapping with a `name`, else the oracle's exception text
-/// (`'name'`, `'NoneType' object is not subscriptable`), or `None` for a
-/// root whose Python type YAML 1.1 and 1.2 may read differently.
-pub fn name_error(root: Option<&Node>) -> Result<(), Option<String>> {
+/// (`'name'`, `'NoneType' object is not subscriptable`, `'int' object is not
+/// subscriptable`, ...), for the type this loader reads the root as. The
+/// oracle reads YAML 1.1, this loader YAML 1.2: a plain scalar the two read
+/// as different types (`yes`, `2026-01-01`) is named by its YAML 1.2 type
+/// (UC-6.0d, #841).
+pub fn name_error(root: Option<&Node>) -> Result<(), String> {
+    let not_subscriptable = |name: &str| format!("'{name}' object is not subscriptable");
     let Some(root) = root else {
-        return Err(Some("'NoneType' object is not subscriptable".to_owned()));
+        return Err(not_subscriptable("NoneType"));
     };
     match &root.value {
         Value::Map(_) if root.get("name").is_some() => Ok(()),
-        Value::Map(_) => Err(Some(crate::strategy::python_repr("name"))),
-        Value::Null => Err(Some("'NoneType' object is not subscriptable".to_owned())),
-        Value::Seq(_) => Err(Some(
-            "list indices must be integers or slices, not str".to_owned(),
-        )),
-        _ => Err(None),
+        Value::Map(_) => Err(crate::strategy::python_repr("name")),
+        Value::Null => Err(not_subscriptable("NoneType")),
+        Value::Seq(_) => Err("list indices must be integers or slices, not str".to_owned()),
+        Value::Str(_) | Value::Datetime(_) => {
+            Err("string indices must be integers, not 'str'".to_owned())
+        }
+        Value::Bool(_) => Err(not_subscriptable("bool")),
+        Value::Int(_) => Err(not_subscriptable("int")),
+        Value::Float(_) => Err(not_subscriptable("float")),
     }
 }
 
@@ -570,21 +577,31 @@ mod tests {
         assert_eq!(name_error(Some(root)), Ok(()));
         assert_eq!(
             name_error(None),
-            Err(Some("'NoneType' object is not subscriptable".into()))
+            Err("'NoneType' object is not subscriptable".into())
         );
         let nameless = node::load("a: 1\n").unwrap();
         assert_eq!(
             name_error(nameless.root().map(AsRef::as_ref)),
-            Err(Some("'name'".into()))
+            Err("'name'".into())
         );
-        let list = node::load("- a\n").unwrap();
-        assert!(
-            name_error(list.root().map(AsRef::as_ref))
-                .unwrap_err()
-                .is_some()
-        );
-        let scalar = node::load("x\n").unwrap();
-        assert_eq!(name_error(scalar.root().map(AsRef::as_ref)), Err(None));
+        // A root that is no mapping: `data["name"]`'s TypeError, as Python
+        // words it for the type YAML 1.2 reads.
+        for (text, error) in [
+            ("- a\n", "list indices must be integers or slices, not str"),
+            ("x\n", "string indices must be integers, not 'str'"),
+            ("'1'\n", "string indices must be integers, not 'str'"),
+            ("1\n", "'int' object is not subscriptable"),
+            ("1.5\n", "'float' object is not subscriptable"),
+            ("true\n", "'bool' object is not subscriptable"),
+            ("~\n", "'NoneType' object is not subscriptable"),
+        ] {
+            let document = node::load(text).unwrap();
+            assert_eq!(
+                name_error(document.root().map(AsRef::as_ref)),
+                Err(error.to_owned()),
+                "{text:?}"
+            );
+        }
     }
 
     #[test]

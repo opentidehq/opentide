@@ -207,6 +207,22 @@ pub fn not_ported(what: &str) -> Report {
     Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
 }
 
+/// A platform with no query runner (Sysdig): a usage error on `--platform`,
+/// the platforms with one as its choices (`run_query`).
+pub fn no_runner(platform: &str) -> Report {
+    let choices: Vec<String> = QUERY_PLATFORMS
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    usage_with(
+        platform,
+        &format!("{platform} has no query runner"),
+        "--platform",
+        suggest(platform, &choices),
+        &choices,
+    )
+}
+
 /// A call that cannot run as given (`_usage`): exit 2, `usage_invalid_value`.
 fn usage(platform: &str, message: &str, argument: &str, choices: &[String]) -> Report {
     usage_with(platform, message, argument, None, choices)
@@ -893,7 +909,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         }
     };
     if !PLATFORMS.contains(&platform) && !plugin {
-        return not_ported(&format!("query on {platform}"));
+        // Sysdig (`run_query`'s first check): no query runner, the platforms
+        // with one as the choices.
+        return no_runner(platform);
     }
     if !(1..=MAX_LIMIT).contains(&args.limit) {
         let mut report = usage(
@@ -2208,15 +2226,21 @@ mod tests {
         assert_eq!(failure.suggestion.as_deref(), Some("eql"));
         assert_eq!(failure.argument.as_deref(), Some("--language"));
         assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
-        let refused = not_ported("query on sysdig");
+        let refused = no_runner("sysdig");
+        assert_eq!(
+            compact_of(&Json::Object(refused.outcome.data.clone())),
+            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","harfanglab","sentinel","sentinel_one","splunk"]}"#
+        );
+        assert_eq!(refused.outcome.exit_code, 2);
+        let failure = refused.outcome.failure.unwrap();
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(failure.argument.as_deref(), Some("--platform"));
+        assert_eq!(failure.message, "sysdig has no query runner");
+        assert_eq!(failure.suggestion, None);
+        let refused = not_ported("query --rule on acme");
         let failure = refused.outcome.failure.unwrap();
         assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
         assert_eq!(failure.argument.as_deref(), Some("OPENTIDE_ENGINE"));
-        assert_eq!(
-            failure.message,
-            "opentide query on sysdig has no Rust implementation yet: unset OPENTIDE_ENGINE, \
-             or set it to python or compare."
-        );
     }
 
     #[test]

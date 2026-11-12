@@ -30,7 +30,10 @@ def serve() -> int:
         return 1
     if sys.stdin.isatty():
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
-    _supply_catalogs()
+    # No catalog is handed over: the server generates each root's field
+    # catalogs and configuration schemas from the models (#926), as
+    # ``opentide lsp start`` on Rust does, and clients read ``catalog:
+    # "models"`` at ``initialize`` (UC-6.0d, #841).
     _name_the_host()
     failure: list[BaseException] = []
     clean: list[bool] = []
@@ -53,32 +56,6 @@ def serve() -> int:
     # LSP: 0 after `shutdown` then `exit`, 1 when the editor exits or closes
     # stdin without shutting the server down.
     return 0 if clean and clean[0] else 1
-
-
-def _supply_catalogs() -> None:
-    """Hand the server this opentide's catalogs for the workspace it starts in.
-
-    The server would otherwise read the workspace's committed catalogs at
-    ``initialize``, which may come from an older opentide, or fall back to
-    the snapshot compiled into the engine. When they cannot be generated, the
-    server does as before, and stderr says why.
-    """
-    from opentide.analysis import engine, own_catalog
-    from opentide.registry.discovery import discover_workspace
-
-    try:
-        catalogs = own_catalog(discover_workspace())
-        module = engine()
-        module.set_default_catalog(
-            fields=catalogs["fields.json"], deprecations=catalogs["deprecations.json"]
-        )
-        module.use_host_catalogs()
-    except Exception as exc:  # the server still starts, on the workspace's catalogs
-        print(  # noqa: T201 -- stderr, outside the protocol
-            f"warning: opentide's catalogs could not be generated ({type(exc).__name__}: {exc}); "
-            "using the workspace's, or the engine's bundled ones",
-            file=sys.stderr,
-        )
 
 
 def _name_the_host() -> None:

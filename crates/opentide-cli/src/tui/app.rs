@@ -175,6 +175,11 @@ pub struct App {
     /// Whether keys type into the filter (`/`).
     pub filtering: bool,
     visibility: TableState,
+    /// The Configuration tab's file list.
+    configuration: TableState,
+    /// Whether the Configuration tab shows the raw file (`t`).
+    pub config_raw: bool,
+    config_scroll: usize,
     /// The Chains tab.
     pub chains: Chains,
     /// The palette, when open.
@@ -228,6 +233,9 @@ impl App {
             visibility_filter: String::new(),
             filtering: false,
             visibility: TableState::default().with_selected(Some(0)),
+            configuration: TableState::default().with_selected(Some(0)),
+            config_raw: false,
+            config_scroll: 0,
             chains: Chains::default(),
             palette: None,
             marked_row: None,
@@ -824,6 +832,28 @@ impl App {
                 );
             }
             (3, KeyCode::Enter) => self.open_log_source(),
+            (4, KeyCode::Up | KeyCode::Down) => {
+                let rows = self
+                    .catalogue
+                    .as_ref()
+                    .map_or(0, |catalogue| catalogue.configuration.files.len());
+                step_table(
+                    &mut self.configuration,
+                    rows,
+                    if key.code == KeyCode::Up { -1 } else { 1 },
+                );
+                self.config_scroll = 0;
+            }
+            (4, KeyCode::Char('t')) => {
+                self.config_raw = !self.config_raw;
+                self.config_scroll = 0;
+            }
+            (4, KeyCode::PageDown) => {
+                self.config_scroll = self.config_scroll.saturating_add_signed(page);
+            }
+            (4, KeyCode::PageUp) => {
+                self.config_scroll = self.config_scroll.saturating_add_signed(-page);
+            }
             (5, _) => self.chains_key(key),
             _ => {}
         }
@@ -1055,10 +1085,7 @@ impl App {
             1 => self.draw_coverage(frame, body),
             2 => self.draw_results(frame, body),
             3 => self.draw_visibility(frame, body),
-            4 => frame.render_widget(
-                Paragraph::new(panes::configuration_refusal()).wrap(Wrap { trim: false }),
-                pad(body),
-            ),
+            4 => self.draw_configuration(frame, body),
             _ => self.draw_chains(frame, body),
         }
         frame.render_widget(
@@ -1088,6 +1115,7 @@ impl App {
         ];
         match self.tab {
             3 => keys.insert(0, ("/", "Filter")),
+            4 => keys.insert(0, ("t", "Raw TOML")),
             5 => keys
                 .splice(0..0, [("+/-", "Hops"), ("l", "Relations"), ("c", "Centre")])
                 .for_each(drop),
@@ -1474,6 +1502,82 @@ impl App {
         let inner = pad(block.inner(detail));
         frame.render_widget(block, detail);
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+    }
+
+    /// The Configuration tab: the files on the left; on the right the one
+    /// highlighted, read or raw (`ConfigurationPane`).
+    fn draw_configuration(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let Some(catalogue) = &self.catalogue else {
+            return;
+        };
+        let view = &catalogue.configuration;
+        let [files, detail] =
+            Layout::horizontal([Constraint::Length(34), Constraint::Fill(1)]).areas(area);
+        let rows: Vec<Row<'static>> = view
+            .files
+            .iter()
+            .map(|item| {
+                Row::new(panes::configuration_cells(item).map(ratatui::widgets::Cell::from))
+            })
+            .collect();
+        if self
+            .configuration
+            .selected()
+            .is_some_and(|at| at >= view.files.len())
+        {
+            self.configuration
+                .select(Some(view.files.len().saturating_sub(1)));
+        }
+        let widget = Table::new(
+            rows,
+            [
+                Constraint::Fill(1),
+                Constraint::Length(3),
+                Constraint::Length(8),
+            ],
+        )
+        .header(
+            Row::new(["File", "Set", "Findings"]).style(Style::new().add_modifier(Modifier::BOLD)),
+        )
+        .row_highlight_style(Style::new().fg(WHITE).bg(BLUE))
+        .block(
+            Block::new()
+                .borders(Borders::RIGHT)
+                .border_style(Style::new().fg(Color::DarkGray)),
+        );
+        let key = self
+            .configuration
+            .selected()
+            .and_then(|at| view.files.get(at))
+            .map(|item| item.key.clone());
+        let lines =
+            panes::configuration_detail(view, key.as_deref(), self.config_raw, Some(catalogue));
+        frame.render_stateful_widget(widget, files, &mut self.configuration);
+        let detail = pad(detail);
+        self.detail_height = usize::from(detail.height);
+        let scroll = u16::try_from(self.config_scroll).unwrap_or(u16::MAX);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .wrap(Wrap { trim: false })
+                .scroll((scroll, 0)),
+            detail,
+        );
+    }
+
+    /// Highlights the configuration file `key` (tests, and the Python UI's
+    /// `move_cursor`).
+    pub fn select_configuration(&mut self, key: &str) {
+        let at = self.catalogue.as_ref().and_then(|catalogue| {
+            catalogue
+                .configuration
+                .files
+                .iter()
+                .position(|item| item.key == key)
+        });
+        if at.is_some() {
+            self.configuration.select(at);
+            self.config_scroll = 0;
+        }
     }
 
     fn draw_chains(&mut self, frame: &mut Frame<'_>, area: Rect) {

@@ -264,6 +264,22 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
     "splunk",
 )
 
+#: The platforms whose ``query`` runs on Rust (*platforms* of ``query``'s
+#: entry): :data:`RUST_QUERY_PLATFORMS`, and Sysdig, which has no runner and
+#: is refused as Python refuses it (``sysdig has no query runner``, UC-6.0d,
+#: #841).
+RUST_QUERY_ROUTED: tuple[str, ...] = (
+    "carbon_black_cloud",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "elastic",
+    "harfanglab",
+    "sentinel",
+    "sentinel_one",
+    "splunk",
+    "sysdig",
+)
+
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
 #: rather than to themselves: ``serve`` runs each request on the engine its
 #: command selects (#822), and the MCP server's read tools do the same. They
@@ -274,11 +290,16 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
 #: start`` (UC-3.6b, #947) is one too: an editor's session has one server on
 #: stdio, so ``compare`` runs the Python host and ``rust`` the Rust one. So is
 #: ``tui``: a full-screen UI cannot run twice to be compared, so ``compare``
-#: opens the Python one; under ``rust`` its refusals and its UI (on ratatui,
-#: UC-3.6d, #951) run on Rust.
+#: opens the Rust one (:data:`UNCOMPARED_RUST`), the default since its
+#: Configuration tab was ported (UC-6.0d); its refusals and its UI (on
+#: ratatui, UC-3.6d, #951) run on Rust.
 ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
     {("serve",), ("mcp", "start"), ("lsp", "start"), ("tui",)}
 )
+
+#: Hosts that ``compare`` runs on Rust alone: ``tui``, whose Rust UI is the
+#: default (UC-6.0d, #841) and which cannot run twice to be compared.
+UNCOMPARED_RUST: frozenset[tuple[str, ...]] = frozenset({("tui",)})
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
 #: ``rust`` runs it in this process (:func:`opentide.cli.rust.run_in_process`);
@@ -308,9 +329,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``new threat|objective|rule`` and ``generate`` with phases named
 #: (``generate schemas templates``) with UC-3.5d (#933); a bare ``generate``,
 #: the full pipeline, with UC-6.0 (#841).
-#: ``serve`` with UC-3.8 (#830): the Rust host, which runs each command with a
-#: Rust implementation itself and hands every other run to this package's
-#: runner in its own process (``opentide.cli.services.serve_bridge``).
+#: ``serve`` with UC-3.8 (#830): the Rust host, which runs every request on
+#: Rust in its own process, whatever engine the request names (UC-6.0d, #841).
 #: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
 #: command line, and ``tui``'s refusals (``usage_tui_needs_tty``); ``tui``'s
 #: terminal UI with UC-3.6d (#951), on ratatui.
@@ -383,7 +403,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
     ("query",): RustCommand(
-        launch=RUST_CLI, side_effects=True, platforms=RUST_QUERY_PLATFORMS, plugins=True
+        launch=RUST_CLI, side_effects=True, platforms=RUST_QUERY_ROUTED, plugins=True
     ),
     ("share",): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
     ("share", "push"): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
@@ -487,6 +507,9 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         return
     words = command_words(click_ctx.command, args)
     engine = selected(words)
+    if engine == COMPARE and words in UNCOMPARED_RUST:
+        # A full-screen UI cannot run twice to be compared: the Rust one opens.
+        engine = RUST
     if engine == PYTHON:
         if not plugin_default(words, args):
             return

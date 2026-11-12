@@ -46,6 +46,8 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 
 `skip` marks an optional integration that is not set up, or a check that did not run. It never changes the exit code.
 
+With `OPENTIDE_ENGINE=rust` (the Rust command line, and the npm package's `opentide`), `doctor` runs neither `python_version` nor `platform_sdk`: it does not run on Python, and its platforms are its own connectors, which import no Python SDK. Their rows are left out of the checklist, `checks` and the summary counts.
+
 When `configuration` fails, the checks that read the configuration (`templates_fresh`, `schemas_fresh`, `platforms_enabled`, `platform_sdk`, `credentials`, `vscode_settings`, `vscode_snippets`) are skipped with `Not checked: the configuration does not load`, so one broken file is reported once, where it is.
 
 `mcp_config` passes when at least one host runs opentide. A file that lists only other servers, such as a Claude Code `.mcp.json`, is named in the message but is not a warning.

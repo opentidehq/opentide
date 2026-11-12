@@ -42,10 +42,9 @@ implementations, as at a terminal.
 
 **The Rust host (UC-3.8, #830).** Under ``OPENTIDE_ENGINE=rust``,
 ``opentide serve`` is the Rust host (``crates/opentide-cli/src/serve``),
-which hands the runs this module's engine selection gives to Python to a
-:class:`CommandRunner` in its process
-(:mod:`opentide.cli.services.serve_bridge`). This module stays the host
-under every other engine until ``serve``'s default flips.
+which runs every request on Rust and nothing on Python (UC-6.0d, #841).
+This module stays the host under every other engine until ``serve``'s
+default flips, and goes with the Python implementation (UC-6.2).
 """
 
 from __future__ import annotations

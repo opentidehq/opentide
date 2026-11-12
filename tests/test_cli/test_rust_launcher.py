@@ -1,66 +1,45 @@
-"""``opentide.cli.rust``: what the launcher tells the Rust command line (UC-3.5c, #928)."""
+"""``opentide.cli.rust``: what the launcher hands the Rust command line (UC-3.5c, #928; UC-6.0d)."""
 
 from __future__ import annotations
 
-import json
+import os
 
 import pytest
 
 from opentide.cli import rust
-from opentide.cli.services.doctor import PLATFORM_SDKS
+
+#: What the launcher handed the Rust command line before UC-6.0d (#841): the
+#: platforms' Python SDK imports for ``doctor``, and whether the Python MCP
+#: server imported for ``setup mcp``.
+RETIRED = ("OPENTIDE_PYTHON_MODULES", "OPENTIDE_MCP_SERVER")
 
 
-def test_doctor_gets_each_platform_module_import_status() -> None:
-    modules = rust.python_modules(["--json", "doctor", "--offline"])
-    assert modules is not None
-    platforms = json.loads(modules)
-    # Every platform, with its modules in the order the Python package lists them.
-    assert {platform: [module for module, _ in pairs] for platform, pairs in platforms.items()} == {
-        platform: list(names) for platform, names in PLATFORM_SDKS.items()
-    }
-    # ``requests`` is a dependency of opentide: it imports.
-    assert ["requests", None] in platforms["elastic"]
-
-
-def test_a_module_that_does_not_import_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opentide.cli.services import doctor
-
-    monkeypatch.setitem(doctor.PLATFORM_SDKS, "splunk", ("requests", "opentide_no_such_module"))
-    platforms = json.loads(rust.python_modules(["doctor"]) or "{}")
-    [first, second] = platforms["splunk"]
-    assert first == ["requests", None]
-    assert second[0] == "opentide_no_such_module"
-    assert second[1].startswith("ModuleNotFoundError")
-
-
-def test_other_commands_pay_for_no_imports() -> None:
-    assert rust.python_modules(["info"]) is None
-    assert rust.python_modules(["migrate", "vocab-scope"]) is None
-
-
-def test_setup_mcp_gets_whether_the_mcp_server_can_start(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opentide.mcp_server import launcher
-
-    monkeypatch.setattr(launcher, "missing_requirements", lambda: ["mcp.server.mcpserver"])
-    for argv in (["setup", "mcp", "--vscode"], ["--json", "setup", "--mcp", "cursor", "--yes"]):
-        server = json.loads(rust.mcp_server(argv) or "{}")
-        assert server == {"missing": ["mcp.server.mcpserver"], "hint": launcher.MCP_INSTALL_HINT}
-    monkeypatch.setattr(launcher, "missing_requirements", list)
-    assert json.loads(rust.mcp_server(["setup", "mcp", "--generic"]) or "{}")["missing"] == []
-
-
-def test_setup_without_mcp_pays_for_no_probe() -> None:
-    assert rust.mcp_server(["setup", "env"]) is None
-    assert rust.mcp_server(["setup", "--yes", "--name", "x"]) is None
-    assert rust.mcp_server(["info"]) is None
-
-
-def test_the_setup_wizard_gets_whether_the_mcp_server_can_start(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--json", "doctor", "--offline"],
+        ["setup", "mcp", "--vscode"],
+        ["--json", "setup", "--mcp", "cursor", "--yes"],
+        ["setup"],
+    ],
+)
+def test_the_rust_run_gets_exactly_the_environment_it_is_given(
+    argv: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The wizard may write MCP configurations: its answers are not on the command line."""
-    from opentide.mcp_server import launcher
+    """``doctor`` checks no Python module and ``setup mcp`` probes the Rust server:
+    the launcher probes nothing in Python and adds no variable."""
+    import opentide._native
 
-    monkeypatch.setattr(launcher, "missing_requirements", lambda: ["mcp"])
-    for argv in (["setup"], ["--no-color", "setup", "-C", "repo"], ["setup", "--path=x"]):
-        assert json.loads(rust.mcp_server(argv) or "{}")["missing"] == ["mcp"]
+    seen: list[dict[str, str]] = []
+
+    def cli_main(args: list[str], version: str) -> int:
+        seen.append(dict(os.environ))
+        return 0
+
+    monkeypatch.setattr(opentide._native, "cli_main", cli_main)
+    given = {"PATH": os.environ.get("PATH", ""), "OPENTIDE_OUTPUT": "plain"}
+    before = dict(os.environ)
+    assert rust.run_in_process(argv, given) == 0
+    assert seen == [given]
+    assert not any(name in seen[0] for name in RETIRED)
+    assert dict(os.environ) == before
