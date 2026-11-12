@@ -295,6 +295,8 @@ Exports the detection rules of one Kibana space and writes each one to `Imported
 - A look-back window that RFC 0007 cannot express is logged as `elastic_import_window_widened` or `elastic_import_schedule_defaulted`.
 - No deployment state is written: Elastic addresses rules by `metadata.uuid`.
 
+With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), `generate extract defender` and `generate extract elastic` run on the Rust command line, through its connectors: the same requests, files (byte for byte), deployment state, warnings and result. At a terminal the `import from …` row is printed when the import is done, and a log line is one unstyled line. `generate extract sentinel` runs on the Python CLI.
+
 ## When to run
 
 - After upgrading the `opentide` package version.

@@ -389,7 +389,7 @@ fn publish(outputs: &[Output], stale: &[PathBuf]) -> Result<(), String> {
 
 /// The nested-file warning (`with_nested_object_warning`): files in
 /// subfolders of an object folder are not objects and get no page.
-fn nested_warning(workspace: &Workspace) -> Option<String> {
+pub(crate) fn nested_warning(workspace: &Workspace) -> Option<String> {
     let index = workspace.index();
     if index.nested.is_empty() {
         return None;

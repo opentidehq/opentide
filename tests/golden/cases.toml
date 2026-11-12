@@ -105,6 +105,17 @@ kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
 about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that take PREVIEW and RELEASE runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed: the cases of a deploy that sends (UC-4.6)"
 
+[fixtures.share-misp]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "a workspace with three MISP destinations (one enabled to the stand-in of tests/cassettes/misp/tenant.py, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before: `share`'s cases (UC-4.4b)"
+
+[fixtures.share-misp-broken]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "share-misp with a sharing.toml block whose max_tlp is not a TLP name: the `sharing_config` preflight (UC-4.4b)"
+edits = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"amber\"", replace = "max_tlp = \"purple\"" }]
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -2262,3 +2273,151 @@ variant = "no-uuid"
 args = ["share", "retract"]
 modes = ["plain", "json", "agent"]
 fixtures = ["tide-corpus"]
+
+# ---- UC-4.4b (#834): share on the MISP stand-in ----
+# The `share-misp` fixture; the cases that reach the stand-in are served from
+# cassettes recorded from the oracle (tests/cassettes/golden/share-*.json). Not
+# in human mode: the catalogue's progress is drawn as often as it loads.
+
+[[case]]
+command = "share preview"
+variant = "misp"
+args = ["share", "preview"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share"
+variant = "misp-dry-run"
+args = ["share", "--dry-run", "--target", "misp-prod", "--no-publish"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp"
+args = ["share", "status"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp-type"
+args = ["share", "status", "--type", "rule", "--target", "misp-locked"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share targets"
+variant = "misp"
+args = ["share", "targets"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share targets"
+variant = "misp-broken"
+args = ["share", "targets"]
+fixtures = ["share-misp-broken"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-key-unset"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+
+[[case]]
+command = "share push"
+variant = "misp-disabled"
+args = ["share", "push", "--target", "misp-lab"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-typo"
+args = ["share", "push", "--target", "misp-prd"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+
+[[case]]
+command = "share push"
+variant = "misp-unknown-type"
+args = ["share", "push", "--type", "rules"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-workers"
+args = ["share", "push", "--workers", "0"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-since-alone"
+args = ["share", "push", "--since", "HEAD~1"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share status"
+variant = "misp-group-option"
+args = ["share", "--dry-run", "status"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share retract"
+variant = "misp-unconfirmed"
+args = ["share", "retract", "--target", "misp-prod", "--delete"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "misp"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/share-push"
+
+[[case]]
+command = "share retract"
+variant = "misp"
+args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012", "--uuid", "00000000-0000-4000-8048-000000000020"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/share-retract"
+
+# ---- UC-4.4b (#834): generate extract on the stand-in tenants ----
+# The `tenants` fixture; each case is served from a cassette recorded from the
+# oracle (tests/cassettes/golden/extract-*.json) and writes `Imported/`.
+
+[[case]]
+command = "generate extract defender"
+variant = "tenant"
+args = ["generate", "extract", "defender"]
+fixtures = ["tenants"]
+modes = ["plain", "json", "agent"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/extract-defender"
+
+[[case]]
+command = "generate extract elastic"
+variant = "tenant"
+args = ["generate", "extract", "elastic", "--space", "soc"]
+fixtures = ["tenants"]
+modes = ["plain", "json", "agent"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/extract-elastic"
+
+[[case]]
+command = "generate extract elastic"
+variant = "no-space"
+args = ["generate", "extract", "elastic", "--space", "default"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+

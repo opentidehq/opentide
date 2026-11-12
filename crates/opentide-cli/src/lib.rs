@@ -27,6 +27,7 @@ pub mod json;
 pub mod logging;
 pub mod mcp;
 pub mod mode;
+pub mod pyyaml;
 pub mod queries;
 pub mod redact;
 pub mod render;

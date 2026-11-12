@@ -1,0 +1,2 @@
+warning: [[misp]] block 'misp-lab' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].
+error: Would share 4 objects to misp-locked, misp-prod · 3 new, 1 updated, 1 unchanged, 6 skipped, 3 failed

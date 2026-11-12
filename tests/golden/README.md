@@ -141,6 +141,8 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
 | `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |
+| `share-misp` | [`fixtures/share-misp/`](fixtures/share-misp/): three `[[misp]]` destinations (one served by the MISP stand-in of `tests/cassettes/misp/tenant.py`, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before, for `share` (UC-4.4b); a cassette's client copies it before a push or retract writes the ledger |
+| `share-misp-broken` | `share-misp` with one declared edit: a `max_tlp` that is no TLP name, the `sharing_config` preflight |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 

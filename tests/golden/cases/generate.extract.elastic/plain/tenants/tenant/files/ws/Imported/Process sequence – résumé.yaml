@@ -1,0 +1,31 @@
+name: "Process sequence \u2013 r\xE9sum\xE9"
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000102
+  schema: rule::1.0
+  version: 1
+  created: '2026-02-03'
+  modified: '2026-02-03'
+  tlp: amber
+  author: Detection team
+description: A sequence of processes.
+response:
+  alert_severity: Low
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: DISABLED
+    type: eql
+    query: |-
+      sequence by host.id
+        [process where process.name == "cmd.exe"]
+        [network where true]
+    index:
+      - logs-*
+    scheduling:
+      interval: 1h
+      lookback: 335h
+    risk: 21
+    eql:
+      timestamp_field: event.ingested
+      tiebreaker_field: event.sequence

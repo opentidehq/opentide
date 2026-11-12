@@ -11859,3 +11859,49 @@ candidate = "  \u001b[1;32m✓\u001b[0m  \u001b[1mdocs\u001b[0m  \u001b[2m1 file
 reason = "The checklist row is printed when the pages are done, without the spinner Python drew while they ran (and while it fetched the CVE details), as on the other docs runs; the page, with its table of CVE details, is the oracle's."
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`validate --check cve` looks CVE references up from the Rust command line**"
+
+# UC-4.4b (#834): generate extract defender and elastic on the Rust command line.
+
+[[diff]]
+command = "generate extract defender"
+case = "generate.extract.defender/human/none/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from defender\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mDefender tenants not configured · detail: You must first have Defender for Endpoint tenants \nconfigured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Defender tenants not configured · detail: You must first have Defender for Endpoint tenants configured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+[[diff]]
+command = "generate extract defender"
+case = "generate.extract.defender/human/tide-corpus/default"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from defender\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mDefender tenants not configured · detail: You must first have Defender for Endpoint tenants \nconfigured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Defender tenants not configured · detail: You must first have Defender for Endpoint tenants configured to initiate the import · advice: run 'opentide setup platforms --defender-for-endpoint'\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from defender\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/human/tide-corpus/example"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from elastic\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[1;31merror: \u001b[0mEnvironment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · \nadvice: Set those environment variables before a live check.\n\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.\n  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "In human mode a log line of the Rust CLI's logging layer is one unstyled line, not wrapped at the terminal's width, where the oracle's Rich handler styled its level and wrapped it inside the live region of its checklist; the Rust engine prints the checklist row when the import is done, without the spinner Python drew while it ran. The event, its fields and every other line are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/human/none/example"
+target = "stderr"
+rule = "text"
+oracle = "\u001b[?25l<LIVE>  \u001b[1;36m<SPIN>\u001b[0m  \u001b[1;36mimport from elastic\u001b[0m\u001b[1m  \u001b[0m\u001b[2m \u001b[0m\u001b[2m<SECONDS>\u001b[0m\u001b[2m \u001b[0m</LIVE>\u001b[?25h\r\u001b[1A\u001b[2K  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+candidate = "  \u001b[1;31m✗\u001b[0m  \u001b[1mimport from elastic\u001b[0m \u001b[2m<SECONDS>\u001b[0m"
+reason = "the import's checklist row is printed when it is done, without the spinner Python drew while it ran"
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**`generate extract defender` and `generate extract elastic` run on the Rust command line**"

@@ -164,6 +164,12 @@ pub fn fixture(name: &str, ws: &Path) {
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
+        // UC-4.4b (#834): the MISP destinations of `share`'s cases.
+        "share-misp" => copy_tree(&repo().join("tests/golden/fixtures/share-misp"), ws),
+        "share-misp-broken" => {
+            fixture("share-misp", ws);
+            apply_edits(name, ws);
+        }
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");

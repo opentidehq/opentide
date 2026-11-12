@@ -52,6 +52,14 @@ pub const PORTED: &[&str] = &[
     "deploy migrate-state",
     "serve",
     "query",
+    "share",
+    "share push",
+    "share preview",
+    "share status",
+    "share retract",
+    "share targets",
+    "generate extract defender",
+    "generate extract elastic",
 ];
 
 /// The file in which a run refused with `engine_not_ported` records its
@@ -196,6 +204,9 @@ pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
     }
     globals
 }
+
+/// A usage error a command found itself, with the notes under it.
+type Refusal = (Outcome, Vec<(String, String)>);
 
 /// What a run resolved before it started the command.
 struct Run<'a> {
@@ -641,6 +652,39 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate extract elastic" => {
+                let options = leaf(&matches);
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::extract::elastic(
+                    &crate::commands::extract::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                    },
+                    options
+                        .get_one::<String>("space")
+                        .map_or("default", String::as_str),
+                    options.get_flag("include_prebuilt"),
+                );
+                self.emit_report(&report, out, err)
+            }
+            "generate extract defender" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report =
+                    crate::commands::extract::defender(&crate::commands::extract::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                    });
+                self.emit_report(&report, out, err)
+            }
+            "share" | "share push" | "share preview" | "share status" | "share retract"
+            | "share targets" => match self.share(&matches, &path) {
+                Ok(report) => self.emit_report(&report, out, err),
+                Err(refused) => self.emit(&refused.0, &refused.1, &[], out, err),
+            },
             "doctor" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
@@ -1931,6 +1975,160 @@ impl Run<'_> {
 }
 
 impl Run<'_> {
+    /// `share` and its subcommands (UC-4.4b, #834): the group's options
+    /// handed down to the subcommand that takes them too, or refused
+    /// (`hand_down`, `refuse_dropped`), then the run.
+    fn share(
+        &self,
+        matches: &clap::ArgMatches,
+        path: &str,
+    ) -> Result<crate::commands::Report, Box<Refusal>> {
+        use crate::commands::share::{Args, Context, Mode, run};
+        let Some(("share", group)) = matches.subcommand() else {
+            return Ok(crate::commands::Report::error(path, "share was not parsed"));
+        };
+        let typed = |matches: &clap::ArgMatches, id: &str| {
+            matches.try_contains_id(id).unwrap_or(false)
+                && matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        // The group's options, in its order, with the flags the oracle names.
+        const GROUP: [(&str, &str); 10] = [
+            ("target", "--target"),
+            ("uuid", "--uuid"),
+            ("object_type", "--type"),
+            ("file", "--file"),
+            ("dry_run", "--dry-run"),
+            ("publish", "--publish/--no-publish"),
+            ("no_publish", "--publish/--no-publish"),
+            ("workers", "--workers"),
+            ("changed", "--changed"),
+            ("since", "--since"),
+        ];
+        let sub = group.subcommand();
+        let (mode, args) = match sub {
+            None => (Mode::Push, group),
+            Some((name, args)) => (
+                match name {
+                    "preview" => Mode::Preview,
+                    "status" => Mode::Status,
+                    "retract" => Mode::Retract,
+                    "targets" => Mode::Targets,
+                    _ => Mode::Push,
+                },
+                args,
+            ),
+        };
+        let accepts = |id: &str| match mode {
+            Mode::Push => true,
+            Mode::Preview => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
+            Mode::Status => matches!(id, "target" | "uuid" | "object_type" | "file"),
+            Mode::Retract => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
+            Mode::Targets => false,
+        };
+        if let Some((name, _)) = sub {
+            let mut refused: Vec<&str> = Vec::new();
+            let mut twice: Vec<&str> = Vec::new();
+            for (id, flag) in GROUP {
+                if !typed(group, id) {
+                    continue;
+                }
+                if !accepts(id) {
+                    if !refused.contains(&flag) {
+                        refused.push(flag);
+                    }
+                } else if typed(args, id) && !twice.contains(&flag) {
+                    twice.push(flag);
+                }
+            }
+            let problem = if !refused.is_empty() {
+                let verb = if refused.len() == 1 {
+                    "configures"
+                } else {
+                    "configure"
+                };
+                Some(format!(
+                    "{} {verb} `opentide share` itself and would be ignored by `opentide share \
+                     {name}`.",
+                    refused.join(", ")
+                ))
+            } else if !twice.is_empty() {
+                Some(format!(
+                    "Pass {} once, before or after `{name}`, not both: `opentide share {name}` \
+                     would use only the second.",
+                    twice.join(", ")
+                ))
+            } else {
+                None
+            };
+            if let Some(problem) = problem {
+                // A `BadParameter`: Click's usage line and help under it.
+                let failure = Failure::new(
+                    code::USAGE_INVALID_VALUE,
+                    format!("Invalid value: {problem}"),
+                );
+                let words: Vec<String> = path.split(' ').map(str::to_owned).collect();
+                let notes = vec![
+                    ("usage".to_owned(), usage::usage_line(&self.root, &words)),
+                    (
+                        "help".to_owned(),
+                        format!("run '{} {path} --help'", catalog::PROGRAM),
+                    ),
+                ];
+                return Err(Box::new((
+                    Outcome::failed(path, USAGE_EXIT_CODE, failure),
+                    notes,
+                )));
+            }
+        }
+        // An option typed on `share` alone is the subcommand's.
+        let pick = |id: &str| -> Option<&clap::ArgMatches> {
+            if typed(group, id) && sub.is_some() {
+                return Some(group);
+            }
+            args.try_contains_id(id).unwrap_or(false).then_some(args)
+        };
+        let strings = |id: &str| -> Vec<String> {
+            pick(id)
+                .and_then(|m| m.get_many::<String>(id))
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let flag = |id: &str| pick(id).is_some_and(|m| m.get_flag(id));
+        let publish = match (pick("publish"), pick("no_publish")) {
+            (Some(m), _) if m.get_flag("publish") => Some(true),
+            (_, Some(m)) if m.get_flag("no_publish") => Some(false),
+            _ => None,
+        };
+        let parsed = Args {
+            mode,
+            targets: strings("target"),
+            uuids: strings("uuid"),
+            types: strings("object_type"),
+            files: strings("file"),
+            dry_run: flag("dry_run"),
+            publish,
+            workers: pick("workers")
+                .and_then(|m| m.get_one::<i64>("workers").copied())
+                .unwrap_or(1),
+            delete: flag("delete"),
+            yes: flag("yes"),
+            changed: flag("changed"),
+            since: pick("since").and_then(|m| m.get_one::<String>("since").cloned()),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        Ok(run(
+            &parsed,
+            &Context {
+                command: path,
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                proxy: self.globals.proxy.as_deref(),
+                version: &self.host.version,
+            },
+        ))
+    }
+
     /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
     /// target the command and its groups name, then the catalogue.
     fn setup_skills_catalogue(
@@ -2968,12 +3166,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("refusal");
         let path = file.to_string_lossy().into_owned();
-        for line in ["--json share push", "share push"] {
+        for line in [
+            "--json generate extract sentinel",
+            "generate extract sentinel",
+        ] {
             let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
             assert_eq!(refused.code, 2, "{line}");
             let recorded = std::fs::read_to_string(&file).unwrap();
             assert!(
-                recorded.starts_with("opentide share push has no Rust implementation yet"),
+                recorded.starts_with(
+                    "opentide generate extract sentinel has no Rust implementation yet"
+                ),
                 "{line}: {recorded}"
             );
             std::fs::remove_file(&file).unwrap();
@@ -2999,7 +3202,7 @@ mod tests {
         assert_eq!(ran.code, 0);
         assert!(!file.exists());
         // Without the variable, nothing is written.
-        assert_eq!(dispatched("share push", &[], false).code, 2);
+        assert_eq!(dispatched("generate extract sentinel", &[], false).code, 2);
         assert_eq!(dispatched("deploy --strategy PREVIEW", &[], false).code, 2);
         assert!(!file.exists());
     }
@@ -3025,14 +3228,14 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json share push", &[], false);
+        let refused = dispatched("--json generate extract sentinel", &[], false);
         assert_eq!(refused.code, 2);
         assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
         assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("share push", &[], false);
+        let plain = dispatched("generate extract sentinel", &[], false);
         assert_eq!(
             plain.stderr,
-            "error: opentide share push has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide generate extract sentinel has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
         );
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
@@ -3187,10 +3390,11 @@ mod tests {
         let plain = dispatched("--quiet commands --quiet", &[], false);
         assert_eq!(plain.code, 0);
         assert!(plain.stdout.contains("commands"), "{}", plain.stdout);
-        // Parsed, then refused as not ported: no usage error.
+        // A flag given twice is parsed: no usage error (a preview runs).
         let strict = dispatched("--json share push --dry-run --dry-run", &[], false);
+        assert_ne!(strict.code, USAGE_EXIT_CODE, "{}", strict.stdout);
         assert!(
-            strict.stdout.contains("\"code\":\"engine_not_ported\""),
+            !strict.stdout.contains("\"code\":\"usage_"),
             "{}",
             strict.stdout
         );
@@ -3256,9 +3460,11 @@ mod tests {
             nested.stdout
         );
         // An unported subcommand after a separator is refused by its path.
-        let unported = dispatched("--json share -- status", &[], false);
+        let unported = dispatched("--json generate extract -- sentinel", &[], false);
         assert!(
-            unported.stdout.contains("\"command\":\"share status\""),
+            unported
+                .stdout
+                .contains("\"command\":\"generate extract sentinel\""),
             "{}",
             unported.stdout
         );

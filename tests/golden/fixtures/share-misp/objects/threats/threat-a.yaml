@@ -1,0 +1,26 @@
+name: Shared Actor
+criticality: High
+
+metadata:
+  uuid: 00000000-0000-4000-8048-000000000001
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: amber
+
+threat:
+  description: A threat shared to the MISP stand-in.
+  severity: Substantial incident
+  impact:
+    - Data Breach
+  leverage:
+    - Information Gathering
+  viability: Likely
+  terrain: Endpoint workstations and user devices.
+  surface:
+    - OS::Windows::Desktop
+  mitre_attack:
+    - T1059
+  actors:
+    - name: att&ck::G0006
