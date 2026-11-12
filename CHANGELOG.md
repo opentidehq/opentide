@@ -6,11 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-11-12
+
+Exabeam New-Scale SIEM correlation rules deploy from a `configurations.exabeam` block, checked by `validate`, the editor and `opentide tui` against the Exabeam Query Language. The engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0).
+
 ### Added
 
-- **Exabeam New-Scale SIEM correlation rules deploy from opentide.** A `configurations.exabeam` block (`platform::exabeam::1.0`) is one correlation rule: one or more sequences, each an Exabeam Query Language filter that triggers on any match or on a threshold, with correlation, suppression, delay, schedule, outcome and email. Deploy derives the name, description (with the ATT&CK line) and severity, checks the name is free before a create (`exabeam_name_conflict`), sends the whole rule on every update, disables with `enabled: false`, keeps the rule UUID in `.opentide/states/deployment/`, and paces requests to 100 a minute. Enable it with `opentide setup platforms --exabeam`; a tenant names its `region`, and `client_id` and `client_secret` as `$VAR`s.
-- **`validate` checks Exabeam blocks.** It reports the 13 `exabeam_*` constraint codes of the spec, each at the `field_path` the spec fixes for it, and two enabled blocks sharing an Exabeam rule name, case-insensitively (`exabeam_name_duplicate`). `validate` and `lint` warn on `outcome: none` without an email (`exabeam_outcome_silent`) and on a correlation window no longer than its ordered sequences need, their windows plus a minute between each (`exabeam_correlation_window`). `deploy --dry-run` shows the create request.
-- **`validate query --platform exabeam --live` and `opentide query --platform exabeam`.** `--live` sends each sequence filter to Exabeam Search over the last 15 minutes: a `400` fails it, and any answer but `200` is an error, never a pass. `opentide query` runs a hunt through Search, at most 3,000 rows. Sequence queries, `system: exabeam` hunts and `.exabeam` files are handed to the analysis engine as the `exabeam` language. An engine that does not know the language fails the check as `engine_unavailable`, never as a pass.
+- **Exabeam New-Scale SIEM correlation rules deploy from opentide.** A `configurations.exabeam` block (`platform::exabeam::1.0`) is one correlation rule: one or more sequences, each an Exabeam Query Language filter that triggers on any match or on a threshold, with correlation, suppression, delay, schedule, outcome and email. Deploy derives the name, description (with the ATT&CK line) and severity, checks the name is free before a create (`exabeam_name_conflict`), sends the whole rule on every update, disables with `enabled: false`, keeps the rule UUID in `.opentide/states/deployment/`, and paces requests to 100 a minute. Enable it with `opentide setup platforms --exabeam`; a tenant names its `region`, and `client_id` and `client_secret` as `$VAR`s ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate` checks Exabeam blocks.** It reports the 13 `exabeam_*` constraint codes of the spec, each at the `field_path` the spec fixes for it, and two enabled blocks sharing an Exabeam rule name, case-insensitively (`exabeam_name_duplicate`). `validate` and `lint` warn on `outcome: none` without an email (`exabeam_outcome_silent`) and on a correlation window no longer than its ordered sequences need, their windows plus a minute between each (`exabeam_correlation_window`). `deploy --dry-run` shows the create request ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate query --platform exabeam --live` and `opentide query --platform exabeam`.** `--live` sends each sequence filter to Exabeam Search over the last 15 minutes: a `400` fails it, and any answer but `200` is an error, never a pass. `opentide query` runs a hunt through Search, at most 3,000 rows. Sequence queries, `system: exabeam` hunts and `.exabeam` files are handed to the analysis engine as the `exabeam` language. An engine that does not know the language fails the check as `engine_unavailable`, never as a pass ([#983](https://github.com/opentidehq/opentide/pull/983)).
 
 ### Changed
 
@@ -1664,7 +1668,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/opentidehq/opentide/releases/tag/v0.27.0
 [0.26.0]: https://github.com/opentidehq/opentide/releases/tag/v0.26.0
 [0.25.0]: https://github.com/opentidehq/opentide/releases/tag/v0.25.0
 [0.24.1]: https://github.com/opentidehq/opentide/releases/tag/v0.24.1

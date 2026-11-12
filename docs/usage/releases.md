@@ -7,6 +7,40 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.27.0 — 12 November 2026
+
+Exabeam New-Scale SIEM correlation rules deploy from a `configurations.exabeam` block, checked by `validate`, the editor and `opentide tui` against the Exabeam Query Language. The engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0).
+
+**Install**
+
+```bash
+pip install opentide==0.27.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. Optional: enable Exabeam New-Scale SIEM with `opentide setup platforms --exabeam`, then set each tenant's `region`, and `client_id` and `client_secret` as `$VAR`s.
+
+**Added**
+
+- **Exabeam New-Scale SIEM correlation rules deploy from opentide.** A `configurations.exabeam` block (`platform::exabeam::1.0`) is one correlation rule: one or more sequences, each an Exabeam Query Language filter that triggers on any match or on a threshold, with correlation, suppression, delay, schedule, outcome and email. Deploy derives the name, description (with the ATT&CK line) and severity, checks the name is free before a create (`exabeam_name_conflict`), sends the whole rule on every update, disables with `enabled: false`, keeps the rule UUID in `.opentide/states/deployment/`, and paces requests to 100 a minute. Enable it with `opentide setup platforms --exabeam`; a tenant names its `region`, and `client_id` and `client_secret` as `$VAR`s ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate` checks Exabeam blocks.** It reports the 13 `exabeam_*` constraint codes of the spec, each at the `field_path` the spec fixes for it, and two enabled blocks sharing an Exabeam rule name, case-insensitively (`exabeam_name_duplicate`). `validate` and `lint` warn on `outcome: none` without an email (`exabeam_outcome_silent`) and on a correlation window no longer than its ordered sequences need, their windows plus a minute between each (`exabeam_correlation_window`). `deploy --dry-run` shows the create request ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate query --platform exabeam --live` and `opentide query --platform exabeam`.** `--live` sends each sequence filter to Exabeam Search over the last 15 minutes: a `400` fails it, and any answer but `200` is an error, never a pass. `opentide query` runs a hunt through Search, at most 3,000 rows. Sequence queries, `system: exabeam` hunts and `.exabeam` files are handed to the analysis engine as the `exabeam` language. An engine that does not know the language fails the check as `engine_unavailable`, never as a pass ([#983](https://github.com/opentidehq/opentide/pull/983)).
+
+**Changed**
+
+- **The analysis engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0), from crates.io.** It adds the Exabeam Query Language and checks Exabeam blocks: `configurations.exabeam.sequences[].query` under the language's `rule` profile, `system: exabeam` hunts and `.exabeam` files under `search`, so the editor, `opentide tui` and `opentide validate` agree on Exabeam rules ([#983](https://github.com/opentidehq/opentide/pull/983)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0270--2026-11-12) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.27.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.27.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.26.0 — 12 November 2026
 
 Graylog event definitions deploy from a `configurations.graylog` block on Graylog 6.3 to 7.2, checked by `validate`, the editor and `opentide tui`. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage. The engine is [language-server 0.14.0](https://github.com/opentidehq/language-server/releases/tag/v0.14.0).
