@@ -222,12 +222,6 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
     })
 }
 
-/// The fixtures whose workspace enables a platform: `doctor` checks each
-/// enabled platform's Python modules there (`platform_sdk`). A fixture that
-/// enables one and is missing here is compared under the Node runner, and
-/// its `doctor` runs fail there: add it.
-pub const PLATFORM_FIXTURES: [&str; 3] = ["fault", "heavy-small", "tide-corpus"];
-
 /// Why the Node runner leaves `case` out, if it does: a run the PyPI CLI
 /// still answers in Python although its command has a Rust implementation,
 /// which the npm bin (the Rust command line alone, with no Python) answers
@@ -236,26 +230,15 @@ pub const PLATFORM_FIXTURES: [&str; 3] = ["fault", "heavy-small", "tide-corpus"]
 ///
 /// - `--help`: the PyPI launcher prints Typer's help (Rich panels), the npm
 ///   bin the Rust command line's (clap) (#977).
-/// - `doctor` on a workspace that enables a platform: for each one,
-///   `platform_sdk` reports which Python modules the platform's live calls
-///   import, which the Python launcher reads and hands to the Rust command
-///   line (`OPENTIDE_PYTHON_MODULES`); the npm bin has no Python
-///   environment, and reports the check not run. `doctor` on a workspace
-///   without one checks nothing in Python beyond `python_version`, which the
-///   ledger approves for every candidate, and is compared.
+///
+/// `doctor` is compared on every fixture: it checks nothing in Python
+/// (UC-6.0d, #841), so the npm bin answers as the PyPI CLI does.
 pub fn node_leaves_out(case: &crate::golden::case::Case) -> Option<&'static str> {
     let mut options = case.argv.iter().skip(1).take_while(|arg| *arg != "--");
     if options.any(|arg| arg == "--help" || arg == "-h") {
         return Some(
             "`--help`: the PyPI CLI prints Typer's help (Rich panels), the npm bin the Rust \
              command line's (clap)",
-        );
-    }
-    if case.command == "doctor" && PLATFORM_FIXTURES.contains(&case.fixture.as_str()) {
-        return Some(
-            "`doctor` on a workspace that enables a platform: platform_sdk reports which Python \
-             modules each platform imports, read from the Python that started the PyPI CLI; \
-             the npm bin has no Python environment",
         );
     }
     None
@@ -673,16 +656,16 @@ changelog = "**c**"
         assert!(left_out("validate", &["opentide", "validate", "--help"]).is_some());
         assert!(left_out("info", &["opentide", "-h", "info"]).is_some());
         assert!(left_out("doctor", &["opentide", "doctor", "--help"]).is_some());
-        // doctor's platform_sdk checks read Python's modules only where a
-        // platform is enabled; elsewhere the npm bin's doctor is compared.
+        // doctor checks nothing in Python (UC-6.0d): compared on every fixture.
         let doctor = ["opentide", "doctor", "--offline"];
-        for fixture in super::PLATFORM_FIXTURES {
-            assert!(
-                super::node_leaves_out(&on(fixture, "doctor", &doctor)).is_some(),
-                "{fixture}"
-            );
-        }
-        for fixture in ["none", "empty", "vscode"] {
+        for fixture in [
+            "none",
+            "empty",
+            "vscode",
+            "fault",
+            "heavy-small",
+            "tide-corpus",
+        ] {
             assert_eq!(
                 super::node_leaves_out(&on(fixture, "doctor", &doctor)),
                 None,
@@ -695,35 +678,6 @@ changelog = "**c**"
             left_out("new rule", &["opentide", "new", "rule", "--", "--help"]),
             None
         );
-    }
-
-    /// `PLATFORM_FIXTURES` names exactly the fixtures on which the oracle's
-    /// `doctor` reports a `platform_sdk` check: the recordings say which.
-    #[test]
-    fn the_platform_fixtures_are_those_doctor_checks_platform_modules_on() {
-        let plain = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/golden/cases/doctor/plain");
-        let mut seen = 0;
-        for fixture in std::fs::read_dir(&plain).unwrap() {
-            let fixture = fixture.unwrap();
-            let name = fixture.file_name().to_string_lossy().into_owned();
-            for variant in std::fs::read_dir(fixture.path()).unwrap() {
-                let variant = variant.unwrap();
-                if variant.file_name() == "help" {
-                    continue;
-                }
-                let stdout = std::fs::read(variant.path().join("stdout")).unwrap();
-                let checks_modules = String::from_utf8_lossy(&stdout).contains("· platform_sdk");
-                assert_eq!(
-                    checks_modules,
-                    super::PLATFORM_FIXTURES.contains(&name.as_str()),
-                    "doctor on {name} ({:?})",
-                    variant.file_name()
-                );
-                seen += 1;
-            }
-        }
-        assert!(seen >= 6, "{seen} doctor recordings");
     }
 
     #[test]

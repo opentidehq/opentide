@@ -873,15 +873,7 @@ impl Run<'_> {
                 }
                 self.emit_report(&report, out, err)
             }
-            _ => {
-                let message = format!(
-                    "opentide {path} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
-                );
-                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                failure.argument = Some("OPENTIDE_ENGINE".into());
-                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                self.emit(&outcome, &[], &[], out, err)
-            }
+            _ => self.emit(&not_ported(&path), &[], &[], out, err),
         }
     }
 
@@ -1376,7 +1368,7 @@ impl Run<'_> {
     /// `validate` it also takes, typed before `query`, are its own
     /// (`hand_down`); the others are refused, as is one typed on both.
     fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::validate_query::{Args, COMMAND, Context, run};
+        use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
         let args = leaf(matches);
         let group = matches.subcommand_matches("validate");
         let typed =
@@ -1476,29 +1468,29 @@ impl Run<'_> {
             check_timeout: args.get_one::<String>("check_timeout").cloned(),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        // A platform plugin's live check (UC-4.5) is `run`'s.
-        if parsed.live
-            && !parsed
-                .platform
-                .as_deref()
-                .is_some_and(crate::plugins::is_plugin)
-        {
+        let plugin = parsed
+            .platform
+            .clone()
+            .filter(|platform| crate::plugins::is_plugin(platform));
+        if parsed.live && plugin.is_none() {
             return self.validate_query_live(&parsed, &cwd);
         }
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
-        run(
-            &parsed,
-            &Context {
-                repo: self.globals.repo.as_deref(),
-                env: self.env,
-                cwd: &cwd,
-                terminal: &terminal,
-                proxy: self.globals.proxy.as_deref(),
-                interrupted: &interrupted,
-            },
-        )
+        let cx = Context {
+            repo: self.globals.repo.as_deref(),
+            env: self.env,
+            cwd: &cwd,
+            terminal: &terminal,
+            proxy: self.globals.proxy.as_deref(),
+            interrupted: &interrupted,
+        };
+        match plugin {
+            // A platform plugin's live check (UC-4.5).
+            Some(platform) if parsed.live => plugin_live(&parsed, &platform, &cx),
+            _ => run(&parsed, &cx),
+        }
     }
 
     /// `opentide deploy --platform <plugin>` (UC-4.5): the plugin's
@@ -2851,6 +2843,17 @@ pub fn main(argv: &[String], version: &str) -> i32 {
     run(argv, &env, &host, &mut out, &mut err)
 }
 
+/// The refusal of a command path this command line has no implementation
+/// of (`engine_not_ported`, exit 2), as `opentide.cli.engines` words it.
+fn not_ported(path: &str) -> Outcome {
+    let message = format!(
+        "opentide {path} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
+    );
+    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
+    failure.argument = Some("OPENTIDE_ENGINE".into());
+    Outcome::failed(path, USAGE_EXIT_CODE, failure)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3363,6 +3366,14 @@ mod tests {
         assert_eq!((code, stderr.as_str()), (1, ""));
     }
 
+    /// `line`, whose command has no implementation here (a path taken out
+    /// of the table): the dispatcher's `engine_not_ported` refusal.
+    fn refused(line: &str, pairs: &[(&str, &str)]) -> Ran {
+        ran(line, pairs, false, |run, out, err| {
+            Ok(run.emit(&not_ported("query"), &[], &[], out, err)?)
+        })
+    }
+
     /// A refusal is recorded in the file `OPENTIDE_ENGINE_REFUSAL` names, in
     /// every mode, for `compare` to run Python alone; nothing else is.
     #[test]
@@ -3370,17 +3381,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("refusal");
         let path = file.to_string_lossy().into_owned();
-        // A query runs here on the platforms with a query runner: on Sysdig,
-        // compare runs Python alone on the refusal.
-        for line in [
-            "--json query --platform sysdig q",
-            "query --platform sysdig q",
-        ] {
-            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
-            assert_eq!(refused.code, 2, "{line}");
+        for line in ["--json query --platform x q", "query --platform x q"] {
+            let run = refused(line, &[(REFUSAL_ENV, &path)]);
+            assert_eq!(run.code, 2, "{line}");
             let recorded = std::fs::read_to_string(&file).unwrap();
             assert!(
-                recorded.starts_with("opentide query on sysdig has no Rust implementation yet"),
+                recorded.starts_with("opentide query has no Rust implementation yet"),
                 "{line}: {recorded}"
             );
             std::fs::remove_file(&file).unwrap();
@@ -3388,8 +3394,12 @@ mod tests {
         let ran = dispatched("--json commands", &[(REFUSAL_ENV, &path)], false);
         assert_eq!(ran.code, 0);
         assert!(!file.exists());
+        // A usage error is no refusal: nothing is written.
+        let sysdig = dispatched("query --platform sysdig q", &[(REFUSAL_ENV, &path)], false);
+        assert_eq!(sysdig.code, 2);
+        assert!(!file.exists());
         // Without the variable, nothing is written.
-        assert_eq!(dispatched("query --platform sysdig q", &[], false).code, 2);
+        assert_eq!(refused("query --platform x q", &[]).code, 2);
         assert!(!file.exists());
     }
 
@@ -3414,15 +3424,18 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json query --platform sysdig q", &[], false);
-        assert_eq!(refused.code, 2);
-        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
-        assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("query --platform sysdig q", &[], false);
+        let json = refused("--json query --platform x q", &[]);
+        assert_eq!(json.code, 2);
+        assert!(json.stdout.contains("\"code\":\"engine_not_ported\""));
+        assert!(json.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
+        let plain = refused("query --platform x q", &[]);
         assert_eq!(
             plain.stderr,
-            "error: opentide query on sysdig has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide query has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
         );
+        let sysdig = dispatched("query --platform sysdig q", &[], false);
+        assert_eq!(sysdig.code, 2);
+        assert_eq!(sysdig.stderr, "error: sysdig has no query runner\n");
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
         std::fs::write(&file, "x").unwrap();
@@ -3894,7 +3907,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json query --platform sysdig q", &[], false);
+        let failed = refused("--json query --platform x q", &[]);
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",

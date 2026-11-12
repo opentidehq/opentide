@@ -60,7 +60,6 @@ fn spawn_with(cwd: &Path, args: &[&str], env: &[(String, String)]) -> Session {
     for name in [
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",
-        "OPENTIDE_MCP_SERVER",
         "NO_PROXY",
         "no_proxy",
     ] {

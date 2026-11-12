@@ -193,7 +193,8 @@ def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> Non
 def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() -> None:
     """``query`` runs on Rust where every ``--platform`` it names has a Rust connector."""
     query = engines.RUST_COMMANDS[("query",)]
-    assert query.platforms == engines.RUST_QUERY_PLATFORMS
+    assert query.platforms == engines.RUST_QUERY_ROUTED
+    assert (*engines.RUST_QUERY_PLATFORMS, "sysdig") == engines.RUST_QUERY_ROUTED
     assert query.side_effects
     for platform in ("crowdstrike", "defender_for_endpoint", "elastic", "harfanglab"):
         assert query.covers(["query", "--platform", platform, "x"])
@@ -201,10 +202,12 @@ def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() ->
     # The SDK platforms (UC-4.3, #833).
     for platform in ("sentinel", "splunk", "carbon_black_cloud"):
         assert query.covers(["query", "--platform", platform, "x"])
-    assert not query.covers(["query", "--platform", "sysdig", "x"])
-    assert query.uncovered("query", ["--platform", "sysdig"]) == "query on sysdig"
+    # Sysdig has no runner: the Rust command line refuses it as Python does.
+    assert query.covers(["query", "--platform", "sysdig", "x"])
+    assert not query.covers(["query", "--platform", "acme", "x"])
+    assert query.uncovered("query", ["--platform", "acme"]) == "query on acme"
     # Every platform it names counts; none named is the workspace's to say.
-    assert not query.covers(["query", "--platform", "elastic", "--platform", "sysdig"])
+    assert not query.covers(["query", "--platform", "elastic", "--platform", "acme"])
     assert query.covers(["query", "--platform", "elastic", "--platform", "splunk"])
     assert not query.covers(["query", "x"])
     assert query.uncovered("query", ["x"]) == "query without --platform"
@@ -269,14 +272,17 @@ def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
     assert document(stdout)["failure"] == document(python_stdout)["failure"]
 
 
-def test_rust_refuses_a_query_on_a_platform_without_a_connector(workspace: Path) -> None:
-    """``query --platform sysdig`` has no Rust query runner: refused, never half-run."""
+def test_rust_refuses_a_query_on_sysdig_as_python_does(workspace: Path) -> None:
+    """``query --platform sysdig``: no query runner, a usage error on ``--platform`` (UC-6.0d)."""
     args = ["--json", "--repo", str(workspace), "query", "--platform", "sysdig", "T"]
     code, stdout, _ = invoke(args, "rust")
+    python_code, python_stdout, _ = invoke(args, "python")
     doc = document(stdout)
-    assert code == 2
-    assert doc["failure"]["code"] == "engine_not_ported"
-    assert "opentide query on sysdig has no Rust implementation yet" in doc["failure"]["message"]
+    assert code == python_code == 2
+    assert doc["failure"]["code"] == "usage_invalid_value"
+    assert doc["failure"]["message"] == "sysdig has no query runner"
+    assert doc["failure"] == document(python_stdout)["failure"]
+    assert doc["choices"] == document(python_stdout)["choices"]
 
 
 def test_rust_output_reaches_a_stream_that_lives_in_memory(
@@ -863,7 +869,8 @@ def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
     assert engines.rust_command(("deploy",), rust, ["deploy"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy", "--platform", "sysdig"]) is deploy
     query = engines.RUST_COMMANDS[("query",)]
-    assert engines.rust_command(("query",), rust, ["query", "--platform", "sysdig"]) is None
+    assert engines.rust_command(("query",), rust, ["query", "--platform", "sysdig"]) is query
+    assert engines.rust_command(("query",), rust, ["query", "--platform", "acme"]) is None
     assert engines.rust_command(("query",), rust, ["query", "--platform", "splunk"]) is query
     assert engines.rust_command(("info",), rust, ["info"]) is engines.RUST_COMMANDS[("info",)]
 

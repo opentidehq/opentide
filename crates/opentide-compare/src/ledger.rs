@@ -6,7 +6,7 @@
 //! command = "commands"                      # the command path, exactly
 //! case = "json/*"                           # a glob over case ids
 //! target = "stdout"                         # stdout | stderr | exit_code | file:<path>
-//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | text | lines | sha256
+//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | json-drop:<JSON pointer> | text | lines | sha256
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
 //! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
@@ -35,7 +35,17 @@
 //! still a difference. Given the oracle, it fixes the candidate's array as
 //! a whole-value `json:` entry would, without quoting the oracle's elements;
 //! a `json:` entry under the same pointer addresses the array with the added
-//! elements set aside (the oracle's indices). A `sha256` rule, on a file
+//! elements set aside (the oracle's indices). A `json-drop:` rule is its
+//! mirror, for elements the candidate drops from an array: its `oracle` is a
+//! JSON object from the oracle's index of each dropped element, in
+//! increasing order, to the element, its `candidate` the length of the
+//! candidate's array. It applies where the candidate's array has that length
+//! and the oracle's has exactly those elements at exactly those indices, and
+//! as many more; the dropped elements are put back where the oracle has them
+//! and the array is compared as any other value is, so a candidate element
+//! changed or moved, or an element dropped that the entry does not name, is
+//! still a difference; a `json:` entry under the same pointer addresses the
+//! array by the oracle's indices. A `sha256` rule, on a file
 //! only, approves one whole file: its `oracle` and `candidate` are the
 //! SHA-256 digests (64 lower-case hex digits) of each side's bytes after
 //! normalisation, so it applies only where both files are exactly the ones
@@ -192,6 +202,20 @@ pub enum Rule {
         /// Each added element, by its index in the candidate's array, in
         /// increasing order of index.
         added: Vec<(usize, Json)>,
+    },
+    /// Elements the candidate drops from an array the oracle has: where the
+    /// candidate's array at `pointer` has `candidate_len` elements and the
+    /// oracle's has exactly the `dropped` ones at their indices plus as many
+    /// others, the dropped ones are put back in the candidate's array, which
+    /// is then compared with the oracle's (`json-drop:<pointer>`).
+    JsonDrop {
+        /// The pointer's tokens.
+        pointer: Vec<String>,
+        /// The number of elements of the candidate's array.
+        candidate_len: usize,
+        /// Each dropped element, by its index in the oracle's array, in
+        /// increasing order of index.
+        dropped: Vec<(usize, Json)>,
     },
     /// A whole file, by the SHA-256 digests of the oracle's and the
     /// candidate's bytes (`sha256`).
@@ -579,6 +603,9 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         (_, rule) if rule.starts_with("json-extend:") => {
             extend_rule(&rule["json-extend:".len()..], &raw, &mut problems)
         }
+        (_, rule) if rule.starts_with("json-drop:") => {
+            drop_rule(&rule["json-drop:".len()..], &raw, &mut problems)
+        }
         (_, rule) => match rule.strip_prefix("json:") {
             Some(pointer) => match json::parse_pointer(pointer) {
                 Some(pointer) => {
@@ -608,8 +635,8 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
                         "`rule` {rule:?} is not `text`, `lines`, `sha256`, `presence`, \
-                         `json:<pointer>` or \
-                         `json-extend:<pointer>`"
+                         `json:<pointer>`, `json-extend:<pointer>` or \
+                         `json-drop:<pointer>`"
                     ));
                 }
                 None
@@ -624,8 +651,9 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
         Some(Rule::Sha256 { oracle, candidate }) => oracle == candidate,
-        // A JsonExtend is parsed only with at least one added element.
-        Some(Rule::Presence | Rule::JsonExtend { .. }) | None => false,
+        // A JsonExtend (JsonDrop) is parsed only with at least one added
+        // (dropped) element.
+        Some(Rule::Presence | Rule::JsonExtend { .. } | Rule::JsonDrop { .. }) | None => false,
     };
     if same {
         problems.push(
@@ -781,6 +809,76 @@ fn extend_rule(pointer: &str, raw: &RawEntry, problems: &mut Vec<String>) -> Opt
             pointer,
             oracle_len,
             added,
+        }),
+        _ => None,
+    }
+}
+
+/// A `json-drop:` rule: its pointer, the dropped elements by oracle index
+/// (`oracle`, a JSON object whose keys are increasing array indices) and the
+/// candidate array's length (`candidate`).
+fn drop_rule(pointer: &str, raw: &RawEntry, problems: &mut Vec<String>) -> Option<Rule> {
+    let mut ok = true;
+    let pointer = json::parse_pointer(pointer).or_else(|| {
+        problems.push(format!(
+            "`rule` {:?}: {pointer:?} is not a JSON pointer (empty, or starting with /)",
+            raw.rule
+        ));
+        None
+    });
+    let candidate_len =
+        raw.candidate.parse::<usize>().ok().filter(|_| {
+            !raw.candidate.is_empty() && raw.candidate.bytes().all(|b| b.is_ascii_digit())
+        });
+    if candidate_len.is_none() {
+        problems.push(format!(
+            "a `json-drop:` rule's `candidate` is the length of the candidate's array, in \
+             decimal, not {:?}",
+            raw.candidate
+        ));
+        ok = false;
+    }
+    let mut dropped: Vec<(usize, Json)> = Vec::new();
+    match json::parse_str(&raw.oracle) {
+        Some(Json::Object(members)) if !members.is_empty() => {
+            for (key, value) in members {
+                match json::array_index(&key) {
+                    Some(index) if dropped.last().is_none_or(|(last, _)| *last < index) => {
+                        dropped.push((index, value));
+                    }
+                    _ => {
+                        problems.push(format!(
+                            "a `json-drop:` rule's `oracle` keys are the dropped elements' \
+                             indices in the oracle's array, increasing: {key:?} is not"
+                        ));
+                        ok = false;
+                    }
+                }
+            }
+        }
+        _ => {
+            problems.push(
+                "a `json-drop:` rule's `oracle` is a JSON object from the oracle's index of \
+                 each dropped element to the element, with at least one"
+                    .to_owned(),
+            );
+            ok = false;
+        }
+    }
+    if let (Some(candidate_len), Some((last, _))) = (candidate_len, dropped.last())
+        && *last >= candidate_len + dropped.len()
+    {
+        problems.push(format!(
+            "a `json-drop:` rule's index {last} is past the oracle's array, which has {} elements",
+            candidate_len + dropped.len()
+        ));
+        ok = false;
+    }
+    match (pointer, candidate_len) {
+        (Some(pointer), Some(candidate_len)) if ok => Some(Rule::JsonDrop {
+            pointer,
+            candidate_len,
+            dropped,
         }),
         _ => None,
     }
@@ -1333,5 +1431,40 @@ changelog = "**x**"
         assert_eq!(Target::parse("file:a//b"), None);
         assert_eq!(Target::parse("stdin"), None);
         assert_eq!(Target::File("a".into()).to_string(), "file:a");
+    }
+    /// A `json-drop:` rule names the oracle's dropped elements by
+    /// increasing index and the candidate array's length; anything else is
+    /// refused.
+    #[test]
+    fn a_json_drop_rule_is_parsed_and_checked() {
+        let entry = |oracle: &str, candidate: &str| {
+            format!(
+                "[[diff]]\ncommand = \"doctor\"\ncase = \"json/*\"\ntarget = \"stdout\"\n\
+                 rule = \"json-drop:/checks\"\noracle = '{oracle}'\ncandidate = '{candidate}'\n\
+                 reason = \"r\"\nissue = \"https://github.com/opentidehq/opentide/issues/841\"\n\
+                 changelog = \"**x**\"\n"
+            )
+        };
+        let ledger = Ledger::parse(&entry(r#"{"0": "a", "3": "b"}"#, "5")).unwrap();
+        assert_eq!(
+            ledger.entries[0].rule,
+            Rule::JsonDrop {
+                pointer: vec!["checks".to_owned()],
+                candidate_len: 5,
+                dropped: vec![(0, Json::String("a".into())), (3, Json::String("b".into()))],
+            }
+        );
+        for (oracle, candidate, problem) in [
+            (r#"{"3": "b", "0": "a"}"#, "5", "increasing"),
+            (r#"{}"#, "5", "with at least one"),
+            (r#"{"0": "a"}"#, "five", "length of the candidate's array"),
+            (r#"{"0": "a"}"#, " 5", "length of the candidate's array"),
+            (r#"{"9": "a"}"#, "5", "past the oracle's array"),
+        ] {
+            let error = Ledger::parse(&entry(oracle, candidate))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(problem), "{oracle} {candidate}: {error}");
+        }
     }
 }

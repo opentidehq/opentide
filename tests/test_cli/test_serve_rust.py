@@ -192,7 +192,7 @@ def test_a_run_that_may_write_drops_the_warm_workspaces(
 ) -> None:
     rust_client.run("info")
     assert native.workspace_stats()["kept"] == 1
-    # OPENTIDE_ENGINE=python for one run: the escape hatch, per request.
+    # OPENTIDE_ENGINE=python for one run: the Python host's escape hatch, per request.
     made = rust_client.run(
         "new", "threat", "--name", "Served Threat", env={"OPENTIDE_ENGINE": "python"}
     )
@@ -324,17 +324,19 @@ def test_help_and_unported_commands_go_through_python(
     assert rust_runs == []
 
 
-def test_a_run_the_rust_implementation_does_not_cover_is_refused_as_at_a_terminal(
+def test_a_query_on_sysdig_runs_on_rust_and_answers_as_python(
     rust_client: Client, rust_runs: list[list[str]]
 ) -> None:
-    """``query`` on Sysdig, which has no query runner: serve refuses it, as the CLI does."""
+    """``query`` on Sysdig, which has no query runner: Rust refuses it as Python does (UC-6.0d)."""
+    expected, code = oracle(["query", "--platform", "sysdig", "q"])
     refused = rust_client.run("query", "--platform", "sysdig", "q")
-    assert refused["exit_code"] == 2
-    assert refused["document"]["failure"]["code"] == "engine_not_ported"
-    assert rust_runs == []
-    # On a platform with a runner it runs on Rust (here, refused for no query).
+    assert refused["exit_code"] == code == 2
+    assert refused["document"]["failure"]["code"] == "usage_invalid_value"
+    assert _same(refused["document"]) == _same(expected)
+    assert rust_runs == [["--json", "query", "--platform", "sysdig", "q"]]
+    # On a platform with a runner it runs on Rust too (here, refused for no query).
     covered = rust_client.run("query", "--platform", "splunk")
-    assert rust_runs == [["--json", "query", "--platform", "splunk"]]
+    assert rust_runs[-1] == ["--json", "query", "--platform", "splunk"]
     assert covered["document"]["command"] == "query"
 
 

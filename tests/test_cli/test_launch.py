@@ -123,7 +123,7 @@ def test_rust_runs_what_the_dispatcher_would_give_it(argv: list[str]) -> None:
         (["--repo"], "a root option without its value"),
         (["--repo", "missing", "validate"], "the root refuses a --repo that is no folder"),
         (["--repo=missing", "validate"], "the same, written with ="),
-        (["query", "--platform", "sysdig", "x"], "a query on a platform without a runner"),
+        (["query", "--platform", "acme", "x"], "a query on a platform nothing provides"),
         (["validat"], "no command: Click's suggestion"),
         (["tui-x"], "no command"),
     ],
