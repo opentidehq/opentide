@@ -31,6 +31,7 @@ PLATFORM_LABELS: dict[str, str] = {
     "elastic": "Elastic",
     "sysdig": "Sysdig",
     "bitdefender": "Bitdefender GravityZone",
+    "google_secops": "Google SecOps",
 }
 
 
@@ -99,7 +100,7 @@ def _compile_failure(rule: DetectionRule, exc: Exception, platform: str) -> dict
 #: Platforms whose request body opentide builds from the rule alone, with no
 #: tenant: ``validate`` compiles each rule they would deploy, so a rule that
 #: validates compiles.
-OFFLINE_COMPILERS = frozenset({"sentinel", "elastic", "sysdig", "bitdefender"})
+OFFLINE_COMPILERS = frozenset({"sentinel", "elastic", "sysdig", "bitdefender", "google_secops"})
 
 
 def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
@@ -126,6 +127,11 @@ def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
 
         compiled = BitdefenderDeploy().compile_deployment(rule)
         return request_body("createCustomRule", create_params(compiled))
+    if platform == "google_secops":
+        from opentide.platforms.google_secops.compile import assemble
+
+        # The rules.create body; a tenant's data_access_scope adds its scope.
+        return {"text": assemble(rule).text}
     raise ValueError(f"{platform} has no offline compiler")
 
 
@@ -221,6 +227,15 @@ def _bitdefender_compile_preview(rule: DetectionRule, tenant_names: list[str]) -
     return preview
 
 
+def _google_secops_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+    """The Chronicle ``rules.create`` body: the YARA-L text deploy verifies, then creates."""
+    try:
+        payload = compile_offline("google_secops", rule)
+    except Exception as exc:
+        return _compile_failure(rule, exc, "google_secops")
+    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
+
+
 def preview_rule_deployment(
     platform: str, rule: DetectionRule, tenants: list[str] | None = None
 ) -> dict[str, Any]:
@@ -235,6 +250,8 @@ def preview_rule_deployment(
         return _sysdig_compile_preview(rule)
     if platform == "bitdefender":
         return _bitdefender_compile_preview(rule, list(tenants or []))
+    if platform == "google_secops":
+        return _google_secops_compile_preview(rule)
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:
