@@ -23,7 +23,7 @@
 | MCP server tools, resources, stdio | [`.agents/skills/mcp-server/SKILL.md`](.agents/skills/mcp-server/SKILL.md) |
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
-| PyPI release, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
+| PyPI release, `v*` tag, install pins, post-release skills review | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 
 Claude Code discovers these through `.claude/skills` (a symlink to `.agents/skills`); cloud
 sessions run `.claude/hooks/session-start.sh`, which syncs the dev environment.
@@ -85,7 +85,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 **CodeQL:** Python and Actions via [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (`/language:python` + `/language:actions`); Code Quality may also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`.
 
-**Release:** merge the notes PR, then Run workflow on [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) on `development` with no inputs: it tags the changelog's version, creates the GitHub Release and publishes, as language-server's Release does from `main`, so a cloud session can release. Steps: [release-management](.agents/skills/release-management/SKILL.md).
+**Release:** merge the notes PR, then Run workflow on [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) on `development` with no inputs: it tags the changelog's version, creates the GitHub Release and publishes, as language-server's Release does from `main`, so a cloud session can release. After PyPI, review the release for agent-skill impact in opentidehq/skills and bump its `coverage.json` `reviewed_against`. Steps: [release-management](.agents/skills/release-management/SKILL.md) (Step 5 for skills).
 
 **Dependabot:** weekly PRs for `uv` (test toolchain grouped), `github-actions` (SHA pins) and `pre-commit`. Merge procedure: [uv skill](.agents/skills/uv/SKILL.md#dependency-upgrades-and-dependabot).
 
@@ -127,6 +127,9 @@ Google SecOps (`src/opentide/platforms/google_secops/`) assembles a YARA-L rule 
 sections and derived meta, and deploys it through the Chronicle API v1 (`verifyRuleText` first,
 then `rules` and `rules/{id}/deployment`), the `ru_` rule id in deployment state; `DELETION`
 archives, or deletes without `force`. `--live` is `verifyRuleText`, which creates nothing.
+A new platform also needs a platform skill in [opentidehq/skills](https://github.com/opentidehq/skills),
+whose `coverage.json` CI checks against `opentide --json info` daily; a platform the skills do not
+cover fails that check and opens an issue there.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
 search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
 `kuery` is the one write: its rule preview's alerts, in the preview index.
@@ -172,6 +175,10 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
    `docs/` ([docs-maintenance](.agents/skills/docs-maintenance/SKILL.md)).
 4. Mechanical refactors are proven behaviour-preserving with
    `uv run python scripts/ast_equivalence.py <base-rev>`.
+5. A platform added or removed, a platform's capabilities (deploy, `--live`, `opentide query`),
+   rule types or query languages changed, or a CLI/MCP name that skills use renamed → a
+   companion PR on [opentidehq/skills](https://github.com/opentidehq/skills) (platform skill,
+   `coverage.json`), linked from this one ([review-checklist](.agents/skills/review-checklist/SKILL.md) item 7).
 
 ## Repository layout
 

@@ -116,6 +116,13 @@ triggers it; drop anything you cannot tie to a trigger.
    behaviour-preserving with `uv run python scripts/ast_equivalence.py <base-rev>`: it lists the
    changed files whose AST differs from the base, ignoring imports and annotations. Review
    every file it prints.
+7. A change the agent skills describe → a companion pull request on
+   [opentidehq/skills](https://github.com/opentidehq/skills), linked from this one:
+   a platform added, renamed or removed; a platform gaining or losing deploy, `--live`
+   validation or `opentide query`; a platform's rule types, query languages or deploy
+   behaviour changing; a CLI command, flag or MCP tool/resource that skills name renamed or
+   removed. A new platform needs a platform skill and a `coverage.json` entry
+   ([process](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide)).
 
 ## Related
 
