@@ -1,6 +1,6 @@
 ---
 title: opentide
-description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across twelve security platforms.
+description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across thirteen security platforms.
 ---
 
 # opentide
@@ -18,10 +18,10 @@ description: Spec-driven development for agentic detection engineering — valid
 
 ## Quick start
 
-The latest release is **[0.26.0](./usage/releases.md)** (12 November 2026). The first public release was **0.1.0**.
+The latest release is **[0.27.0](./usage/releases.md)** (12 November 2026). The first public release was **0.1.0**.
 
 ```bash
-pip install 'opentide==0.26.0'
+pip install 'opentide==0.27.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 opentide setup --yes --platform sentinel --ci github
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ## Platform coverage
 
-opentide supports **twelve deployment platforms** and **eight query validators**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but do not support live query validation — opentide never fakes validation for those platforms.
+opentide supports **thirteen deployment platforms** and **nine query validators**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but do not support live query validation — opentide never fakes validation for those platforms.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 

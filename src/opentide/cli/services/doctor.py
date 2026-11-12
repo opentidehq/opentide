@@ -62,6 +62,7 @@ PLATFORM_SDKS: dict[str, tuple[str, ...]] = {
     "sysdig": ("requests",),
     "bitdefender": ("requests",),
     "graylog": ("requests",),
+    "exabeam": ("requests",),
     "google_secops": ("google.auth", "requests"),
 }
 

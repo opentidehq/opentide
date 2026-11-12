@@ -5,12 +5,12 @@
 
 **opentide** — spec-driven development for agentic detection engineering.
 
-opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across twelve security platforms.
+opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across thirteen security platforms.
 
 ## Install
 
 ```bash
-pip install opentide==0.26.0
+pip install opentide==0.27.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```

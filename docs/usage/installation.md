@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, the MCP server (`opentide mcp start`), all twelve platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all thirteen platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.26.0** (12 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.27.0** (12 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -49,7 +49,7 @@ The latest release is **0.26.0** (12 November 2026). The first public release wa
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==0.26.0'     # pin the current release
+pip install 'opentide==0.27.0'     # pin the current release
 ```
 
 </Tab>
@@ -58,14 +58,14 @@ pip install 'opentide==0.26.0'     # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==0.26.0'    # pin the current release
+uv pip install 'opentide==0.27.0'    # pin the current release
 ```
 
 </Tab>
 
 </Tabs>
 
-That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all twelve platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
@@ -149,7 +149,7 @@ Every vendor SDK a platform calls ships with `pip install opentide`, so live dep
 | Microsoft Sentinel | `azure-identity` `azure-monitor-query`. Rules are deployed through the ARM `alertRules` REST API directly. |
 | Splunk | `splunk-sdk` |
 | Carbon Black Cloud | `carbon-black-cloud-sdk` |
-| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab, Sysdig, Bitdefender, Graylog | HTTP clients bundled with opentide |
+| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab, Sysdig, Bitdefender, Graylog, Exabeam | HTTP clients bundled with opentide |
 | Google Security Operations | `google-auth` for the OAuth 2.0 token; requests on opentide's own HTTP client |
 
 `deploy --dry-run` compiles each Sentinel rule into the exact request a live deploy sends. A bare `opentide validate query` checks the queries offline with the analysis engine; `generate`, `validate`, offline query checks and dry-run deploy need no credentials. If a live check reports that an SDK will not import, the environment is damaged: reinstall with `pip install --force-reinstall opentide`.
@@ -175,6 +175,7 @@ These `--platform` values are built into the package:
 | `sysdig` | Sysdig Secure (Falco) |
 | `bitdefender` | Bitdefender GravityZone |
 | `graylog` | Graylog |
+| `exabeam` | Exabeam New-Scale SIEM |
 | `google_secops` | Google Security Operations (YARA-L 2.0) |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.

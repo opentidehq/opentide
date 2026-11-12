@@ -10,7 +10,7 @@ description: Install opentide and start the stdio server with opentide mcp start
 The server ships in the base package:
 
 ```bash
-pip install 'opentide==0.26.0'
+pip install 'opentide==0.27.0'
 ```
 
 Command: **`opentide mcp start`**. It calls `opentide.mcp_server.launcher:main`, which probes for `mcp.server.mcpserver` before importing the server.
@@ -31,7 +31,7 @@ The launcher tells that case apart from a missing `mcp` rather than reporting
 both as missing.
 </Callout>
 
-All twelve platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
+All thirteen platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
 
 ## Verify
 

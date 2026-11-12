@@ -295,6 +295,15 @@ def run_validation(
                 _file_of,
             )
         )
+        from opentide.validation.exabeam_names import exabeam_name_issues
+
+        issues.extend(
+            exabeam_name_issues(
+                objects.get("rule", {}),
+                (item.uuid for item in work_items if item.object_type == "rule"),
+                _file_of,
+            )
+        )
         from opentide.validation.google_secops import google_secops_name_issues
 
         issues.extend(
@@ -700,6 +709,16 @@ def _validate_work_item(
         )
         warnings.extend(
             graylog_advisory_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
+        from opentide.validation.exabeam_advisories import exabeam_advisory_issues
+
+        warnings.extend(
+            exabeam_advisory_issues(
                 item.body,
                 object_uuid=item.uuid,
                 object_type=item.object_type,

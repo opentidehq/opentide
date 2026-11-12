@@ -26,6 +26,7 @@ class DetectionPlatforms(Enum):
     SYSDIG = auto()
     BITDEFENDER = auto()
     GRAYLOG = auto()
+    EXABEAM = auto()
     GOOGLE_SECOPS = auto()
 
 

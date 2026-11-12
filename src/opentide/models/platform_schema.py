@@ -12,6 +12,7 @@ from opentide.models.platform import (
     CrowdstrikeConfig,
     DefenderConfig,
     ElasticConfig,
+    ExabeamConfig,
     GoogleSecopsConfig,
     GraylogConfig,
     HarfangLabConfig,
@@ -49,6 +50,7 @@ _REQUIRED: dict[type[TideModel], list[str]] = {
     SysdigConfig: ["status"],
     BitdefenderConfig: ["status"],
     GraylogConfig: ["status", "query"],
+    ExabeamConfig: ["status", "sequences"],
     GoogleSecopsConfig: ["status", "events", "condition"],
 }
 

@@ -62,6 +62,7 @@ PLATFORMS = (
     "sysdig",
     "bitdefender",
     "graylog",
+    "exabeam",
     "google_secops",
 )
 

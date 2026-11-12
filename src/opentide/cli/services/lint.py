@@ -588,6 +588,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+    from opentide.platforms.exabeam.advisories import ADVISORY_CODES as EXABEAM_ADVISORY_CODES
     from opentide.platforms.harfanglab.yara import ADVISORY_CODES
 
     # The datasets visibility.toml declares, as validate and the editor see them.
@@ -604,6 +605,8 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                 continue
             if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
                 continue  # one finding per code, form and rule: opentide's, placed by key
+            if finding.code in EXABEAM_ADVISORY_CODES:
+                continue  # the block advisories are opentide's own (_exabeam_findings)
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
@@ -634,22 +637,33 @@ def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object
     """The Bitdefender advisories (bitdefender-1.0), at the value each points at."""
     from opentide.platforms.bitdefender.advisories import bitdefender_advisories
 
-    return _advisory_findings(records, "bitdefender", bitdefender_advisories)
+    return _platform_advisory_findings(records, "bitdefender", bitdefender_advisories)
+
+
+def _exabeam_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Exabeam advisories (exabeam-1.0), at the key each points at."""
+    from opentide.platforms.exabeam.advisories import exabeam_advisories
+
+    return _platform_advisory_findings(records, "exabeam", exabeam_advisories)
 
 
 def _google_secops_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     """The Google SecOps advisories (google-secops-1.0), at the value each points at."""
     from opentide.platforms.google_secops.advisories import google_secops_advisories
 
-    return _advisory_findings(records, "google_secops", google_secops_advisories)
+    return _platform_advisory_findings(records, "google_secops", google_secops_advisories)
 
 
-def _advisory_findings(
+def _platform_advisory_findings(
     records: list[_ObjectRecord],
     platform: str,
-    advisories: Callable[[dict[str, Any]], Sequence[Any]],
+    advise: Callable[[dict[str, Any]], Sequence[Any]],
 ) -> list[dict[str, object]]:
-    """A platform's advisories as ``queries`` warnings, each at the value it points at."""
+    """*platform*'s block advisories, each a ``queries`` warning at its field path.
+
+    *advise* reads a rule body and returns items with ``code``, ``field_path``
+    and ``message``.
+    """
     import yaml
 
     from opentide.core.io import parse_yaml
@@ -668,7 +682,7 @@ def _advisory_findings(
             continue
         issues = [
             ValidationIssue(code=item.code, field_path=item.field_path, message=item.message)
-            for item in advisories(body)
+            for item in advise(body)
         ]
         for issue in attach_yaml_lines(issues, body, file_path=record.path):
             findings.append(
@@ -973,11 +987,12 @@ def run_lint(
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
-        # The HarfangLab YARA, Bitdefender, Graylog and Google SecOps advisories need no
-        # engine: reported whether it loads or not.
+        # The HarfangLab YARA, Bitdefender, Graylog, Exabeam and Google SecOps advisories
+        # need no engine: reported whether it loads or not.
         advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
         advisories.extend(_bitdefender_findings(shown))
         advisories.extend(_graylog_findings(shown))
+        advisories.extend(_exabeam_findings(shown))
         advisories.extend(_google_secops_findings(shown))
         findings.extend(advisories)
         try:

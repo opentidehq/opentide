@@ -404,6 +404,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `harfanglab` | YARA, HarfangLab profile: `yara.signature`, and the rule the decomposed form assembles |
 | `bitdefender` | YARA, Bitdefender profile: `yara.signature`, ASCII only, at most 30,000 characters, the modules GravityZone confirms |
 | `graylog` | Lucene, Graylog dialect: the block's `query`, and `.lucene` query files |
+| `exabeam` | Exabeam Query Language: each `sequences[].query` under the `rule` profile (a filter; the advanced `SELECT` form is `exabeam_advanced_in_rule`), a `system: exabeam` hunt and a `.exabeam` file under `search`. |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
@@ -584,7 +585,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on eight, five of them the same:
+Live query validation works on **eight platforms**; the offline engine on ten, seven of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -598,8 +599,13 @@ Live query validation works on **six platforms**; the offline engine on eight, f
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA; criteria by `validate`) | ❌ `supported: false` | ✅ YARA |
 | `graylog` (Lucene, Graylog dialect) | ✅ `/api/search/validate` | ✅ |
+| `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
 | `crowdstrike` | ❌ `supported: false` | ❌ |
+
+### Exabeam live validation
+
+`opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
 
 ### Elastic live validation and deploy
 

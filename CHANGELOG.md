@@ -11,17 +11,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **Google Security Operations rules deploy from opentide.** A `configurations.google_secops` block (`platform::google_secops::1.0`) is a YARA-L 2.0 custom rule written as its sections: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, `match` and `options` as YAML. Deploy assembles the rule with a `meta` section derived from the rule (author, description, severity, priority, ATT&CK `technique`, the comma-separated list Google's coverage matrix reads, `opentide_uuid`, `opentide_version`), verifies it with `verifyRuleText` before every create and text update, sends the text only when it changed, and keeps the `ru_` rule id in `.opentide/states/deployment/`. A bound rule is unarchived first, then its text, `scope` and run state are each updated only where they differ. `PREVIEW` runs the rule without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables (even when the new text fails to verify or update, which is still reported), and `DELETION` archives the rule (or, with `deletion = "delete"`, deletes it without `force`, archiving it when Google refuses): detections are never deleted. `runFrequency` is sent only when the block names one, so Google's default and legacy schedules are left alone; a `schedule` is compared as Google stores it, and cleared when removed while `run_frequency` stays. `data_access_scope` takes a scope id or its full name. Credentials are a service-account key in an environment variable, or Application Default Credentials, applied with their quota project; a token that cannot be obtained stops the tenant. 429s, and 503s on any call but a create, are waited out (`Retry-After`, `RetryInfo`, else 5, 15, 60 seconds); a create is never resent after a 5xx or no answer (`google_secops_create_unconfirmed`). Deploy warns when Google limits or pauses a rule (`google_secops_rule_execution_limited`) or reports its compilation failed (`google_secops_rule_compilation_failed`). `deploy --dry-run` shows the assembled rule. Enable it with `opentide setup platforms --google-secops`.
 - **`validate` checks Google SecOps blocks.** It reports the constraint codes `google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule` and `google_secops_meta_key`, the YARA-L section codes `yaral_section_missing`, `yaral_section_empty` (with the reason a `condition: #e > 0` plain scalar loads as null), `yaral_section_header`, `yaral_section_alias`, `yaral_match_shape`, `yaral_match_window` and `yaral_option`, each at its field path, and two enabled blocks sharing a rule name, ignoring case (`google_secops_name_duplicate`). `validate` and `lint` warn, without failing, when `outcome` assigns no `$risk_score` (the instance's default score then applies), when a rule matches a producer by a literal `ru_` id, and on `run_frequency: LIVE` for a rule with two or more event variables, which deploy refuses. Each code has an `opentide explain` page.
 - **`opentide validate query --platform google_secops --live` compiles each rule with Google's `verifyRuleText`**, which creates nothing, and reports `google_secops_compile_error` and `google_secops_compile_warning` at the section key and line they fall in, and `google_secops_run_frequency_not_allowed`. MCP `validate_query` takes `google_secops`: a whole YARA-L rule offline, the catalogue's rules with `live: true`.
-- **YARA-L is checked offline.** The analysis engine (language-server 0.15.0) checks a `google_secops` block's sections as the one rule deploy assembles, hunts with `system: google_secops` as YARA-L searches, and `.yaral` and `.yl2` files with `validate query --file`: UDM fields and enum values, functions, scope across sections, windows, outcomes and condition shape (the `yaral_*` codes), in `opentide validate`, `validate query` without `--live`, `opentide lsp` and `opentide tui`.
+- **YARA-L is checked offline.** The analysis engine checks a `google_secops` block's sections as the one rule deploy assembles, hunts with `system: google_secops` as YARA-L searches, and `.yaral` and `.yl2` files with `validate query --file`: UDM fields and enum values, functions, scope across sections, windows, outcomes and condition shape (the `yaral_*` codes), in `opentide validate`, `validate query` without `--live`, `opentide lsp` and `opentide tui`.
 - **`opentide query --platform google_secops` runs a YARA-L search** through `udmSearch` (`queryDialect=YL2`), returning events or statistics and warning when the result is truncated. `--rule` is not supported: a rule runs in the detection engine, not as a search.
 
 ### Changed
 
-- **The analysis engine is language-server at the head of its YARA-L work** (0.15.0), pinned by git revision until that release. Building opentide from source still needs Rust 1.95 or later.
+- **The analysis engine is language-server at the head of its YARA-L work**, pinned by git revision until language-server 0.16.0 ships it.
 - **`google-auth` is a dependency**, for the Google SecOps OAuth 2.0 token.
+
+## [0.27.0] — 2026-11-12
+
+Exabeam New-Scale SIEM support: deploy correlation rules to Exabeam, with their queries checked as you type.
+
+### Added
+
+- **Exabeam New-Scale SIEM correlation rules deploy from opentide.** A `configurations.exabeam` block (`platform::exabeam::1.0`) is one correlation rule: one or more sequences, each an Exabeam Query Language filter that triggers on any match or on a threshold, with correlation, suppression, delay, schedule, outcome and email. Deploy derives the name, description (with the ATT&CK line) and severity, checks the name is free before a create (`exabeam_name_conflict`), sends the whole rule on every update, disables with `enabled: false`, keeps the rule UUID in `.opentide/states/deployment/`, and paces requests to 100 a minute. Enable it with `opentide setup platforms --exabeam`; a tenant names its `region`, and `client_id` and `client_secret` as `$VAR`s ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **`validate` checks Exabeam blocks.** It reports the 13 `exabeam_*` constraint codes of the spec, each at the `field_path` the spec fixes for it, and two enabled blocks sharing an Exabeam rule name, case-insensitively (`exabeam_name_duplicate`). `validate` and `lint` warn on `outcome: none` without an email (`exabeam_outcome_silent`) and on a correlation window no longer than its ordered sequences need, their windows plus a minute between each (`exabeam_correlation_window`). `deploy --dry-run` shows the create request ([#983](https://github.com/opentidehq/opentide/pull/983)).
+- **Exabeam queries run live, through Exabeam Search.** `validate query --platform exabeam --live` sends each sequence filter to Exabeam Search over the last 15 minutes: a `400` fails it, and any answer but `200` is an error, never a pass. `opentide query` runs a hunt through Search, at most 3,000 rows. Sequence queries, `system: exabeam` hunts and `.exabeam` files are handed to the analysis engine as the `exabeam` language. An engine that does not know the language fails the check as `engine_unavailable`, never as a pass ([#983](https://github.com/opentidehq/opentide/pull/983)).
+
+### Changed
+
+- **The analysis engine is [language-server 0.15.0](https://github.com/opentidehq/language-server/releases/tag/v0.15.0), from crates.io.** It adds the Exabeam Query Language and checks Exabeam blocks: `configurations.exabeam.sequences[].query` under the language's `rule` profile, `system: exabeam` hunts and `.exabeam` files under `search`, so the editor, `opentide tui` and `opentide validate` agree on Exabeam rules ([#983](https://github.com/opentidehq/opentide/pull/983)).
 
 ## [0.26.0] — 2026-11-12
 
-Graylog event definitions deploy from a `configurations.graylog` block on Graylog 6.3 to 7.2, checked by `validate`, the editor and `opentide tui`. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage. The engine is [language-server 0.14.0](https://github.com/opentidehq/language-server/releases/tag/v0.14.0).
+Graylog support: deploy rules to Graylog 6.3–7.2 as event definitions. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage.
 
 ### Added
 
@@ -47,7 +61,7 @@ Graylog event definitions deploy from a `configurations.graylog` block on Graylo
 
 ## [0.25.0] — 2026-11-11
 
-Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
+Bitdefender GravityZone support. YARA in HarfangLab and Bitdefender rules is checked before you deploy.
 
 ### Upgrade
 
@@ -73,7 +87,7 @@ Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, 
 
 ## [0.24.1] — 2026-11-10
 
-`pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
+`pip install opentide` works again: Typer 0.29.0 made opentide crash on start.
 
 ### Fixed
 
@@ -82,7 +96,7 @@ Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, 
 
 ## [0.24.0] — 2026-11-09
 
-A Splunk block's `advanced` table validates and deploys again, so catalogues whose rules set a custom alert action's parameters, such as MISP's, pass `validate`. The editor and `opentide tui` check CrowdStrike queries as CQL.
+Splunk rules with custom alert action settings deploy again. CrowdStrike queries are checked in the editor and `opentide tui`.
 
 ### Added
 
@@ -98,7 +112,7 @@ A Splunk block's `advanced` table validates and deploys again, so catalogues who
 
 ## [0.23.0] — 2026-11-06
 
-`opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility, opt-in.
+A redesigned `opentide tui`: each object opens as a page with its findings, plus Visibility, Configuration and Chains tabs.
 
 ### Added
 
@@ -118,6 +132,8 @@ A Splunk block's `advanced` table validates and deploys again, so catalogues who
 - **Coverage counts the techniques a rule inherits** ([#775](https://github.com/opentidehq/opentide/issues/775)). `opentide info coverage`, the MCP `coverage` tool and the TUI's Coverage tab read only a rule's own `techniques`, so a rule that takes its techniques from its objective, directly or through one of its signals, counted for nothing, and every such technique showed as a gap (`0 rules`, `covered: false`). They now use the walk `info catalog` reports as inherited techniques, from one shared resolver, so the four agree. `info coverage` adds `own`, `inherited` and `matched_techniques` and prints `3 rules (1 own, 2 inherited)`; MCP `coverage` adds `own_rules`, `inherited_rules` and `own_matrix`; the Coverage tab shows `3  1 own · 2 inherited`, and `Enter` opens a rule that lists the technique first. See [Coverage lookup](docs/cli/info.md#coverage-lookup).
 
 ## [0.22.0] — 2026-11-04
+
+The [opentide VS Code extension](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) is out. Installs are smaller without pandas and numpy, and Windows on Arm gets a wheel.
 
 Minor release. The opentide VS Code extension ([`opentidehq.opentide`](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide)) ships its first release with it, and builds its catalogue, graph, relations and deploy-plan views on two new commands: `opentide --json info catalog`, the catalogue and its relationships in one document, and `opentide serve`, CLI commands from one warm process. `setup vscode` recommends the extension and stops mapping opentide's schemas for the YAML extension. `pip install opentide` no longer installs pandas or numpy, and Windows on Arm installs a wheel. `deploy --uuid` and `--file`, `setup --plan`, progress events and each platform's tenants in `info` are new. A minor because it adds commands, changes the files `setup vscode` and `generate snippets` write, changes the `end_column` of a query finding over several lines, and drops two dependencies: run `opentide setup vscode --settings --no-generate` and `opentide generate snippets`, and add pandas or numpy to your own requirements if your code imports them.
 
@@ -170,6 +186,8 @@ opentide validate --strict
 ```
 
 ## [0.21.0] — 2026-11-03
+
+Sysdig Secure support, with Falco rules checked offline. CoreTIDE files, keys and commands are retired.
 
 Minor release. Sysdig Secure and Falco become the ninth platform, with Falco conditions checked offline. Migrating CoreTIDE content is not a supported path, and what suggested otherwise is removed: `global.toml`, `schema.toml` and `systems/` fail every command, and the splunk::2.x keys, a rule's `meta:` and an objective's root `composition` are unknown keys. Rule pages show each platform block's own status and severity, one slow query no longer marks a tenant unreachable, and the generated GitLab pipeline is built as data. A minor because it changes what input is accepted, removes `migrate objects` and `export playbook-map`, and changes the generated pipelines: run `opentide validate --strict`, which names each retired file and key, and re-run `opentide setup ci <provider> --yes`.
 
@@ -257,6 +275,8 @@ opentide validate --strict
 
 ## [0.20.1] — 2026-11-03
 
+Fixes the `visibility.toml` format from 0.20.0: each log source is one dataset, and can list its columns.
+
 Patch release. A `visibility.toml` log source is one dataset, named by its `name` and declaring its columns, and the query checks read them ([language-server 0.7.1](https://github.com/opentidehq/language-server/releases/tag/v0.7.1)); `lint` checks files that start with a UTF-8 byte-order mark, MCP `validate_query` reads `visibility.toml`, and `lint.toml` sets the filename convention per object kind. A patch by maintainer decision, although the release-management rule makes a change to accepted input a minor: the 0.20.0 `visibility.toml` dataset lists were a defect of `visibility::1.0`, shipped the same day, and are corrected in place. After upgrading, a workspace that used the 0.20.0 dataset lists (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), which now fail validation with a message that says what to do, rewrites `visibility.toml` with one `[[logsources]]` per table, sourcetype or index pattern, named after it, and updates the signals' `data.logsources` references to the new names ([Upgrading from 0.20.0](docs/usage/configuration.md#upgrading-from-0200)). Everything else needs nothing.
 
 ### Added
@@ -283,6 +303,8 @@ opentide validate --strict
 ```
 
 ## [0.20.0] — 2026-11-02
+
+`validate` catches what a deploy would reject: it compiles every rule and checks queries against the documented tables and columns.
 
 Minor release: `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns (language-server 0.7.0), a workspace's `visibility.toml` declares its own datasets, and `lint.toml` sets the filename convention. It is a minor because `validate` can now fail a rule that passed under 0.19.0, and because `validate query --live` drops the `VALIDATION_*` environment flags and the `validation_exit_code` / `exit_on_validation_errors` helpers. After upgrading:
 
@@ -318,6 +340,8 @@ Minor release: `validate` compiles every rule a deploy would compile, the query 
 - **`opentide doctor` no longer reports fresh templates as stale in a workspace that sets `[metadata].required` in `lint.toml`.** `generate templates` renders those metadata keys as live keys, but the `templates_fresh` check rendered the default `author` and `organisation`, so a workspace whose `[metadata].required` differs from the default was told to regenerate templates it had just generated. The check now renders with the workspace's `[metadata].required`. A `lint.toml` that parses but holds a value opentide rejects (an unknown `[metadata].required` key, say) is reported by `templates_fresh` as a warning naming the key, where the check used to report stale templates for the wrong reason. A `lint.toml` that is not valid TOML is still reported by `configuration`.
 
 ## [0.19.0] — 2026-10-29
+
+Offline query checks: `validate` checks every rule query without a tenant, and `opentide query` runs a query on one.
 
 Minor release: the language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. It is a minor because `validate` now fails on a query the platform would reject, `validate query` without `--live` checks instead of refusing, and wheels are built per platform.
 
@@ -361,6 +385,8 @@ The language server and its query engine ship with `pip install opentide` ([#332
 - **`opentide validate` names Elastic advisories by the codes of the platform specification** ([#637](https://github.com/opentidehq/opentide/issues/637)). The editor already used `lookback_zero`, `lookback_long`, `threshold_lookback`, `esql_metadata_id`, `eql_maxspan_window`, `eql_maxspan_lookback`, `risk_band` and `technique_not_enterprise`, while the CLI logged event names of its own, two of which (`elastic_lookback_long_warning`, `elastic_eql_maxspan_window_warning`) covered two conditions each. The log event is now the code, repeated as `code`, and `legacy_event` holds the old name for log consumers; it goes in the release after next. The three look-back codes are now independent: a `threshold` rule with a look-back over `1h` raises `lookback_long` and `threshold_lookback`, where only the first was reported before. The `technique_not_enterprise` warning that `deploy` logs when it leaves a Mobile or ICS technique out of `threat` is renamed the same way. See [opentide validate](docs/cli/validate.md#elastic-live-validation-and-deploy).
 
 ## [0.18.0] — 2026-10-27
+
+Configuration files are validated. New commands for authors and agents: `new`, `doctor`, `explain`, `tui` and `commands`.
 
 Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:
 
@@ -565,6 +591,8 @@ opentide validate --strict
 
 ## [0.17.2] — 2026-10-22
 
+`uv` installs get a working boto3 again, and a proxy blocking a Splunk tenant gives a clear error.
+
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
 
 ### Fixed
@@ -583,6 +611,8 @@ opentide validate --strict
 ```
 
 ## [0.17.1] — 2026-10-21
+
+Splunk works again with self-signed certificates (`ssl = false`), and Splunk rules with a `trigger` block deploy.
 
 Patch release. Nothing to regenerate. A tenant's `ssl` now decides certificate verification for every call opentide makes to that tenant, on every platform. Splunk deploys and live query checks work again against a tenant with `ssl = false` (a self-signed certificate), and Splunk rules with a `trigger` block deploy. If your pipeline patches the installed `opentide/platforms/splunk/client.py` or `deployer.py` with `sed` to work around either bug, delete those steps: after upgrading their patterns match nothing. A patch, not a minor: each fix restores what the configuration already documented, and the stricter `ssl` check only refuses values that never worked.
 
@@ -605,6 +635,8 @@ opentide validate --strict
 ```
 
 ## [0.17.0] — 2026-10-20
+
+Deployment plans are replaced by status strategies: `--plan` becomes `--strategy`. Every old setting fails with a message naming its replacement.
 
 Minor release with **breaking changes**: deployment plans are removed. A deploy now names the status strategy it carries out, and a tenant lists the strategies it accepts. Three things need action after upgrading; each old setting fails with a message naming its replacement.
 - **Replace `--plan` and unset `DEPLOYMENT_PLAN`.** `--plan STAGING` becomes `--strategy PREVIEW`, `--plan PRODUCTION` becomes `--strategy RELEASE`, and `--plan FULL` (or no plan) becomes `--strategy PREVIEW --strategy RELEASE --all`.
@@ -657,6 +689,8 @@ opentide validate --strict
 
 ## [0.16.1] — 2026-10-20
 
+The SDK class is spelled `Opentide`. `OpenTide` still works, with a deprecation warning.
+
 Patch release. Nothing to regenerate and nothing to do after upgrading: the SDK class is renamed `Opentide` with the old spelling kept as a deprecated alias.
 
 ### Changed
@@ -677,6 +711,8 @@ opentide validate --strict
 ```
 
 ## [0.16.0] — 2026-10-19
+
+One install for everything: `pip install opentide` includes every platform SDK. Technique pins move to ATT&CK 20.0.
 
 Minor release: `pip install opentide` is the only install, and two things need action after upgrading.
 - **Regenerate generated pipelines** with `opentide setup ci <provider> --yes`. They now take tenant configuration from the default branch before credentialed jobs (security), and an install with no extras validates every platform live.
@@ -742,6 +778,8 @@ opentide validate --strict
 ```
 
 ## [0.15.0] — 2026-10-16
+
+Elastic Security support. Vendor rule ids move out of rule YAML into committed deployment state.
 
 Minor release: two things need action after upgrading.
 - **Vendor rule ids move out of rule YAML into committed deployment state shards** (RFC 0010, [specs/deployment-state.md](https://github.com/opentidehq/specifications/blob/main/specs/deployment-state.md)). Run `opentide deploy migrate-state` and commit its output before the next deploy.
@@ -816,6 +854,8 @@ opentide validate --strict
 
 ## [0.14.2] — 2026-10-14
 
+Security fix: `opentide setup skills` installs only from the pinned catalogue. Upgrade promptly if you use it.
+
 Patch on 0.14.1. Nothing to do after upgrading, but upgrade promptly if you run `opentide setup skills`: it could be made to install skill content from a repository other than the pinned catalogue. A patch rather than a minor because no input contract, generated artefact, exit code or command surface changes — the installer refuses inputs that no legitimate catalogue produces, and a normal install behaves exactly as before.
 
 ### Fixed
@@ -835,6 +875,8 @@ opentide validate --strict
 ```
 
 ## [0.14.1] — 2026-10-14
+
+Documentation generation is fast again: 1.4 s instead of 722 s on a 265-object corpus.
 
 Patch on 0.14.0. Nothing to do after upgrading. Documentation and export generation are dramatically faster again — a 265-object corpus that took **722s** on 0.14.0 now completes in **under a second**, and the generated output is byte-identical, so no regeneration is required. Field extraction for ATT&CK techniques, threat actors and platform configurations is now derived from the Pydantic models rather than a hardcoded key list. A patch rather than a minor because no input contract, generated artefact, exit code or command surface changes; the one behaviour change is an undeclared legacy key that no model ever described, noted under Changed.
 
@@ -856,6 +898,8 @@ opentide validate --strict
 ```
 
 ## [0.14.0] — 2026-10-14
+
+Signal entities carry their stage, and `opentide migrate vocab-scope` updates them for you. Documentation generation finishes on large catalogues.
 
 Minor on 0.13.0. Two things need action after upgrading. `objective.signals[].entities` values are now stage-scoped (`Hostname` → `Host::Hostname`), and `opentide migrate vocab-scope` re-prefixes them for you. `response.responders` becomes a configuration enum you declare in `deployment.toml`, so a value that no instance could make valid under 0.13.0 now validates. Documentation and export generation are dramatically faster — a corpus that previously exceeded a one-hour CI timeout now completes.
 
@@ -897,6 +941,8 @@ opentide validate --strict
 
 ## [0.13.0] — 2026-10-12
 
+`threat.surface` values carry their stage. Generated CI deploys only for pull requests to the default branch.
+
 Minor on 0.12.1. `threat.surface` values are now stage-scoped (`Windows::Desktop` → `OS::Windows::Desktop`), platform configuration blocks require `status`, `opentide --json validate` emits one document shape and drops its legacy `errors` map, and the local `[vocabulary]` extension block is removed. Re-run `opentide setup ci` — generated pipelines deployed to the staging tenant and pushed to your default branch from any pull request. Regenerate with `opentide generate schemas templates vocabs snippets`.
 
 ### Changed
@@ -925,6 +971,8 @@ opentide validate --strict
 
 ## [0.12.1] — 2026-10-09
 
+A missing credential is logged once, not once per object.
+
 Patch on 0.12.0. A missing credential is logged once, not once per object. Re-run `opentide setup ci` so a live query job guards only the `$VAR` names in that platform file and exits 2 when one of them is unset.
 
 ### Fixed
@@ -941,6 +989,8 @@ opentide validate --strict
 ```
 
 ## [0.12.0] — 2026-10-09
+
+The MCP server starts with `opentide mcp start`. The `opentide-mcp` command is removed.
 
 Minor on 0.11.0. The `opentide-mcp` console script is gone. The stdio server is `opentide mcp start`. Regenerate editor config with `opentide setup mcp`. Re-run `opentide setup ci` so a live query job runs only when every required credential variable is set. Regenerate schemas with `opentide generate` so object lists such as `threat.chaining` are not given a string vocabulary enum.
 
@@ -970,6 +1020,8 @@ opentide validate --strict
 ```
 
 ## [0.11.0] — 2026-10-07
+
+`validate query --live` checks queries on your tenant. Plain `validate query` no longer scans query text.
 
 Minor on 0.10.0. Bare `validate query` no longer scans. `--live` is the tenant check. Regenerate CI with `opentide setup ci` so generated pipelines pass `--live` and pin this release. Regenerate schemas with `opentide generate` so optional vocabulary lists include `items.enum`.
 
@@ -1001,6 +1053,8 @@ opentide validate --strict
 ```
 
 ## [0.10.0] — 2026-10-06
+
+Signals reference the log sources in `visibility.toml`, technique lists are called `mitre_attack`, and `--proxy` sets an HTTP proxy.
 
 Minor on 0.9.0. Upgrade, rename technique lists to `mitre_attack`, and regenerate schemas with `opentide generate`. Regenerate CI with `opentide setup ci` so the install pin is exact. A root `composition` block is still accepted and is no longer required.
 
@@ -1044,6 +1098,8 @@ opentide validate --strict
 
 ## [0.9.0] — 2026-10-05
 
+Rule reviews: rules record `metadata.reviewed`, and `opentide rules unreviewed` lists the ones due.
+
 Minor on 0.8.2. Upgrade and regenerate schemas with `opentide generate` so `rule::1.1` can record `metadata.reviewed` and technique and logsource checks use `att&ck::1.1` and `datasources::1.1`. `opentide rules unreviewed` lists rules with no review, or a review older than the window. It does not require regenerating CI.
 
 ### Added
@@ -1071,6 +1127,8 @@ opentide validate --strict
 
 ## [0.8.2] — 2026-10-02
 
+A faster object index in the SDK, and vocabulary files keep dotted keys quoted.
+
 Patch on 0.8.1. Upgrade for a memoised object index and vocabulary files that keep dotted keys quoted. It does not change accepted input, CLI output, or exit codes, and it does not require regenerating CI.
 
 ### Changed
@@ -1092,6 +1150,8 @@ opentide validate --strict
 
 ## [0.8.1] — 2026-10-01
 
+Generated GitLab pipelines wait for query validation before deploying, as GitHub and Azure already did.
+
 Patch on 0.8.0. Upgrade and regenerate GitLab CI with `opentide setup ci gitlab` so query validation gates generate and deploy, and the inflight shell matches ShellCheck. This restores the documented gate that GitHub and Azure already enforced. It does not change accepted input, CLI output, or exit codes.
 
 ### Fixed
@@ -1108,6 +1168,8 @@ opentide validate --strict
 ```
 
 ## [0.8.0] — 2026-09-30
+
+Generated pipelines gate deploys on strict validation and lint. Object files without a `uuid` fail validation.
 
 Minor on 0.7.0. Upgrade and regenerate CI with `opentide setup ci` so validation and lint are strict, deploy skips a plan whose platforms have no tenants, and an Azure pipeline has a pool. An object file with no `uuid` now fails validation. `get_chaining` returns the threat, objective, and rule lineage.
 
@@ -1143,6 +1205,8 @@ opentide validate --strict
 
 ## [0.7.0] — 2026-09-29
 
+MISP sharing: `opentide share` publishes threats, objectives and rules as MISP events.
+
 Minor on 0.6.4. Upgrade to publish Tide objects to MISP, or to regenerate CI so a GitHub production job compares `github.ref` to a literal ref. Sharing is a new command. The share stage stays off until `opentide setup ci` is run with `--sharing`.
 
 ### Added
@@ -1173,6 +1237,8 @@ opentide validate --strict
 
 ## [0.6.4] — 2026-09-28
 
+GitHub production deploys run again, and re-running setup keeps your edited README, `.gitignore` and platform comments.
+
 Patch on 0.6.3. Upgrade if `generate` printed an empty error for a missing detection model, a GitHub production deploy never ran, setup rewrote a README or platform comments, or MCP `deploy_rule` crashed. Regenerate a GitHub, GitLab, or Azure workflow with `opentide setup ci` so production deploy and the checkout depth match this release.
 
 ### Fixed
@@ -1196,6 +1262,8 @@ opentide validate --strict
 ```
 
 ## [0.6.3] — 2026-09-24
+
+CI diff plans say what is wrong instead of crashing.
 
 Patch on 0.6.2. Upgrade if a CI diff plan still crashed after 0.6.2: a missing tip SHA died on `encode`, Azure `STAGING` died on `KeyError` or a fetch of a missing `origin`, a ref that is not on `origin` died on `Invalid object name`, or `DEBUG`, `MANUAL`, or `ALWAYS` died on `KeyError`. Each still exits `1`, with the sentence for that case. `FULL` is unchanged.
 
@@ -1222,6 +1290,8 @@ opentide validate --strict
 
 ## [0.6.2] — 2026-09-24
 
+GitLab and GitHub diff plans report a missing commit or variable instead of crashing.
+
 Patch on 0.6.1. Upgrade if a GitLab `STAGING` or `PRODUCTION` plan crashed with `'Repo' object has no attribute 'lookup_ref'`, or a GitHub `STAGING` plan asked for Azure pull-request variables and then `KeyError`. Both still exit `1`. GitLab reports `No Source Commit Found`. GitHub names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`.
 
 ### Fixed
@@ -1243,6 +1313,8 @@ opentide validate --strict
 ```
 
 ## [0.6.1] — 2026-09-23
+
+CI deploys pick up changed rule files that sit directly in `objects/rules/`.
 
 Patch on 0.6.0. Upgrade if a CI `STAGING` or `PRODUCTION` plan skipped a changed rule file that sits directly in `objects/rules/`: 0.6.0 left that file out of the plan, and 0.6.1 deploys it. A file in a subdirectory of `objects/rules/` is still not deployed. The missing-checkout failure is still exit `1`, with a different message.
 
@@ -1272,6 +1344,8 @@ opentide validate --strict
 ```
 
 ## [0.6.0] — 2026-09-23
+
+Commands work from any folder in your workspace, and `deploy` handles a workspace with no rules or tenants yet.
 
 Minor on 0.5.0. Upgrade if a command checked the wrong directory, hid what `--json` already showed, or crashed on a repository that was not finished yet. A few JSON fields and exit results change, so read **Changed** before upgrading a pipeline.
 
@@ -1326,6 +1400,8 @@ If you generated CI with `opentide setup ci`, regenerate it so `--default-branch
 
 ## [0.5.0] — 2026-09-23
 
+Threats written to `threat::1.0` validate: `impact` and `leverage` are lists.
+
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/opentidehq/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.
 
 ### Changed
@@ -1352,6 +1428,8 @@ opentide validate --strict
 Rewrite each `impact: Data Breach` as a one-item list (same for `leverage`), then run `opentide generate` so new threats start from the list template. If your CI patches the installed model to accept lists, drop that step.
 
 ## [0.4.0] — 2026-09-22
+
+Fixes for first-run crashes and tracebacks. `validate query` checks syntax offline by default.
 
 Minor on the public 0.3.0 beta. Upgrade if a first-run command crashed, printed a traceback, or quietly did nothing: this release fixes the first-user bugs filed against 0.3.0 ([#239](https://github.com/opentidehq/opentide/issues/239)–[#258](https://github.com/opentidehq/opentide/issues/258), [#202](https://github.com/opentidehq/opentide/issues/202), [#233](https://github.com/opentidehq/opentide/issues/233)) and the test-harness gaps that let them ship ([#259](https://github.com/opentidehq/opentide/issues/259)). It is a minor rather than a patch because several fixes change output that scripts can depend on — read **Changed** before upgrading a pipeline. If you generated GitHub CI with `opentide setup ci`, regenerate it — see **Security**.
 
@@ -1412,6 +1490,8 @@ Regenerate generated CI and hooks to pick up the fixed templates: `opentide setu
 
 ## [0.3.0] — 2026-09-21
 
+Dependency update: cryptography 50.x (CVE-2026-69247) and Typer 0.27.
+
 Minor maintenance release on the public 0.2.1 beta. Upgrade for current runtime and toolchain floors (cryptography 50.x, typer 0.27) and a clean GitHub Code Quality pass.
 
 ### Changed
@@ -1428,6 +1508,8 @@ opentide validate --strict
 ```
 
 ## [0.2.1] — 2026-09-18
+
+CVE checks use CIRCL Vulnerability-Lookup instead of NVD, and look up GHSA and GCVE ids too.
 
 Patch on the public 0.2.0 beta. Upgrade if you validate `threat.cve` identifiers or generate threat documentation that should link to CIRCL Vulnerability-Lookup.
 
@@ -1450,6 +1532,8 @@ opentide validate --strict
 
 ## [0.2.0] — 2026-09-18
 
+Cleaner generated templates: optional keys are commented in place, and rule `configurations` are platform stubs.
+
 Minor on the public 0.1.8 beta. Upgrade if you generate templates or VS Code snippets — optional YAML now hugs `#` to each key, spacers stay blank, and rule `configurations` are commented platform stubs rather than `{}`.
 
 ### Changed
@@ -1466,6 +1550,8 @@ opentide validate --strict
 ```
 
 ## [0.1.8] — 2026-09-16
+
+First-run `setup` and `generate` write clean templates. VS Code snippets get prefixes, descriptions and tab stops.
 
 Patch on the public 0.1.7 beta. Upgrade if first-time `setup` / `generate` logged missing object folders as errors, dumped YAML `null`, attached live children under `#key:` parents, skipped platform TOML from `setup repo --platform`, emitted Title-Case UUID documentation paths, or looked up `objective.priority` in `criticality::1.0`.
 
@@ -1493,6 +1579,8 @@ opentide validate --strict
 
 ## [0.1.7] — 2026-09-16
 
+VS Code stops reporting "Matches multiple schemas", and templates show required nested fields.
+
 Patch on the public 0.1.6 beta. Upgrade if VS Code YAML reported "Matches multiple schemas", generated templates hid required nested fields, `setup vscode` skipped snippets or crashed on a missing path, JSON validate stamped every check failed, or `invalid_ref` pointed at parent objects.
 
 ### Fixed
@@ -1514,6 +1602,8 @@ opentide validate --strict
 
 ## [0.1.6] — 2026-09-15
 
+Fixes two crashes: `opentide generate` on unquoted YAML dates, and interactive `setup` after choosing a CI provider.
+
 Patch on the public 0.1.5 beta. Upgrade if `opentide generate` crashed on unquoted YAML dates, or if interactive `opentide setup` crashed after choosing a CI provider.
 
 ### Fixed
@@ -1530,6 +1620,8 @@ opentide validate --strict
 ```
 
 ## [0.1.5] — 2026-09-13
+
+ATT&CK and MISP threat-actor vocabularies update weekly.
 
 Patch on the public 0.1.4 beta. Upgrade if you regenerate ATT&CK or MISP vocabularies, or if you run the weekly ingest workflow.
 
@@ -1552,6 +1644,8 @@ opentide validate --strict
 
 ## [0.1.4] — 2026-09-13
 
+Fixes the `opentide generate` crash on `threat.actors`: actors are objects with a `name`.
+
 Patch on the public 0.1.3 beta. Upgrade if `opentide generate` crashed with `'str' object has no attribute 'get'` on `threat.actors`, or if you authored actors as vocabulary ID strings.
 
 ### Fixed
@@ -1569,6 +1663,8 @@ opentide validate --strict
 ```
 
 ## [0.1.3] — 2026-09-11
+
+`setup ci` writes pipelines GitHub, GitLab and Azure accept, and `deploy` runs locally.
 
 Patch on the public 0.1.2 beta. Upgrade if you ran `setup ci`, `deploy` / `validate query` locally, followed the tutorial, or installed without Azure/pandas extras.
 
@@ -1588,6 +1684,8 @@ opentide validate --strict
 ```
 
 ## [0.1.2] — 2026-09-11
+
+`opentide lint` checks filenames and metadata, and `setup hooks` validates on every commit.
 
 Patch on the public 0.1.1 beta. Upgrade if you scaffold new detection repos, generate on an empty catalogue, or install agent skills.
 
@@ -1617,6 +1715,8 @@ opentide validate --strict
 
 ## [0.1.1] — 2026-09-11
 
+Fixes the `UnicodeDecodeError` crash in `validate` and `generate` after a pip install.
+
 Patch for the public 0.1.0 wheel. Upgrade if you installed from PyPI and hit `UnicodeDecodeError` on `validate` / `generate`, or if `opentide setup skills discover` started an install wizard.
 
 ### Fixed
@@ -1634,6 +1734,8 @@ opentide validate --strict
 ```
 
 ## [0.1.0] — 2026-09-09
+
+First public beta: the CLI, MCP server, SDK and seven platforms in one PyPI package.
 
 First public release of the DetectionOps engine as a **PyPI package**. This is a beta (`Development Status :: 4 - Beta`), not a 1.0. The old engine and companion repos are archived; pinned CoreTide submodules still resolve.
 
@@ -1667,7 +1769,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/opentidehq/opentide/releases/tag/v0.27.0
 [0.26.0]: https://github.com/opentidehq/opentide/releases/tag/v0.26.0
 [0.25.0]: https://github.com/opentidehq/opentide/releases/tag/v0.25.0
 [0.24.1]: https://github.com/opentidehq/opentide/releases/tag/v0.24.1

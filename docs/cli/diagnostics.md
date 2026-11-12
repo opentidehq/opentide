@@ -120,6 +120,68 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`esql_unknown_command`](#esql_unknown_command) | The ES|QL command is not one Elasticsearch knows. |
 | [`esql_unknown_function`](#esql_unknown_function) | The ES|QL function is not in the Elasticsearch function catalog. |
 | [`esql_unknown_type`](#esql_unknown_type) | The ::type cast names a type no Elasticsearch release can cast to. |
+| [`exabeam_advanced_in_rule`](#exabeam_advanced_in_rule) | A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only. |
+| [`exabeam_bare_wildcard`](#exabeam_bare_wildcard) | A * alone is not an Exabeam query term. |
+| [`exabeam_clause_order`](#exabeam_clause_order) | Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT. |
+| [`exabeam_context_table_limit`](#exabeam_context_table_limit) | An Exabeam query has more than two context table lookups. |
+| [`exabeam_context_table_or`](#exabeam_context_table_or) | An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only. |
+| [`exabeam_context_table_trigger`](#exabeam_context_table_trigger) | A sequence whose query looks a value up in a context table has a threshold. |
+| [`exabeam_correlation`](#exabeam_correlation) | An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one. |
+| [`exabeam_correlation_window`](#exabeam_correlation_window) | `correlation.within` is not more than the time the ordered sequences need. |
+| [`exabeam_create_no_id`](#exabeam_create_no_id) | Exabeam answered a create without a rule UUID. |
+| [`exabeam_create_unconfirmed`](#exabeam_create_unconfirmed) | An Exabeam create got no answer, or a server error, so it may or may not have happened. |
+| [`exabeam_duration`](#exabeam_duration) | A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes. |
+| [`exabeam_email`](#exabeam_email) | The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject. |
+| [`exabeam_feature_unavailable`](#exabeam_feature_unavailable) | The Exabeam tenant's subscription does not include the feature, so no rule deploys to it. |
+| [`exabeam_foreach_clause`](#exabeam_foreach_clause) | An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY. |
+| [`exabeam_foreach_position`](#exabeam_foreach_position) | An Exabeam FOREACH is the first statement; it runs on the result of a preceding query. |
+| [`exabeam_foreach_reference`](#exabeam_foreach_reference) | An Exabeam @field reference is outside a FOREACH sub-query. |
+| [`exabeam_free_text_special`](#exabeam_free_text_special) | Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes. |
+| [`exabeam_function_arity`](#exabeam_function_arity) | An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern. |
+| [`exabeam_group_by`](#exabeam_group_by) | A `group_by` is not a list of one to three distinct field names. |
+| [`exabeam_group_by_column`](#exabeam_group_by_column) | An Exabeam selected column is neither in GROUP-BY nor aggregated. |
+| [`exabeam_group_by_select_star`](#exabeam_group_by_select_star) | An Exabeam GROUP-BY is combined with SELECT *. |
+| [`exabeam_implicit_and`](#exabeam_implicit_and) | Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND. |
+| [`exabeam_implicit_operator`](#exabeam_implicit_operator) | An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT. |
+| [`exabeam_ipv6_range`](#exabeam_ipv6_range) | An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only. |
+| [`exabeam_keyword_case`](#exabeam_keyword_case) | An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case. |
+| [`exabeam_leading_slash`](#exabeam_leading_slash) | An Exabeam query cannot start with /. |
+| [`exabeam_legacy_regex`](#exabeam_legacy_regex) | An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path. |
+| [`exabeam_mixed_boolean`](#exabeam_mixed_boolean) | Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence. |
+| [`exabeam_name_conflict`](#exabeam_name_conflict) | An Exabeam rule with the block's name already exists, so deploy did not create a second one. |
+| [`exabeam_name_duplicate`](#exabeam_name_duplicate) | Two enabled Exabeam blocks resolve to the same Exabeam rule name. |
+| [`exabeam_name_length`](#exabeam_name_length) | The Exabeam rule name is longer than 128 characters. |
+| [`exabeam_not_equal`](#exabeam_not_equal) | Exabeam filters have no != operator; write NOT field:value. |
+| [`exabeam_outcome`](#exabeam_outcome) | The block `outcome` is not `alert`, `case` or `none`. |
+| [`exabeam_outcome_silent`](#exabeam_outcome_silent) | An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers. |
+| [`exabeam_parse_error`](#exabeam_parse_error) | The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number. |
+| [`exabeam_pipe_limit`](#exabeam_pipe_limit) | An Exabeam query has more than five pipes. |
+| [`exabeam_pipe_misuse`](#exabeam_pipe_misuse) | An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE. |
+| [`exabeam_range`](#exabeam_range) | The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network. |
+| [`exabeam_regex`](#exabeam_regex) | The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier. |
+| [`exabeam_request_failed`](#exabeam_request_failed) | An Exabeam call for one rule failed. |
+| [`exabeam_request_rejected`](#exabeam_request_rejected) | Exabeam refused the rule with HTTP 400. |
+| [`exabeam_reserved_alias`](#exabeam_reserved_alias) | An Exabeam AS name is one of the Search guide's reserved words. |
+| [`exabeam_rgx_extract_limit`](#exabeam_rgx_extract_limit) | An Exabeam query has more than three RGX_EXTRACT calls. |
+| [`exabeam_rule_auto_disabled`](#exabeam_rule_auto_disabled) | Exabeam has stopped the rule on its own. |
+| [`exabeam_rule_missing`](#exabeam_rule_missing) | A rule to disable was already gone from Exabeam, so its id was removed. |
+| [`exabeam_rule_recreated`](#exabeam_rule_recreated) | The recorded Exabeam rule was gone, so deploy created it again. |
+| [`exabeam_schedule`](#exabeam_schedule) | A `schedule` recurrence is not one Exabeam takes. |
+| [`exabeam_schedule_retained`](#exabeam_schedule_retained) | The Exabeam rule keeps a schedule the block no longer sets. |
+| [`exabeam_sequences`](#exabeam_sequences) | An Exabeam block has no sequences, or a sequence has no query. |
+| [`exabeam_severity`](#exabeam_severity) | The block `severity` is not `none`, `low`, `medium`, `high` or `critical`. |
+| [`exabeam_single_group`](#exabeam_single_group) | Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them. |
+| [`exabeam_string_field_number`](#exabeam_string_field_number) | An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes. |
+| [`exabeam_tenant_unauthorized`](#exabeam_tenant_unauthorized) | Exabeam refused the tenant's API key, so nothing more is sent to it. |
+| [`exabeam_tenant_unreachable`](#exabeam_tenant_unreachable) | An Exabeam tenant did not answer, so no rule deploys to it. |
+| [`exabeam_threshold_function`](#exabeam_threshold_function) | A threshold's `function` is not an Exabeam function, or its `field` is missing or blank. |
+| [`exabeam_threshold_operator`](#exabeam_threshold_operator) | A threshold's `operator` is not one its function takes. |
+| [`exabeam_threshold_value`](#exabeam_threshold_value) | A threshold's `value` does not have the shape its operator takes. |
+| [`exabeam_time_exact`](#exabeam_time_exact) | An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only. |
+| [`exabeam_unknown_field`](#exabeam_unknown_field) | The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it. |
+| [`exabeam_unknown_function`](#exabeam_unknown_function) | The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT. |
+| [`exabeam_unquoted_value`](#exabeam_unquoted_value) | An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes. |
+| [`exabeam_wildcard_in_phrase`](#exabeam_wildcard_in_phrase) | A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
 | [`external_id_shape`](#external_id_shape) | A vendor rule id in deployment state has the wrong form. |
 | [`falco_append_condition`](#falco_append_condition) | A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not. |
@@ -2302,6 +2364,1054 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [ES|QL reference](https://www.elastic.co/docs/reference/query-languages/esql) describes the syntax and the commands the engine checks against.
+
+## exabeam_advanced_in_rule
+
+A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_bare_wildcard
+
+A * alone is not an Exabeam query term.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_clause_order
+
+Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_context_table_limit
+
+An Exabeam query has more than two context table lookups.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_context_table_or
+
+An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_context_table_trigger
+
+A sequence whose query looks a value up in a context table has a threshold.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Exabeam requires "Trigger on first match" for a sequence with a context table lookup (`user IN "Privileged Accounts"`), so the sequence takes no `threshold`.
+
+### Example
+
+```yaml
+sequences:
+  - query: activity_type:"app-login" AND user IN "Privileged Accounts"
+    threshold:
+      function: count
+      operator: more_than
+      value: 5
+      within: 1h
+```
+
+### How to fix
+
+Remove the `threshold`, or move the lookup to a sequence of its own that triggers on any match and correlate the two.
+
+## exabeam_correlation
+
+An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Two or more sequences correlate within a common window, `correlation.within`; one sequence has nothing to correlate with.
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    sequences:
+      - query: activity_type:"process-create" AND process_name:"mshta.exe"
+    correlation:
+      within: 10m
+```
+
+### How to fix
+
+With one sequence, remove `correlation`. With two or more, set `correlation.within` (`15m`) and, optionally, `correlation.group_by`.
+
+## exabeam_correlation_window
+
+`correlation.within` is not more than the time the ordered sequences need.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block with two or more sequences (exabeam-1.0). Exabeam evaluates the sequences in order: it waits one minute before it evaluates the next one, and an any-match sequence evaluates events for one minute. Its guide asks for a correlation window of more than the sum of the sequence windows (`threshold.within`, one minute for an any-match sequence) plus one minute for each sequence after the first: "more than nine minutes" for a 3-minute and a 5-minute sequence. A shorter window may never see every condition met. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+sequences:
+  - query: activity_type:"app-login" AND outcome:"fail"
+    threshold: {function: count, operator: more_than, value: 10, within: 1h}
+  - query: activity_type:"app-login" AND outcome:"success"
+correlation:
+  within: 15m
+```
+
+### How to fix
+
+Make `correlation.within` more than the minutes the sequences need: 60 + 1 + 1 = 62 here, so `63m` or `2h`.
+
+## exabeam_create_no_id
+
+Exabeam answered a create without a rule UUID.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The create returned `201`, but its `id` is not a UUID, so nothing was recorded in `.opentide/states/deployment/`. The rule may exist on the tenant with no binding.
+
+### Example
+
+```text illustrative
+exabeam_create_no_id: the create of 'Password spraying from outside the network' answered no rule UUID (id None)
+```
+
+### How to fix
+
+Find the rule by its name in the Exabeam console. Delete it and deploy again, or record its id under `platforms.exabeam.<tenant>` and commit it.
+
+## exabeam_create_unconfirmed
+
+An Exabeam create got no answer, or a server error, so it may or may not have happened.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The create timed out, the connection was reset, or Exabeam answered `5xx`. Exabeam may have created the rule, but its id never reached opentide. Deploy never sends a create again, because it may not list rules to find the first one.
+
+### Example
+
+```text illustrative
+exabeam_create_unconfirmed: the create of 'Password spraying from outside the network' got no answer, so Exabeam may have created it with an id opentide does not know
+```
+
+### How to fix
+
+Look for the rule by its name in the Exabeam console. Delete it and deploy again, or record its id under `platforms.exabeam.<tenant>` in `.opentide/states/deployment/<uuid>.json` and commit it. If there is none, deploy again.
+
+## exabeam_duration
+
+A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). A duration is a positive whole number and one unit, no space: `m`, `h`, `d`, and `w` for `suppression.for` only. Compound (`1h30m`) and ISO 8601 durations are not durations. `delay` is 7 to 180 minutes (`7m` to `180m`, `1h` to `3h`).
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    delay: 5m
+```
+
+### How to fix
+
+Write the duration in one unit (`90m`, not `1h30m`), and keep `delay` between `7m` and `3h`.
+
+## exabeam_email
+
+The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `email.recipients` is a non-empty list of distinct addresses (`local@domain`); `subject`, when set, is non-blank; `attach_csv` is `true` or `false`.
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    email:
+      recipients: []
+```
+
+### How to fix
+
+List at least one address, each once, or remove `email`.
+
+## exabeam_feature_unavailable
+
+The Exabeam tenant's subscription does not include the feature, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). Exabeam answered `409` ("Feature is not enabled for subscription"). Deploy stops the tenant.
+
+### Example
+
+```text illustrative
+exabeam_feature_unavailable: tenant exabeam-eu answered POST /correlation-rules/v2/rules with HTTP 409: Feature is not enabled for subscription
+```
+
+### How to fix
+
+Ask Exabeam to enable correlation rules (Threat Detection Management) for the tenant, or remove the tenant from `exabeam.toml`.
+
+## exabeam_foreach_clause
+
+An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_foreach_position
+
+An Exabeam FOREACH is the first statement; it runs on the result of a preceding query.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_foreach_reference
+
+An Exabeam @field reference is outside a FOREACH sub-query.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_free_text_special
+
+Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_function_arity
+
+An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_group_by
+
+A `group_by` is not a list of one to three distinct field names.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). A sequence's and the suppression's `group_by` hold one to three distinct non-blank field names; `correlation.group_by` holds up to three and may be empty. Field names are not checked against a list: they come from the tenant's data.
+
+### Example
+
+```yaml
+sequences:
+  - query: activity_type:"app-login"
+    group_by: [user, src_ip, host, dest_ip]
+```
+
+### How to fix
+
+Keep at most three fields, each once, or remove `group_by`.
+
+## exabeam_group_by_column
+
+An Exabeam selected column is neither in GROUP-BY nor aggregated.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_group_by_select_star
+
+An Exabeam GROUP-BY is combined with SELECT *.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_implicit_and
+
+Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_implicit_operator
+
+An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_ipv6_range
+
+An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_keyword_case
+
+An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_leading_slash
+
+An Exabeam query cannot start with /.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_legacy_regex
+
+An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_mixed_boolean
+
+Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_name_conflict
+
+An Exabeam rule with the block's name already exists, so deploy did not create a second one.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). Before a create, deploy lists the rules whose name holds the block's name (`nameContains`) and compares the names case-insensitively. A match fails the rule, naming the existing rule's id. Deploy never adopts it or records its id.
+
+### Example
+
+```text illustrative
+exabeam_name_conflict: an Exabeam rule named 'Password spraying from outside the network' already exists (id 016dbc1d-a727-43df-a143-9546dcc81a5a); deploy does not adopt it
+```
+
+### How to fix
+
+Rename the block (`configurations.exabeam.name`), or delete the old rule in the console. If it is this rule's own earlier create, record its id under `platforms.exabeam.<tenant>` in `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## exabeam_name_duplicate
+
+Two enabled Exabeam blocks resolve to the same Exabeam rule name.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared case-insensitively. Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Password spraying from outside the network
+configurations:
+  exabeam:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.exabeam.name`, or rename one of the rules.
+
+## exabeam_name_length
+
+The Exabeam rule name is longer than 128 characters.
+
+Severity: error. Reported by `opentide validate` and `opentide deploy` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`; Exabeam takes at most 128 characters, and deploy never sends a longer one.
+
+### Example
+
+```yaml
+name: A very long rule name that keeps going well past the one hundred and twenty-eight characters an Exabeam rule name may hold, and more
+configurations:
+  exabeam:
+    enabled: true
+```
+
+### How to fix
+
+Set a shorter `configurations.exabeam.name`, or shorten the rule's `name`.
+
+## exabeam_not_equal
+
+Exabeam filters have no != operator; write NOT field:value.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_outcome
+
+The block `outcome` is not `alert`, `case` or `none`.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `alert` sends an alert to Threat Center (the default), `case` creates a case, and `none` only writes a `rule-trigger` event. An email is the separate `email` table.
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    outcome: webhook
+```
+
+### How to fix
+
+Use `alert`, `case` or `none`. Webhooks are set in the Exabeam console, not through the API.
+
+## exabeam_outcome_silent
+
+An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block (exabeam-1.0). The rule only writes a `rule-trigger` event. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    outcome: none
+```
+
+### How to fix
+
+Use `outcome: alert` or `case`, add an `email`, or keep it if the trigger events are all you want.
+
+## exabeam_parse_error
+
+The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_pipe_limit
+
+An Exabeam query has more than five pipes.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_pipe_misuse
+
+An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_range
+
+The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_regex
+
+The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_request_failed
+
+An Exabeam call for one rule failed.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). A call answered an error other than the ones deploy handles itself: not `400` (`exabeam_request_rejected`), not a `404` deploy recovers from, and not a refusal that stops the tenant. The other rules still deploy.
+
+### Example
+
+```text illustrative
+exabeam_request_failed: PUT /correlation-rules/v2/rules/016dbc1d-a727-43df-a143-9546dcc81a5a: HTTP 502: Bad Gateway
+```
+
+### How to fix
+
+Deploy again later. If it keeps failing, check the tenant's status page and the message's details.
+
+## exabeam_request_rejected
+
+Exabeam refused the rule with HTTP 400.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The answer's `errors[]` name what Exabeam refused (`code`, `message`, `fields`), and its `traceId` identifies the request for Exabeam support.
+
+### Example
+
+```text illustrative
+exabeam_request_rejected: POST /correlation-rules/v2/rules: HTTP 400: INVALID_QUERY: query is invalid (fields: sequencesConfig.sequences[0].query) (traceId 5f1c…)
+```
+
+### How to fix
+
+Fix the field the error names, run `opentide validate`, and deploy again. Send the `traceId` to Exabeam support if the rule looks right.
+
+## exabeam_reserved_alias
+
+An Exabeam AS name is one of the Search guide's reserved words.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_rgx_extract_limit
+
+An Exabeam query has more than three RGX_EXTRACT calls.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_rule_auto_disabled
+
+Exabeam has stopped the rule on its own.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The rule a `PUT` returned has `autoDisabled: true`. Exabeam stops a rule that matches more than 500 times or triggers more than 50 times in five minutes, or whose query or context table is broken.
+
+### Example
+
+```text illustrative
+exabeam_rule_auto_disabled: Exabeam stopped rule 016dbc1d-a727-43df-a143-9546dcc81a5a (autoDisabled)
+```
+
+### How to fix
+
+Narrow the query or raise the threshold, check the context tables it reads, then re-enable the rule in the console.
+
+## exabeam_rule_missing
+
+A rule to disable was already gone from Exabeam, so its id was removed.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). Under `DISABLEMENT`, the `PUT` answered `404`. Deploy creates nothing and removes the binding from `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+exabeam_rule_missing: the recorded rule no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state. Nothing else is needed: the rule is not on the tenant.
+
+## exabeam_rule_recreated
+
+The recorded Exabeam rule was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The `PUT` answered `404`: someone deleted the rule in the console. Deploy creates it again (after the name check) and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+exabeam_rule_recreated: the recorded rule no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete rules through a `DELETION` status, not in the console.
+
+## exabeam_schedule
+
+A `schedule` recurrence is not one Exabeam takes.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Each recurrence has `every` (`day`, `week`, `month` or `days`), `from` and `to` as UTC `HH:MMZ`, and exactly the day keys its `every` takes: `week` takes `days` (weekday names), `month` takes `days` (1 to 31) and `last_day`, `days` takes `first` and `last` (weekday names).
+
+### Example
+
+```yaml
+schedule:
+  - every: week
+    days: [mon]
+    from: "08:00Z"
+    to: "18:00Z"
+```
+
+### How to fix
+
+Write weekday names in full and lower case (`monday`), times as `H:MMZ` or `HH:MMZ` in quotes, and only the keys the recurrence takes.
+
+## exabeam_schedule_retained
+
+The Exabeam rule keeps a schedule the block no longer sets.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The rule a `PUT` returned still has a `scheduleConfig`. Exabeam does not document whether a `PUT` without one clears it, so the rule may still run only at the old times.
+
+### Example
+
+```text illustrative
+exabeam_schedule_retained: Exabeam rule 016dbc1d-a727-43df-a143-9546dcc81a5a keeps a schedule the block no longer sets; clear it in the console
+```
+
+### How to fix
+
+Clear the schedule in the Exabeam console, or set `schedule` in the block again.
+
+## exabeam_sequences
+
+An Exabeam block has no sequences, or a sequence has no query.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `sequences` is a non-empty list, and every sequence has a non-blank `query`: a filter in the Exabeam Query Language.
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    sequences:
+      - name: Failed logins
+        query: ""
+```
+
+### How to fix
+
+Write the filter in `query`, such as `activity_type:"app-login" AND outcome:"fail"`, or remove the empty sequence.
+
+## exabeam_severity
+
+The block `severity` is not `none`, `low`, `medium`, `high` or `critical`.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Exabeam's severities are lower case. Without `severity`, deploy derives it from `response.alert_severity` (`Informational` is `none`).
+
+### Example
+
+```yaml
+configurations:
+  exabeam:
+    severity: High
+```
+
+### How to fix
+
+Use `none`, `low`, `medium`, `high` or `critical`, or remove the key.
+
+## exabeam_single_group
+
+Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_string_field_number
+
+An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_tenant_unauthorized
+
+Exabeam refused the tenant's API key, so nothing more is sent to it.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The token request was refused, or a call answered `401` after one new token, or `403`. Deploy stops the tenant. The key needs Correlation Rules at Read Write Delete; `validate query --live` and `opentide query` also need Search, Analyze and Export.
+
+### Example
+
+```text illustrative
+exabeam_tenant_unauthorized: tenant exabeam-eu refused the API key: HTTP 401
+```
+
+### How to fix
+
+Check the variables `client_id` and `client_secret` name, the tenant's `region` (or `api_url`), and the key's role in the Exabeam console (Settings, API Keys).
+
+## exabeam_tenant_unreachable
+
+An Exabeam tenant did not answer, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). A request other than a create got no answer (a timeout, a refused connection, a TLS failure), or the token could not be had. Deploy stops the tenant.
+
+### Example
+
+```text illustrative
+exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=HTTPSConnectionPool(host='api.eu.exabeam.cloud', port=443): Read timed out
+```
+
+### How to fix
+
+Check the network path to `https://api.<region>.exabeam.cloud`, the tenant's `region` or `api_url`, and the proxy settings, then deploy again.
+
+## exabeam_threshold_function
+
+A threshold's `function` is not an Exabeam function, or its `field` is missing or blank.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `function` is `count`, `unique_count`, `value`, `max`, `min`, `sum` or `average`. Every function but `count` reads a field, so `field` is required; `count` without a field counts events.
+
+### Example
+
+```yaml
+threshold:
+  function: sum
+  operator: more_than
+  value: 1000000
+  within: 1h
+```
+
+### How to fix
+
+Set `field` to the field the function reads (`bytes_out`), or use another function.
+
+## exabeam_threshold_operator
+
+A threshold's `operator` is not one its function takes.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `value` takes `in` or `not_in`; every other function takes `more_than` or `less_than`. Exabeam's `between` and `changed` are not supported in this revision: no published rule shows how their value is written.
+
+### Example
+
+```yaml
+threshold:
+  function: count
+  operator: in
+  value: [5, 10]
+  within: 10m
+```
+
+### How to fix
+
+Use `more_than` or `less_than` with a number, or the `value` function with `in` or `not_in`.
+
+## exabeam_threshold_value
+
+A threshold's `value` does not have the shape its operator takes.
+
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `more_than` and `less_than` compare with a number (`count` and `unique_count`: a non-negative integer); `in` and `not_in` with a non-empty list of strings or numbers. A list item holds no comma, because Exabeam joins the list with commas.
+
+### Example
+
+```yaml
+threshold:
+  function: count
+  operator: more_than
+  value: 2.5
+  within: 10m
+```
+
+### How to fix
+
+Write a whole number for `count` and `unique_count`, a number for the other numeric functions, and a list for `in` and `not_in`.
+
+## exabeam_time_exact
+
+An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_unknown_field
+
+The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_unknown_function
+
+The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_unquoted_value
+
+An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_wildcard_in_phrase
+
+A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## external_id_in_rule
 

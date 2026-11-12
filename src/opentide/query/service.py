@@ -44,6 +44,7 @@ PLATFORM_LANGUAGES: dict[str, tuple[str, ...]] = {
     "harfanglab": ("telemetry",),
     "elastic": ("esql", "eql", "lucene", "kuery"),
     "graylog": ("lucene",),
+    "exabeam": ("exabeam",),
     "google_secops": ("yaral",),
 }
 

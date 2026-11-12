@@ -26,6 +26,7 @@ _PLATFORM_TOML: dict[DetectionPlatform, str] = {
     DetectionPlatform.sysdig: "sysdig.toml",
     DetectionPlatform.bitdefender: "bitdefender.toml",
     DetectionPlatform.graylog: "graylog.toml",
+    DetectionPlatform.exabeam: "exabeam.toml",
     DetectionPlatform.google_secops: "google_secops.toml",
 }
 

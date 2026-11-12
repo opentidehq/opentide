@@ -283,6 +283,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "harfanglab": "yara",
     "bitdefender": "yara",
     "graylog": "lucene",
+    "exabeam": "exabeam",
     # A whole YARA-L rule (a .yaral file's text), checked under the rule profile.
     "google_secops": "yaral",
 }

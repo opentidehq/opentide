@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Twelve deployment platforms, eight query validators (seven offline), ten query runners, and where each platform block schema is specified.
+description: Thirteen deployment platforms, nine query validators (eight offline), eleven query runners, the offline query checks, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **twelve detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **thirteen detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -22,7 +22,10 @@ opentide integrates with **twelve detection platforms** through built-in adapter
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 | Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
 | Graylog | `graylog` | yes | yes | yes | yes | Graylog search syntax (Lucene) |
+| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes* | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
+
+\* Through the analysis engine: each sequence under the Exabeam Query Language's `rule` profile, a `system: exabeam` hunt or a `.exabeam` file under `search`.
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -62,6 +65,34 @@ Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exc
 Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; The analysis engine checks `yara.signature` offline under its Bitdefender profile, as `opentide validate` (its `queries` check), `opentide validate query --platform bitdefender` and the editor do: a YARA error, a character that is not ASCII (`bitdefender_yara_ascii`) or a signature over 30,000 characters (`bitdefender_yara_size`) fails the rule, each reported once, at its place in the signature, and `opentide lint` warns on a module GravityZone has not confirmed (`yara_module_unconfirmed`). GravityZone has no dry run, so `validate query --platform bitdefender --live` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
 
 Graylog takes event definitions of the Filter & Aggregation type, on Graylog 6.3, 7.0, 7.1 and 7.2, Open included. A `graylog` block is one definition: a query in Graylog's search syntax, and optionally an `aggregation` (group-by fields and a condition such as `count() >= 3 OR card(parent_image_lc) >= 2`), streams and notifications named by aliases from the tenant's tables, a schedule, event fields, a summary and remediation steps. Deploy reads the server version (`GET /api/system`) once per tenant and builds every request for it, checks the query with `POST /api/search/validate` before every create and update (a query Graylog reports as `ERROR` is never saved; a `DISABLEMENT` skips the check, so a rule stays disableable), and keeps Graylog's 24-hex event definition id in [deployment state](deployment-state.md); it never lists definitions. It derives the title, description, priority, tags and ATT&CK ids from the rule: `tags` and `tactics_techniques` on 7.2 and later, a description line and an `attack_techniques` event field before. `opentide validate` checks the block's constraints and warns on a filter whose window overlaps its interval, a definition with no stream, and two rules with one title. Offline, the analysis engine checks the query as Lucene in its Graylog dialect; `validate query --platform graylog --live` asks each tenant's `/api/search/validate`, and `opentide query --platform graylog` searches messages read-only. Graylog keyword fields are case-sensitive: the [spec](/docs/specifications/specs/platforms/graylog-1.0/) documents the lower-cased-copy pipeline pattern for case-insensitive rules.
+Exabeam New-Scale SIEM takes correlation rules. An `exabeam` block is one rule: one or more `sequences`, each a filter in the Exabeam Query Language (profile `rule`) that triggers on any matching event or on a `threshold` (`count`, `unique_count`, `value`, `max`, `min`, `sum` or `average` with `more_than`, `less_than`, `in` or `not_in`, within a window). Two or more sequences correlate within `correlation.within`, optionally on common fields, in the order they are written. `outcome` is `alert` (the default), `case` or `none`, with an optional `email`, `suppression`, `delay` (7 to 180 minutes) and `schedule`. Durations are a whole number and one unit (`30m`, `4h`, `1d`, and `2w` for `suppression.for`).
+
+```yaml
+configurations:
+  exabeam:
+    schema: platform::exabeam::1.0
+    status: STAGING
+    outcome: case
+    sequences:
+      - name: Failed logins from outside
+        query: |
+          activity_type:"app-login" AND outcome:"fail"
+          AND NOT src_ip:[10.0.0.0/8]
+        group_by: [src_ip]
+        threshold:
+          function: unique_count
+          field: user
+          operator: more_than
+          value: 3
+          within: 30m
+    suppression:
+      for: 1h
+      group_by: [src_ip]
+```
+
+Deploy derives the Exabeam rule name (the block's `name`, else the rule's), the description (whitespace collapsed, then an `ATT&CK:` line and an `opentide: <uuid>` line) and the severity (`none` to `critical`, from `response.alert_severity` unless the block sets it). It creates, updates and deletes through the Correlation Rules API, always sending the whole rule; `DISABLEMENT` is the same `PUT` with `enabled: false`. The rule UUID is kept in [deployment state](deployment-state.md). Before a create, deploy checks that no Exabeam rule has the name, case-insensitively, and fails with `exabeam_name_conflict` rather than adopt one; a create with no answer, or a server error, is never sent again (`exabeam_create_unconfirmed`). Requests are paced to 100 a minute across every Exabeam tenant of a run, and a `429` is waited out. A tenant names its API `region` (`us-west`, `us-east`, `ca`, `eu`, `sa`, `sg`, `ch`, `jp`, `au` or `uk`; calls go to `https://api.<region>.exabeam.cloud`), or an `api_url`, and its `client_id` and `client_secret` as `$VAR`s; `test_mode = true` deploys every block that does not set `test_mode` in test mode.
+
+`opentide validate` checks the block (the `exabeam_*` codes), two enabled blocks sharing a name (`exabeam_name_duplicate`), and warns (as does `opentide lint`) on `outcome: none` without an email and on a correlation window shorter than a sequence's. `validate query --platform exabeam --live` sends each sequence filter to Exabeam Search over the last 15 minutes: Exabeam has no rule preview, so the condition, windows and grouping are checked offline only. [`opentide query --platform exabeam`](../../cli/query.md) runs a `system: exabeam` hunt through Search, at most 3,000 rows. `deploy --dry-run` shows the create request.
 
 Google Security Operations (Google SecOps, formerly Chronicle) takes YARA-L 2.0 custom rules. A `google_secops` block carries the rule's sections as keys: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, written as block scalars, and `match` and `options` as YAML objects. Deploy assembles the rule from them: `rule <name> {`, a `meta` section it derives from the rule (author, description, severity, priority, the ATT&CK `technique` list Google's coverage matrix reads, `opentide_uuid` and `opentide_version`, then the block's own `meta`), then each section under its label. The rule name is the block's `name`, else the rule's title in `snake_case`.
 
@@ -111,6 +142,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
   <Card title="Bitdefender GravityZone" href="/docs/specifications/specs/platforms/bitdefender-1.0/" description="Custom detection rule: Basic criteria or a YARA signature, through the Incidents API." />
   <Card title="Graylog" href="/docs/specifications/specs/platforms/graylog-1.0/" description="Event definition (Filter & Aggregation) on Graylog 6.3 to 7.2, each request built for the server's version." />
+  <Card title="Exabeam New-Scale SIEM" href="/docs/specifications/specs/platforms/exabeam-1.0/" description="Correlation rule: sequences of Exabeam Query Language filters, through the Correlation Rules API." />
   <Card title="Google Security Operations" href="/docs/specifications/specs/platforms/google-secops-1.0/" description="YARA-L 2.0 rule written as sections, assembled with derived meta, through the Chronicle API v1." />
 </Cards>
 

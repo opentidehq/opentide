@@ -110,6 +110,27 @@ class EngineUnavailableError(RuntimeError):
         return f"reinstall opentide: {REINSTALL_COMMAND}"
 
 
+class EngineLanguageUnavailableError(EngineUnavailableError):
+    """The compiled engine loads but does not know a language opentide checks offline.
+
+    An engine older than the opentide around it (the ``exabeam`` language before
+    the engine pin ships it): the check is not skipped, it fails as an
+    unavailable engine.
+    """
+
+    def __init__(self, language: str, cause: str) -> None:
+        super().__init__(cause)
+        self.language = language
+        self.args = (f"The opentide analysis engine does not check {language} queries: {cause}",)
+
+    @property
+    def advice(self) -> str:
+        return (
+            f"the engine compiled into this opentide predates the {self.language} language; "
+            "upgrade opentide: pip install --upgrade opentide"
+        )
+
+
 @cache
 def engine() -> ModuleType:
     """The ``opentide._native`` module. Raises :class:`EngineUnavailableError`."""
@@ -688,11 +709,18 @@ def _graylog_findings(findings: tuple[Finding, ...], text: str) -> tuple[Finding
 def check_query(
     text: str, *, language: str, platform: str | None = None, stack: str | None = None
 ) -> list[Finding]:
-    """One query on its own, in its own coordinates."""
-    return [
-        Finding.from_engine(item, text)
-        for item in engine().analyze_query(text, language, platform=platform, stack=stack)
-    ]
+    """One query on its own, in its own coordinates.
+
+    Raises :class:`EngineLanguageUnavailableError` when the engine does not know
+    *language* although opentide checks it offline.
+    """
+    try:
+        diagnostics = engine().analyze_query(text, language, platform=platform, stack=stack)
+    except ValueError as exc:
+        if language in _OFFLINE_LANGUAGES and "unknown language" in str(exc):
+            raise EngineLanguageUnavailableError(language, str(exc)) from exc
+        raise
+    return [Finding.from_engine(item, text) for item in diagnostics]
 
 
 #: Extensions of a query file: one query in the language its extension names.
@@ -706,9 +734,13 @@ QUERY_FILE_SUFFIXES = (
     ".falco",
     ".yar",
     ".yara",
+    ".exabeam",
     ".yaral",
     ".yl2",
 )
+
+#: The language of a query file extension the compiled engine may not name yet.
+_QUERY_FILE_LANGUAGES: dict[str, str] = {".exabeam": "exabeam"}
 
 
 def is_query_file(path: Path | str) -> bool:
@@ -721,7 +753,8 @@ def query_file_language(path: Path | str) -> str | None:
     path = Path(path)
     if not is_query_file(path):
         return None
-    return language_for_path(path.with_suffix(path.suffix.lower()))
+    suffix = path.suffix.lower()
+    return language_for_path(path.with_suffix(suffix)) or _QUERY_FILE_LANGUAGES.get(suffix)
 
 
 def check_query_file(path: Path, *, platform: str | None = None) -> QueryCheck | UnreadableFile:

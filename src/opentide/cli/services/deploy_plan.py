@@ -6,7 +6,7 @@ tenant yet), with one action:
 ``create`` / ``update``
     Platforms that keep vendor ids in ``.opentide/states/deployment/``
     (CrowdStrike, Defender for Endpoint, SentinelOne, Sysdig ``api`` tenants, Bitdefender,
-    Graylog, Google SecOps):
+    Graylog, Exabeam, Google SecOps):
     ``update`` when the shard holds an id for the tenant, otherwise ``create``.
 ``upsert``
     Platforms that address a rule by its own UUID (Sentinel, Splunk, Elastic,

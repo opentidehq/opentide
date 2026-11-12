@@ -168,6 +168,8 @@ class TideDeployment:
                 return registry.Opentide.Configurations.Systems.Bitdefender
             case DetectionPlatforms.GRAYLOG:
                 return registry.Opentide.Configurations.Systems.Graylog
+            case DetectionPlatforms.EXABEAM:
+                return registry.Opentide.Configurations.Systems.Exabeam
             case DetectionPlatforms.GOOGLE_SECOPS:
                 return registry.Opentide.Configurations.Systems.GoogleSecops
         raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
@@ -201,6 +203,8 @@ class TideDeployment:
                     mdr_config = configurations.bitdefender
                 case DetectionPlatforms.GRAYLOG:
                     mdr_config = configurations.graylog
+                case DetectionPlatforms.EXABEAM:
+                    mdr_config = configurations.exabeam
                 case DetectionPlatforms.GOOGLE_SECOPS:
                     mdr_config = configurations.google_secops
                 case _:

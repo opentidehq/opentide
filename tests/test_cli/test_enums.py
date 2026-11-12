@@ -10,10 +10,11 @@ def test_query_validation_platforms_exclude_crowdstrike_and_harfanglab() -> None
     assert DetectionPlatform.harfanglab.value not in QUERY_VALIDATION_PLATFORMS
 
 
-def test_query_validation_platforms_include_eight_deployers() -> None:
-    assert len(QUERY_VALIDATION_PLATFORMS) == 8
+def test_query_validation_platforms_include_nine_deployers() -> None:
+    assert len(QUERY_VALIDATION_PLATFORMS) == 9
     assert DetectionPlatform.sentinel.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.defender.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.elastic.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.graylog.value in QUERY_VALIDATION_PLATFORMS
+    assert DetectionPlatform.exabeam.value in QUERY_VALIDATION_PLATFORMS
     assert DetectionPlatform.google_secops.value in QUERY_VALIDATION_PLATFORMS

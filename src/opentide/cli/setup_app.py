@@ -626,6 +626,7 @@ def setup_platforms_cmd(
     sysdig: bool = typer.Option(False, "--sysdig", help="Enable Sysdig Secure (Falco)"),
     bitdefender: bool = typer.Option(False, "--bitdefender", help="Enable Bitdefender GravityZone"),
     graylog: bool = typer.Option(False, "--graylog", help="Enable Graylog"),
+    exabeam: bool = typer.Option(False, "--exabeam", help="Enable Exabeam New-Scale SIEM"),
     google_secops: bool = typer.Option(
         False, "--google-secops", help="Enable Google Security Operations (YARA-L)"
     ),
@@ -661,6 +662,8 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.bitdefender)
     if graylog:
         platforms.append(DetectionPlatform.graylog)
+    if exabeam:
+        platforms.append(DetectionPlatform.exabeam)
     if google_secops:
         platforms.append(DetectionPlatform.google_secops)
     if not platforms:

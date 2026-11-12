@@ -79,9 +79,9 @@ def test_object_link_resolves_signal_to_parent_heading() -> None:
 
 
 def test_object_link_missing_uuid_is_code(monkeypatch: pytest.MonkeyPatch) -> None:
-    # An unknown UUID falls back to the process-wide registry, which loads
-    # whatever workspace an earlier test in this worker left: keep it out.
-    monkeypatch.setattr("opentide.documentation.catalog.Opentide.lookup", lambda _uuid: None)
+    # resolve_name falls back to the process-wide registry: an earlier test's
+    # workspace (test_lint's holds an invalid threat) must not answer for it.
+    monkeypatch.setattr("opentide.documentation.catalog.Opentide.lookup", lambda uuid: None)
     catalog = DocumentationCatalog(rules=[], objectives=[], threats=[])
     assert object_link(GitHubFormatter(), catalog, "missing", from_folder="rules") == "`missing`"
 
