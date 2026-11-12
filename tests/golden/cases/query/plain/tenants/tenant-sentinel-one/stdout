@@ -1,0 +1,7 @@
+lab  2 rows
+src.process.name ┃ endpoint.name
+━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+cmd.exe          │ ws-1         
+powershell.exe   │ ws-2         
+
+✓ 2 rows from 1 sentinel_one tenant

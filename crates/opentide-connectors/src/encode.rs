@@ -33,6 +33,23 @@ pub fn quote_plus(value: &str) -> String {
         .replace(' ', "+")
 }
 
+/// `urllib.parse.quote(text, safe)`: every byte but ASCII letters, digits,
+/// `_.-~` and the ASCII characters of *safe* as `%XX`.
+pub fn quote(text: &str, safe: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric()
+            || b"_.-~".contains(&byte)
+            || (byte.is_ascii() && safe.as_bytes().contains(&byte))
+        {
+            out.push(char::from(byte));
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 /// `key=value&...` in the pairs' order (`urlencode`).
 pub fn urlencode<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> String {
     pairs
@@ -56,5 +73,7 @@ mod tests {
             "%40event_create_date__gte=2026-10-26T08%3A00%3A00.000Z&q=a+b%2A~%2F%C3%A9"
         );
         assert_eq!(segment("a b/c~"), "a%20b%2Fc~");
+        assert_eq!(quote("logs-*,x y", ",*-_."), "logs-*,x%20y");
+        assert_eq!(quote("a b/c~", ""), segment("a b/c~"));
     }
 }

@@ -1,0 +1,1 @@
+{"detail":"Unset configuration variables: $CROWDSTRIKE_CLIENT_SECRET","advice":"Set those environment variables before a live check.","event":"environment_variable_missing","logger":"opentide.core.environment","level":"critical","timestamp":"0000-00-00 00:00:00"}

@@ -1,0 +1,7 @@
+soc  2 rows
+host.name ┃ user.name
+━━━━━━━━━━╇━━━━━━━━━━
+ws-1      │ alice    
+ws-2      │ bob      
+
+✓ 2 rows from 1 elastic tenant

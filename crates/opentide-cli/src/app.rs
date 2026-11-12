@@ -50,6 +50,7 @@ pub const PORTED: &[&str] = &[
     "generate docs index",
     "deploy",
     "serve",
+    "query",
 ];
 
 /// The file in which a run refused with `engine_not_ported` records its
@@ -567,6 +568,10 @@ impl Run<'_> {
             }
             "validate query" => {
                 let report = self.validate_query(&matches);
+                self.emit_report(&report, out, err)
+            }
+            "query" => {
+                let report = self.query(&matches);
                 self.emit_report(&report, out, err)
             }
             "lint" => {
@@ -1376,6 +1381,66 @@ impl Run<'_> {
             stdout_tty: self.host.stdout_tty,
             width: self.host.width,
         }
+    }
+
+    /// `opentide query`, from its parsed arguments (UC-4.2c).
+    fn query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::query::{Args, Context, RowFormat, run};
+        use clap::ValueEnum;
+        let args = leaf(matches);
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let strings = |id: &str| -> Vec<String> {
+            args.get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let parsed = Args {
+            query: text("query"),
+            platform: args
+                .get_one::<crate::tree::Platform>("platform")
+                .and_then(|platform| platform.to_possible_value())
+                .map(|value| value.get_name().to_owned())
+                .unwrap_or_default(),
+            tenants: strings("tenant"),
+            rule: text("rule"),
+            file: text("file"),
+            query_file: text("query_file"),
+            since: text("since"),
+            start: text("start"),
+            end: text("end"),
+            limit: args.get_one::<i64>("limit").copied().unwrap_or(100),
+            language: text("language"),
+            index: strings("index"),
+            timeout: args.get_one::<f64>("timeout").copied().unwrap_or(120.0),
+            columns: text("columns"),
+            format: match args.get_one::<crate::tree::RowFormat>("row_format") {
+                Some(crate::tree::RowFormat::Jsonl) => RowFormat::Jsonl,
+                Some(crate::tree::RowFormat::Csv) => RowFormat::Csv,
+                _ => RowFormat::Table,
+            },
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        let stdin = || {
+            let mut text = String::new();
+            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut text);
+            text
+        };
+        run(
+            &parsed,
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                proxy: self.globals.proxy.as_deref(),
+                terminal: &terminal,
+                interrupted: &interrupted,
+                stdin: &stdin,
+                now: jiff::Timestamp::now(),
+            },
+        )
     }
 
     /// `opentide deploy --dry-run`, from its parsed arguments.

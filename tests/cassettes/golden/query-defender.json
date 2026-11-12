@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "scenario": "golden/query-defender",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/tenants",
+    "--json",
+    "query",
+    "--platform",
+    "defender_for_endpoint",
+    "--from",
+    "2099-01-01T00:00:00Z",
+    "--to",
+    "2099-01-01T01:00:00Z",
+    "--limit",
+    "1",
+    "DeviceProcessEvents | project Timestamp, DeviceName"
+  ],
+  "digest": "sha256:0d2bdfec2c2461003a3e7ec2f07e3a3fc89ff6c3ee8fbea51d3aaf5264860008",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=00000000-0000-4000-8000-00000000c11d&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/runHuntingQuery",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Query\": \"DeviceProcessEvents | project Timestamp, DeviceName\\n| take 2\", \"Timespan\": \"2099-01-01T00:00:00.000Z/2099-01-01T01:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"Schema\": [{\"Name\": \"Timestamp\", \"Type\": \"String\"}, {\"Name\": \"DeviceName\", \"Type\": \"String\"}], \"results\": [{\"Timestamp\": \"2026-10-27T07:51:00.0000000Z\", \"DeviceName\": \"ws-1.contoso.example\"}, {\"Timestamp\": \"2026-10-27T07:52:00.0000000Z\", \"DeviceName\": \"ws-2.contoso.example\"}]}"
+      }
+    }
+  ]
+}

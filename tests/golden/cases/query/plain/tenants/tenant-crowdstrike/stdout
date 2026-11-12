@@ -1,0 +1,7 @@
+lab  2 rows
+ComputerName ┃ aid.id ┃ aid.cid ┃ @timestamp    ┃ UserName ┃ tags   
+━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━
+ws-01        │ a1     │ c1      │ 1761465600000 │          │        
+ws-02        │ a2     │         │               │ Ünïcode  │ ["x",1]
+
+✓ 2 rows from 1 crowdstrike tenant

@@ -14,16 +14,15 @@ use std::time::{Duration, Instant};
 
 use opentide_compile::json::{Json, Object};
 
+use crate::answer::Answer;
 use crate::body::python_json;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveValidator, Operation, Platform,
-    QueryRequest, TenantContext, Validation,
+    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
+    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, TimeWindow,
+    kql_code, utc_z,
 };
 use crate::error::ConnectorError;
-use crate::search::{
-    self, Answer, Column, SearchError, SearchRequest, SearchResult, TimeWindow, kql_code,
-    python_str, utc_z,
-};
+use crate::python::{python_str, python_string_repr};
 use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
@@ -151,7 +150,7 @@ impl SentinelOne {
         if let Some(body) = body {
             builder = builder.body(body);
         }
-        search::exchange(cx, builder).await
+        crate::answer::exchange(cx, builder).await
     }
 
     /// Creates the STAR rule *body*, or replaces rule *rule_id* with it
@@ -283,8 +282,8 @@ impl SentinelOne {
     pub async fn run(
         &self,
         cx: TenantContext<'_>,
-        request: &SearchRequest,
-    ) -> Result<SearchResult, SearchError> {
+        request: &QueryRequest,
+    ) -> Result<QueryOutcome, ConnectorError> {
         let tenant = cx.tenant.label.tenant.clone();
         let setup = setup(cx)?;
         let sent = powerquery_with_limit(&request.text, request.limit);
@@ -316,29 +315,36 @@ impl SentinelOne {
             .filter(|id| !id.is_empty());
         let ping = format!("{}{PING_PATH}", setup.url);
         let mut delay = Duration::from_millis(500);
-        while !finished(&data)? {
+        while !finished(&data, &tenant)? {
             let Some(id) = &query_id else {
-                return Err(SearchError::refused(
+                return Err(ConnectorError::refused(
+                    PLATFORM,
+                    &tenant,
                     format!("SentinelOne returned no query id on {tenant}"),
                     None,
                 ));
             };
             if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-                return Err(SearchError::TimedOut {
+                return Err(ConnectorError::QueryTimedOut {
+                    platform: PLATFORM.into(),
+                    tenant: tenant.clone(),
                     message: format!(
                         "the PowerQuery did not finish within {}s on {tenant}",
                         seconds_text(request.timeout)
                     ),
-                    timeout: request.timeout.as_secs_f64(),
                     detail: Some("narrow the window or raise --timeout".into()),
+                    timeout: request.timeout,
                 });
             }
             tokio::select! {
-                () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled.into()),
+                () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }
             delay = (delay * 2).min(MAX_POLL_DELAY);
-            let url = format!("{ping}?{}", search::urlencode(&[("queryId", id)]));
+            let url = format!(
+                "{ping}?{}",
+                crate::encode::urlencode([("queryId", id.as_str())])
+            );
             let answer = Self::call(cx, &setup, reqwest::Method::GET, &url, None).await?;
             data = self::data(&answer, &tenant)?;
         }
@@ -346,17 +352,17 @@ impl SentinelOne {
             Some(Json::Array(columns)) => columns.iter().map(column_name).collect(),
             _ => Vec::new(),
         };
-        let rows: Vec<Json> = match data.get("data") {
+        let rows: Vec<Row> = match data.get("data") {
             Some(Json::Array(rows)) => rows
                 .iter()
                 .filter_map(|row| match row {
-                    Json::Array(values) => Some(Json::Object(
+                    Json::Array(values) => Some(
                         names
                             .iter()
                             .cloned()
                             .zip(values.iter().cloned())
                             .collect::<Object>(),
-                    )),
+                    ),
                     _ => None,
                 })
                 .collect(),
@@ -371,15 +377,15 @@ impl SentinelOne {
             _ => Vec::new(),
         };
         let truncated = rows.len() > request.limit;
-        Ok(SearchResult {
-            columns: names.into_iter().map(Column::named).collect(),
+        Ok(QueryOutcome {
+            columns: names.into_iter().map(QueryColumn::named).collect(),
             rows: rows.into_iter().take(request.limit).collect(),
             truncated,
             partial: false,
             warnings,
             vendor_query_id: query_id,
             sent: (sent != request.text.trim()).then_some(sent),
-            language: "powerquery".into(),
+            language: Some("powerquery".into()),
         })
     }
 
@@ -388,8 +394,8 @@ impl SentinelOne {
     pub async fn check(
         &self,
         cx: TenantContext<'_>,
-        request: &SearchRequest,
-    ) -> Result<SearchResult, SearchError> {
+        request: &QueryRequest,
+    ) -> Result<QueryOutcome, ConnectorError> {
         self.run(cx, &request.for_check()).await
     }
 }
@@ -514,7 +520,7 @@ pub fn powerquery_with_limit(query: &str, limit: usize) -> String {
 }
 
 /// Whether a PowerQuery is done; a failed one is a refusal (`_finished`).
-fn finished(data: &Json) -> Result<bool, SearchError> {
+fn finished(data: &Json, tenant: &str) -> Result<bool, ConnectorError> {
     let status = data
         .get("status")
         .map(python_str)
@@ -528,7 +534,9 @@ fn finished(data: &Json) -> Result<bool, SearchError> {
             .filter(|value| value.truthy())
             .map(python_str)
             .filter(|text| !text.is_empty());
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!("the PowerQuery ended {}", status.to_lowercase()),
             detail,
         ));
@@ -537,9 +545,11 @@ fn finished(data: &Json) -> Result<bool, SearchError> {
 }
 
 /// The `data` of a PowerQuery answer, or the refusal it is (`_data`).
-fn data(answer: &Answer, tenant: &str) -> Result<Json, SearchError> {
+fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
     let Some(body) = answer.json() else {
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!("SentinelOne did not answer the PowerQuery on {tenant} with JSON"),
             answer.not_json_detail(),
         ));
@@ -561,7 +571,9 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, SearchError> {
             .map(python_str)
             .filter(|text| !text.is_empty());
         let text: String = answer.text().chars().take(500).collect();
-        return Err(SearchError::refused(
+        return Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
             format!(
                 "SentinelOne refused the PowerQuery on {tenant} (HTTP {})",
                 answer.status
@@ -593,7 +605,7 @@ fn column_name(column: &Json) -> String {
 pub fn rule_id(text: &str) -> Result<i64, SentinelOneError> {
     text.trim()
         .parse::<i64>()
-        .map_err(|_| SentinelOneError::BadId(search::python_string_repr(text)))
+        .map_err(|_| SentinelOneError::BadId(python_string_repr(text)))
 }
 
 impl Deployer for SentinelOne {
@@ -656,25 +668,31 @@ impl Deployer for SentinelOne {
     }
 }
 
+impl QueryRunner for SentinelOne {
+    /// A PowerQuery over the request's window, polled until it finishes.
+    fn run<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<QueryOutcome, ConnectorError>> {
+        Box::pin(async move { SentinelOne::run(self, cx, request).await })
+    }
+}
+
 impl LiveValidator for SentinelOne {
+    /// The runner's check: one row over the request's window, as Python's
+    /// `LiveQueryValidator` asks it.
     fn validate<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a QueryRequest,
-    ) -> BoxFuture<'a, Result<Validation, ConnectorError>> {
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
         Box::pin(async move {
-            let search =
-                SearchRequest::new(&request.text, TimeWindow::check(jiff::Timestamp::now()));
-            Ok(match self.check(cx, &search).await {
-                Ok(_) => Validation {
-                    ok: true,
-                    message: None,
-                },
-                Err(SearchError::Connector(error)) => return Err(error),
-                Err(refused) => Validation {
-                    ok: false,
-                    message: Some(refused.text()),
-                },
+            let result = self.check(cx, request).await?;
+            Ok(LiveCheck {
+                result: Some(result),
+                errors: Vec::new(),
+                warnings: Vec::new(),
             })
         })
     }
@@ -690,6 +708,10 @@ impl Platform for SentinelOne {
     }
 
     fn live_validator(&self) -> Option<&dyn LiveValidator> {
+        Some(self)
+    }
+
+    fn query_runner(&self) -> Option<&dyn QueryRunner> {
         Some(self)
     }
 }

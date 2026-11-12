@@ -1,0 +1,7 @@
+soc  2 rows
+_sequence ┃ _index ┃ process.name
+━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━
+1         │ logs-1 │ cmd.exe     
+1         │ logs-1 │ whoami.exe  
+
+✓ 2 rows from 1 elastic tenant
