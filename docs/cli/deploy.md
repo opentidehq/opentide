@@ -240,7 +240,9 @@ With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choo
 
 - a log line names no tenant (`tenant: ***`): the Rust CLI redacts tenant names and hosts from every line it logs; the document still names them;
 - a credential whose `$NAME` is unset is refused before any request, where the Python CLI sent the literal `$NAME` to the platform;
-- a status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is refused with `engine_not_ported`: run it with `OPENTIDE_ENGINE=python`. `OPENTIDE_ENGINE=compare` refuses a deploy that sends, since both runs would reach the tenant.
+- a status promotion whose rule file the Rust engine cannot read as the Python CLI reports it (YAML that does not parse, a file that is not a mapping or cannot be read) is refused with `engine_not_ported` before anything is written: run it with `OPENTIDE_ENGINE=python`.
+
+A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) runs on Rust too: the same `status promotion` step, the same rule files rewritten byte for byte (each block `status` replaced in place, a byte-order mark and line endings kept, the file written atomically), the same `rule_not_promoted` warning for a status written as an anchor, an alias or under a merge key, and the same exit codes. `OPENTIDE_ENGINE=compare` refuses a deploy that sends, since both runs would reach the tenant.
 
 ## Subcommands
 
@@ -262,6 +264,8 @@ What it does:
 5. **Leaves a rule untouched and exits `1`** when a tenant is mapped twice or to a different id than the shard already holds (`external_id_conflict`), or when a value is not a usable id (`external_id_shape`: not a string or integer, an empty tenant or id, or a Defender or SentinelOne id that is not a plain decimal like `12345`). Other rules still migrate.
 
 It exits `0` after a migration, after a second run with nothing left to move, and when the only findings are `external_id_unused` warnings. It exits `1` when any rule fails or git ignores the deployment state directory. If the command stopped after writing a shard and before editing the rule, the next run finds the two agree and finishes the edit.
+
+With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)) it runs on the Rust command line, through the same deployment-state code as a deploy: the same shards, edits, warnings, document and exit codes. On a terminal its log lines are one unstyled line each.
 
 <Callout type="warn">
 The migration is done when it is committed. Commit the edited rules together with every new file under `.opentide/states/deployment/`. A deploy from a checkout that has the stripped rules but not the shards creates a second live rule for every one of them.

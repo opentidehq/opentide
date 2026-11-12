@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 41 |
+| Commands with a Rust implementation | 42 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 691 |
-| … no Rust yet | 140 (20.2%) |
+| Recordings (command × corpus × mode) | 716 |
+| … no Rust yet | 128 (17.8%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 551 (79.7%) |
+| … compare not run | 588 (82.1%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 929 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1022 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -52,6 +52,9 @@ No compare results were given: every command with a Rust implementation that is 
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
+| deploy-push | compare not run | not recorded | compare not run | compare not run |
+| deploy-push-anchor | compare not run | not recorded | compare not run | compare not run |
+| deploy-push-production | compare not run | not recorded | compare not run | compare not run |
 | deploy-tenants | compare not run | not recorded | compare not run | compare not run |
 | fault | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -60,15 +63,19 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy migrate-state`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus-legacy-id-error | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus-legacy-ids | compare not run | compare not run | compare not run | compare not run |
+| vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide doctor`
 
-23 approved diff(s).
+111 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -140,12 +147,13 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs threats`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus-cve | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate explorer`
@@ -547,7 +555,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide validate`
 
-404 approved diff(s).
+406 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -556,6 +564,7 @@ No compare results were given: every command with a Rust implementation that is 
 | heavy-small | compare not run | compare not run | compare not run | compare not run |
 | none | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus-cve | compare not run | compare not run | compare not run | compare not run |
 | tide-corpus-typo | compare not run | compare not run | compare not run | compare not run |
 | vscode | compare not run | compare not run | compare not run | compare not run |
 

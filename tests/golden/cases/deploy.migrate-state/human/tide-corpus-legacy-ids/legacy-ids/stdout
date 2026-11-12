@@ -1,0 +1,4 @@
+[1;32m✓[0m Moved 4 vendor ids to .opentide/states/deployment/ · 4 rules edited, 3 shards written
+  [1;36mhelp:[0m Commit the edited rules together with every new or changed file under
+        .opentide/states/deployment/. A deploy from a checkout that has the stripped rules but not
+        the shards creates a second remote rule.

@@ -4,8 +4,8 @@
 //! keywords, and the string rules over them.
 //!
 //! One copy for both engines: opentide-schema's `sysdig_rule_shape` (the
-//! CLI's model, on the YAML node tree) and opentide-tide's `sysdig` module
-//! (the language server's findings, on `serde_yaml` values) call these, so
+//! CLI's model, on the YAML node tree, [`crate::node`]) and opentide-tide's `sysdig` module
+//! (the language server's findings, its own walk of the same tree) call these, so
 //! the editor and `validate` cannot drift apart on an operator, a priority
 //! or a name. What each keeps is how it walks its own value type and where
 //! it places a finding.

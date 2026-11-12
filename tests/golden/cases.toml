@@ -18,6 +18,32 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
 vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
+[fixtures.tide-corpus-legacy-ids]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with vendor rule ids still on its rules: Defender for Endpoint (a tenant key and a bundle), CrowdStrike and SentinelOne ids, which `deploy migrate-state` moves into deployment state shards, and a Sentinel id, which it drops as unused"
+edits = [
+  { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "\n  defender_for_endpoint:\n    enabled: true\n", replace = "\n  defender_for_endpoint:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n      # staging comes later\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id:\n      us-1: ab12cd34\n" },
+  { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: 901\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n  sentinel:\n    enabled: true\n", replace = "\n  sentinel:\n    rule_id::soc: 9f2c\n    enabled: true\n" },
+]
+
+[fixtures.tide-corpus-legacy-id-error]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a SentinelOne rule id written with a leading zero, which `deploy migrate-state` refuses (exit 1) and leaves on the rule, beside a CrowdStrike id it moves"
+edits = [
+  { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: '0901'\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id::us-1: ab12cd34\n" },
+]
+
+[fixtures.tide-corpus-cve]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with CVE references on its threat (one written in lower case, one repeated), which `validate --check cve` looks up on Vulnerability-Lookup: without a network every lookup fails, a warning per threat"
+edits = [{ path = "Objects/Threat Vectors/threat-0001-simulated-actor.yaml", find = "\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n", replace = "\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n  cve:\n    - cve-2024-3094\n    - GHSA-RXWQ-X6H5-QC8M\n    - CVE-2024-3094\n" }]
+
 [fixtures.tide-corpus-typo]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -78,6 +104,24 @@ about = "the `tenants` workspace with a rule or more per platform whose tenants 
 kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
 about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that take PREVIEW and RELEASE runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed: the cases of a deploy that sends (UC-4.6)"
+
+[fixtures.deploy-push]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, changed a rule in STAGING: the rule file a RELEASE deploy on a push in CI promotes (UC-4.6c)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "description: A rule the splunk", replace = "description: A changed rule the splunk" }]
+
+[fixtures.deploy-push-production]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, changed a rule already in PRODUCTION: nothing to promote (UC-4.6c)"
+pushed = [{ path = "objects/rules/crowdstrike-b-update.yaml", find = "description: A rule the crowdstrike", replace = "description: A changed rule the crowdstrike" }]
+
+[fixtures.deploy-push-anchor]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING rule's status as an anchor: a status promotion leaves alone, with a warning (UC-4.6c)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "    status: STAGING\n", replace = "    status: &status STAGING\n" }]
 
 [fixtures.empty]
 kind = "skeleton"
@@ -544,6 +588,15 @@ command = "validate"
 variant = "check-schema"
 args = ["validate", "--check", "schema"]
 fixtures = ["tide-corpus", "vscode", "fault"]
+
+# UC-4.4 (#834): the online CVE check. The golden network refuses every
+# request, so each threat with references warns cve_lookup_unavailable; a
+# threat without any reports nothing.
+[[case]]
+command = "validate"
+variant = "check-cve"
+args = ["validate", "--check", "cve"]
+fixtures = ["tide-corpus", "tide-corpus-cve"]
 
 [[case]]
 command = "validate"
@@ -1363,6 +1416,15 @@ variant = "default"
 args = ["generate", "docs", "threats"]
 fixtures = ["tide-corpus", "vscode"]
 
+# UC-4.4 (#834): a threat whose CVE details are fetched ([cve]
+# retrieve_details on, the default); the golden network refuses every
+# lookup, so each row says the details are unavailable.
+[[case]]
+command = "generate docs threats"
+variant = "cve-details"
+args = ["generate", "docs", "threats"]
+fixtures = ["tide-corpus-cve"]
+
 [[case]]
 command = "generate docs index"
 variant = "default"
@@ -1606,11 +1668,50 @@ args = ["deploy", "--platform", "sentinel", "--strategy", "PREVIEW", "--uuid", "
 fixtures = ["deploy-tenants"]
 modes = ["plain", "json"]
 
+# UC-4.6c (#979): a RELEASE deploy on a push in CI promotes the rules the push
+# changed (`status promotion`) before it plans: the rule file rewritten in
+# place, `--skip-promotion` leaving it, a push with nothing to promote, and a
+# status written as an anchor, left with a warning. The oracle's plan reads
+# the promoted rule's tenants from before the promotion, so none is reached
+# and nothing is sent.
+
+[[case]]
+command = "deploy"
+variant = "promote-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
+modes = ["plain", "json", "agent"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "promote-skip"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE", "--skip-promotion"]
+fixtures = ["deploy-push"]
+modes = ["plain", "json"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "promote-gitlab-progress-json"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push"]
+modes = ["json"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
+
 [[case]]
 command = "deploy migrate-state"
 variant = "default"
 args = ["deploy", "migrate-state"]
 fixtures = ["tide-corpus", "vscode"]
+
+# UC-4.4 (#834): ids moved into a shard and dropped as unused, then a rule
+# refused, on the Rust command line as on the oracle.
+[[case]]
+command = "deploy migrate-state"
+variant = "legacy-ids"
+args = ["deploy", "migrate-state"]
+fixtures = ["tide-corpus-legacy-ids", "tide-corpus-legacy-id-error"]
 
 # ---- share (MISP): tenant-contacting, recorded as failures without targets ----
 

@@ -70,7 +70,7 @@ PUBLISHED_FROM = {
     ".github/workflows/publish-dry-run.yml",
     "pyproject.toml",
     "hatch_build.py",
-    "analysis/**",
+    "bindings/python/**",
     "crates/**",
     "Cargo.toml",
     "Cargo.lock",

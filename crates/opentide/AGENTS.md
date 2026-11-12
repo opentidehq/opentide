@@ -7,7 +7,7 @@ UC-5.1, #836). Every binding is to wrap it and nothing else (UC-5.2, UC-5.3).
 ## Place
 
 facade (`xtask/layers.toml`), above the applications: its features reach opentide-cli (`queries`,
-`cli`) and opentide-lsp (`lsp`). Published with the crates it wraps by the release train
+`cli`), opentide-lsp (`lsp`) and opentide-connectors (`connectors`). Published with the crates it wraps by the release train
 (`.github/workflows/publish.yml`, UC-5.5), at the product version: `cargo install opentide
 --features cli` is the command line. `cargo package` builds it from its package (`ci.yml`
 `engine-package`, `scripts/ci-local.sh`, and the release's `checks`). crates.io's `opentide`
@@ -26,12 +26,14 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 | `src/models.rs`, `catalog.rs`, `validate.rs`, `lint.rs` | Curated re-exports of the internal crates' types |
 | `src/cli.rs` | `cli` feature: `main`, `exit`, `run_json`, `VERSION` |
 | `src/lsp.rs` | `lsp` feature: `run_stdio`, `serve`, `MessageSession` |
+| `src/connectors.rs` | `connectors` feature: `Workspace::tenants`, `TenantConfig`, `ConnectOptions`, `Connection` (`query`, `validate_query`, `deploy`: async, on tokio, over `opentide-connectors`' traits), `Canceller`, `block_on`, `Error::Connector`'s codes |
 | `src/bin/opentide.rs` | The `opentide` binary (`required-features = ["cli"]`) |
-| `examples/` | `validate`, `catalog`, `deploy_plan`: the three examples of `docs/sdk/rust.md` |
+| `examples/` | `validate`, `catalog`, `deploy_plan`, `query` (`connectors`): the four examples of `docs/sdk/rust.md`; the page shows `query`'s `docs:start`..`docs:end` part verbatim, which `tests/examples.rs` checks |
 | `tests/api.rs` | The API on `tests/fixtures/tide_corpus` laid out under a temporary folder |
 | `tests/examples.rs` | Each example compiled in (`#[path]`) and run on the corpus |
 | `tests/cli.rs` | `cli`: the binary's `--json commands` against the PyPI CLI's recording, through the goldens' comparator and `APPROVED_DIFFS.toml`; `run_json` |
 | `tests/lsp.rs` | `lsp`: the lifecycle over frames and one message at a time |
+| `tests/connectors.rs` | `connectors`: tenants from a workspace, and query, live check, deploy, cancellation and errors on wiremock stand-in tenants (each connection is given its environment, so no proxy of the process applies) |
 
 `docs/sdk/rust.md` and `README.md` are doctests too (`#[cfg(doctest)]` items in `lib.rs`).
 
@@ -51,6 +53,9 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
   missing file stops its manifest from parsing (`tests/test_package/test_layout.py` checks every
   member). CI's `facade` job runs them all (`--all-features`), and the workspace's run the default
   ones.
+- **Async.** The tenant operations (`connectors`) are `async fn`s on tokio, as the plan's facade
+  sketch has them (`connectors::deploy(...).await`) and as the connectors are; `block_on` serves a
+  synchronous caller. Nothing else in the crate is async, and no other feature pulls in tokio.
 - **The binary.** opentide-cli also builds a binary named `opentide`; this crate's is built only
   with `cli`, so a workspace build never builds both, and opentide-cli's is not documented
   (`doc = false`), whose page would take this crate's path (cargo#6313).

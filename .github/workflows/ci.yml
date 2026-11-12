@@ -123,7 +123,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -224,7 +224,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # The Cargo workspace: the engine crates (crates/, imported from
-  # opentidehq/language-server) and their PyO3 binding (analysis/).
+  # opentidehq/language-server) and their PyO3 binding (bindings/python/).
   #
   # Rust caches (Swatinem/rust-cache), one strategy for the whole file
   # (tests/test_ci/test_rust_caches.py): every cache names a `shared-key`, and
@@ -645,7 +645,7 @@ jobs:
 
   # Every engine crate builds from its packaged sources, as it will from
   # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
-  # at release. The binding (analysis/, opentide-native), the tooling (xtask)
+  # at release. The binding (bindings/python/, opentide-native), the tooling (xtask)
   # and the differential comparator (opentide-compare, which only they use)
   # are not crates to publish. The packages carry the embedded catalogs, so the licence scan
   # catches an oracle reference here rather than at release time.
@@ -693,7 +693,7 @@ jobs:
           set -euo pipefail
           find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
           bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node
+          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
@@ -1220,7 +1220,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -1378,7 +1378,7 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -1442,7 +1442,7 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -1473,7 +1473,7 @@ jobs:
   # with OPENTIDE_ENGINE=rust and compared with the oracle's recording
   # (crates/opentide-compare, tests/golden/APPROVED_DIFFS.toml); a stale ledger
   # entry fails it. Here, not in golden.yml, so that it runs on every pull
-  # request: a change anywhere in crates/, analysis/ or src/ can change a port.
+  # request: a change anywhere in crates/, bindings/python/ or src/ can change a port.
   golden-compare:
     name: Golden compare
     runs-on: ubuntu-latest
@@ -1559,7 +1559,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust

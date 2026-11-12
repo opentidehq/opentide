@@ -51,7 +51,7 @@ Pinned stack (do not bump in passing):
 | --- | --- | --- |
 | `serde` 1 / `serde_json` 1 | lockfile | derive on engine types; JSON at the host boundary |
 | `toml` 0.8 | 0.8.23 | catalog files and `highlights/spec.toml` |
-| `serde_yaml` 0.9 | lockfile | Tide YAML only. Do not migrate to `serde_yml` |
+| `saphyr` / `saphyr-parser` 0.3 | lockfile | YAML, through `opentide_core::node` only (#850). No `serde_yaml` or `serde_yml` |
 | `thiserror` 2 | 2.0.20 | library errors |
 | `anyhow` 1 | 1.0.104 | `opentide-lsp` binary only |
 | `clap` 4 | derive | `opentide-lsp` CLI only |

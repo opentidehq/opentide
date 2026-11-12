@@ -92,7 +92,7 @@ dependencies = [
     "boto3>=1.35",
     # The query and Tide object engine and the language server (the queries
     # checks of `validate` and `lint`, `validate query`, `opentide lsp`) are not a dependency:
-    # they are Rust, compiled from analysis/ into this package (opentide._native)
+    # they are Rust, compiled from bindings/python/ into this package (opentide._native)
     # by hatch_build.py.
 ]
 
@@ -121,9 +121,9 @@ cache-keys = [
     { file = "hatch_build.py" },
     { file = "Cargo.toml" },
     { file = "Cargo.lock" },
-    { file = "analysis/Cargo.toml" },
-    { file = "analysis/build.rs" },
-    { file = "analysis/src/**/*.rs" },
+    { file = "bindings/python/Cargo.toml" },
+    { file = "bindings/python/build.rs" },
+    { file = "bindings/python/src/**/*.rs" },
     { file = "crates/*/Cargo.toml" },
     { file = "crates/*/build.rs" },
     { file = "crates/*/src/**/*.rs" },
@@ -231,7 +231,7 @@ exclude = [
     "src/opentide/_native.*.pyd",
 ]
 
-# Compiles analysis/ (Rust) into opentide/_native: see hatch_build.py.
+# Compiles bindings/python/ (Rust) into opentide/_native: see hatch_build.py.
 [tool.hatch.build.targets.wheel.hooks.custom]
 path = "hatch_build.py"
 

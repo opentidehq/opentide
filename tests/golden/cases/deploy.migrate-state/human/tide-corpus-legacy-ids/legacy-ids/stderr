@@ -1,0 +1,4 @@
+[1;33mwarning: [0mExternal id unused · platform: sentinel · tenant: soc · value: 9f2c · file: 
+Objects/Detection Rules/rule-0001-sentinel-kql.yaml
+[1;33mwarning:[0m external_id_unused: sentinel tenant soc id 9f2c removed from Objects/Detection
+         Rules/rule-0001-sentinel-kql.yaml (never read by its deployer; not stored)

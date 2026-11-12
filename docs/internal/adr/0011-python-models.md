@@ -37,7 +37,7 @@ The Python CLI is still built on the Pydantic classes: 126 modules of `src/opent
 
 ## Decision
 
-1. **The classes.** Every object model, metadata model and platform block of `opentide-schema` (103 classes) is `#[pyclass(frozen, get_all, eq, name = "<Pydantic name>", module = "opentide._native.models")]` behind the crate's `python` feature: `DetectionRule`, `DetectionRule_v1_1`, `DetectionObjective`, `ThreatVector`, `ObjectMetadata`, `RuleMetadata`, `RuleConfigurations`, `SentinelConfig`, … Each one's attributes are Pydantic's, in Pydantic's order, under Pydantic's names (`objective.type`: the Rust field is `r#type`), which `tests/test_models/test_native_models.py` checks class by class. The binding (`analysis/`) exports them as `opentide._native.models`, registered in `sys.modules`.
+1. **The classes.** Every object model, metadata model and platform block of `opentide-schema` (103 classes) is `#[pyclass(frozen, get_all, eq, name = "<Pydantic name>", module = "opentide._native.models")]` behind the crate's `python` feature: `DetectionRule`, `DetectionRule_v1_1`, `DetectionObjective`, `ThreatVector`, `ObjectMetadata`, `RuleMetadata`, `RuleConfigurations`, `SentinelConfig`, … Each one's attributes are Pydantic's, in Pydantic's order, under Pydantic's names (`objective.type`: the Rust field is `r#type`), which `tests/test_models/test_native_models.py` checks class by class. The binding (`bindings/python/`) exports them as `opentide._native.models`, registered in `sys.modules`.
 2. **The methods** (`crates/opentide-schema/src/python.rs`, one macro for every class, so no class differs):
 
    | Pydantic | Rust class |

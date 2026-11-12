@@ -32,7 +32,7 @@ on:
       - ".github/workflows/publish-dry-run.yml"
       - "pyproject.toml"
       - "hatch_build.py"
-      - "analysis/**"
+      - "bindings/python/**"
       # The engine the wheel compiles, once UC-0.2 builds it from a root Cargo
       # workspace (a filter for a path that does not exist yet matches nothing).
       - "crates/**"
@@ -158,7 +158,7 @@ jobs:
           done
 
   # The artifacts publish.yml uploads to PyPI, built the same way: cibuildwheel
-  # (hatchling and hatch_build.py, which compiles analysis/) at the version the
+  # (hatchling and hatch_build.py, which compiles bindings/python/) at the version the
   # release guard reads from CHANGELOG.md, and `uv build --sdist`. One runner:
   # the Linux x86_64 wheel (manylinux_2_28; no musllinux, the maintainer's
   # decision) and the sdist. The release builds the other platforms itself and

@@ -186,17 +186,16 @@ The validator catches these, but designing against them keeps your graph healthy
 
 ## Typed Python access
 
-The same objects are available programmatically through the [registry](../../sdk/registry.md):
+The same objects are available programmatically through a [`Workspace`](../../sdk/workspace.md), each as its row of the catalogue (UUID, name, path, techniques, platforms):
 
 ```python
-from opentide import Opentide
+from opentide import Workspace
 
-Opentide.initialise()
-rule = Opentide.Rules["00000000-0000-4000-8003-000000000001"]
-objective = Opentide.Objectives["00000000-0000-4000-8002-000000000001"]
-threat = Opentide.Threats["00000000-0000-4000-8001-000000000001"]
-
-obj = Opentide.lookup("00000000-0000-4000-8002-000000000001")  # cross-type lookup
+ws = Workspace.open(".")
+rules = {row["uuid"]: row for row in ws.rules()}
+rule = rules["00000000-0000-4000-8003-000000000001"]
+objectives = ws.objectives()
+threats = ws.threats()
 ```
 
 Rules loaded through the registry expose delegation methods: `validate()`, `validate_query(platform)`, `deploy()`, and `document()`. See [SDK models](../../sdk/models.md).

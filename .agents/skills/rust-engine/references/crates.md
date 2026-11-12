@@ -37,7 +37,7 @@ Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repos
 - Catalog TOML uses `#[serde(default)]` on vectors and flags so a missing key is empty, not a parse failure.
 - `toml::from_str` on `include_str!` data. Do not `std::fs::read_to_string` a catalog from an engine.
 - `serde_json::json!` is the LSP wire format in `opentide-lsp`. See `.agents/skills/lsp-host/SKILL.md`.
-- `serde_yaml` 0.9 parses Tide documents in `opentide-tide`. Keep it there.
+- YAML has one reader: `opentide_core::node` (saphyr, YAML 1.2), which `validate`, the model and `opentide-tide` all use (#850). Do not add `serde_yaml`, `serde_yml` or another YAML parser.
 
 ## thiserror 2 and anyhow
 

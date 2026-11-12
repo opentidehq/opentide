@@ -1,4 +1,10 @@
-"""opentide: spec-driven development for agentic detection engineering."""
+"""opentide: spec-driven development for agentic detection engineering.
+
+The SDK is :class:`opentide.Workspace` (``open``, ``validate``, ``lint``,
+``rules``, ``catalog``, ``deploy_plan``, ...) and :func:`opentide.run_json`,
+the ``opentide`` Rust crate bound one to one (UC-5.2). ``Opentide``, the
+registry the SDK documented before, keeps working for one deprecation cycle.
+"""
 
 from __future__ import annotations
 
@@ -10,20 +16,41 @@ TYPE_CHECKING = False
 
 if TYPE_CHECKING:
     from opentide.core.registry import Opentide
+    from opentide.sdk import DeployPlan, LintReport, OpentideError, Validation, Workspace, run_json
 
-__all__ = ["Opentide", "__version__"]
+__all__ = [
+    "DeployPlan",
+    "LintReport",
+    "Opentide",
+    "OpentideError",
+    "Validation",
+    "Workspace",
+    "__version__",
+    "run_json",
+]
+
+#: The SDK's names, from ``opentide.sdk``, loaded on first use.
+_SDK = frozenset(
+    {"DeployPlan", "LintReport", "OpentideError", "Validation", "Workspace", "run_json"}
+)
 
 
 def __getattr__(name: str) -> object:
-    """Resolve ``Opentide`` on first use; keep ``OpenTide`` importable with a warning.
+    """Resolve the SDK and ``Opentide`` on first use; keep ``OpenTide`` importable with a warning.
 
     Lazy so that ``import opentide`` (which every ``opentide.*`` import runs)
-    does not load the registry: ``opentide --version`` and ``--help`` never
-    need it.
+    loads neither the engine nor the registry: ``opentide --version`` and
+    ``--help`` never need them.
     """
+    if name in _SDK:
+        from opentide import sdk
+
+        return getattr(sdk, name)
     if name == "Opentide":
+        from opentide._deprecation import warn_external
         from opentide.core.registry import Opentide
 
+        warn_external("opentide.Opentide", "opentide.Workspace")
         return Opentide
     if name == "OpenTide":
         import warnings

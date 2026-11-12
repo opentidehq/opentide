@@ -1,0 +1,9 @@
+{
+  "object_uuid": "00000000-0000-4000-8003-000000000006",
+  "platforms": {
+    "crowdstrike": {
+      "us-1": "ab12cd34"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

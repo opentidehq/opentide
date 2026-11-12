@@ -164,7 +164,7 @@ impl Lines {
     }
 
     /// A finished step: its progress event in every mode, then its row.
-    fn step(&self, step: &Step, completed: usize, total: usize) {
+    pub(crate) fn step(&self, step: &Step, completed: usize, total: usize) {
         if self.progress {
             self.write(&crate::render::progress::event_line(
                 &crate::render::progress::progress_event(&step.name, completed, Some(total)),
@@ -177,7 +177,7 @@ impl Lines {
     }
 
     /// The finished steps as the live display leaves them (`_final`).
-    fn checklist(&self, steps: &[Step]) {
+    pub(crate) fn checklist(&self, steps: &[Step]) {
         let Some(width) = self.live else {
             return;
         };
@@ -212,6 +212,8 @@ pub struct Context<'a> {
     pub lines: Lines,
     /// `--json` (the CI annotation of a run that matched nothing is not written).
     pub json: bool,
+    /// `--debug`: status promotion reads every rule file.
+    pub debug: bool,
 }
 
 impl std::fmt::Debug for Context<'_> {
@@ -246,6 +248,7 @@ impl Sent {
     pub fn report(&self) -> Report {
         let mut report = super::validate_live::report_of(COMMAND, &self.result);
         report.outcome_line = text_of(&self.result, "_outcome");
+        report.bare_exit = has(&self.result, super::deploy_promote::BARE_EXIT);
         report
     }
 }
@@ -617,16 +620,22 @@ fn deploy(
         }
     };
     if promotes(args, &runs, cx.env) {
-        let mut result = usage(
-            "opentide deploy's status promotion (a RELEASE run on a push in CI) has no Rust \
-             implementation yet: pass --skip-promotion, or unset OPENTIDE_ENGINE, or set it to \
-             python or compare.",
-            code::ENGINE_NOT_PORTED,
-            Some("OPENTIDE_ENGINE"),
-        );
-        result.retain(|(key, _)| key != "_failure_argument");
-        result.push(("_failure_argument".into(), Json::str("OPENTIDE_ENGINE")));
-        return result;
+        let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
+        let debug = cx.debug || super::deploy_promote::is_debug(cx.env);
+        let local = if debug {
+            plan::local_scope(fs, &rules_dir, &folder).files
+        } else {
+            Vec::new()
+        };
+        let promotion = super::deploy_promote::Promotion {
+            settings: &settings,
+            changed: &scope.files,
+            local: &local,
+            debug,
+        };
+        if let Err(stop) = super::deploy_promote::run(&promotion, &cx.lines) {
+            return super::deploy_promote::stopped(&stop);
+        }
     }
     let enabled = plan::enabled(&owned.config);
     let read = |path: &Path| -> Result<opentide_schema::node::Node, String> {

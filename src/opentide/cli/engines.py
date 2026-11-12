@@ -18,8 +18,7 @@ one. ``OPENTIDE_ENGINE`` chooses, read once per process by the root callback:
   directory whose path the message names. A command without a Rust
   implementation runs Python alone, and so does a run its Rust implementation
   refuses with ``engine_not_ported`` (:data:`REFUSAL_ENV`): one it covers for
-  some inputs only, such as ``generate docs`` on threats whose CVE details
-  only Python fetches.
+  some inputs only, such as ``query`` with ``--rule``.
 
 :data:`RUST_COMMANDS` is the dispatch table: the work items that port a
 command add it there. The console script reads it before Typer or anything
@@ -309,6 +308,8 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: with UC-4.6 (#979), and ``deploy`` that sends on those of
 #: :data:`RUST_DEPLOY_PLATFORMS`: *offline* keeps ``--dry-run`` covered whatever
 #: its ``--platform``.
+#: ``deploy migrate-state`` and ``doctor``'s network checks (PyPI, the proxy)
+#: with UC-4.4 (#834): ``doctor`` no longer requires ``--offline``.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -325,7 +326,8 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
         platforms=RUST_DEPLOY_PLATFORMS,
         offline=("--dry-run",),
     ),
-    ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",), requires=("--offline",)),
+    ("deploy", "migrate-state"): RustCommand(launch=RUST_CLI),
+    ("doctor",): RustCommand(launch=RUST_CLI, rules=("host-git",)),
     ("migrate", "vocab-scope"): RustCommand(launch=RUST_CLI),
     ("generate", "exports"): RustCommand(launch=RUST_CLI),
     ("generate", "exports", "navigator"): RustCommand(launch=RUST_CLI),

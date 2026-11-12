@@ -155,6 +155,48 @@ impl Tenant {
     }
 }
 
+/// The tenants *config* (a workspace's resolved configuration, as
+/// `opentide_compile::Json`) lists for *platform*, in file order: each one's
+/// `name` and its `setup` table, ready for [`Tenant::from_setup`]. A setup
+/// value with no TOML form (a null, a table) is left out, as the loader
+/// leaves it out of the strings it resolves.
+pub fn configured(config: &opentide_compile::Json, platform: &str) -> Vec<(String, toml::Table)> {
+    opentide_compile::plan::tenants(config, platform)
+        .into_iter()
+        .map(|tenant| {
+            let setup = tenant
+                .get("setup")
+                .and_then(opentide_compile::Json::as_object)
+                .map(|setup| {
+                    setup
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            toml_value(value).map(|value| (key.clone(), value))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            (
+                opentide_compile::deploy::tenant_name(tenant).to_owned(),
+                setup,
+            )
+        })
+        .collect()
+}
+
+/// A setup value as `toml` holds it.
+fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
+    use opentide_compile::Json as J;
+    Some(match value {
+        J::Str(text) => toml::Value::String(text.clone()),
+        J::Int(number) => toml::Value::Integer(*number),
+        J::Float(number) => toml::Value::Float(*number),
+        J::Bool(flag) => toml::Value::Boolean(*flag),
+        J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
+        J::Null | J::Object(_) => return None,
+    })
+}
+
 /// A tenant's `ssl` as the verify flag.
 fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, String> {
     let word = |text: &str| {

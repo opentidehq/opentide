@@ -35,11 +35,10 @@ checkout, and build dependencies (`cc`) run at build time and link nothing in, a
 
 **Advisories.** Vulnerable, unsound, unmaintained and yanked crates all fail. An exception is an
 `[advisories] ignore` entry with its reason and its follow-up issue; `cargo audit` reads the same
-list (`scripts/engine/audit.py ignores`). Today there is one:
-
-| Advisory | Crate | Why it is excepted | Follow-up |
-|----------|-------|--------------------|-----------|
-| RUSTSEC-2024-0449 | `unsafe-libyaml` (unmaintained), through `serde_yaml` 0.9 | `opentide-tide` and `opentide-lsp` read Tide YAML with `serde_yaml`. Replacing it changes the YAML the engine accepts and the positions it reports, a behaviour change that needs a parity proof on every corpus | [#850](https://github.com/opentidehq/opentide/issues/850) |
+list (`scripts/engine/audit.py ignores`). Today there is none. The last one, RUSTSEC-2024-0449
+(`unsafe-libyaml`, unmaintained, through `serde_yaml` 0.9), went when the engine moved its Tide
+YAML onto the node tree every crate reads YAML with, `opentide_core::node` (saphyr, YAML 1.2)
+([#850](https://github.com/opentidehq/opentide/issues/850)).
 
 **Bans.** A second version of a crate we ship fails, unless `[bans] skip` lists it with its reason. There is one: `syn` 2, which `garde_derive` 0.23 needs (`opentide-schema`'s validation derive, plan D-2; no garde release uses `syn` 3 yet), beside the `syn` 3 of every other proc macro. Dev-dependencies are
 left out, as cargo-deny leaves them out by default. These test tools duplicate a shipped crate,

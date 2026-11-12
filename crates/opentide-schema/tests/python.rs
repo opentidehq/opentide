@@ -12,6 +12,15 @@ use pyo3::types::PyDict;
 
 const FIXTURE: &str = include_str!("fixtures/sample-1.1.yaml");
 
+/// `yaml` read with the workspace's YAML reader, then into a sample by its
+/// serde derive.
+fn read(yaml: &str) -> Result<Sample, String> {
+    let document = opentide_schema::node::load(yaml).map_err(|error| error.to_string())?;
+    let root = document.root().ok_or("no document")?;
+    let json = opentide_schema::configuration::merge::to_json(root);
+    serde_json::from_value(json).map_err(|error| error.to_string())
+}
+
 /// Compiles only for a `frozen` class. `get_all` without `set_all` already
 /// makes the attributes read-only in Python, so assertions in Python cannot
 /// tell a frozen class from another; this can.
@@ -46,7 +55,7 @@ fn run(code: &str, sample: Sample) {
 
 #[test]
 fn imports_as_a_frozen_class_with_attribute_access() {
-    let sample: Sample = serde_yaml::from_str(FIXTURE).unwrap();
+    let sample = read(FIXTURE).unwrap();
     run(
         r#"
 import dataclasses
@@ -95,6 +104,6 @@ fn optional_fields_read_as_none() {
     let yaml = "name: n\nuuid: u\nschema: sample::1.1\ndescription: d\nseverity: Low\n";
     run(
         "assert sample.effort is None and sample.examples is None and sample.enabled is True",
-        serde_yaml::from_str(yaml).unwrap(),
+        read(yaml).unwrap(),
     );
 }

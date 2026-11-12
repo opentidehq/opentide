@@ -453,6 +453,29 @@ fn summary_of(issues: &[Json], warnings: &[Json]) -> Json {
     })
 }
 
+/// The CVE lookup of a `--check cve` case (UC-4.4, #834): the command
+/// line's, with the `[cve]` settings of the case's workspace, in the case's
+/// own recorded environment and never this process's. The recordings send
+/// every request to a proxy that refuses it (`127.0.0.1:9`), so the lookup
+/// fails as the oracle's failed, with no network reached.
+fn online_cve(
+    case: &Case,
+    args: &Args,
+    workspace: &Workspace,
+) -> Option<opentide_cli::commands::cve::OnlineCve> {
+    use opentide_cli::commands::cve::{OnlineCve, Settings};
+    (args.check == Some(Check::Cve)).then(|| {
+        let settings =
+            Settings::from_documentation(workspace.configuration().resolved.get("documentation"));
+        let env = opentide_cli::env::Env::from_pairs(
+            case.env
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.as_str())),
+        );
+        OnlineCve::new(&settings, &env, None, env!("CARGO_PKG_VERSION"))
+    })
+}
+
 /// Runs one case; its differences.
 fn run_case(
     case: &Case,
@@ -492,12 +515,16 @@ fn run_case(
     };
     let mut workspace = workspace.map_err(|error| anyhow::anyhow!("{}: open: {error}", case.id))?;
     let counting = crate::corpus::queries::CountingQueries::default();
+    let cve = online_cve(case, &args, &workspace);
     let options = Options {
         check: args.check,
         selection: Some(&args.selection),
         strict: args.strict,
         queries: args.queries,
         query_check: Some(&counting),
+        cve_check: cve
+            .as_ref()
+            .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
     };
     let validation = match args.fix {
         None => workspace.validate(&options),

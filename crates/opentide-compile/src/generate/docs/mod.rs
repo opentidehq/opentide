@@ -70,8 +70,10 @@ pub struct Settings {
     /// Where CVE links point.
     pub cve: CveLinks,
     /// `[cve] retrieve_details`: a CVE section is a table of each record's
-    /// details, which this engine cannot fetch ([`cve_details_needed`]).
+    /// details, from [`Settings::cve_source`].
     pub cve_details: bool,
+    /// Where those details come from (the host's lookup).
+    pub cve_source: cve::CveSource,
 }
 
 /// Where the flavour comes from when `--flavor` does not say.
@@ -232,6 +234,7 @@ impl Settings {
                 CveLinks::new(Some(&docs.cve.base_url), Some(&docs.cve.default_db_link))
             }),
             cve_details: docs.as_ref().is_none_or(|docs| docs.cve.retrieve_details),
+            cve_source: cve::CveSource::default(),
         })
     }
 
@@ -332,12 +335,9 @@ fn page_records<'c>(
 
 /// The names of the threats whose pages, in a run of `scopes` (only the
 /// objects of `targets` when given), need the details of their CVEs: with
-/// `[cve] retrieve_details` on, the oracle fetched each identifier's record
-/// over HTTP and wrote a table of them. This engine has no HTTP client until
-/// the connectors bring one (UC-4.1), so the command line refuses such a run
-/// and the Python engine writes it (`CHANGELOG.md`, the "**`generate docs`
-/// runs on the Rust engine**" entry). Empty when the setting is off: the
-/// pages then list each identifier as a link, as the oracle does.
+/// `[cve] retrieve_details` on, each identifier's record is asked of the
+/// host's [`cve::CveSource`] and the page is a table of them. Empty when the
+/// setting is off: the pages then list each identifier as a link.
 pub fn cve_details_needed(
     pages: &Pages<'_, '_>,
     scopes: &[Scope],

@@ -1,6 +1,6 @@
 # AGENTS.md — the Rust workspace and the engine
 
-Instructions for coding agents working on the Cargo workspace of this repository (`opentidehq/opentide`): the engine crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), the binding in `analysis/`, the tooling in `xtask/`, and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` is the map of the rest. Each crate has its own `AGENTS.md`; read it before changing the crate. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
+Instructions for coding agents working on the Cargo workspace of this repository (`opentidehq/opentide`): the engine crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), the binding in `bindings/python/`, the tooling in `xtask/`, and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` is the map of the rest. Each crate has its own `AGENTS.md`; read it before changing the crate. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
 
 Before editing, read the one skill that matches the change. Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
@@ -19,7 +19,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 
 Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`), and the **CrowdStrike Query Language** (CQL: Falcon LogScale and Next-Gen SIEM, `configurations.crowdstrike`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
-The offline query checks of the CLI (`validate`'s and `lint`'s `queries` checks, `validate query`), `opentide lsp start`, `opentide tui` and MCP `validate_query` run this engine: `analysis/` binds `opentide-analysis` and `opentide-lsp` with PyO3, by path, and `hatch_build.py` compiles it into the opentide package as `opentide._native`. There is no separate engine distribution and no engine pin. `uv sync` builds `_native` (develop profile) with the Rust release `rust-toolchain.toml` pins (rustup installs it); the crates declare `rust-version` 1.85, but no job checks it: the code needs Rust 1.88 or later (let chains) and `Cargo.lock` 1.90 (tree-sitter-language 0.1.8). Release wheels are one `cp310-abi3` wheel per platform, and the sdist carries the workspace.
+The offline query checks of the CLI (`validate`'s and `lint`'s `queries` checks, `validate query`), `opentide lsp start`, `opentide tui` and MCP `validate_query` run this engine: `bindings/python/` binds `opentide-analysis` and `opentide-lsp` with PyO3, by path, and `hatch_build.py` compiles it into the opentide package as `opentide._native`. There is no separate engine distribution and no engine pin. `uv sync` builds `_native` (develop profile) with the Rust release `rust-toolchain.toml` pins (rustup installs it); the crates declare `rust-version` 1.85, but no job checks it: the code needs Rust 1.88 or later (let chains) and `Cargo.lock` 1.90 (tree-sitter-language 0.1.8). Release wheels are one `cp310-abi3` wheel per platform, and the sdist carries the workspace.
 
 Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript packages) own the filesystem and the editor protocol. The CLI (`analyze`, `highlight`, `generate-highlights`) prints plain JSON. Only `--stdio` and `--listen` speak JSON-RPC.
 
@@ -37,7 +37,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | domain 0, 1, 2 | [`opentide-tide`](opentide-tide/AGENTS.md) and [`opentide-workspace`](opentide-workspace/AGENTS.md) (loading and the index, UC-2.1), then [`opentide-analysis`](opentide-analysis/AGENTS.md) and [`opentide-compile`](opentide-compile/AGENTS.md) (deploy compile and plan, UC-3.1), then [`opentide-connectors`](opentide-connectors/AGENTS.md) (tenant HTTP, UC-4.1) |
 | application 0, 1 | [`opentide-lsp`](opentide-lsp/AGENTS.md), then [`opentide-cli`](opentide-cli/AGENTS.md) (the command line, UC-3.3, which hosts the language server: `lsp start`) |
 | facade | [`opentide`](opentide/AGENTS.md): the Rust SDK, the only crate with a stability promise (UC-5.1, #836) |
-| bindings | [`opentide-native`](../analysis/AGENTS.md) (`analysis/`), [`opentide-wasm`](opentide-wasm/AGENTS.md), [`opentide-node`](../bindings/node/AGENTS.md) (`bindings/node`, the npm package `@opentide/opentide`, UC-5.3) |
+| bindings | [`opentide-native`](../bindings/python/AGENTS.md) (`bindings/python/`), [`opentide-wasm`](opentide-wasm/AGENTS.md), [`opentide-node`](../bindings/node/AGENTS.md) (`bindings/node`, the npm package `@opentide/opentide`, UC-5.3) |
 | tooling | [`xtask`](../xtask/AGENTS.md) |
 
 ## Hard rules
@@ -53,7 +53,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 - Do not commit a rewritten `Cargo.lock` with a change that is not about dependencies. The lock is what Cargo resolves and CI builds with `--locked`; restore the committed lock if Cargo rewrites it.
 - Configuration TOML (`opentide-config`, #158): the models, layering and checks are `opentide-schema`'s `configuration` module (UC-1.5, #811), the oracle's `configuration_text_issues` ported and compared case for case. The language server checks a buffer natively with `buffer_issues` (UC-2.6, #821) and `opentide-analysis` places the `{code, field_path, severity}` findings (`place_configuration_issues`); hover and completion read the host's schemas. No configuration check logic in `opentide-analysis`, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures.
 - The Tide object checks are `opentide-workspace`'s `validate`: the language server publishes its findings (UC-2.6, #821), and `cargo xtask lsp parity --corpus faults` holds them equal. No object check in `opentide-tide` or `opentide-analysis`.
-- A change opentide users see gets an entry in `CHANGELOG.md`, beside `crates/CHANGELOG.md`. After a change to `analysis/src/lib.rs`, update `src/opentide/_native/__init__.pyi`; after a change to a model of `opentide-schema`, run `cargo xtask stubs` (the generated `src/opentide/_native/models.pyi`).
+- A change opentide users see gets an entry in `CHANGELOG.md`, beside `crates/CHANGELOG.md`. After a change to `bindings/python/src/lib.rs`, update `src/opentide/_native/__init__.pyi`; after a change to a model of `opentide-schema`, run `cargo xtask stubs` (the generated `src/opentide/_native/models.pyi`).
 - Object models, vocabulary or pins (`src/opentide`) change the bundled Tide catalog: regenerate it in the same change with `uv run python scripts/engine/sync_opentide_schemas.py`.
 
 ## Lints

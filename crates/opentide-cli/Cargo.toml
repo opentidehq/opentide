@@ -102,6 +102,9 @@ unicode-width = "0.2"
 inquire = { version = "0.9", default-features = false, features = ["crossterm"] }
 # `new`'s fresh object identifiers.
 uuid = { workspace = true, features = ["v4"] }
+# `doctor`'s opentide_latest (UC-4.4, #834): PEP 440 versions ordered as
+# `packaging.version.Version` orders them.
+pep440_rs = { version = "0.7", default-features = false }
 # `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
 which = "7"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }

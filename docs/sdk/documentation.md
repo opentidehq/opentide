@@ -5,6 +5,10 @@ description: Render and publish markdown documentation for rules, objectives, an
 
 # Documentation API
 
+<Callout type="warn">
+Writing pages from Python (`write_all`, `write_rules`, `write_objectives`, `write_threats`, `run`) is deprecated: those functions warn when your code calls them, and 0.25 removes them. Run `generate docs` with [`Workspace.run_json`](./workspace.md#run-a-command) instead; see [Migration](./migration.md#write-the-documentation). Rendering one page (`render_rule`, `render_objective`, `render_threat`) is not deprecated.
+</Callout>
+
 Programmatic access to the same renderer used by `opentide generate docs`.
 
 <Callout type="info">

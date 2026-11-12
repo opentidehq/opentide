@@ -72,10 +72,10 @@ opentide --json info --platform sentinel
 MCP resource: `opentide://platforms`
 
 ```python
-from opentide import Opentide
-Opentide.initialise()
-for name, plat in Opentide.Platforms.items():
-    print(name, plat.enabled, plat.can_deploy, plat.can_validate)
+from opentide import Workspace
+ws = Workspace.open(".")
+for platform in ws.info()["platforms"]:
+    print(platform["name"], platform["enabled"], platform["can_deploy"], platform["can_validate"])
 ```
 
 ## Query validation policy

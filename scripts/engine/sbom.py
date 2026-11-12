@@ -9,7 +9,7 @@
 
 - `opentide-wheel.cdx.json`: the PyPI wheel. The Python dependencies
   (`uv export`) and the Rust crates compiled into `opentide._native`
-  (`analysis/`, every target).
+  (`bindings/python/`, every target).
 - `opentide-lsp.cdx.json`: the `opentide-lsp` binaries and its WASI build
   (the crate, every target).
 - `opentide-wasm.cdx.json`: the browser build (the `opentide-wasm-web` zip):
@@ -62,7 +62,7 @@ RUST_SBOMS = (
     ("crates/opentide-lsp", "all", "opentide-lsp.cdx.json"),
     ("crates/opentide-wasm", "wasm32-unknown-unknown", "opentide-wasm.cdx.json"),
 )
-NATIVE = "analysis"
+NATIVE = "bindings__python"
 # The facade as its binaries and npm packages build it: with `cli`, which a run
 # over the whole workspace (default features) leaves out.
 FACADE = "crates/opentide"
@@ -272,7 +272,6 @@ def _cargo_sboms(
     out = scratch / label
     out.mkdir(parents=True)
     members = [
-        ROOT / "analysis",
         ROOT / "xtask",
         *sorted(ROOT.glob("crates/*")),
         *sorted(ROOT.glob("bindings/*")),

@@ -1,13 +1,10 @@
 //! CVE references as links to a Vulnerability-Lookup instance
 //! (`vulnerability_lookup.py`: identifiers, `page_url_for`, `[cve]`).
 //!
-//! Offline: a page lists each identifier as a link to its record page, as the
-//! oracle does with `[cve] retrieve_details` off. With it on (its default) the
-//! oracle fetched each record's details over HTTP and wrote a table of them;
-//! the engine has no HTTP client until the connectors bring one (UC-4.1), so
-//! a run whose threat pages list CVEs with the setting on is refused and the
-//! Python engine writes it ([`super::cve_details_needed`]; `CHANGELOG.md`, the
-//! "**`generate docs` runs on the Rust engine**" entry).
+//! With `[cve] retrieve_details` off, a page lists each identifier as a link
+//! to its record page. With it on (its default) a page is a table of each
+//! record's details, which the host fetches ([`CveSource`]: the connectors'
+//! Vulnerability-Lookup client, UC-4.4, #834); this crate does no I/O.
 
 use std::sync::LazyLock;
 
@@ -166,4 +163,91 @@ mod tests {
         let links = CveLinks::new(Some("https://x.example/"), None);
         assert_eq!(links.page_url("A"), "https://x.example/vuln/A");
     }
+}
+
+/// One record's details, as a page's CVE table shows them
+/// (`VulnerabilityRecord`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CveRecord {
+    /// Its canonical identifier.
+    pub identifier: String,
+    /// Its title.
+    pub title: Option<String>,
+    /// Its description.
+    pub description: Option<String>,
+    /// Its publication date.
+    pub published: Option<String>,
+    /// The CVE record's state.
+    pub state: Option<String>,
+    /// Its severity.
+    pub severity: Option<String>,
+    /// Its aliases.
+    pub aliases: Vec<String>,
+    /// Its page.
+    pub page_url: String,
+}
+
+/// What the instance answered for one identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CveDetail {
+    /// Its record.
+    Found(CveRecord),
+    /// It does not know the identifier.
+    NotFound,
+    /// It could not be asked.
+    Unavailable,
+}
+
+/// Where a run's CVE details come from: the host's lookup (the connectors'
+/// Vulnerability-Lookup client), each identifier asked with its linked
+/// records. Without one a page that needs details reads every identifier as
+/// unavailable.
+#[derive(Clone, Default)]
+pub struct CveSource(Option<std::sync::Arc<Lookup>>);
+
+/// A host's lookup of one identifier.
+type Lookup = dyn Fn(&str) -> CveDetail + Send + Sync;
+
+impl CveSource {
+    /// A source that asks `lookup`.
+    pub fn new(lookup: impl Fn(&str) -> CveDetail + Send + Sync + 'static) -> Self {
+        Self(Some(std::sync::Arc::new(lookup)))
+    }
+
+    /// The details of `id`.
+    pub fn get(&self, id: &str) -> CveDetail {
+        self.0
+            .as_ref()
+            .map_or(CveDetail::Unavailable, |lookup| lookup(id))
+    }
+}
+
+impl std::fmt::Debug for CveSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0.is_some() {
+            "CveSource(lookup)"
+        } else {
+            "CveSource(none)"
+        })
+    }
+}
+
+/// Two runs' settings are the same whatever their lookups.
+impl PartialEq for CveSource {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for CveSource {}
+
+/// `text`, its whitespace collapsed, cut at `limit` characters with an
+/// ellipsis (`_truncate`).
+pub fn truncate(text: &str, limit: usize) -> String {
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() <= limit {
+        return collapsed;
+    }
+    let head: String = collapsed.chars().take(limit.saturating_sub(1)).collect();
+    format!("{}…", head.trim_end())
 }

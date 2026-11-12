@@ -280,8 +280,16 @@ def run(
     overlaid on the registry for the run. Files in subfolders of an object
     folder are not objects (#584): they get no page, and the payload names
     them once in ``warnings``.
+
+    Deprecated outside opentide (UC-5.2, #837): run ``generate docs`` with
+    :meth:`opentide.Workspace.run_json`.
     """
+    from opentide._deprecation import warn_external
     from opentide.indexing.inflight import inflight_preview
+
+    warn_external(
+        "opentide.documentation.run()", 'opentide.Workspace.run_json(["generate", "docs", ...])'
+    )
     from opentide.registry.catalogue import with_nested_object_warning
 
     with inflight_preview():

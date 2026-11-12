@@ -111,7 +111,7 @@ rust_jobs() {
   cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty --quiet
   find "${CARGO_TARGET_DIR:-target}/package" -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
   bash scripts/engine/license-scan.sh --product "${CARGO_TARGET_DIR:-target}"/package/opentide-cli-*.crate
-  bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node
+  bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
   python3 scripts/engine/release.py vendor --clean
   trap - EXIT
 
