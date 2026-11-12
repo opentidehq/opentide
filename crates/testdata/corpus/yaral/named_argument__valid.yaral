@@ -1,0 +1,13 @@
+// prod:named_argument valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  outcome:
+    $user = $e.target.user.userid
+  condition:
+    $e
+  export:
+    %seen.write_row(user: $user, count: 1)
+}

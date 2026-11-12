@@ -1,0 +1,4 @@
+// prod:stage invalid
+stage daily {
+  metadata.event_type = "NETWORK_CONNECTION"
+

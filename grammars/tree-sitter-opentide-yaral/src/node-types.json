@@ -1,0 +1,4886 @@
+[
+  {
+    "type": "and_expression",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "arguments",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "named_argument",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "array",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "bare_field",
+    "named": true,
+    "fields": {
+      "root": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "field_name",
+            "named": true
+          }
+        ]
+      },
+      "segment": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "field_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "index",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "binary_expression",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "%",
+            "named": false
+          },
+          {
+            "type": "*",
+            "named": false
+          },
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          },
+          {
+            "type": "/",
+            "named": false
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "boolean",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "comparison",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "nocase": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "nocase",
+            "named": false
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "!=",
+            "named": false
+          },
+          {
+            "type": "<",
+            "named": false
+          },
+          {
+            "type": "<=",
+            "named": false
+          },
+          {
+            "type": "=",
+            "named": false
+          },
+          {
+            "type": ">",
+            "named": false
+          },
+          {
+            "type": ">=",
+            "named": false
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "condition_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "data_table_column",
+    "named": true,
+    "fields": {
+      "column": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column",
+            "named": true
+          }
+        ]
+      },
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "reference_list",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "dedup_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "events_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "export_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "function_call",
+    "named": true,
+    "fields": {
+      "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "function_name",
+            "named": true
+          }
+        ]
+      },
+      "nocase": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "nocase",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "arguments",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "function_name",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "name",
+            "named": true
+          }
+        ]
+      },
+      "namespace": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "namespace",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "graph_operation",
+    "named": true,
+    "fields": {
+      "arguments": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          }
+        ]
+      },
+      "join": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "operation": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "graph_append",
+            "named": false
+          },
+          {
+            "type": "graph_exclude",
+            "named": false
+          },
+          {
+            "type": "graph_override",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "if_expression",
+    "named": true,
+    "fields": {
+      "condition": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "else": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "then": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "in_expression",
+    "named": true,
+    "fields": {
+      "kind": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "cidr",
+            "named": false
+          },
+          {
+            "type": "regex",
+            "named": false
+          }
+        ]
+      },
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "nocase": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "nocase",
+            "named": false
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "index",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "limit_section",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "integer",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "match_clause",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          }
+        ]
+      },
+      "window": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "match_window",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "match_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "match_clause",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "match_window",
+    "named": true,
+    "fields": {
+      "direction": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "after",
+            "named": false
+          },
+          {
+            "type": "before",
+            "named": false
+          }
+        ]
+      },
+      "kind": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "by",
+            "named": false
+          },
+          {
+            "type": "over",
+            "named": false
+          }
+        ]
+      },
+      "length": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "time_unit",
+            "named": true
+          }
+        ]
+      },
+      "pivot": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "variable",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "meta_entry",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "meta_key",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "meta_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "meta_entry",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "named_argument",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "argument_name",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "not_expression",
+    "named": true,
+    "fields": {
+      "operand": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "of_expression",
+    "named": true,
+    "fields": {
+      "quantifier": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "all",
+            "named": false
+          },
+          {
+            "type": "any",
+            "named": false
+          },
+          {
+            "type": "integer",
+            "named": true
+          }
+        ]
+      },
+      "terms": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "option_entry",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "option_key",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "options_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "option_entry",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "or_expression",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "order_item",
+    "named": true,
+    "fields": {
+      "direction": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "asc",
+            "named": false
+          },
+          {
+            "type": "desc",
+            "named": false
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "order_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "order_item",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "outcome_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "parenthesized_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "quantified_field",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          }
+        ]
+      },
+      "quantifier": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "all",
+            "named": false
+          },
+          {
+            "type": "any",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "rule_declaration",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "rule_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "condition_section",
+          "named": true
+        },
+        {
+          "type": "dedup_section",
+          "named": true
+        },
+        {
+          "type": "events_section",
+          "named": true
+        },
+        {
+          "type": "export_section",
+          "named": true
+        },
+        {
+          "type": "limit_section",
+          "named": true
+        },
+        {
+          "type": "match_section",
+          "named": true
+        },
+        {
+          "type": "meta_section",
+          "named": true
+        },
+        {
+          "type": "options_section",
+          "named": true
+        },
+        {
+          "type": "order_section",
+          "named": true
+        },
+        {
+          "type": "outcome_section",
+          "named": true
+        },
+        {
+          "type": "select_section",
+          "named": true
+        },
+        {
+          "type": "setup_section",
+          "named": true
+        },
+        {
+          "type": "unselect_section",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "search_events",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "search_query",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "condition_section",
+          "named": true
+        },
+        {
+          "type": "dedup_section",
+          "named": true
+        },
+        {
+          "type": "events_section",
+          "named": true
+        },
+        {
+          "type": "export_section",
+          "named": true
+        },
+        {
+          "type": "limit_section",
+          "named": true
+        },
+        {
+          "type": "match_section",
+          "named": true
+        },
+        {
+          "type": "meta_section",
+          "named": true
+        },
+        {
+          "type": "options_section",
+          "named": true
+        },
+        {
+          "type": "order_section",
+          "named": true
+        },
+        {
+          "type": "outcome_section",
+          "named": true
+        },
+        {
+          "type": "search_events",
+          "named": true
+        },
+        {
+          "type": "select_section",
+          "named": true
+        },
+        {
+          "type": "setup_section",
+          "named": true
+        },
+        {
+          "type": "stage",
+          "named": true
+        },
+        {
+          "type": "unselect_section",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "select_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "setup_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "graph_operation",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "source_file",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "rule_declaration",
+          "named": true
+        },
+        {
+          "type": "search_query",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "stage",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "stage_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "condition_section",
+          "named": true
+        },
+        {
+          "type": "dedup_section",
+          "named": true
+        },
+        {
+          "type": "events_section",
+          "named": true
+        },
+        {
+          "type": "export_section",
+          "named": true
+        },
+        {
+          "type": "limit_section",
+          "named": true
+        },
+        {
+          "type": "match_section",
+          "named": true
+        },
+        {
+          "type": "meta_section",
+          "named": true
+        },
+        {
+          "type": "options_section",
+          "named": true
+        },
+        {
+          "type": "order_section",
+          "named": true
+        },
+        {
+          "type": "outcome_section",
+          "named": true
+        },
+        {
+          "type": "search_events",
+          "named": true
+        },
+        {
+          "type": "select_section",
+          "named": true
+        },
+        {
+          "type": "setup_section",
+          "named": true
+        },
+        {
+          "type": "unselect_section",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "table_call",
+    "named": true,
+    "fields": {
+      "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "name",
+            "named": true
+          }
+        ]
+      },
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "reference_list",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "arguments",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "udm_field",
+    "named": true,
+    "fields": {
+      "segment": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "field_name",
+            "named": true
+          }
+        ]
+      },
+      "variable": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "variable",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "index",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "unary_expression",
+    "named": true,
+    "fields": {
+      "operand": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "and_expression",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "bare_field",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "comparison",
+            "named": true
+          },
+          {
+            "type": "count",
+            "named": true
+          },
+          {
+            "type": "data_table_column",
+            "named": true
+          },
+          {
+            "type": "duration",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "if_expression",
+            "named": true
+          },
+          {
+            "type": "in_expression",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "not_expression",
+            "named": true
+          },
+          {
+            "type": "of_expression",
+            "named": true
+          },
+          {
+            "type": "or_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "quantified_field",
+            "named": true
+          },
+          {
+            "type": "raw_string",
+            "named": true
+          },
+          {
+            "type": "reference_list",
+            "named": true
+          },
+          {
+            "type": "regex",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "table_call",
+            "named": true
+          },
+          {
+            "type": "udm_field",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "variable",
+            "named": true
+          },
+          {
+            "type": "window_bound",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "!",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "unselect_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "and_expression",
+          "named": true
+        },
+        {
+          "type": "array",
+          "named": true
+        },
+        {
+          "type": "bare_field",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "comparison",
+          "named": true
+        },
+        {
+          "type": "count",
+          "named": true
+        },
+        {
+          "type": "data_table_column",
+          "named": true
+        },
+        {
+          "type": "duration",
+          "named": true
+        },
+        {
+          "type": "float",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "if_expression",
+          "named": true
+        },
+        {
+          "type": "in_expression",
+          "named": true
+        },
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "not_expression",
+          "named": true
+        },
+        {
+          "type": "of_expression",
+          "named": true
+        },
+        {
+          "type": "or_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "quantified_field",
+          "named": true
+        },
+        {
+          "type": "raw_string",
+          "named": true
+        },
+        {
+          "type": "reference_list",
+          "named": true
+        },
+        {
+          "type": "regex",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "table_call",
+          "named": true
+        },
+        {
+          "type": "udm_field",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "variable",
+          "named": true
+        },
+        {
+          "type": "window_bound",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "window_bound",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "!",
+    "named": false
+  },
+  {
+    "type": "!=",
+    "named": false
+  },
+  {
+    "type": "%",
+    "named": false
+  },
+  {
+    "type": "(",
+    "named": false
+  },
+  {
+    "type": ")",
+    "named": false
+  },
+  {
+    "type": "*",
+    "named": false
+  },
+  {
+    "type": "+",
+    "named": false
+  },
+  {
+    "type": ",",
+    "named": false
+  },
+  {
+    "type": "-",
+    "named": false
+  },
+  {
+    "type": ".",
+    "named": false
+  },
+  {
+    "type": "/",
+    "named": false
+  },
+  {
+    "type": ":",
+    "named": false
+  },
+  {
+    "type": "<",
+    "named": false
+  },
+  {
+    "type": "<=",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": ">",
+    "named": false
+  },
+  {
+    "type": ">=",
+    "named": false
+  },
+  {
+    "type": "[",
+    "named": false
+  },
+  {
+    "type": "]",
+    "named": false
+  },
+  {
+    "type": "after",
+    "named": false
+  },
+  {
+    "type": "all",
+    "named": false
+  },
+  {
+    "type": "and",
+    "named": false
+  },
+  {
+    "type": "any",
+    "named": false
+  },
+  {
+    "type": "argument_name",
+    "named": true
+  },
+  {
+    "type": "asc",
+    "named": false
+  },
+  {
+    "type": "before",
+    "named": false
+  },
+  {
+    "type": "by",
+    "named": false
+  },
+  {
+    "type": "cidr",
+    "named": false
+  },
+  {
+    "type": "column",
+    "named": true
+  },
+  {
+    "type": "comment",
+    "named": true,
+    "extra": true
+  },
+  {
+    "type": "condition",
+    "named": false
+  },
+  {
+    "type": "count",
+    "named": true
+  },
+  {
+    "type": "dedup",
+    "named": false
+  },
+  {
+    "type": "desc",
+    "named": false
+  },
+  {
+    "type": "duration",
+    "named": true
+  },
+  {
+    "type": "events",
+    "named": false
+  },
+  {
+    "type": "every",
+    "named": false
+  },
+  {
+    "type": "export",
+    "named": false
+  },
+  {
+    "type": "false",
+    "named": false
+  },
+  {
+    "type": "field_name",
+    "named": true
+  },
+  {
+    "type": "first",
+    "named": false
+  },
+  {
+    "type": "float",
+    "named": true
+  },
+  {
+    "type": "graph_append",
+    "named": false
+  },
+  {
+    "type": "graph_exclude",
+    "named": false
+  },
+  {
+    "type": "graph_override",
+    "named": false
+  },
+  {
+    "type": "identifier",
+    "named": true
+  },
+  {
+    "type": "if",
+    "named": false
+  },
+  {
+    "type": "in",
+    "named": false
+  },
+  {
+    "type": "integer",
+    "named": true
+  },
+  {
+    "type": "limit",
+    "named": false
+  },
+  {
+    "type": "match",
+    "named": false
+  },
+  {
+    "type": "meta",
+    "named": false
+  },
+  {
+    "type": "meta_key",
+    "named": true
+  },
+  {
+    "type": "name",
+    "named": true
+  },
+  {
+    "type": "namespace",
+    "named": true
+  },
+  {
+    "type": "nocase",
+    "named": false
+  },
+  {
+    "type": "not",
+    "named": false
+  },
+  {
+    "type": "of",
+    "named": false
+  },
+  {
+    "type": "option_key",
+    "named": true
+  },
+  {
+    "type": "options",
+    "named": false
+  },
+  {
+    "type": "or",
+    "named": false
+  },
+  {
+    "type": "order",
+    "named": false
+  },
+  {
+    "type": "outcome",
+    "named": false
+  },
+  {
+    "type": "over",
+    "named": false
+  },
+  {
+    "type": "raw_string",
+    "named": true
+  },
+  {
+    "type": "reference_list",
+    "named": true
+  },
+  {
+    "type": "regex",
+    "named": false
+  },
+  {
+    "type": "regex",
+    "named": true
+  },
+  {
+    "type": "rule",
+    "named": false
+  },
+  {
+    "type": "rule_name",
+    "named": true
+  },
+  {
+    "type": "select",
+    "named": false
+  },
+  {
+    "type": "setup",
+    "named": false
+  },
+  {
+    "type": "stage",
+    "named": false
+  },
+  {
+    "type": "stage_name",
+    "named": true
+  },
+  {
+    "type": "string",
+    "named": true
+  },
+  {
+    "type": "time_unit",
+    "named": true
+  },
+  {
+    "type": "true",
+    "named": false
+  },
+  {
+    "type": "unselect",
+    "named": false
+  },
+  {
+    "type": "variable",
+    "named": true
+  },
+  {
+    "type": "window_end",
+    "named": false
+  },
+  {
+    "type": "window_start",
+    "named": false
+  },
+  {
+    "type": "{",
+    "named": false
+  },
+  {
+    "type": "}",
+    "named": false
+  }
+]
