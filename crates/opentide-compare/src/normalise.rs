@@ -555,10 +555,16 @@ mod tests {
         let wide = |version: &str| format!("ab {version}{}", " ".repeat(30 - 3 - version.len()));
         assert_eq!(
             opentide_version_padded(&wide("0.23.0"), "0.23.0"),
-            opentide_version_padded(&wide("0.23.1.dev1203+gfb19974d1"), "0.23.1.dev1203+gfb19974d1")
+            opentide_version_padded(
+                &wide("0.23.1.dev1203+gfb19974d1"),
+                "0.23.1.dev1203+gfb19974d1"
+            )
         );
         // A line without trailing spaces, or without the version, is as before.
-        assert_eq!(opentide_version_padded("opentide 0.23.0\n", "0.23.0"), "opentide <OPENTIDE_VERSION>\n");
+        assert_eq!(
+            opentide_version_padded("opentide 0.23.0\n", "0.23.0"),
+            "opentide <OPENTIDE_VERSION>\n"
+        );
         assert_eq!(opentide_version_padded("x   \n", "0.23.0"), "x   \n");
     }
 
