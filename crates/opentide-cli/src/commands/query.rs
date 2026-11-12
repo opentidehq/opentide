@@ -2018,13 +2018,13 @@ mod tests {
         assert_eq!(failure.suggestion.as_deref(), Some("eql"));
         assert_eq!(failure.argument.as_deref(), Some("--language"));
         assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
-        let refused = not_ported("query on splunk");
+        let refused = not_ported("query --rule");
         let failure = refused.outcome.failure.unwrap();
         assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
         assert_eq!(failure.argument.as_deref(), Some("OPENTIDE_ENGINE"));
         assert_eq!(
             failure.message,
-            "opentide query on splunk has no Rust implementation yet: unset OPENTIDE_ENGINE, \
+            "opentide query --rule has no Rust implementation yet: unset OPENTIDE_ENGINE, \
              or set it to python or compare."
         );
     }
@@ -2046,7 +2046,13 @@ mod tests {
         assert_eq!(credential_keys("elastic").1, ["api_key"]);
         assert_eq!(credential_keys("crowdstrike").0, "CrowdStrike");
         assert_eq!(credential_keys("defender_for_endpoint").1.len(), 3);
-        assert_eq!(credential_keys("splunk"), ("", &[][..]));
+        assert_eq!(
+            credential_keys("splunk"),
+            ("Splunk", &["url", "port", "token", "app", "ssl"][..])
+        );
+        assert_eq!(credential_keys("carbon_black_cloud").0, "CBC");
+        assert_eq!(credential_keys("sentinel").1.len(), 3);
+        assert_eq!(credential_keys("sysdig"), ("", &[][..]));
         let tenant = |url: Option<&str>| Configured {
             name: "lab".into(),
             setup: url
@@ -2080,8 +2086,23 @@ mod tests {
             let settings = http_settings(platform, Duration::from_secs(30));
             assert!(settings.timeout > Duration::ZERO, "{platform}");
         }
+        // Splunk and Carbon Black Cloud read for --timeout; Sentinel for
+        // azure-core's 300 s at least; a platform with no runner mounts the
+        // defaults.
         assert_eq!(
             http_settings("splunk", Duration::from_secs(5)).timeout,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            http_settings("carbon_black_cloud", Duration::from_secs(5)).timeout,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            http_settings("sentinel", Duration::from_secs(5)).timeout,
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            http_settings("sysdig", Duration::from_secs(5)).timeout,
             HttpSettings::default().timeout
         );
     }

@@ -218,13 +218,6 @@ fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
              set it to python or compare.",
         ),
         (
-            &["--json", "query", "--platform", "splunk", "index=main"],
-            "engine_not_ported",
-            "OPENTIDE_ENGINE",
-            "opentide query on splunk has no Rust implementation yet: unset OPENTIDE_ENGINE, \
-             or set it to python or compare.",
-        ),
-        (
             &[
                 "--json",
                 "query",
@@ -328,6 +321,24 @@ fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
         assert_eq!(document["failure"]["code"], *code, "{argv:?}");
         assert_eq!(document["failure"]["argument"], *argument, "{argv:?}");
         assert_eq!(document["failure"]["message"], *message, "{argv:?}");
+    }
+    // Splunk, Carbon Black Cloud and Sentinel run here since UC-4.3 (#833):
+    // a run on one of them is no longer refused as not ported, but goes on
+    // to choose its tenants (none are configured for them here).
+    for platform in ["splunk", "carbon_black_cloud", "sentinel"] {
+        let ran = run_at(&ws, &["--json", "query", "--platform", platform, "q"], &[]);
+        assert_eq!(ran.code, 2, "{platform}: {}", ran.stdout);
+        let document = ran.document();
+        assert_eq!(
+            document["failure"]["code"], "usage_invalid_value",
+            "{platform}"
+        );
+        assert_eq!(document["failure"]["argument"], "--tenant", "{platform}");
+        let message = document["failure"]["message"].as_str().unwrap_or_default();
+        assert!(
+            message.starts_with(&format!("{platform} has no tenants configured: ")),
+            "{platform}: {message}"
+        );
     }
 }
 
