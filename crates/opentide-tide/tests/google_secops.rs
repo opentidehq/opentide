@@ -244,6 +244,8 @@ fn block_codes_follow_the_reference() {
             "{key}"
         );
     }
+    // google-secops-1.0 1.1: tactic is not derived, so a block may set one.
+    assert!(codes(&format!("{window}    meta:\n      tactic: TA0006\n")).is_empty());
     assert_eq!(
         codes("    match:\n      group_by: [$u]\n      window: 15d\n"),
         ["yaral_match_window"]

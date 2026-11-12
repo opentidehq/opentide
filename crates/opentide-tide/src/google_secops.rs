@@ -56,12 +56,11 @@ const LABELS: [&str; 13] = [
 ];
 const SEVERITIES: [&str; 5] = ["Info", "Low", "Medium", "High", "Critical"];
 const RUN_FREQUENCIES: [&str; 4] = ["LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY"];
-const DERIVED_META: [&str; 8] = [
+const DERIVED_META: [&str; 7] = [
     "author",
     "description",
     "severity",
     "priority",
-    "tactic",
     "technique",
     "opentide_uuid",
     "opentide_version",
@@ -137,8 +136,9 @@ fn scalar_string(value: Option<&Value>) -> Option<String> {
 }
 
 /// The meta lines deploy writes, as far as the engine needs them: the keys
-/// in their order, with values from the object. The engine checks the body,
-/// so the ATT&CK tactics are left out.
+/// in their order, with values from the object (google-secops-1.0 1.1: no
+/// `tactic`). Techniques inherited through `detection_model` are not resolved
+/// here; the engine checks the sections, which the meta does not change.
 fn meta_lines(doc: Option<&Value>) -> Vec<(String, String)> {
     let Some(doc) = doc else {
         return Vec::new();

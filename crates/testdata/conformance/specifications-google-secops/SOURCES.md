@@ -1,6 +1,6 @@
 # Google SecOps fixtures of the opentide specifications
 
-Copied unchanged from [opentidehq/specifications](https://github.com/opentidehq/specifications) at `1c57e3b7e0ea10931f17317f2a10a29eadef7847`, licensed CC BY 4.0. Each invalid file's header comment names the code it expects; `crates/opentide-tide/tests/google_secops.rs` asserts it, and `crates/opentide-yaral/tests/codes.rs` parses the assembled rules.
+Copied unchanged from [opentidehq/specifications](https://github.com/opentidehq/specifications) at `aabb8e02812c568a216a197846b0f6cf8b8e74c6`, licensed CC BY 4.0. Each invalid file's header comment names the code it expects; `crates/opentide-tide/tests/google_secops.rs` asserts it, and `crates/opentide-yaral/tests/codes.rs` parses the assembled rules.
 
 | File | From | Expected |
 |------|------|----------|
