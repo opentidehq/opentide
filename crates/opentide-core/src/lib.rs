@@ -1086,7 +1086,7 @@ pub mod codes {
                 "A Graylog regex uses an inline flag, a `(?…)` group, `\\b`, `\\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query."
             }
             GRAYLOG_REGEX_OPERATOR => {
-                "A Graylog regex holds an unescaped `#`, `&`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character."
+                "A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character."
             }
             GRAYLOG_REGEX_QUOTE => {
                 "A Graylog regex holds an unescaped `\"`, which Lucene reads as a quoted literal, not the character: escape it as `\\\"`."

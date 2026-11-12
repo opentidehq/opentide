@@ -13,7 +13,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - Warnings: `graylog_regex_operator`, `graylog_regex_quote`, `graylog_double_backslash`, `graylog_analyzed_field`
 - **The bundled Tide catalog knows the `configurations.graylog` block.** It is regenerated from opentide's Graylog models, so `opentide-lsp` run on its own and `opentide validate` agree on Graylog blocks, and the Tide TextMate grammar highlights their keys.
 - **Graylog blocks (`configurations.graylog`) are checked as graylog-1.0 says.** The block's constraint codes and `graylog_overlapping_window` (warning) are reported on their fields, so the editor and `opentide validate` agree; `aggregation.condition` gets completion and hover for Graylog's 12 aggregation functions. `graylog_all_streams` and `graylog_title_duplicate` stay opentide's.
-  - Errors: `graylog_query_blank`, `graylog_list_shape`, `graylog_schedule` (a Quartz cron as Graylog reads it, an IANA `timezone`), `graylog_event_limit`, `graylog_aggregation`, `graylog_event_field`, `graylog_event_key`, `graylog_priority`, `graylog_field_name`
+  - Errors: `graylog_query_blank`, `graylog_list_shape`, `graylog_schedule` (a Quartz cron as Graylog reads it, an IANA `timezone`), `graylog_event_limit`, `graylog_aggregation` (the condition grammar, nesting at most 32 deep), `graylog_event_field`, `graylog_event_key`, `graylog_priority`, `graylog_field_name`
   - `opentide_tide::graylog::compile_condition` compiles a condition into Graylog's series and condition tree
 
 ## [0.13.0] - 2026-11-11

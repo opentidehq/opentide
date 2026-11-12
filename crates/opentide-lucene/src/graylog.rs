@@ -393,7 +393,7 @@ pub(crate) fn scan_regex(body: &str) -> RegexScan {
                 }
                 i = end;
             }
-            '#' | '&' | '~' | '>' => {
+            '#' | '&' | '@' | '~' | '>' => {
                 scan.operators.push(operator(c, byte(i), width(i, i + 1)));
                 i += 1;
             }
@@ -433,6 +433,7 @@ fn operator(c: char, at: usize, len: usize) -> BodyFinding {
     let meaning = match c {
         '#' => "the empty language (it matches nothing)",
         '&' => "intersection",
+        '@' => "any string",
         '~' => "complement",
         '<' | '>' => "a numeric interval `<n-m>` or a named automaton",
         _ => "an operator",
@@ -506,6 +507,8 @@ mod tests {
         };
         assert_eq!(at(".*f~g.*"), [3]);
         assert_eq!(at("a#b&c"), [1, 3]);
+        assert_eq!(at(".*@contoso"), [2]);
+        assert_eq!(at(r".*\@contoso[@]"), Vec::<usize>::new());
         assert_eq!(at("a<16-31>b"), Vec::<usize>::new());
         assert_eq!(at("a<+1-5>"), Vec::<usize>::new());
         assert_eq!(at("a<b"), [1]);

@@ -251,11 +251,17 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
     Ok(tokens)
 }
 
+/// How deep parentheses and `NOT` may nest (graylog-1.1, "Condition grammar"):
+/// the parser recurses once per level, so an unbounded condition would
+/// overflow the stack.
+const MAX_NESTING: usize = 32;
+
 struct Parser<'a> {
     text: &'a str,
     tokens: Vec<Token<'a>>,
     index: usize,
     series: Vec<Series>,
+    depth: usize,
 }
 
 fn number(token: &str) -> bool {
@@ -326,10 +332,26 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
+    /// Enter one level of `(` or `NOT`, the token at `self.index - 1`.
+    fn nest(&mut self) -> Result<(), ConditionError> {
+        self.depth += 1;
+        if self.depth > MAX_NESTING {
+            let at = self.tokens.get(self.index - 1).copied();
+            return self.fail(
+                format!("the condition nests deeper than {MAX_NESTING} levels of `(` and `NOT`"),
+                at,
+            );
+        }
+        Ok(())
+    }
+
     fn not(&mut self) -> Result<Expr, ConditionError> {
         if self.peek_is("NOT") {
             self.index += 1;
-            return Ok(Expr::Not(Box::new(self.not()?)));
+            self.nest()?;
+            let node = Expr::Not(Box::new(self.not()?));
+            self.depth -= 1;
+            return Ok(node);
         }
         self.primary()
     }
@@ -337,8 +359,10 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> Result<Expr, ConditionError> {
         if self.peek_is("(") {
             self.index += 1;
+            self.nest()?;
             let node = self.or()?;
             self.expect(")", "`)`")?;
+            self.depth -= 1;
             return Ok(node);
         }
         let series = self.call()?;
@@ -521,6 +545,7 @@ pub(crate) fn parse_condition(text: &str) -> Result<Condition, ConditionError> {
         tokens,
         index: 0,
         series: Vec::new(),
+        depth: 0,
     };
     if parser.tokens.is_empty() {
         return parser.fail("the condition is empty".into(), None);
@@ -1464,6 +1489,22 @@ mod tests {
     }
 
     #[test]
+    fn condition_nesting_is_bounded() {
+        let ok = format!("{}count() > 1{}", "(".repeat(32), ")".repeat(32));
+        assert!(parse_condition(&ok).is_ok());
+        // Deep enough to overflow the stack without the bound.
+        for deep in [
+            format!("{}count() > 1{}", "(".repeat(10_000), ")".repeat(10_000)),
+            format!("{}count() > 1", "NOT ".repeat(50_000)),
+        ] {
+            let e = parse_condition(&deep).unwrap_err();
+            assert!(e.message.contains("nests deeper than 32"), "{}", e.message);
+        }
+        let e = parse_condition(&format!("{}count() > 1", "NOT ".repeat(33))).unwrap_err();
+        assert_eq!((e.start, e.end), (128, 131));
+    }
+
+    #[test]
     fn condition_refusals() {
         for text in [
             "",
@@ -1487,6 +1528,8 @@ mod tests {
             "COUNT() > 1",
             "count() > 1 count() > 2",
             "avg(a!) > 1",
+            &format!("{}count() > 1{}", "(".repeat(33), ")".repeat(33)),
+            &format!("{}count() > 1", "NOT ".repeat(33)),
         ] {
             assert!(parse_condition(text).is_err(), "{text:?}");
         }
