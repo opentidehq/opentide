@@ -61,6 +61,6 @@ def test_hints_reach_the_wire_in_camel_case() -> None:
     assert wire["annotations"] == {
         "readOnlyHint": False,
         "destructiveHint": True,
-        "idempotentHint": True,
+        "idempotentHint": False,
         "openWorldHint": True,
     }

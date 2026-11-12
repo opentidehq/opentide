@@ -84,6 +84,35 @@ def test_attack_matrix_follows_the_bundled_vocabulary() -> None:
     assert all("." not in technique for technique in every_id)
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"error": "Unknown vocabulary 'att&ck'", "available": ["tlp"]},
+        {"metadata": {"stages": [{"name": "Execution"}]}, "entries": {}},
+        {"metadata": {"stages": []}, "entries": {"T1059": {"name": "x"}}},
+    ],
+)
+def test_attack_matrix_is_none_without_techniques(
+    monkeypatch: pytest.MonkeyPatch, body: dict[str, object]
+) -> None:
+    # resource_vocabulary answers an unknown vocabulary with an error document, not
+    # an exception; an empty matrix would hide every covered technique in the view.
+    monkeypatch.setattr(
+        "opentide.mcp_server.resources.resource_vocabulary", lambda name: json.dumps(body)
+    )
+    assert ui.attack_matrix() is None
+
+
+def test_attack_matrix_is_none_when_the_workspace_fails_to_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken(name: str) -> str:
+        raise RuntimeError("workspace configuration is invalid")
+
+    monkeypatch.setattr("opentide.mcp_server.resources.resource_vocabulary", broken)
+    assert ui.attack_matrix() is None
+
+
 def test_attack_matrix_is_none_when_the_vocabulary_cannot_be_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

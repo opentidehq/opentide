@@ -24,6 +24,10 @@ from typing import Any, Literal
 from mcp.server.apps import APP_MIME_TYPE, Apps
 from mcp.server.mcpserver.resources import FunctionResource
 
+from opentide.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 View = Literal["coverage", "validation", "lineage"]
 
 #: The ``ui://`` resource of each view.
@@ -51,21 +55,25 @@ def ui_meta(view: View) -> dict[str, Any]:
 def attack_matrix() -> dict[str, Any] | None:
     """Tactics in kill-chain order, each with its techniques and their sub-techniques.
 
-    Built from the bundled ``att&ck`` vocabulary; revoked or removed entries are
-    left out. ``None`` when the vocabulary cannot be read, and the coverage view
-    then lists covered techniques only.
+    Built from the workspace's ``att&ck`` vocabulary; revoked or removed entries
+    are left out. ``None`` when there is no such vocabulary or it cannot be
+    read, and the coverage view then lists covered techniques only.
     """
     from opentide.mcp_server.resources import resource_vocabulary
 
     try:
         vocabulary = json.loads(resource_vocabulary("att&ck"))
-    except (OSError, ValueError, KeyError):
+    except Exception as error:  # the page still renders, without the matrix
+        # resource_vocabulary loads the workspace first; a workspace that fails to
+        # load must not take the coverage page down with it.
+        logger.warning("attack_matrix_unavailable", error=str(error))
         return None
-    if not isinstance(vocabulary, dict):
+    # An unknown vocabulary comes back as {"error": ..., "available": [...]}.
+    if not isinstance(vocabulary, dict) or "error" in vocabulary:
         return None
     metadata = vocabulary.get("metadata") or {}
     entries = vocabulary.get("entries") or {}
-    if not isinstance(entries, dict):
+    if not isinstance(entries, dict) or not entries:
         return None
 
     subs: dict[str, list[dict[str, str]]] = {}
@@ -103,6 +111,8 @@ def attack_matrix() -> dict[str, Any] | None:
             if tactic in technique["stages"]
         ]
         tactics.append({"name": str(tactic), "techniques": techniques})
+    if not any(tactic["techniques"] for tactic in tactics):
+        return None
     version = (metadata.get("extra") or {}).get("source_version")
     return {"version": str(version) if version else "", "tactics": tactics}
 

@@ -174,7 +174,8 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
     const id = nextId++;
     post({ jsonrpc: "2.0", id, method, params: params || {} });
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      // timeoutMs 0: wait for as long as the host takes.
+      const timer = timeoutMs === 0 ? null : setTimeout(() => {
         pending.delete(id);
         reject(new Error(method + " timed out"));
       }, timeoutMs || 30000);
@@ -255,18 +256,28 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
   }
 
   async function connect() {
+    if (window.parent === window) {
+      render(state("This view needs an MCP Apps host, such as Claude Desktop. Opened on its own, it has no tool result to show."));
+      return;
+    }
+    // A host may take a while to answer (a web host's sandbox proxy, a busy app): keep
+    // waiting, and only say what the page needs if nothing has answered after 10 s.
+    const hint = setTimeout(() => render(state("Waiting for the host. This view needs an MCP Apps host, such as Claude Desktop.")), 10000);
     try {
       const result = await request("ui/initialize", {
         appInfo: { name: "opentide-" + VIEW, version: "1" },
         appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
         protocolVersion: PROTOCOL_VERSION,
-      }, 10000);
+      }, 0);
       hostCapabilities = (result && result.hostCapabilities) || {};
       applyHostContext(result && result.hostContext);
     } catch (error) {
-      render(state("This view needs an MCP Apps host. " + error.message));
+      clearTimeout(hint);
+      render(state("The host refused this view: " + error.message));
       return;
     }
+    clearTimeout(hint);
+    if (root.textContent.startsWith("Waiting for the host")) render(state("Waiting for opentide…"));
     notify("ui/notifications/initialized");
     watchSize();
   }
@@ -282,7 +293,12 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
       // MCPServer wraps a non-object return value as {"result": ...}.
       return Object.keys(structured).length === 1 && "result" in structured ? structured.result : structured;
     }
-    try { return JSON.parse(text); } catch (_) { return { error: text || "The tool returned no data." }; }
+    try { return JSON.parse(text); } catch (_) { /* opentide's list tools send one JSON block per item */ }
+    const blocks = (result.content || []).filter((block) => block && block.type === "text");
+    if (blocks.length > 1) {
+      try { return blocks.map((block) => JSON.parse(block.text)); } catch (_) { /* not JSON */ }
+    }
+    return { error: text || "The tool returned no data." };
   }
 
   async function callTool(name, args) {
@@ -380,31 +396,34 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
   }
 
   // ------------------------------------------------------------ validation
-  let validation = { filter: "all", explained: new Map() };
+  // pages: explain results by code; open: the issues whose explanation shows.
+  let validation = { filter: "all", pages: new Map(), open: new Set() };
+  const issueKey = (issue) => [issue.path || issue.file_path, issue.line, issue.column, issue.code, issue.message].join("|");
 
   function renderValidation(report) {
     if (report.error) return render(header("Validation report"), el("div", { class: "error-box" }, report.error));
     const issues = (report.issues || []).map((issue) => Object.assign({ severity: "error" }, issue));
     const warnings = (report.warnings || []).map((issue) => Object.assign({ severity: "warning" }, issue));
-    const errorCount = issues.filter((issue) => issue.severity === "error").length;
     const all = issues.concat(warnings);
+    const errorCount = all.filter((issue) => issue.severity === "error").length;
+    const warningCount = all.filter((issue) => issue.severity === "warning").length;
     const stats = report.stats || {};
 
     const status = report.ok
       ? el("span", { class: "pill ok" }, "✓ Valid")
-      : el("span", { class: "pill error" }, plural(errorCount || issues.length, "error"));
+      : el("span", { class: "pill error" }, errorCount ? plural(errorCount, "error") : "Not valid");
     const rerun = canCallTools() ? el("button", { onclick: (event) => rerunValidation(event.currentTarget) }, "Re-validate") : null;
     const filters = el("div", { class: "segmented", role: "group", "aria-label": "Filter issues" },
       ["all", "error", "warning"].map((filter) => el("button", {
         "aria-pressed": String(validation.filter === filter),
         onclick: () => { validation.filter = filter; renderValidation(report); },
-      }, filter === "all" ? "All " + all.length : filter === "error" ? "Errors " + issues.length : "Warnings " + warnings.length)));
+      }, filter === "all" ? "All " + all.length : filter === "error" ? "Errors " + errorCount : "Warnings " + warningCount)));
 
     const statLine = el("div", { class: "stats faint" },
       stats.objects_checked !== undefined ? el("span", null, plural(stats.objects_checked, "object") + " checked") : null,
       stats.queries_checked !== undefined ? el("span", null, plural(stats.queries_checked, "query", "queries") + " checked offline") : null,
       stats.wall_ms !== undefined ? el("span", null, Math.round(stats.wall_ms) + " ms") : null,
-      warnings.length ? el("span", null, plural(warnings.length, "warning")) : null);
+      warningCount ? el("span", null, plural(warningCount, "warning")) : null);
 
     const shown = all.filter((issue) => validation.filter === "all" || issue.severity === validation.filter);
     const groups = new Map();
@@ -426,11 +445,12 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
     const location = issue.line ? "line " + issue.line + (issue.column ? ", column " + issue.column : "") : null;
     const fix = issue.fix && Array.isArray(issue.fix.edits) && issue.fix.edits.length ? issue.fix : null;
     const explainSlot = el("div");
-    const explained = validation.explained.get(issue.code);
-    if (explained) explainSlot.appendChild(explained);
+    const key = issueKey(issue);
+    const isOpen = validation.open.has(key) && validation.pages.has(issue.code);
+    if (isOpen) explainSlot.appendChild(explanation(validation.pages.get(issue.code)));
     const actions = [];
     if (issue.code && canCallTools()) {
-      actions.push(el("button", { onclick: (event) => toggleExplain(issue.code, explainSlot, event.currentTarget) }, explained ? "Hide explanation" : "Explain " + issue.code));
+      actions.push(el("button", { onclick: (event) => toggleExplain(issue, explainSlot, event.currentTarget) }, isOpen ? "Hide explanation" : "Explain " + issue.code));
     }
     if (canMessage()) {
       actions.push(el("button", { onclick: (event) => askToFix(issue, event.currentTarget) }, "Ask Claude to fix"));
@@ -449,19 +469,23 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
       explainSlot);
   }
 
-  async function toggleExplain(code, slot, button) {
-    if (validation.explained.has(code)) {
-      validation.explained.delete(code);
+  function explanation(page) {
+    return page.error ? el("div", { class: "error-box" }, page.error) : markdown(page.markdown || page.meaning || "");
+  }
+
+  async function toggleExplain(issue, slot, button) {
+    const key = issueKey(issue), code = issue.code;
+    if (validation.open.has(key)) {
+      validation.open.delete(key);
       slot.replaceChildren();
       button.textContent = "Explain " + code;
       return;
     }
     button.disabled = true;
     try {
-      const page = await callTool("explain", { code });
-      const node = page.error ? el("div", { class: "error-box" }, page.error) : markdown(page.markdown || page.meaning || "");
-      validation.explained.set(code, node);
-      slot.replaceChildren(node);
+      if (!validation.pages.has(code)) validation.pages.set(code, await callTool("explain", { code }));
+      validation.open.add(key);
+      slot.replaceChildren(explanation(validation.pages.get(code)));
       button.textContent = "Hide explanation";
     } catch (error) {
       slot.replaceChildren(el("div", { class: "error-box" }, error.message));
@@ -496,10 +520,21 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
   let coverage = { data: null, selected: null, filter: "all", open: null };
 
   /** Rules covering a technique: its own entry plus its sub-techniques' (a parent covers its subs). */
+  const byParent = new WeakMap();
   function rulesFor(matrix, id) {
-    const rules = new Set(matrix[id] || []);
-    if (!id.includes(".")) for (const [key, list] of Object.entries(matrix)) if (key.startsWith(id + ".")) list.forEach((uuid) => rules.add(uuid));
-    return Array.from(rules);
+    if (id.includes(".")) return Array.from(new Set(matrix[id] || []));
+    let index = byParent.get(matrix);
+    if (!index) {
+      // One pass per matrix: each parent technique with its own and its sub-techniques' rules.
+      index = new Map();
+      for (const [key, list] of Object.entries(matrix)) {
+        const parent = key.split(".")[0];
+        if (!index.has(parent)) index.set(parent, new Set());
+        for (const uuid of list) index.get(parent).add(uuid);
+      }
+      byParent.set(matrix, index);
+    }
+    return Array.from(index.get(id) || []);
   }
   const heat = (count) => (count === 0 ? "" : count === 1 ? "h1" : count <= 3 ? "h2" : "h3");
 
@@ -508,7 +543,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
     coverage.data = data;
     if (data.technique) return renderTechnique(data);
     const matrix = data.matrix || {};
-    if (!attack || !Array.isArray(attack.tactics)) return renderCoverageList(matrix);
+    if (!attack || !Array.isArray(attack.tactics) || !attack.tactics.length) return renderCoverageList(matrix);
 
     const allTechniques = new Map();
     for (const tactic of attack.tactics) for (const technique of tactic.techniques) allTechniques.set(technique.id, technique);

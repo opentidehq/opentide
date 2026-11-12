@@ -90,9 +90,10 @@ TENANT_READ = ToolAnnotations(
 TENANT_QUERY = ToolAnnotations(
     read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True
 )
-#: dry_run false creates or replaces the rule on the tenant.
+#: dry_run false creates or replaces the rule on the tenant. Not idempotent: when the
+#: deployment state was not recorded, a repeat creates the rule a second time.
 TENANT_DEPLOY = ToolAnnotations(
-    read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True
+    read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True
 )
 
 

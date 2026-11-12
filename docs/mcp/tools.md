@@ -22,7 +22,7 @@ Every tool has a `title` and `annotations` in `tools/list`. Hosts use the hints 
 | `run_query` | `false` | `false` | `true` | Contacts the tenant; Elastic `kuery` writes its rule preview's alerts to the preview index |
 | `deploy_rule` | `false` | `true` | `true` | `dry_run: false` creates or replaces the rule on the tenant |
 
-`idempotentHint` is `false` for `run_query` and `true` for every other tool.
+`idempotentHint` is `false` for `run_query` and `deploy_rule` (a deploy whose state was not recorded creates the rule again) and `true` for every other tool.
 
 ### Next actions
 
