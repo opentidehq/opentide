@@ -13,6 +13,8 @@
 //! | `configurations.sysdig.condition`, `configurations.sysdig.macros.<n>.condition` | Falco | `sysdig` |
 //! | `configurations.sysdig.output` | Falco output template (`%field` checks) | `sysdig` |
 //! | `configurations.{harfanglab,bitdefender}.yara.signature` | YARA, under the platform's profile | the block's key |
+//! | `configurations.exabeam.sequences.<n>.query` | Exabeam Query Language, `rule` profile | `exabeam` |
+//! | `response.procedure.searches.<n>.query` with `system: exabeam` | Exabeam Query Language, `search` profile | `exabeam` |
 //! | `configurations.harfanglab.yara.{strings,condition,imports}` | YARA: the one rule deploy assembles ([`crate::yara`]) | `harfanglab` |
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
@@ -54,6 +56,11 @@ pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<Langu
     if system == "elastic" {
         return elastic_search_language(language);
     }
+    // An Exabeam hunt is a search; the rule block's queries are its
+    // sequences', not a `query` key.
+    if system == "exabeam" {
+        return Some(LanguageId::Exabeam);
+    }
     language_for_field_path(&["configurations", system, "query"])
 }
 
@@ -86,6 +93,9 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
         }
         ["configurations", "sysdig", "macros", item, "condition"] if is_index(item) => {
             Some((LanguageId::Falco, "sysdig".into()))
+        }
+        ["configurations", "exabeam", "sequences", item, "query"] if is_index(item) => {
+            language_for_field_path(&path).map(|l| (l, "exabeam".into()))
         }
         [
             "configurations",
@@ -359,6 +369,59 @@ configurations:
                 "#event_simpleName=DnsRequest"
             )]
         );
+    }
+
+    #[test]
+    fn exabeam_sequences_and_hunts_are_the_exabeam_query_language() {
+        let source = format!(
+            "{HEAD}response:
+  procedure:
+    searches:
+      - query: 'SELECT user GROUP-BY user'
+        system: exabeam
+configurations:
+  exabeam:
+    query: not a key of the block
+    sequences:
+      - name: First
+        query: |
+          activity_type:\"app-login\"
+          AND outcome:\"fail\"
+      - query: 'process_name:\"cmd.exe\"'
+"
+        );
+        assert_eq!(
+            queries(&source),
+            vec![
+                row(
+                    "response.procedure.searches.0.query",
+                    LanguageId::Exabeam,
+                    "exabeam",
+                    "SELECT user GROUP-BY user"
+                ),
+                row(
+                    "configurations.exabeam.sequences.0.query",
+                    LanguageId::Exabeam,
+                    "exabeam",
+                    "activity_type:\"app-login\"\nAND outcome:\"fail\""
+                ),
+                row(
+                    "configurations.exabeam.sequences.1.query",
+                    LanguageId::Exabeam,
+                    "exabeam",
+                    "process_name:\"cmd.exe\""
+                ),
+            ]
+        );
+        // The hunt is a search, the sequence a rule: SELECT is refused in
+        // the rule only.
+        let d = diagnostics(&source.replace("process_name:\"cmd.exe\"", "SELECT user"));
+        let advanced: Vec<String> = d
+            .iter()
+            .filter(|d| d.code == codes::EXABEAM_ADVANCED_IN_RULE)
+            .map(|d| d.field_path.clone().unwrap_or_default().join("."))
+            .collect();
+        assert_eq!(advanced, ["configurations.exabeam.sequences.1.query"]);
     }
 
     #[test]

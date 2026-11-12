@@ -400,7 +400,7 @@ fn diagnostic(
 /// the item itself, whatever its form (a block mapping with nested lists, a
 /// flow mapping, a scalar, or an element of a flow sequence). `None` when the
 /// list cannot be found in the source.
-fn item_range(source: &str, path: &[&str]) -> Option<opentide_core::Range> {
+pub(crate) fn item_range(source: &str, path: &[&str]) -> Option<opentide_core::Range> {
     let (index, list) = path.split_last()?;
     let index: usize = index.parse().ok()?;
     let key = crate::yaml_scalar::mapping_keys(source)
