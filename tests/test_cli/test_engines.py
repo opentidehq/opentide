@@ -142,7 +142,6 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     # After ``--`` it is an argument, not the flag.
     assert not command.covers(["deploy", "--", "--dry-run"])
     assert RustCommand(launch=("x",)).covers(["info"])
-    assert engines.RUST_COMMANDS[("deploy",)].requires == ("--dry-run",)
     # ``doctor`` reaches PyPI and the proxy without ``--offline``: that run stays Python's.
     doctor = engines.RUST_COMMANDS[("doctor",)]
     assert doctor.requires == ("--offline",)
@@ -305,6 +304,50 @@ def test_rust_reads_a_stdin_that_lives_in_memory(
     )
     assert result.exit_code == 0
     assert result.stdout == "given on stdin\n"
+
+
+def test_deploy_sends_on_rust_per_platform_and_dry_runs_whatever_the_platform() -> None:
+    """UC-4.6 (#979): a deploy that sends runs on Rust when its --platform has a connector."""
+    deploy = engines.RUST_COMMANDS[("deploy",)]
+    assert deploy.requires == ()
+    assert deploy.offline == ("--dry-run",)
+    assert deploy.side_effects
+    assert set(deploy.platforms) == set(engines.RUST_LIVE_VALIDATION_PLATFORMS)
+    assert deploy.covers(["deploy", "--strategy", "PREVIEW", "--dry-run"])
+    assert deploy.covers(["deploy", "--dry-run", "--platform", "not_a_platform"])
+    assert deploy.covers(["deploy", "--strategy", "PREVIEW", "--platform", "elastic"])
+    assert deploy.covers(["deploy", "--platform=splunk"])
+    assert not deploy.covers(["deploy", "--strategy", "PREVIEW"])
+    assert not deploy.covers(["deploy", "--platform", "not_a_platform"])
+    # After ``--`` it is an argument, not the flag.
+    assert not deploy.covers(["deploy", "--", "--dry-run"])
+    assert deploy.uncovered("deploy", ["deploy", "--strategy", "PREVIEW"]) == (
+        "deploy without --platform"
+    )
+    assert "offline=('--dry-run',)" in repr(deploy)
+
+
+def test_compare_refuses_a_deploy_that_sends_and_compares_a_dry_run(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Both runs of a deploy that sends would reach the tenant: compare refuses it."""
+    code, stdout, _ = invoke(
+        [
+            "--json",
+            "--repo",
+            str(workspace),
+            "deploy",
+            "--strategy",
+            "PREVIEW",
+            "--platform",
+            "sentinel",
+        ],
+        "compare",
+    )
+    assert code == 2
+    doc = document(stdout)
+    assert doc["failure"]["code"] == "usage_error"
+    assert "reaches outside the workspace" in doc["failure"]["message"]
 
 
 def test_rust_refuses_a_run_its_implementation_does_not_cover(
@@ -820,6 +863,7 @@ def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
     deploy = engines.RUST_COMMANDS[("deploy",)]
     assert engines.rust_command(("deploy",), rust, ["deploy", "--dry-run"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy"]) is None
+    assert engines.rust_command(("deploy",), rust, ["deploy", "--platform", "sysdig"]) is deploy
     assert engines.rust_command(("info",), rust, ["info"]) is engines.RUST_COMMANDS[("info",)]
 
 

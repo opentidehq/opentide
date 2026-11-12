@@ -1214,6 +1214,180 @@ pub fn changed_in_folders(
     Ok(changed)
 }
 
+/// The git ignore rule that hides `.opentide/states/deployment/` from git
+/// (`states/deployment.py` `IgnoreRule`): its pattern, and the file and
+/// line it is on when it is in the work tree's `.gitignore` files or the
+/// repository's `info/exclude`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IgnoreRule {
+    /// The pattern, as written.
+    pub pattern: String,
+    /// The file it is in, relative to the git top level.
+    pub source: Option<String>,
+    /// Its line in that file.
+    pub line: Option<usize>,
+}
+
+impl IgnoreRule {
+    /// `<source>:<line>: <pattern>`, or the pattern alone (`describe`).
+    pub fn describe(&self) -> String {
+        match (&self.source, self.line) {
+            (Some(source), Some(line)) => format!("{source}:{line}: {}", self.pattern),
+            _ => self.pattern.clone(),
+        }
+    }
+}
+
+/// The pattern that decides whether a path is ignored.
+struct Decided {
+    excluded: bool,
+    pattern: String,
+    source: Option<PathBuf>,
+    line: usize,
+}
+
+/// The folder deploy keeps its state in, and a shard inside it, relative to
+/// the workspace (`deployment_state_ignore`'s probes).
+const STATE_PROBES: [&str; 4] = [
+    ".opentide/",
+    ".opentide/states/",
+    ".opentide/states/deployment/",
+    ".opentide/states/deployment/00000000-0000-4000-8000-000000000000.json",
+];
+
+/// The ignore rule that hides `.opentide/states/deployment/` of the
+/// workspace at `workspace` from git, with git's own ignore semantics
+/// (`deployment_state_ignore`): the `.gitignore` files of the work tree, the
+/// repository's `info/exclude` and `core.excludesFile`; a folder ignored
+/// above the shards hides them too. `None` when git keeps them. Outside a
+/// checkout, the workspace's `.gitignore` files alone are read.
+pub fn state_ignore(workspace: &Path) -> Option<IgnoreRule> {
+    let root = std::fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
+    let top = root
+        .ancestors()
+        .find(|candidate| candidate.join(".git").exists())
+        .map_or_else(|| root.clone(), Path::to_path_buf);
+    let mut buf = Vec::new();
+    let globals = if top.join(".git").exists() {
+        discover(&top)
+            .map(|(_, git_dir)| {
+                let common = match gix_discover::path::from_plain_file_relative_to_file(
+                    &git_dir.join("commondir"),
+                ) {
+                    Some(Ok(common)) => common,
+                    _ => git_dir.clone(),
+                };
+                let config = full_config(&git_dir);
+                gix_ignore::Search::from_git_dir(
+                    &common,
+                    config_path(config.as_ref(), "core.excludesFile", "ignore"),
+                    &mut buf,
+                    gix_ignore::search::Ignore::default(),
+                )
+                .unwrap_or_default()
+            })
+            .unwrap_or_default()
+    } else {
+        gix_ignore::Search::default()
+    };
+    let ignore = gix_worktree::stack::state::Ignore::new(
+        gix_ignore::Search::default(),
+        globals,
+        None,
+        gix_worktree::stack::state::ignore::Source::WorktreeThenIdMappingIfNotSkipped,
+        gix_ignore::search::Ignore::default(),
+    );
+    // No index: the ignore files are read from the work tree.
+    let index = gix_index::State::new(gix_hash::Kind::Sha1);
+    let mut stack = gix_worktree::Stack::from_state_and_ignore_case(
+        &top,
+        false,
+        gix_worktree::stack::State::IgnoreStack(ignore),
+        &index,
+        index.path_backing(),
+    );
+    let prefix = root
+        .strip_prefix(&top)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default();
+    let prefix = if prefix.is_empty() {
+        String::new()
+    } else {
+        format!("{prefix}/")
+    };
+    let chain: Vec<String> = STATE_PROBES
+        .iter()
+        .map(|probe| format!("{prefix}{probe}"))
+        .collect();
+    // Each probe's deciding pattern: whether it excludes, its text, its
+    // file and its line.
+    let mut matched = |path: &str| -> Option<Decided> {
+        let directory = path.ends_with('/');
+        let relative = path.trim_end_matches('/');
+        let mode = if directory {
+            gix_index::entry::Mode::DIR
+        } else {
+            gix_index::entry::Mode::FILE
+        };
+        let platform = stack
+            .at_path(Path::new(relative), Some(mode), &gix_object::find::Never)
+            .ok()?;
+        let found = platform.matching_exclude_pattern()?;
+        Some(Decided {
+            excluded: !found.pattern.is_negative(),
+            pattern: found.pattern.to_string(),
+            source: found.source.map(Path::to_path_buf),
+            line: found.sequence_number,
+        })
+    };
+    let ignored = |found: &Option<Decided>| found.as_ref().is_some_and(|found| found.excluded);
+    let results: Vec<_> = chain.iter().map(|path| matched(path)).collect();
+    if !(ignored(&results[2]) || ignored(&results[3])) {
+        return None;
+    }
+    for found in &results {
+        if !ignored(found) {
+            continue;
+        }
+        let Some(Decided {
+            pattern,
+            source,
+            line,
+            ..
+        }) = found
+        else {
+            continue;
+        };
+        let written = source
+            .as_ref()
+            .and_then(|source| std::fs::read_to_string(source).ok())
+            .and_then(|text| {
+                text.lines()
+                    .nth(line.saturating_sub(1))
+                    .map(|text| text.trim().to_owned())
+            })
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| pattern.clone());
+        // Named only when the file is the work tree's or `info/exclude`
+        // (`_locate_pattern`); `core.excludesFile` is outside both.
+        let located = source.as_ref().and_then(|source| {
+            let relative = source.strip_prefix(&top).ok()?;
+            let text = relative.to_string_lossy().replace('\\', "/");
+            (text.ends_with(".gitignore") || text == ".git/info/exclude").then_some(text)
+        });
+        return Some(IgnoreRule {
+            pattern: written,
+            line: located.as_ref().map(|_| *line),
+            source: located,
+        });
+    }
+    Some(IgnoreRule {
+        pattern: ".opentide/states/deployment/".to_owned(),
+        source: None,
+        line: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1290,6 +1464,50 @@ mod tests {
         assert!(
             message.contains(&format!("no .git was found from {}.", plain.display())),
             "{message}"
+        );
+    }
+
+    #[test]
+    fn deployment_state_hidden_by_an_ignore_file_is_named_with_its_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // No checkout: the workspace's own `.gitignore` files are read.
+        assert_eq!(state_ignore(root), None);
+        std::fs::write(root.join(".gitignore"), "target/\n.opentide/states/\n").unwrap();
+        let rule = state_ignore(root).unwrap();
+        assert_eq!(rule.pattern, ".opentide/states/");
+        assert_eq!(rule.source.as_deref(), Some(".gitignore"));
+        assert_eq!(rule.line, Some(2));
+        assert_eq!(rule.describe(), ".gitignore:2: .opentide/states/");
+        // A negation for the shards keeps them.
+        std::fs::write(
+            root.join(".gitignore"),
+            ".opentide/states/*\n!.opentide/states/deployment/\n",
+        )
+        .unwrap();
+        assert_eq!(state_ignore(root), None);
+        // The shards themselves.
+        std::fs::write(root.join(".gitignore"), "*.json\n").unwrap();
+        let rule = state_ignore(root).unwrap();
+        assert_eq!(rule.pattern, "*.json");
+        // In a checkout, `info/exclude` counts too.
+        std::fs::write(root.join(".gitignore"), "").unwrap();
+        std::fs::create_dir_all(root.join(".git/info")).unwrap();
+        std::fs::write(root.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        std::fs::create_dir_all(root.join(".git/objects")).unwrap();
+        std::fs::create_dir_all(root.join(".git/refs/heads")).unwrap();
+        std::fs::write(root.join(".git/info/exclude"), ".opentide/\n").unwrap();
+        let rule = state_ignore(root).unwrap();
+        assert_eq!(rule.pattern, ".opentide/");
+        assert_eq!(rule.source.as_deref(), Some(".git/info/exclude"));
+        assert_eq!(
+            IgnoreRule {
+                pattern: "x/".into(),
+                source: None,
+                line: None
+            }
+            .describe(),
+            "x/"
         );
     }
 }

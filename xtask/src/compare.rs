@@ -182,7 +182,8 @@ fn package_uuids(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
 }
 
 /// Which runs of a command its Rust implementation covers
-/// (`RustCommand.requires`, `refuses`, `platforms` and `platform_scope`).
+/// (`RustCommand.requires`, `refuses`, `platforms`, `platform_scope` and
+/// `offline`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
 pub struct Coverage {
     /// Flags of which a run must carry one (none: every run).
@@ -200,6 +201,10 @@ pub struct Coverage {
     /// `validate query --live`.
     #[serde(default)]
     pub platform_scope: Vec<String>,
+    /// Flags under which a run reaches no tenant, so `platforms` does not
+    /// apply: `deploy --dry-run`.
+    #[serde(default)]
+    pub offline: Vec<String>,
 }
 
 impl Coverage {
@@ -207,6 +212,7 @@ impl Coverage {
     /// `platforms` does not apply to it.
     fn platforms_covered(&self, options: &[String]) -> bool {
         if self.platforms.is_empty()
+            || self.offline.iter().any(|flag| options.contains(flag))
             || (!self.platform_scope.is_empty()
                 && !self
                     .platform_scope
@@ -245,7 +251,8 @@ pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
              print(json.dumps({' '.join(path): {'requires': list(command.requires), \
              'refuses': list(getattr(command, 'refuses', ())), \
              'platforms': list(getattr(command, 'platforms', ())), \
-             'platform_scope': list(getattr(command, 'platform_scope', ()))} \
+             'platform_scope': list(getattr(command, 'platform_scope', ())), \
+             'offline': list(getattr(command, 'offline', ()))} \
              for path, command in RUST_COMMANDS.items()}))",
         ])
         .output()
@@ -475,7 +482,8 @@ mod tests {
             (
                 "deploy".to_owned(),
                 super::Coverage {
-                    requires: vec!["--dry-run".to_owned()],
+                    platforms: vec!["sysdig".to_owned()],
+                    offline: vec!["--dry-run".to_owned()],
                     ..super::Coverage::default()
                 },
             ),
@@ -576,6 +584,21 @@ mod tests {
             &table,
             "deploy",
             &argv(&["opentide", "deploy", "--", "--dry-run"])
+        ));
+        assert!(super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--platform", "sysdig", "--all"])
+        ));
+        assert!(super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--platform", "elastic", "--dry-run"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--platform", "elastic", "--all"])
         ));
         assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
     }

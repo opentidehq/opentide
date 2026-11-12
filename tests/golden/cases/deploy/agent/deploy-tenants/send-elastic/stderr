@@ -1,0 +1,12 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 0 to create, 0 to update, 3 to create or update, 0 to disable, 1 to delete
+
+Deploying to elastic / soc · 4 rules
+  [1/4] ✓ deployed  Elastic create rule <SECONDS>
+  [2/4] ✓ deployed  Elastic update rule <SECONDS>
+error: Refusing to modify prebuilt rule · rule_id: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004 · name: Elastic prebuilt rule
+  [3/4] ✗ failed    Elastic prebuilt rule  refusing to modify prebuilt rule
+  [4/4] ✓ deleted   Elastic retire rule <SECONDS>
+✗ elastic · 3 deployed, 1 failed, 0 not attempted · <SECONDS>
+✗ Deployment failed · 2 created or updated, 1 deleted, 1 failed, 0 not attempted · <SECONDS>
+tip: add --json for machine-readable output

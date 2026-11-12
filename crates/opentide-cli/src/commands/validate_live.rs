@@ -420,16 +420,16 @@ fn scoped(mut live: Live, label: Option<&str>) -> Live {
 
 /// One rule as one tenant receives it: the platform's modifiers applied.
 #[derive(Clone, Debug)]
-struct Sent {
-    rule: opentide_compile::Rule,
+pub(crate) struct Sent {
+    pub(crate) rule: opentide_compile::Rule,
 }
 
 /// The rules of one tenant (`DeploymentBatch`).
 #[derive(Debug)]
-struct Batch {
-    tenant: Configured,
-    table: CJson,
-    rules: Vec<Sent>,
+pub(crate) struct Batch {
+    pub(crate) tenant: Configured,
+    pub(crate) table: CJson,
+    pub(crate) rules: Vec<Sent>,
 }
 
 fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
@@ -797,7 +797,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
 }
 
 /// The rule *uuid* as the index holds it, with its file.
-fn rule_of(workspace: &Workspace, uuid: &str) -> Option<opentide_compile::Rule> {
+pub(crate) fn rule_of(workspace: &Workspace, uuid: &str) -> Option<opentide_compile::Rule> {
     let object = workspace.index().get("rule", uuid)?;
     let root = object.root()?;
     let file = object
@@ -809,7 +809,7 @@ fn rule_of(workspace: &Workspace, uuid: &str) -> Option<opentide_compile::Rule> 
 }
 
 /// The rule's block on *platform*, its status and the strategy that maps to.
-fn block_strategy(
+pub(crate) fn block_strategy(
     rule: &opentide_compile::Rule,
     platform: &str,
     cx: &opentide_compile::Context<'_>,
@@ -830,7 +830,7 @@ fn block_strategy(
 /// reaches, the platform's modifiers applied for that tenant
 /// (`TideDeployment.deployment_resolver`). Tenants come in the order a rule
 /// first reaches them.
-fn batches(
+pub(crate) fn batches(
     platform: &str,
     uuids: &[String],
     tables: &[&CJson],

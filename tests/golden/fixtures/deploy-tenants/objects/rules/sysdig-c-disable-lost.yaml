@@ -1,0 +1,22 @@
+name: Sysdig rule to disable the tenant lost
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000033
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A rule the sysdig stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  sysdig:
+    schema: platform::sysdig::1.0
+    status: DISABLED
+    condition: >
+      spawned_process and container
+      and proc.name in (corpus_shells)
+    lists:
+      - name: corpus_shells
+        items: [bash, sh, zsh]
+    tags: [container, shell]

@@ -1,0 +1,1 @@
+{"uuid":"00000000-0000-4000-8047-000000000021","platform":"crowdstrike","tenant":"lab","external_id":"cs-rule-1","event":"external_id_recorded","logger":"opentide.deployment.external_ids","level":"warning","timestamp":"0000-00-00 00:00:00"}

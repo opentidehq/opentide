@@ -1,0 +1,144 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-crowdstrike",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform crowdstrike --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:9f1db51be19b4155ffcf8952e72cd69163fc2a951226518ac315862bd73dc5ea",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=golden-client-id&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"CrowdStrike create rule\", \"description\": \"A rule the crowdstrike stand-in tenant receives in a deploy that sends.\", \"customer_id\": \"00000000000000000000000000000c1d\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2\", \"lookback\": \"2h\", \"trigger_mode\": \"verbose\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h\"}}, \"status\": \"active\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : \"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [{\"id\": \"cs-rule-1\", \"name\": \"CrowdStrike create rule\", \"status\": \"active\"}], \"errors\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"name\": \"CrowdStrike update rule\", \"description\": \"A rule the crowdstrike stand-in tenant receives in a deploy that sends.\", \"customer_id\": \"00000000000000000000000000000c1d\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2\", \"lookback\": \"2h\", \"trigger_mode\": \"verbose\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h\"}}, \"status\": \"active\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : \", \"id\": \"cs-rule-9\"}]"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [{\"id\": \"cs-rule-9\", \"status\": \"active\"}], \"errors\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1?ids=cs-rule-8",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [\"cs-rule-8\"], \"errors\": []}"
+      }
+    }
+  ]
+}

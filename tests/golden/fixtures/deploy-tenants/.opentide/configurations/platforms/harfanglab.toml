@@ -1,0 +1,13 @@
+[platform]
+enabled = true
+name = "HarfangLab"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW", "RELEASE"]
+[tenants.setup]
+ssl = true
+type = "Sigma"
+url = "https://hl-tenant.invalid"
+api_token = "$HARFANGLAB_API_TOKEN"
+source_id = "golden-source"

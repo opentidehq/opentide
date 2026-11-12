@@ -15,6 +15,9 @@ description = "opentide's tenant connectors: one HTTP client per tenant (TLS, CA
 workspace = true
 
 [dependencies]
+# The log events a client writes as the Python one does (Splunk's urllib handler):
+# the CLI's log layer prints them.
+tracing = "0.1"
 # `$NAME` and `${NAME}` placeholders: the one parser the workspace's `info` uses.
 opentide-workspace.workspace = true
 # Elastic's advisory codes (UC-4.2b) and Python's float `repr` in messages.

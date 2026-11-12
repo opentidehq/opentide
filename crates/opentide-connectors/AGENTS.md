@@ -35,8 +35,7 @@ domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and on
 `opentide-compile` (its ordered `Json` for bodies and rows; the platforms send the bodies it
 compiles). `opentide-cli` uses it (`setup skills`, `query` on every platform with a runner,
 UC-4.2c and UC-4.3, and `validate query --live` through each `LiveValidator`, Elastic's rule
-checks through `Elastic::checks` and `preview_rule`, UC-4.6);
-`deploy` routes to the platforms once every platform is ported.
+checks through `Elastic::checks` and `preview_rule`, and `deploy` that sends through each platform's deploy calls, UC-4.6);
 
 ## Invariants
 

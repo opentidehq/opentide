@@ -63,6 +63,7 @@ pub const FIXTURES: &[&str] = &[
     "setup-merge",
     "vscode-docs-folder",
     "live-tenants",
+    "deploy-tenants",
 ];
 
 pub fn repo() -> PathBuf {
@@ -136,6 +137,7 @@ pub fn fixture(name: &str, ws: &Path) {
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
+        "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -340,7 +342,49 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    // `deploy` (`offline`, UC-4.6): a dry run whatever its platform, a run
+    // that sends when it names one (every platform has a connector).
+    if let Some(offline) = offline_flags().get(command) {
+        return offline.iter().any(|flag| options.contains(flag))
+            || options
+                .iter()
+                .any(|arg| arg == "--platform" || arg.starts_with("--platform="));
+    }
     requires.is_empty() || requires.iter().any(|flag| options.contains(flag))
+}
+
+/// The `offline` flags of each `RUST_COMMANDS` entry that has them: the runs
+/// that reach no tenant.
+pub fn offline_flags() -> &'static BTreeMap<String, Vec<String>> {
+    static CELL: std::sync::OnceLock<BTreeMap<String, Vec<String>>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        let source = std::fs::read_to_string(repo().join("src/opentide/cli/engines.py")).unwrap();
+        let key = regex::Regex::new(r#"\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\("#).unwrap();
+        let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
+        let offline = regex::Regex::new(r"offline\s*=\s*\(([^)]*)\)").unwrap();
+        let keys: Vec<regex::Captures<'_>> = key.captures_iter(&source).collect();
+        let mut table = BTreeMap::new();
+        for (index, found) in keys.iter().enumerate() {
+            let start = found.get(0).unwrap().end();
+            let end = keys
+                .get(index + 1)
+                .map_or(source.len(), |next| next.get(0).unwrap().start());
+            let Some(flags) = offline.captures(&source[start..end]) else {
+                continue;
+            };
+            let path: Vec<String> = word
+                .captures_iter(&found[1])
+                .map(|word| word[1].to_owned())
+                .collect();
+            table.insert(
+                path.join(" "),
+                word.captures_iter(&flags[1])
+                    .map(|word| word[1].to_owned())
+                    .collect(),
+            );
+        }
+        table
+    })
 }
 
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:

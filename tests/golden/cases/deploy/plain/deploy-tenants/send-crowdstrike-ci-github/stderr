@@ -1,0 +1,9 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 0 to disable, 1 to delete
+warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000021 · platform: crowdstrike · tenant: lab · external_id: cs-rule-1
+
+Deploying to crowdstrike / lab · 3 rules
+  [1/3] ✓ created   CrowdStrike create rule <SECONDS>
+  [2/3] ✓ updated   CrowdStrike update rule <SECONDS>
+  [3/3] ✓ deleted   CrowdStrike retire rule <SECONDS>
+✓ crowdstrike · 3 deployed, 0 failed, 0 not attempted · <SECONDS>

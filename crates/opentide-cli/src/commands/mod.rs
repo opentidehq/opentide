@@ -9,6 +9,8 @@
 //! mode.
 
 pub mod deploy;
+pub mod deploy_send;
+pub mod deploy_state;
 pub mod doctor;
 pub mod explain;
 pub mod findings;

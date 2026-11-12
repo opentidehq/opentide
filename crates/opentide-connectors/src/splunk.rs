@@ -72,6 +72,26 @@ impl Reply {
             .unwrap_or("")
     }
 
+    /// What opentide's urllib handler logs for an error status in a client
+    /// that raises on it (`request_handler` without `allow_http_errors`:
+    /// the deploy's), before splunklib raises.
+    fn log_failure(&self) {
+        if self.failed() {
+            tracing::error!(
+                detail = format!(
+                    "Received HTTP Error Code {} {}",
+                    self.answer.status,
+                    self.reason()
+                )
+                .as_str(),
+                context = python_bytes_repr(&self.answer.body).as_str(),
+                critical = true,
+                logger = "opentide.platforms.splunk.client",
+                "fatal_error"
+            );
+        }
+    }
+
     /// splunklib's `HTTPError` text: `HTTP <status> <reason>`, then the
     /// first `<msg>` of an XML error, else the body's bytes.
     fn http_error(&self) -> String {
@@ -456,6 +476,7 @@ impl Splunk {
             quote_plus(name)
         );
         let reply = Self::send(cx, reqwest::Method::GET, &path, None).await?;
+        reply.log_failure();
         if reply.answer.status == 404 {
             return Ok(None);
         }
@@ -490,6 +511,7 @@ impl Splunk {
         let path = format!("{}saved/searches/", Self::namespace(cx)?);
         let body = urlencode([("name", name), ("search", search)]);
         let reply = Self::send(cx, reqwest::Method::POST, &path, Some(body)).await?;
+        reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
         }
@@ -535,6 +557,7 @@ impl Splunk {
         );
         let path = format!("{}{}", Self::namespace(cx)?, quote(&saved.path, "/"));
         let reply = Self::send(cx, reqwest::Method::POST, &path, Some(form(&pairs))).await?;
+        reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
         }
@@ -553,6 +576,7 @@ impl Splunk {
             quote_plus(name)
         );
         let reply = Self::send(cx, reqwest::Method::DELETE, &path, None).await?;
+        reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
         }

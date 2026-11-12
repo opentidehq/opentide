@@ -1,0 +1,147 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-carbon-black",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform carbon_black_cloud --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:c67c9a0a36b6b364f5289c75b7f609a034c88ff52e692c336eb3a8f945467144",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"report-other\", \"timestamp\": 1790000000, \"title\": \"Another rule\", \"description\": \"Another rule's report.\", \"severity\": 3, \"link\": null, \"tags\": [\"PRODUCTION\"], \"iocs_v2\": [{\"id\": \"ioc-other\", \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"], \"field\": null, \"link\": null}], \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    }
+  ]
+}

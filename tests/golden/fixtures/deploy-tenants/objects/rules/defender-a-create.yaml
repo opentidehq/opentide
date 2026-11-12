@@ -1,0 +1,22 @@
+name: Defender create rule
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A rule the defender stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  defender_for_endpoint:
+    status: STAGING
+    query: |
+      DeviceProcessEvents
+      | take 1
+    scheduling: 1H
+    alert:
+      category: Execution
+    impacted_entities:
+      device: device_id

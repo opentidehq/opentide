@@ -74,6 +74,11 @@ kind = "copy"
 source = "tests/golden/fixtures/live-tenants"
 about = "the `tenants` workspace with a rule or more per platform whose tenants check queries (Splunk, Carbon Black Cloud, Elastic, Defender for Endpoint, SentinelOne, Sentinel), each sent to the stand-in tenants of tests/cassettes/<platform>/tenant.py: `validate query --live`'s cases (UC-4.6)"
 
+[fixtures.deploy-tenants]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that take PREVIEW and RELEASE runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed: the cases of a deploy that sends (UC-4.6)"
+
 [fixtures.empty]
 kind = "skeleton"
 dirs = [".opentide"]
@@ -1505,6 +1510,101 @@ command = "deploy"
 variant = "elastic-tenant"
 args = ["deploy", "--strategy", "PREVIEW", "--platform", "elastic", "--all"]
 fixtures = ["tide-corpus"]
+
+# UC-4.6 (#979): a deploy that sends, on the connectors, on the
+# `deploy-tenants` fixture, each platform served from a cassette recorded
+# from the oracle (tests/cassettes/golden/, the `golden/deploy-*` scenarios):
+# creates whose ids are recorded in deployment state, updates, deletes whose
+# ids are forgotten, skips and refusals. Not in human mode: a deploy's live
+# region is drawn as often as the network allows.
+
+[[case]]
+command = "deploy"
+variant = "send-defender"
+args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/deploy-defender"
+
+[[case]]
+command = "deploy"
+variant = "send-sentinel-one"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sentinel-one"
+
+[[case]]
+command = "deploy"
+variant = "send-crowdstrike"
+args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/deploy-crowdstrike"
+
+[[case]]
+command = "deploy"
+variant = "send-sysdig"
+args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sysdig"
+
+[[case]]
+command = "deploy"
+variant = "send-elastic"
+args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/deploy-elastic"
+
+[[case]]
+command = "deploy"
+variant = "send-splunk"
+args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-splunk"
+
+[[case]]
+command = "deploy"
+variant = "send-carbon-black"
+args = ["deploy", "--platform", "carbon_black_cloud", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json", "agent"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-carbon-black"
+
+[[case]]
+command = "deploy"
+variant = "send-splunk-progress-json"
+args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["json"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", OPENTIDE_PROGRESS = "json" }
+cassette = "golden/deploy-splunk"
+
+[[case]]
+command = "deploy"
+variant = "send-crowdstrike-ci-github"
+args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+cassette = "golden/deploy-crowdstrike"
+
+[[case]]
+command = "deploy"
+variant = "send-sentinel-no-rule"
+args = ["deploy", "--platform", "sentinel", "--strategy", "PREVIEW", "--uuid", "00000000-0000-4000-8047-000000000072"]
+fixtures = ["deploy-tenants"]
+modes = ["plain", "json"]
 
 [[case]]
 command = "deploy migrate-state"

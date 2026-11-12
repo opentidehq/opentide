@@ -533,7 +533,7 @@ fn a_deploy_that_sends_is_not_ported() {
     assert_eq!(failure.get("code"), Some(&Json::str("engine_not_ported")));
     let message = failure.get("message").unwrap();
     assert!(
-        matches!(message, Json::Str(text) if text.contains("without --dry-run has no Rust implementation yet")),
+        matches!(message, Json::Str(text) if text.contains("opentide deploy without --platform has no Rust implementation yet")),
         "{message:?}"
     );
     let _ = std::fs::remove_dir_all(&ws);

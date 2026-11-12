@@ -1,0 +1,105 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-sentinel-one",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform sentinel_one --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:bdb808ac2670aec44933e93b4c155f35d6d5b62d97c2d3f8531d5cefd928788a",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"expirationMode\": \"Permanent\", \"name\": \"SentinelOne create rule\", \"description\": \"A rule the sentinel stand-in tenant receives in a deploy that sends.\", \"queryType\": \"events\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"s1ql\": \"src.process.name = 'cmd.exe'\"}, \"filter\": {\"accountIds\": [\"1001\"]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"id\": \"1900000000000000001\", \"expirationMode\": \"Permanent\", \"name\": \"SentinelOne create rule\", \"description\": \"A rule the sentinel stand-in tenant receives in a deploy that sends.\", \"queryType\": \"events\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"s1ql\": \"src.process.name = 'cmd.exe'\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"filter\": {\"ids\": [1800000000000000012]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"affected\": 1}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://s1.invalid/web/api/v2.1/cloud-detection/rules/1800000000000000014",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"expirationMode\": \"Permanent\", \"name\": \"SentinelOne update rule\", \"description\": \"A rule the sentinel stand-in tenant receives in a deploy that sends.\", \"queryType\": \"events\", \"severity\": \"High\", \"status\": \"Active\", \"networkQuarantine\": false, \"treatAsThreat\": \"Malicious\", \"queryLang\": \"2.0\", \"s1ql\": \"src.process.name = 'cmd.exe'\"}, \"filter\": {\"accountIds\": [\"1001\"]}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}"
+      }
+    }
+  ]
+}

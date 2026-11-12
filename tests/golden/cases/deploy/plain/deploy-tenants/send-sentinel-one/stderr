@@ -1,0 +1,13 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 1 to disable, 1 to delete
+warning: External id missing · detail: rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant 'lab' in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand. · code: external_id_missing · uuid: 00000000-0000-4000-8047-000000000013 · platform: sentinel_one · tenant: lab
+
+Deploying to sentinel_one / lab · 4 rules
+  [1/4] · skipped   SentinelOne disable rule never deployed  rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant 'lab' in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.
+warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000011 · platform: sentinel_one · tenant: lab · external_id: 1900000000000000001
+  [2/4] ✓ created   SentinelOne create rule <SECONDS>
+  [3/4] ✓ deleted   SentinelOne retire rule <SECONDS>
+error: Fatal error · detail: {"errors": [{"code": 4040010, "title": "Not Found", "detail": "Rule 1800000000000000014 not found"}]} · advice: Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/
+  [4/4] ✗ failed    SentinelOne update rule                  DetectionRuleCreationFailed
+✗ sentinel_one · 2 deployed, 1 failed, 1 skipped, 0 not attempted · <SECONDS>
+✗ Deployment failed · 1 created, 1 deleted, 1 skipped, 1 failed, 0 not attempted · <SECONDS>

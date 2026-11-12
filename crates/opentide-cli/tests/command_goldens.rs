@@ -68,6 +68,14 @@ fn tui_cases_are_the_oracles() {
     check(&["tui"], 6);
 }
 
+/// `deploy` (UC-3.1c, #896; UC-4.6, #979): the dry runs, and the deploys
+/// that send, each platform's tenant served from its cassette and the
+/// deployment state it writes compared with the oracle's.
+#[test]
+fn deploy_cases_are_the_oracles() {
+    check(&["deploy"], 60);
+}
+
 /// `validate query` offline (UC-3.5b, #927) and `--live` (UC-4.2c, #832;
 /// UC-4.6, #979): Splunk's, Carbon Black Cloud's and Elastic's tenants served
 /// from their cassettes.
@@ -337,7 +345,18 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
         |text: &str| -> Vec<String> { text.split_whitespace().map(str::to_owned).collect() };
     let table = replay::rust_commands();
     assert_eq!(table["validate"], Vec::<String>::new());
-    assert_eq!(table["deploy"], ["--dry-run"]);
+    assert_eq!(table["deploy"], Vec::<String>::new());
+    assert_eq!(replay::offline_flags()["deploy"], ["--dry-run"]);
+    assert!(replay::covers("deploy", &words("deploy --dry-run --all")));
+    assert!(replay::covers(
+        "deploy",
+        &words("deploy --platform sysdig --all")
+    ));
+    assert!(!replay::covers(
+        "deploy",
+        &words("deploy --strategy PREVIEW --all")
+    ));
+    assert!(!replay::covers("deploy", &words("deploy -- --dry-run")));
     assert_eq!(
         table["generate"],
         ["schemas", "templates", "vocabs", "snippets"]

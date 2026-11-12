@@ -1,0 +1,258 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-elastic",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:af865f9afc5ace7a40a77688183144472c982c46ce60f6e0c02badfdb1ccad47",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\\\" not found\", \"status_code\": 404}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\", \"type\": \"query\", \"name\": \"Elastic create rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\", \"type\": \"query\", \"name\": \"Elastic create rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-2\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"name\": \"Elastic update rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-2\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"name\": \"Elastic update rule\", \"description\": \"A rule the elastic stand-in tenant receives in a deploy that sends.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004\", \"type\": \"query\", \"immutable\": true, \"rule_source\": {\"type\": \"external\", \"is_customized\": false}}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005\\\" not found\", \"status_code\": 404}"
+      }
+    }
+  ]
+}
