@@ -1,0 +1,13 @@
+lab · sub-query 1  2 rows
+src.process.name ┃ endpoint.name
+━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+cmd.exe          │ ws-1         
+powershell.exe   │ ws-2         
+
+lab · sub-query 2  2 rows
+src.process.name ┃ endpoint.name
+━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+cmd.exe          │ ws-1         
+powershell.exe   │ ws-2         
+
+✓ 4 rows from 1 sentinel_one tenant

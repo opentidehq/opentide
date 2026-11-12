@@ -25,6 +25,7 @@ pub mod migrate;
 pub mod migrate_state;
 pub mod new;
 pub mod query;
+pub mod query_rule;
 pub mod rules;
 pub mod setup;
 pub mod skills;

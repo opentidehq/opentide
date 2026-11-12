@@ -1,0 +1,13 @@
+[1mlab · sub-query 1[0m  [2m2 rows[0m
+[1msrc.process.name[0m[1m [0m┃[1m [0m[1mendpoint.name[0m
+━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+cmd.exe          │ ws-1         
+powershell.exe   │ ws-2         
+
+[1mlab · sub-query 2[0m  [2m2 rows[0m
+[1msrc.process.name[0m[1m [0m┃[1m [0m[1mendpoint.name[0m
+━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━
+cmd.exe          │ ws-1         
+powershell.exe   │ ws-2         
+
+[1;32m✓[0m 4 rows from 1 sentinel_one tenant

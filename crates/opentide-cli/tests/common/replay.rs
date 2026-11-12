@@ -88,6 +88,7 @@ pub const FIXTURES: &[&str] = &[
     "tenants",
     "live-tenants",
     "deploy-tenants",
+    "deploy-tenants-sysdig",
     "deploy-push",
     "deploy-push-production",
     "deploy-push-anchor",
@@ -167,6 +168,32 @@ pub fn fixture(name: &str, ws: &Path) {
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
+        // Every platform but Sysdig disabled (UC-4.4c): a deploy without
+        // --platform sends to Sysdig's stand-in alone.
+        "deploy-tenants-sysdig" => {
+            fixture("deploy-tenants", ws);
+            for platform in [
+                "carbon_black_cloud",
+                "crowdstrike",
+                "defender_for_endpoint",
+                "elastic",
+                "harfanglab",
+                "sentinel",
+                "sentinel_one",
+                "splunk",
+            ] {
+                let path = ws.join(format!(
+                    ".opentide/configurations/platforms/{platform}.toml"
+                ));
+                let text = std::fs::read_to_string(&path).unwrap();
+                let (on, off) = (
+                    "[platform]\nenabled = true\n",
+                    "[platform]\nenabled = false\n",
+                );
+                assert_eq!(text.matches(on).count(), 1, "{platform}");
+                std::fs::write(&path, text.replace(on, off)).unwrap();
+            }
+        }
         // A push of one edit on `deploy-tenants` (UC-4.6c): two commits.
         "deploy-push" => pushed(
             ws,

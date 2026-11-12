@@ -105,6 +105,12 @@ kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
 about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that take PREVIEW and RELEASE runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed: the cases of a deploy that sends (UC-4.6)"
 
+[fixtures.deploy-tenants-sysdig]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "deploy-tenants with every platform but Sysdig disabled: a deploy without --platform sends to the workspace's enabled platforms, Sysdig's stand-in alone, so the `golden/deploy-sysdig` cassette serves it (UC-4.4c)"
+edits = [{ path = ".opentide/configurations/platforms/carbon_black_cloud.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/crowdstrike.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/defender_for_endpoint.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/elastic.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/harfanglab.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel_one.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/splunk.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }]
+
 [fixtures.deploy-push]
 kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
@@ -811,6 +817,14 @@ args = ["validate", "query", "--file", "{rule_file}", "--queries", "warn"]
 fixtures = ["tide-corpus", "vscode"]
 
 # Tenant-contacting: recorded as its failure without tenants.
+# UC-4.4c (#834): a live check reads one platform's tenants: without
+# --platform the run is refused.
+[[case]]
+command = "validate query"
+variant = "live-no-platform"
+args = ["validate", "query", "--live"]
+fixtures = ["tide-corpus"]
+
 [[case]]
 command = "validate query"
 variant = "live-no-tenant"
@@ -1125,6 +1139,57 @@ args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to
 fixtures = ["tenants"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/query-splunk"
+
+# UC-4.4c (#834): a rule's query on the stand-in tenants of the
+# `live-tenants` fixture: Splunk's saved search by --rule, and a SentinelOne
+# correlation's two sub-queries by --file, each labelled, in every format.
+[[case]]
+command = "query"
+variant = "tenant-splunk-rule"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-splunk-rule"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z"]
+fixtures = ["live-tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file-csv"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--format", "csv"]
+fixtures = ["live-tenants"]
+modes = ["plain"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file-jsonl"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--format", "jsonl"]
+fixtures = ["live-tenants"]
+modes = ["plain"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "rule-unknown"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-0000000000O1"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "rule-no-block"
+args = ["query", "--platform", "crowdstrike", "--rule", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
 
 [[case]]
 command = "query"
@@ -1660,6 +1725,33 @@ fixtures = ["deploy-tenants"]
 modes = ["plain"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
 cassette = "golden/deploy-crowdstrike"
+
+# UC-4.4c (#834): a deploy without --platform sends to the workspace's
+# enabled platforms: refused where they have no tenants, a warning on the CI
+# run where no rule matched, and Sysdig's stand-in alone where it is the one
+# platform enabled.
+[[case]]
+command = "deploy"
+variant = "send-every-platform"
+args = ["deploy", "--strategy", "PREVIEW", "--all"]
+fixtures = ["tide-corpus", "empty"]
+
+[[case]]
+command = "deploy"
+variant = "send-every-platform-ci-github"
+args = ["deploy", "--strategy", "PREVIEW", "--all"]
+fixtures = ["empty"]
+modes = ["plain"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "deploy"
+variant = "send-enabled-platforms"
+args = ["deploy", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants-sysdig"]
+modes = ["plain", "json", "agent"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sysdig"
 
 [[case]]
 command = "deploy"

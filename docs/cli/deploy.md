@@ -236,7 +236,7 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 
 ### On the Rust engine
 
-With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), a deploy that names its `--platform` runs on the Rust connectors, for every platform: the same plan, rule lines, checklist row, `progress` events, CI job summary, document, deployment-state shards and exit codes as above. A deploy that names no `--platform` stays on the Python CLI. Where the Rust run differs, it is on purpose:
+With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), a deploy that sends runs on the Rust connectors, for every platform: to the platform its `--platform` names or, without one, to every platform the workspace enables, in the plan's order, with the same plan, rule lines, checklist rows, `progress` events, CI job summary (and, on a run that matched no rule, the same warning on the CI run), document, deployment-state shards and exit codes as above. Where the Rust run differs, it is on purpose:
 
 - a log line names no tenant (`tenant: ***`): the Rust CLI redacts tenant names and hosts from every line it logs; the document still names them;
 - a credential whose `$NAME` is unset is refused before any request, where the Python CLI sent the literal `$NAME` to the platform;

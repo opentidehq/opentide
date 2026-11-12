@@ -315,6 +315,24 @@ secrets = ["SPLUNK_TOKEN"]
 cwd = "repo"
 
 [[scenario]]
+name = "golden/query-splunk-rule"
+description = "opentide query --rule on Splunk's stand-in, the golden cases' cassette: the saved search a deploy of the rule creates, as a one-shot search (UC-4.4c)."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-sentinel-one-file"
+description = "opentide query --file on SentinelOne's stand-in, the golden cases' cassette: a correlation rule's two sub-queries, each a PowerQuery of its own (UC-4.4c)."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
 name = "golden/query-carbon-black"
 description = "opentide query on Carbon Black Cloud's stand-in, the golden cases' cassette: a process search validated, started, polled until complete and read past --limit 2."
 client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "process_name:cmd.exe"]

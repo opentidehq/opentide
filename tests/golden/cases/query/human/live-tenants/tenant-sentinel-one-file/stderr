@@ -1,0 +1,4 @@
+[1;33mwarning[0m: one correlation sub-query: the correlation itself is not applied
+[1;33mwarning[0m: Add a filter on event.type to speed up the query
+[1;33mwarning[0m: one correlation sub-query: the correlation itself is not applied
+[1;33mwarning[0m: Add a filter on event.type to speed up the query

@@ -244,8 +244,9 @@ pub struct SelectOptions<'a> {
     pub folder: &'a str,
     /// Log what the plan leaves out as warnings, as `make_deploy_plan` does
     /// when its caller passes no list to report through (`validate query
-    /// --live`): `--wide`, the subfolder files, a block of a disabled
-    /// platform, a block no run strategy deploys, a rule with vendor ids.
+    /// --live`): `--wide`, the subfolder files, a block no run strategy
+    /// deploys, a rule with vendor ids. A block of a disabled platform is
+    /// logged for every caller, as `make_deploy_plan` logs it.
     pub log: bool,
 }
 
@@ -377,19 +378,19 @@ pub fn select(
                         )))
                     })?;
                 if !options.enabled.iter().any(|known| known == platform) {
-                    if options.log {
-                        tracing::warn!(
-                            system = platform.to_uppercase().as_str(),
-                            rule = name.as_str(),
-                            advice = format!(
-                                "enable it with 'opentide setup platforms --{}'",
-                                platform.replace('_', "-")
-                            )
-                            .as_str(),
-                            logger = "opentide.deployment.utils",
-                            "system_disabled_for_deploy"
-                        );
-                    }
+                    // Logged whatever `log` says: `make_deploy_plan` logs it
+                    // for every caller, a deploy too.
+                    tracing::warn!(
+                        system = platform.to_uppercase().as_str(),
+                        rule = name.as_str(),
+                        advice = format!(
+                            "enable it with 'opentide setup platforms --{}'",
+                            platform.replace('_', "-")
+                        )
+                        .as_str(),
+                        logger = "opentide.deployment.utils",
+                        "system_disabled_for_deploy"
+                    );
                     continue;
                 }
                 let strategy = statuses.strategy(&status).map_err(|error| {

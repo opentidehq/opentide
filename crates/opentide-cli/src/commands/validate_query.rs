@@ -216,10 +216,9 @@ pub fn refuse(args: &Args) -> Option<Report> {
     None
 }
 
-/// The platforms whose `--live` run is this engine's: those whose tenants
-/// cannot check a query, answered `supported: false` before any request
-/// (`opentide.cli.engines.RUST_LIVE_VALIDATION_PLATFORMS`). Defender,
-/// Elastic and SentinelOne check on the tenant: still the Python CLI's.
+/// The platforms whose tenants cannot check a query: a `--live` run on one
+/// is answered `supported: false` before any request; the others check on
+/// their tenants (`validate_live`).
 pub const LIVE_RUST_PLATFORMS: [&str; 3] = ["crowdstrike", "harfanglab", "sysdig"];
 
 /// `validate query --live` (`validate_query_cmd`'s `--live` branch, then
@@ -315,17 +314,30 @@ pub fn live_usage(args: &Args, env: &Env) -> Option<Report> {
 /// gives none (`CHECK_TIMEOUT_ENV`).
 pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
 
-/// The refusal of a `--live` run that names no `--platform`: the platforms it
-/// would reach are the workspace's, which `opentide.cli.engines` routes to
-/// Python (`engine_not_ported`).
-pub fn live_not_ported_without_platform() -> Report {
-    let mut failure = Failure::new(
-        code::ENGINE_NOT_PORTED,
-        "opentide validate query --live without --platform has no Rust implementation yet: unset \
-         OPENTIDE_ENGINE, or set it to python or compare.",
-    );
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+/// What a `--live` run that names no `--platform` answers: a live check
+/// reads one platform's tenants, so the run is refused (exit 2,
+/// `usage_missing_option`), as `_validate_query_platform` refuses it. The
+/// result, keys in the oracle's order, `_`-keys included.
+pub fn live_without_platform() -> Vec<(String, Json)> {
+    vec![
+        ("platform".to_owned(), Json::Null),
+        ("mode".to_owned(), Json::str("live")),
+        ("status".to_owned(), Json::str("failed")),
+        ("supported".to_owned(), Json::Bool(true)),
+        (
+            "message".to_owned(),
+            Json::str("--live checks one platform's tenants: pass --platform"),
+        ),
+        (
+            "_exit_code".to_owned(),
+            Json::Int(i64::from(USAGE_EXIT_CODE)),
+        ),
+        (
+            "_failure_code".to_owned(),
+            Json::str(code::USAGE_MISSING_OPTION),
+        ),
+        ("_failure_argument".to_owned(), Json::str("--platform")),
+    ]
 }
 
 /// The refusal of a `--live` run: Python's (`engine_not_ported`).
