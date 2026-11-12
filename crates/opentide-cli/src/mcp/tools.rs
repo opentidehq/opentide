@@ -1,12 +1,15 @@
-//! The tools that run in Rust (`NATIVE_TOOLS`): each returns the payload the
-//! Python tool of the same name returns (`src/opentide/mcp_server/tools.py`),
-//! wrapped as MCPServer wraps a dict: one text block holding the JSON, and
-//! `isError` false; a refusal is one text block and `isError` true.
+//! The tools ([`super::TOOLS`]): each returns the payload the Python tool of
+//! the same name returns (`src/opentide/mcp_server/tools.py`), wrapped as
+//! MCPServer wraps a dict: one text block holding the JSON, and `isError`
+//! false; a list is one text block per item and its `structuredContent`; a
+//! refusal is one text block and `isError` true.
 
 use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
+use super::args::Args;
+use super::{catalog, deploy, queries};
 use crate::env::Env;
 use crate::json::{Json, document_text};
 
@@ -18,30 +21,139 @@ pub struct Context<'a> {
     pub cwd: Option<&'a Path>,
     /// `--repo`, resolved.
     pub repo: Option<&'a str>,
+    /// The package's version.
+    pub version: &'a str,
     /// Why there is no workspace to serve (`workspace_not_found`), if so.
     pub workspace_problem: Option<String>,
 }
 
-/// The `tools/call` result of the native tool `name`.
+/// What a tool returns.
+enum Payload {
+    /// A dict.
+    One(Json),
+    /// A list (`search`).
+    List(Vec<Json>),
+}
+
+/// The `tools/call` result of the tool `name`.
 pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> Value {
+    let args = Args::new(arguments);
     let payload = match name {
-        "explain" => strings(arguments, &["code"]).map(|args| explain(&args[0])),
-        "validation_report" => strings(arguments, &["file", "uuid", "object_type", "queries"])
-            .and_then(|args| {
-                let queries = if arguments.contains_key("queries") {
-                    args[3].as_str()
-                } else {
-                    "error"
-                };
-                validation_report(&args[0], &args[1], &args[2], queries, context)
-            }),
+        "explain" => args
+            .string("code", "")
+            .map(|code| Payload::One(explain(&code))),
+        "validation_report" => (|| {
+            let file = args.string("file", "")?;
+            let uuid = args.string("uuid", "")?;
+            let object_type = args.string("object_type", "")?;
+            let queries = args.string("queries", "error")?;
+            validation_report(&file, &uuid, &object_type, &queries, context).map(Payload::One)
+        })(),
+        "search" => (|| {
+            let query = args.required("query")?;
+            let filters = catalog::Filters {
+                family: args.string("type", "")?,
+                platform: args.string("platform", "")?,
+                status: args.string("status", "")?,
+                technique: args.string("technique", "")?,
+                actor: args.string("actor", "")?,
+            };
+            let workspace = catalog::require(context)?;
+            Ok(Payload::List(catalog::search(
+                workspace.index(),
+                &query,
+                &filters,
+            )))
+        })(),
+        "get_chaining" => (|| {
+            let uuid = args.required("uuid")?;
+            let workspace = catalog::require(context)?;
+            Ok(Payload::One(catalog::get_chaining(
+                workspace.index(),
+                &uuid,
+            )))
+        })(),
+        "coverage" => (|| {
+            let technique = args.string("technique", "")?;
+            let tactic = args.string("tactic", "")?;
+            let workspace = catalog::require(context)?;
+            Ok(Payload::One(catalog::coverage(
+                workspace.index(),
+                &technique,
+                &tactic,
+            )))
+        })(),
+        "validate_rule" => (|| {
+            let uuid = args.required("uuid")?;
+            catalog::validate_rule(context, &uuid).map(Payload::One)
+        })(),
+        "deployment_status" => (|| {
+            let uuid = args.required("uuid")?;
+            let workspace = catalog::require(context)?;
+            Ok(Payload::One(catalog::deployment_status(&workspace, &uuid)))
+        })(),
+        "validate_query" => (|| {
+            let request = queries::QueryCheck {
+                query: args.required("query")?,
+                platform: args.required("platform")?,
+                live: args.boolean("live", false)?,
+                language: args.string("language", "")?,
+                stack: args.string("stack", "")?,
+            };
+            queries::validate_query(&request, context).map(Payload::One)
+        })(),
+        "run_query" => (|| {
+            let request = queries::QueryRun {
+                query: args.required("query")?,
+                platform: args.required("platform")?,
+                tenant: args.string("tenant", "")?,
+                live: args.boolean("live", false)?,
+                rule: args.string("rule", "")?,
+                since: args.string("since", "24h")?,
+                limit: args.integer("limit", queries::MAX_QUERY_ROWS)?,
+                language: args.string("language", "")?,
+                index: args.string("index", "")?,
+            };
+            if let Some(problem) = &context.workspace_problem {
+                return Err(problem.clone());
+            }
+            queries::run_query(&request, context).map(Payload::One)
+        })(),
+        "deploy_rule" => (|| {
+            let uuid = args.required("uuid")?;
+            let platform = args.required("platform")?;
+            let dry_run = args.boolean("dry_run", true)?;
+            deploy::deploy_rule(&uuid, &platform, dry_run, context).map(Payload::One)
+        })(),
         other => return error_result(&format!("Unknown tool: {other}")),
     };
     match payload {
-        Ok(payload) => ok_result(&payload),
+        Ok(Payload::One(payload)) => ok_result(&payload),
+        Ok(Payload::List(items)) => list_result(&items),
         // As MCPServer reports a tool that raised.
         Err(message) => error_result(&format!("Error executing tool {name}: {message}")),
     }
+}
+
+/// A list payload as MCPServer returns one: a text block per item, and the
+/// list as `structuredContent.result`.
+pub fn list_result(items: &[Json]) -> Value {
+    let content: Vec<Value> = items
+        .iter()
+        .map(|item| {
+            let text = document_text(item, true);
+            json!({"type": "text", "text": text.trim_end_matches('\n')})
+        })
+        .collect();
+    let structured: Vec<Value> = items
+        .iter()
+        .map(|item| serde_json::to_value(item).unwrap_or(Value::Null))
+        .collect();
+    json!({
+        "content": content,
+        "isError": false,
+        "structuredContent": {"result": structured},
+    })
 }
 
 /// A tool's payload as MCPServer returns a dict: its JSON in one text block.
@@ -56,34 +168,6 @@ pub fn ok_result(payload: &Json) -> Value {
 /// A tool that refused: its message in one text block, `isError` true.
 pub fn error_result(message: &str) -> Value {
     json!({"content": [{"type": "text", "text": message}], "isError": true})
-}
-
-/// The string arguments `names` (`""` when absent), or the refusal of a value
-/// that is not a string. Unknown arguments are ignored, as the Python
-/// server's argument model ignores them.
-fn strings(arguments: &Map<String, Value>, names: &[&str]) -> Result<Vec<String>, String> {
-    names
-        .iter()
-        .map(|name| match arguments.get(*name) {
-            None => Ok(String::new()),
-            Some(Value::String(text)) => Ok(text.clone()),
-            Some(other) => Err(format!(
-                "argument {name} must be a string, not {}",
-                kind(other)
-            )),
-        })
-        .collect()
-}
-
-fn kind(value: &Value) -> &'static str {
-    match value {
-        Value::Null => "null",
-        Value::Bool(_) => "a boolean",
-        Value::Number(_) => "a number",
-        Value::String(_) => "a string",
-        Value::Array(_) => "an array",
-        Value::Object(_) => "an object",
-    }
 }
 
 /// `explain`: the page for `code`, every code when it is blank.
@@ -132,6 +216,27 @@ pub fn explain(code: &str) -> Json {
 /// The modes of `validate --queries`, in the order the refusal lists them.
 const QUERIES_MODES: [&str; 3] = ["error", "warn", "off"];
 
+/// `validate`'s report for `request`, or the refusal of a run that has none.
+pub fn report(
+    request: &crate::embed::ValidateRequest,
+    env: &Env,
+    cwd: &Path,
+) -> Result<Json, String> {
+    let text = crate::embed::validate_json(request, env, cwd);
+    let result = Json::parse(&text).map_err(|error| format!("command_failed: {error}"))?;
+    if let Some(error) = result.get("error") {
+        let field = |name: &str| match error.get(name) {
+            Some(Json::Str(text)) => text.clone(),
+            _ => String::new(),
+        };
+        return Err(format!("{}: {}", field("code"), field("message")));
+    }
+    match result.get("report") {
+        Some(report @ Json::Object(_)) => Ok(report.clone()),
+        _ => Err("command_failed: validate returned no report".into()),
+    }
+}
+
 /// `validation_report`: `validate`'s report on the selection, with the next
 /// steps; `Err` is a refusal (`isError`).
 pub fn validation_report(
@@ -176,16 +281,7 @@ pub fn validation_report(
     let cwd = context
         .cwd
         .map_or_else(|| std::path::PathBuf::from("."), Path::to_path_buf);
-    let text = crate::embed::validate_json(&request, context.env, &cwd);
-    let result = Json::parse(&text).map_err(|error| format!("command_failed: {error}"))?;
-    if let Some(error) = result.get("error") {
-        let field = |name: &str| match error.get(name) {
-            Some(Json::Str(text)) => text.clone(),
-            _ => String::new(),
-        };
-        return Err(format!("{}: {}", field("code"), field("message")));
-    }
-    let Some(Json::Object(mut payload)) = result.get("report").cloned() else {
+    let Json::Object(mut payload) = report(&request, context.env, &cwd)? else {
         return Err("command_failed: validate returned no report".into());
     };
     let diagnostics = diagnostics_of(&payload);
@@ -240,12 +336,12 @@ fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Jso
 }
 
 /// A word of a command line, quoted for a POSIX shell when it needs it.
-fn quote(word: &str) -> String {
+pub fn quote(word: &str) -> String {
     shlex::try_quote(word).map_or_else(|_| format!("{word:?}"), std::borrow::Cow::into_owned)
 }
 
 /// A tool call worth making next: the CLI's `{command, reason}` plus the MCP call.
-fn next_action(tool: &str, arguments: Json, command: &str, reason: &str) -> Json {
+pub fn next_action(tool: &str, arguments: Json, command: &str, reason: &str) -> Json {
     Json::object([
         ("tool", Json::str(tool)),
         ("arguments", arguments),
@@ -264,7 +360,7 @@ fn set(object: &mut Json, key: &str, value: Json) {
 
 /// Explain the first error's code, then validate again once the fixes are
 /// written (`_validation_next_actions`).
-fn validation_next_actions(diagnostics: &[Json], again: Json) -> Vec<Json> {
+pub fn validation_next_actions(diagnostics: &[Json], again: Json) -> Vec<Json> {
     let string = |item: &Json, key: &str| match item.get(key) {
         Some(Json::Str(text)) => Some(text.clone()),
         _ => None,
@@ -328,6 +424,7 @@ mod tests {
             env,
             cwd: None,
             repo: None,
+            version: "1",
             workspace_problem: None,
         }
     }
@@ -417,6 +514,7 @@ mod tests {
             env: &env,
             cwd: None,
             repo: None,
+            version: "1",
             workspace_problem: Some("workspace_not_found: set OPENTIDE_REPO_ROOT".into()),
         };
         let result = call("validation_report", &Map::new(), &context);
@@ -434,6 +532,7 @@ mod tests {
             env: &env,
             cwd: None,
             repo: None,
+            version: "1",
             workspace_problem: Some("workspace_not_found: no workspace".into()),
         };
         let result = call(

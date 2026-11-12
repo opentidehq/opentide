@@ -239,3 +239,50 @@ steps = [
     { id = "platforms", message = '{"method": "resources/read", "params": {"uri": "opentide://platforms"}}' },
     { id = "unknown-resource", message = '{"method": "resources/read", "params": {"uri": "opentide://nothing"}}' },
 ]
+
+# UC-6.0c (#841): the resource forms the first sessions leave out: an object
+# vocabulary, the platform templates, versioned and aliased identifiers, a
+# UUID in upper case, a UUID of another family.
+[[session]]
+name = "resources-forms"
+fixture = "tide-corpus"
+steps = [
+    { id = "vocabulary-threat", message = '{"method": "resources/read", "params": {"uri": "opentide://vocabularies/threat"}}' },
+    { id = "vocabulary-objective", message = '{"method": "resources/read", "params": {"uri": "opentide://vocabularies/objective"}}' },
+    { id = "templates-systems", message = '{"method": "resources/read", "params": {"uri": "opentide://templates/systems"}}' },
+    { id = "template-versioned", message = '{"method": "resources/read", "params": {"uri": "opentide://templates/rule::1.1"}}' },
+    { id = "schema-alias", message = '{"method": "resources/read", "params": {"uri": "opentide://schemas/rules.1.0"}}' },
+    { id = "rule-upper-case", message = '{"method": "resources/read", "params": {"uri": "opentide://rules/00000000-0000-4000-8003-0000005D1A90"}}' },
+    { id = "threat-of-a-rule", message = '{"method": "resources/read", "params": {"uri": "opentide://threats/00000000-0000-4000-8003-000000000001"}}' },
+    { id = "vocabulary-simple-ampersand", message = '{"method": "resources/read", "params": {"uri": "opentide://rules/a&b"}}' },
+]
+
+# The catalogue tools' other filters and forms.
+[[session]]
+name = "tools-catalogue-filters"
+fixture = "tide-corpus"
+steps = [
+    { id = "search-actor", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "", "actor": "G0006"}}}' },
+    { id = "search-status", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "", "status": "STAGING"}}}' },
+    { id = "search-type", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "", "type": "objective"}}}' },
+    { id = "search-uuid-upper", message = '{"method": "tools/call", "params": {"name": "search", "arguments": {"query": "00000000-0000-4000-8003-0000005D1A90"}}}' },
+    { id = "get-chaining-objective", message = '{"method": "tools/call", "params": {"name": "get_chaining", "arguments": {"uuid": "00000000-0000-4000-8002-000000000001"}}}' },
+    { id = "coverage-subtechnique", message = '{"method": "tools/call", "params": {"name": "coverage", "arguments": {"technique": "t1059.004"}}}' },
+    { id = "coverage-none", message = '{"method": "tools/call", "params": {"name": "coverage", "arguments": {"technique": "T9999"}}}' },
+    { id = "validate-rule-elastic", message = '{"method": "tools/call", "params": {"name": "validate_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000009"}}}' },
+    { id = "deploy-rule-other-block", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001", "platform": "splunk"}}}' },
+    { id = "run-query-defaults", message = '{"method": "tools/call", "params": {"name": "run_query", "arguments": {"query": "index=main", "platform": "splunk", "since": "24h", "limit": "100"}}}' },
+    { id = "validate-query-live-unsupported", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x", "platform": "crowdstrike", "live": true}}}' },
+    { id = "validate-query-falco", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "evt.type = open", "platform": "sysdig"}}}' },
+]
+
+# The tools that reach a tenant, with no network: each the command line's own
+# run (`validate query --live`, `query`, `deploy`) and how it fails.
+[[session]]
+name = "tools-live"
+fixture = "tide-corpus"
+steps = [
+    { id = "validate-query-live", message = '{"method": "tools/call", "params": {"name": "validate_query", "arguments": {"query": "x", "platform": "sentinel", "live": true}}}' },
+    { id = "run-query-live", message = '{"method": "tools/call", "params": {"name": "run_query", "arguments": {"query": "index=main", "platform": "splunk", "live": true}}}' },
+    { id = "deploy-rule-live", message = '{"method": "tools/call", "params": {"name": "deploy_rule", "arguments": {"uuid": "00000000-0000-4000-8003-000000000001", "platform": "sentinel", "dry_run": false}}}' },
+]

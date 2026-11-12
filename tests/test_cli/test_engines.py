@@ -967,15 +967,16 @@ def test_hosts_run_under_any_engine_but_not_a_bad_one(workspace: Path) -> None:
 
 @pytest.mark.parametrize(
     ("engine", "rust_runs"),
-    [(None, False), ("python", False), ("compare", False), ("rust", True)],
+    [(None, True), ("", True), ("python", False), ("compare", False), ("rust", True)],
 )
-def test_mcp_start_is_the_rust_server_under_rust_and_the_python_host_otherwise(
+def test_mcp_start_is_the_rust_server_by_default_and_the_python_host_otherwise(
     workspace: Path, monkeypatch: pytest.MonkeyPatch, engine: str | None, rust_runs: bool
 ) -> None:
-    """``mcp start`` (UC-3.7, #829): ``rust`` serves from Rust; otherwise Python hosts.
+    """``mcp start`` (UC-3.7, #829; UC-6.0c, #841): Rust serves by default and under ``rust``.
 
-    Under ``compare`` an MCP call answers with Python's result and records how
-    Rust differs (#822), so the Python server is the host there too.
+    ``python`` is the escape hatch to the Python server. Under ``compare`` an
+    MCP call answers with Python's result and records how Rust differs
+    (#822), so the Python server is the host there too.
     """
     assert ("mcp", "start") in engines.RUST_COMMANDS
     monkeypatch.setitem(engines.RUST_COMMANDS, ("mcp", "start"), fake("exit"))

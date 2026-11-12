@@ -27,10 +27,31 @@ parity_engines = _load()
 
 
 def test_the_repositorys_table_reads_and_matches_the_import() -> None:
+    from opentide.cli.engine_defaults import DEFAULT_ENGINES, RUST
     from opentide.cli.engines import RUST_COMMANDS
 
-    state = parity_engines.engine_state(parity_engines.ENGINES.read_text(encoding="utf-8"))
-    assert state == {"rust": sorted(list(path) for path in RUST_COMMANDS), "flipped": []}
+    defaults = parity_engines.ENGINES.with_name(parity_engines.DEFAULTS_FILE)
+    state = parity_engines.engine_state(
+        parity_engines.ENGINES.read_text(encoding="utf-8"), defaults.read_text(encoding="utf-8")
+    )
+    flipped = sorted(list(path) for path, engine in DEFAULT_ENGINES.items() if engine == RUST)
+    assert state == {"rust": sorted(list(path) for path in RUST_COMMANDS), "flipped": flipped}
+    assert ["mcp", "start"] in state["flipped"]
+
+
+def test_reads_the_flipped_paths_of_the_defaults() -> None:
+    source = (
+        'RUST = "rust"\n'
+        "DEFAULT_ENGINES: dict[tuple[str, ...], str] = {\n"
+        '    ("mcp", "start"): RUST,\n'
+        '    ("info",): "rust",\n'
+        '    ("lint",): "python",\n'
+        "}\n"
+    )
+    assert parity_engines.flipped_commands(source) == [["info"], ["mcp", "start"]]
+    assert parity_engines.flipped_commands("DEFAULT_ENGINES = {}\n") == []
+    with pytest.raises(parity_engines.EngineStateError, match="no DEFAULT_ENGINES"):
+        parity_engines.flipped_commands("OTHER = {}\n")
 
 
 def test_reads_every_command_path_of_the_literal() -> None:

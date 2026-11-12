@@ -23,12 +23,13 @@ description: What still runs on Python before Rust becomes the default engine (U
 - **`--help` is the largest group and needs a maintainer decision** (below): 236 cases print
   Typer's help, 204 of them on commands that otherwise run on Rust, plus 10 bare runs that print
   a help screen and the 2-case home screen.
-- Outside the goldens, Python still answers 8 of the MCP server's 10 tools and all 12 of its
-  resources and shell completion. UC-6.0d took the rest to Rust: the `serve` host runs every
-  request on Rust, `opentide tui` opens the Rust UI (its Configuration tab ported), `lsp start`
-  hands the server no Python catalog, `doctor` and `setup mcp` probe nothing in Python, and
-  `new` at a prompt, the two status-promotion edge cases and `query --platform sysdig` no
-  longer refuse. One narrow in-Rust refusal is left: a `query --rule` on a plugin (UC-4.5c).
+- Outside the goldens, Python still answers shell completion. UC-6.0d took the rest to Rust:
+  the `serve` host runs every request on Rust, `opentide tui` opens the Rust UI (its
+  Configuration tab ported), `lsp start` hands the server no Python catalog, `doctor` and
+  `setup mcp` probe nothing in Python, and `new` at a prompt, the two status-promotion edge cases
+  and `query --platform sysdig` no longer refuse. The MCP server is done (D4, UC-6.0c):
+  `opentide mcp start` defaults to the Rust server, which answers all 10 tools and 12 resources
+  itself. One narrow in-Rust refusal is left: a `query --rule` on a plugin (UC-4.5c).
 
 ## How the inventory was taken
 
@@ -94,7 +95,7 @@ plain) and its words compared with the recording's:
 
 | Piece | Python today | Needed before Python can go | Path |
 |-------|--------------|-----------------------------|------|
-| MCP server (`opentide mcp start`) | Default engine: the Python server (`src/opentide/mcp_server/`). Under `rust`: the rmcp server (`crates/opentide-cli/src/mcp/`) runs `explain` and `validation_report` and delegates `search`, `get_chaining`, `coverage`, `validate_rule`, `deployment_status` (UC-5.2, the SDK registry), `validate_query`, `run_query`, `deploy_rule` (tenants) and all 6 resources and 6 templates to `opentide.mcp_server.bridge` in-process | Rust implementations of the 8 tools and 12 resources, each replayed against `tests/golden/mcp/` (`cargo xtask mcp replay --engine compare`) | **Port** (D4 decides the order: the registry tools need UC-5.2's catalogue on the facade) |
+| MCP server (`opentide mcp start`) | **Done (UC-6.0c, D4).** The default engine is the rmcp server (`crates/opentide-cli/src/mcp/`), which answers all 10 tools and all 6 resources and 6 templates itself; no delegate to Python is left (`opentide.mcp_server.bridge` only writes the manifest). `cargo xtask mcp replay --engine compare`: 17 sessions, 152 answers from each server, 0 unexplained differences (21 ledger entries: argument refusals and `opentide://index`'s Python-only parts). `OPENTIDE_ENGINE=python` still starts the Python server, as the escape hatch | Nothing: the live tools (`validate_query`/`run_query` with `live`, `deploy_rule` without `dry_run`) run the CLI's own commands in process and are recorded without a tenant only (`tools-live`: the refusal each gives with no tenant configured); a run that reaches a tenant is held by the CLI's cassettes of the same commands | **Delete** `mcp_server/` with the Python implementations (#841); `data/mcp/manifest.json` stays as the checked-in description of the server |
 | `opentide serve` | **Done (UC-6.0d)**: the Rust host runs every request on Rust; `serve_bridge` and the `Delegate` are deleted | — | The Python host (`cli/services/serve.py`) goes with the Python implementations |
 | `opentide tui` | **Done (UC-6.0d)**: the Configuration tab is ported (`tui/configuration.rs`) and `tui`'s default is `rust` (`DEFAULT_ENGINES`); `compare` opens the Rust UI too; `OPENTIDE_ENGINE=python` opens the Textual UI | — | Delete `cli/tui*` with the Python implementations |
 | `opentide lsp start` | **Done (UC-6.0d)**: the Python launcher hands the server no catalog; it generates them from the models (`catalog: "models"`), as under `rust` | — | — |
@@ -127,8 +128,8 @@ keeps `OPENTIDE_ENGINE=python` as an escape hatch, then its Python implementatio
    - `OPENTIDE_ENGINE=python` keeps working and **warns**: a `DeprecationWarning`-style log line
      (`engine_python_deprecated`, stderr only, never in `--json`'s stdout) naming the release that
      removes it; `OPENTIDE_ENGINE=compare` keeps working for CI. Changelog: Deprecated.
-   - `serve` reads the same defaults (`Bridge.plan`), `mcp start` flips only when D4's tools are
-     ported, `tui` when its Configuration tab is.
+   - `serve` reads the same defaults (`Bridge.plan`), `tui` flips when its Configuration tab is;
+     `mcp start` already flipped (UC-6.0c).
 3. **Release N+2 — delete, per command family** (each PR lists the tests it ports or deletes,
    #841):
 
@@ -154,7 +155,7 @@ keeps `OPENTIDE_ENGINE=python` as an escape hatch, then its Python implementatio
 | D1 | `--help` (G1–G3: 246 cases) | **(a)** approve clap's help per case group (one `APPROVED_DIFFS.toml` entry per command path's help cases, a whole-stdout rule, one `CHANGELOG.md` lead: "`--help` is printed by the Rust command line"), and route `--help` to Rust at the flip; **(b)** keep `--help` on Python until removal | (a) lets the flip be whole and the npm bin reach parity (#977); Typer and Rich can go with the rest. (b) keeps Typer, Rich and the Python command tree installed until the last removal PR, which must then approve (a) anyway or reproduce Typer's layout, which the standing rule (no Python library ported) rules out. Either way, disable clap's `help` subcommand |
 | D2 | Shell completion | generate completions with a crate (`clap_complete`) under the same options, or drop the options with a changelog entry | Typer's scripts call back into Python; they cannot survive the removal unchanged |
 | D3 | The home screen (G4) | port it (2 recordings; `info`'s data) or approve the root's help in its place | A person running `opentide` with no arguments sees it first |
-| D4 | The MCP server's 8 delegated tools and 12 resources | the order of their ports (UC-5.2 registry tools first, or the tenant tools), and whether `mcp start` flips separately | Until they are ported, `mcp start` cannot flip, and Python stays installed for MCP clients |
+| D4 | ~~The MCP server's 8 delegated tools and 12 resources~~ **Done (UC-6.0c)** | All ported in one change, and `mcp start` flipped on its own (`DEFAULT_ENGINES`) | Python is no longer needed for MCP clients |
 | D5 | `doctor`'s `platform_sdk` and `python_version` without Python | **Decided: dropped** (UC-6.0d) | Closes the `doctor` half of #977 |
 | D6 | Flip granularity | per command family across several releases (plan §7), or every path at once in one release since compare is green for all | One release is shorter; per family limits what the escape hatch must cover |
 | D7 | `query` routing (G6) | port the Sysdig answer and drop `platforms` from `query`'s entry once UC-4.5b merges | 8 cases (and 4 help cases) move from Python only to compared |

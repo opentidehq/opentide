@@ -6,7 +6,7 @@
 //! command = "commands"                      # the command path, exactly
 //! case = "json/*"                           # a glob over case ids
 //! target = "stdout"                         # stdout | stderr | exit_code | file:<path>
-//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | json-drop:<JSON pointer> | text | lines | sha256 | mode | presence
+//! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | json-drop:<JSON pointer> | json-sha256:<JSON pointer> | text | lines | sha256 | mode | presence
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
 //! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
@@ -220,6 +220,16 @@ pub enum Rule {
         /// Each dropped element, by its index in the oracle's array, in
         /// increasing order of index.
         dropped: Vec<(usize, Json)>,
+    },
+    /// The value at a JSON pointer, by the SHA-256 digest of each side's
+    /// compact JSON (`json-sha256:<pointer>`); `None` is absent.
+    JsonSha256 {
+        /// The pointer's tokens.
+        pointer: Vec<String>,
+        /// The digest of the oracle's value.
+        oracle: String,
+        /// The digest of the candidate's value, `None` where it has none.
+        candidate: Option<String>,
     },
     /// A whole file, by the SHA-256 digests of the oracle's and the
     /// candidate's bytes (`sha256`).
@@ -638,6 +648,30 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         (_, rule) if rule.starts_with("json-drop:") => {
             drop_rule(&rule["json-drop:".len()..], &raw, &mut problems)
         }
+        (_, rule) if rule.starts_with("json-sha256:") => {
+            let pointer = json::parse_pointer(&rule["json-sha256:".len()..]);
+            let candidate_ok = raw.candidate == ABSENT || is_digest(&raw.candidate);
+            match pointer {
+                Some(pointer) if is_digest(&raw.oracle) && candidate_ok => Some(Rule::JsonSha256 {
+                    pointer,
+                    oracle: raw.oracle.clone(),
+                    candidate: (raw.candidate != ABSENT).then(|| raw.candidate.clone()),
+                }),
+                Some(_) => {
+                    problems.push(format!(
+                        "a `json-sha256:` rule's `oracle` is a SHA-256 digest (64 lower-case hex \
+                         digits) and its `candidate` one too, or {ABSENT}"
+                    ));
+                    None
+                }
+                None => {
+                    problems.push(format!(
+                        "`rule` {rule:?} is not a JSON pointer (empty, or starting with /)"
+                    ));
+                    None
+                }
+            }
+        }
         (_, rule) => match rule.strip_prefix("json:") {
             Some(pointer) => match json::parse_pointer(pointer) {
                 Some(pointer) => {
@@ -667,7 +701,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
                         "`rule` {rule:?} is not `text`, `lines`, `sha256`, `mode`, `presence`, \
-                         `json:<pointer>`, `json-extend:<pointer>` or \
+                         `json:<pointer>`, `json-sha256:<pointer>`, `json-extend:<pointer>` or \
                          `json-drop:<pointer>`"
                     ));
                 }
@@ -684,6 +718,9 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
         Some(Rule::Sha256 { oracle, candidate }) => oracle == candidate,
         Some(Rule::Mode { oracle, candidate }) => oracle == candidate,
+        Some(Rule::JsonSha256 {
+            oracle, candidate, ..
+        }) => candidate.as_ref() == Some(oracle),
         // A JsonExtend (JsonDrop) is parsed only with at least one added
         // (dropped) element.
         Some(Rule::Presence | Rule::JsonExtend { .. } | Rule::JsonDrop { .. }) | None => false,
@@ -781,6 +818,8 @@ fn same_place(left: &Rule, right: &Rule) -> bool {
         (Rule::Text { oracle: a, .. }, Rule::Text { oracle: b, .. }) => a == b,
         (Rule::Lines { oracle: a, .. }, Rule::Lines { oracle: b, .. }) => a == b,
         (Rule::Sha256 { oracle: a, .. }, Rule::Sha256 { oracle: b, .. }) => a == b,
+        (Rule::JsonSha256 { pointer: a, .. }, Rule::JsonSha256 { pointer: b, .. }) => a == b,
+        (Rule::JsonSha256 { .. }, _) | (_, Rule::JsonSha256 { .. }) => false,
         _ => true,
     }
 }

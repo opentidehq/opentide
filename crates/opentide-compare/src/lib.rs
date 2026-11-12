@@ -350,6 +350,7 @@ impl Comparison<'_> {
         // so that an array inside one of its elements is found by the
         // oracle's index too.
         let mut aligned = candidate_doc;
+        let mut removals: Vec<(usize, Vec<String>)> = Vec::new();
         let mut extends: Vec<Extend<'_>> = entries
             .iter()
             .filter_map(|(index, rule)| match rule {
@@ -396,27 +397,66 @@ impl Comparison<'_> {
                 applied.push(index);
             }
         }
-        let mut patched = aligned.clone();
+        // The approved values, applied in the oracle's key order: a value the
+        // candidate lacks goes back at the oracle's position, which holds only
+        // once every approved value before it in its object is back.
+        let mut approved_values: Vec<(usize, Vec<String>, Json, Option<usize>)> = Vec::new();
         for (index, rule) in entries {
-            let Rule::Json {
-                pointer,
-                oracle: expected_oracle,
-                candidate: expected_candidate,
-            } = rule
-            else {
-                continue;
-            };
-            let found_oracle = oracle_doc.get(&pointer);
-            let found_candidate = aligned.get(&pointer);
-            if found_oracle != expected_oracle.as_ref()
-                || found_candidate != expected_candidate.as_ref()
-            {
-                continue;
+            match rule {
+                Rule::JsonSha256 {
+                    pointer,
+                    oracle: expected_oracle,
+                    candidate: expected_candidate,
+                } => {
+                    let digest = |value: &Json| ledger::sha256_hex(json::compact(value).as_bytes());
+                    let Some(found_oracle) = oracle_doc.get(&pointer) else {
+                        continue;
+                    };
+                    let found_candidate = aligned.get(&pointer).map(digest);
+                    if digest(found_oracle) != expected_oracle
+                        || found_candidate != expected_candidate
+                    {
+                        continue;
+                    }
+                    let position = oracle_doc.position(&pointer);
+                    approved_values.push((index, pointer, found_oracle.clone(), position));
+                }
+                Rule::Json {
+                    pointer,
+                    oracle: expected_oracle,
+                    candidate: expected_candidate,
+                } => {
+                    let found_oracle = oracle_doc.get(&pointer);
+                    let found_candidate = aligned.get(&pointer);
+                    if found_oracle != expected_oracle.as_ref()
+                        || found_candidate != expected_candidate.as_ref()
+                    {
+                        continue;
+                    }
+                    // Approved: the candidate reads as the oracle there, so
+                    // what remains to compare is everything else.
+                    let position = oracle_doc.position(&pointer);
+                    match found_oracle {
+                        Some(value) => {
+                            approved_values.push((index, pointer, value.clone(), position));
+                        }
+                        None => removals.push((index, pointer)),
+                    }
+                }
+                _ => {}
             }
-            // Approved: the candidate reads as the oracle there, so what
-            // remains to compare is everything else.
-            let position = oracle_doc.position(&pointer);
-            if patched.set(&pointer, found_oracle.cloned(), position) {
+        }
+        approved_values.sort_by_key(|(index, pointer, _, position)| {
+            (pointer.len(), position.unwrap_or(usize::MAX), *index)
+        });
+        let mut patched = aligned.clone();
+        for (index, pointer, value, position) in approved_values {
+            if patched.set(&pointer, Some(value), position) {
+                applied.push(index);
+            }
+        }
+        for (index, pointer) in removals {
+            if patched.set(&pointer, None, None) {
                 applied.push(index);
             }
         }
@@ -1099,6 +1139,118 @@ changelog = "**x**"
             id: "generate/json/vscode/schemas",
         };
         assert!(!compare(vscode, &oracle, &approved, &ledger, &mut Usage::default()).equal);
+    }
+
+    /// A `json-sha256:` entry approves one value by its digest, absent on the
+    /// candidate's side or another value, and nothing else.
+    #[test]
+    fn a_json_sha256_entry_approves_exactly_the_value_it_names() {
+        let entry = |candidate: &str| {
+            Ledger::parse(&format!(
+                r#"
+[[diff]]
+command = "mcp start"
+case = "resources/index"
+target = "stdout"
+rule = "json-sha256:/big"
+oracle = "{}"
+candidate = "{candidate}"
+reason = "a large internal value"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**x**"
+"#,
+                ledger::sha256_hex(br#"{"a":[1,2]}"#),
+            ))
+            .unwrap()
+        };
+        let case = Case {
+            command: "mcp start",
+            id: "resources/index",
+        };
+        let run = |text: &str| Run {
+            stdout: format!("{text}\n").into_bytes(),
+            ..Run::default()
+        };
+        let oracle = run(r#"{"big":{"a":[1,2]},"kept":1}"#);
+        let absent = entry("(absent)");
+        let mut usage = Usage::default();
+        let report = compare(case, &oracle, &run(r#"{"kept":1}"#), &absent, &mut usage);
+        assert!(report.equal, "{report:?}");
+        assert!(usage.is_used(0));
+        // Another difference beside it is still one.
+        assert!(!compare(case, &oracle, &run(r#"{"kept":2}"#), &absent, &mut usage).equal);
+        // A changed oracle value is not the one approved.
+        let changed = run(r#"{"big":{"a":[1,3]},"kept":1}"#);
+        assert!(!compare(case, &changed, &run(r#"{"kept":1}"#), &absent, &mut usage).equal);
+        let replaced = entry(&ledger::sha256_hex(br#"{"b":1}"#));
+        let candidate = run(r#"{"big":{"b":1},"kept":1}"#);
+        assert!(compare(case, &oracle, &candidate, &replaced, &mut Usage::default()).equal);
+        assert!(
+            !compare(
+                case,
+                &oracle,
+                &run(r#"{"kept":1}"#),
+                &replaced,
+                &mut Usage::default()
+            )
+            .equal
+        );
+        assert!(
+            Ledger::parse(
+                r#"
+[[diff]]
+command = "x"
+case = "x"
+target = "stdout"
+rule = "json-sha256:/a"
+oracle = "not a digest"
+candidate = "(absent)"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**x**"
+"#
+            )
+            .is_err()
+        );
+    }
+
+    /// Several values the candidate lacks in one object go back in the
+    /// oracle's key order, whatever the ledger's order.
+    #[test]
+    fn approved_absent_keys_keep_the_oracles_order() {
+        let entry = |key: &str| {
+            format!(
+                r#"
+[[diff]]
+command = "c"
+case = "x"
+target = "stdout"
+rule = "json:/{key}"
+oracle = "1"
+candidate = "(absent)"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**x**"
+"#
+            )
+        };
+        let ledger = Ledger::parse(&format!("{}{}", entry("c"), entry("b"))).unwrap();
+        let case = Case {
+            command: "c",
+            id: "x",
+        };
+        let run = |text: &str| Run {
+            stdout: format!("{text}\n").into_bytes(),
+            ..Run::default()
+        };
+        let report = compare(
+            case,
+            &run(r#"{"a":0,"b":1,"c":1,"d":0}"#),
+            &run(r#"{"a":0,"d":0}"#),
+            &ledger,
+            &mut Usage::default(),
+        );
+        assert!(report.equal, "{report:?}");
     }
 
     /// A `sha256` rule takes two digests and a file target.
