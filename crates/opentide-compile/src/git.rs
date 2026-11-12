@@ -779,7 +779,7 @@ fn push_baseline(repo: &Repo, ci: Ci, env: Env<'_>) -> Result<Option<ObjectId>, 
 /// The paths a push changed, up to the checkout's HEAD rather than the
 /// pushed commit (`changed_through_head`), for a job that runs after the
 /// production deploy and checks out the default branch's tip. The diff starts
-/// where the triggering push's starts ([`push_baseline`]), or at `since`, a
+/// where the triggering push's starts (`push_baseline`), or at `since`, a
 /// commit id or reference, which also works outside CI; it ends at HEAD.
 /// Added, renamed and modified files count, from the git top level.
 ///

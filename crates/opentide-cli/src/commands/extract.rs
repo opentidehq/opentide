@@ -5,7 +5,7 @@
 //!
 //! Defender's files are the oracle's template filled in, byte for byte;
 //! Elastic's are the rule document written by serde-saphyr's emitter
-//! ([`rule_yaml`]): the same data, keys in the importer's order, formatted
+//! (`rule_yaml`): the same data, keys in the importer's order, formatted
 //! as serde-saphyr formats YAML where the oracle used PyYAML's
 //! `IndentedYamlDumper` (the approved differences of #834). The run is one
 //! checklist step,
