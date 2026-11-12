@@ -340,3 +340,59 @@ def test_duration(value: object, units: str, parsed: tuple[int, str] | None) -> 
 )
 def test_uses_context_table(query: str, found: bool) -> None:
     assert uses_context_table(query) is found
+
+
+# --- adversarial review of PR #983 ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("every", [["day"], {"day": 1}])
+def test_a_list_or_map_under_every_is_exabeam_schedule(every: object) -> None:
+    """An unhashable ``every`` is the constraint at its path, not a crash of the check."""
+    block = _block(schedule=[{"every": every, "from": "08:00Z", "to": "17:00Z"}], severity="High")
+    errors = _errors(block)
+    assert ("exabeam_schedule", ("schedule", "0")) in errors
+    assert ("exabeam_severity", ("severity",)) in errors
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        {"suppression": {"for_": "1h"}},
+        {"schedule": [{"every": "day", "from_": "08:00Z", "to": "09:00Z"}]},
+    ],
+    ids=["for_", "from_"],
+)
+def test_the_python_names_of_keyword_keys_are_unknown_keys(keys: dict[str, Any]) -> None:
+    """Only ``for`` and ``from`` are the YAML keys (exabeam-1.0: unknown keys fail)."""
+    with pytest.raises(ValidationError):
+        ExabeamConfig.model_validate(_block(**keys))
+
+
+def test_a_null_attach_csv_or_correlation_group_by_is_the_key_left_out() -> None:
+    """Both validate, as every other null does, and compile to their defaults."""
+    from opentide.models.deployment_enums import StatusStrategy
+    from opentide.platforms.exabeam.compile import compile_body
+    from tests.test_platforms.test_exabeam_compile import _block_rule
+
+    two = [{"query": QUERY}, {"query": QUERY}]
+    block = ExabeamConfig.model_validate(
+        _block(
+            sequences=two,
+            correlation={"within": "15m", "group_by": None},
+            email={"recipients": ["soc@example.com"], "attach_csv": None},
+        )
+    )
+    assert block.correlation is not None and not block.correlation.group_by
+    assert block.email is not None and not block.email.attach_csv
+    body = compile_body(
+        _block_rule(
+            _block(
+                sequences=two,
+                correlation={"within": "15m", "group_by": None},
+                email={"recipients": ["soc@example.com"], "attach_csv": None},
+            )
+        ),
+        StatusStrategy.RELEASE,
+    )
+    assert body["sequencesConfig"]["commonProperties"]["groupBy"] == []
+    assert body["sequencesConfig"]["outcomes"]["email"]["attachCsv"] is False

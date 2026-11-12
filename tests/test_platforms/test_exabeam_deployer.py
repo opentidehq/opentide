@@ -644,3 +644,122 @@ def test_the_specification_bad_shards_are_refused(tide_corpus_repo: Path, name: 
     with pytest.raises(DeploymentStateError) as caught:
         DeploymentState.load(document["object_uuid"], tide_corpus_repo)
     assert caught.value.code == "deployment_state_shape"
+
+
+# --- adversarial review of PR #983 ---------------------------------------------------------
+
+
+@pytest.fixture
+def reported(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The rule-level deployment error codes a run reports, in order."""
+    from opentide.platforms.exabeam import deployer as deployer_module
+
+    seen: list[str] = []
+    real = deployer_module._deployment_error
+
+    def error(code: str, **kwargs: Any) -> None:
+        seen.append(code)
+        real(code, **kwargs)
+
+    monkeypatch.setattr(deployer_module, "_deployment_error", error)
+    return seen
+
+
+def _token(call: dict[str, Any]) -> requests.Response:
+    return _response(200, {"access_token": "t1"})
+
+
+def test_a_create_accepted_with_an_unreadable_answer_is_create_no_id(
+    run: Run, tide_corpus_repo: Path, reported: list[str]
+) -> None:
+    """A 2xx create whose body is not a rule: the rule exists without a binding (exabeam-1.0)."""
+    run.fake.script = [
+        _token,
+        lambda call: _response(200, []),
+        lambda call: _response(201, text="<html>Created</html>"),
+    ]
+    run()
+    assert reported == ["exabeam_create_no_id"]
+    assert _bound(tide_corpus_repo) is None
+    assert _failed()
+
+
+@pytest.mark.parametrize("payload", [{"data": [{"id": FIRST_ID, "name": NAME}]}, {"total": 0}])
+def test_a_name_check_answer_of_another_shape_refuses_the_create(
+    run: Run, tide_corpus_repo: Path, reported: list[str], payload: dict[str, Any]
+) -> None:
+    """An unknown object shape is never read as "no rule has this name"."""
+    run.fake.script = [_token, lambda call: _response(200, payload)]
+    run.fake.tokens = 1
+    fake = run()
+    assert f"POST {RULES_PATH}" not in fake.routes()
+    assert reported == ["exabeam_request_failed"]
+    assert _bound(tide_corpus_repo) is None
+
+
+def test_retry_after_is_read_as_seconds_or_an_http_date() -> None:
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    from opentide.platforms.exabeam.client import DEFAULT_RETRY_AFTER, _retry_after
+
+    now = datetime(2026, 11, 12, 9, 0, tzinfo=timezone.utc)
+
+    def wait(value: str | None) -> float:
+        headers = {} if value is None else {"Retry-After": value}
+        return _retry_after(_response(429, {}, headers), now=now)
+
+    assert wait("7") == 7.0
+    assert wait(format_datetime(now + timedelta(seconds=120), usegmt=True)) == 120.0
+    assert wait(format_datetime(now - timedelta(seconds=30), usegmt=True)) == 0.0
+    for odd in (None, "", "soon", "nan", "inf", "-inf"):
+        assert wait(odd) == DEFAULT_RETRY_AFTER, odd
+    assert wait("-5") == 0.0
+
+
+def test_a_retry_after_longer_than_five_minutes_fails_the_request(
+    run: Run, tide_corpus_repo: Path
+) -> None:
+    """A 429 that asks for days fails the request instead of stalling the run."""
+    run.fake.script = [lambda call: _response(429, {}, {"Retry-After": "864000"})]
+    run()
+    assert run.slept == []
+    assert _failed()
+    assert _bound(tide_corpus_repo) is None
+
+
+def test_a_retry_after_of_nan_does_not_escape_the_deploy(run: Run, tide_corpus_repo: Path) -> None:
+    run.fake.script = [lambda call: _response(429, {}, {"Retry-After": "nan"})] * 11
+    run()  # a NaN wait is the default wait; the request fails after its resends
+    assert run.slept and set(run.slept) == {60.0}
+    assert _failed()
+
+
+@pytest.mark.parametrize(
+    "token_answer",
+    [
+        lambda call: _response(503, {"errors": [{"code": "503", "message": "down"}]}),
+        lambda call: (_ for _ in ()).throw(requests.ConnectionError("reset")),
+    ],
+    ids=["token-5xx", "token-no-answer"],
+)
+def test_a_token_that_cannot_be_renewed_stops_the_tenant_not_a_create(
+    run: Run,
+    tide_corpus_repo: Path,
+    reported: list[str],
+    caplog: pytest.LogCaptureFixture,
+    token_answer: Callable[[dict[str, Any]], requests.Response],
+) -> None:
+    """The create was refused (expired token) and never sent again: not unconfirmed."""
+    run.fake.script = [
+        _token,
+        lambda call: _response(200, []),
+        lambda call: _response(401, text='{"message":"Jwt is expired"}'),
+        token_answer,
+    ]
+    run.fake.tokens = 1
+    fake = run()
+    assert "exabeam_create_unconfirmed" not in reported
+    assert fake.routes().count(f"POST {RULES_PATH}") == 1
+    assert _failed()
+    assert _bound(tide_corpus_repo) is None

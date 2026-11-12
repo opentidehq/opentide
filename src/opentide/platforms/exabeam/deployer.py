@@ -261,6 +261,19 @@ class ExabeamDeploy(RuleDeployer):
             )
             return
         except ExabeamApiError as exc:
+            if 200 <= exc.status < 300:
+                # Exabeam created the rule but its answer cannot be read: no id to keep.
+                _deployment_error(
+                    "exabeam_create_no_id",
+                    error=(
+                        f"the create of {compiled.name!r} was accepted (HTTP {exc.status}) but "
+                        "its answer is not a rule: the rule may exist on the tenant without a "
+                        "binding: remove it in the console"
+                    ),
+                    detail=str(exc),
+                    **fields,
+                )
+                return
             if exc.status >= 500:
                 _deployment_error(
                     "exabeam_create_unconfirmed",

@@ -171,7 +171,7 @@ def _outcomes(block: ExabeamConfig, name: str) -> dict[str, Any]:
         outcomes["email"] = {
             "recipients": list(email.recipients),
             "subject": email.subject or name,
-            "attachCsv": email.attach_csv,
+            "attachCsv": bool(email.attach_csv),
         }
     return outcomes
 
@@ -207,7 +207,7 @@ def compile_body(
             raise ValueError(f"Rule {rule.metadata.uuid}: two or more sequences need correlation")
         time, unit = time_unit(correlation.within)
         sequences_config["commonProperties"] = {
-            "groupBy": list(correlation.group_by),
+            "groupBy": list(correlation.group_by or []),
             "time": time,
             "unit": unit,
         }

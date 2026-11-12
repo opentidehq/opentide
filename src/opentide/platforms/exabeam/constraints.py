@@ -339,9 +339,10 @@ def _distinct(values: list[Any]) -> bool:
 
 def _recurrence_problem(recurrence: Any) -> str | None:
     """Why *recurrence* is not a valid ``schedule[]`` entry, or ``None``."""
-    if not isinstance(recurrence, Mapping) or recurrence.get("every") not in RECURRENCE_DAY_KEYS:
+    every = recurrence.get("every") if isinstance(recurrence, Mapping) else None
+    # A list or a map under ``every`` is unhashable: test the type before the lookup.
+    if not isinstance(every, str) or every not in RECURRENCE_DAY_KEYS:
         return "every is day, week, month or days"
-    every = str(recurrence["every"])
     for key in ("from", "to"):
         value = recurrence.get(key)
         if not isinstance(value, str) or _TIME.fullmatch(value) is None:
@@ -392,22 +393,16 @@ def _schedule_findings(schedule: Any) -> list[Finding]:
     return findings
 
 
-#: Field names of the keys that are Python keywords, as a dump not by alias spells them.
-_FIELD_NAMES = {"from_": "from", "for_": "for"}
-
-
 def as_authored(value: Any) -> Any:
-    """*value* with the keyword keys' field names read as their YAML keys.
+    """*value* as the author wrote it, with null keys left out.
 
     A key whose value is null is left out, at every level: it is the key not
-    written, which is how a model dump writes every optional key.
+    written, which is how a model dump writes every optional key. The keyword
+    keys ``for`` and ``from`` are read only by those names: ``for_`` and
+    ``from_`` are unknown keys, and the models dump the YAML names.
     """
     if isinstance(value, Mapping):
-        return {
-            _FIELD_NAMES.get(str(key), key): as_authored(item)
-            for key, item in value.items()
-            if item is not None
-        }
+        return {key: as_authored(item) for key, item in value.items() if item is not None}
     if isinstance(value, list):
         return [as_authored(item) for item in value]
     return value

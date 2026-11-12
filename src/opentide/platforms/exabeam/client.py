@@ -19,11 +19,14 @@ be sent again (``exabeam_create_unconfirmed``).
 
 from __future__ import annotations
 
+import math
 import re
 import threading
 import time
 from collections import deque
 from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import requests
@@ -41,9 +44,13 @@ PACE_WINDOW = 60.0
 DEFAULT_RETRY_AFTER = 60.0
 #: Rate-limited resends of one request before it fails.
 MAX_RATE_LIMITED = 10
+#: The longest ``Retry-After`` waited out; a longer one fails the request instead of
+#: stalling the run (a CI job has a timeout).
+MAX_RETRY_AFTER = 300.0
 
 UNAUTHORIZED = "exabeam_tenant_unauthorized"
 FEATURE_UNAVAILABLE = "exabeam_feature_unavailable"
+UNREACHABLE = "exabeam_tenant_unreachable"
 
 #: A ``401`` body that says the token expired ("Jwt is expired").
 _EXPIRED = re.compile(r"expired", re.IGNORECASE)
@@ -155,12 +162,29 @@ class _Pacer:
 PACER = _Pacer()
 
 
-def _retry_after(response: requests.Response) -> float:
-    value = response.headers.get("Retry-After")
-    try:
-        return max(float(value), 0.0) if value is not None else DEFAULT_RETRY_AFTER
-    except ValueError:
+def _retry_after(response: requests.Response, now: datetime | None = None) -> float:
+    """Seconds a ``429`` asks to wait: ``Retry-After`` as seconds or an HTTP-date (RFC 9110).
+
+    No header, or one that is neither, is :data:`DEFAULT_RETRY_AFTER`; a date in the
+    past is ``0``. The value is not capped here (:meth:`ExabeamClient._send` refuses a
+    wait over :data:`MAX_RETRY_AFTER`).
+    """
+    value = (response.headers.get("Retry-After") or "").strip()
+    if not value:
         return DEFAULT_RETRY_AFTER
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return DEFAULT_RETRY_AFTER
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        seconds = (when - (now or datetime.now(timezone.utc))).total_seconds()
+    if not math.isfinite(seconds):
+        return DEFAULT_RETRY_AFTER
+    return max(seconds, 0.0)
 
 
 def _token_expired(response: requests.Response) -> bool:
@@ -223,7 +247,15 @@ class ExabeamClient:
             )
             if response.status_code != 429:
                 return response
-            self._sleep(_retry_after(response))
+            wait = _retry_after(response)
+            if wait > MAX_RETRY_AFTER:
+                raise ExabeamApiError(
+                    f"{method} {path}",
+                    429,
+                    f"rate limited, and Retry-After asks to wait {wait:.0f}s, more than "
+                    f"{MAX_RETRY_AFTER:.0f}s",
+                )
+            self._sleep(wait)
         raise ExabeamApiError(
             f"{method} {path}", 429, f"still rate limited after {MAX_RATE_LIMITED} waits"
         )
@@ -267,6 +299,21 @@ class ExabeamClient:
         self._token = token
         return token
 
+    def _token_for(self, method: str, path: str, *, refresh: bool = False) -> str:
+        """The token for a request, or :class:`ExabeamTenantError` when it cannot be had.
+
+        A token that cannot be had (no answer, or an error from the token endpoint)
+        stops the tenant: the request itself was never sent, so a create that needed
+        it is not unconfirmed.
+        """
+        try:
+            return self.token(refresh=refresh)
+        except (requests.RequestException, ExabeamApiError) as exc:
+            raise ExabeamTenantError(
+                UNREACHABLE,
+                f"tenant {self.tenant}: no token for {method} {path}: {exc}",
+            ) from exc
+
     def request(
         self,
         method: str,
@@ -283,13 +330,13 @@ class ExabeamClient:
         """
         refreshed = False
         while True:
-            headers = {"Authorization": f"Bearer {self.token()}"}
+            headers = {"Authorization": f"Bearer {self._token_for(method, path)}"}
             response = self._send(
                 method, path, json=json, params=params, headers=headers, timeout=timeout
             )
             if response.status_code == 401 and not refreshed and _token_expired(response):
                 refreshed = True
-                self.token(refresh=True)
+                self._token_for(method, path, refresh=True)
                 continue
             if response.status_code in (401, 403):
                 raise self._refused(response, f"{method} {path}")
@@ -315,7 +362,11 @@ class ExabeamClient:
             raise api_error(action, response)
         payload = _json(response, action)
         if isinstance(payload, Mapping):
-            payload = payload.get("rules", payload.get("items", []))
+            # A wrapped list is read only under a known key: any other shape is refused,
+            # never read as "no rule has this name" (the check would then let a create
+            # through beside a rule of the same name).
+            listed = [payload[key] for key in ("rules", "items") if key in payload]
+            payload = listed[0] if len(listed) == 1 else None
         if not isinstance(payload, list):
             raise ExabeamApiError(action, response.status_code, "the answer is not a list of rules")
         return [rule for rule in payload if isinstance(rule, dict)]

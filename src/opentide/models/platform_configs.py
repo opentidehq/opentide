@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.sentinel_attack import SentinelTechnique
@@ -947,11 +953,23 @@ class ExabeamSequence(TideModel):
 class ExabeamCorrelation(TideModel):
     within: str
     """The window every sequence's condition must be met in: whole `m`, `h`, or `d`"""
-    group_by: list[str] = Field(default_factory=list)
+    group_by: list[str] | None = None
     """Up to three fields every sequence shares (the API's limit; the console allows more)"""
 
 
+#: The YAML key is a Python keyword: read and written only as ``for``/``from``, so
+#: ``for_``/``from_`` in a rule file is an unknown key (exabeam-1.0, Requirements).
+_KEYWORD_KEY_CONFIG = ConfigDict(
+    populate_by_name=False,
+    validate_by_name=False,
+    validate_by_alias=True,
+    serialize_by_alias=True,
+)
+
+
 class ExabeamSuppression(TideModel):
+    model_config = _KEYWORD_KEY_CONFIG
+
     for_: str = Field(alias="for")
     """Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`"""
     group_by: list[str] | None = None
@@ -963,11 +981,13 @@ class ExabeamEmail(TideModel):
     """One or more email addresses"""
     subject: str | None = None
     """Email subject"""
-    attach_csv: bool = False
+    attach_csv: bool | None = None
     """Attach the matching events as CSV"""
 
 
 class ExabeamRecurrence(TideModel):
+    model_config = _KEYWORD_KEY_CONFIG
+
     every: Literal["day", "week", "month", "days"]
     """`day`, `week`, `month`, or `days` (a range of weekdays)"""
     from_: str = Field(alias="from")
