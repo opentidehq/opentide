@@ -588,6 +588,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+    from opentide.platforms.exabeam.advisories import ADVISORY_CODES as EXABEAM_ADVISORY_CODES
     from opentide.platforms.harfanglab.yara import ADVISORY_CODES
 
     # The datasets visibility.toml declares, as validate and the editor see them.
@@ -604,6 +605,8 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                 continue
             if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
                 continue  # one finding per code, form and rule: opentide's, placed by key
+            if finding.code in EXABEAM_ADVISORY_CODES:
+                continue  # the block advisories are opentide's own (_exabeam_findings)
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES

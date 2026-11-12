@@ -297,7 +297,7 @@ def test_validate_query_takes_a_harfanglab_context_list(context: str) -> None:
 
 
 def _engine_without_exabeam(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An engine that, as the pinned 0.13.0 one, does not know the ``exabeam`` language."""
+    """An engine that, as language-server 0.13.0, does not know the ``exabeam`` language."""
     from opentide import analysis
 
     real = analysis.engine()

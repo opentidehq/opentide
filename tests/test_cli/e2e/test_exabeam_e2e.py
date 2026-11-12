@@ -163,3 +163,33 @@ def test_setup_platforms_enables_exabeam(invoke_cli, tmp_path: Path) -> None:
     assert_json_ok(invoke_cli("setup", "platforms", str(tmp_path), "--exabeam", "--yes"))
     written = tmp_path / ".opentide" / "configurations" / "platforms" / "exabeam.toml"
     assert "enabled = true" in written.read_text(encoding="utf-8")
+
+
+def test_validate_fails_a_sequence_query_the_language_refuses(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """The engine checks each sequence under the language's ``rule`` profile (exabeam-1.0)."""
+    _rewrite(
+        tide_corpus_repo,
+        '          activity_type:"app-login" AND outcome:"fail"\n',
+        '          activity_type:"app-login" AND user != "SYSTEM"\n',
+    )
+    result = invoke_cli("validate", "--file", RULE)
+    assert result.exit_code == 1
+    assert "exabeam_not_equal" in _codes(result)
+
+
+def test_lint_reports_language_warnings_and_each_block_advisory_once(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """Engine warnings on a sequence reach lint; opentide's block advisories are not doubled."""
+    _rewrite(
+        tide_corpus_repo,
+        '          activity_type:"app-login" AND outcome:"fail"\n',
+        '          activity_type:"app-login" outcome:"fail"\n',
+    )
+    _rewrite(tide_corpus_repo, "    outcome: case\n", "    outcome: none\n")
+    payload = parse_cli_json(invoke_cli("lint", "--file", RULE))
+    codes = [item["code"] for item in payload["findings"]]
+    assert "exabeam_implicit_and" in codes
+    assert codes.count("exabeam_outcome_silent") == 1

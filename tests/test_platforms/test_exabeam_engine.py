@@ -1,9 +1,10 @@
 """The Exabeam Query Language in the analysis engine (exabeam-1.0 language spec).
 
-opentide hands every Exabeam query to the engine as language ``exabeam``. The
-pinned engine (opentide-analysis 0.13.0) predates the language: until the pin
-moves, a check of an Exabeam query fails as an unavailable engine, never as a
-pass. The tests that need the language itself skip on such an engine.
+opentide hands every Exabeam query to the engine as language ``exabeam``. An
+engine that predates the language (language-server 0.13.0 and older) fails such
+a check as an unavailable engine, never as a pass; the mocked tests below keep
+that path covered. The tests that need the language itself run on the pinned
+engine and skip on an older one.
 """
 
 from __future__ import annotations
@@ -37,10 +38,7 @@ def _engine_knows_exabeam() -> bool:
 
 needs_the_language = pytest.mark.skipif(
     not _engine_knows_exabeam(),
-    reason=(
-        "the pinned engine (opentide-analysis/opentide-lsp 0.13.0) predates the exabeam "
-        "language; pending the engine pin that ships it (language-server)"
-    ),
+    reason=("this engine predates the exabeam language (language-server 0.13.0 and older)"),
 )
 
 

@@ -23,7 +23,7 @@ opentide integrates with **eleven detection platforms** through built-in adapter
 | Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
 | Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes* | yes | Exabeam Query Language |
 
-\* Through the analysis engine, once the pinned engine knows the `exabeam` language; until then an offline check of an Exabeam query fails as `engine_unavailable`, never as a pass.
+\* Through the analysis engine: each sequence under the Exabeam Query Language's `rule` profile, a `system: exabeam` hunt or a `.exabeam` file under `search`.
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
