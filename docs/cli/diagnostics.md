@@ -346,6 +346,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yaral_condition_shape`](#yaral_condition_shape) | The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event. |
 | [`yaral_deprecated_field`](#yaral_deprecated_field) | The UDM field is deprecated. |
 | [`yaral_enum_value`](#yaral_enum_value) | The value is not one of the enumerated UDM field's values. |
+| [`yaral_export_value`](#yaral_export_value) | An `export` `write_row` value is not an outcome variable: Google exports outcome variables only. |
 | [`yaral_function_unavailable`](#yaral_function_unavailable) | The function exists, but not in this profile (rules or search). |
 | [`yaral_leading_wildcard_regex`](#yaral_leading_wildcard_regex) | The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time. |
 | [`yaral_match_shape`](#yaral_match_shape) | A YARA-L `match` is not a `YaraLMatch` object. |
@@ -353,10 +354,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yaral_match_window`](#yaral_match_window) | A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows. |
 | [`yaral_meta_duplicate`](#yaral_meta_duplicate) | A meta key appears twice, or a meta value is not a double-quoted string. |
 | [`yaral_multi_event_match`](#yaral_multi_event_match) | A rule with two or more event variables has no `match` section. |
-| [`yaral_nesting_depth`](#yaral_nesting_depth) | Function calls nest more than 20 deep. |
 | [`yaral_nocase_on_enum`](#yaral_nocase_on_enum) | `nocase` is applied to a comparison with an enumerated UDM field. |
 | [`yaral_option`](#yaral_option) | A YARA-L `options` key is unknown, or its value is of the wrong kind. |
-| [`yaral_outcome_aggregation`](#yaral_outcome_aggregation) | An outcome reads an event field outside an aggregation in a rule with `match`, or aggregates an outcome variable. |
+| [`yaral_outcome_aggregation`](#yaral_outcome_aggregation) | With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable. |
 | [`yaral_outcome_limit`](#yaral_outcome_limit) | A rule or search assigns more than 20 outcome variables. |
 | [`yaral_parse_error`](#yaral_parse_error) | The YARA-L text does not parse, or a text holds a second rule. |
 | [`yaral_reference_list_deprecated`](#yaral_reference_list_deprecated) | Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`). |
@@ -369,12 +369,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yaral_section_missing`](#yaral_section_missing) | A YARA-L rule has no `events` or no `condition` section. |
 | [`yaral_section_order`](#yaral_section_order) | A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export). |
 | [`yaral_section_unavailable`](#yaral_section_unavailable) | The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections. |
-| [`yaral_string_escape`](#yaral_string_escape) | A double-quoted string holds an escape YARA-L does not define; the escapes are backslash, double quote, n, r and t. |
-| [`yaral_type`](#yaral_type) | An operator or function is applied to a value of the wrong type. |
+| [`yaral_string_escape`](#yaral_string_escape) | A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles. |
+| [`yaral_type`](#yaral_type) | An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number. |
 | [`yaral_undefined_variable`](#yaral_undefined_variable) | A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`. |
 | [`yaral_unfiltered_event`](#yaral_unfiltered_event) | An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event. |
 | [`yaral_unknown_function`](#yaral_unknown_function) | The function is not in Google's YARA-L function list, or it takes a different number of arguments. |
 | [`yaral_unknown_udm_field`](#yaral_unknown_udm_field) | The field path is not in the Unified Data Model. |
+| [`yaral_window_bound`](#yaral_window_bound) | `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window. |
 
 ## analysis_engine
 
@@ -6094,6 +6095,22 @@ opentide validate
 
 Change the file where the frame points, then run `opentide validate` again.
 
+## yaral_export_value
+
+An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
 ## yaral_function_unavailable
 
 The function exists, but not in this profile (rules or search).
@@ -6226,22 +6243,6 @@ opentide validate
 
 Change the file where the frame points, then run `opentide validate` again.
 
-## yaral_nesting_depth
-
-Function calls nest more than 20 deep.
-
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
-
-### Example
-
-```text
-opentide validate
-```
-
-### How to fix
-
-Change the file where the frame points, then run `opentide validate` again.
-
 ## yaral_nocase_on_enum
 
 `nocase` is applied to a comparison with an enumerated UDM field.
@@ -6279,7 +6280,7 @@ Write `suppression_window: 1h`, and `allow_zero_values: true` without quotes.
 
 ## yaral_outcome_aggregation
 
-An outcome reads an event field outside an aggregation in a rule with `match`, or aggregates an outcome variable.
+With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
 
 Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
@@ -6527,7 +6528,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 ## yaral_string_escape
 
-A double-quoted string holds an escape YARA-L does not define; the escapes are backslash, double quote, n, r and t.
+A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
 
 Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
@@ -6543,7 +6544,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 ## yaral_type
 
-An operator or function is applied to a value of the wrong type.
+An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
 
 Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
@@ -6608,6 +6609,22 @@ Change the file where the frame points, then run `opentide validate` again.
 ## yaral_unknown_udm_field
 
 The field path is not in the Unified Data Model.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_window_bound
+
+`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
 
 Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 

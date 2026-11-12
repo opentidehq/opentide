@@ -26,8 +26,8 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # published, so a release always builds from crates.io.
 # language-server at the head of its YARA-L work (Google Security Operations), until
 # the release that ships it.
-opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "847316012a822f95495f640eb1878119afa7bfcd" }
-opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "847316012a822f95495f640eb1878119afa7bfcd" }
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "c7f5cb5c83bda15578446957353c497fd33a0d9c" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "c7f5cb5c83bda15578446957353c497fd33a0d9c" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"
