@@ -294,6 +294,60 @@ impl Document {
     }
 }
 
+/// The end, in bytes, of the scalar written at `start..end` in `source`
+/// (`end` the parser's end mark): for a quoted scalar, just after its
+/// closing quote. The parser's end mark for a quoted scalar runs on over the
+/// blanks and a comment after it on the line, so a span taken from it would
+/// rewrite the comment too. `start` may sit on the scalar's tag or anchor
+/// (`!!str 'x'`, `&a "x"`), which are skipped. A plain or block scalar keeps
+/// `end`.
+#[must_use]
+pub fn scalar_end(source: &str, start: usize, end: usize) -> usize {
+    let mut at = start;
+    // The node's properties (a tag, an anchor, either order), each followed
+    // by blanks.
+    loop {
+        let rest = source.get(at..).unwrap_or_default();
+        if !rest.starts_with(['!', '&']) {
+            break;
+        }
+        let token = rest.find([' ', '\t', '\r', '\n']).unwrap_or(rest.len());
+        let blanks = rest[token..]
+            .find(|c: char| !matches!(c, ' ' | '\t'))
+            .unwrap_or(rest.len() - token);
+        at += token + blanks;
+    }
+    let rest = source.get(at..).unwrap_or_default();
+    let mut chars = rest.char_indices().peekable();
+    match chars.next() {
+        Some((_, '"')) => {
+            while let Some((index, ch)) = chars.next() {
+                match ch {
+                    '\\' => {
+                        chars.next();
+                    }
+                    '"' => return at + index + 1,
+                    _ => {}
+                }
+            }
+            end
+        }
+        Some((_, '\'')) => {
+            while let Some((index, ch)) = chars.next() {
+                if ch == '\'' {
+                    if chars.peek().is_some_and(|(_, next)| *next == '\'') {
+                        chars.next();
+                    } else {
+                        return at + index + 1;
+                    }
+                }
+            }
+            end
+        }
+        _ => end,
+    }
+}
+
 /// Reads `bytes`: UTF-8, then [`load`].
 pub fn load_bytes(bytes: &[u8]) -> Result<Document, LoadError> {
     let text = utf8(bytes)?;
@@ -808,6 +862,30 @@ impl Builder {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_quoted_scalar_ends_at_its_closing_quote() {
+        let cases = [
+            ("'a'  # c", "'a'"),
+            ("\"a\" # c", "\"a\""),
+            ("'it''s' # c", "'it''s'"),
+            ("\"a \\\" b\" # c", "\"a \\\" b\""),
+            ("!!str 'a' # c", "!!str 'a'"),
+            ("&x \"a\" # c", "&x \"a\""),
+            ("&x !!str 'a' # c", "&x !!str 'a'"),
+            ("'a\n  b'  # c", "'a\n  b'"),
+        ];
+        for (text, scalar) in cases {
+            assert_eq!(&text[..scalar_end(text, 0, text.len())], scalar, "{text:?}");
+        }
+        // A plain scalar, or a quote that never closes, keeps the end given.
+        assert_eq!(scalar_end("plain # c", 0, 5), 5);
+        assert_eq!(scalar_end("'open", 0, 5), 5);
+        // Byte offsets: `é` and `ü` are two bytes each.
+        let text = "é: 'ü' # c";
+        assert_eq!(&text[4..scalar_end(text, 4, text.len())], "'ü'");
+    }
+
     use super::*;
 
     #[test]
