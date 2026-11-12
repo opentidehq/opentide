@@ -1274,7 +1274,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
 
 /// `opentide generate <phase>...` (`run_generate` with named phases): the
 /// `schemas`, `templates`, `vocabs` and `snippets` phases; with none, the full
-/// pipeline ([`pipeline`]). Each finished phase writes its
+/// pipeline (`pipeline`). Each finished phase writes its
 /// `OPENTIDE_PROGRESS=json` event, out of the phases the run names.
 pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
     let mut report = named_phases(names, cx, version);
