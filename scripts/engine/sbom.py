@@ -271,7 +271,12 @@ def _cargo_sboms(
     _run(command)
     out = scratch / label
     out.mkdir(parents=True)
-    members = [ROOT / "analysis", ROOT / "xtask", *sorted(ROOT.glob("crates/*"))]
+    members = [
+        ROOT / "analysis",
+        ROOT / "xtask",
+        *sorted(ROOT.glob("crates/*")),
+        *sorted(ROOT.glob("bindings/*")),
+    ]
     for path in (member / f"{name}.json" for member in members):
         if not path.is_file():
             continue
@@ -372,8 +377,10 @@ def generate(out: Path, version: str | None = None, npm_version: str | None = No
             cwd=ROOT / NODE_PACKAGE,
         )
     )
+    # `npm sbom` names the subject after its folder (`node`).
+    subject = node["metadata"]["component"]
+    subject["group"], subject["name"] = "@opentide", "opentide"
     if npm_version:
-        subject = node["metadata"]["component"]
         subject["version"] = npm_version
         subject["purl"] = f"pkg:npm/%40opentide/opentide@{npm_version}"
     node = add_native(node, facade)
