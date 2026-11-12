@@ -31,8 +31,8 @@ commands:
                bin (bindings/node/cli.js, after `npm run build` there) under the
                `node` on PATH, which runs the same command line in-process
                (UC-5.3), leaving out and counting the runs the PyPI CLI still
-               answers in Python (--help, doctor). `--runner node` alone implies
-               --engine compare
+               answers in Python (--help; doctor where a platform is
+               enabled). `--runner node` alone implies --engine compare
 --report FILE  with --engine compare: write the JSON report (opentide-compare's RunReport)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start

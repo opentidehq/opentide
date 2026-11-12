@@ -481,8 +481,9 @@ jobs:
   # consumer); and its command line against the PyPI CLI's: `--json
   # commands` byte for byte, and every ported golden case through the
   # comparator (`cargo xtask golden check --runner node`; it leaves out
-  # `--help` and `doctor`, which the PyPI CLI still answers in Python). It
-  # builds the CLI a second time, so it is in the full set.
+  # `--help`, and `doctor` on a workspace that enables a platform, which the
+  # PyPI CLI still answers with Python: #977). It builds the CLI a second
+  # time, so it is in the full set.
   node:
     name: Node package (napi-rs build, tests, golden)
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
