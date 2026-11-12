@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 
 pub mod glob;
+pub mod help;
 pub mod json;
 pub mod ledger;
 pub mod normalise;
@@ -103,6 +104,9 @@ pub enum Kind {
     FileState,
     /// The file's permission bits differ.
     FileMode,
+    /// Two help screens a `help` entry approves the layout of say different
+    /// things: an option, a description, a default, the examples.
+    Help,
 }
 
 impl Kind {
@@ -118,6 +122,7 @@ impl Kind {
             Kind::FileExtra => "file_extra",
             Kind::FileState => "file_state",
             Kind::FileMode => "file_mode",
+            Kind::Help => "help",
         }
     }
 }
@@ -321,12 +326,86 @@ impl Comparison<'_> {
                 return;
             }
         }
+        if self.help_content(target, oracle, candidate) {
+            return;
+        }
         match (json::parse(oracle), json::parse(candidate)) {
             (Some(oracle_doc), Some(candidate_doc)) => {
                 self.json_content(target, oracle, candidate, &oracle_doc, candidate_doc);
             }
             _ => self.text_content(target, oracle, candidate),
         }
+    }
+
+    /// A help screen under a `help` entry: compared by what it says
+    /// ([`help`]), the layout approved. Whether it was (`false`: no `help`
+    /// entry, or a side that is not a help screen of the entry's command, so
+    /// the bytes are compared).
+    fn help_content(&mut self, target: &Target, oracle: &[u8], candidate: &[u8]) -> bool {
+        let entries: Vec<(usize, Rule)> = self
+            .ledger
+            .entries_for(self.case.command, self.case.id, target)
+            .map(|(index, entry)| (index, entry.rule.clone()))
+            .collect();
+        let Some(help_entry) = entries
+            .iter()
+            .find(|(_, rule)| *rule == Rule::Help)
+            .map(|(index, _)| *index)
+        else {
+            return false;
+        };
+        let (Ok(oracle_text), Ok(candidate_text)) =
+            (std::str::from_utf8(oracle), std::str::from_utf8(candidate))
+        else {
+            return false;
+        };
+        let (Some(oracle_screen), Some(candidate_screen)) = (
+            help::parse_typer(oracle_text),
+            help::parse_clap(candidate_text),
+        ) else {
+            return false;
+        };
+        let path = if self.case.command.is_empty() {
+            "opentide".to_owned()
+        } else {
+            format!("opentide {}", self.case.command)
+        };
+        if oracle_screen.path != path || candidate_screen.path != path {
+            return false;
+        }
+        let texts: Vec<(usize, &str, &str)> = entries
+            .iter()
+            .filter_map(|(index, rule)| match rule {
+                Rule::HelpText { oracle, candidate } => {
+                    Some((*index, oracle.as_str(), candidate.as_str()))
+                }
+                _ => None,
+            })
+            .collect();
+        let mut used = Vec::new();
+        let found = help::mismatches(&oracle_screen, &candidate_screen, &texts, &mut used);
+        if found.is_empty() {
+            self.approve(target, help_entry);
+            used.sort_unstable();
+            used.dedup();
+            for index in used {
+                self.approve(target, index);
+            }
+        } else {
+            let found = found
+                .into_iter()
+                .map(|mismatch| Difference {
+                    target: target.to_string(),
+                    kind: Kind::Help,
+                    pointer: None,
+                    oracle: excerpt(&mismatch.oracle),
+                    candidate: excerpt(&mismatch.candidate),
+                    at: Some(mismatch.at),
+                })
+                .collect();
+            self.differ(found);
+        }
+        true
     }
 
     fn json_content(
@@ -1882,6 +1961,7 @@ changelog = "**x**"
             Kind::FileExtra,
             Kind::FileState,
             Kind::FileMode,
+            Kind::Help,
         ] {
             assert_eq!(
                 serde_json::to_string(&kind).unwrap(),

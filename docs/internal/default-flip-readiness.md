@@ -13,23 +13,25 @@ description: What still runs on Python before Rust becomes the default engine (U
 
 ## Summary
 
-- `cargo xtask golden check --engine compare` on this branch: **1,660 cases, 1,568 compared,
-  0 unexplained differences, 0 stale ledger entries, 92 Python only.** Before this change it was
-  106 Python only: the 14 cases of a bare `opentide generate` (the full pipeline), ported here.
-- Every command path with a leaf implementation is in `RUST_COMMANDS`, and no recorded run of
-  one is refused with `engine_not_ported` any more. What the goldens still send to Python is the
-  root command, the bare command groups, `query` runs outside its platform routing, and
-  `--help` everywhere.
-- **`--help` is the largest group and needs a maintainer decision** (below): 236 cases print
-  Typer's help, 204 of them on commands that otherwise run on Rust, plus 10 bare runs that print
-  a help screen and the 2-case home screen.
-- Outside the goldens, Python still answers shell completion. UC-6.0d took the rest to Rust:
-  the `serve` host runs every request on Rust, `opentide tui` opens the Rust UI (its
-  Configuration tab ported), `lsp start` hands the server no Python catalog, `doctor` and
-  `setup mcp` probe nothing in Python, and `new` at a prompt, the two status-promotion edge cases
-  and `query --platform sysdig` no longer refuse. The MCP server is done (D4, UC-6.0c):
-  `opentide mcp start` defaults to the Rust server, which answers all 10 tools and 12 resources
-  itself. One narrow in-Rust refusal is left: a `query --rule` on a plugin (UC-4.5c).
+- `cargo xtask golden check --engine compare` after UC-6.0b: **1,660 cases, 1,652 compared,
+  0 unexplained differences, 0 stale ledger entries, 8 Python only** (G6, `query` outside its
+  platform routing). After UC-6.0 it was 1,568 compared and 92 Python only, with `--help`
+  compared against Typer's own output.
+- Every command path is in `RUST_COMMANDS`, the root (`()`) and the bare groups included
+  (UC-6.0b), and `--help` is covered on every path. Under `OPENTIDE_ENGINE=rust` the launcher
+  hands every run to the Rust command line, except Typer's completion requests
+  (`_OPENTIDE_COMPLETE`) and the runs `RUST_COMMANDS` does not cover (G6).
+- **D1, D2 and D3 are decided and done** (UC-6.0b, #841): clap's help, compared with the oracle's
+  by content (the ledger's `help` rule); `clap_complete` scripts behind `--show-completion` and
+  `--install-completion`; the home screen ported byte for byte.
+- Outside the goldens, Python answers only the completion requests of scripts Typer installed
+  (`_OPENTIDE_COMPLETE`). UC-6.0d took the rest to Rust: the `serve` host runs every request on
+  Rust, `opentide tui` opens the Rust UI (its Configuration tab ported), `lsp start` hands the
+  server no Python catalog, `doctor` and `setup mcp` probe nothing in Python, and `new` at a
+  prompt, the two status-promotion edge cases and `query --platform sysdig` no longer refuse.
+  The MCP server is done (D4, UC-6.0c): `opentide mcp start` defaults to the Rust server, which
+  answers all 10 tools and 12 resources itself. One narrow in-Rust refusal is left: a
+  `query --rule` on a plugin (UC-4.5c).
 
 ## How the inventory was taken
 
@@ -49,18 +51,26 @@ itself: it is Python in disguise and is counted with the help group below.
 
 | # | Group | Cases | What runs on Python, and why | Rust today | Proposed path |
 |---|-------|------:|------------------------------|------------|---------------|
-| G1 | `--help` on a command that runs on Rust | 204 | `dispatch` and the launcher hand every `--help` to Click: help is printed by Typer and Rich | clap's long help: the same descriptions and options, a different layout (below) | **Decision D1**: approve, or keep on Python until removal |
-| G2 | `--help` on the root, the six bare groups and `query` | 32 | as G1, and their command is not in `RUST_COMMANDS` (root, groups) or not covered (`query`, G6) | as G1 | with D1 |
-| G3 | A bare group or root that prints a help screen: `opentide` in plain and agent mode (4), `lsp`, `mcp`, `new` in human and plain mode (6, exit 2) | 10 | Typer's `no_args_is_help` | clap's help (`framework_goldens.rs` leaves these out as "help") | with D1 |
-| G4 | The home screen: a bare `opentide` at a terminal | 2 | Python renders a logo, the workspace's catalogue, health and platforms, and suggested commands with Rich | prints the root's help | **Port** (bounded: two recordings, the data is `info`'s) or approve the help instead (D3) |
-| G5 | Root and group runs that do not print help: `--version` (4), a mistyped command (4) or root option (4), `--repo` that is not a folder (4), `--debug info` (4), `--json` with no command (2); `generate extract`, `migrate`, `rules` bare in every mode (12), `lsp`, `mcp`, `new` bare in json and agent mode (6) | 40 | The launcher (`_may_run_on_rust`, `_plain_root_options`) and Click answer them before the dispatcher, and neither the root nor a group is a key of `RUST_COMMANDS` | byte for byte the oracle's: `crates/opentide-cli/tests/framework_goldens.rs` replays every one of them in-process | **Port the routing at the flip** (flip step 2): no Rust code is missing |
+| G1 | `--help` on a command that runs on Rust | 204 | — | clap's long help, compared by content | **Done** (UC-6.0b, D1): `--help` is covered on every path (`RustCommand.covers`), one `help` ledger entry per command path |
+| G2 | `--help` on the root, the six bare groups and `query` | 32 | — | as G1; the root lists its commands under Typer's headings | **Done** (UC-6.0b, D1) |
+| G3 | A bare group or root that prints a help screen: `opentide` in plain and agent mode (4), `lsp`, `mcp`, `new` in human and plain mode (6, exit 2) | 10 | — | clap's help | **Done** (UC-6.0b, D1) |
+| G4 | The home screen: a bare `opentide` at a terminal | 2 | — | `commands/home.rs`, byte for byte (`command_goldens.rs` replays both) | **Done** (UC-6.0b, D3) |
+| G5 | Root and group runs that do not print help: `--version` (4), a mistyped command (4) or root option (4), `--repo` that is not a folder (4), `--debug info` (4), `--json` with no command (2); `generate extract`, `migrate`, `rules` bare in every mode (12), `lsp`, `mcp`, `new` bare in json and agent mode (6) | 40 | — | byte for byte the oracle's | **Done** (UC-6.0b): the root `()` and the six groups are keys of `RUST_COMMANDS`, and the launcher no longer answers root options itself |
 | G6 | `query` without `--platform` or with a mistyped one (`sentinal`) | 8 | `query`'s `platforms=RUST_QUERY_PLATFORMS` covers a run only when it names a platform with a Rust connector | the same usage errors as Python (checked by hand: `query x`, `query --platform sentinal x`, plain and json). One run differs: `query --platform sysdig` is refused with `engine_not_ported`, where Python answers `sysdig has no query runner` (`usage_invalid_value`, `argument` `--platform`, the eight platforms with a runner as `choices`) | **Done (UC-6.0d)**: the Sysdig answer is ported (`query::no_runner`, the oracle's usage error) and `query`'s entry routes `sysdig` to Rust (`RUST_QUERY_ROUTED`); the app's unit tests emit a refusal of their own (`app::not_ported`). Left: **drop `platforms` from `query`'s entry** once UC-4.5b's plugin routing lands (D7) |
 
-The Node runner (`cargo xtask golden check --runner node`, the npm bin, no Python at all) leaves
-out G1 and `doctor`'s 8 cases on workspaces that enable a platform (#977); it was not run for
-this page.
+The Node runner (`cargo xtask golden check --runner node`, the npm bin, no Python at all) no
+longer leaves out `--help` (UC-6.0b) or `doctor`'s 8 cases on workspaces that enable a platform
+(UC-6.0d, #977, D5): it leaves out nothing. It was not run for this page.
 
 ### `--help`: how far clap is from the oracle
+
+> Resolved by UC-6.0b (D1). What follows is the inventory UC-6.0 took. The gaps it lists are
+> closed: the root's help lists its commands under the four headings and the completion
+> options, a flag pair is one option with its default, `--help` is the one help option (no
+> `-h`) and no command lists a `help` subcommand. The ledger's `help` rule
+> (`opentide_compare::help`) compares the usage path, the about text, every option, argument
+> and command with its description, default and environment variable, and the examples, case
+> by case; two `help-text` entries approve `validate query`'s CrowdStrike wording (#874).
 
 Each help case was run through the Rust command line (`python -m opentide.cli.rust <path> --help`,
 plain) and its words compared with the recording's:
@@ -101,8 +111,8 @@ plain) and its words compared with the recording's:
 | `opentide lsp start` | **Done (UC-6.0d)**: the Python launcher hands the server no catalog; it generates them from the models (`catalog: "models"`), as under `rust` | — | — |
 | `doctor` | **Done (UC-6.0d, D5)**: neither `python_version` nor `platform_sdk` runs on Rust; the dropped rows are approved (`json-drop:/checks` entries and the text cases' blocks), and the Node runner compares `doctor` on every fixture | — | — |
 | `setup mcp`, `setup --mcp` | **Done (UC-6.0d)**: probes the Rust MCP server (`McpServer::probe`), compiled in; the launcher sets neither `OPENTIDE_MCP_SERVER` nor `OPENTIDE_PYTHON_MODULES` | — | — |
-| Shell completion | `--install-completion`, `--show-completion` are Typer's | A Rust completion, or none | **Decision D2** |
-| The launcher (`opentide.cli.launch`) | Decides Rust or Python before Typer loads; sends `--help`, `--version`, completion, root errors and `compare` to Python | At the flip, everything but the escape hatch to Rust; at removal, a console script that only calls `opentide._native.main` | Flip steps 2 and 5 |
+| Shell completion | Under `rust`, `clap_complete`'s scripts (`commands/completion.rs`, UC-6.0b); Typer's scripts still call back into Python (`_OPENTIDE_COMPLETE`), which the launcher sends to the Python CLI | Nothing: reinstalling replaces a Typer script. The Rust scripts complete commands, options and choices, not the workspace's values (UUIDs, files, ATT&CK ids, codes) | **Done** (D2); dynamic values are a follow-up (`clap_complete`'s `CompleteEnv`) |
+| The launcher (`opentide.cli.launch`) | Decides Rust or Python before Typer loads; under `rust`, sends only Typer's completion requests and uncovered runs (G6) to Python (UC-6.0b) | At the flip, everything but the escape hatch to Rust; at removal, a console script that only calls `opentide._native.main` | Flip steps 2 and 5 |
 | SDK | `opentide.Workspace` and `run_json` are the Rust facade (UC-5.2); `opentide.models` are Rust classes (UC-1.9); `opentide.Opentide` (the Python registry) and the Pydantic shims in `opentide.models` warn as deprecated | The end of their deprecation cycle; UC-5.2b (async methods, `sdk.pyi`) in flight | Delete `core/registry.py` and the shims when their cycle ends, independent of the CLI flip |
 | Platform plugins | Entry points (`opentide.platforms`) are Python by design; the Rust core calls them through PyO3 (`plugins.rs`, `opentide.plugins`) | Nothing: the plugin hook stays in the SDK layer (#841's acceptance) | Keep |
 
@@ -152,9 +162,9 @@ keeps `OPENTIDE_ENGINE=python` as an escape hatch, then its Python implementatio
 
 | # | Decision | Options | Consequence |
 |---|----------|---------|-------------|
-| D1 | `--help` (G1–G3: 246 cases) | **(a)** approve clap's help per case group (one `APPROVED_DIFFS.toml` entry per command path's help cases, a whole-stdout rule, one `CHANGELOG.md` lead: "`--help` is printed by the Rust command line"), and route `--help` to Rust at the flip; **(b)** keep `--help` on Python until removal | (a) lets the flip be whole and the npm bin reach parity (#977); Typer and Rich can go with the rest. (b) keeps Typer, Rich and the Python command tree installed until the last removal PR, which must then approve (a) anyway or reproduce Typer's layout, which the standing rule (no Python library ported) rules out. Either way, disable clap's `help` subcommand |
-| D2 | Shell completion | generate completions with a crate (`clap_complete`) under the same options, or drop the options with a changelog entry | Typer's scripts call back into Python; they cannot survive the removal unchanged |
-| D3 | The home screen (G4) | port it (2 recordings; `info`'s data) or approve the root's help in its place | A person running `opentide` with no arguments sees it first |
+| D1 | **Decided, done in UC-6.0b:** (a), clap's help compared by content. `--help` (G1–G3: 246 cases) | **(a)** approve clap's help per case group (one `APPROVED_DIFFS.toml` entry per command path's help cases, a whole-stdout rule, one `CHANGELOG.md` lead: "`--help` is printed by the Rust command line"), and route `--help` to Rust at the flip; **(b)** keep `--help` on Python until removal | (a) lets the flip be whole and the npm bin reach parity (#977); Typer and Rich can go with the rest. (b) keeps Typer, Rich and the Python command tree installed until the last removal PR, which must then approve (a) anyway or reproduce Typer's layout, which the standing rule (no Python library ported) rules out. Either way, disable clap's `help` subcommand |
+| D2 | **Decided, done in UC-6.0b:** `clap_complete`. Shell completion | generate completions with a crate (`clap_complete`) under the same options, or drop the options with a changelog entry | Typer's scripts call back into Python; they cannot survive the removal unchanged |
+| D3 | **Decided, done in UC-6.0b:** port. The home screen (G4) | port it (2 recordings; `info`'s data) or approve the root's help in its place | A person running `opentide` with no arguments sees it first |
 | D4 | ~~The MCP server's 8 delegated tools and 12 resources~~ **Done (UC-6.0c)** | All ported in one change, and `mcp start` flipped on its own (`DEFAULT_ENGINES`) | Python is no longer needed for MCP clients |
 | D5 | `doctor`'s `platform_sdk` and `python_version` without Python | **Decided: dropped** (UC-6.0d) | Closes the `doctor` half of #977 |
 | D6 | Flip granularity | per command family across several releases (plan §7), or every path at once in one release since compare is green for all | One release is shorter; per family limits what the escape hatch must cover |
@@ -181,3 +191,21 @@ keeps `OPENTIDE_ENGINE=python` as an escape hatch, then its Python implementatio
   oracle's indices for the entries after them.
 - **`new` at a prompt**, **two status-promotion edge cases** and **`query --platform sysdig`**
   no longer refuse; `validate_query::live` and `live_not_ported` are deleted.
+
+## What UC-6.0b ported
+
+- **`--help` (D1, G1–G3):** clap's long help (`crates/opentide-cli/src/help.rs`), the root's
+  commands under Author, Ship, Workspace and Agents and integrations, flag pairs on one line
+  with their defaults, `--help` the one help option, no `help` subcommand, environment values
+  never shown. 64 `help` ledger entries (one per command path's help cases, five for the bare
+  help screens) and two `help-text` entries; `tests/command_goldens.rs` replays all 236 help
+  cases in-process.
+- **Shell completion (D2):** `--show-completion` and `--install-completion` on `clap_complete`
+  (`commands/completion.rs`).
+- **The home screen (D3, G4):** `commands/home.rs`, byte for byte; a line holding opentide's
+  version keeps its printed width when the comparator normalises the version
+  (`normalise::opentide_version_padded`).
+- **Routing (G5):** the root and the six bare groups are keys of `RUST_COMMANDS`; the launcher
+  sends every root option to the Rust command line under `rust`. Two parser errors now read as
+  the oracle's (`Option '--json' does not take a value.`, `Option '--repo' requires an
+  argument.`, no command and no usage notes), for every command.

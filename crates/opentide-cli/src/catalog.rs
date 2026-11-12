@@ -110,11 +110,14 @@ pub struct Entry {
     pub command: Command,
 }
 
-/// The root command: the tree, with no `help` subcommand (the CLI has
-/// `--help` only), parsed as the CLI always has ([`parse_settings`]).
+/// The root command: the tree, parsed as the CLI always has
+/// ([`parse_settings`]).
 pub fn root() -> Command {
-    parse_settings(Cli::command().disable_help_subcommand(true))
+    parse_settings(Cli::command())
 }
+
+/// What `--help` says of itself, on every command.
+pub const HELP_FLAG_HELP: &str = "Show this message and exit.";
 
 /// clap's settings for how `command` and everything under it parse:
 ///
@@ -123,11 +126,25 @@ pub fn root() -> Command {
 ///   (`--strategy`) still collects every value;
 /// - an option's value may start with `-` (`--query --json` searches for
 ///   `--json`, `--limit -1` is a number out of range): the word after an
-///   option that takes a value is its value.
+///   option that takes a value is its value;
+/// - `--help` is the one help option, on every command, and there is no
+///   `help` subcommand (`opentide validate help` is no command) and no `-h`,
+///   as the command tree has always been (#841);
+/// - an environment variable an option reads is named in the help, never
+///   its value (`--proxy`'s may hold a password).
 pub fn parse_settings(command: Command) -> Command {
     command
+        .disable_help_subcommand(true)
+        .disable_help_flag(true)
+        .arg(
+            Arg::new("help")
+                .long("help")
+                .action(ArgAction::Help)
+                .help(HELP_FLAG_HELP),
+        )
         .args_override_self(true)
         .mut_args(|arg| {
+            let arg = arg.hide_env_values(true);
             if !arg.is_positional() && crate::hoist::takes_value(&arg) {
                 arg.allow_hyphen_values(true)
             } else {

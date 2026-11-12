@@ -8,6 +8,7 @@
 //! before the outcome line. `app::Run::emit_report` writes it in the run's
 //! mode.
 
+pub mod completion;
 pub mod cve;
 pub mod deploy;
 pub mod deploy_promote;
@@ -19,6 +20,7 @@ pub mod explain;
 pub mod extract;
 pub mod findings;
 pub mod generate;
+pub mod home;
 pub mod info;
 pub mod lint;
 pub mod lsp;

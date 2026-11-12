@@ -158,8 +158,12 @@ pub struct Globals {
     pub quiet: bool,
     /// `--version` or `-V`.
     pub version: bool,
-    /// `--help` or `-h` among the root's own options.
+    /// `--help` among the root's own options.
     pub help: bool,
+    /// `--install-completion`.
+    pub install_completion: bool,
+    /// `--show-completion`.
+    pub show_completion: bool,
     /// `--repo`, as typed on the command line (not from the environment).
     pub repo: Option<String>,
     /// `--proxy`, from the command line or `OPENTIDE_PROXY`.
@@ -187,13 +191,17 @@ pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
                 next
             })
         };
+        // A flag given a value (`--json=1`) is a usage error, not the flag.
+        let flag = inline.is_none();
         match name {
-            "--json" => globals.json = true,
-            "--no-color" => globals.no_color = true,
-            "--debug" => globals.debug = true,
-            "--quiet" => globals.quiet = true,
-            "--version" | "-V" => globals.version = true,
-            "--help" | "-h" => globals.help = true,
+            "--json" if flag => globals.json = true,
+            "--no-color" if flag => globals.no_color = true,
+            "--debug" if flag => globals.debug = true,
+            "--quiet" if flag => globals.quiet = true,
+            "--version" | "-V" if flag => globals.version = true,
+            "--help" if flag => globals.help = true,
+            "--install-completion" if flag => globals.install_completion = true,
+            "--show-completion" if flag => globals.show_completion = true,
             "--repo" => globals.repo = value(),
             "--proxy" => globals.proxy = value(),
             "--data" => globals.data = value(),
@@ -322,22 +330,153 @@ impl Run<'_> {
 
     /// The help of the command at `path` on `out`; `code`.
     fn help(&self, path: &[String], code: i32, out: &mut dyn Write) -> std::io::Result<i32> {
-        let mut command = usage::command_at(&self.root, path).clone();
-        let mut bin = vec![catalog::PROGRAM.to_owned()];
-        bin.extend(path.iter().cloned());
-        command = command.bin_name(bin.join(" "));
-        let help = command.render_long_help();
-        let text = if self.mode == Mode::Human {
-            help.ansi().to_string()
-        } else {
-            help.to_string()
-        };
+        let text = crate::help::render(&self.root, path, self.mode == Mode::Human);
         out.write_all(text.as_bytes())?;
-        if !text.ends_with('\n') {
-            out.write_all(b"\n")?;
-        }
         out.flush()?;
         Ok(code)
+    }
+
+    /// The home screen of a bare `opentide` (`commands::home`), for this
+    /// run's terminal; `None` where it cannot be drawn and the help shows.
+    fn home(&self) -> Option<String> {
+        let cwd = self
+            .host
+            .cwd
+            .clone()
+            .or_else(|| std::env::current_dir().ok())?;
+        let home = self
+            .env
+            .get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        let facts = crate::commands::home::gather(
+            &self.host.version,
+            &cwd,
+            self.env.get("OPENTIDE_REPO_ROOT"),
+        );
+        let console = self.console(self.host.stdout_tty);
+        Some(crate::commands::home::render(
+            &facts,
+            &crate::commands::home::Screen {
+                colour: console.colour,
+                width: self.host.width.unwrap_or(80),
+                cwd: &cwd,
+                home: home.as_deref(),
+            },
+        ))
+    }
+
+    /// `--show-completion [SHELL]` (`install` false) or
+    /// `--install-completion [SHELL]`: the script on stdout, or installed.
+    fn completion(
+        &self,
+        install: bool,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        use crate::commands::completion;
+        let option = if install {
+            "--install-completion"
+        } else {
+            "--show-completion"
+        };
+        let start = hoist::root_options_end(&self.root, &self.args);
+        let words: Vec<String> = self.args[start..]
+            .iter()
+            .take_while(|word| !word.starts_with('-'))
+            .cloned()
+            .collect();
+        let refuse = |failure: Failure| {
+            let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            let notes = vec![
+                ("usage".to_owned(), usage::usage_line(&self.root, &[])),
+                (
+                    "help".to_owned(),
+                    format!("run '{} --help'", catalog::PROGRAM),
+                ),
+            ];
+            (outcome, notes)
+        };
+        let shell = match completion::named_shell(&words, option) {
+            Ok(Some(shell)) => shell,
+            Ok(None) => {
+                if let Some(shell) = completion::detect(self.env.get("SHELL")) {
+                    shell
+                } else {
+                    let message = format!(
+                        "Could not tell which shell this is. Name it: {}",
+                        completion::form(option)
+                    );
+                    let (outcome, notes) = refuse(Failure::new(code::USAGE_ERROR, message));
+                    return self.emit(&outcome, &notes, &[], out, err);
+                }
+            }
+            Err(message) => {
+                let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
+                failure.argument = Some(option.to_owned());
+                let (outcome, notes) = refuse(failure);
+                return self.emit(&outcome, &notes, &[], out, err);
+            }
+        };
+        let script = completion::script(&self.root, shell);
+        if !install {
+            out.write_all(script.as_bytes())?;
+            out.flush()?;
+            return Ok(0);
+        }
+        let home = self
+            .env
+            .get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        let profile = matches!(shell, "powershell" | "pwsh")
+            .then(|| completion::powershell_profile(shell))
+            .flatten();
+        let installed = home.as_deref().map_or_else(
+            || {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "no home folder (HOME is not set)",
+                ))
+            },
+            |home| completion::install(shell, &script, home, profile.as_deref()),
+        );
+        let outcome = match installed {
+            Ok(installed) => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let shown = completion::person_path(&installed.path, &cwd, home.as_deref());
+                let next = if installed.reload.is_empty() {
+                    NextAction::new(installed.reason, "")
+                } else {
+                    NextAction::new(installed.reload, installed.reason)
+                };
+                Outcome {
+                    command: String::new(),
+                    status: "completed".into(),
+                    message: format!("Installed {shell} completion in {shown}"),
+                    data: vec![
+                        ("shell".into(), crate::json::Json::Str(shell.to_owned())),
+                        (
+                            "path".into(),
+                            crate::json::Json::Str(installed.path.to_string_lossy().into_owned()),
+                        ),
+                    ],
+                    exit_code: 0,
+                    summary: Vec::new(),
+                    next_actions: vec![next],
+                    failure: None,
+                }
+            }
+            Err(error) => Outcome::failed(
+                "",
+                1,
+                Failure::new(
+                    "io_error",
+                    format!("Could not install {shell} completion: {error}"),
+                ),
+            ),
+        };
+        self.emit(&outcome, &[], &[], out, err)
     }
 
     fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
@@ -345,6 +484,17 @@ impl Run<'_> {
             writeln!(out, "{} {}", catalog::PROGRAM, self.host.version)?;
             out.flush()?;
             return Ok(0);
+        }
+        if self.globals.install_completion || self.globals.show_completion {
+            return self.completion(self.globals.install_completion, out, err);
+        }
+        if self.args.is_empty() && self.mode == Mode::Human {
+            // A person at a terminal: the home screen (D3), else the help.
+            if let Some(screen) = self.home() {
+                out.write_all(screen.as_bytes())?;
+                out.flush()?;
+                return Ok(0);
+            }
         }
         if self.args.is_empty() && !self.mode.is_machine() {
             return self.help(&[], 0, out);
@@ -3897,11 +4047,103 @@ mod tests {
         let bare = dispatched("--json", &[], false);
         assert_eq!(bare.code, 2);
         assert!(bare.stdout.contains("\"error\":\"Missing command.\""));
-        // `-Vh`: clap's `-h` shows the help (an intended difference: the
-        // Python CLI had no `-h` and exited 2).
-        let short = dispatched("-Vh", &[], false);
-        assert_eq!(short.code, 0);
-        assert!(short.stdout.contains("Usage: opentide"));
+        // `-h` is no option, as in the Python CLI (#841): `--help` is the
+        // one help option.
+        let short = dispatched("--json -h", &[], false);
+        assert_eq!(short.code, 2, "{}", short.stdout);
+        assert!(
+            short.stdout.contains("\"code\":\"usage_unknown_option\""),
+            "{}",
+            short.stdout
+        );
+        // A flag given a value is the parser's error, as the oracle's.
+        let valued = dispatched("--json=1 explain x", &[], false);
+        assert_eq!(valued.code, 2);
+        assert!(
+            valued
+                .stderr
+                .starts_with("error: Option '--json' does not take a value.\n"),
+            "{}",
+            valued.stderr
+        );
+        assert!(!valued.stderr.contains("usage:"), "{}", valued.stderr);
+        let missing = dispatched("--json info --platform", &[], false);
+        assert!(
+            missing.stdout.contains("\"command\":\"\",\"duration_ms\""),
+            "{}",
+            missing.stdout
+        );
+    }
+
+    /// `--show-completion` and `--install-completion` (#841, D2): clap's
+    /// script for the shell named after the option, or the shell the run is
+    /// in; a word that is no shell is a usage error naming the form.
+    #[test]
+    fn completion_scripts_are_shown_and_installed() {
+        let shown = dispatched("--show-completion zsh", &[], false);
+        assert_eq!(shown.code, 0, "{}", shown.stderr);
+        assert!(
+            shown.stdout.starts_with("#compdef opentide"),
+            "{}",
+            shown.stdout
+        );
+        let detected = dispatched("--show-completion", &[("SHELL", "/usr/bin/fish")], false);
+        assert_eq!(detected.code, 0, "{}", detected.stderr);
+        let bad = dispatched("--json --show-completion bash zsh", &[], false);
+        assert_eq!(bad.code, 2);
+        assert!(
+            bad.stdout.contains(
+                "Invalid value for '--show-completion': 'bash zsh' is not a supported shell. \
+                 Use: opentide --show-completion [bash|zsh|fish|powershell|pwsh]"
+            ),
+            "{}",
+            bad.stdout
+        );
+        assert!(bad.stdout.contains("\"code\":\"usage_invalid_value\""));
+        let home = tempfile::tempdir().unwrap();
+        let home_text = home.path().display().to_string();
+        let installed = dispatched(
+            "--json --install-completion bash",
+            &[("HOME", home_text.as_str())],
+            false,
+        );
+        assert_eq!(installed.code, 0, "{}", installed.stdout);
+        assert!(
+            installed
+                .stdout
+                .starts_with("{\"shell\":\"bash\",\"path\":"),
+            "{}",
+            installed.stdout
+        );
+        assert!(
+            installed.stdout.contains(
+                "{\"command\":\"source ~/.bashrc\",\"reason\":\"or restart your shell\"}"
+            ),
+            "{}",
+            installed.stdout
+        );
+        assert!(home.path().join(".bash_completions/opentide.sh").is_file());
+        let homeless = dispatched("--install-completion fish", &[("HOME", "")], false);
+        assert_eq!(homeless.code, 1, "{}", homeless.stderr);
+        assert!(
+            homeless
+                .stderr
+                .contains("Could not install fish completion"),
+            "{}",
+            homeless.stderr
+        );
+    }
+
+    /// A bare `opentide` at a terminal is the home screen (D3); with no
+    /// terminal, the help.
+    #[test]
+    fn a_bare_run_at_a_terminal_is_the_home_screen() {
+        let home = dispatched("", &[("OPENTIDE_OUTPUT", "human")], true);
+        assert_eq!(home.code, 0);
+        assert!(home.stdout.contains("Suggested next"), "{}", home.stdout);
+        let help = dispatched("", &[], false);
+        assert_eq!(help.code, 0);
+        assert!(help.stdout.contains("Usage: opentide"), "{}", help.stdout);
     }
 
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {

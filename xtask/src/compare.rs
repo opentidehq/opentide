@@ -228,19 +228,11 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
 /// differently. `golden check --runner node` counts these cases and says why;
 /// `--engine compare` compares them.
 ///
-/// - `--help`: the PyPI launcher prints Typer's help (Rich panels), the npm
-///   bin the Rust command line's (clap) (#977).
-///
-/// `doctor` is compared on every fixture: it checks nothing in Python
-/// (UC-6.0d, #841), so the npm bin answers as the PyPI CLI does.
-pub fn node_leaves_out(case: &crate::golden::case::Case) -> Option<&'static str> {
-    let mut options = case.argv.iter().skip(1).take_while(|arg| *arg != "--");
-    if options.any(|arg| arg == "--help" || arg == "-h") {
-        return Some(
-            "`--help`: the PyPI CLI prints Typer's help (Rich panels), the npm bin the Rust \
-             command line's (clap)",
-        );
-    }
+/// Nothing is left out since UC-6.0b and UC-6.0d (#841, #977): `--help` is
+/// the Rust command line's under both runners, and `doctor` checks nothing in
+/// Python, so the npm bin answers both as the PyPI CLI does and every case is
+/// compared. The hook stays for the next run that answers in Python.
+pub fn node_leaves_out(_case: &crate::golden::case::Case) -> Option<&'static str> {
     None
 }
 
@@ -381,7 +373,8 @@ pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
 
 /// Whether the Rust implementation covers a case of `command` run with
 /// `argv`: its command is in `table`, and the arguments before `--` carry
-/// one of the flags it requires, if it requires any, and none it refuses.
+/// `--help` (the command tree's, whatever else they carry: #841), or one of
+/// the flags it requires, if it requires any, and none it refuses.
 pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]) -> bool {
     let Some(coverage) = table.get(command) else {
         return false;
@@ -390,6 +383,9 @@ pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    if options.iter().any(|arg| arg == "--help") {
+        return true;
+    }
     if coverage.refuses.iter().any(|flag| options.contains(flag)) {
         return false;
     }
@@ -653,9 +649,13 @@ changelog = "**c**"
         };
         let left_out =
             |command: &str, argv: &[&str]| super::node_leaves_out(&on("none", command, argv));
-        assert!(left_out("validate", &["opentide", "validate", "--help"]).is_some());
-        assert!(left_out("info", &["opentide", "-h", "info"]).is_some());
-        assert!(left_out("doctor", &["opentide", "doctor", "--help"]).is_some());
+        // `--help` is the Rust command line's under both runners (#841).
+        assert_eq!(
+            left_out("validate", &["opentide", "validate", "--help"]),
+            None
+        );
+        assert_eq!(left_out("info", &["opentide", "-h", "info"]), None);
+        assert_eq!(left_out("doctor", &["opentide", "doctor", "--help"]), None);
         // doctor checks nothing in Python (UC-6.0d): compared on every fixture.
         let doctor = ["opentide", "doctor", "--offline"];
         for fixture in [
@@ -673,11 +673,6 @@ changelog = "**c**"
             );
         }
         assert_eq!(left_out("validate", &["opentide", "validate"]), None);
-        // After `--`, `--help` is an argument, not the option.
-        assert_eq!(
-            left_out("new rule", &["opentide", "new", "rule", "--", "--help"]),
-            None
-        );
     }
 
     #[test]
@@ -852,6 +847,28 @@ changelog = "**c**"
             &argv(&["opentide", "deploy", "--platform", "elastic", "--all"])
         ));
         assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
+        // `--help` is the command tree's, whatever the run requires (#841);
+        // after `--` it is an argument.
+        assert!(super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--help"])
+        ));
+        assert!(super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--all", "--help"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--", "--help"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "lint",
+            &argv(&["opentide", "lint", "--help"])
+        ));
     }
 
     #[test]

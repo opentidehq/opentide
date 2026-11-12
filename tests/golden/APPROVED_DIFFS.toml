@@ -10,6 +10,7 @@
 # Each entry is a [[diff]] table, and every field is required:
 #
 #   command    the command path, words one space apart: "generate docs rules"
+#              ("" for the root, `opentide` itself)
 #   case       a glob over case ids: `*` any run of characters, `?` one
 #   target     stdout | stderr | exit_code | file:<path relative to the workspace>
 #   rule       json:<JSON pointer> (the value there in the target's JSON
@@ -26,6 +27,16 @@
 #              one entry and the lines after it are compared at their place;
 #              a case may have several, one per block, each placed by its
 #              oracle lines)
+#              or help (stdout only, oracle = "typer", candidate = "clap": a
+#              help screen's layout, approved where both screens are help of
+#              the entry's command and say the same thing: usage path, about
+#              text, every section's options, arguments and commands in
+#              order with their descriptions, defaults and environment
+#              variables, and the examples; opentide_compare::help)
+#              or help-text (stdout only: where a help entry applies, a
+#              description, about text or epilog that reads `oracle` on the
+#              oracle's screen and `candidate` on the candidate's, words one
+#              space apart)
 #              or mode (file: targets only: the file's permission bits,
 #              the file written on both sides; its bytes are still
 #              compared)
@@ -8672,96 +8683,6 @@ issue = "https://github.com/opentidehq/opentide/issues/790"
 changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
 
 [[diff]]
-command = "validate query"
-case = "validate.query/human/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "\u001b[2m│\u001b[0m                                    platform the engine parses: carbon_black_cloud,               \u001b[2m│\u001b[0m"
-candidate = "\u001b[2m│\u001b[0m                                    platform the engine parses: carbon_black_cloud, crowdstrike,  \u001b[2m│\u001b[0m"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/human/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "\u001b[2m│\u001b[0m                                    .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)    \u001b[2m│\u001b[0m"
-candidate = "\u001b[2m│\u001b[0m                                    .esql, .eql, .kuery, .lucene, .falco, .cql) offline           \u001b[2m│\u001b[0m\n\u001b[2m│\u001b[0m                                    (repeatable)                                                  \u001b[2m│\u001b[0m"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/plain/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "│                                    carbon_black_cloud,                       │"
-candidate = "│                                    carbon_black_cloud, crowdstrike,          │"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/plain/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "│                                    .lucene, .falco) offline (repeatable)     │"
-candidate = "│                                    .lucene, .falco, .cql) offline            │\n│                                    (repeatable)                              │"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/json/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "│                                    carbon_black_cloud,                       │"
-candidate = "│                                    carbon_black_cloud, crowdstrike,          │"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/json/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "│                                    .lucene, .falco) offline (repeatable)     │"
-candidate = "│                                    .lucene, .falco, .cql) offline            │\n│                                    (repeatable)                              │"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/agent/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "│                                    carbon_black_cloud,                       │"
-candidate = "│                                    carbon_black_cloud, crowdstrike,          │"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-[[diff]]
-command = "validate query"
-case = "validate.query/agent/none/help"
-target = "stdout"
-rule = "lines"
-oracle = "│                                    .lucene, .falco) offline (repeatable)     │"
-candidate = "│                                    .lucene, .falco, .cql) offline            │\n│                                    (repeatable)                              │"
-reason = "`validate query` checks CrowdStrike's CQL offline since the oracle (#874): its help, which the Python launcher prints until UC-3.8, names `crowdstrike` among the platforms the engine parses and `.cql` among the query files, and Rich wraps the `--file` help one line further"
-issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
-
-# migrate vocab-scope on the Rust command line (UC-3.5c, #928).
-
-[[diff]]
 command = "migrate vocab-scope"
 case = "migrate.vocab-scope/json/fault/default"
 target = "stdout"
@@ -12835,3 +12756,731 @@ candidate = "0644"
 reason = "Status promotion rewrites a rule file through a temporary file; 0.23.0 left mkstemp's owner-only mode on it, so a rule committed as 0644 came back 0600. The rewritten file now takes the mode of the file it replaces (the fixture's 0644); its bytes are compared as before."
 issue = "https://github.com/opentidehq/opentide/issues/987"
 changelog = "**Status promotion keeps a rule file's permissions**"
+
+# UC-6.0b (#841, D1): --help is clap's, compared with the oracle's by content (rule = "help").
+
+[[diff]]
+command = ""
+case = "_root/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "commands"
+case = "commands/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "deploy migrate-state"
+case = "deploy.migrate-state/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "doctor"
+case = "doctor/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "explain"
+case = "explain/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate"
+case = "generate/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate docs"
+case = "generate.docs/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate docs index"
+case = "generate.docs.index/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate docs objectives"
+case = "generate.docs.objectives/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate docs rules"
+case = "generate.docs.rules/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate docs threats"
+case = "generate.docs.threats/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate explorer"
+case = "generate.explorer/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate exports"
+case = "generate.exports/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate exports navigator"
+case = "generate.exports.navigator/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate exports objects"
+case = "generate.exports.objects/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate exports revisions"
+case = "generate.exports.revisions/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate extract"
+case = "generate.extract/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate extract defender"
+case = "generate.extract.defender/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate extract elastic"
+case = "generate.extract.elastic/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate inflight"
+case = "generate.inflight/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "generate inflight prune"
+case = "generate.inflight.prune/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "info"
+case = "info/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "lint"
+case = "lint/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "lsp"
+case = "lsp/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "lsp start"
+case = "lsp.start/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "mcp"
+case = "mcp/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "mcp start"
+case = "mcp.start/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "migrate"
+case = "migrate/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "migrate vocab-scope"
+case = "migrate.vocab-scope/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "new"
+case = "new/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "new objective"
+case = "new.objective/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "new rule"
+case = "new.rule/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "new threat"
+case = "new.threat/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "query"
+case = "query/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "rules"
+case = "rules/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "rules unreviewed"
+case = "rules.unreviewed/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "serve"
+case = "serve/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup"
+case = "setup/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup ci"
+case = "setup.ci/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup env"
+case = "setup.env/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup hooks"
+case = "setup.hooks/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup mcp"
+case = "setup.mcp/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup platforms"
+case = "setup.platforms/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup repo"
+case = "setup.repo/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup skills discover"
+case = "setup.skills.discover/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup skills show"
+case = "setup.skills.show/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "setup vscode"
+case = "setup.vscode/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "share"
+case = "share/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "share preview"
+case = "share.preview/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "share push"
+case = "share.push/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "share retract"
+case = "share.retract/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "share status"
+case = "share.status/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "share targets"
+case = "share.targets/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "tui"
+case = "tui/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "validate"
+case = "validate/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = ""
+case = "_root/plain/*/bare"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "A bare group (or `opentide` itself, outside a terminal's home screen) prints its help, laid out by clap, where the oracle's was Typer's; the same content, held to the oracle's by the comparator (decision D1, #841)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = ""
+case = "_root/agent/*/bare"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "A bare group (or `opentide` itself, outside a terminal's home screen) prints its help, laid out by clap, where the oracle's was Typer's; the same content, held to the oracle's by the comparator (decision D1, #841)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "lsp"
+case = "lsp/*/none/bare"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "A bare group (or `opentide` itself, outside a terminal's home screen) prints its help, laid out by clap, where the oracle's was Typer's; the same content, held to the oracle's by the comparator (decision D1, #841)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "mcp"
+case = "mcp/*/none/bare"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "A bare group (or `opentide` itself, outside a terminal's home screen) prints its help, laid out by clap, where the oracle's was Typer's; the same content, held to the oracle's by the comparator (decision D1, #841)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "new"
+case = "new/*/none/bare"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "A bare group (or `opentide` itself, outside a terminal's home screen) prints its help, laid out by clap, where the oracle's was Typer's; the same content, held to the oracle's by the comparator (decision D1, #841)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is clap's help on the Rust command line**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/*/none/help"
+target = "stdout"
+rule = "help-text"
+oracle = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk"
+candidate = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk"
+reason = "validate query checks CrowdStrike queries offline as CQL since 0.24, so its help names the platform and the .cql files, as opentide --json commands does (its entries above)."
+issue = "https://github.com/opentidehq/opentide/issues/790"
+changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/*/none/help"
+target = "stdout"
+rule = "help-text"
+oracle = "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)"
+candidate = "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)"
+reason = "validate query checks CrowdStrike queries offline as CQL since 0.24, so its help names the platform and the .cql files, as opentide --json commands does (its entries above)."
+issue = "https://github.com/opentidehq/opentide/issues/790"
+changelog = "**CrowdStrike Next-Gen SIEM queries are checked as CQL, offline and in the editor.**"

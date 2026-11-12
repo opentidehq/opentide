@@ -175,8 +175,14 @@ class RustCommand:
         )
 
     def covers(self, args: Sequence[str]) -> bool:
-        """Whether the Rust implementation runs the command with *args*."""
+        """Whether the Rust implementation runs the command with *args*.
+
+        ``--help`` is the command tree's, whatever the run's other options:
+        the Rust command line prints it for every command it has (#841).
+        """
         options = args[: args.index("--")] if "--" in args else args
+        if "--help" in options:
+            return True
         if any(flag in options for flag in self.refuses):
             return False
         if self.plugin_run(options):
@@ -356,7 +362,19 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: plugin's platform run on Rust, the one engine with the plugin hook
 #: (*plugins*, UC-4.5, #835), under the default engine too (UC-4.5b:
 #: :func:`plugin_default`).
+#: The root, ``()``, and the bare groups (``generate extract``, ``lsp``,
+#: ``mcp``, ``migrate``, ``new``, ``rules``) with UC-6.0b (#841): ``--version``,
+#: a mistyped command or root option, a ``--repo`` that is not a folder, the
+#: help a bare group prints, shell completion and the home screen; and
+#: ``--help`` on every path here (:meth:`RustCommand.covers`).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
+    (): RustCommand(launch=RUST_CLI),
+    ("generate", "extract"): RustCommand(launch=RUST_CLI),
+    ("lsp",): RustCommand(launch=RUST_CLI),
+    ("mcp",): RustCommand(launch=RUST_CLI),
+    ("migrate",): RustCommand(launch=RUST_CLI),
+    ("new",): RustCommand(launch=RUST_CLI),
+    ("rules",): RustCommand(launch=RUST_CLI),
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
     ("info",): RustCommand(launch=RUST_CLI),

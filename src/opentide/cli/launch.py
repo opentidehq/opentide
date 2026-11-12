@@ -18,9 +18,14 @@ decides which implementation answers, as the root callback's dispatcher
   command itself;
 - every other run goes to the Python CLI (:func:`opentide.cli.main`), in this
   process, which answers it as it always has: the default engine, ``python``,
-  ``compare``, ``--help`` and ``--version``, shell completion, and the
-  refusals (an unknown engine, ``engine_not_ported``, a ``--repo`` that is
-  not a folder).
+  ``compare``, Typer's completion requests (``_OPENTIDE_COMPLETE``), and the
+  refusals (an unknown engine, ``engine_not_ported``).
+
+Under ``rust``, the root's own runs are the Rust command line's too (#841):
+``--help`` on any command it has, ``--version``, ``--show-completion`` and
+``--install-completion``, a bare ``opentide`` (the home screen, or the
+help), a bare group, a mistyped command or root option and a ``--repo`` that
+is not a folder.
 
 The decision reads ``OPENTIDE_ENGINE``, the defaults
 (:mod:`opentide.cli.engine_defaults`) and the dispatch table
@@ -51,9 +56,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Through the engine (``opentide._native.main``, then :func:`run`) when the
     run may be Rust's and the engine loads, else on the Python CLI alone; the
-    exit code. A run the environment and the root options alone give to
-    Python (the default engine, ``--version``, ``--help``) does not load the
-    engine first.
+    exit code. A run the environment alone gives to Python (the default
+    engine, ``python``, ``compare``) does not load the engine first.
     """
     import importlib
 
@@ -128,10 +132,11 @@ def run_python(argv: Sequence[str] | None = None) -> int:
 def runs_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
     """Whether the dispatcher would run *args* on the Rust command line compiled in.
 
-    Only a run it would hand to that command line unchanged counts. Anything
-    the Python CLI answers before the dispatcher (help, the version, a root
-    option it does not know, completion, a ``--repo`` that is not a folder)
-    or instead of it (``compare``, a refusal) does not.
+    Only a run it would hand to that command line unchanged counts: the
+    command path its tree reads (``()`` for the root's own runs: the help,
+    the version, completion, a bare ``opentide``, a mistyped command) is in
+    :data:`~opentide.cli.engines.RUST_COMMANDS` and covers the run. Anything
+    the Python CLI answers instead (``compare``, a refusal) does not.
     """
     if not _may_run_on_rust(args, env):
         return False
@@ -139,19 +144,15 @@ def runs_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
     from opentide.cli.engine_defaults import RUST
     from opentide.cli.engines import RUST_CLI, RUST_COMMANDS, plugin_default, selected
 
-    options = args[: args.index("--")] if "--" in args else args
     words = tuple(command_words(list(args)))
-    if not words or (selected(words, env) != RUST and not plugin_default(words, args, env)):
+    if selected(words, env) != RUST and not plugin_default(words, args, env):
         return False
     rust = RUST_COMMANDS.get(words)
-    if rust is None or rust.launch != RUST_CLI or not rust.covers(args):
-        return False
-    # setup is the one command that may name a folder it is about to create.
-    return words[:1] == ("setup",) or _repo_is_a_folder(options)
+    return rust is not None and rust.launch == RUST_CLI and rust.covers(args)
 
 
 def _may_run_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
-    """What :func:`runs_on_rust` reads from the environment and the root options alone.
+    """What :func:`runs_on_rust` reads from the environment and the platforms *args* name.
 
     False: Python answers, whatever the command. It needs neither the engine
     nor the command tree.
@@ -170,44 +171,6 @@ def _may_run_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
         # python, compare or not an engine; or no default to read and no
         # platform that may be a plugin's (UC-4.5b).
         return False
-    if any(name.startswith("_") and name.endswith("_COMPLETE") for name in env):
-        # Click's shell completion.
-        return False
-    options = args[: args.index("--")] if "--" in args else args
-    return "--help" not in options and _plain_root_options(options)
-
-
-def _plain_root_options(options: Sequence[str]) -> bool:
-    """Whether the options before the command are root options the root callback accepts.
-
-    ``--version`` and ``-V`` are answered before the callback, and an option
-    the root does not know (``--install-completion`` included), or one
-    missing its value, is Click's to answer.
-    """
-    from opentide.cli import _ROOT_FLAGS, _ROOT_VALUE_OPTIONS
-
-    tokens = iter(options)
-    for token in tokens:
-        if token == "-" or not token.startswith("-"):
-            return True
-        if token in _ROOT_FLAGS:
-            continue
-        if token in _ROOT_VALUE_OPTIONS:
-            if next(tokens, None) is None:
-                return False
-            continue
-        if token.partition("=")[0] not in _ROOT_VALUE_OPTIONS:
-            return False
-    return True
-
-
-def _repo_is_a_folder(options: Sequence[str]) -> bool:
-    """Whether ``--repo``, when the command line gives it, names a folder, as the root requires."""
-    repo = None
-    tokens = iter(options)
-    for token in tokens:
-        if token == "--repo":
-            repo = next(tokens, None)
-        elif token.startswith("--repo="):
-            repo = token.partition("=")[2]
-    return not repo or os.path.isdir(repo)
+    # A completion script Typer installed asks the Python CLI (Click's
+    # protocol); the Rust command line's scripts never call back.
+    return not any(name.startswith("_") and name.endswith("_COMPLETE") for name in env)
