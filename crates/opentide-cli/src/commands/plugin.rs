@@ -1,30 +1,29 @@
-//! `deploy` and `validate query --live` on a platform plugin (UC-4.5, #835).
+//! `validate query --live` on a platform plugin (UC-4.5, #835).
 //!
-//! A plugin platform has no compiler of its own in Rust: what it deploys is
-//! the rule's document with its block of `configurations`, and what it checks
-//! live is that block's `query`. Each rule that has the platform's block goes
-//! to each of the platform's tenants (`platforms/<id>.toml`'s
-//! `[[tenants]]`), through the connectors' [`Deployer`] and
-//! [`LiveValidator`] as the plugin implements them ([`crate::plugins`]). A
+//! A plugin platform has no compiler of its own in Rust: what it checks live
+//! is the `query` of each rule's block of `configurations` for it. Each rule
+//! that has the platform's block goes to each of the platform's tenants
+//! (`platforms/<id>.toml`'s `[[tenants]]`), through the connectors'
+//! [`LiveValidator`] as the plugin implements it ([`crate::plugins`]). A
 //! tenant that fails fails the run (exit 1); the others still run.
 //!
-//! [`Deployer`]: opentide_connectors::connector::Deployer
+//! A plugin's `deploy` is the built-in platforms' (`deploy_send`, UC-4.5b):
+//! strategies, deployment state and the dry run's plan.
+//!
 //! [`LiveValidator`]: opentide_connectors::connector::LiveValidator
 
 use std::path::Path;
 use std::time::Duration;
 
 use opentide_compile::Json as Compiled;
-use opentide_connectors::connector::{
-    DeployRequest, LiveCheck, Operation, QueryRequest, TenantContext, TimeWindow,
-};
+use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 
 use super::{Report, open, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, Outcome, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, Outcome};
 use crate::json::Json;
 
 /// What a run reads besides its options.
@@ -81,7 +80,6 @@ impl Selection {
 struct Rule {
     uuid: String,
     name: String,
-    document: Compiled,
     block: Compiled,
 }
 
@@ -124,7 +122,6 @@ fn read(
                     .and_then(Compiled::as_str)
                     .unwrap_or_default()
                     .to_owned(),
-                document,
                 block,
             });
         }
@@ -211,12 +208,6 @@ fn failure_text(error: &ConnectorError) -> String {
     }
 }
 
-fn usage(command: &str, message: &str, argument: &str) -> Report {
-    let mut failure = Failure::new(code::USAGE_MISSING_OPTION, message);
-    failure.argument = Some(argument.to_owned());
-    Report::failed(command, USAGE_EXIT_CODE, failure)
-}
-
 fn finished(
     command: &str,
     data: Vec<(String, Json)>,
@@ -252,134 +243,6 @@ fn finished(
 
 fn queries(count: usize) -> String {
     format!("{count} quer{}", if count == 1 { "y" } else { "ies" })
-}
-
-fn plural(count: usize, word: &str) -> String {
-    format!("{count} {word}{}", if count == 1 { "" } else { "s" })
-}
-
-/// `opentide deploy --platform <plugin>`: each selected rule with the
-/// platform's block to each of its tenants; with *dry_run*, what would be
-/// sent, sending nothing.
-pub fn deploy(platform: &str, selection: &Selection, dry_run: bool, cx: &Context<'_>) -> Report {
-    const COMMAND: &str = "deploy";
-    if selection.is_empty() {
-        return usage(
-            COMMAND,
-            &format!("name the rules to deploy to {platform}: --all, --uuid or --file"),
-            "--all",
-        );
-    }
-    let (rules, tenants) = match read(platform, selection, cx) {
-        Ok(read) => read,
-        Err(message) => return Report::error(COMMAND, message),
-    };
-    let registry = crate::plugins::registry();
-    let Some(deployer) = registry
-        .get(platform)
-        .and_then(opentide_connectors::Platform::deployer)
-    else {
-        return Report::error(COMMAND, format!("platform plugin {platform} cannot deploy"));
-    };
-    let environment = Environment::from_pairs(cx.env.iter());
-    let mut results = Vec::new();
-    let mut failures: Vec<String> = Vec::new();
-    for configured in &tenants {
-        let connected = if dry_run {
-            None
-        } else {
-            Some(connect(platform, configured, &environment, cx.proxy))
-        };
-        for rule in &rules {
-            if (cx.interrupted)() {
-                break;
-            }
-            let body = Compiled::Object(
-                [
-                    ("rule".to_owned(), rule.document.clone()),
-                    ("configuration".to_owned(), rule.block.clone()),
-                ]
-                .into_iter()
-                .collect(),
-            );
-            let request = DeployRequest {
-                rule_id: rule.uuid.clone(),
-                operation: Operation::Create,
-                body: body.to_compact().into_bytes(),
-            };
-            let outcome = match &connected {
-                None => Ok(None),
-                Some(Err(error)) => Err(error.to_string()),
-                Some(Ok((tenant, http))) => {
-                    let cancel = CancellationToken::new();
-                    let context = TenantContext {
-                        tenant,
-                        http,
-                        cancel: &cancel,
-                    };
-                    on_tenant(
-                        tenant,
-                        &cancel,
-                        cx.interrupted,
-                        deployer.deploy(context, &request),
-                    )
-                    .map(Some)
-                    .map_err(|error| failure_text(&error))
-                }
-            };
-            let mut row = vec![
-                ("uuid", Json::str(&rule.uuid)),
-                ("name", Json::str(&rule.name)),
-                ("tenant", Json::str(&configured.name)),
-            ];
-            match outcome {
-                Ok(None) => row.push(("status", Json::str("planned"))),
-                Ok(Some(done)) => {
-                    row.push(("status", Json::str("deployed")));
-                    row.push(("remote_id", done.remote_id.map_or(Json::Null, Json::str)));
-                }
-                Err(message) => {
-                    failures.push(format!(
-                        "{} on tenant {}: {message}",
-                        rule.name, configured.name
-                    ));
-                    row.push(("status", Json::str("failed")));
-                    row.push(("error", Json::str(message)));
-                }
-            }
-            results.push(Json::object(row));
-        }
-    }
-    let attempts = results.len();
-    let place = format!(
-        "{} {platform} tenant{}",
-        tenants.len(),
-        if tenants.len() == 1 { "" } else { "s" }
-    );
-    let data = vec![
-        ("platform".to_owned(), Json::str(platform)),
-        ("dry_run".to_owned(), Json::Bool(dry_run)),
-        ("results".to_owned(), Json::Array(results)),
-    ];
-    let summary = vec![
-        ("rules".to_owned(), Json::from(rules.len())),
-        ("tenants".to_owned(), Json::from(tenants.len())),
-        ("failed".to_owned(), Json::from(failures.len())),
-    ];
-    let failed = failures.first().map(|first| {
-        format!(
-            "{} of {attempts} deploys failed on {place}: {first}",
-            failures.len()
-        )
-    });
-    let verb = if dry_run { "Would deploy" } else { "Deployed" };
-    finished(
-        COMMAND,
-        data,
-        summary,
-        failed,
-        format!("{verb} {} to {place}", plural(rules.len(), "rule")),
-    )
 }
 
 /// `opentide validate query --live --platform <plugin>`: each selected
@@ -553,26 +416,7 @@ mod tests {
         };
         assert_eq!(failure_text(&refused), "rule refused: bad field");
         assert_eq!(failure_text(&ConnectorError::Cancelled), "interrupted");
-        assert_eq!(plural(1, "rule"), "1 rule");
-        assert_eq!(plural(2, "rule"), "2 rules");
         assert_eq!(queries(1), "1 query");
         assert_eq!(queries(0), "0 queries");
-    }
-
-    #[test]
-    fn a_deploy_without_rules_named_is_a_usage_error() {
-        let env = Env::default();
-        let interrupted = || false;
-        let cx = Context {
-            repo: None,
-            env: &env,
-            cwd: Path::new("/nowhere"),
-            proxy: None,
-            interrupted: &interrupted,
-            now: jiff::Timestamp::UNIX_EPOCH,
-        };
-        let report = deploy("acme", &Selection::default(), false, &cx);
-        assert_eq!(report.outcome.exit_code, USAGE_EXIT_CODE);
-        assert!(report.outcome.message.contains("--all, --uuid or --file"));
     }
 }

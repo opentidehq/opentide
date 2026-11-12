@@ -584,6 +584,7 @@ fn deploy(
         keep_deprecated: args.keep_deprecated,
         removed_plan: None,
         cwd: cx.cwd.to_path_buf(),
+        plugins: crate::plugins::plugin_ids(),
     };
     let scope: Scope = if selecting {
         let (scope, unmatched) =
@@ -637,7 +638,7 @@ fn deploy(
             return super::deploy_promote::stopped(&stop);
         }
     }
-    let enabled = plan::enabled(&owned.config);
+    let enabled = plan::enabled_with(&owned.config, &crate::plugins::plugin_ids());
     let read = |path: &Path| -> Result<opentide_schema::node::Node, String> {
         let bytes = fs.read(path).map_err(|error| error.to_string())?;
         let document =
@@ -1794,6 +1795,7 @@ impl Sender<'_, '_> {
             "defender_for_endpoint" | "sentinel_one" | "crowdstrike" => {
                 self.with_state(platform, &batches, log)
             }
+            plugin if crate::plugins::is_plugin(plugin) => self.plugin(plugin, &batches, log),
             _ => self.by_uuid(platform, &batches, log),
         }
     }
@@ -2347,6 +2349,128 @@ impl Sender<'_, '_> {
                 );
                 self.close(log, result, outcome)?;
             }
+        }
+        Ok(())
+    }
+
+    /// A platform plugin (UC-4.5b, #835): each rule planned from deployment
+    /// state as the built-in platforms that keep ids are, then sent through
+    /// the plugin's `Deployer`: created (the id it returns recorded), updated
+    /// or disabled (by the stored id), or deleted (the id forgotten).
+    fn plugin(
+        &mut self,
+        platform: &str,
+        batches: &[Batch],
+        log: &mut DeployLog<'_>,
+    ) -> Result<(), Raised> {
+        let cx = self.cx;
+        let deployer = cx
+            .registry
+            .get(platform)
+            .and_then(opentide_connectors::Platform::deployer)
+            .ok_or_else(|| {
+                Raised::new(
+                    "ValueError",
+                    format!("platform plugin {platform} cannot deploy"),
+                )
+            })?;
+        for batch in batches {
+            let planned = self.screen(platform, batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect_plugin(platform, batch)?;
+            for (rule, action) in planned {
+                let tenant = batch.tenant.name.as_str();
+                let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
+                let outcome =
+                    self.plugin_rule(deployer, platform, &connection, rule, &action, &mut result);
+                self.close(log, result, outcome)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// A plugin tenant's connection: every `$NAME` of its setup must be set,
+    /// since no built-in check names the keys a plugin reads.
+    fn connect_plugin(&self, platform: &str, batch: &Batch) -> Result<Connection, Raised> {
+        let setup: toml::Table = batch
+            .tenant
+            .setup
+            .iter()
+            .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
+            .collect();
+        let tenant = Tenant::from_setup(
+            platform,
+            &batch.tenant.name,
+            &setup,
+            &self.environment,
+            Resolve::Required,
+            &opentide_connectors::HttpSettings::default(),
+        )
+        .map_err(|error| Raised::new("ValueError", error.to_string()))?;
+        let http = HttpClient::new(
+            &tenant.label,
+            &tenant.http,
+            &self.environment,
+            self.cx.proxy,
+        )
+        .map_err(|error| Raised::new("ValueError", error.to_string()))?;
+        Ok(Connection { tenant, http })
+    }
+
+    /// One rule on a plugin's tenant: the request the plugin receives (its
+    /// `body` the rule, its block for the platform, and the stored id), then
+    /// the deployment state the answer changes.
+    fn plugin_rule(
+        &mut self,
+        deployer: &dyn opentide_connectors::connector::Deployer,
+        platform: &str,
+        connection: &Connection,
+        rule: &opentide_compile::Rule,
+        action: &Planned,
+        result: &mut RuleResult,
+    ) -> Result<(), Raised> {
+        let tenant = connection.tenant.label.tenant.clone();
+        let disables = self.strategy_of(rule, platform)? == StatusStrategy::Disablement;
+        let (operation, stored) = match action {
+            Planned::Create => (Operation::Create, None),
+            Planned::Update(id) if disables => (Operation::Disable, Some(id.as_str())),
+            Planned::Update(id) => (Operation::Update, Some(id.as_str())),
+            Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
+        };
+        let request = DeployRequest {
+            rule_id: rule.uuid.clone(),
+            operation,
+            body: plugin_body(rule, platform, stored)
+                .to_compact()
+                .into_bytes(),
+        };
+        let context = self.context(connection);
+        let done = self
+            .block(deployer.deploy(context, &request))
+            .map_err(|error| plugin_raised(&error))?;
+        match (operation, done.remote_id) {
+            (Operation::Delete, _) => self.record_deleted(result, platform, &tenant),
+            (Operation::Create, Some(id)) if !id.trim().is_empty() => {
+                self.record_created(result, platform, &tenant, &ExternalId::Text(id));
+            }
+            (Operation::Create, _) => self.rule_error(
+                result,
+                &format!(
+                    "platform plugin {platform} created rule {} on tenant {} but returned no \
+                     remote_id, so deployment state cannot record it: the next deploy creates \
+                     it again",
+                    rule.uuid,
+                    tenant.trim()
+                ),
+            ),
+            (_, Some(id)) if Some(id.as_str()) != stored && !id.trim().is_empty() => {
+                // The plugin answered another id for the rule (it recreated
+                // it): the state follows the platform.
+                self.record_created(result, platform, &tenant, &ExternalId::Text(id));
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -2963,6 +3087,42 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+}
+
+/// What a platform plugin's `Deployer` receives as the body (UC-4.5b): the
+/// rule's document with the tenant's modifiers applied, its block for the
+/// platform, and, for an update, a disable or a delete, the id deployment
+/// state holds. `opentide.plugins` hands the plugin `remote_id` as the
+/// request's own field.
+fn plugin_body(rule: &opentide_compile::Rule, platform: &str, stored: Option<&str>) -> CJson {
+    let mut body = opentide_compile::json::Object::new();
+    body.insert("rule".into(), rule.data.clone());
+    body.insert(
+        "configuration".into(),
+        rule.block(platform).cloned().unwrap_or(CJson::Null),
+    );
+    if let Some(id) = stored {
+        body.insert("remote_id".into(), CJson::Str(id.to_owned()));
+    }
+    CJson::Object(body)
+}
+
+/// A plugin's failure as the exception that stops the run: the tenant
+/// refused the rule or the credentials, or the plugin raised.
+fn plugin_raised(error: &ConnectorError) -> Raised {
+    match error {
+        ConnectorError::Refused {
+            message,
+            detail: Some(detail),
+            ..
+        } => Raised::new("PlatformRefused", format!("{message}: {detail}")),
+        ConnectorError::Refused { message, .. } => Raised::new("PlatformRefused", message.clone()),
+        ConnectorError::Authentication { message, .. } => {
+            Raised::new("PlatformAuthenticationError", message.clone())
+        }
+        ConnectorError::Crashed { message, .. } => Raised::new("PluginError", message.clone()),
+        other => raised(other, "PlatformRefused"),
     }
 }
 

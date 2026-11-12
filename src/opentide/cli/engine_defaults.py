@@ -14,13 +14,19 @@ A command flips only when it is in :data:`opentide.cli.engines.RUST_COMMANDS`
 (``run_validation``, ``validation_report``), when the library has its Rust
 implementation. No command has flipped yet.
 
+One kind of run goes to Rust whatever the defaults say: a ``query``,
+``validate query`` or ``deploy`` on an installed platform plugin's platform
+(UC-4.5b, #835), since only the Rust core has the plugin hook. The root
+callback reads :func:`names_other_platform` to know whether a run may be one;
+:func:`opentide.cli.engines.plugin_default` decides.
+
 Standard library only, and no imports at all: the root callback reads it on
 every run.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 #: The variable that chooses the implementation for every command at once.
 ENGINE_ENV = "OPENTIDE_ENGINE"
@@ -30,6 +36,45 @@ RUST = "rust"
 #: A command path's default engine when ``OPENTIDE_ENGINE`` is unset or blank;
 #: a path that is not here runs Python. Only ``python`` or ``rust``.
 DEFAULT_ENGINES: dict[tuple[str, ...], str] = {}
+
+#: The built-in platforms (``opentide.plugins.BUILTIN_PLATFORMS``, kept here
+#: so the console script imports nothing more): any other ``--platform`` may
+#: be a platform plugin's.
+BUILTIN_PLATFORMS: frozenset[str] = frozenset(
+    {
+        "carbon_black_cloud",
+        "crowdstrike",
+        "defender_for_endpoint",
+        "elastic",
+        "harfanglab",
+        "sentinel",
+        "sentinel_one",
+        "splunk",
+        "sysdig",
+    }
+)
+
+
+def platform_values(options: Sequence[str]) -> list[str]:
+    """The values of every ``--platform`` in *options* (``--platform x`` and ``--platform=x``)."""
+    values: list[str] = []
+    for index, token in enumerate(options):
+        if token == "--platform" and index + 1 < len(options):
+            values.append(options[index + 1])
+        elif token.startswith("--platform="):
+            values.append(token.partition("=")[2])
+    return values
+
+
+def names_other_platform(args: Sequence[str]) -> bool:
+    """Whether *args* name a ``--platform`` that is not built in, before any ``--``.
+
+    Such a run may be a platform plugin's, which the default engine hands to
+    Rust (:func:`opentide.cli.engines.plugin_default`). Reads the arguments
+    alone: no entry point is looked up.
+    """
+    options = args[: args.index("--")] if "--" in args else args
+    return any(name not in BUILTIN_PLATFORMS for name in platform_values(options))
 
 
 def default_engine(words: tuple[str, ...]) -> str:
