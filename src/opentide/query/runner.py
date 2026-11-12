@@ -25,6 +25,7 @@ QUERY_PLATFORMS: frozenset[str] = frozenset(
         "crowdstrike",
         "harfanglab",
         "elastic",
+        "exabeam",
     }
 )
 

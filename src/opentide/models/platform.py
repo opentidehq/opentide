@@ -47,6 +47,11 @@ from opentide.models.platform_configs import (
     ElasticSuppression,
     ElasticThreatMatch,
     ElasticThreshold,
+    ExabeamCorrelation,
+    ExabeamEmail,
+    ExabeamRecurrence,
+    ExabeamSequence,
+    ExabeamSuppression,
     HarfangLabSigma,
     HarfangLabYara,
     SentinelAlert,
@@ -878,6 +883,69 @@ class BitdefenderConfig(PlatformConfigBase):
         return raw
 
 
+class ExabeamConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::exabeam::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    sequences: list[ExabeamSequence] = TideField(
+        schema_extra={"tide.template.required": True}, min_length=1
+    )
+    """One or more sequences, in the order the events happen. Each is a filter and a condition:
+    any match, or a threshold."""
+    correlation: ExabeamCorrelation | None = None
+    """Required with two or more sequences; not allowed with one."""
+    severity: Literal["none", "low", "medium", "high", "critical"] | None = None
+    """`none`, `low`, `medium`, `high`, or `critical`. Derived from `response.alert_severity`
+    when omitted."""
+    outcome: Literal["alert", "case", "none"] | None = None
+    """`alert` (an alert in Threat Center), `case`, or `none`. Default: `alert`."""
+    email: ExabeamEmail | None = None
+    """Also send an email when the rule triggers."""
+    suppression: ExabeamSuppression | None = None
+    """Suppress repeated triggers."""
+    delay: str | None = None
+    """Evaluation delay, `7m` to `180m` (`3h`). Omitted: Exabeam's default of 7 minutes."""
+    schedule: list[ExabeamRecurrence] | None = None
+    """When the rule is active. Omitted: always."""
+    test_mode: bool | None = None
+    """Run the rule in test mode: it triggers and writes a `rule-trigger-test` event, with no
+    outcome. Default: the tenant `test_mode`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_exabeam_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.exabeam.constraints import block_findings
+
+        findings = block_findings(raw)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code),
+                        "{message}",
+                        {"message": finding.message},
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -889,6 +957,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "elastic": ElasticConfig,
     "sysdig": SysdigConfig,
     "bitdefender": BitdefenderConfig,
+    "exabeam": ExabeamConfig,
 }
 
 
@@ -922,6 +991,8 @@ class RuleConfigurations(TideModel):
     """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
     bitdefender: BitdefenderConfig | None = None
     """Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."""
+    exabeam: ExabeamConfig | None = None
+    """Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

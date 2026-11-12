@@ -67,6 +67,8 @@ def rule_queries(rule: DetectionRule, platform: str) -> list[RuleQuery]:
             return _sentinel_one_queries(config, rule)
         case "elastic":
             return [_elastic_query(config, rule)]
+        case "exabeam":
+            return _exabeam_queries(config, rule)
         case "harfanglab":
             raise RuleQueryError(
                 f"rule {rule.name!r} is a HarfangLab Sigma or YARA rule, which the agents "
@@ -100,6 +102,24 @@ def _sentinel_one_queries(config: object, rule: DetectionRule) -> list[RuleQuery
             for number, sub in enumerate(sub_queries, start=1)
         ]
     raise RuleQueryError(f"rule {rule.name!r} has no SentinelOne query")
+
+
+def _exabeam_queries(config: object, rule: DetectionRule) -> list[RuleQuery]:
+    """One query per sequence: its filter, as deploy sends it (exabeam-1.0)."""
+    sequences = list(getattr(config, "sequences", None) or [])
+    if not sequences:
+        raise RuleQueryError(f"rule {rule.name!r} has no Exabeam sequences")
+    several = len(sequences) > 1
+    note = "the sequence's filter only: its condition, window and grouping are not applied"
+    return [
+        RuleQuery(
+            _required(sequence.query, rule, "exabeam"),
+            language="exabeam",
+            label=f"sequence {number}" if several else None,
+            note=note if sequence.threshold is not None or sequence.group_by else None,
+        )
+        for number, sequence in enumerate(sequences, start=1)
+    ]
 
 
 def _elastic_query(config: object, rule: DetectionRule) -> RuleQuery:

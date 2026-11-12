@@ -300,6 +300,7 @@ _PLATFORM_PKG: dict[str, str] = {
     "elastic": "elastic",
     "sysdig": "sysdig",
     "bitdefender": "bitdefender",
+    "exabeam": "exabeam",
 }
 
 

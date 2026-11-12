@@ -281,6 +281,29 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class Exabeam(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    region: str = ""
+                    client_id: str = ""
+                    client_secret: str = ""
+                    api_url: str | None = None
+                    test_mode: bool = False
+
+                    @property
+                    def url(self) -> str:
+                        """The API base URL: ``api_url``, else the region's."""
+                        if self.api_url:
+                            return self.api_url.rstrip("/")
+                        return f"https://api.{self.region}.exabeam.cloud"
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -343,3 +366,7 @@ class TenantDeployment:
     @dataclass
     class Bitdefender(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Bitdefender.Tenant
+
+    @dataclass
+    class Exabeam(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Exabeam.Tenant

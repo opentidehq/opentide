@@ -43,6 +43,7 @@ PLATFORM_LANGUAGES: dict[str, tuple[str, ...]] = {
     "crowdstrike": ("cql",),
     "harfanglab": ("telemetry",),
     "elastic": ("esql", "eql", "lucene", "kuery"),
+    "exabeam": ("exabeam",),
 }
 
 #: The address a transport failure is reported against, for tenants configured without a URL.

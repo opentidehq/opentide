@@ -35,6 +35,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "elastic": ConfigurationModels.Systems.Elastic,
     "sysdig": ConfigurationModels.Systems.Sysdig,
     "bitdefender": ConfigurationModels.Systems.Bitdefender,
+    "exabeam": ConfigurationModels.Systems.Exabeam,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -245,6 +246,57 @@ def _check_bitdefender_setup(setup: dict[str, Any], *, where: str) -> None:
             )
 
 
+#: ``[tenants.setup]`` keys of an Exabeam tenant (exabeam-1.0, Tenant setup).
+_EXABEAM_SETUP_KEYS = frozenset(
+    {"ssl", "region", "client_id", "client_secret", "api_url", "test_mode"}
+)
+#: Exabeam's API regions; each is served at ``https://api.<region>.exabeam.cloud``.
+EXABEAM_REGIONS: tuple[str, ...] = (
+    "us-west",
+    "us-east",
+    "ca",
+    "eu",
+    "sa",
+    "sg",
+    "ch",
+    "jp",
+    "au",
+    "uk",
+)
+
+
+def _check_exabeam_setup(setup: dict[str, Any], *, where: str) -> None:
+    """exabeam-1.0 tenant setup: known keys, a known region, the API key as `$VAR`s."""
+    unknown = sorted(set(setup) - _EXABEAM_SETUP_KEYS)
+    if unknown:
+        raise ValueError(f"{where} setup has unknown key(s): {', '.join(unknown)}")
+    missing = [key for key in ("region", "client_id", "client_secret") if not setup.get(key)]
+    if missing:
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
+    if setup["region"] not in EXABEAM_REGIONS:
+        raise ValueError(
+            f"{where} setup: region {setup['region']!r} is not an Exabeam API region "
+            f"({', '.join(EXABEAM_REGIONS)}); it is not the console's (use1 is us-east, "
+            "euw6 is ch)"
+        )
+    for key in ("client_id", "client_secret"):
+        value = setup[key]
+        reference = _ENV_REFERENCE.fullmatch(value) if isinstance(value, str) else None
+        if reference is None:
+            raise ValueError(
+                f"{where} setup: {key} must be an environment variable reference "
+                f"($VAR or ${{VAR}}, e.g. $EXABEAM_{key.upper()})"
+            )
+        setup[key] = f"${reference.group(1) or reference.group(2)}"
+    api_url = setup.get("api_url")
+    if api_url is not None and (
+        not isinstance(api_url, str) or not api_url.startswith("https://") or api_url == "https://"
+    ):
+        raise ValueError(f"{where} setup: api_url must be an https:// base URL")
+    if not isinstance(setup.get("test_mode", False), bool):
+        raise ValueError(f"{where} setup: test_mode must be true or false")
+
+
 def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
     """Typed tenants for any system without a bespoke loader."""
     from opentide.core.debug import DebugHelpers
@@ -280,6 +332,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
             _check_sysdig_setup(supplied_setup, where=where)
         if system == "bitdefender":
             _check_bitdefender_setup(supplied_setup, where=where)
+        if system == "exabeam":
+            _check_exabeam_setup(supplied_setup, where=where)
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)

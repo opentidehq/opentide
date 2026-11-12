@@ -910,3 +910,77 @@ class BitdefenderActions(_BitdefenderTable):
     """Quarantine the file (type 6): `true`, or `{include_parent, include_children}`."""
     risk_scan: Literal[True] | None = None
     """Run a risk scan (type 7)."""
+
+
+# --- Exabeam New-Scale SIEM (platform::exabeam::1.0) -----------------------------------
+# The docstrings are the spec's table text (tests/test_models/test_spec_field_descriptions.py).
+
+
+class ExabeamThreshold(TideModel):
+    function: Literal["count", "unique_count", "value", "max", "min", "sum", "average"]
+    """`count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`"""
+    field: str | None = None
+    """The field the function reads. Required except for `count`. `count` without a field counts
+    events."""
+    operator: Literal["more_than", "less_than", "in", "not_in"]
+    """`more_than`, `less_than`, `in`, or `not_in`"""
+    value: int | float | list[str | int | float] | None = None
+    """`more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative
+    integer). `in` and `not_in`: a non-empty list of strings or numbers."""
+    within: str
+    """The window: whole `m`, `h`, or `d`"""
+
+
+class ExabeamSequence(TideModel):
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.required": True}
+    )
+    """A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML."""
+    name: str | None = None
+    """Sequence name, shown in the console"""
+    threshold: ExabeamThreshold | None = None
+    """The condition. Without it, the sequence triggers on any matching event."""
+    group_by: list[str] | None = None
+    """One to three fields. A threshold counts per value; any match triggers once per value."""
+
+
+class ExabeamCorrelation(TideModel):
+    within: str
+    """The window every sequence's condition must be met in: whole `m`, `h`, or `d`"""
+    group_by: list[str] = Field(default_factory=list)
+    """Up to three fields every sequence shares (the API's limit; the console allows more)"""
+
+
+class ExabeamSuppression(TideModel):
+    for_: str = Field(alias="for")
+    """Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`"""
+    group_by: list[str] | None = None
+    """One to three fields. Suppress per value instead of for the whole rule."""
+
+
+class ExabeamEmail(TideModel):
+    recipients: list[str] = Field(min_length=1)
+    """One or more email addresses"""
+    subject: str | None = None
+    """Email subject"""
+    attach_csv: bool = False
+    """Attach the matching events as CSV"""
+
+
+class ExabeamRecurrence(TideModel):
+    every: Literal["day", "week", "month", "days"]
+    """`day`, `week`, `month`, or `days` (a range of weekdays)"""
+    from_: str = Field(alias="from")
+    """Start time, UTC, `HH:MMZ` (`08:00Z`)"""
+    to: str
+    """End time, UTC, `HH:MMZ`"""
+    days: list[str] | list[int] | None = None
+    """`week`: one or more weekday names (`monday` … `sunday`). `month`: day numbers 1–31. Not
+    allowed otherwise."""
+    last_day: bool | None = None
+    """`month` only: also the last day of the month. A `month` recurrence has `days`,
+    `last_day: true`, or both."""
+    first: str | None = None
+    """`days` only: the first weekday of the range"""
+    last: str | None = None
+    """`days` only: the last weekday of the range"""

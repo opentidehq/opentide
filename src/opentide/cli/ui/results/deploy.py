@@ -24,7 +24,7 @@ class RulePayload(ResultModel):
     help: str | None = Field(None, description="What fixes it, when known")
     file: str | None = Field(None, description="The rule's file, absolute")
     tenant: str | None = Field(
-        None, description="The tenant the request was resolved against (Bitdefender)"
+        None, description="The tenant the request was resolved against (Bitdefender, Exabeam)"
     )
     unresolved: dict[str, Any] | None = Field(
         None,
