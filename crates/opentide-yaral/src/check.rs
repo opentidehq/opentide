@@ -272,6 +272,23 @@ fn as_rust_pattern(pattern: &str) -> String {
                 i += 1 + octal;
                 continue;
             }
+            // RE2 `\Q…\E` quotes a literal run (to `\E` or the end).
+            if next == b'Q' {
+                let rest = &pattern[i + 2..];
+                let (quoted, consumed) = match rest.find("\\E") {
+                    Some(end) => (&rest[..end], end + 2),
+                    None => (rest, rest.len()),
+                };
+                out.push_str(&regex_syntax::escape(quoted));
+                i += 2 + consumed;
+                continue;
+            }
+            // RE2 `\C` is any byte; only the pattern's validity is checked here.
+            if next == b'C' {
+                out.push('.');
+                i += 2;
+                continue;
+            }
             // `\/` is a literal slash in a YARA-L regex literal.
             if next == b'/' {
                 out.push('/');
@@ -651,6 +668,24 @@ impl<'s> Checker<'s> {
         {
             self.unfiltered(events.node, &scope);
         }
+        // `cross join` joins the stages of a multi-stage search: a rule has none.
+        if profile == Profile::Rule {
+            let mut joins: Vec<Node<'_>> = Vec::new();
+            for s in sections {
+                opentide_syntax::walk_with_ancestors(s.node, |n, _| {
+                    if n.kind() == "cross_join" {
+                        joins.push(n);
+                    }
+                });
+            }
+            for join in joins {
+                self.error(
+                    codes::YARAL_PARSE_ERROR,
+                    "`cross join` belongs to a multi-stage search; a rule joins events through placeholders".to_string(),
+                    join,
+                );
+            }
+        }
     }
 
     /// Whether a search body reads an earlier stage (`$stage.field`, `cross join`).
@@ -743,16 +778,22 @@ impl<'s> Checker<'s> {
         });
         for value in values {
             let value = unparen(value);
-            // A search writes scalar values too (data-tables: "the support
-            // offered in Search for writing scalar values to data tables",
-            // `write_row(col_name: $e.metadata.product_name)`).
-            // A `match` key is not exported ("You can't include a match
-            // variable in the export section of a statistics query").
-            if self.profile == Profile::Search
-                && matches!(value.kind(), "udm_field" | "bare_field")
-                && !self.stage_field(value)
-                && !matched.contains(self.text(value))
-            {
+            if self.profile == Profile::Search {
+                // A search writes scalar values too (data-tables: "the support
+                // offered in Search for writing scalar values to data tables",
+                // `write_row(col_name: $e.metadata.product_name)`); only a
+                // `match` key is refused ("You can't include a match variable
+                // in the export section of a statistics query").
+                let name = self.text(value);
+                if matched.contains(name) {
+                    self.error(
+                        codes::YARAL_EXPORT_VALUE,
+                        format!(
+                            "`{name}` is a `match` variable: a search does not export match variables"
+                        ),
+                        value,
+                    );
+                }
                 continue;
             }
             if value.kind() == "variable" {
@@ -1841,6 +1882,21 @@ impl<'s> Checker<'s> {
         if self.stage_field(field) {
             return;
         }
+        // A `metrics.*` argument names the metric's fields bare
+        // (`principal.asset.ip: $ip`, `filter: principal.hostname = "h"`).
+        let in_argument = std::iter::successors(field.parent(), |n| n.parent())
+            .any(|n| n.kind() == "named_argument");
+        if self.profile == Profile::Rule && field.kind() == "bare_field" && !in_argument {
+            let path = self.text(field);
+            self.error(
+                codes::YARAL_UNKNOWN_UDM_FIELD,
+                format!(
+                    "`{path}` is not a field: a rule reads fields through an event variable (`$e.{path}`)"
+                ),
+                field,
+            );
+            return;
+        }
         let segs = self.field_segments(field);
         let udm = Udm::cached();
         let resolution = udm.resolve(&segs);
@@ -2051,6 +2107,10 @@ mod tests {
         assert!(regex_problem(r"\1").is_some());
         assert!(regex_problem(r"\0").is_none());
         assert!(regex_problem(r"\012x").is_none());
+        // RE2 quoting and the any-byte escape (regex-syntax has neither).
+        assert!(regex_problem(r"\Q.exe\E$").is_none());
+        assert!(regex_problem(r"\Qa(b").is_none());
+        assert!(regex_problem(r"a\Cb").is_none());
     }
 
     #[test]

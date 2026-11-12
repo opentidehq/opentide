@@ -216,11 +216,17 @@ fn meta_lines(doc: Option<&Value>) -> Vec<(String, String)> {
 /// literals blanked, line by line (a section scanner, not a parser): a label
 /// or a brace inside a comment or a literal never counts.
 fn code_lines(text: &str) -> Vec<String> {
+    // Every masked character becomes as many spaces as it has bytes, a `//`
+    // comment is blanked rather than cut, and a CR stays as a space: each line
+    // keeps its byte length, so an offset in the masked text is one in `text`.
+    fn blank(buf: &mut String, c: char) {
+        buf.extend(std::iter::repeat_n(' ', c.len_utf8()));
+    }
     let mut out = Vec::new();
     let mut in_block = false;
-    for line in text.split('\n') {
-        let line = line.strip_suffix('\r').unwrap_or(line);
-        let mut buf = String::with_capacity(line.len());
+    for raw in text.split('\n') {
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        let mut buf = String::with_capacity(raw.len());
         let mut quote: Option<char> = None;
         let mut chars = line.char_indices().peekable();
         while let Some((i, c)) = chars.next() {
@@ -230,15 +236,15 @@ fn code_lines(text: &str) -> Vec<String> {
                     chars.next();
                     buf.push_str("  ");
                 } else {
-                    buf.push(' ');
+                    blank(&mut buf, c);
                 }
                 continue;
             }
             if let Some(q) = quote {
                 if q == '"' && c == '\\' {
                     buf.push(' ');
-                    if chars.next().is_some() {
-                        buf.push(' ');
+                    if let Some((_, escaped)) = chars.next() {
+                        blank(&mut buf, escaped);
                     }
                     continue;
                 }
@@ -246,11 +252,12 @@ fn code_lines(text: &str) -> Vec<String> {
                     quote = None;
                     buf.push(c);
                 } else {
-                    buf.push(' ');
+                    blank(&mut buf, c);
                 }
                 continue;
             }
             if line[i..].starts_with("//") {
+                buf.extend(std::iter::repeat_n(' ', line.len() - i));
                 break;
             }
             if line[i..].starts_with("/*") {
@@ -264,6 +271,10 @@ fn code_lines(text: &str) -> Vec<String> {
             }
             buf.push(c);
         }
+        if raw.len() > line.len() {
+            buf.push(' ');
+        }
+        debug_assert_eq!(buf.len(), raw.len());
         out.push(buf);
     }
     out
@@ -292,7 +303,7 @@ fn section_header(text: &str) -> Option<(usize, usize)> {
         if label || header || brace {
             return Some((offset + lead, offset + line.trim_end().len().max(lead + 1)));
         }
-        // `code_lines` keeps every byte, so offsets line up with the text.
+        // `code_lines` keeps each line's byte length, so offsets line up with the text.
         offset += line.len() + 1;
     }
     None
@@ -1156,7 +1167,7 @@ fn advisories(
         out.push(
             Diagnostic::warning(
                 codes::GOOGLE_SECOPS_RISK_SCORE_MISSING,
-                "`outcome` assigns no `$risk_score`: Google scores every alert 40 and every non-alerting detection 15, whatever the rule detects",
+                "`outcome` assigns no `$risk_score`: every detection gets the instance's default score, whatever the rule detects",
                 crate::elastic::path_range(source, &at(target)),
             )
             .with_field_path(field(target)),

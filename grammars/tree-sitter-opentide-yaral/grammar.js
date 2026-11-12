@@ -90,6 +90,9 @@ module.exports = grammar({
 
   reserved: {
     global: ($) => RESERVED.map((w) => $[`_kw_${w}`]),
+    // A rule name or a meta key may be spelled like a keyword so the engine
+    // reports yaral_reserved_identifier, not a parse error.
+    identifier_position: ($) => [],
   },
 
   conflicts: ($) => [
@@ -107,7 +110,7 @@ module.exports = grammar({
     rule_declaration: ($) =>
       seq(
         kw($, "rule"),
-        field("name", alias($.identifier, $.rule_name)),
+        field("name", alias(reserved("identifier_position", $.identifier), $.rule_name)),
         "{",
         repeat($._section),
         "}",
@@ -134,7 +137,7 @@ module.exports = grammar({
 
     meta_entry: ($) =>
       seq(
-        field("key", alias($.identifier, $.meta_key)),
+        field("key", alias(reserved("identifier_position", $.identifier), $.meta_key)),
         "=",
         field("value", $._setting_value),
       ),

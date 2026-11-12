@@ -23,8 +23,7 @@
 
 ; Reference lists and data tables, window bounds.
 (reference_list) @constant
-((identifier) @constant
-  (#match? @constant "^[wW][iI][nN][dD][oO][wW]_([sS][tT][aA][rR][tT]|[eE][nN][dD])$"))
+(window_bound) @constant
 
 ; Functions: the namespace is a type, the function a builtin.
 (function_name namespace: (namespace) @type)

@@ -83,8 +83,12 @@
           "content": {
             "type": "ALIAS",
             "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
+              "type": "RESERVED",
+              "content": {
+                "type": "SYMBOL",
+                "name": "identifier"
+              },
+              "context_name": "identifier_position"
             },
             "named": true,
             "value": "rule_name"
@@ -198,8 +202,12 @@
           "content": {
             "type": "ALIAS",
             "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
+              "type": "RESERVED",
+              "content": {
+                "type": "SYMBOL",
+                "name": "identifier"
+              },
+              "context_name": "identifier_position"
             },
             "named": true,
             "value": "meta_key"
@@ -3093,6 +3101,7 @@
         "type": "SYMBOL",
         "name": "_kw_window_end"
       }
-    ]
+    ],
+    "identifier_position": []
   }
 }

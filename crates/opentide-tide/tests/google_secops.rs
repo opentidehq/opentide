@@ -395,3 +395,45 @@ fn the_block_is_highlighted_as_yaral_and_yaml() {
         Some("string")
     );
 }
+
+/// A block whose `events` is `events` (each line indented under `events: |`).
+fn with_events(events: &str) -> String {
+    let body: String = events.lines().map(|l| format!("      {l}\n")).collect();
+    format!(
+        "name: Login\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  google_secops:\n    status: STAGING\n    events: |\n{body}    outcome: |\n      $risk_score = 10\n    condition: |\n      $e and $d\n"
+    )
+}
+
+#[test]
+fn the_rule_id_advisory_survives_multi_byte_text_before_it() {
+    // Masked text once lost bytes for each multi-byte character in a string,
+    // so the offset slicing the original text panicked or missed the literal.
+    for user in ["日日日日日日日日日日日日日日日日日", "é"] {
+        let source = with_events(&format!(
+            "$e.principal.user.userid = \"{user}\"\n$d.detection.detection.rule_id = \"ru_123\"\n$e.principal.hostname = $h\n$d.principal.hostname = $h"
+        ));
+        let found = findings(&source);
+        assert!(
+            found
+                .iter()
+                .any(|(code, _, at)| code == "google_secops_rule_id_literal" && at == "\"ru_123\""),
+            "{user}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn a_section_header_after_a_comment_lands_on_its_line() {
+    let source = with_events(
+        "$e.metadata.event_type = \"PROCESS_LAUNCH\" // a fairly long trailing comment here\n$e.principal.hostname = \"h\"\n}",
+    );
+    let header = analyse(&source)
+        .into_iter()
+        .find(|d| d.code == "yaral_section_header")
+        .expect("yaral_section_header");
+    let line = source
+        .lines()
+        .nth(header.range.start.line as usize)
+        .unwrap();
+    assert_eq!(line.trim(), "}", "{header:?}");
+}

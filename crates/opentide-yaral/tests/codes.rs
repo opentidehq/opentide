@@ -886,3 +886,60 @@ fn search_profile_1_1() {
         codes::YARAL_UNKNOWN_UDM_FIELD,
     );
 }
+
+#[test]
+fn review_regressions() {
+    // A search exports placeholders and literals; only a `match` key is refused.
+    let search = "metadata.event_type = \"USER_LOGIN\"\n$h = principal.hostname\nexport:\n  %t.write_row(col: $h, n: 5, s: \"x\")\n";
+    assert!(
+        !has(&search_codes(search), codes::YARAL_EXPORT_VALUE),
+        "{:?}",
+        search_codes(search)
+    );
+    let matched = "metadata.event_type = \"USER_LOGIN\"\n$h = principal.hostname\nmatch:\n  $h\nexport:\n  %t.write_row(col: $h)\n";
+    assert!(has(&search_codes(matched), codes::YARAL_EXPORT_VALUE));
+    // RE2 quoting and the any-byte escape are valid.
+    assert_clean(&rule(
+        &format!("{EVENTS}\n    $e.target.process.file.full_path = /\\Q.exe\\E$/"),
+        CONDITION,
+    ));
+    // A keyword as rule name or meta key is a reserved identifier, not a parse error.
+    let named = format!(
+        "rule events {{\n  meta:\n    author = \"a\"\n  events:\n{EVENTS}\n{CONDITION}}}\n"
+    );
+    assert_code(&named, codes::YARAL_RESERVED_IDENTIFIER);
+    assert!(
+        !has(&codes_of(&named), codes::YARAL_PARSE_ERROR),
+        "{:?}",
+        codes_of(&named)
+    );
+    let keyed =
+        format!("rule r {{\n  meta:\n    regex = \"a\"\n  events:\n{EVENTS}\n{CONDITION}}}\n");
+    assert_code(&keyed, codes::YARAL_RESERVED_IDENTIFIER);
+    // A rule reads fields through an event variable, and has no `cross join`.
+    assert_code(
+        &rule(
+            &format!("{EVENTS}\n    principal.hostname = \"h\""),
+            CONDITION,
+        ),
+        codes::YARAL_UNKNOWN_UDM_FIELD,
+    );
+    assert_code(
+        &rule(&format!("{EVENTS}\n    cross join $a, $b"), CONDITION),
+        codes::YARAL_PARSE_ERROR,
+    );
+}
+
+#[test]
+fn window_bounds_are_highlighted_as_constants() {
+    let text = rule(
+        EVENTS,
+        &format!("{MATCHED}  outcome:\n    $s = max(window_start)\n{CONDITION}"),
+    );
+    let at = text.find("window_start").unwrap();
+    let token = opentide_yaral::highlight(&text)
+        .into_iter()
+        .find(|t| t.span.start == at)
+        .expect("a token at window_start");
+    assert_eq!(token.capture, "constant");
+}

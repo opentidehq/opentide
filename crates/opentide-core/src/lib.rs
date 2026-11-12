@@ -1660,7 +1660,7 @@ pub mod codes {
                 "A block `meta` key is not an identifier, is a keyword or a key deploy derives, or its value is not a string."
             }
             GOOGLE_SECOPS_RISK_SCORE_MISSING => {
-                "`outcome` assigns no `$risk_score`, so Google scores every alert 40 and every non-alerting detection 15."
+                "`outcome` assigns no `$risk_score`, so every detection gets the instance's default score."
             }
             GOOGLE_SECOPS_RULE_ID_LITERAL => {
                 "The rule compares `detection.detection.rule_id` with a literal `ru_` id, which differs per tenant: match `detection.detection.rule_name` instead."
