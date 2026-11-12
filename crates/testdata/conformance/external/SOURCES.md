@@ -226,3 +226,7 @@ The rules are shared under the Detection Rule License 1.1: [`LICENSE.DRL-1.1.md`
 - `vul_backdoor_antitheftweb.yar` from `yara/vul_backdoor_antitheftweb.yar`
 - `vuln_erlang_otp_ssh_cve_2025_32433.yar` from `yara/vuln_erlang_otp_ssh_cve_2025_32433.yar`
 - `webshell_regeorg.yar` from `yara/webshell_regeorg.yar`
+
+## YARA-L — chronicle/detection-rules (Apache-2.0)
+
+Licence text: [`LICENSE.Apache-2.0.txt`](LICENSE.Apache-2.0.txt). 79 community rules from `chronicle/detection-rules@a49c3752f3f013e9ead85c7430b8f39369efacbf`, unmodified, each with a `.broken.` twin (a modified copy with one injected fault). The list, and how each twin is made, is [`yaral/SOURCES.md`](yaral/SOURCES.md); `crates/opentide-yaral/tests/external_corpus.rs` requires every public rule to parse with no error but its listed exceptions, and every twin to have an error.
