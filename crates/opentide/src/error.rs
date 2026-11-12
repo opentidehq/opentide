@@ -17,6 +17,7 @@ use std::path::PathBuf;
 /// | [`Error::Usage`] | the command line's usage code (`usage_missing_option`, `usage_invalid_choice`, `usage_invalid_value`) |
 /// | [`Error::NoDocument`] | `no_json_document` |
 /// | [`Error::Lsp`] | `lsp_failed` |
+/// | [`Error::Connector`] | `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported`, `runtime_unavailable` |
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -62,6 +63,26 @@ pub enum Error {
         /// What failed.
         message: String,
     },
+    /// A tenant operation failed (feature `connectors`): the tenant could
+    /// not be reached, refused the request or its credentials, or the
+    /// platform's connector cannot do it. The message names the platform,
+    /// the tenant and its address (scheme, host and port), never a path, a
+    /// query string or a credential.
+    #[error("{message}")]
+    Connector {
+        /// The stable code (the table above).
+        code: &'static str,
+        /// The platform's identifier; empty when no tenant is involved
+        /// (`interrupted`, `runtime_unavailable`).
+        platform: String,
+        /// The tenant's name; empty when no tenant is involved.
+        tenant: String,
+        /// What failed.
+        message: String,
+        /// The vendor's own words, when the tenant gave a reason
+        /// (`tenant_refused`, `authentication_failed`, `query_timed_out`).
+        detail: Option<String>,
+    },
 }
 
 impl Error {
@@ -72,7 +93,9 @@ impl Error {
     /// The stable code of this error (the table on [`Error`]).
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Configuration { code, .. } | Self::Usage { code, .. } => code,
+            Self::Configuration { code, .. }
+            | Self::Usage { code, .. }
+            | Self::Connector { code, .. } => code,
             Self::Io { .. } => "io_error",
             Self::NoDocument { .. } => "no_json_document",
             Self::Lsp { .. } => "lsp_failed",
@@ -135,6 +158,17 @@ mod tests {
                 },
                 "lsp_failed",
                 "language server: broken pipe",
+            ),
+            (
+                Error::Connector {
+                    code: "tenant_refused",
+                    platform: "splunk".into(),
+                    tenant: "prod".into(),
+                    message: "Splunk refused the search".into(),
+                    detail: Some("Unknown search command 'nope'".into()),
+                },
+                "tenant_refused",
+                "Splunk refused the search",
             ),
         ];
         for (error, code, message) in cases {

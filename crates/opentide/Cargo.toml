@@ -41,7 +41,7 @@ required-features = ["cli"]
 # The library's documentation is the crate's; the binary has none of its own.
 doc = false
 
-# The three examples of the Rust page in docs/sdk (the sdist ships
+# The four examples of the Rust page in docs/sdk (the sdist ships
 # examples/, so these entries parse there). Each is also compiled into
 # tests/examples.rs, which runs it on a workspace, so CI runs them with the
 # tests (`cargo nextest run --workspace`).
@@ -56,6 +56,10 @@ required-features = ["workspace"]
 [[example]]
 name = "deploy_plan"
 required-features = ["compile"]
+
+[[example]]
+name = "query"
+required-features = ["connectors"]
 
 # The integration tests gate themselves on the features they need
 # (`#![cfg(feature = "...")]` at each file's top), as cargo discovers them:
@@ -84,6 +88,16 @@ queries = ["workspace", "dep:opentide-cli"]
 cli = ["compile", "queries"]
 # The language server (`opentide::lsp`): stdio, or one message at a time.
 lsp = ["workspace", "dep:opentide-lsp"]
+# Tenant operations (`opentide::connectors`): a query run, a live query check
+# and a rule deploy on the tenants a workspace configures, through the
+# platform connectors (tokio, reqwest on rustls). Async; not for wasm32.
+connectors = [
+    "compile",
+    "dep:opentide-connectors",
+    "dep:tokio-util",
+    "dep:jiff",
+    "dep:toml",
+]
 
 [dependencies]
 opentide-schema = { workspace = true, optional = true }
@@ -91,6 +105,12 @@ opentide-workspace = { workspace = true, optional = true }
 opentide-compile = { workspace = true, optional = true }
 opentide-cli = { workspace = true, optional = true }
 opentide-lsp = { workspace = true, optional = true }
+opentide-connectors = { workspace = true, optional = true }
+# `connectors`: a connection's cancellation, a window's time
+# (`connectors::Timestamp`), a tenant's setup table.
+tokio-util = { workspace = true, optional = true }
+jiff = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
 # The documents the facade hands back as JSON: the deploy plan's payload,
 # `cli::run_json`'s envelope.
 serde_json.workspace = true
@@ -103,3 +123,7 @@ tempfile = "3"
 # The goldens' comparator and ledger: the binary's `--json commands` against
 # the PyPI CLI's recording (tests/cli.rs).
 opentide-compare.workspace = true
+# `connectors`: a stand-in tenant (tests/connectors.rs), and the runtime the
+# tests await a connection's operations on.
+wiremock.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

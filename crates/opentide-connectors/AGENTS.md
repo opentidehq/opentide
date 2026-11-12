@@ -12,9 +12,9 @@ adds the Python plugin hook to its registry.
 | `proxy.rs` | `--proxy`/`OPENTIDE_PROXY`, then `https_proxy`/`HTTPS_PROXY`, `http_proxy`/`HTTP_PROXY`, `all_proxy`, with `no_proxy`; lower case wins, as urllib reads them | `CliContext.apply_environment`, `urllib.request.getproxies_environment` |
 | `retry.rs` | `RetryPolicy`: urllib3's `Retry(total, backoff_factor, status_forcelist, allowed_methods)`, the waits scheduled by backon, `Retry-After` on 413/429/503 | urllib3 `Retry` |
 | `credentials.rs` | `$NAME`/`${NAME}` (opentide-workspace's `env_reference`), the 0.21.0 `$text` reading, placeholders for runs that send nothing; `Secret` prints `***` | `core/environment.py` `fetch_config_envvar`, `defer_missing_envvars` |
-| `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel` | `platforms/config.py` `_tenant_ssl`, `transport.tenant_tls_verify` |
+| `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel`; `configured`: a resolved configuration's tenants of a platform as `(name, setup)` | `platforms/config.py` `_tenant_ssl`, `transport.tenant_tls_verify` |
 | `error.rs` | `ConnectorError` and its `failure.code`; messages name `scheme://host[:port]` only, never a path, query or credential | `transport.py` `TenantUnreachableError`, `reaching_tenant` |
-| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the six platforms | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
+| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the nine platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
 | `body.rs` | `python_json`: a body as `json.dumps` writes it (`, ` and `: `, ASCII escapes), through a serde_json formatter | `requests`' `json=` |
@@ -35,7 +35,8 @@ domain, tier 2 (`xtask/layers.toml`): it builds on `opentide-workspace` and on
 `opentide-compile` (its ordered `Json` for bodies and rows; the platforms send the bodies it
 compiles). `opentide-cli` uses it (`setup skills`, `query` on every platform with a runner,
 UC-4.2c and UC-4.3, and `validate query --live` through each `LiveValidator`, Elastic's rule
-checks through `Elastic::checks` and `preview_rule`, and `deploy` that sends through each platform's deploy calls, UC-4.6);
+checks through `Elastic::checks` and `preview_rule`, and `deploy` that sends through each platform's deploy calls, UC-4.6),
+and the facade's `connectors` feature wraps its traits (`opentide::connectors`).
 
 ## Invariants
 

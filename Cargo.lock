@@ -3037,9 +3037,11 @@ checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 name = "opentide"
 version = "0.12.0"
 dependencies = [
+ "jiff",
  "opentide-cli",
  "opentide-compare",
  "opentide-compile",
+ "opentide-connectors",
  "opentide-lsp",
  "opentide-schema",
  "opentide-workspace",
@@ -3047,6 +3049,10 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "toml 0.8.23",
+ "wiremock",
 ]
 
 [[package]]
