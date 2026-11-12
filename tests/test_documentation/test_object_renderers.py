@@ -41,7 +41,6 @@ def test_rule_page_reads_from_overview_to_metadata(tmp_path) -> None:
     bundle = load_documentation_bundle()
     rendered = render_rule_page(bundle.rule, context(tmp_path), bundle.catalog)
     assert _headings(rendered) == [
-        "Description",
         "Deployment",
         "Platform configuration",
         "Response",
@@ -49,24 +48,34 @@ def test_rule_page_reads_from_overview_to_metadata(tmp_path) -> None:
         "Detection coverage",
         "Metadata",
     ]
-    lead = rendered.split("**Contents**")[0]
+    lead = rendered.split("**On this page:**")[0]
+    assert lead.startswith(
+        "[Catalogue](../README.md) / [Detection rules](README.md)\n\n"
+        "# Shai-Hulud Sentinel Rule\n\n"
+        "*Detection rule · `rule::1.0` · version 1 · modified 2026-01-02 · TLP:CLEAR*\n\n"
+        "Detects suspicious cloud data gathering"
+    )
     assert "| Severity | High |" in lead
     assert "| Platforms | Microsoft Sentinel: `STAGING` (PREVIEW runs) |" in lead
+    assert rendered.rstrip().endswith("this page is rewritten on every run. -->")
 
 
 def test_rule_page_states_tenants_and_remote_ids(tmp_path) -> None:
     bundle = load_documentation_bundle()
     rendered = render_rule_page(bundle.rule, context(tmp_path), bundle.catalog)
-    assert (
-        "| Microsoft Sentinel | `STAGING` | `PREVIEW` | PREVIEW runs | `staging` | yes |"
-        in rendered
-    )
-    assert "- `STAGING`: Under test on the staging tenant" in rendered
+    assert "| Microsoft Sentinel | `STAGING` | PREVIEW runs | `staging` | yes |" in rendered
+    assert "- `STAGING` (strategy `PREVIEW`): Under test on the staging tenant" in rendered
+    # The fixture's block sets no schema, so the summary line names none.
+    summary = "Status `STAGING` · deployed by PREVIEW runs · tenants: `staging`"
+    assert f"### Microsoft Sentinel\n\n{summary}\n" in rendered
     assert (
         "| Microsoft Sentinel | `staging`<br>Pre-production workspace | PREVIEW runs "
         "| `rule-7f3a` |" in rendered
     )
-    assert "| Microsoft Sentinel | `production`<br>Production workspace | no run | - |" in rendered
+    assert (
+        "| Microsoft Sentinel | `production`<br>Production workspace "
+        "| no run: the tenant takes RELEASE runs only | - |" in rendered
+    )
 
 
 @pytest.mark.parametrize("flavor", list(DocumentFlavor))
@@ -76,7 +85,9 @@ def test_every_flavor_renders_the_rule_page(tmp_path, flavor: DocumentFlavor) ->
     assert "## Platform configuration" in rendered
     native_toc = flavor in {DocumentFlavor.gitlab, DocumentFlavor.azure_devops}
     assert ("[[_TOC_]]" in rendered) is native_toc
-    assert ("**Contents**" in rendered) is not native_toc
+    assert ("**On this page:**" in rendered) is not native_toc
+    # Azure DevOps names every index README alike, so its pages have no breadcrumb.
+    assert ("[Catalogue]" in rendered) is (flavor is not DocumentFlavor.azure_devops)
     fence = "::: mermaid" if flavor is DocumentFlavor.azure_devops else "```mermaid"
     assert fence in rendered
     assert rendered.endswith("\n") and not rendered.endswith("\n\n")
@@ -130,7 +141,10 @@ def test_objective_page_lists_its_parts(tmp_path, metadata: dict[str, Any]) -> N
         }
     )
     rendered = ObjectiveRenderer(context(tmp_path), _empty_catalog()).render(objective)
-    assert _headings(rendered) == ["Description", "Composition", "Metadata"]
+    # The description is the page's lead, not a section.
+    assert _headings(rendered) == ["Composition", "Metadata"]
+    assert "*Detection objective · `objective::1.0`" in rendered
+    assert "\nFind lateral movement\n" in rendered
     assert "| Detection rules | 0 rules |" in rendered
 
 

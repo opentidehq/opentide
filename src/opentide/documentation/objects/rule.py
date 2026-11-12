@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
+from opentide.documentation.diagram.builders import deployment_diagram, render_diagram
 from opentide.documentation.diagram.model import NodeKind
 from opentide.documentation.facts.deployment import rule_deployments
 from opentide.documentation.markdown.page import section
@@ -23,17 +24,22 @@ class RuleRenderer(ObjectRenderer):
 
     folder = "rules"
     kind = NodeKind.rule
+    noun = "Detection rule"
+    index_title = "Detection rules"
 
     def render(self, obj: DetectionRule) -> str:
         rule = obj
         deployments = rule_deployments(rule, self.ctx.environment)
-        page = self.page(rule.name)
+        page = self.page(rule.name, rule.metadata, rule.description)
         page.add_lead(parts.overview(rule, deployments, self.links))
-        page.add(section("Description", common.prose(self.formatter, rule.description)))
+        deployment_map = deployment_diagram(
+            rule.metadata.uuid, name=rule.name, deployments=deployments
+        )
         page.add(
             section(
                 "Deployment",
                 parts.deployment_body(deployments, self.formatter),
+                render_diagram(self.formatter, deployment_map),
                 children=[
                     section("Tenant targeting", parts.tenants_body(deployments, self.formatter))
                 ],
@@ -42,12 +48,12 @@ class RuleRenderer(ObjectRenderer):
         page.add(
             section(
                 "Platform configuration",
-                children=parts.configuration_sections(rule, self.formatter),
+                children=parts.configuration_sections(rule, self.formatter, deployments),
             )
         )
         page.add(section("Response", parts.response_body(rule, self.formatter)))
         page.add(section("ATT&CK techniques", common.attack_table(rule.techniques, self.formatter)))
-        page.add(self.coverage_section(rule.metadata.uuid, rule.name, platforms=deployments))
+        page.add(self.coverage_section(rule.metadata.uuid, rule.name))
         page.add(self.references_section(rule.references))
         page.add(self.metadata_section(rule.metadata))
         return page.render()

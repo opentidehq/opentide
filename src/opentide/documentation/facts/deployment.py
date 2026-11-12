@@ -206,6 +206,8 @@ class TenantTarget:
     description: str = ""
     runs: tuple[StatusStrategy, ...] = ()
     remote_id: str = ""
+    #: The run strategies the tenant accepts; empty when its configuration is unknown.
+    accepts: tuple[StatusStrategy, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -317,6 +319,7 @@ def _platform_deployment(
             description=tenant.description,
             runs=tuple(run for run in runs if run in tenant.strategies),
             remote_id=remote.get(tenant.name, ""),
+            accepts=tuple(tenant.strategies),
         )
         for tenant in candidates
     )

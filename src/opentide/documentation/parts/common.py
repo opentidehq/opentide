@@ -78,6 +78,13 @@ def metadata_table(metadata: ObjectMetadata, formatter: MarkdownFormatter) -> st
     return key_value_table(formatter, rows, headers=("Field", "Value"))
 
 
+def tlp_marking(tlp: str) -> str:
+    """The marking id of *tlp* (``TLP:AMBER``), or the value as written when unknown."""
+    entry = enrich("tlp", tlp)
+    marking = entry.raw.get("id") if isinstance(entry.raw, dict) else ""
+    return marking if isinstance(marking, str) and marking else tlp
+
+
 def tlp_label(tlp: str) -> str:
     """``clear`` as ``clear (`TLP:CLEAR`)``: the vocabulary label and its marking id."""
     entry = enrich("tlp", tlp)

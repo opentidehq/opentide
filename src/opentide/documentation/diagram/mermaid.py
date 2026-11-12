@@ -68,12 +68,16 @@ KIND_STYLES: dict[NodeKind, KindStyle] = {
         "[(",
         ")]",
         "cylinder",
-        "platform deployment",
+        "platform",
         "fill:#f2f4f7,stroke:#475467,color:#101828",
+    ),
+    NodeKind.tenant: KindStyle(
+        "ten", "[[", "]]", "subroutine box", "tenant", "fill:#f4f3ff,stroke:#5925dc,color:#21125a"
     ),
 }
 
 _FOCUS_CSS = "stroke-width:3px"
+_GAP_CSS = "stroke-dasharray:5 3"
 _LANE_CSS = "fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4"
 
 #: Arrow of each line style: (one-way, two-way).
@@ -134,6 +138,8 @@ def legend(diagram: Diagram, dialect: MermaidDialect) -> str:
     shapes = [f"{KIND_STYLES[kind].shape} = {KIND_STYLES[kind].noun}" for kind in diagram.kinds()]
     if dialect.styles and any(node.focus for node in diagram.nodes.values()):
         shapes.append("bold outline = this page")
+    if dialect.styles and any(node.gap for node in diagram.nodes.values()):
+        shapes.append("dashed outline = no detection objective")
     parts = [f"*Shapes:* {'; '.join(shapes)}."]
     lines = [
         f"{_LINE_NOUNS[style]} = {diagram.link_legend[style]}"
@@ -197,6 +203,10 @@ def _style_lines(diagram: Diagram, ids: dict[str, str], lane_ids: list[str]) -> 
         lines.append(f"    class {','.join(members)} {kind.value}")
     if focus:
         lines.append(f"    class {','.join(focus)} focus")
+    gaps = [ids[node.key] for node in diagram.nodes.values() if node.gap]
+    if gaps:
+        lines.append(f"    classDef gap {_GAP_CSS}")
+        lines.append(f"    class {','.join(gaps)} gap")
     lines.extend(f"    style {lane_id} {_LANE_CSS}" for lane_id in lane_ids)
     return lines
 

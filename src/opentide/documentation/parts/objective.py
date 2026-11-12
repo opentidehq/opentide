@@ -55,6 +55,20 @@ def overview(objective: DetectionObjective, links: Links) -> str:
     return key_value_table(links.formatter, rows, headers=("Property", "Value"))
 
 
+def unimplemented_signals(objective: DetectionObjective, links: Links) -> str:
+    """A warning naming the signals no rule implements yet."""
+    signals = objective.objective.signals
+    missing = [s.name for s in signals if not links.catalog.rules_for_signal(s.uuid)]
+    if not missing:
+        return ""
+    names = ", ".join(f"*{table_cell(name)}*" for name in missing)
+    return links.formatter.callout(
+        "warning",
+        f"{len(missing)} of {plural(len(signals), 'signal')} "
+        f"{'has' if len(missing) == 1 else 'have'} no implementing rule yet: {names}.",
+    )
+
+
 def composition_body(objective: DetectionObjective, formatter: MarkdownFormatter) -> str:
     composition = objective.objective.composition
     entry = enrich("detection.composition", composition.strategy)
@@ -87,23 +101,26 @@ def signal_sections(objective: DetectionObjective, links: Links) -> list[Section
 
 
 def _signal_section(signal: DetectionSignal, links: Links) -> Section:
+    """The signal's description and the facts the summary table has no room for."""
     formatter = links.formatter
     rules = links.catalog.rules_for_signal(signal.uuid)
-    rows = [
-        ("Severity", enrich("alert_severity", signal.severity).label),
-        ("Methodology", enrich("detection.methodology", signal.methodology).label),
-        ("Effort", str(signal.effort) if signal.effort is not None else ""),
-        ("Entities", ", ".join(enrich("signal.entities", e).label for e in signal.entities)),
-        ("Data availability", table_cell(signal.data.availability)),
-        ("Data requirements", table_cell(signal.data.requirements)),
-        ("Log sources", ", ".join(inline_code(s) for s in signal.data.logsources or [])),
-        ("Implemented by", join_lines(links.to(uuid) for uuid in rules) or "No rule yet"),
-        ("UUID", inline_code(signal.uuid)),
+    data = signal.data
+    facts = [
+        f"**Data:** {table_cell(data.availability)}. {data.requirements.strip()}",
+        (
+            "**Log sources:** " + ", ".join(inline_code(s) for s in data.logsources)
+            if data.logsources
+            else ""
+        ),
+        "**Entities:** " + ", ".join(enrich("signal.entities", e).label for e in signal.entities),
+        "**Implemented by:** "
+        + (", ".join(links.to(uuid) for uuid in rules) if rules else "*no rule yet*"),
+        f"**UUID:** {inline_code(signal.uuid)}",
     ]
     return section(
         signal.name,
         formatter.paragraph(signal.description),
-        key_value_table(formatter, rows, headers=("Property", "Value")),
+        "\n".join(f"- {fact}" for fact in facts if fact) + "\n",
         _detectors(signal.detectors or [], formatter),
         _examples(signal.examples or [], formatter),
     )
@@ -145,10 +162,11 @@ def _examples(examples: Sequence[DetectionExample], formatter: MarkdownFormatter
     return join(parts)
 
 
-def coverage_matrix(objective: DetectionObjective, links: Links) -> str:
-    """Signals against the rules implementing them and where those rules deploy."""
+def signals_summary(objective: DetectionObjective, links: Links) -> str:
+    """Every signal at a glance: how it detects, and the rules and platforms implementing it."""
     if not objective.objective.signals:
         return ""
+    formatter = links.formatter
     rows: list[list[str]] = []
     listed: set[str] = set()
     for signal in objective.objective.signals:
@@ -156,8 +174,13 @@ def coverage_matrix(objective: DetectionObjective, links: Links) -> str:
         listed.update(rules)
         rows.append(
             [
-                table_cell(signal.name),
-                join_lines(links.to(uuid) for uuid in rules) or "*None*",
+                formatter.link(
+                    table_cell(signal.name), f"#{formatter.heading_anchor(signal.name)}"
+                ),
+                enrich("alert_severity", signal.severity).label,
+                enrich("detection.methodology", signal.methodology).label,
+                str(signal.effort) if signal.effort is not None else "-",
+                join_lines(links.to(uuid) for uuid in rules) or "*None yet*",
                 join_lines(_rule_platforms(uuid, links.catalog) for uuid in rules) or "-",
             ]
         )
@@ -171,11 +194,16 @@ def coverage_matrix(objective: DetectionObjective, links: Links) -> str:
         rows.append(
             [
                 "*Objective as a whole*",
+                "-",
+                "-",
+                "-",
                 join_lines(links.to(uuid) for uuid in direct),
                 join_lines(_rule_platforms(uuid, links.catalog) for uuid in direct),
             ]
         )
-    return links.formatter.table(["Signal", "Rules", "Platforms and status"], rows)
+    return formatter.table(
+        ["Signal", "Severity", "Methodology", "Effort", "Rules", "Platforms and status"], rows
+    )
 
 
 def _rule_platforms(rule_uuid: str, catalog: DocumentationCatalog) -> str:
@@ -186,7 +214,7 @@ def _rule_platforms(rule_uuid: str, catalog: DocumentationCatalog) -> str:
     statuses = rule.platform_statuses
     if not statuses:
         return "-"
-    return ", ".join(
+    return join_lines(
         f"{platform_label(platform)} {inline_code(status)}" for platform, status in statuses.items()
     )
 

@@ -16,8 +16,8 @@ from opentide.documentation.markdown.text import (
     table_cell,
     truncate,
 )
-from opentide.documentation.parts.common import Links, entry_link
-from opentide.documentation.vocabulary import chaining_relation, enrich
+from opentide.documentation.parts.common import Links, entry_link, technique_links
+from opentide.documentation.vocabulary import chaining_relation, enrich, vocabulary_order
 from opentide.generation import framework as fw
 from opentide.models.threat import ThreatBody, ThreatVector
 from opentide.vulnerability_lookup import (
@@ -62,18 +62,50 @@ def overview(threat: ThreatVector, links: Links, *, coverage: tuple[int, int]) -
         ("Kill chain", ", ".join(killchain_phases(body))),
         ("Surface", ", ".join(_surface_label(value)[0] for value in body.surface)),
         ("Actors", table_cell(", ".join(actors))),
-        ("ATT&CK", plural(len(body.mitre_attack), "technique") if body.mitre_attack else ""),
+        ("ATT&CK", technique_links(body.mitre_attack, links.formatter)),
         ("Detection coverage", detection),
     ]
     return key_value_table(links.formatter, rows, headers=("Property", "Value"))
 
 
+#: Phases shown on each side of the threat's own in the kill-chain window.
+KILLCHAIN_CONTEXT = 2
+
+
+def killchain_strip(body: ThreatBody, formatter: MarkdownFormatter) -> str:
+    """Where the threat sits on the kill chain: its phases in bold, with their neighbours.
+
+    ``**Kill chain** (phase 13 of 18): … Privilege Escalation → Execution →
+    **Credential Access** → Lateral Movement → Collection …``
+    """
+    phases = killchain_phases(body)
+    order = vocabulary_order("killchain")
+    positions = [order.index(phase) for phase in phases if phase in order]
+    if not positions:
+        return ""
+    first = max(min(positions) - KILLCHAIN_CONTEXT, 0)
+    last = min(max(positions) + KILLCHAIN_CONTEXT, len(order) - 1)
+    steps = [f"**{phase}**" if phase in phases else phase for phase in order[first : last + 1]]
+    window = " → ".join(steps)
+    if first > 0:
+        window = "… " + window
+    if last < len(order) - 1:
+        window += " …"
+    where = ", ".join(str(position + 1) for position in sorted(positions))
+    noun = "phase" if len(positions) == 1 else "phases"
+    return formatter.paragraph(f"**Kill chain** ({noun} {where} of {len(order)}): {window}")
+
+
 def criticality_body(threat: ThreatVector, formatter: MarkdownFormatter) -> str:
     entry = enrich("criticality", threat.criticality)
-    text = f"**{entry.label}**"
+    text = f"**Criticality: {entry.label}**"
     if entry.description:
-        text += f": {' '.join(entry.description.split())}"
+        text += f". {' '.join(entry.description.split())}"
     return formatter.paragraph(text)
+
+
+def terrain_body(body: ThreatBody, formatter: MarkdownFormatter) -> str:
+    return formatter.paragraph(f"**Terrain:** {body.terrain.strip()}") if body.terrain else ""
 
 
 def assessment_table(body: ThreatBody, formatter: MarkdownFormatter) -> str:

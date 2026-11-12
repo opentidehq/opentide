@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 
 from opentide.documentation.format.factory import formatter_for
-from opentide.documentation.markdown.page import Page, key_value_table, section
+from opentide.documentation.markdown.page import (
+    GENERATED_NOTICE,
+    Page,
+    key_value_table,
+    section,
+)
 from opentide.documentation.markdown.text import (
     first_sentence,
     inline_code,
@@ -29,24 +34,34 @@ def test_layout_is_title_lead_contents_then_sections() -> None:
     page = _page(DocumentFlavor.github)
     page.add(section("Part 0", "Repeated title.", children=[section("Child", "Nested.")]))
     text = page.render()
-    assert text.startswith("# Rule\n\nLead text.\n\n**Contents**\n\n- [Part 0](#part-0)\n")
+    assert text.startswith(
+        "# Rule\n\nLead text.\n\n**On this page:** [Part 0](#part-0) · [Part 1](#part-1) · "
+    )
     # A repeated heading gets the anchor GitHub gives it.
-    assert "- [Part 0](#part-0-1)\n  - [Child](#child)\n" in text
+    assert "[Part 3](#part-3) · [Part 0](#part-0-1)\n" in text
     assert (
         "\n## Part 3\n\nBody 3.\n\n## Part 0\n\nRepeated title.\n\n### Child\n\nNested.\n" in text
     )
-    assert text.endswith("Nested.\n")
+    assert text.endswith("Nested.\n\n" + GENERATED_NOTICE + "\n")
+
+
+def test_breadcrumb_sits_above_the_title_and_below_front_matter() -> None:
+    formatter = formatter_for(DocumentFlavor.gitlab)
+    plain = Page(formatter, "Rule", breadcrumb="[Catalogue](../README)").render()
+    assert plain.startswith("[Catalogue](../README)\n\n# Rule\n")
+    framed = Page(formatter, "Rule", frontmatter=True, breadcrumb="[Catalogue](../README)").render()
+    assert framed.startswith("---\ntitle: Rule\n---\n\n[Catalogue](../README)\n")
 
 
 @pytest.mark.parametrize("flavor", [DocumentFlavor.gitlab, DocumentFlavor.azure_devops])
 def test_wiki_flavors_use_their_native_contents(flavor: DocumentFlavor) -> None:
     text = _page(flavor).render()
     assert "[[_TOC_]]" in text
-    assert "**Contents**" not in text
+    assert "On this page" not in text
 
 
 def test_short_pages_have_no_contents() -> None:
-    assert "Contents" not in _page(DocumentFlavor.github, count=3).render()
+    assert "On this page" not in _page(DocumentFlavor.github, count=3).render()
 
 
 def test_empty_sections_and_children_are_dropped() -> None:

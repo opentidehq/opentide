@@ -88,7 +88,9 @@ def test_write_index_writes_folder_pages(tmp_path: Path) -> None:
     assert (pub.objectives_dir / "README.md").is_file()
     assert (pub.threats_dir / "README.md").is_file()
     assert (pub.output_root / "README.md").is_file()
-    assert "Detection Objectives" in (pub.objectives_dir / "README.md").read_text(encoding="utf-8")
+    assert "# Detection objectives" in (pub.objectives_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_write_index_writes_gitlab_order_file(tmp_path: Path) -> None:
@@ -227,9 +229,9 @@ def test_write_index_writes_section_pages_when_every_folder_is_empty(tmp_path: P
     write_index(ctx, pub, rules=[], objectives=[], threats=[])
     root = (tmp_path / "README.md").read_text(encoding="utf-8")
     for folder, title in (
-        ("rules", "Detection Rules"),
-        ("objectives", "Detection Objectives"),
-        ("threats", "Threat Vectors"),
+        ("rules", "Detection rules"),
+        ("objectives", "Detection objectives"),
+        ("threats", "Threat vectors"),
     ):
         page = tmp_path / folder / "README.md"
         assert page.is_file()
@@ -318,9 +320,12 @@ def test_root_index_summarises_status_per_platform_and_coverage(
         ],
     )
     assert (
-        "Detection catalogue of 2 threat vectors, 1 detection objective and 2 detection rules"
+        "# Detection catalogue\n\n2 threat vectors, 1 detection objective and 2 detection rules"
         in page
     )
+    assert "pie showData title Platform blocks by status" in page
+    # Each slice takes its strategy's colour: grey for INERT, green for RELEASE.
+    assert '"pie1":"#667085","pie2":"#039855"' in page
     assert "| Platform | `DRAFT` | `PRODUCTION` | Total |" in page
     assert "| Splunk Enterprise Security | 1 | 1 | 2 |" in page
     assert "| Threat vectors addressed by an objective | 1 of 2 (50%) |" in page

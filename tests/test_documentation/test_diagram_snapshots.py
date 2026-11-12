@@ -48,8 +48,11 @@ def test_rule_page_draws_its_lineage_and_platforms(tmp_path) -> None:
 
     assert "## Detection coverage" in rendered
     assert "thr1 --> obj1" in rendered
+    assert "plt1" not in rendered.split("## Detection coverage")[1]
     assert 'plt1[("Microsoft Sentinel<br>STAGING")]' in rendered
-    assert "rul1 --> plt1" in rendered
+    assert 'plt1 -->|"PREVIEW"| ten1' in rendered
+    assert 'ten1[["staging<br>id rule-7f3a"]]' in rendered
+    assert "plt1 -.-> ten2" in rendered
     assert "[Shai-Hulud Objective](../objectives/shai-hulud-objective.md)" in rendered
 
 
@@ -62,7 +65,9 @@ def test_rule_page_omits_coverage_when_catalog_has_none(tmp_path) -> None:
     assert "## Detection coverage" not in rendered
     assert "## Relations" not in rendered
     assert "Related objects" not in rendered
-    assert "```mermaid" not in rendered
+    # Only the deployment map is drawn.
+    assert rendered.count("```mermaid") == 1
+    assert "accTitle: Deployment map of" in rendered
 
 
 def test_objective_page_relations_fallback_is_not_titled_coverage(tmp_path) -> None:

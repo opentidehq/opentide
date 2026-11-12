@@ -73,14 +73,17 @@ def test_flatten_documents_every_value_the_block_holds() -> None:
         code_language=lambda path: PROFILES["sentinel"].language(path, block),
     )
     rows = {row.path: row for row in settings.rows}
-    assert rows["name"].value == "`Sentinel name`"
+    # Words are prose, identifiers are code.
+    assert rows["name"].value == "Sentinel name"
     assert rows["scheduling.frequency"].value == "`PT1H`"
     assert rows["alert.suppression"].value == "`false`"
     assert rows["alert.title"].description
     assert "status" not in rows and "tenants" not in rows
     # Exclusions hold a query, so each is walked and its query fenced, not tabled.
     assert rows["exclusions[0].tenant"].value == "`blue`"
-    assert rows["exclusions[0].reason"].value == "`Service account`"
+    assert rows["exclusions[0].reason"].value == "Service account"
+    # A pipe is not plain language: the value stays code, the table escapes it.
+    assert rows["alert.title"].value == "`Alert | title`"
     code = {item.path: item for item in settings.code}
     assert code["query"].language == KQL
     assert code["query"].code == "SecurityEvent\n| take 1"
@@ -237,3 +240,24 @@ def test_live_environment_caches_tenants_and_tolerates_a_broken_state_shard(
     assert environment.tenants("sentinel") == ()
     assert calls == ["sentinel"]
     assert environment.remote_ids("00000000-0000-4000-8000-000000000001") == {}
+
+
+@pytest.mark.parametrize(
+    ("value", "rendered"),
+    [
+        (
+            "Corporate VPN egress is hosted on a cloud provider.",
+            "Corporate VPN egress is hosted on a cloud provider.",
+        ),
+        ("0 * * * *", "`0 * * * *`"),
+        ("{{Account}} signed in from {{IP}}", "`{{Account}} signed in from {{IP}}`"),
+        ("SingleAlert", "`SingleAlert`"),
+        ("search count > 0", "`search count > 0`"),
+        ("PT1H", "`PT1H`"),
+    ],
+)
+def test_plain_language_is_text_and_everything_else_is_code(value: str, rendered: str) -> None:
+    """A cron expression written as text lost its asterisks to emphasis."""
+    from opentide.documentation.facts.settings import _scalar
+
+    assert _scalar(value) == rendered

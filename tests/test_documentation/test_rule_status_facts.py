@@ -91,8 +91,9 @@ def test_the_page_shows_each_block_status_and_the_alert_severity(
     assert "| Splunk Enterprise Security | `STAGING` |" in page
     assert "| Severity | Critical |" in page
     assert "Informational" not in page
-    # Splunk's block in the overview and the deployment table, never the rule-level value.
-    assert page.count("`STAGING`") == 2
+    # Splunk's block in the overview, the deployment table and the status
+    # reference, never the rule-level value.
+    assert page.count("`STAGING`") == 3
 
 
 @pytest.mark.parametrize(

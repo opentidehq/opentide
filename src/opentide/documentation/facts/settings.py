@@ -12,6 +12,7 @@ A field the model gains is documented with no change here.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping, Sequence, Set
 from dataclasses import dataclass, field
 from typing import Any
@@ -25,8 +26,6 @@ from opentide.documentation.markdown.text import first_sentence, inline_code, st
 #: A setting path (indices removed) to the language of the code it holds.
 CodeDetector = Callable[[str], CodeLanguage | None]
 
-#: Longer plain text reads better as prose than as a code span.
-_PROSE_LENGTH = 60
 _DESCRIPTION_LENGTH = 160
 
 
@@ -183,9 +182,25 @@ def _cell(value: Any) -> str:
 
 def _scalar(value: Any, *, prose: bool = True) -> str:
     text = " ".join(stringify(value).split())
-    if prose and isinstance(value, str) and len(text) > _PROSE_LENGTH and " " in text:
+    if prose and isinstance(value, str) and _is_prose(text):
         return text
     return inline_code(text)
+
+
+#: Plain language: letters, digits, spaces and sentence punctuation, nothing a
+#: Markdown renderer or a query language reads specially.
+_PLAIN = re.compile(r"[\w\s.,;:'()&/-]+")
+_WORD = re.compile(r"[^\W\d_]{2,}")
+
+
+def _is_prose(text: str) -> bool:
+    """A rule name or a reason reads as text; an identifier, cron or template as code.
+
+    A code span wrapped over several lines was hard to read, but ``0 * * * *``
+    or ``{{Account}} on {{Host}}`` written as text would lose characters to
+    Markdown.
+    """
+    return " " in text and _PLAIN.fullmatch(text) is not None and len(_WORD.findall(text)) >= 2
 
 
 def _is_scalar(value: Any) -> bool:

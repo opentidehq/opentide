@@ -16,14 +16,21 @@ from opentide.documentation.catalog import (
 from opentide.documentation.diagram.builders import (
     chaining_diagram,
     coverage_diagram,
+    deployment_diagram,
+    landscape_diagram,
     relations_diagram,
     render_diagram,
 )
 from opentide.documentation.diagram.model import LinkStyle, NodeKind
-from opentide.documentation.facts.deployment import PlatformDeployment, StatusDefinition
+from opentide.documentation.facts.deployment import (
+    PlatformDeployment,
+    StatusDefinition,
+    TenantTarget,
+)
 from opentide.documentation.format.azure_devops import AzureDevOpsFormatter
 from opentide.documentation.format.github import GitHubFormatter
 from opentide.models.deployment_enums import StatusStrategy
+from opentide.models.threat import ThreatVector
 
 
 def _catalog(
@@ -77,10 +84,10 @@ def test_coverage_diagram_lanes_run_from_threat_to_rule() -> None:
     assert "*Shapes:* hexagon = threat vector" in rendered
 
 
-def test_coverage_diagram_adds_a_rules_platforms_with_their_status() -> None:
+def test_deployment_map_draws_platforms_and_the_tenants_each_run_reaches() -> None:
     preview = StatusDefinition("STAGING", "", StatusStrategy.PREVIEW)
     inert = StatusDefinition("DRAFT", "", StatusStrategy.INERT)
-    platforms = [
+    deployments = [
         PlatformDeployment(
             "sentinel",
             "Microsoft Sentinel",
@@ -89,19 +96,63 @@ def test_coverage_diagram_adds_a_rules_platforms_with_their_status() -> None:
             preview,
             (StatusStrategy.PREVIEW,),
             "all",
+            targets=(
+                TenantTarget("staging", runs=(StatusStrategy.PREVIEW,), remote_id="42"),
+                TenantTarget("prod", accepts=(StatusStrategy.RELEASE,)),
+            ),
         ),
         PlatformDeployment("splunk", "Splunk", True, "DRAFT", inert, (), "all"),
     ]
-    diagram = coverage_diagram(
-        _catalog(coverage=_COVERAGE), "r1", name="Rule One", platforms=platforms
-    )
+    diagram = deployment_diagram("r1", name="Rule One", deployments=deployments)
     assert diagram is not None
+    assert [lane.title for lane in diagram.lanes] == ["Detection rule", "Platforms", "Tenants"]
     rendered = render_diagram(GitHubFormatter(), diagram)
     assert 'plt1[("Microsoft Sentinel<br>STAGING")]' in rendered
-    assert "rul1 --> plt1" in rendered
+    assert 'ten1[["staging<br>id 42"]]' in rendered
+    assert 'plt1 -->|"PREVIEW"| ten1' in rendered
+    assert "plt1 -.-> ten2" in rendered
     # A status no run deploys is drawn dotted, and the legend says so.
     assert "rul1 -.-> plt2" in rendered
-    assert "dotted line = a status no run deploys" in rendered
+    assert "subroutine box = tenant" in rendered
+    assert "dotted line = not deployed" in rendered
+    assert deployment_diagram("r1", name="Rule One", deployments=[]) is None
+
+
+def test_landscape_lanes_every_threat_and_marks_the_uncovered(metadata: dict) -> None:
+    def threat(uuid: str, phase: str, chaining: list[dict[str, str]]) -> ThreatVector:
+        return ThreatVector.from_yaml_dict(
+            {
+                "name": f"Threat {uuid}",
+                "criticality": "High",
+                "metadata": {**metadata, "uuid": uuid, "schema": "threat::1.0"},
+                "threat": {
+                    "description": "d",
+                    "severity": "Moderate incident",
+                    "impact": ["Data Breach"],
+                    "leverage": ["Spoofing"],
+                    "viability": "Likely",
+                    "terrain": "t",
+                    "surface": ["Entra ID"],
+                    "mitre_attack": ["T1078"],
+                    "killchain": phase,
+                    "chaining": chaining,
+                },
+            }
+        )
+
+    threats = [
+        threat("a", "Collection", [{"vector": "b", "relation": "succeeds"}]),
+        threat("b", "Delivery", [{"vector": "elsewhere", "relation": "preceeds"}]),
+    ]
+    diagram = landscape_diagram(threats, addressed={"a"})
+    assert diagram is not None
+    assert [lane.title for lane in diagram.lanes] == ["Delivery", "Collection"]
+    assert [(link.source, link.target) for link in diagram.links] == [("b", "a")]
+    rendered = render_diagram(GitHubFormatter(), diagram)
+    assert 'thr2{{"Threat b<br>not covered"}}' in rendered
+    assert "class thr2 gap" in rendered
+    assert "dashed outline = no detection objective" in rendered
+    assert landscape_diagram(threats[:1], addressed=set()) is None
 
 
 def test_azure_dialect_drops_lanes_styles_and_accessibility() -> None:

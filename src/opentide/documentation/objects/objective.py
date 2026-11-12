@@ -21,17 +21,26 @@ class ObjectiveRenderer(ObjectRenderer):
 
     folder = "objectives"
     kind = NodeKind.objective
+    noun = "Detection objective"
+    index_title = "Detection objectives"
 
     def render(self, obj: DetectionObjective) -> str:
         objective = obj
         body = objective.objective
-        page = self.page(objective.name)
-        page.add_lead(parts.overview(objective, self.links))
-        page.add(section("Description", common.prose(self.formatter, body.description)))
+        page = self.page(objective.name, objective.metadata, body.description)
+        page.add_lead(
+            parts.overview(objective, self.links),
+            parts.unimplemented_signals(objective, self.links),
+        )
         page.add(section("Composition", parts.composition_body(objective, self.formatter)))
         page.add(section("Threats addressed", parts.threats_body(objective, self.links)))
-        page.add(section("Signals", children=parts.signal_sections(objective, self.links)))
-        page.add(section("Signal rule coverage", parts.coverage_matrix(objective, self.links)))
+        page.add(
+            section(
+                "Signals",
+                parts.signals_summary(objective, self.links),
+                children=parts.signal_sections(objective, self.links),
+            )
+        )
         page.add(
             section(
                 "ATT&CK techniques", common.attack_table(body.mitre_attack or [], self.formatter)

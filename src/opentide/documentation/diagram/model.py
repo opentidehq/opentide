@@ -24,6 +24,7 @@ class NodeKind(str, Enum):
     signal = "signal"
     rule = "rule"
     platform = "platform"
+    tenant = "tenant"
 
 
 class LinkStyle(str, Enum):
@@ -48,6 +49,8 @@ class Node:
     caption: str = ""
     #: The object the page is about.
     focus: bool = False
+    #: A gap: drawn with a dashed outline (a threat no objective addresses).
+    gap: bool = False
 
 
 @dataclass(frozen=True)

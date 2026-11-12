@@ -18,11 +18,11 @@ from opentide.documentation.parts.common import (
     references_body,
 )
 from opentide.documentation.parts.objective import (
-    coverage_matrix,
-    signal_sections,
+    overview as objective_overview,
 )
 from opentide.documentation.parts.objective import (
-    overview as objective_overview,
+    signal_sections,
+    signals_summary,
 )
 from opentide.documentation.parts.rule import (
     configuration_sections,
@@ -219,7 +219,8 @@ def test_platform_sections_document_every_setting_in_model_order(
     assert [section.title for section in sections] == ["Microsoft Sentinel", "Elastic Security"]
     sentinel, elastic = (section.body for section in sections)
     assert "**`query`** (KQL)\n\n```kql\nSecurityEvent | take 1\n```" in sentinel
-    assert "| `alert.title` | `Sentinel alert` |" in sentinel
+    assert sentinel.startswith("Status `STAGING`\n")
+    assert "| `alert.title` | Sentinel alert |" in sentinel
     assert "| `scheduling.lookback` | `PT2H` |" in sentinel
     assert "| `grouping.event` | `SingleAlert` |" in sentinel
     assert "**`entities[0].mappings`**" in sentinel
@@ -288,15 +289,18 @@ def test_signal_sections_keep_the_signal_name_as_their_heading(metadata: dict[st
     (signal,) = signal_sections(objective, _links(catalog, "objectives"))
     # Rule pages link to this heading's anchor.
     assert signal.title == "Exec signal"
-    assert "| Effort | 3 |" in signal.body
-    assert "| Log sources | `MDE DeviceProcessEvents` |" in signal.body
-    assert "| Implemented by | No rule yet |" in signal.body
+    assert "- **Data:** Complete. logs\n" in signal.body
+    assert "- **Log sources:** `MDE DeviceProcessEvents`\n" in signal.body
+    assert "- **Implemented by:** *no rule yet*\n" in signal.body
+    assert "- **UUID:** `00000000-0000-4000-8000-000000000021`" in signal.body
     assert "| Sentinel KQL baseline | Microsoft Sentinel |" in signal.body
     assert "1. Baseline suspicious process lineage query." in signal.body
     assert "```sql\nDeviceProcessEvents\n| take 1\n```" in signal.body
 
 
-def test_coverage_matrix_lists_rules_and_their_platforms(metadata: dict[str, Any]) -> None:
+def test_signals_summary_lists_each_signal_its_rules_and_platforms(
+    metadata: dict[str, Any],
+) -> None:
     objective = load_objective_from_dict(_objective_payload(metadata))
     rule = _sentinel_rule(metadata)
     record = DocumentRecord(DocumentScope.rules, "rule-1", rule.name, rule)
@@ -306,12 +310,17 @@ def test_coverage_matrix_lists_rules_and_their_platforms(metadata: dict[str, Any
     catalog.resolve_record.side_effect = lambda uuid: record if uuid == "rule-1" else None
     catalog.resolve_signal.return_value = None
     catalog.resolve_name.side_effect = lambda uuid: uuid
-    rendered = coverage_matrix(objective, _links(catalog, "objectives"))
-    assert "| Signal | Rules | Platforms and status |" in rendered
+    rendered = signals_summary(objective, _links(catalog, "objectives"))
+    assert rendered.splitlines()[0] == (
+        "| Signal | Severity | Methodology | Effort | Rules | Platforms and status |"
+    )
+    # The signal links to its own heading below the table.
+    assert "| [Exec signal](#exec-signal) | High |" in rendered
+    assert "| 3 |" in rendered
     assert (
         "[Rule on two platforms](../rules/rule-on-two-platforms.md)<br>`unknown-rule`" in rendered
     )
-    assert "Microsoft Sentinel `STAGING`, Elastic Security `STAGING`<br>-" in rendered
+    assert "Microsoft Sentinel `STAGING`<br>Elastic Security `STAGING`<br>-" in rendered
 
 
 def test_surface_table_and_chaining_table(metadata: dict[str, Any]) -> None:

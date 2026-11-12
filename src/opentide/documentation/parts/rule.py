@@ -13,7 +13,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from opentide.core.responders import resolve_responders
-from opentide.documentation.facts.deployment import PlatformDeployment, TenantTarget
+from opentide.documentation.facts.deployment import (
+    PlatformDeployment,
+    StatusDefinition,
+    TenantTarget,
+)
 from opentide.documentation.facts.platforms import PROFILES, TEXT, CodeLanguage, profile_for
 from opentide.documentation.facts.settings import Settings, flatten
 from opentide.documentation.format.protocol import MarkdownFormatter
@@ -28,8 +32,8 @@ from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.platform import PlatformConfigBase
 from opentide.models.rule import DetectionRule
 
-#: Block keys the deployment table already documents.
-_DEPLOYMENT_KEYS = ("enabled", "status", "tenants")
+#: Block keys the deployment table and each platform's summary line already document.
+_DEPLOYMENT_KEYS = ("enabled", "status", "tenants", "schema")
 
 #: What a run does to a rule, by the strategy its status maps to.
 _RUN_VERBS: dict[StatusStrategy, str] = {
@@ -49,7 +53,6 @@ def overview(rule: DetectionRule, deployments: Sequence[PlatformDeployment], lin
         ("Platforms", join_lines(_platform_summary(item) for item in deployments)),
         ("Playbook", table_cell(response.playbook) if response and response.playbook else ""),
         ("Responders", table_cell(resolve_responders(response) or "") if response else ""),
-        ("Version", f"{inline_code(rule.metadata.version)}, modified {rule.metadata.modified}"),
     ]
     return key_value_table(formatter, rows, headers=("Property", "Value"))
 
@@ -65,21 +68,22 @@ def deployment_body(deployments: Sequence[PlatformDeployment], formatter: Markdo
         return formatter.callout(
             "note", "This rule has no platform configuration: no run deploys it anywhere."
         )
+    intro = formatter.paragraph(
+        "What `opentide deploy` does with this rule: each platform block's status, the runs "
+        "that act on it, and the tenants they reach."
+    )
     rows = [
         [
             deployment.label,
             inline_code(deployment.status),
-            inline_code(deployment.strategy.name) if deployment.strategy else "undefined",
             _runs_text(deployment),
             _tenants_text(deployment),
             "yes" if deployment.enabled else "no",
         ]
         for deployment in deployments
     ]
-    table = formatter.table(
-        ["Platform", "Status", "Strategy", "Deployed by", "Tenants", "Block enabled"], rows
-    )
-    return join([table, _status_reference(deployments), *_warnings(deployments, formatter)])
+    table = formatter.table(["Platform", "Status", "Deployed by", "Tenants", "Block enabled"], rows)
+    return join([intro, table, _status_reference(deployments), *_warnings(deployments, formatter)])
 
 
 def tenants_body(deployments: Sequence[PlatformDeployment], formatter: MarkdownFormatter) -> str:
@@ -100,10 +104,13 @@ def tenants_body(deployments: Sequence[PlatformDeployment], formatter: MarkdownF
 def _tenant_row(deployment: PlatformDeployment, target: TenantTarget) -> list[str]:
     if target.runs:
         reached = ", ".join(f"{run.name} runs" for run in target.runs)
-    elif deployment.scope == "listed" and deployment.platform_enabled is not False:
-        reached = "no run (the tenant accepts none of the rule's runs)"
+    elif deployment.runs and target.accepts:
+        accepted = " and ".join(run.name for run in target.accepts)
+        reached = f"no run: the tenant takes {accepted} runs only"
+    elif deployment.runs:
+        reached = "no run: the tenant takes none of the rule's runs"
     else:
-        reached = "no run"
+        reached = "no run: no run deploys this status"
     name = inline_code(target.name)
     if target.description:
         name = f"{name}<br>{table_cell(target.description)}"
@@ -135,16 +142,18 @@ def _tenants_text(deployment: PlatformDeployment) -> str:
 
 
 def _status_reference(deployments: Sequence[PlatformDeployment]) -> str:
-    seen: dict[str, str] = {}
+    """Each status the table uses: its strategy in ``deployment.toml``, and what it means."""
+    seen: dict[str, StatusDefinition] = {}
     for deployment in deployments:
-        if deployment.definition and deployment.definition.description:
-            seen.setdefault(deployment.status, deployment.definition.description)
-    if not seen:
-        return ""
-    return "\n".join(
-        f"- {inline_code(status)}: {' '.join(description.split())}"
-        for status, description in seen.items()
-    )
+        if deployment.definition is not None:
+            seen.setdefault(deployment.status, deployment.definition)
+    lines = []
+    for status, definition in seen.items():
+        line = f"- {inline_code(status)} (strategy {inline_code(definition.strategy.name)})"
+        if definition.description:
+            line += f": {' '.join(definition.description.split())}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _warnings(deployments: Sequence[PlatformDeployment], formatter: MarkdownFormatter) -> list[str]:
@@ -170,20 +179,28 @@ def _warnings(deployments: Sequence[PlatformDeployment], formatter: MarkdownForm
     return [formatter.callout("warning", note) for note in notes]
 
 
-def configuration_sections(rule: DetectionRule, formatter: MarkdownFormatter) -> list[Section]:
+def configuration_sections(
+    rule: DetectionRule,
+    formatter: MarkdownFormatter,
+    deployments: Sequence[PlatformDeployment] = (),
+) -> list[Section]:
     """One section per platform block, documenting every setting it holds."""
     if rule.configurations is None:
         return []
+    by_platform = {deployment.platform: deployment for deployment in deployments}
     sections: list[Section] = []
     for platform in type(rule.configurations).model_fields:
         block = getattr(rule.configurations, platform, None)
         if isinstance(block, PlatformConfigBase):
-            sections.append(platform_section(platform, block, formatter))
+            sections.append(platform_section(platform, block, formatter, by_platform.get(platform)))
     return sections
 
 
 def platform_section(
-    platform: str, block: PlatformConfigBase, formatter: MarkdownFormatter
+    platform: str,
+    block: PlatformConfigBase,
+    formatter: MarkdownFormatter,
+    deployment: PlatformDeployment | None = None,
 ) -> Section:
     profile = profile_for(platform)
     settings = flatten(
@@ -191,7 +208,27 @@ def platform_section(
         exclude=_DEPLOYMENT_KEYS,
         code_language=lambda path: profile.language(path, block),
     )
-    return section(profile.label, settings_body(settings, formatter))
+    return section(
+        profile.label,
+        _block_summary(block, deployment, formatter),
+        settings_body(settings, formatter),
+    )
+
+
+def _block_summary(
+    block: PlatformConfigBase, deployment: PlatformDeployment | None, formatter: MarkdownFormatter
+) -> str:
+    """One line on where the block stands: status, runs, tenants, schema."""
+    parts = [f"Status {inline_code(block.status)}"]
+    if deployment is not None:
+        runs = _runs_text(deployment)
+        parts.append(f"deployed by {runs}" if deployment.runs else runs)
+        parts.append(f"tenants: {_tenants_text(deployment)}")
+    if block.schema:
+        parts.append(f"schema {inline_code(block.schema)}")
+    if not block.enabled:
+        parts.append("block disabled")
+    return formatter.paragraph(" · ".join(parts))
 
 
 def settings_body(settings: Settings, formatter: MarkdownFormatter) -> str:

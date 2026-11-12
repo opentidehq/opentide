@@ -23,13 +23,15 @@ class ThreatRenderer(ObjectRenderer):
 
     folder = "threats"
     kind = NodeKind.threat
+    noun = "Threat vector"
+    index_title = "Threat vectors"
 
     def render(self, obj: ThreatVector) -> str:
         threat = obj
         body = threat.threat
         uuid = threat.metadata.uuid
         coverage = parts.coverage_counts(self.catalog.coverage_graph(uuid))
-        page = self.page(threat.name)
+        page = self.page(threat.name, threat.metadata, body.description)
         page.add_lead(parts.overview(threat, self.links, coverage=coverage))
         if coverage[0] == 0:
             page.add_lead(
@@ -37,10 +39,15 @@ class ThreatRenderer(ObjectRenderer):
                     "warning", "No detection objective addresses this threat vector yet."
                 )
             )
-        page.add(section("Description", common.prose(self.formatter, body.description)))
-        page.add(section("Criticality", parts.criticality_body(threat, self.formatter)))
-        page.add(section("Terrain", common.prose(self.formatter, body.terrain)))
-        page.add(section("Threat assessment", parts.assessment_table(body, self.formatter)))
+        page.add(
+            section(
+                "Assessment",
+                parts.criticality_body(threat, self.formatter),
+                parts.terrain_body(body, self.formatter),
+                parts.killchain_strip(body, self.formatter),
+                parts.assessment_table(body, self.formatter),
+            )
+        )
         page.add(section("Surface", parts.surface_table(body, self.formatter)))
         page.add(section("Actors", parts.actors_table(body, self.formatter)))
         page.add(
