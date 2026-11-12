@@ -1,0 +1,21 @@
+# The tenant the fixtures/valid/rule-google-secops-*.yaml rules deploy to, and
+# whose request bodies are the *.api.json files beside this one.
+[platform]
+enabled = true
+identifier = "google_secops"
+name = "Google Security Operations"
+subschema = "Google SecOps SIEM"
+description = "YARA-L 2.0 detection rules for Google SecOps SIEM."
+flags = []
+
+[[tenants]]
+name = "secops-eu"
+description = "Google SecOps, EU multi-region"
+strategies = ["PREVIEW", "RELEASE"]
+[tenants.setup]
+ssl = true
+project = "acme-secops"
+location = "eu"
+instance = "3f0ac524-5ae1-4bfd-b86d-53afc953e7e6"
+credentials = "$GOOGLE_SECOPS_CREDENTIALS"
+deletion = "archive"

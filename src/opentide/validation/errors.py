@@ -64,8 +64,9 @@ def _cross_object_ref_type(field_path: tuple[str, ...]) -> str | None:
 def _platform_constraint_codes() -> frozenset[str]:
     """Codes a platform block's validator raises as the error's type."""
     from opentide.platforms.bitdefender.catalog import CONSTRAINT_CODES
+    from opentide.platforms.google_secops.checks import CONSTRAINT_CODES as SECOPS_CODES
 
-    return CONSTRAINT_CODES
+    return CONSTRAINT_CODES | SECOPS_CODES
 
 
 def issues_from_pydantic(
@@ -95,7 +96,8 @@ def issues_from_pydantic(
                     if suggestion:
                         code = "vocab_unknown"
         if str(err.get("type")) in _platform_constraint_codes():
-            # A platform constraint (bitdefender-1.0): the error's type is its code.
+            # A platform constraint (bitdefender-1.0, google-secops-1.0): the error's type
+            # is its code.
             code = str(err["type"])
         value = err.get("input")
         issues.append(

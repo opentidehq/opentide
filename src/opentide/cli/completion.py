@@ -61,6 +61,7 @@ PLATFORMS = (
     "elastic",
     "sysdig",
     "bitdefender",
+    "google_secops",
 )
 
 #: ``--strategy`` values and what each deploys, as

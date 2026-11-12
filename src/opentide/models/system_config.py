@@ -281,6 +281,24 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class GoogleSecops(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    project: str = ""
+                    location: str = ""
+                    instance: str = ""
+                    endpoint: str | None = None
+                    credentials: str | None = None
+                    data_access_scope: str | None = None
+                    deletion: str = "archive"
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -343,3 +361,7 @@ class TenantDeployment:
     @dataclass
     class Bitdefender(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Bitdefender.Tenant
+
+    @dataclass
+    class GoogleSecops(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.GoogleSecops.Tenant

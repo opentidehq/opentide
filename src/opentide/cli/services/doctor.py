@@ -61,6 +61,7 @@ PLATFORM_SDKS: dict[str, tuple[str, ...]] = {
     "elastic": ("requests",),
     "sysdig": ("requests",),
     "bitdefender": ("requests",),
+    "google_secops": ("google.auth", "requests"),
 }
 
 #: How the checklist names each host ``opentide setup mcp`` writes for; the

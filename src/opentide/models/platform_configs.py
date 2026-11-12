@@ -910,3 +910,40 @@ class BitdefenderActions(_BitdefenderTable):
     """Quarantine the file (type 6): `true`, or `{include_parent, include_children}`."""
     risk_scan: Literal[True] | None = None
     """Run a risk scan (type 7)."""
+
+
+# --- Google Security Operations (platform::google_secops::1.0) ------------------------
+
+
+class GoogleSecopsMatch(TideModel):
+    group_by: list[str] = Field(min_length=1)
+    """The placeholders the rule groups by, each `$name`, non-empty, no repeats. Rendered joined
+    with `, `."""
+    window: str
+    """The match window: `<n>m`, `<n>h`, or `<n>d`. A hop or sliding window is at most `14d`, a
+    tumbling window at most `72h`."""
+    type: Literal["hop", "tumbling", "sliding"] | None = None
+    """`hop` (the default) renders `over`, `tumbling` renders `by`, `sliding` renders
+    `over … before|after $pivot`."""
+    pivot: str | None = None
+    """With `sliding`: the event variable the window is anchored on, `$name`."""
+    direction: Literal["before", "after"] | None = None
+    """With `sliding`: `before` or `after`."""
+
+
+class GoogleSecopsOptions(TideModel):
+    allow_zero_values: bool | None = Field(default=None, strict=True)
+    """Keep zero values of match placeholders (`false` by default). Rendered
+    `allow_zero_values = true`."""
+    suppression_window: str | None = None
+    """Suppress repeated detections for this duration (`m`, `h`, `d`). Rendered
+    `suppression_window = 1h`."""
+
+
+class GoogleSecopsSchedule(TideModel):
+    ensure_enrichment_completeness: bool | None = Field(default=None, strict=True)
+    """Sent as `scheduleCustomizations.ensureEnrichmentCompleteness`. Google's default when
+    omitted."""
+    late_arriving_data_adjustment: str | None = None
+    """A duration (`30m`, `2h`), sent as `scheduleCustomizations.lateArrivingDataAdjustment` in
+    seconds (`"1800s"`). Google's default when omitted."""

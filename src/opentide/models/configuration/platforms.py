@@ -474,6 +474,61 @@ class BitdefenderConfiguration(PlatformConfigurationBase):
     )
 
 
+# --- Google Security Operations -------------------------------------------------------
+
+
+class GoogleSecopsSetup(TenantSetup):
+    """`[tenants.setup]` for Google Security Operations."""
+
+    project: str = Field(
+        min_length=1,
+        description="The Google Cloud project bound to the SecOps instance, id or number.",
+    )
+    location: str = Field(
+        min_length=1,
+        description=(
+            "The instance's region: us, eu, europe, or a Google Cloud region such as europe-west2."
+        ),
+    )
+    instance: str = Field(min_length=1, description="The SecOps customer id (a UUID).")
+    endpoint: str | None = Field(
+        default=None,
+        description="The regional service endpoint. Default: https://<location>-chronicle.googleapis.com.",
+    )
+    credentials: EnvPlaceholder | None = Field(
+        default=None,
+        description=(
+            "A $NAME placeholder for a service-account key, as a JSON document or a path to "
+            "one. Without it, Application Default Credentials (workload identity, gcloud auth)."
+        ),
+    )
+    data_access_scope: str | None = Field(
+        default=None,
+        description="A data access scope id, sent as scope on create and update.",
+    )
+    deletion: Literal["archive", "delete"] = Field(
+        default="archive",
+        description=(
+            "DELETION: archive the rule (keeps its detections and the binding), or delete it "
+            "without force."
+        ),
+    )
+
+
+class GoogleSecopsTenant(TenantBase):
+    """`[[tenants]]` for Google Security Operations."""
+
+    setup: GoogleSecopsSetup = Field(description="Connection settings.")
+
+
+class GoogleSecopsConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/google_secops.toml`."""
+
+    tenants: list[GoogleSecopsTenant] = Field(
+        default_factory=list, description="Google SecOps instances."
+    )
+
+
 # --- Any other platform file ----------------------------------------------------------
 
 
@@ -519,4 +574,5 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "elastic": ElasticConfiguration,
     "sysdig": SysdigConfiguration,
     "bitdefender": BitdefenderConfiguration,
+    "google_secops": GoogleSecopsConfiguration,
 }

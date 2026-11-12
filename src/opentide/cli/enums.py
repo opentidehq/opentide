@@ -24,6 +24,7 @@ class DetectionPlatform(str, Enum):
     elastic = "elastic"
     sysdig = "sysdig"
     bitdefender = "bitdefender"
+    google_secops = "google_secops"
 
 
 #: ``--platform`` shows this in help instead of ten values run together.
@@ -144,6 +145,7 @@ def platform_label(platform: DetectionPlatform) -> str:
         DetectionPlatform.elastic: "Elastic Security",
         DetectionPlatform.sysdig: "Sysdig Secure",
         DetectionPlatform.bitdefender: "Bitdefender GravityZone",
+        DetectionPlatform.google_secops: "Google Security Operations",
     }
     return labels.get(platform, platform.value)
 
