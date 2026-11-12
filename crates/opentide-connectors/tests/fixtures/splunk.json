@@ -1,0 +1,105 @@
+{
+  "deploy": [
+    {
+      "name": "Splunk SPL Rule",
+      "status": "STAGING",
+      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
+      "mdr_config": {
+        "is_scheduled": 1,
+        "cron_schedule": "0 * * * *",
+        "alert.severity": 5,
+        "alert.managedBy": "",
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+      },
+      "actions_config": {}
+    },
+    {
+      "name": "Splunk SPL Rule",
+      "status": "STAGING",
+      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
+      "mdr_config": {
+        "is_scheduled": 1,
+        "cron_schedule": "0 * * * *",
+        "alert.severity": 5,
+        "alert.managedBy": "",
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+      },
+      "actions_config": {}
+    },
+    {
+      "name": "Splunk SPL Rule",
+      "status": "REMOVED",
+      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"REMOVED\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
+      "mdr_config": {
+        "is_scheduled": 1,
+        "cron_schedule": "0 * * * *",
+        "alert.severity": 5,
+        "alert.managedBy": "",
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+      },
+      "actions_config": {}
+    },
+    {
+      "name": "Splunk SPL Rule",
+      "status": "REMOVED",
+      "query": "index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"REMOVED\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`",
+      "mdr_config": {
+        "is_scheduled": 1,
+        "cron_schedule": "0 * * * *",
+        "alert.severity": 5,
+        "alert.managedBy": "",
+        "description": "Simulated Splunk rule for CLI E2E corpus.\n"
+      },
+      "actions_config": {}
+    }
+  ],
+  "query": {
+    "window": [
+      "2026-10-26T08:00:00+00:00",
+      "2026-10-27T08:00:00.250000+00:00"
+    ],
+    "queries": [
+      {
+        "text": "index=main sourcetype=WinEventLog:Security EventCode=4688",
+        "limit": 2
+      },
+      {
+        "text": "| makeresults count=3 | eval host=\"ws-é\"",
+        "limit": 100
+      },
+      {
+        "text": "search index=missing_index",
+        "limit": 100
+      },
+      {
+        "text": "index=main | lookup errors x",
+        "limit": 100
+      },
+      {
+        "text": "index=main | badcommand",
+        "limit": 100
+      },
+      {
+        "text": "index=main nofields",
+        "limit": 100
+      },
+      {
+        "text": "index=main gateway",
+        "limit": 100
+      }
+    ]
+  },
+  "validate": {
+    "window": [
+      "2026-10-27T07:59:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      "index=main EventCode=4688 | stats count by host",
+      "| tstats count where index=main by host",
+      "index=main |badcommand",
+      "index=main |unreachable",
+      "index=main |gateway"
+    ]
+  }
+}

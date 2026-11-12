@@ -3,9 +3,10 @@
 //! `query/service.py` request for request.
 //!
 //! The query runs on the platforms with a Rust connector and a query runner
-//! ([`PLATFORMS`]: CrowdStrike, Defender for Endpoint, Elastic, HarfangLab,
-//! SentinelOne). A run on another platform, and a run of a rule's query
-//! (`--rule`, `--file`), are the Python CLI's: refused with
+//! ([`PLATFORMS`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
+//! Elastic, HarfangLab, Sentinel, SentinelOne, Splunk; every platform with a
+//! runner since UC-4.3, #833). A run of a rule's query (`--rule`,
+//! `--file`) is the Python CLI's: refused with
 //! `engine_not_ported` ([`not_ported`]), which `OPENTIDE_ENGINE=compare`
 //! hands to Python.
 //!
@@ -35,12 +36,15 @@ pub const COMMAND: &str = "query";
 
 /// The platforms whose queries run here: those with a connector and a query
 /// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`).
-pub const PLATFORMS: [&str; 5] = [
+pub const PLATFORMS: [&str; 8] = [
+    "carbon_black_cloud",
     "crowdstrike",
     "defender_for_endpoint",
     "elastic",
     "harfanglab",
+    "sentinel",
     "sentinel_one",
+    "splunk",
 ];
 
 /// Every platform with a query runner (`QUERY_PLATFORMS`), sorted.
@@ -93,6 +97,12 @@ fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
         "sentinel_one" => ("SentinelOne", &["url", "api_token"]),
         "elastic" => ("Elastic", &["api_key"]),
         "harfanglab" => ("HarfangLab", &["url", "api_token"]),
+        "splunk" => ("Splunk", &["url", "port", "token", "app", "ssl"]),
+        "carbon_black_cloud" => ("CBC", &["url", "org_key", "token"]),
+        "sentinel" => (
+            "Azure",
+            &["azure_tenant_id", "azure_client_id", "azure_client_secret"],
+        ),
         _ => ("", &[]),
     }
 }
@@ -103,6 +113,7 @@ fn default_host(platform: &str) -> &'static str {
     match platform {
         "defender_for_endpoint" => "https://graph.microsoft.com",
         "crowdstrike" => "https://api.crowdstrike.com",
+        "sentinel" => "https://api.loganalytics.io",
         _ => "",
     }
 }
@@ -607,13 +618,20 @@ fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) -> Option<S
 
 /// The HTTP settings each platform's client mounts.
 fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
-    use opentide_connectors::{crowdstrike, defender, elastic, harfanglab, sentinel_one};
+    use opentide_connectors::{
+        carbon_black, crowdstrike, defender, elastic, harfanglab, sentinel, sentinel_one, splunk,
+    };
     match platform {
         "defender_for_endpoint" => defender::http_settings(),
         "sentinel_one" => sentinel_one::http_settings(),
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
+        "splunk" => splunk::http_settings(timeout),
+        "carbon_black_cloud" => carbon_black::http_settings(timeout),
+        // azure-core reads for 300 s; the server holds the query up to its
+        // own timeout (`Prefer: wait`).
+        "sentinel" => sentinel::http_settings(timeout.max(Duration::from_secs(300))),
         _ => HttpSettings::default(),
     }
 }
@@ -749,6 +767,14 @@ fn run_on_tenant(
                 "cannot authenticate to {platform} tenant {}: {message}",
                 python_string_repr(&configured.name)
             ));
+        }
+        Err(ConnectorError::Gateway { message, .. }) => {
+            outcome.error = Some(format!(
+                "{platform} tenant {} did not answer the query within {}s: {message}",
+                python_string_repr(&configured.name),
+                seconds_g(request.timeout.as_secs_f64()),
+            ));
+            outcome.detail = Some("narrow the window or raise --timeout".into());
         }
         Err(ConnectorError::Timeout { seconds, .. }) => {
             let host = setup_host(platform, configured);
@@ -1235,7 +1261,8 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
                 .iter()
                 .map(|row| shown.iter().map(|name| cell(row.get(name))).collect())
                 .collect();
-            for line in rich_table(&shown, &cells) {
+            let width = terminal.stdout.width.unwrap_or(80);
+            for line in rich_table(&shown, &cells, width) {
                 out.push_str(&terminal.stdout.line(&line));
             }
         }
@@ -1264,60 +1291,147 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
 }
 
 /// A Rich `Table(show_edge=False, header_style="bold", pad_edge=False)` of
-/// columns that never wrap: the header in bold over a heavy rule, the cells
-/// one space from the light rules between them.
-fn rich_table(headers: &[String], rows: &[Vec<String>]) -> Vec<Text> {
+/// columns that never wrap, `width` cells wide at most: the header in bold
+/// over a heavy rule, the cells one space from the light rules between them.
+/// A table wider than the stream loses width evenly across its columns
+/// (Rich's `ratio_reduce`; no column wraps), and each cell is cut with `…`.
+fn rich_table(headers: &[String], rows: &[Vec<String>], width: usize) -> Vec<Text> {
     use crate::render::text::cell_len;
-    let widths: Vec<usize> = headers
-        .iter()
-        .enumerate()
-        .map(|(at, header)| {
-            rows.iter()
-                .map(|row| cell_len(&row[at]))
-                .chain(std::iter::once(cell_len(header)))
-                .max()
-                .unwrap_or_default()
-                .min(CELL_WIDTH)
-        })
+    let count = headers.len();
+    let last = count.saturating_sub(1);
+    let pads: Vec<(usize, usize)> = (0..count)
+        .map(|at| (usize::from(at > 0), usize::from(at < last)))
         .collect();
-    let last = headers.len().saturating_sub(1);
-    let pad = |text: &str, width: usize| {
-        let mut padded = text.to_owned();
-        padded.push_str(&" ".repeat(width.saturating_sub(cell_len(text))));
-        padded
+    // The room for the columns: the stream less the rules between them.
+    let room = width.saturating_sub(last);
+    let measure = |at: usize, limit: usize| -> usize {
+        // `_measure_column`: the widest cell with its padding, at most `limit`
+        // and the column's `max_width` (CELL_WIDTH) with its padding.
+        if limit < 1 {
+            return 0;
+        }
+        let (left, right) = pads[at];
+        let padding = left + right;
+        let widest = rows
+            .iter()
+            .map(|row| cell_len(&row[at]))
+            .chain(std::iter::once(cell_len(&headers[at])))
+            .map(|cells| {
+                if limit < padding + 1 {
+                    limit
+                } else {
+                    (cells + padding).min(limit)
+                }
+            })
+            .max()
+            .unwrap_or(limit);
+        widest.min(limit).min(CELL_WIDTH + padding)
     };
+    let mut widths: Vec<usize> = (0..count).map(|at| measure(at, room).max(1)).collect();
+    let total: usize = widths.iter().sum();
+    if total > room {
+        widths = ratio_reduce(total - room, &widths);
+        widths = (0..count).map(|at| measure(at, widths[at])).collect();
+    }
     let bold = Style::new("bold");
-    let mut lines = Vec::new();
+    let plain = Style::new("");
+    // One cell: its padding and its text cut to fit, the whole cropped to
+    // the column's width.
+    let cell = |line: &mut Text, at: usize, value: &str, style: &Style| {
+        let (left, right) = pads[at];
+        let room = widths[at];
+        let inner = room.saturating_sub(left + right);
+        let mut content = Text::plain(value);
+        content.truncate_ellipsis(inner);
+        let mut text = content.as_plain();
+        if inner == 0 {
+            text.clear();
+        }
+        text.push_str(&" ".repeat(inner.saturating_sub(cell_len(&text))));
+        let mut used = 0;
+        for piece in [" ".repeat(left), text, " ".repeat(right)] {
+            let take: String = piece
+                .chars()
+                .scan(used, |cells, ch| {
+                    *cells += crate::render::text::char_width(ch);
+                    (*cells <= room).then_some(ch)
+                })
+                .collect();
+            used += cell_len(&take);
+            if !take.is_empty() {
+                line.append(&take, style);
+            }
+        }
+    };
+    let mut lines: Vec<Text> = Vec::new();
     let mut header = Text::plain("");
     for (at, name) in headers.iter().enumerate() {
         if at > 0 {
-            // Rich pads each header cell in its style: the rule between
-            // two cells is the only plain character.
-            header.append(" ", &bold);
             header.push_str("┃");
-            header.append(" ", &bold);
         }
-        header.append(&pad(name, widths[at]), &bold);
+        cell(&mut header, at, name, &bold);
     }
     lines.push(header);
-    let rule: Vec<String> = widths
-        .iter()
-        .enumerate()
-        .map(|(at, width)| {
-            let extra = usize::from(at > 0) + usize::from(at < last);
-            "━".repeat(width + extra)
-        })
-        .collect();
+    let rule: Vec<String> = widths.iter().map(|width| "━".repeat(*width)).collect();
     lines.push(Text::plain(&rule.join("╇")));
     for row in rows {
-        let cells: Vec<String> = row
-            .iter()
-            .enumerate()
-            .map(|(at, value)| pad(value, widths[at]))
-            .collect();
-        lines.push(Text::plain(&cells.join(" │ ")));
+        let mut line = Text::plain("");
+        for (at, value) in row.iter().enumerate() {
+            if at > 0 {
+                line.push_str("│");
+            }
+            cell(&mut line, at, value, &plain);
+        }
+        lines.push(Text::plain(&line.as_plain()));
     }
-    lines
+    // A table still wider than the stream is cut at its edge, as the
+    // console crops each line it prints.
+    lines.iter().map(|line| crop_cells(line, width)).collect()
+}
+
+/// *line*'s first *width* cells.
+fn crop_cells(line: &Text, width: usize) -> Text {
+    let mut cells = 0;
+    let mut keep = 0;
+    for ch in line.as_plain().chars() {
+        cells += crate::render::text::char_width(ch);
+        if cells > width {
+            break;
+        }
+        keep += 1;
+    }
+    line.slice(0, keep)
+}
+
+/// Rich's `ratio_reduce(total, [1] * n, widths, widths)`: *total* cells
+/// taken from the columns in turn, each its share (Python's `round`, half
+/// to even), at most its whole width.
+fn ratio_reduce(total: usize, widths: &[usize]) -> Vec<usize> {
+    let mut ratio_left = widths.iter().filter(|width| **width > 0).count();
+    if ratio_left == 0 {
+        return widths.to_vec();
+    }
+    let mut remaining = total;
+    widths
+        .iter()
+        .map(|&width| {
+            if width == 0 || ratio_left == 0 {
+                return width;
+            }
+            // round(remaining / ratio_left), ties to even.
+            let quotient = remaining / ratio_left;
+            let rest = remaining % ratio_left;
+            let share = match (rest * 2).cmp(&ratio_left) {
+                std::cmp::Ordering::Greater => quotient + 1,
+                std::cmp::Ordering::Equal if quotient % 2 == 1 => quotient + 1,
+                _ => quotient,
+            };
+            let distributed = share.min(width);
+            remaining -= distributed.min(remaining);
+            ratio_left -= 1;
+            width - distributed
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1410,14 +1524,52 @@ mod tests {
         assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
         assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
         assert_eq!(csv_value(Some(&Json::Bool(true))), "True");
-        let lines: Vec<String> = rich_table(
-            &["A".into(), "Bee".into()],
-            &[vec!["long".into(), "b".into()]],
-        )
-        .iter()
-        .map(Text::as_plain)
-        .collect();
-        assert_eq!(lines, ["A    ┃ Bee", "━━━━━╇━━━━", "long │ b  "]);
+        let table = |headers: &[&str], row: &[&str], width: usize| -> Vec<String> {
+            let headers: Vec<String> = headers.iter().map(|h| (*h).to_owned()).collect();
+            let row: Vec<String> = row.iter().map(|c| (*c).to_owned()).collect();
+            rich_table(&headers, &[row], width)
+                .iter()
+                .map(Text::as_plain)
+                .collect()
+        };
+        assert_eq!(
+            table(&["A", "Bee"], &["long", "b"], 80),
+            ["A    ┃ Bee", "━━━━━╇━━━━", "long │ b  "]
+        );
+        // Wider than the stream: Rich's own output for the same table.
+        assert_eq!(
+            table(
+                &["process_name", "pid", "device", "guid"],
+                &["c:\\windows\\cmd.exe", "4001", "ws-1", "ORGKEY01-0001"],
+                20
+            ),
+            [
+                "process_… ┃┃┃ guid  ",
+                "━━━━━━━━━━╇╇╇━━━━━━━",
+                "c:\\windo… │││ ORGKE…"
+            ]
+        );
+        assert_eq!(
+            table(
+                &["alpha", "beta", "gamma"],
+                &["一二三四", "x", "yyyyyyy"],
+                12
+            ),
+            ["alp… ┃  ┃ g…", "━━━━━╇━━╇━━━", "一 … │  │ y…"]
+        );
+        // Still wider after the even reduction: cut at the stream's edge.
+        assert_eq!(
+            table(
+                &["aaaaaaaaaa", "bbbbbbbbbbb", "ccc", "dddd"],
+                &[&"x".repeat(30), &"y".repeat(20), "z", &"w".repeat(9)],
+                20
+            ),
+            [
+                "aaaaaaa… ┃ bbbbbb… ┃",
+                "━━━━━━━━━╇━━━━━━━━━╇",
+                "xxxxxxx… │ yyyyyy… │"
+            ]
+        );
     }
 
     #[test]

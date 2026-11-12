@@ -1,0 +1,68 @@
+{
+  "deploy": {
+    "rule_id": "00000000-0000-4000-8003-000000000001",
+    "rule": {
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "Encoded PowerShell — Ünïcode",
+        "description": "A process ran PowerShell with an encoded command.",
+        "severity": "High",
+        "enabled": true,
+        "query": "SecurityEvent\n| where CommandLine has \"-enc\"",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Execution"
+        ],
+        "techniques": [
+          "T1059"
+        ],
+        "subTechniques": [
+          "T1059.001"
+        ]
+      }
+    }
+  },
+  "query": {
+    "window": [
+      "2026-10-26T08:00:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      {
+        "text": "SecurityEvent\n| where EventID == 4688\n| project TimeGenerated, Computer, EventID",
+        "limit": 2
+      },
+      {
+        "text": "SecurityEvent // partial\n| take 2",
+        "limit": 100
+      },
+      {
+        "text": "SecurityEvent // tables",
+        "limit": 100
+      },
+      {
+        "text": "SecurityEvent | whre x",
+        "limit": 100
+      },
+      {
+        "text": "// forbidden\nSigninLogs",
+        "limit": 100
+      }
+    ]
+  },
+  "validate": {
+    "window": [
+      "2026-10-27T07:59:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      "SecurityEvent\n| where EventID == 4688",
+      "SigninLogs\n| project TimeGenerated, Computer"
+    ]
+  }
+}

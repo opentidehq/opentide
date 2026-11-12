@@ -1,0 +1,757 @@
+{
+  "format": 1,
+  "scenario": "carbon_black/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/carbon_black/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:7520e9832dad1f469e77cfcda72108c4467407cebecb37cc9107705018f7bc06",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"report-other\", \"timestamp\": 1790000000, \"title\": \"Another rule\", \"description\": \"Another rule's report.\", \"severity\": 3, \"link\": null, \"tags\": [\"PRODUCTION\"], \"iocs_v2\": [{\"id\": \"ioc-other\", \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"], \"field\": null, \"link\": null}], \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\", \"id\": \"report-1\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists/wl-1",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"alerts_enabled\": true, \"classifier\": null, \"description\": \"opentide detections\", \"id\": \"wl-1\", \"last_update\": 1790000000, \"name\": \"opentide\", \"report_ids\": [\"report-other\", \"report-1\"], \"tags_enabled\": true, \"timestamp\": 1790000000}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"report-other\", \"timestamp\": 1790000000, \"title\": \"Another rule\", \"description\": \"Another rule's report.\", \"severity\": 3, \"link\": null, \"tags\": [\"PRODUCTION\"], \"iocs_v2\": [{\"id\": \"ioc-other\", \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"], \"field\": null, \"link\": null}], \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-1",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\", \"id\": \"report-1\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-1",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-1\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-1\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"report-other\", \"timestamp\": 1790000000, \"title\": \"Another rule\", \"description\": \"Another rule's report.\", \"severity\": 3, \"link\": null, \"tags\": [\"PRODUCTION\"], \"iocs_v2\": [{\"id\": \"ioc-other\", \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"], \"field\": null, \"link\": null}], \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-1",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-1\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-other\", \"iocs_v2\": [{\"field\": null, \"id\": \"ioc-other\", \"link\": null, \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"]}, {\"id\": \"00000000-0000-4000-8003-0000000000c5\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"link\": null, \"severity\": 8, \"tags\": [\"PRODUCTION\", \"shared\"], \"timestamp\": 1793088000, \"title\": \"Another rule\", \"visibility\": null}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-other\", \"iocs_v2\": [{\"field\": null, \"id\": \"ioc-other\", \"link\": null, \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"]}, {\"id\": \"00000000-0000-4000-8003-0000000000c5\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"link\": null, \"severity\": 8, \"tags\": [\"PRODUCTION\", \"shared\"], \"timestamp\": 1793088000, \"title\": \"Another rule\", \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-other\", \"iocs_v2\": [{\"field\": null, \"id\": \"ioc-other\", \"link\": null, \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"]}, {\"id\": \"00000000-0000-4000-8003-0000000000c5\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"link\": null, \"severity\": 8, \"tags\": [\"PRODUCTION\", \"shared\"], \"timestamp\": 1793088000, \"title\": \"Another rule\", \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-1",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-1\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-other\", \"iocs_v2\": [{\"field\": null, \"id\": \"ioc-other\", \"link\": null, \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"]}], \"link\": null, \"severity\": 8, \"tags\": [\"PRODUCTION\", \"shared\"], \"timestamp\": 1793088000, \"title\": \"Another rule\", \"visibility\": null}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-other\", \"iocs_v2\": [{\"field\": null, \"id\": \"ioc-other\", \"link\": null, \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"]}], \"link\": null, \"severity\": 8, \"tags\": [\"PRODUCTION\", \"shared\"], \"timestamp\": 1793088000, \"title\": \"Another rule\", \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\", \"report-1\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-other",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-other\", \"iocs_v2\": [{\"field\": null, \"id\": \"ioc-other\", \"link\": null, \"match_type\": \"query\", \"values\": [\"process_name:other.exe\"]}], \"link\": null, \"severity\": 8, \"tags\": [\"PRODUCTION\", \"shared\"], \"timestamp\": 1793088000, \"title\": \"Another rule\", \"visibility\": null}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-1",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"description\": \"Simulated Carbon Black rule for CLI E2E corpus.\", \"id\": \"report-1\", \"iocs_v2\": [{\"id\": \"00000000-0000-4000-8003-000000000005\", \"match_type\": \"query\", \"values\": [\"process_name:cmd.exe\"]}], \"severity\": 8, \"tags\": [\"STAGING\"], \"timestamp\": 1793088000, \"title\": \"Carbon Black Lucene Rule\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/reports/report-1",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/threathunter/watchlistmgr/v3/orgs/ORGKEY01/watchlists",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"results\": [{\"id\": \"wl-1\", \"name\": \"opentide\", \"description\": \"opentide detections\", \"timestamp\": 1790000000, \"last_update\": 1790000100, \"report_ids\": [\"report-other\"], \"classifier\": null, \"alerts_enabled\": true, \"tags_enabled\": true}, {\"id\": \"wl-2\", \"name\": \"empty\", \"description\": \"\", \"timestamp\": 1790000000, \"last_update\": 1790000000, \"report_ids\": [], \"classifier\": null, \"alerts_enabled\": false, \"tags_enabled\": true}]}"
+      }
+    }
+  ]
+}

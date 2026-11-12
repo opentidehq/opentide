@@ -1,0 +1,8 @@
+[1mlab[0m  [2m2 rows (more matched; raise --limit)[0m
+[1mprocess_…[0m[1m [0m┃┃┃[1m [0m[1mdev…[0m[1m [0m┃[1m [0m[1mprocess_guid                    [0m[1m [0m┃[1m [0m[1mback…[0m[1m [0m┃[1m [0m[1mprocess_hash                        [0m
+━━━━━━━━━━╇╇╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+c:\windo… │││ 202… │ ORGKEY01-00000001-00000fa0-0000… │ 2026… │ ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+c:\windo… │││ 202… │ ORGKEY01-00000002-00000fa0-0000… │ 2026… │ ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+[2m1 more columns: name them with --columns, or use --format jsonl[0m
+
+[1;32m✓[0m 2 rows from 1 carbon_black_cloud tenant (limited to 2 per tenant)

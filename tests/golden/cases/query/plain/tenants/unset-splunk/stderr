@@ -1,0 +1,2 @@
+error: Environment variable missing · detail: Unset configuration variables: $SPLUNK_TOKEN · advice: Set those environment variables before a live check.
+error: 1 of 1 queries failed on 1 splunk tenant: lab: Splunk credentials are unset ($SPLUNK_TOKEN). Set those environment variables before a live check.

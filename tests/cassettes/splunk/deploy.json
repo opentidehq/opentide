@@ -1,0 +1,302 @@
+{
+  "format": 1,
+  "scenario": "splunk/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/splunk/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:c9fda1d17c66aa7ebed522cd68cf9b69660431a36f021c2b4b5456ed2eb9c8e5",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+SPL+Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\n  </messages>\n</response>\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "name=Splunk+SPL+Rule&search=index%3Dmain+%7C+head+1%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8003-000000000003%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=index%3Dmain+%7C+head+1%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8003-000000000003%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&cron_schedule=0+%2A+%2A+%2A+%2A&alert.severity=5&alert.managedBy=&description=Simulated+Splunk+rule+for+CLI+E2E+corpus.%0A"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=index%3Dmain+%7C+head+1%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8003-000000000003%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&is_scheduled=1"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+SPL+Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=index%3Dmain+%7C+head+1%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8003-000000000003%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&cron_schedule=0+%2A+%2A+%2A+%2A&alert.severity=5&alert.managedBy=&description=Simulated+Splunk+rule+for+CLI+E2E+corpus.%0A"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "search=index%3Dmain+%7C+head+1%0A%7C+eval+MDR_UUID%3D%2200000000-0000-4000-8003-000000000003%22%2C+MDR_status%3D%22STAGING%22+%0A%7C%60soc_macro_auto_mdr_mapping%28MDR_UUID%29%60&is_scheduled=1"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+SPL+Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"><entry><title>Splunk SPL Rule</title><id>https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule</id><link href=\"/servicesNS/nobody/search/saved/searches/Splunk%20SPL%20Rule\" rel=\"alternate\"/><content type=\"text/xml\"><s:dict><s:key name=\"search\">index=main | head 1\n| eval MDR_UUID=\"00000000-0000-4000-8003-000000000003\", MDR_status=\"STAGING\" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`</s:key><s:key name=\"cron_schedule\">0 * * * *</s:key><s:key name=\"alert.severity\">5</s:key><s:key name=\"alert.managedBy\"></s:key><s:key name=\"description\">Simulated Splunk rule for CLI E2E corpus.\n</s:key><s:key name=\"is_scheduled\">1</s:key><s:key name=\"eai:acl\"><s:dict><s:key name=\"app\">search</s:key><s:key name=\"owner\">nobody</s:key><s:key name=\"sharing\">app</s:key></s:dict></s:key></s:dict></content></entry></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+SPL+Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:s=\"http://dev.splunk.com/ns/rest\"></feed>"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk+SPL+Rule",
+        "headers": [
+          [
+            "authorization",
+            "Splunk REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "splunk-tenant"
+          ],
+          [
+            "content-type",
+            "text/xml"
+          ]
+        ],
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg type=\"ERROR\">Could not find object id=absent</msg>\n  </messages>\n</response>\n"
+      }
+    }
+  ]
+}

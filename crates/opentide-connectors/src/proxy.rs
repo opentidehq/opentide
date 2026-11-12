@@ -44,6 +44,51 @@ impl ProxySettings {
         }
     }
 
+    /// The proxy *url* goes through, as `scheme://host[:port]` without
+    /// credentials; `None` when it goes direct: no proxy for its scheme, or
+    /// its host in `no_proxy` (`urllib.request.proxy_bypass_environment`:
+    /// `*`, a host, a domain suffix, an optional `:port`).
+    pub fn route(&self, url: &url::Url) -> Option<String> {
+        let proxy = match url.scheme() {
+            "https" => self.https.as_deref(),
+            "http" => self.http.as_deref(),
+            _ => None,
+        }?;
+        if self.bypassed(url) {
+            return None;
+        }
+        let shown = if proxy.contains("://") {
+            proxy.to_owned()
+        } else {
+            format!("http://{proxy}")
+        };
+        let parsed = url::Url::parse(&shown).ok()?;
+        Some(crate::error::origin(&parsed))
+    }
+
+    /// Whether `no_proxy` sends *url* direct.
+    fn bypassed(&self, url: &url::Url) -> bool {
+        let Some(list) = self.no_proxy.as_deref() else {
+            return false;
+        };
+        let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+        let with_port = url
+            .port()
+            .map_or_else(|| host.clone(), |port| format!("{host}:{port}"));
+        list.split(',')
+            .map(|entry| entry.trim().to_ascii_lowercase())
+            .filter(|entry| !entry.is_empty())
+            .any(|entry| {
+                if entry == "*" {
+                    return true;
+                }
+                let entry = entry.trim_start_matches('.');
+                [host.as_str(), with_port.as_str()].iter().any(|candidate| {
+                    *candidate == entry || candidate.ends_with(&format!(".{entry}"))
+                })
+            })
+    }
+
     /// The reqwest proxies, each with the `no_proxy` list.
     pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, String> {
         let no_proxy = || {

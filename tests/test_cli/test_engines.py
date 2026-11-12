@@ -200,11 +200,14 @@ def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() ->
     for platform in ("crowdstrike", "defender_for_endpoint", "elastic", "harfanglab"):
         assert query.covers(["query", "--platform", platform, "x"])
     assert query.covers(["query", "--platform=sentinel_one", "x"])
-    for platform in ("sentinel", "splunk", "carbon_black_cloud", "sysdig"):
-        assert not query.covers(["query", "--platform", platform, "x"])
-        assert query.uncovered("query", ["--platform", platform]) == f"query on {platform}"
+    # The SDK platforms (UC-4.3, #833).
+    for platform in ("sentinel", "splunk", "carbon_black_cloud"):
+        assert query.covers(["query", "--platform", platform, "x"])
+    assert not query.covers(["query", "--platform", "sysdig", "x"])
+    assert query.uncovered("query", ["--platform", "sysdig"]) == "query on sysdig"
     # Every platform it names counts; none named is the workspace's to say.
-    assert not query.covers(["query", "--platform", "elastic", "--platform", "sentinel"])
+    assert not query.covers(["query", "--platform", "elastic", "--platform", "sysdig"])
+    assert query.covers(["query", "--platform", "elastic", "--platform", "splunk"])
     assert not query.covers(["query", "x"])
     assert query.uncovered("query", ["x"]) == "query without --platform"
     # After ``--`` it is an argument, not the flag.
@@ -265,13 +268,13 @@ def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
 
 
 def test_rust_refuses_a_query_on_a_platform_without_a_connector(workspace: Path) -> None:
-    """``query --platform sentinel`` has no Rust connector yet: refused, never half-run."""
-    args = ["--json", "--repo", str(workspace), "query", "--platform", "sentinel", "T"]
+    """``query --platform sysdig`` has no Rust query runner: refused, never half-run."""
+    args = ["--json", "--repo", str(workspace), "query", "--platform", "sysdig", "T"]
     code, stdout, _ = invoke(args, "rust")
     doc = document(stdout)
     assert code == 2
     assert doc["failure"]["code"] == "engine_not_ported"
-    assert "opentide query on sentinel has no Rust implementation yet" in doc["failure"]["message"]
+    assert "opentide query on sysdig has no Rust implementation yet" in doc["failure"]["message"]
 
 
 def test_rust_output_reaches_a_stream_that_lives_in_memory(

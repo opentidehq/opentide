@@ -1,4 +1,4 @@
-//! Live parity on a test tenant (UC-4.2, #832): a maintainer's step, never
+//! Live parity on a test tenant (UC-4.2, #832; UC-4.3, #833): a maintainer's step, never
 //! run in CI (`#[ignore]`). Each test reads a test tenant's `setup` table from
 //! the TOML file `OPENTIDE_LIVE_<PLATFORM>` names (the keys of
 //! `[tenants.setup]` in `configurations/platforms/<platform>.toml`, `$NAME`
@@ -11,6 +11,8 @@
 //! ```text
 //! OPENTIDE_LIVE_DEFENDER_FOR_ENDPOINT=defender.toml \
 //! OPENTIDE_LIVE_ELASTIC=elastic.toml OPENTIDE_LIVE_SENTINEL_ONE=s1.toml \
+//! OPENTIDE_LIVE_SPLUNK=splunk.toml OPENTIDE_LIVE_CARBON_BLACK_CLOUD=cbc.toml \
+//! OPENTIDE_LIVE_SENTINEL=sentinel.toml \
 //!   cargo test -p opentide-connectors --test live -- --ignored --nocapture
 //! ```
 
@@ -19,13 +21,16 @@
 mod support;
 
 use opentide_compile::json::Json;
+use opentide_connectors::carbon_black::{self, CarbonBlack, ReportDeploy};
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::connector::{QueryRequest, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::defender::{self, Defender};
 use opentide_connectors::elastic::{self, Elastic, ElasticRule, Strategy};
 use opentide_connectors::runtime::block_on;
+use opentide_connectors::sentinel::{self, Sentinel};
 use opentide_connectors::sentinel_one::{self, SentinelOne};
+use opentide_connectors::splunk::{self, Splunk};
 use opentide_connectors::{Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 
@@ -208,6 +213,117 @@ fn live_sentinel_one_deploy_validate_query_disable() {
         println!("disabled {id}");
         SentinelOne.delete_rule(cx, id).await.unwrap();
         println!("deleted {id}");
+    })
+    .unwrap();
+}
+
+#[test]
+#[ignore = "reaches a live test tenant: OPENTIDE_LIVE_SPLUNK"]
+fn live_splunk_deploy_validate_query_delete() {
+    let settings = splunk::http_settings(std::time::Duration::from_secs(120));
+    let Some((tenant, http, _)) = tenant(splunk::PLATFORM, &settings) else {
+        return;
+    };
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let inputs = support::fixture("splunk");
+    let step = &support::items(inputs.get("deploy").unwrap())[0];
+    let mut saved = step.get("mdr_config").unwrap().as_object().unwrap().clone();
+    saved.insert("search".into(), step.get("query").unwrap().clone());
+    let name = "opentide live parity (UC-4.3)";
+    let connector = Splunk::new();
+    block_on(async {
+        println!(
+            "deployed {:?}",
+            connector.apply_saved_search(cx, name, &saved, false).await
+        );
+        let request = QueryRequest::new("index=_internal | head 5", "spl", last_hour());
+        println!("check {:?}", connector.check(cx, &request).await);
+        println!("query {:?}", connector.run(cx, &request).await);
+        println!(
+            "deleted {:?}",
+            connector.apply_saved_search(cx, name, &saved, true).await
+        );
+    })
+    .unwrap();
+}
+
+#[test]
+#[ignore = "reaches a live test tenant: OPENTIDE_LIVE_CARBON_BLACK_CLOUD"]
+fn live_carbon_black_deploy_validate_query_retire() {
+    let settings = carbon_black::http_settings(std::time::Duration::from_secs(120));
+    let Some((tenant, http, setup)) = tenant(carbon_black::PLATFORM, &settings) else {
+        return;
+    };
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let watchlist = setup
+        .get("watchlist")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("opentide")
+        .to_owned();
+    let mut plan = ReportDeploy {
+        uuid: "00000000-0000-4000-8003-0000000004c3".into(),
+        name: "opentide live parity (UC-4.3)".into(),
+        description: "Created and deleted by opentide's live parity test.".into(),
+        query: "process_name:cmd.exe".into(),
+        deployment: true,
+        tags: vec!["STAGING".into()],
+        severity: 3,
+        watchlist,
+        report: "opentide live parity (UC-4.3)".into(),
+        now: jiff::Timestamp::now().as_second(),
+    };
+    block_on(async {
+        println!("deployed {:?}", CarbonBlack.deploy_report(cx, &plan).await);
+        let request = QueryRequest::new("process_name:cmd.exe", "lucene", last_hour());
+        println!("check {:?}", CarbonBlack.check(cx, &request).await);
+        println!("query {:?}", CarbonBlack.run(cx, &request).await);
+        plan.deployment = false;
+        println!("retired {:?}", CarbonBlack.deploy_report(cx, &plan).await);
+    })
+    .unwrap();
+}
+
+#[test]
+#[ignore = "reaches a live test tenant: OPENTIDE_LIVE_SENTINEL"]
+fn live_sentinel_deploy_validate_query_delete() {
+    let settings = sentinel::http_settings(std::time::Duration::from_secs(300));
+    let Some((tenant, http, _)) = tenant(sentinel::PLATFORM, &settings) else {
+        return;
+    };
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let inputs = support::fixture("sentinel");
+    let deploy = inputs.get("deploy").unwrap();
+    let rule_id = support::text(deploy.get("rule_id").unwrap());
+    let rule: &Json = deploy.get("rule").unwrap();
+    let connector = Sentinel::new();
+    block_on(async {
+        println!(
+            "deployed {:?}",
+            connector.create_or_update(cx, rule_id, rule).await
+        );
+        let request = QueryRequest::new("SecurityEvent | take 5", "kql", last_hour());
+        println!("check {:?}", connector.check(cx, &request).await);
+        println!("query {:?}", connector.run(cx, &request).await);
+        println!(
+            "listed {:?}",
+            connector.list(cx).await.map(|rules| rules.map(|r| r.len()))
+        );
+        println!("deleted {:?}", connector.delete(cx, rule_id).await);
     })
     .unwrap();
 }
