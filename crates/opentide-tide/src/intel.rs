@@ -107,6 +107,9 @@ pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> O
     if let Some(md) = crate::bitdefender::hover(source, offset, &cursor) {
         return Some(md);
     }
+    if let Some(md) = crate::graylog::hover(source, offset, &cursor) {
+        return Some(md);
+    }
     if cursor.on_key {
         return field_for(source, &cursor).map(|field| hover_markdown(field, &cursor));
     }
@@ -145,6 +148,9 @@ pub fn completions_tide(
     workspace: &[IndexedObject],
 ) -> Vec<CompletionItem> {
     let cursor = yaml_cursor(source, offset);
+    if let Some(items) = crate::graylog::completions(source, offset, &cursor) {
+        return items;
+    }
     if let Some(mut items) = crate::bitdefender::completions(source, offset, &cursor) {
         // The generated catalogue may know the same keys and values.
         for item in completions_at(source, &cursor, workspace) {

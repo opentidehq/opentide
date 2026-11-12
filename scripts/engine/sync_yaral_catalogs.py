@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate catalogs/yaral/udm.toml and catalogs/yaral/functions.toml.
 
-YARA-L 2.0 (yara-l-1.0, RFC 0017 section 7) checks field paths against
+YARA-L 2.0 (yara-l-1.0, RFC 0019 section 7) checks field paths against
 Google's Unified Data Model and calls against Google's function list. Both
 come from Google's pages, never from memory:
 

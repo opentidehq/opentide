@@ -1,4 +1,4 @@
-//! I/O-free YARA-L 2.0 engine (yara-l-1.0, RFC 0017 section 7).
+//! I/O-free YARA-L 2.0 engine (yara-l-1.0, RFC 0019 section 7).
 //!
 //! YARA-L is the detection and search language of Google Security
 //! Operations. Google publishes no grammar and no offline compiler, so the

@@ -21,6 +21,20 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **API: `opentide_core::LanguageId::Yaral`** and the `opentide-yaral` crate.
 - **The Tide catalog knows `configurations.google_secops`.** Regenerated with opentide's generator from the opentide branch that adds the block, so editors complete and validate its keys and nested `match`, `options` and `schedule` objects.
 
+## [0.14.0] - 2026-11-12
+
+Graylog is a platform: Graylog queries are checked in a Graylog dialect of Lucene, as live Graylog 6.3 and 7.2 read them, and `configurations.graylog` event definitions are checked as graylog-1.1 says, aggregation conditions included.
+
+### Added
+
+- **Graylog queries are checked in a Graylog dialect of Lucene.** `configurations.graylog.query`, hunts with `system: graylog` and `opentide-lsp analyze --platform graylog` get Elastic's Lucene checks without the ECS and Kibana KQL advice, plus graylog-1.1's seven codes. Hover and completion offer Graylog's message fields and `_exists_` (`docs/LANGUAGE.md`) ([#242](https://github.com/opentidehq/language-server/pull/242)).
+  - Errors: `graylog_leading_wildcard` (opentide drops it for a tenant that allows leading wildcards), `graylog_regex_unsupported`, `graylog_open_range` (a `*` range bound, which Graylog's validator refuses)
+  - Warnings: `graylog_regex_operator`, `graylog_regex_quote`, `graylog_double_backslash`, `graylog_analyzed_field`
+- **The bundled Tide catalog knows the `configurations.graylog` block.** It is regenerated from opentide's Graylog models, so `opentide-lsp` run on its own and `opentide validate` agree on Graylog blocks, and the Tide TextMate grammar highlights their keys ([#242](https://github.com/opentidehq/language-server/pull/242)).
+- **Graylog blocks (`configurations.graylog`) are checked as graylog-1.0 says.** The block's constraint codes and `graylog_overlapping_window` (warning) are reported on their fields, so the editor and `opentide validate` agree; `aggregation.condition` gets completion and hover for Graylog's 12 aggregation functions. `graylog_all_streams` and `graylog_title_duplicate` stay opentide's ([#242](https://github.com/opentidehq/language-server/pull/242)).
+  - Errors: `graylog_query_blank`, `graylog_list_shape`, `graylog_schedule` (a Quartz cron as Graylog reads it, an IANA `timezone`), `graylog_event_limit`, `graylog_aggregation` (the condition grammar, nesting at most 32 deep), `graylog_event_field`, `graylog_event_key`, `graylog_priority`, `graylog_field_name`
+  - `opentide_tide::graylog::compile_condition` compiles a condition into Graylog's series and condition tree
+
 ## [0.13.0] - 2026-11-11
 
 YARA is a language: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as libyara 4.5 compiles them, with YARA-X differences flagged, and Bitdefender GravityZone rules are checked against GravityZone's criteria.
@@ -709,6 +723,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.14.0]: https://github.com/opentidehq/language-server/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/opentidehq/language-server/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/opentidehq/language-server/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/opentidehq/language-server/compare/v0.11.0...v0.12.0
