@@ -619,3 +619,100 @@ def test_a_skill_folder_linked_out_of_the_repository_is_left_as_it_is(tmp_path: 
     assert sorted(path.name for path in shared.iterdir()) == ["SKILL.md"]
     warnings = [str(w) for w in result.get("warnings") or []]
     assert any(".cursor/skills/opentide-detection-rule" in w and "outside" in w for w in warnings)
+
+
+_AUTHORING = (
+    Path(skills_mod.__file__).resolve().parents[3] / "data" / "setup" / "skills" / "authoring"
+)
+
+
+@pytest.mark.parametrize("slug", sorted(registry.BUNDLED_AUTHORING_SKILLS), ids=lambda slug: slug)
+def test_a_bundled_authoring_skill_has_frontmatter_agents_can_discover(slug: str) -> None:
+    """They shipped without ``name``/``description``, so frontmatter discovery skipped them."""
+    import yaml
+
+    text = (_AUTHORING / slug / "SKILL.md").read_text(encoding="utf-8")
+    assert text.startswith("---\n"), f"{slug} has no YAML frontmatter"
+    data = yaml.safe_load(text.split("---\n", 2)[1])
+    assert data["name"] == slug
+    assert isinstance(data["description"], str)
+    assert 50 <= len(data["description"]) <= 1024
+
+
+def _catalogue_download(monkeypatch: pytest.MonkeyPatch, *, reachable: bool) -> list[str]:
+    """The real ``_download_skill`` against a fake catalogue; returns the listed prefixes."""
+    listed: list[str] = []
+
+    def _list(prefix: str, **_: object) -> list[str] | None:
+        listed.append(prefix)
+        return [f"{prefix}/SKILL.md"] if reachable else None
+
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "list_github_paths", _list)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", lambda path, **_: b"# catalogue copy\n")
+    return listed
+
+
+def test_a_bundled_slug_the_catalogue_lists_installs_the_catalogue_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """discover describes the catalogue's detection-engineering; install wrote the package's."""
+    listed = _catalogue_download(monkeypatch, reachable=True)
+    dest = tmp_path / "detection-engineering"
+    written = skills_mod._download_skill(
+        "detection-engineering", dest, source="opentidehq/skills", ref="main", catalogued=True
+    )
+    assert written == ["SKILL.md"]
+    assert listed == ["skills/detection-engineering"]
+    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# catalogue copy\n"
+
+
+def test_a_catalogued_bundled_slug_falls_back_to_the_package_offline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _catalogue_download(monkeypatch, reachable=False)
+    dest = tmp_path / "detection-engineering"
+    skills_mod._download_skill(
+        "detection-engineering", dest, source="opentidehq/skills", ref="main", catalogued=True
+    )
+    assert "rule::1.1" in (dest / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_a_bundled_slug_the_catalogue_omits_never_touches_the_network(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    listed = _catalogue_download(monkeypatch, reachable=True)
+    dest = tmp_path / "opentide-detection-rule"
+    skills_mod._download_skill(
+        "opentide-detection-rule", dest, source="opentidehq/skills", ref="main"
+    )
+    assert listed == []
+    assert "rule::1.1" in (dest / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_the_manifest_records_which_slugs_the_catalogue_itself_lists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [registry.SkillEntry(name="DE", slug="detection-engineering", description="Lifecycle")],
+    )
+    manifest = registry.load_manifest(refresh=True)
+    assert manifest.catalogue_slugs == frozenset({"detection-engineering"})
+    assert "opentide-detection-rule" in {entry.slug for entry in manifest.entries}
+
+
+def test_setup_installs_a_catalogued_bundled_slug_from_the_catalogue(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _catalogue_download(monkeypatch, reachable=True)
+    run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            skill_slugs=["detection-engineering"],
+            yes=True,
+        )
+    )
+    installed = tmp_path / ".agents" / "skills" / "detection-engineering" / "SKILL.md"
+    assert installed.read_text(encoding="utf-8") == "# catalogue copy\n"

@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - **`opentide explain` calls a warning-only YARA code a warning.** The pages for `yara_module_unconfirmed`, `yara_entrypoint_deprecated`, `yara_slow_pattern` and `yara_suspicious_expression` said `opentide validate` fails on them; the engine only ever warns on these, so `validate` passes and `opentide lint` reports them. The Bitdefender and validate docs already called `yara_module_unconfirmed` a warning.
+- **The packaged authoring skills have frontmatter.** `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector` and `detection-engineering` were installed without `name` and `description`, so agents that discover skills by frontmatter (Claude Code, Cursor, Codex) did not find them. Each also names the catalogue's full authoring skill to install alongside it (`opentide-rule`, `opentide-objective`, `opentide-threat`).
+- **`setup skills` installs the `detection-engineering` that `discover` describes.** `discover` and `show` described the catalogue's skill while install wrote the package's 22-line primer. A bundled slug the catalogue lists now installs the catalogue's copy, falling back to the package's when GitHub is unreachable; the other three still install from the package.
 - **The validate docs say Elastic `--live` writes preview alerts.** `validate query --platform elastic --live` previews each rule in Kibana, which creates no rule but writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as `opentide query` with `kuery` does.
 
 ## [0.28.0] — 2026-11-12

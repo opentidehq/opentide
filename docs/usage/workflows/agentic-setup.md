@@ -61,7 +61,7 @@ The server uses **stdio transport**. It must know where your content lives, so s
 
 Skills give the agent durable, project-specific instructions (object layout, commands, the validate-before-deploy rule):
 
-Browse the catalogue with `discover` and `show`. Those commands read the live `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills). If that catalogue cannot be fetched, the command fails with an actionable error. `AGENTS.md` is rendered from the package template. The four authoring skills are copied from the package. Every other skill is the full tree under `skills/<slug>/`, including its reference files; an unreadable or truncated tree fails the install instead of writing a partial skill.
+Browse the catalogue with `discover` and `show`. Those commands read the live `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills). If that catalogue cannot be fetched, the command fails with an actionable error. `AGENTS.md` is rendered from the package template. The four authoring skills ship in the package: `detection-engineering`, which the catalogue also lists, installs the catalogue's copy and falls back to the package's when GitHub is unreachable; the other three are copied from the package. Every other skill is the full tree under `skills/<slug>/`, including its reference files; an unreadable or truncated tree fails the install instead of writing a partial skill.
 
 ```bash
 opentide setup skills discover
@@ -97,7 +97,7 @@ After setup, point your agent at the generated `AGENTS.md` at the repo root — 
 
 An agent connected through MCP gets the same workflow from the server's `instructions`, and the same fields from `validation_report`.
 
-`opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package so they match `rule::1.0`, `objective::1.0`, and `threat::1.0` under `objects/`. Other skills are downloaded as the full tree under `skills/<slug>/` from opentidehq/skills.
+`opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` are installed from the package so they match the installed engine's `rule`, `objective` and `threat` revisions under `objects/`; each points to the catalogue's full authoring skill (`opentide-rule`, `opentide-objective`, `opentide-threat`) for practice beyond shape and checks. `detection-engineering` installs from the catalogue, with the package's short copy as the offline fallback. Other skills are downloaded as the full tree under `skills/<slug>/` from opentidehq/skills.
 
 ## A safe agent workflow
 

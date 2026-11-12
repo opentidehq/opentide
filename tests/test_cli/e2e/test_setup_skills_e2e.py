@@ -57,7 +57,12 @@ def test_skills_show_json(invoke_cli, tide_corpus_repo) -> None:
 def test_skills_install_uses_packaged_authoring_and_agents_template(
     invoke_cli, tmp_path: Path
 ) -> None:
-    """#399/#405: reference-only downloads and the skills-repo AGENTS.md are gone."""
+    """#399/#405: reference-only downloads and the skills-repo AGENTS.md are gone.
+
+    ``detection-engineering`` is in the catalogue, so it installs the catalogue's copy (the
+    one ``discover`` describes); ``opentide-detection-rule`` is not, so it comes from the
+    package. Neither may teach the CoreTide-era identifiers #405 removed.
+    """
     result = invoke_cli(
         "setup",
         "skills",
@@ -82,9 +87,12 @@ def test_skills_install_uses_packaged_authoring_and_agents_template(
         encoding="utf-8"
     )
     agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
-    assert "rule::1.1" in engineering
+    assert engineering.startswith("---\nname: detection-engineering\n")
     assert "objects/rules/" in rule
-    assert "schema: mdr::" not in engineering
+    for text in (engineering, rule):
+        assert "mdr::" not in text
+        assert "Schemas/Templates" not in text
+        assert "Configurations/systems" not in text
     assert "SOC Detections" in agents
     assert "# remote agents" not in agents
 

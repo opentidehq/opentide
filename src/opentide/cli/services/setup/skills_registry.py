@@ -47,9 +47,11 @@ class SkillEntry:
 
 
 #: Authoring skills that ship inside the wheel, under
-#: ``data/setup/skills/authoring/<slug>/``. They install from the package with
-#: no network access, so they must stay nameable and discoverable regardless of
-#: what the remote catalogue happens to list.
+#: ``data/setup/skills/authoring/<slug>/``. One the catalogue does not list installs
+#: from the package with no network access; one it does (``detection-engineering``)
+#: installs the catalogue's copy, which ``discover`` describes, and falls back to the
+#: package when the download fails. Either way they must stay nameable and
+#: discoverable regardless of what the remote catalogue happens to list.
 #:
 #: They were previously known only through the remote manifest. When
 #: ``opentidehq/skills`` dropped three of them from ``manifest.json``, the CLI
@@ -103,6 +105,8 @@ class ManifestLoadResult:
     entries: list[SkillEntry]
     manifest_source: str
     manifest_refreshed: bool
+    #: Slugs the remote catalogue itself lists (``entries`` adds bundled ones it omits).
+    catalogue_slugs: frozenset[str] = frozenset()
 
 
 class _ManifestTtlCache:
@@ -354,6 +358,7 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
         entries=_merge_bundled(entries),
         manifest_source="remote",
         manifest_refreshed=refresh,
+        catalogue_slugs=frozenset(entry.slug for entry in entries),
     )
     _MANIFEST_CACHE.item = (now, result)
     return result
