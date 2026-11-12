@@ -6,6 +6,6 @@
 //! issue of `validate --json`.
 
 pub use opentide_workspace::validate::{
-    Check, QueriesMode, Report, STRICT_EXEMPT_WARNINGS, Stats, Summary, VALIDATION_CODES,
-    Validation,
+    Check, PlatformConfigurations, PlatformFinding, QueriesMode, Report, STRICT_EXEMPT_WARNINGS,
+    Stats, Summary, VALIDATION_CODES, Validation,
 };

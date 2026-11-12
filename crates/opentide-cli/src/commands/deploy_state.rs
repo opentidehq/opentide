@@ -326,7 +326,7 @@ impl Shard {
             let Some(tenants) = raw.get(&platform) else {
                 continue;
             };
-            if !STATE_PLATFORMS.contains(&platform.as_str()) {
+            if !opentide_workspace::state::stores_ids(&platform) {
                 return Err(StateError::new(
                     "deployment_state_platform",
                     format!(
@@ -421,7 +421,7 @@ impl Shard {
         tenant: &str,
         external_id: &ExternalId,
     ) -> Result<String, StateError> {
-        if !STATE_PLATFORMS.contains(&platform) {
+        if !opentide_workspace::state::stores_ids(platform) {
             return Err(StateError::new(
                 "deployment_state_platform",
                 format!("{platform} does not store external ids in deployment state"),
