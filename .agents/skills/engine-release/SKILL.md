@@ -23,7 +23,7 @@ python3 scripts/release.py check vX.Y.Z   # tag, pins and CHANGELOG.md agree
 
 - The `Cargo.lock` diff is only the workspace crates' `version` lines. Anything else means Cargo re-resolved: restore the lock and bump again.
 - In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, keep an empty `## [Unreleased]` above it, and add `[X.Y.Z]: https://github.com/opentidehq/language-server/compare/vPREV...vX.Y.Z` to the links at the bottom.
-- The section's first paragraph is its summary: the GitHub Release and opentide.org show it above the change lists. Write one, and check the entries, as `skills/release-notes/SKILL.md` says: the parts in order (Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed, Security), a bold lead on every entry.
+- The section's first paragraph is its headline: the GitHub Release and opentide.org show it above the change lists. Write one of at most 25 words that leads with the biggest change ("Graylog support."), and check the entries, as `skills/release-notes/SKILL.md` says: the parts in order (Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed, Security), a bold lead on every entry.
 - `release.py vendor` + `cargo package --workspace --allow-dirty` + `release.py vendor --clean`, then `cargo test --workspace` (with `scripts/requirements-opentide.txt` installed, or `tide_corpus` fails on the missing `opentide` module). The vendored `crates/*/assets`, `LICENSE` and `NOTICE` copies are never committed.
 
 CI green on the PR, then merge it.

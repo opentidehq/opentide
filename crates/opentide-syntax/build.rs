@@ -25,7 +25,7 @@ fn main() {
         "tree-sitter-opentide-spl",
     );
     for lang in [
-        "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "yaral",
+        "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "exabeam", "yaral",
     ] {
         compile_grammar(
             &root.join(format!("grammars/tree-sitter-opentide-{lang}/src")),
@@ -39,7 +39,7 @@ fn main() {
     // permanently stale, so every cargo invocation would recompile the parsers and
     // every crate above them.
     for lang in [
-        "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "yaral",
+        "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "exabeam", "yaral",
     ] {
         let src = root.join(format!("grammars/tree-sitter-opentide-{lang}/src"));
         println!("cargo:rerun-if-changed={}", src.display());

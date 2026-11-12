@@ -1,0 +1,23 @@
+name: Exabeam correlation rule block
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000070
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Exabeam correlation rule: the smallest useful block, one sequence that
+  triggers on any matching event.
+status: STAGING
+severity: Medium
+response:
+  alert_severity: Medium
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: activity_type:"process-create" AND process_name:"mshta.exe"

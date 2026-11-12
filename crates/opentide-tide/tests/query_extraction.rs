@@ -143,6 +143,22 @@ fn expected(doc: &Value, source: &str) -> BTreeSet<Query> {
             }
         }
     }
+    // Exabeam correlation-rule sequences (no oracle reads them: Exabeam's
+    // language has no public parser, `scripts/oracles/README.md`).
+    let sequences = configurations
+        .and_then(|c| c.get("exabeam"))
+        .and_then(|b| b.get("sequences"))
+        .and_then(Value::as_sequence);
+    for (n, sequence) in sequences.into_iter().flatten().enumerate() {
+        if let Some(value) = text(sequence.get("query")) {
+            add(
+                format!("configurations.exabeam.sequences.{n}.query"),
+                LanguageId::Exabeam,
+                "exabeam",
+                value,
+            );
+        }
+    }
     let searches = doc
         .get("response")
         .and_then(|r| r.get("procedure"))

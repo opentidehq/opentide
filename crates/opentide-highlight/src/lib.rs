@@ -60,6 +60,10 @@ pub const YARA_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/yara/highlights.scm"
 ));
+pub const EXABEAM_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/exabeam/highlights.scm"
+));
 pub const YARAL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/yaral/highlights.scm"
@@ -80,6 +84,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
         LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
         LanguageId::Yara => YARA_HIGHLIGHTS_SCM,
+        LanguageId::Exabeam => EXABEAM_HIGHLIGHTS_SCM,
         LanguageId::Yaral => YARAL_HIGHLIGHTS_SCM,
     }
 }
@@ -825,8 +830,9 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         LanguageId::Spl => Some("```[^`]*```"),
         // A CQL comment starts only where a token may: `https://x` is one pattern.
         LanguageId::Cql => Some("(?:^|(?<=[\\s|(\\[{,;]))//.*$|/\\*[\\s\\S]*?\\*/"),
-        // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
+        // Kibana KQL, Lucene, Falco conditions and the Exabeam Query
+        // Language have no comment syntax.
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco | LanguageId::Exabeam => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
     };
     if let Some(comment_match) = comment_match {
@@ -1264,6 +1270,13 @@ mod tests {
                 include_str!(concat!(
                     env!("OPENTIDE_ASSETS"),
                     "/grammars/tree-sitter-opentide-yara/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Exabeam,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-exabeam/queries/highlights.scm"
                 )),
             ),
             (

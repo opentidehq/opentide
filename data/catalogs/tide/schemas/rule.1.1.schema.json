@@ -9063,7 +9063,7 @@
       "title": "ElasticTimeline",
       "type": "object"
     },
-    "GoogleSecopsConfig": {
+    "ExabeamConfig": {
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -9146,97 +9146,37 @@
           "description": "Platform contributors.",
           "title": "Contributors"
         },
-        "setup": {
+        "sequences": {
+          "description": "One or more sequences, in the order the events happen. Each is a filter and a condition: any match, or a threshold.",
+          "items": {
+            "$ref": "#/$defs/ExabeamSequence"
+          },
+          "minItems": 1,
+          "title": "Sequences",
+          "type": "array"
+        },
+        "correlation": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/ExabeamCorrelation"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "YARA-L setup section text.",
-          "title": "Setup",
-          "markdownDescription": "YARA-L `setup` section text."
-        },
-        "events": {
-          "description": "YARA-L events section text.",
-          "title": "Events",
-          "type": "string",
-          "markdownDescription": "YARA-L `events` section text."
-        },
-        "match": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GoogleSecopsMatch"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "group_by, window, and type (hop, tumbling, sliding with pivot and direction). Required with two or more event variables.",
-          "title": "Match",
-          "markdownDescription": "`group_by`, `window`, and `type` (`hop`, `tumbling`, `sliding` with `pivot` and\n`direction`). Required with two or more event variables."
-        },
-        "outcome": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "YARA-L outcome section text.",
-          "title": "Outcome",
-          "markdownDescription": "YARA-L `outcome` section text."
-        },
-        "condition": {
-          "description": "YARA-L condition section text.",
-          "title": "Condition",
-          "type": "string",
-          "markdownDescription": "YARA-L `condition` section text."
-        },
-        "options": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GoogleSecopsOptions"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "allow_zero_values, suppression_window.",
-          "title": "Options",
-          "markdownDescription": "`allow_zero_values`, `suppression_window`."
-        },
-        "export": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "YARA-L export section text.",
-          "title": "Export",
-          "markdownDescription": "YARA-L `export` section text."
+          "description": "Required with two or more sequences; not allowed with one.",
+          "title": "Correlation"
         },
         "severity": {
           "anyOf": [
             {
               "enum": [
-                "Info",
-                "Low",
-                "Medium",
-                "High",
-                "Critical"
+                "none",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ],
               "type": "string"
             },
@@ -9245,19 +9185,17 @@
             }
           ],
           "default": null,
-          "description": "Info, Low, Medium, High, or Critical. Written as meta severity. Derived from response.alert_severity when omitted.",
+          "description": "none, low, medium, high, or critical. Derived from response.alert_severity when omitted.",
           "title": "Severity",
-          "markdownDescription": "`Info`, `Low`, `Medium`, `High`, or `Critical`. Written as meta `severity`. Derived from\n`response.alert_severity` when omitted."
+          "markdownDescription": "`none`, `low`, `medium`, `high`, or `critical`. Derived from `response.alert_severity`\nwhen omitted."
         },
-        "priority": {
+        "outcome": {
           "anyOf": [
             {
               "enum": [
-                "Info",
-                "Low",
-                "Medium",
-                "High",
-                "Critical"
+                "alert",
+                "case",
+                "none"
               ],
               "type": "string"
             },
@@ -9266,33 +9204,39 @@
             }
           ],
           "default": null,
-          "description": "Same values. Written as meta priority. Default: the severity.",
-          "title": "Priority",
-          "markdownDescription": "Same values. Written as meta `priority`. Default: the severity."
+          "description": "alert (an alert in Threat Center), case, or none. Default: alert.",
+          "title": "Outcome",
+          "markdownDescription": "`alert` (an alert in Threat Center), `case`, or `none`. Default: `alert`."
         },
-        "alerting": {
+        "email": {
           "anyOf": [
             {
-              "type": "boolean"
+              "$ref": "#/$defs/ExabeamEmail"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Whether detections become alerts (RuleDeployment.alerting). Default: false under PREVIEW, true under RELEASE and UNIVERSAL.",
-          "title": "Alerting",
-          "markdownDescription": "Whether detections become alerts (`RuleDeployment.alerting`). Default: `false` under\n`PREVIEW`, `true` under `RELEASE` and `UNIVERSAL`."
+          "description": "Also send an email when the rule triggers.",
+          "title": "Email"
         },
-        "run_frequency": {
+        "suppression": {
           "anyOf": [
             {
-              "enum": [
-                "LIVE",
-                "LIVE_CUSTOMIZABLE",
-                "HOURLY_CUSTOMIZABLE",
-                "DAILY"
-              ],
+              "$ref": "#/$defs/ExabeamSuppression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Suppress repeated triggers.",
+          "title": "Suppression"
+        },
+        "delay": {
+          "anyOf": [
+            {
               "type": "string"
             },
             {
@@ -9300,88 +9244,93 @@
             }
           ],
           "default": null,
-          "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Not sent when omitted: a new rule gets Google's default, and an existing rule keeps its own.",
-          "title": "Run Frequency",
-          "markdownDescription": "`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Not sent when omitted: a new\nrule gets Google's default, and an existing rule keeps its own."
+          "description": "Evaluation delay, 7m to 180m (3h). Omitted: Exabeam's default of 7 minutes.",
+          "title": "Delay",
+          "markdownDescription": "Evaluation delay, `7m` to `180m` (`3h`). Omitted: Exabeam's default of 7 minutes."
         },
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/$defs/GoogleSecopsSchedule"
+              "items": {
+                "$ref": "#/$defs/ExabeamRecurrence"
+              },
+              "type": "array"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Schedule customizations, for LIVE_CUSTOMIZABLE and HOURLY_CUSTOMIZABLE only.",
-          "title": "Schedule",
-          "markdownDescription": "Schedule customizations, for `LIVE_CUSTOMIZABLE` and `HOURLY_CUSTOMIZABLE` only."
+          "description": "When the rule is active. Omitted: always.",
+          "title": "Schedule"
         },
-        "meta": {
+        "test_mode": {
           "anyOf": [
             {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
+              "type": "boolean"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Extra meta keys, written after the derived meta in the order given.",
-          "title": "Meta"
+          "description": "Run the rule in test mode: it triggers and writes a rule-trigger-test event, with no outcome. Default: the tenant test_mode.",
+          "title": "Test Mode",
+          "markdownDescription": "Run the rule in test mode: it triggers and writes a `rule-trigger-test` event, with no\noutcome. Default: the tenant `test_mode`."
         }
       },
       "required": [
         "status",
-        "events",
-        "condition"
+        "sequences"
       ],
-      "title": "GoogleSecopsConfig",
+      "title": "ExabeamConfig",
       "type": "object"
     },
-    "GoogleSecopsMatch": {
+    "ExabeamCorrelation": {
       "additionalProperties": false,
       "properties": {
+        "within": {
+          "description": "The window every sequence's condition must be met in: whole m, h, or d",
+          "title": "Within",
+          "type": "string",
+          "markdownDescription": "The window every sequence's condition must be met in: whole `m`, `h`, or `d`"
+        },
         "group_by": {
-          "description": "The placeholders the rule groups by, each $name, non-empty, no repeats. Rendered joined with , .",
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Up to three fields every sequence shares (the API's limit; the console allows more)",
+          "title": "Group By"
+        }
+      },
+      "required": [
+        "within"
+      ],
+      "title": "ExabeamCorrelation",
+      "type": "object"
+    },
+    "ExabeamEmail": {
+      "additionalProperties": false,
+      "properties": {
+        "recipients": {
+          "description": "One or more email addresses",
           "items": {
             "type": "string"
           },
           "minItems": 1,
-          "title": "Group By",
-          "type": "array",
-          "markdownDescription": "The placeholders the rule groups by, each `$name`, non-empty, no repeats. Rendered joined\nwith `, `."
+          "title": "Recipients",
+          "type": "array"
         },
-        "window": {
-          "description": "The match window: <n>m, <n>h, or <n>d. A hop or sliding window is at most 14d, a tumbling window at most 72h.",
-          "title": "Window",
-          "type": "string",
-          "markdownDescription": "The match window: `<n>m`, `<n>h`, or `<n>d`. A hop or sliding window is at most `14d`, a\ntumbling window at most `72h`."
-        },
-        "type": {
-          "anyOf": [
-            {
-              "enum": [
-                "hop",
-                "tumbling",
-                "sliding"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "hop (the default) renders over, tumbling renders by, sliding renders over \u2026 before|after $pivot.",
-          "title": "Type",
-          "markdownDescription": "`hop` (the default) renders `over`, `tumbling` renders `by`, `sliding` renders\n`over \u2026 before|after $pivot`."
-        },
-        "pivot": {
+        "subject": {
           "anyOf": [
             {
               "type": "string"
@@ -9391,40 +9340,80 @@
             }
           ],
           "default": null,
-          "description": "With sliding: the event variable the window is anchored on, $name.",
-          "title": "Pivot",
-          "markdownDescription": "With `sliding`: the event variable the window is anchored on, `$name`."
+          "description": "Email subject",
+          "title": "Subject"
         },
-        "direction": {
+        "attach_csv": {
           "anyOf": [
             {
-              "enum": [
-                "before",
-                "after"
-              ],
-              "type": "string"
+              "type": "boolean"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "With sliding: before or after.",
-          "title": "Direction",
-          "markdownDescription": "With `sliding`: `before` or `after`."
+          "description": "Attach the matching events as CSV",
+          "title": "Attach Csv"
         }
       },
       "required": [
-        "group_by",
-        "window"
+        "recipients"
       ],
-      "title": "GoogleSecopsMatch",
+      "title": "ExabeamEmail",
       "type": "object"
     },
-    "GoogleSecopsOptions": {
+    "ExabeamRecurrence": {
       "additionalProperties": false,
       "properties": {
-        "allow_zero_values": {
+        "every": {
+          "description": "day, week, month, or days (a range of weekdays)",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "days"
+          ],
+          "title": "Every",
+          "type": "string",
+          "markdownDescription": "`day`, `week`, `month`, or `days` (a range of weekdays)"
+        },
+        "from": {
+          "description": "Start time, UTC, H:MMZ or HH:MMZ (8:00Z, 08:00Z)",
+          "title": "From",
+          "type": "string",
+          "markdownDescription": "Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)"
+        },
+        "to": {
+          "description": "End time, UTC, H:MMZ or HH:MMZ",
+          "title": "To",
+          "type": "string",
+          "markdownDescription": "End time, UTC, `H:MMZ` or `HH:MMZ`"
+        },
+        "days": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "week: one or more weekday names (monday \u2026 sunday). month: day numbers 1\u201331. Not allowed otherwise.",
+          "title": "Days",
+          "markdownDescription": "`week`: one or more weekday names (`monday` \u2026 `sunday`). `month`: day numbers 1\u201331. Not\nallowed otherwise."
+        },
+        "last_day": {
           "anyOf": [
             {
               "type": "boolean"
@@ -9434,11 +9423,11 @@
             }
           ],
           "default": null,
-          "description": "Keep zero values of match placeholders (false by default). Rendered allow_zero_values = true.",
-          "title": "Allow Zero Values",
-          "markdownDescription": "Keep zero values of match placeholders (`false` by default). Rendered\n`allow_zero_values = true`."
+          "description": "month only: also the last day of the month. A month recurrence has days, last_day: true, or both.",
+          "title": "Last Day",
+          "markdownDescription": "`month` only: also the last day of the month. A `month` recurrence has `days`,\n`last_day: true`, or both."
         },
-        "suppression_window": {
+        "first": {
           "anyOf": [
             {
               "type": "string"
@@ -9448,32 +9437,43 @@
             }
           ],
           "default": null,
-          "description": "Suppress repeated detections for this duration (m, h, d). Rendered suppression_window = 1h.",
-          "title": "Suppression Window",
-          "markdownDescription": "Suppress repeated detections for this duration (`m`, `h`, `d`). Rendered\n`suppression_window = 1h`."
+          "description": "days only: the first weekday of the range",
+          "title": "First",
+          "markdownDescription": "`days` only: the first weekday of the range"
+        },
+        "last": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "days only: the last weekday of the range",
+          "title": "Last",
+          "markdownDescription": "`days` only: the last weekday of the range"
         }
       },
-      "title": "GoogleSecopsOptions",
+      "required": [
+        "every",
+        "from",
+        "to"
+      ],
+      "title": "ExabeamRecurrence",
       "type": "object"
     },
-    "GoogleSecopsSchedule": {
+    "ExabeamSequence": {
       "additionalProperties": false,
       "properties": {
-        "ensure_enrichment_completeness": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Sent as scheduleCustomizations.ensureEnrichmentCompleteness. Google's default when omitted.",
-          "title": "Ensure Enrichment Completeness",
-          "markdownDescription": "Sent as `scheduleCustomizations.ensureEnrichmentCompleteness`. Google's default when\nomitted."
+        "query": {
+          "description": "A filter in the Exabeam Query Language, profile rule. Multiline in YAML.",
+          "title": "Query",
+          "type": "string",
+          "markdownDescription": "A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML."
         },
-        "late_arriving_data_adjustment": {
+        "name": {
           "anyOf": [
             {
               "type": "string"
@@ -9483,12 +9483,168 @@
             }
           ],
           "default": null,
-          "description": "A duration (30m, 2h), sent as scheduleCustomizations.lateArrivingDataAdjustment in seconds (\"1800s\"). Google's default when omitted.",
-          "title": "Late Arriving Data Adjustment",
-          "markdownDescription": "A duration (`30m`, `2h`), sent as `scheduleCustomizations.lateArrivingDataAdjustment` in\nseconds (`\"1800s\"`). Google's default when omitted."
+          "description": "Sequence name, shown in the console",
+          "title": "Name"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamThreshold"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The condition. Without it, the sequence triggers on any matching event.",
+          "title": "Threshold"
+        },
+        "group_by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One to three fields. A threshold is evaluated per value. With any match, the rule still triggers on every matching event; to trigger once per value, also set suppression.group_by to these fields (Exabeam's granular suppression).",
+          "title": "Group By",
+          "markdownDescription": "One to three fields. A threshold is evaluated per value. With any match, the rule still\ntriggers on every matching event; to trigger once per value, also set `suppression.group_by`\nto these fields (Exabeam's granular suppression)."
         }
       },
-      "title": "GoogleSecopsSchedule",
+      "required": [
+        "query"
+      ],
+      "title": "ExabeamSequence",
+      "type": "object"
+    },
+    "ExabeamSuppression": {
+      "additionalProperties": false,
+      "properties": {
+        "for": {
+          "description": "Suppress repeated triggers for this long: whole m, h, d, or w",
+          "title": "For",
+          "type": "string",
+          "markdownDescription": "Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`"
+        },
+        "group_by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One to three fields. Suppress per value instead of for the whole rule.",
+          "title": "Group By"
+        }
+      },
+      "required": [
+        "for"
+      ],
+      "title": "ExabeamSuppression",
+      "type": "object"
+    },
+    "ExabeamThreshold": {
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "description": "count, unique_count, value, max, min, sum, or average",
+          "enum": [
+            "count",
+            "unique_count",
+            "value",
+            "max",
+            "min",
+            "sum",
+            "average"
+          ],
+          "title": "Function",
+          "type": "string",
+          "markdownDescription": "`count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The field the function reads. Required except for count. count without a field counts events.",
+          "title": "Field",
+          "markdownDescription": "The field the function reads. Required except for `count`. `count` without a field counts\nevents."
+        },
+        "operator": {
+          "description": "more_than, less_than, in, or not_in",
+          "enum": [
+            "more_than",
+            "less_than",
+            "in",
+            "not_in"
+          ],
+          "title": "Operator",
+          "type": "string",
+          "markdownDescription": "`more_than`, `less_than`, `in`, or `not_in`"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "more_than and less_than: a number (count and unique_count: a non-negative integer). in and not_in: a non-empty list of strings or numbers.",
+          "title": "Value",
+          "markdownDescription": "`more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative\ninteger). `in` and `not_in`: a non-empty list of strings or numbers."
+        },
+        "within": {
+          "description": "The window: whole m, h, or d",
+          "title": "Within",
+          "type": "string",
+          "markdownDescription": "The window: whole `m`, `h`, or `d`"
+        }
+      },
+      "required": [
+        "function",
+        "operator",
+        "within"
+      ],
+      "title": "ExabeamThreshold",
       "type": "object"
     },
     "GraylogAggregation": {
@@ -10720,19 +10876,19 @@
           "title": "Graylog",
           "markdownDescription": "Graylog event definition (`platform::graylog::1.0`)."
         },
-        "google_secops": {
+        "exabeam": {
           "anyOf": [
             {
-              "$ref": "#/$defs/GoogleSecopsConfig"
+              "$ref": "#/$defs/ExabeamConfig"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Google Security Operations YARA-L 2.0 detection rule (platform::google_secops::1.0).",
-          "title": "Google Secops",
-          "markdownDescription": "Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`)."
+          "description": "Exabeam New-Scale SIEM correlation rule (platform::exabeam::1.0).",
+          "title": "Exabeam",
+          "markdownDescription": "Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."
         }
       },
       "title": "RuleConfigurations",

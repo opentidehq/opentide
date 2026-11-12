@@ -227,6 +227,10 @@ The rules are shared under the Detection Rule License 1.1: [`LICENSE.DRL-1.1.md`
 - `vuln_erlang_otp_ssh_cve_2025_32433.yar` from `yara/vuln_erlang_otp_ssh_cve_2025_32433.yar`
 - `webshell_regeorg.yar` from `yara/webshell_regeorg.yar`
 
+## Exabeam Query Language — written for opentide (EUPL-1.2)
+
+`exabeam/<name>.<profile>.exabeam` is a query written for this repository, not copied: Exabeam's own published content (ExabeamLabs/new-scale-content-hub) may not be redistributed, so it is measured locally (`crates/opentide-exabeam/tests/content_hub.rs`, `docs/EXABEAM.md`) and never vendored. The queries are realistic detections and hunts in the forms Exabeam's rules use (activity types, lists, CIDR blocks and ranges, context tables, `RGX`/`WLD` patterns, `SELECT` … `GROUP-BY`, `FOREACH`, `RGX_EXTRACT`), written with the Common Information Model's field names; `<profile>` is `rule` (a correlation-rule sequence) or `search` (a hunt). `<name>.broken.<profile>.exabeam` is the same query with one injected fault, which the specification's reference checker reports too. [`exabeam/FAULTS.toml`](exabeam/FAULTS.toml) records each twin's fault and code. `crates/opentide-analysis/tests/external_exabeam.rs` requires every query to produce no finding under its profile, every twin to report its code, and a manifest that matches the files.
+
 ## YARA-L — chronicle/detection-rules (Apache-2.0)
 
 Licence text: [`LICENSE.Apache-2.0.txt`](LICENSE.Apache-2.0.txt). 79 community rules from `chronicle/detection-rules@a49c3752f3f013e9ead85c7430b8f39369efacbf`, unmodified, each with a `.broken.` twin (a modified copy with one injected fault). The list, and how each twin is made, is [`yaral/SOURCES.md`](yaral/SOURCES.md); `crates/opentide-yaral/tests/external_corpus.rs` requires every public rule to parse with no error but its listed exceptions, and every twin to have an error.

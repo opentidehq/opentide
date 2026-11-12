@@ -2191,6 +2191,45 @@ fn a_definition_in_a_web_workspace_is_the_other_documents_own_uri() {
 }
 
 #[test]
+fn exabeam_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // The `.exabeam` suffix selects the engine when the client reports no
+    // known id; a raw file is a search.
+    let broken = "activity_type:\"process-create\" AND user != \"SYSTEM\"\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/r.exabeam", "plaintext", broken);
+    assert_eq!(codes, vec!["exabeam_not_equal"], "raw .exabeam file");
+    let uri = "file:///tmp/h.exabeam";
+    let text = "SELECT user, COUNT(*) AS n\nWHERE activity_type:\"app-login\" AND outcome:\"fail\"\nGROUP-BY user\n";
+    let codes = published_codes(&mut lsp, uri, "exabeam", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    let hover = lsp.request("textDocument/hover", at(1, 8));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("activity_type"), "{hover}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        data.len() >= 5 * 15,
+        "semantic tokens for .exabeam: {tokens}"
+    );
+}
+
+#[test]
 fn yaral_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));

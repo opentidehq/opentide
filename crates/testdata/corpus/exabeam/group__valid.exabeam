@@ -1,0 +1,2 @@
+# prod:group valid
+(process_name:"a.exe" OR process_name:"b.exe") AND user:"x"

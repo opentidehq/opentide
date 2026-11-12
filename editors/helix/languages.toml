@@ -68,6 +68,14 @@ scope = "source.opentide.yara"
 file-types = ["yar", "yara"]
 language-servers = ["opentide-lsp"]
 
+# The Exabeam Query Language (Exabeam New-Scale SIEM). A `.exabeam` file is
+# a search.
+[[language]]
+name = "exabeam"
+scope = "source.exabeam"
+file-types = ["exabeam"]
+language-servers = ["opentide-lsp"]
+
 # YARA-L 2.0 (Google Security Operations). The scope matches the TextMate
 # grammar's, which avoids Google's own `source.yara-l`.
 [[language]]

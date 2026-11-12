@@ -261,6 +261,60 @@ fn standalone_yara_matches_tide_harfanglab_signature() {
     );
 }
 
+/// A `.exabeam` file is a search; the same filter in a correlation-rule
+/// sequence (`configurations.exabeam.sequences[].query`) reports the same
+/// finding, at the query, and a hunt with `system: exabeam` is a search.
+#[test]
+fn standalone_exabeam_matches_tide_exabeam_sequence_and_hunt() {
+    let query = "activity_type:\"process-create\"\nAND process_command_line:contains(\"-enc\")";
+    let raw = analyze_raw("queries/broken.exabeam", LanguageId::Exabeam, query);
+    let raw_op = operator(&raw.diagnostics, codes::EXABEAM_UNKNOWN_FUNCTION);
+    assert!(
+        raw_op.message.contains("WLD(\"*x*\")"),
+        "{}",
+        raw_op.message
+    );
+    assert!(
+        raw.diagnostics
+            .iter()
+            .all(|d| d.code.starts_with("exabeam_"))
+    );
+
+    let body = query
+        .lines()
+        .map(|line| format!("          {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let yaml = format!(
+        "name: Composability\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.1\nresponse:\n  procedure:\n    searches:\n      - system: exabeam\n        query: 'SELECT user WHERE vendor:\"a\" GROUP-BY user'\nconfigurations:\n  exabeam:\n    enabled: true\n    schema: platform::exabeam::1.0\n    status: STAGING\n    sequences:\n      - query: |\n{body}\n      - query: 'SELECT user WHERE vendor:\"a\" GROUP-BY user'\n    correlation:\n      within: 1h\n"
+    );
+    let host = MemoryWorkspace {
+        files: vec![(
+            "objects/rules/composability-exabeam.yaml".into(),
+            yaml.clone(),
+        )],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-exabeam.yaml",
+        LanguageId::TideYaml,
+        &yaml,
+        &host,
+    );
+    let embedded_op = operator(&embedded.diagnostics, codes::EXABEAM_UNKNOWN_FUNCTION);
+    assert_same_operator(raw_op, embedded_op);
+    assert_eq!(
+        embedded_op.field_path.as_deref().map(|p| p.join(".")),
+        Some("configurations.exabeam.sequences.0.query".to_string())
+    );
+    // The second sequence uses the advanced form, which a rule refuses; the
+    // hunt, a search, may.
+    let advanced = operator(&embedded.diagnostics, codes::EXABEAM_ADVANCED_IN_RULE);
+    assert_eq!(
+        advanced.field_path.as_deref().map(|p| p.join(".")),
+        Some("configurations.exabeam.sequences.1.query".to_string())
+    );
+}
+
 #[test]
 fn standalone_yaral_matches_the_google_secops_block() {
     // The same unknown UDM field, in a `.yaral` file and in the block's

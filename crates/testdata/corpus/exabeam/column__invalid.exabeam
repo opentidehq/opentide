@@ -1,0 +1,2 @@
+# prod:column invalid
+SELECT user AS WHERE vendor:"Microsoft"

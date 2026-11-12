@@ -12,6 +12,7 @@ members = [
     "crates/opentide-lucene",
     "crates/opentide-falco",
     "crates/opentide-cql",
+    "crates/opentide-exabeam",
     "crates/opentide-ecs",
     "crates/opentide-yara",
     "crates/opentide-yaral",
@@ -42,6 +43,7 @@ opentide-kuery = { path = "crates/opentide-kuery", version = "=0.15.0" }
 opentide-lucene = { path = "crates/opentide-lucene", version = "=0.15.0" }
 opentide-falco = { path = "crates/opentide-falco", version = "=0.15.0" }
 opentide-cql = { path = "crates/opentide-cql", version = "=0.15.0" }
+opentide-exabeam = { path = "crates/opentide-exabeam", version = "=0.15.0" }
 opentide-ecs = { path = "crates/opentide-ecs", version = "=0.15.0" }
 opentide-yara = { path = "crates/opentide-yara", version = "=0.15.0" }
 opentide-yaral = { path = "crates/opentide-yaral", version = "=0.15.0" }
@@ -61,8 +63,8 @@ lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
 regex = "1"
-# RE2 syntax checks of YARA-L regular expressions (opentide-yaral): the parser
-# `regex` already locks, without compiling.
+# RE2 syntax of Exabeam's RGX patterns and YARA-L regular expressions: the
+# parser `regex` already locks, without compiling.
 regex-syntax = "0.8"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }

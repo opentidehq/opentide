@@ -228,6 +228,15 @@ pub fn analyze_with_index(
                 symbols: yara::symbols(&request.text),
             }
         }
+        // A `.exabeam` file is a search (exabeam-1.0, "Defaults").
+        LanguageId::Exabeam => {
+            let r = opentide_exabeam::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::Yaral => {
             let r = opentide_yaral::analyze(&request.text);
             AnalyzeResponse {
@@ -278,8 +287,9 @@ pub struct QueryReport {
 /// query with no finding is reported too, so a host can count what it
 /// checked. Only the queries are checked: for the object's own fields, use
 /// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike queries are CQL,
-/// checked as correlation rules; HarfangLab queries are not injected, so they
-/// never appear.
+/// checked as correlation rules; Exabeam sequence queries are checked under
+/// the language's `rule` profile and `system: exabeam` hunts under `search`;
+/// HarfangLab queries are not injected, so they never appear.
 pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
     // Ranges are those of the text after a byte-order mark, as an editor shows them.
     let text = opentide_core::strip_bom(text);
@@ -302,8 +312,9 @@ pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key
     /// (`defender_for_endpoint` picks the Defender KQL schema,
-    /// `carbon_black_cloud` the Carbon Black Lucene dialect, and `graylog`
-    /// the Graylog one). `None` for the language's default.
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
+    /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
+    /// correlation-rule sequence). `None` for the language's default.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -323,6 +334,16 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
         LanguageId::Cql if platform == "crowdstrike" => {
             opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
                 .diagnostics
+        }
+        // `platform: exabeam` is a correlation-rule sequence query (the
+        // `rule` profile); without it, a search.
+        LanguageId::Exabeam => {
+            let ctx = if platform == "exabeam" {
+                opentide_exabeam::Context::RULE
+            } else {
+                opentide_exabeam::Context::SEARCH
+            };
+            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Lucene => {
             let dialect = opentide_lucene::Dialect::for_platform(platform);
@@ -599,6 +620,7 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Falco => opentide_falco::hover(text, offset, &Default::default()),
         LanguageId::Cql => opentide_cql::hover(text, offset),
         LanguageId::Yara => opentide_yara::editor::hover(text, offset),
+        LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
         LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
@@ -674,6 +696,7 @@ fn query_completions(
         LanguageId::Falco => opentide_falco::completions(text, offset, &Default::default()),
         LanguageId::Cql => opentide_cql::completions(text, offset),
         LanguageId::Yara => opentide_yara::editor::completions(text, offset),
+        LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
         LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
@@ -731,6 +754,7 @@ fn query_signature_help(
         LanguageId::Kuery
         | LanguageId::Lucene
         | LanguageId::Falco
+        | LanguageId::Exabeam
         | LanguageId::TideYaml
         | LanguageId::Config => None,
     }

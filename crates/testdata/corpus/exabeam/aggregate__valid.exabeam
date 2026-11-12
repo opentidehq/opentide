@@ -1,0 +1,2 @@
+# prod:aggregate valid
+SELECT COUNT(*) AS n, MAX(bytes), RGX_EXTRACT(user, "(\\w+)") AS name WHERE vendor:"Microsoft"

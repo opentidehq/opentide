@@ -329,6 +329,7 @@ mod tests {
         assert_eq!(lang("file:///q.spl", Some("SPL")), Some(LanguageId::Spl));
         assert_eq!(lang("file:///q.txt", None), Some(LanguageId::TideYaml));
         assert_eq!(lang("file:///q.yar", None), Some(LanguageId::Yara));
+        assert_eq!(lang("file:///q.exabeam", None), Some(LanguageId::Exabeam));
         assert_eq!(
             lang("file:///q.yara", Some("plaintext")),
             Some(LanguageId::Yara)
