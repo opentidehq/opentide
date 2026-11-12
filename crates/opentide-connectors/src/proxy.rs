@@ -122,3 +122,73 @@ fn invalid(url: &str) -> String {
         .unwrap_or_else(|_| "the proxy".to_owned());
     format!("{shown} is not a proxy URL")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn settings(https: Option<&str>, http: Option<&str>, no_proxy: Option<&str>) -> ProxySettings {
+        ProxySettings {
+            https: https.map(str::to_owned),
+            http: http.map(str::to_owned),
+            no_proxy: no_proxy.map(str::to_owned),
+        }
+    }
+
+    fn route(settings: &ProxySettings, url: &str) -> Option<String> {
+        settings.route(&url::Url::parse(url).ok()?)
+    }
+
+    #[test]
+    fn a_request_names_the_proxy_of_its_scheme_without_credentials() {
+        let proxies = settings(
+            Some("http://user:secret@proxy.corp:3128"),
+            Some("gateway.corp:8080"),
+            None,
+        );
+        assert_eq!(
+            route(&proxies, "https://splunk.example.com:8089/services"),
+            Some("http://proxy.corp:3128".to_owned())
+        );
+        // A proxy written without a scheme is an HTTP proxy, as urllib reads it.
+        assert_eq!(
+            route(&proxies, "http://splunk.example.com/x"),
+            Some("http://gateway.corp:8080".to_owned())
+        );
+        assert_eq!(route(&proxies, "ftp://files.example.com/x"), None);
+        assert_eq!(
+            route(
+                &settings(None, Some("gateway.corp:8080"), None),
+                "https://a.example.com"
+            ),
+            None
+        );
+        // A proxy that is not a URL is not shown.
+        assert_eq!(
+            route(
+                &settings(Some("http://[proxy"), None, None),
+                "https://a.example.com"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn no_proxy_sends_a_host_its_domain_or_its_port_direct() {
+        let proxies = settings(
+            Some("http://proxy.corp:3128"),
+            None,
+            Some(" .Example.com , other.org:8089,, "),
+        );
+        let direct = |url: &str| route(&proxies, url).is_none();
+        assert!(direct("https://splunk.example.com:8089/x"));
+        assert!(direct("https://example.com/x"));
+        assert!(direct("https://other.org:8089/x"));
+        // The same host on another port, a lookalike domain: through the proxy.
+        assert!(!direct("https://other.org/x"));
+        assert!(!direct("https://notexample.com/x"));
+        assert!(!direct("https://example.com.evil.net/x"));
+        let everything = settings(Some("http://proxy.corp:3128"), None, Some("*"));
+        assert_eq!(route(&everything, "https://any.where/x"), None);
+    }
+}

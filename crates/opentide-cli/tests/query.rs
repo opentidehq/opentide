@@ -2,7 +2,9 @@
 //! that cannot run, and runs on Elastic tenants served by a stand-in
 //! Elasticsearch on the loopback (one that answers, one that refuses the
 //! query, one that is not listening, one that never answers). The recorded
-//! tenants' runs are `command_goldens.rs`'s.
+//! tenants' runs are `command_goldens.rs`'s; two are replayed here with one
+//! answer changed (a gateway's page in front of Splunk, Carbon Black Cloud
+//! refusing the token).
 
 #![cfg(unix)]
 #![expect(
@@ -594,4 +596,158 @@ fn a_tenant_that_does_not_answer_in_time_fails_with_advice() {
          HTTPSConnectionPool(host='127.0.0.1', port=443): Read timed out. (read timeout=1)"
     );
     assert_eq!(document["detail"], "narrow the window or raise --timeout");
+}
+
+/// The repository's root.
+fn repo() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Replays the recorded run `golden/<scenario>` (`tests/cassettes/`) with
+/// its first `keep` interactions as recorded and the next one answered with
+/// `status`, `content_type` and `body`, on the golden `tenants` fixture's
+/// configuration of `platform`; `argv` is the recorded case's, so the
+/// requests are the cassette's. The run, and every difference between what
+/// was sent and the cassette.
+fn replay_answering(
+    scenario: &str,
+    platform: &str,
+    keep: usize,
+    (status, content_type, body): (u16, &str, &str),
+    argv: &[&str],
+    credential: (&str, &str),
+) -> (Ran, Vec<String>) {
+    use opentide_cassette::{Body, Cassette, Mode, Proxy, Redaction};
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/golden/{scenario}.json")))
+            .unwrap();
+    let recorded = Cassette::parse(&text).unwrap();
+    let mut interactions = recorded.interactions[..=keep].to_vec();
+    let answer = &mut interactions[keep].response;
+    answer.status = status;
+    answer.headers = vec![("content-type".into(), content_type.into())];
+    answer.body = Body::Text(body.into());
+    let cassette = Cassette::new(
+        &recorded.scenario,
+        recorded.recorded_from.clone(),
+        interactions,
+    );
+    let proxy = Proxy::start(Mode::Replay { cassette }, Redaction::default()).unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    let platforms = ws.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    let config = format!("{platform}.toml");
+    std::fs::copy(
+        repo()
+            .join("tests/golden/fixtures/tenants/.opentide/configurations/platforms")
+            .join(&config),
+        platforms.join(&config),
+    )
+    .unwrap();
+    let ca = scratch.path().join("cassette-ca.pem");
+    std::fs::write(&ca, proxy.ca_pem()).unwrap();
+    let env = proxy.client_env(&ca.display().to_string());
+    let mut pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    pairs.push(credential);
+    let ran = run_at(&ws, argv, &pairs);
+    let mismatches = proxy.verify().iter().map(|m| format!("{m:?}")).collect();
+    (ran, mismatches)
+}
+
+/// The one tenant's error and advice in a run's JSON document.
+fn tenant_failure(ran: &Ran) -> (String, Option<String>) {
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    let document = ran.document();
+    let result = &document["results"][0];
+    assert_eq!(result["status"], "failed", "{result}");
+    (
+        result["error"].as_str().unwrap().to_owned(),
+        result["detail"].as_str().map(str::to_owned),
+    )
+}
+
+/// A gateway in front of Splunk answers the search with its own HTML page
+/// (UC-4.3, #833): the tenant did not answer in time, with the advice to
+/// narrow the window, and the page names the proxy the request went
+/// through.
+#[test]
+fn a_splunk_search_a_gateway_answers_is_a_timeout_with_advice() {
+    let (ran, mismatches) = replay_answering(
+        "query-splunk",
+        "splunk",
+        2,
+        (
+            504,
+            "text/html",
+            "<html><head><title>504 Gateway Time-out</title></head><body></body></html>",
+        ),
+        &[
+            "--json",
+            "query",
+            "--platform",
+            "splunk",
+            "--from",
+            "2099-01-01T00:00:00Z",
+            "--to",
+            "2099-01-01T01:00:00Z",
+            "--limit",
+            "2",
+            "index=main EventCode=4688",
+        ],
+        ("SPLUNK_TOKEN", "golden-stand-in-credential"),
+    );
+    assert_eq!(mismatches, Vec::<String>::new());
+    let (error, detail) = tenant_failure(&ran);
+    assert!(
+        error.starts_with(
+            "splunk tenant 'lab' did not answer the query within 120s: Splunk at \
+             https://splunk.invalid:8089 answered with an HTML page (HTTP 504), not its REST API \
+             (page title: '504 Gateway Time-out'). HTTP 504 Gateway Timeout is what a gateway"
+        ),
+        "{error}"
+    );
+    assert!(
+        error.contains(" The request went through the proxy http://127.0.0.1:"),
+        "{error}"
+    );
+    assert_eq!(
+        detail.as_deref(),
+        Some("narrow the window or raise --timeout")
+    );
+}
+
+/// Carbon Black Cloud answers the query's validation with 401: the tenant
+/// cannot be signed in to, and no search starts.
+#[test]
+fn a_carbon_black_tenant_that_refuses_the_token_fails_authentication() {
+    let (ran, mismatches) = replay_answering(
+        "query-carbon-black",
+        "carbon_black_cloud",
+        0,
+        (401, "application/json", ""),
+        &[
+            "--json",
+            "query",
+            "--platform",
+            "carbon_black_cloud",
+            "--from",
+            "2099-01-01T00:00:00Z",
+            "--to",
+            "2099-01-01T01:00:00Z",
+            "--limit",
+            "2",
+            "process_name:cmd.exe",
+        ],
+        ("CBC_TOKEN", "golden-stand-in-credential"),
+    );
+    assert_eq!(mismatches, Vec::<String>::new());
+    let (error, detail) = tenant_failure(&ran);
+    assert_eq!(
+        error,
+        "cannot authenticate to carbon_black_cloud tenant 'lab': Unauthorized (Check API \
+         creds): attempted to POST \
+         https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation"
+    );
+    assert_eq!(detail, None);
 }
