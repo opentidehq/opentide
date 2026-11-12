@@ -9,7 +9,7 @@
 use std::process::Command;
 
 fn opentide(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_opentide"))
+    Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
         .args(args)
         .env_clear()
         .env("OPENTIDE_OUTPUT", "plain")

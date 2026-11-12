@@ -6,25 +6,29 @@
 //! tuning's condition (`append_to_rule`) is a fragment that starts with `and`
 //! or `or`; a new rule's and a macro's are whole conditions.
 
+use opentide_core::node::{Node, Value};
 use opentide_core::{Diagnostic, codes};
 use opentide_falco::exceptions::{Exception, Item, Strs};
 use opentide_falco::{Catalog, Context};
+use std::sync::Arc;
+
+use crate::yaml::YamlNode;
 
 /// The Falco context of the value at `field_path` in the object `source`.
 pub fn falco_context(source: &str, field_path: &[String]) -> Context {
-    let object = serde_yaml::from_str::<serde_yaml::Value>(opentide_core::strip_bom(source)).ok();
+    let object = crate::yaml::parse(opentide_core::strip_bom(source));
     let block = object
         .as_ref()
         .and_then(|o| o.get("configurations"))
         .and_then(|c| c.get("sysdig"));
-    context_for(block, field_path)
+    context_for(block.map(Arc::as_ref), field_path)
 }
 
-pub(crate) fn context_for(block: Option<&serde_yaml::Value>, field_path: &[String]) -> Context {
+pub(crate) fn context_for(block: Option<&Node>, field_path: &[String]) -> Context {
     let Some(block) = block else {
         return Context::default();
     };
-    let text = |v: Option<&serde_yaml::Value>| v.and_then(|v| v.as_str()).map(str::to_string);
+    let text = |v: Option<&Arc<Node>>| v.and_then(|v| v.as_str()).map(str::to_string);
     let mut ctx = Context {
         source: text(block.get("source")).filter(|s| !s.trim().is_empty()),
         ..Context::default()
@@ -44,17 +48,7 @@ pub(crate) fn context_for(block: Option<&serde_yaml::Value>, field_path: &[Strin
             let items = l
                 .get("items")
                 .and_then(|i| i.as_sequence())
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|i| match i {
-                            serde_yaml::Value::String(s) => Some(s.clone()),
-                            serde_yaml::Value::Number(n) => Some(n.to_string()),
-                            serde_yaml::Value::Bool(b) => Some(b.to_string()),
-                            _ => None,
-                        })
-                        .collect()
-                })
+                .map(|items| items.iter().filter_map(|i| i.scalar_text()).collect())
                 .unwrap_or_default();
             ctx.list_order.push(name.clone());
             ctx.lists.insert(name, items);
@@ -74,7 +68,7 @@ pub(crate) fn context_for(block: Option<&serde_yaml::Value>, field_path: &[Strin
 
 /// `falco_unknown_source` on the block's `source` when no Falco plugin the
 /// engine knows defines it: its fields are then not checked.
-pub(crate) fn source_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+pub(crate) fn source_diagnostics(source: &str, block: &Node) -> Vec<Diagnostic> {
     let Some(name) = block.get("source").and_then(|s| s.as_str()) else {
         return Vec::new();
     };
@@ -103,7 +97,7 @@ pub(crate) fn source_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec
 /// `falco_unknown_rule` on `append_to_rule` when the Falco default rules have
 /// no rule by that name. Falco OSS refuses the append; on a Sysdig tenant it may
 /// tune a rule Sysdig manages, so it is a warning.
-pub(crate) fn tuning_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+pub(crate) fn tuning_diagnostics(source: &str, block: &Node) -> Vec<Diagnostic> {
     let Some(name) = block.get("append_to_rule").and_then(|s| s.as_str()) else {
         return Vec::new();
     };
@@ -127,48 +121,43 @@ pub(crate) fn tuning_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec
     vec![d]
 }
 
-fn scalar(v: &serde_yaml::Value) -> Option<String> {
-    match v {
-        serde_yaml::Value::String(s) => Some(s.clone()),
-        serde_yaml::Value::Number(n) => Some(n.to_string()),
-        serde_yaml::Value::Bool(b) => Some(b.to_string()),
-        _ => None,
+fn strs(v: Option<&Arc<Node>>) -> Option<Strs> {
+    let v = v?;
+    match &v.value {
+        Value::Seq(items) => Some(Strs::Many(
+            items.iter().filter_map(|i| i.scalar_text()).collect(),
+        )),
+        _ => v.scalar_text().map(Strs::One),
     }
 }
 
-fn strs(v: Option<&serde_yaml::Value>) -> Option<Strs> {
-    match v? {
-        serde_yaml::Value::Sequence(items) => {
-            Some(Strs::Many(items.iter().filter_map(scalar).collect()))
-        }
-        other => scalar(other).map(Strs::One),
-    }
-}
-
-fn item(v: &serde_yaml::Value) -> Item {
-    match v {
-        serde_yaml::Value::Sequence(items) => Item::List(items.iter().map(item).collect()),
-        other => Item::Scalar(scalar(other).unwrap_or_default()),
+fn item(v: &Node) -> Item {
+    match &v.value {
+        Value::Seq(items) => Item::List(items.iter().map(|i| item(i)).collect()),
+        _ => Item::Scalar(v.scalar_text().unwrap_or_default()),
     }
 }
 
 /// Falco's checks on the block's `exceptions` (opentide_falco::exceptions):
 /// operators, field and value counts, and the values compiled as Falco writes
 /// them into the condition.
-pub(crate) fn exception_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+pub(crate) fn exception_diagnostics(source: &str, block: &Node) -> Vec<Diagnostic> {
     let Some(list) = block.get("exceptions").and_then(|e| e.as_sequence()) else {
         return Vec::new();
     };
     let exceptions: Vec<Exception> = list
         .iter()
         .map(|e| Exception {
-            name: e.get("name").and_then(scalar).unwrap_or_default(),
+            name: e
+                .get("name")
+                .and_then(|n| n.scalar_text())
+                .unwrap_or_default(),
             fields: strs(e.get("fields")),
             comps: strs(e.get("comps")),
             values: e
                 .get("values")
                 .and_then(|v| v.as_sequence())
-                .map(|vs| vs.iter().map(item).collect())
+                .map(|vs| vs.iter().map(|v| item(v)).collect())
                 .unwrap_or_default(),
         })
         .collect();

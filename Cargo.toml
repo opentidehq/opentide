@@ -1,6 +1,6 @@
 # One workspace: the engine crates (crates/, imported from opentidehq/language-server
 # with their history, docs/engine/IMPORT.md), the PyO3 binding the opentide
-# package compiles in (analysis/, built by hatch_build.py) and the repository's
+# package compiles in (bindings/python/, built by hatch_build.py) and the repository's
 # Rust tooling (xtask/, `cargo xtask`). Members are listed, not globbed; each one
 # has a place in the layer table, xtask/layers.toml (`cargo xtask check-layers`).
 # cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
@@ -33,7 +33,7 @@ members = [
     "crates/opentide-connectors",
     "crates/opentide-cassette",
     "crates/opentide",
-    "analysis",
+    "bindings/python",
     "bindings/node",
     "xtask",
 ]
@@ -101,7 +101,9 @@ strsim = "0.11"
 # Unicode general categories (opentide-schema `vocab::quote`: which characters a
 # message escapes). unicode-rs, as unicode-normalization and unicode-width.
 unicode-properties = { version = "0.1", default-features = false, features = ["general-category"] }
-serde_yaml = "0.9"
+# The shortest text of a float (opentide-tide `yaml::number_text`): the
+# version Cargo.lock already holds.
+ryu = "1"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"
 # `LanguageFn`, the type tree-sitter 0.25 builds a Language from (opentide-syntax).
@@ -114,7 +116,7 @@ js-sys = "0.3"
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.
 schemars = { version = "1.2", features = ["indexmap2"] }
-# PyO3, for analysis/ (opentide._native) and opentide-schema's `python` feature.
+# PyO3, for bindings/python/ (opentide._native) and opentide-schema's `python` feature.
 pyo3 = "0.30.1"
 garde = { version = "0.23", features = ["derive"] }
 # YAML 1.2 for opentide-schema's node tree (UC-1.2, #808): saphyr-parser's

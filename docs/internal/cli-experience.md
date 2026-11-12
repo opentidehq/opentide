@@ -233,7 +233,7 @@ One new runtime dependency, `textual`, for `opentide tui`.
 | stdlib | `difflib` (did you mean), `importlib` (lazy loading) |
 | syrupy, pexpect (dev, kept) | Snapshot tests of every renderer at fixed width; the wizard on a real PTY |
 | textual (new) | `opentide tui` only, imported lazily so it never affects start-up |
-| Analysis engine (new, #332) | The Rust analysis engine and language server, compiled from `analysis/` into the package as `opentide._native`; imported only through `opentide.analysis` when a command needs it, so start-up and `--help` never load it |
+| Analysis engine (new, #332) | The Rust analysis engine and language server, compiled from `bindings/python/` into the package as `opentide._native`; imported only through `opentide.analysis` when a command needs it, so start-up and `--help` never load it |
 | Not added | `agent-detector` (a dozen env checks), `sarif-om` (SARIF is a small dict), `trogon` (early-stage; the TUI is built on Textual directly), `watchfiles` (`--watch` polls modification times) |
 
 `src/opentide/cli/ui/` is inside ty's checked scope even while the rest of `src/opentide/cli` is excluded.

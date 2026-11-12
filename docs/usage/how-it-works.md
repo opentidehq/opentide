@@ -85,7 +85,7 @@ The same operations are available three ways. Pick per task — see [Choosing an
 | Interface | Best for | Reference |
 |-----------|----------|-----------|
 | **CLI** (`opentide`) | Humans, CI pipelines, scripts | [CLI](../cli/index.md) |
-| **SDK** (`from opentide import Opentide`) | Embedding in Python tools and tests | [SDK](../sdk/index.md) |
+| **SDK** (`from opentide import Workspace`) | Embedding in Python tools and tests | [SDK](../sdk/index.md) |
 | **MCP** (`opentide mcp start`) | AI agents in editors | [MCP](../mcp/index.md) |
 
 ## Where generation and deployment differ

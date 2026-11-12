@@ -60,6 +60,7 @@ When modifying source, update docs in the **same PR**:
 | `src/opentide/mcp_server/server.py` | `docs/mcp/tools.md`, `docs/mcp/resources.md` |
 | `src/opentide/mcp_server/tools.py` | `docs/mcp/tools.md` |
 | `src/opentide/core/registry.py` | `docs/sdk/registry.md` |
+| `src/opentide/sdk.py`, `bindings/python/src/sdk.rs` | `docs/sdk/workspace.md` (its snippets run in `tests/test_docs/test_sdk_snippets.py`) |
 | `src/opentide/__init__.py` | `docs/sdk/index.md` |
 | `src/opentide/cli/enums.py` (platforms) | `docs/usage/concepts/platforms.md` (capability matrix only) |
 | `src/opentide/_models/platform.py`, `platform_configs.py` | Do not restate keys under `docs/`. Change `specs/platforms/` in [opentidehq/specifications](https://github.com/opentidehq/specifications) first. Usage and SDK pages only link there. |

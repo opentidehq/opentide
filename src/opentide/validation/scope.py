@@ -77,6 +77,10 @@ class ValidationScope:
 
     @classmethod
     def full(cls) -> ValidationScope:
+        """Every object. Deprecated outside opentide (UC-5.2, #837)."""
+        from opentide._deprecation import warn_external
+
+        warn_external("ValidationScope.full()", "opentide.Workspace.validate()")
         return cls(mode="full")
 
     @classmethod
@@ -92,7 +96,16 @@ class ValidationScope:
 
         Relative *files* are resolved against *roots*, which default to
         :func:`workspace_roots`.
+
+        Deprecated outside opentide (UC-5.2, #837): pass ``files``, ``uuids``
+        and ``types`` to :meth:`opentide.Workspace.validate`.
         """
+        from opentide._deprecation import warn_external
+
+        warn_external(
+            "ValidationScope.narrow()",
+            "opentide.Workspace.validate(files=..., uuids=..., types=...)",
+        )
         if files and roots is None:
             roots = workspace_roots()
         targets: set[str] = set()

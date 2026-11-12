@@ -1,7 +1,8 @@
 //! Every Tide object under `crates/testdata/`: the queries the engine extracts are the
 //! ones YAML loads at the paths opentide models, with the same text.
 //!
-//! The expected side reads each file with `serde_yaml` and follows the rules
+//! The expected side reads each file with the workspace's YAML reader
+//! (`opentide_core::node`, as `validate` does) and follows the rules
 //! `scripts/engine/oracles/oracle.py` (`embedded`, `elastic_embedded`) uses to feed
 //! the reference parsers, so the oracles check the text the engine checks.
 
@@ -11,10 +12,11 @@
 )]
 
 use opentide_core::LanguageId;
+use opentide_core::node::{self, Node, Value};
 use opentide_tide::{elastic_query_language, extract_injections, hunt_query_language};
-use serde_yaml::Value;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -37,12 +39,19 @@ fn yaml_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// `(path, language, platform, text)`.
 type Query = (String, &'static str, String, String);
 
-fn text(value: Option<&Value>) -> Option<&str> {
-    value.and_then(Value::as_str)
+fn text(value: Option<&Arc<Node>>) -> Option<&str> {
+    value.and_then(|v| v.value.as_str())
+}
+
+fn sequence(value: Option<&Arc<Node>>) -> Option<&[Arc<Node>]> {
+    match &value?.value {
+        Value::Seq(items) => Some(items),
+        _ => None,
+    }
 }
 
 /// The queries a YAML loader finds, as `(path, language, platform, text)`.
-fn expected(doc: &Value) -> BTreeSet<Query> {
+fn expected(doc: &Node) -> BTreeSet<Query> {
     let mut out = BTreeSet::new();
     let mut add = |path: String, language: LanguageId, platform: &str, value: &str| {
         let value = value.trim_matches(['\n', '\r']);
@@ -65,7 +74,7 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
     ] {
         let block = configurations.and_then(|c| c.get(platform));
         for field in fields {
-            if let Some(value) = text(block.and_then(|b| b.get(*field))) {
+            if let Some(value) = text(block.and_then(|b| b.get(field))) {
                 add(
                     format!("configurations.{platform}.{field}"),
                     language,
@@ -117,7 +126,7 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
                 );
             }
         }
-        let macros = sysdig.get("macros").and_then(Value::as_sequence);
+        let macros = sequence(sysdig.get("macros"));
         for (n, m) in macros.into_iter().flatten().enumerate() {
             if let Some(value) = text(m.get("condition")) {
                 add(
@@ -129,11 +138,11 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
             }
         }
     }
-    let searches = doc
-        .get("response")
-        .and_then(|r| r.get("procedure"))
-        .and_then(|p| p.get("searches"))
-        .and_then(Value::as_sequence);
+    let searches = sequence(
+        doc.get("response")
+            .and_then(|r| r.get("procedure"))
+            .and_then(|p| p.get("searches")),
+    );
     for (n, search) in searches.into_iter().flatten().enumerate() {
         let (Some(system), Some(value)) = (text(search.get("system")), text(search.get("query")))
         else {
@@ -160,10 +169,13 @@ fn every_testdata_query_is_extracted_as_yaml_loads_it() {
     let mut hunts = 0;
     for path in files {
         let source = std::fs::read_to_string(&path).unwrap();
-        let Ok(doc) = serde_yaml::from_str::<Value>(&source) else {
+        let Ok(document) = node::load(&source) else {
             continue;
         };
-        let want = expected(&doc);
+        let Some(doc) = document.root() else {
+            continue;
+        };
+        let want = expected(doc);
         let got: BTreeSet<Query> = extract_injections(&source)
             .into_iter()
             .map(|q| {

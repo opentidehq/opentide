@@ -765,10 +765,14 @@ impl SessionHost<'_> {
         if let Some(index) = self.slot().borrow().as_ref() {
             return Arc::clone(index);
         }
-        let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(text) else {
+        let Ok(rule) = opentide_schema::node::load(text) else {
             return Arc::default();
         };
-        let Some(model) = rule.get("detection_model").and_then(|m| m.as_str()) else {
+        let Some(model) = rule
+            .root()
+            .and_then(|root| root.get("detection_model"))
+            .and_then(|m| m.value.as_str())
+        else {
             return Arc::default();
         };
         let names = |text: &str, uuids: &[&str]| {
@@ -780,11 +784,12 @@ impl SessionHost<'_> {
             .find(|o| o.object_type == "objective" && o.uuid == model)
             .and_then(|o| o.body.get("objective"))
             .and_then(|b| b.get("threats"))
-            .and_then(|t| t.as_sequence())
-            .map(|s| {
-                s.iter()
-                    .filter_map(|t| t.as_str().map(str::to_owned))
-                    .collect()
+            .map(|t| match &t.value {
+                opentide_schema::node::Value::Seq(items) => items
+                    .iter()
+                    .filter_map(|t| t.value.as_str().map(str::to_owned))
+                    .collect(),
+                _ => Vec::new(),
             })
             .unwrap_or_default();
         if threats.is_empty() {
@@ -1853,10 +1858,11 @@ mod tests {
         ));
         let escaped = "name: r\nconfigurations:\n  \"\\x65lastic\":\n    query: x\n";
         assert!(!escaped.contains("elastic"));
-        let value: serde_yaml::Value = serde_yaml::from_str(escaped).unwrap();
+        let document = opentide_schema::node::load(escaped).unwrap();
+        let root = document.root().unwrap();
         assert!(
-            value["configurations"].get("elastic").is_some(),
-            "{value:?}"
+            root.get("configurations").unwrap().get("elastic").is_some(),
+            "{root:?}"
         );
         assert!(may_read_index(escaped));
     }

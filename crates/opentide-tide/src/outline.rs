@@ -474,7 +474,7 @@ mod tests {
             kind,
             uuid,
             format!("{kind} {uuid}"),
-            serde_yaml::from_str(body).unwrap(),
+            crate::yaml::parse(body).unwrap(),
         )
     }
 

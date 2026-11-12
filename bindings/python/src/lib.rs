@@ -20,6 +20,7 @@ use std::path::PathBuf;
 
 use opentide_cli::env::Env;
 
+mod sdk;
 mod serve;
 
 /// One finding, in the CLI's coordinates.
@@ -763,6 +764,11 @@ mod _native {
     #[pymodule_export]
     use super::serve::ServeHost;
 
+    /// The SDK's core (UC-5.2, #837): `opentide._native.sdk`, the facade's
+    /// `Workspace` and `run_json`, which `opentide.Workspace` wraps.
+    #[pymodule_export]
+    use super::sdk::module;
+
     /// The Tide models (UC-1.9, #815): `opentide._native.models`.
     #[pymodule_export]
     use opentide_schema::python::models;
@@ -774,6 +780,13 @@ mod _native {
         module.add("LANGUAGES", languages())?;
         // Importable by name, as pickling needs for the classes it rebuilds.
         opentide_schema::python::register(&module.getattr("models")?.cast_into()?)?;
+        let sdk = module.getattr("sdk")?;
+        sdk.setattr("__name__", "opentide._native.sdk")?;
+        module
+            .py()
+            .import("sys")?
+            .getattr("modules")?
+            .set_item("opentide._native.sdk", sdk)?;
         Ok(())
     }
 }

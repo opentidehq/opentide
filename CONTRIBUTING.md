@@ -109,7 +109,7 @@ Coding agents start at [`AGENTS.md`](AGENTS.md) (`CLAUDE.md` includes it). It ma
 to its guide and every kind of task to a skill under [`.agents/skills/`](.agents/skills/); Claude
 Code finds the skills through the `.claude/skills` link. The area guides are
 [`src/AGENTS.md`](src/AGENTS.md), [`crates/AGENTS.md`](crates/AGENTS.md) and one per crate,
-[`xtask/AGENTS.md`](xtask/AGENTS.md), [`analysis/AGENTS.md`](analysis/AGENTS.md) and
+[`xtask/AGENTS.md`](xtask/AGENTS.md), [`bindings/python/AGENTS.md`](bindings/python/AGENTS.md) and
 [`.github/AGENTS.md`](.github/AGENTS.md). If you change how something is done, change the guide or
 skill that describes it in the same pull request.
 

@@ -649,14 +649,13 @@ The process exits `1`.
 ## SDK equivalent
 
 ```python
-from opentide.validation.session import run_validation
-from opentide.validation.scope import ValidationScope
+from opentide import Workspace
 
-report = run_validation(scope=ValidationScope.full())
-print(report.ok, len(report.errors))
+validation = Workspace.open(".").validate()
+print(not validation.failed, len(validation.report["issues"]))
 ```
 
-See [SDK validation](../sdk/validation.md).
+See [SDK workspace](../sdk/workspace.md#validate).
 
 ## Source
 

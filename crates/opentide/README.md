@@ -39,6 +39,7 @@ cargo run -p opentide --example deploy_plan -- path/to/workspace PREVIEW
 | `queries` | no | The offline query engines behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::{main, run_json}` and the `opentide` binary (`cargo install opentide --features cli`) |
 | `lsp` | no | The language server (`opentide::lsp`) |
+| `connectors` | no | Tenant operations (`opentide::connectors`): a query run, a live query check and a rule deploy on a workspace's tenants; async, on tokio |
 
 This is the only opentide crate with a stability promise: semantic versioning, checked with `cargo semver-checks`. The `opentide-*` crates it builds on are internal. The documentation is on [docs.rs](https://docs.rs/opentide) and on [opentide.org](https://opentide.org/docs/sdk/rust).
 

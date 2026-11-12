@@ -6,8 +6,11 @@ Shared, I/O-free types every engine crate uses: `LanguageId`, positions, ranges 
 `visibility.toml` (`datasets`), the Elastic duration grammar (`duration`) and Falco's terms for the
 Sysdig block's constraints (`falco`: operators, modifiers, priorities, keywords, the name rule,
 Python's `strip()`), each the one copy opentide-schema's model and opentide-tide's findings share,
-and the one "did you mean" rule every caller shares (`suggest`:
-the same word without case or `-`/`_` wins, otherwise the fewest edits, strsim's OSA distance).
+the one "did you mean" rule every caller shares (`suggest`:
+the same word without case or `-`/`_` wins, otherwise the fewest edits, strsim's OSA distance),
+and the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
+every node's position), the one YAML reader of the workspace: `validate`, the models
+(`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850).
 
 ## Place
 
@@ -29,6 +32,8 @@ crate depends on it.
   (opentide-schema's `elastic_rule_shape` and `sysdig_rule_shape`, opentide-tide's `elastic` and
   `sysdig`); never a second table in either crate. `xtask/tests/sysdig_engines.rs` runs both
   Sysdig engines on the model's oracle cases.
+- YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).
+  What it reads differently from the oracle is `crates/opentide-schema/YAML.md`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.
 
 ## Test

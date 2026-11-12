@@ -33,7 +33,7 @@ opentide serves several audiences. Follow the path that matches you.
 | **Checking what shipped** | [Releases](./releases.md) | [0.23.0 on PyPI](https://pypi.org/project/opentide/0.23.0/) |
 | **Evaluating the project** | [Why opentide](./why-opentide.md) → [How it works](./how-it-works.md) | [Object model](./concepts/object-model.md) |
 | **Wiring up an AI agent** | [Agentic setup](./workflows/agentic-setup.md) | [MCP reference](../mcp/index.md) |
-| **Embedding opentide in Python** | [SDK](../sdk/index.md) | [SDK registry](../sdk/registry.md) |
+| **Embedding opentide in Python** | [SDK](../sdk/index.md) | [SDK workspace](../sdk/workspace.md) |
 
 ## The recommended read order
 
