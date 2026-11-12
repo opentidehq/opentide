@@ -1,0 +1,4 @@
+✓ status promotion · 1 rule · <SECONDS>
+Deploy plan · strategy RELEASE · 1 platform, 0 tenants
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+✓ splunk · 1 deployed, 0 failed, 0 not attempted · <SECONDS>

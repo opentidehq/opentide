@@ -48,6 +48,13 @@ pub struct FixtureSpec {
     /// place: a reviewed variation of a fixture (a typo `--fix` repairs).
     #[serde(default)]
     pub edits: Vec<Edit>,
+    /// Edits a push made: when set, the laid-out workspace becomes a git
+    /// checkout of two commits, the workspace as laid out, then these edits
+    /// (the rule files a deploy on a push reads, UC-4.6c). The commits'
+    /// authors and times are fixed, so their identifiers are the same on
+    /// every host.
+    #[serde(default)]
+    pub pushed: Vec<Edit>,
 }
 
 /// One edit of a fixture file: `find` occurs exactly once and becomes `replace`.
@@ -92,20 +99,16 @@ impl FixtureSpec {
         spawn: impl FnOnce(&[String], &Path) -> Result<()>,
     ) -> Result<()> {
         self.lay_out(repo, dest, spawn)?;
-        for edit in &self.edits {
-            let path = dest.join(&edit.path);
-            let text =
-                fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-            ensure!(
-                text.matches(edit.find.as_str()).count() == 1,
-                "fixture edit: `{}` must occur exactly once in {}",
-                edit.find,
-                edit.path
-            );
-            fs::write(&path, text.replacen(edit.find.as_str(), &edit.replace, 1))
-                .with_context(|| format!("write {}", path.display()))?;
+        apply(dest, &self.edits)?;
+        fix_modes(dest)?;
+        if !self.pushed.is_empty() {
+            git(dest, &["init", "-q"])?;
+            git(dest, &["add", "-A"])?;
+            git(dest, &["commit", "-q", "--no-verify", "-m", "The fixture"])?;
+            apply(dest, &self.pushed)?;
+            git(dest, &["commit", "-q", "--no-verify", "-a", "-m", "A push"])?;
         }
-        fix_modes(dest)
+        Ok(())
     }
 
     fn lay_out(
@@ -175,6 +178,63 @@ impl FixtureSpec {
         ensure!(!command.is_empty(), "a generated fixture needs `argv`");
         spawn(&command, repo)
     }
+}
+
+/// Applies `edits` to the workspace `dest`, each to exactly one place.
+fn apply(dest: &Path, edits: &[Edit]) -> Result<()> {
+    for edit in edits {
+        let path = dest.join(&edit.path);
+        let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        ensure!(
+            text.matches(edit.find.as_str()).count() == 1,
+            "fixture edit: `{}` must occur exactly once in {}",
+            edit.find,
+            edit.path
+        );
+        fs::write(&path, text.replacen(edit.find.as_str(), &edit.replace, 1))
+            .with_context(|| format!("write {}", path.display()))?;
+    }
+    Ok(())
+}
+
+/// Runs git in `dir` without the system's or the user's configuration, as
+/// a fixed author at a fixed time on a `main` branch, and fails unless it
+/// succeeds.
+fn git(dir: &Path, args: &[&str]) -> Result<()> {
+    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let output = Command::new("git")
+        .args([
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(["-c", "core.autocrlf=false"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", null)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .envs([
+            ("GIT_AUTHOR_NAME", "opentide golden"),
+            ("GIT_AUTHOR_EMAIL", "golden@opentide.invalid"),
+            ("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z"),
+            ("GIT_COMMITTER_NAME", "opentide golden"),
+            ("GIT_COMMITTER_EMAIL", "golden@opentide.invalid"),
+            ("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z"),
+        ])
+        .output()
+        .context("run git: a fixture with `pushed` edits is a git checkout")?;
+    ensure!(
+        output.status.success(),
+        "git {} failed ({}): {}",
+        args.join(" "),
+        output.status,
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(())
 }
 
 /// Runs a generator command in `repo` and fails unless it succeeds.
@@ -430,6 +490,7 @@ mod portable_tests {
             vars: BTreeMap::new(),
             about: String::new(),
             edits: Vec::new(),
+            pushed: Vec::new(),
         };
         let dir = tempfile::tempdir().unwrap();
         let ws = dir.path().join("ws");
@@ -500,6 +561,7 @@ mod portable_tests {
             vars: BTreeMap::new(),
             about: String::new(),
             edits: Vec::new(),
+            pushed: Vec::new(),
         };
         let ws = dir.path().join("ws");
         fs::create_dir_all(&ws).unwrap();
@@ -558,6 +620,7 @@ mod portable_tests {
             vars: BTreeMap::new(),
             about: String::new(),
             edits: Vec::new(),
+            pushed: Vec::new(),
         };
         fixture.materialise(repo.path(), dest.path()).unwrap();
         let link = dest.path().join("objects").join("rules");
@@ -596,6 +659,7 @@ mod tests {
             vars: BTreeMap::new(),
             about: String::new(),
             edits: Vec::new(),
+            pushed: Vec::new(),
         }
     }
 
@@ -700,6 +764,48 @@ mod tests {
                 "{find}"
             );
         }
+    }
+
+    #[test]
+    fn pushed_edits_are_the_last_commit_with_the_same_ids_everywhere() {
+        let repo = tempfile::tempdir().unwrap();
+        fs::create_dir_all(repo.path().join("src/rules")).unwrap();
+        fs::write(repo.path().join("src/rules/r.yaml"), "status: STAGING\n").unwrap();
+        fs::write(repo.path().join("src/other.yaml"), "x: 1\n").unwrap();
+        let fixture = FixtureSpec {
+            source: Some("src".into()),
+            pushed: vec![Edit {
+                path: "rules/r.yaml".into(),
+                find: "STAGING".into(),
+                replace: "DEVELOPMENT".into(),
+            }],
+            ..spec(FixtureKind::Copy)
+        };
+        let head = |dir: &Path, args: &[&str]| {
+            let output = Command::new("git")
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap()
+        };
+        let mut ids = Vec::new();
+        for _ in 0..2 {
+            let dest = tempfile::tempdir().unwrap();
+            fixture.materialise(repo.path(), dest.path()).unwrap();
+            assert_eq!(
+                head(dest.path(), &["diff", "--name-only", "HEAD~1", "HEAD"]),
+                "rules/r.yaml\n"
+            );
+            assert_eq!(head(dest.path(), &["status", "--porcelain"]), "");
+            assert_eq!(
+                fs::read_to_string(dest.path().join("rules/r.yaml")).unwrap(),
+                "status: DEVELOPMENT\n"
+            );
+            ids.push(head(dest.path(), &["rev-parse", "HEAD"]));
+        }
+        assert_eq!(ids[0], ids[1]);
     }
 
     #[test]

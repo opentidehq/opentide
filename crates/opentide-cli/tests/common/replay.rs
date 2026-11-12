@@ -85,6 +85,9 @@ pub const FIXTURES: &[&str] = &[
     "tenants",
     "live-tenants",
     "deploy-tenants",
+    "deploy-push",
+    "deploy-push-production",
+    "deploy-push-anchor",
 ];
 
 pub fn repo() -> PathBuf {
@@ -161,6 +164,25 @@ pub fn fixture(name: &str, ws: &Path) {
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
+        // A push of one edit on `deploy-tenants` (UC-4.6c): two commits.
+        "deploy-push" => pushed(
+            ws,
+            "objects/rules/splunk-a-create.yaml",
+            "description: A rule the splunk",
+            "description: A changed rule the splunk",
+        ),
+        "deploy-push-production" => pushed(
+            ws,
+            "objects/rules/crowdstrike-b-update.yaml",
+            "description: A rule the crowdstrike",
+            "description: A changed rule the crowdstrike",
+        ),
+        "deploy-push-anchor" => pushed(
+            ws,
+            "objects/rules/splunk-a-create.yaml",
+            "    status: STAGING\n",
+            "    status: &status STAGING\n",
+        ),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -177,6 +199,45 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         other => panic!("{other}: a fixture this test does not lay out"),
     }
+}
+
+/// `deploy-tenants` as a git checkout of two commits, the fixture and then
+/// one edit (`pushed` in `cases.toml`, laid out by `xtask/src/golden/fixture.rs`).
+fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
+    copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws);
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args([
+                "-c",
+                "init.defaultBranch=main",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(["-c", "core.autocrlf=false"])
+            .args(args)
+            .current_dir(ws)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .envs([
+                ("GIT_AUTHOR_NAME", "opentide golden"),
+                ("GIT_AUTHOR_EMAIL", "golden@opentide.invalid"),
+                ("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z"),
+                ("GIT_COMMITTER_NAME", "opentide golden"),
+                ("GIT_COMMITTER_EMAIL", "golden@opentide.invalid"),
+                ("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z"),
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {args:?}: {output:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "--no-verify", "-m", "The fixture"]);
+    let file = ws.join(path);
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert_eq!(text.matches(find).count(), 1);
+    std::fs::write(&file, text.replacen(find, replace, 1)).unwrap();
+    git(&["commit", "-q", "--no-verify", "-a", "-m", "A push"]);
 }
 
 /// Every file under `root` (links not followed), by relative path.
