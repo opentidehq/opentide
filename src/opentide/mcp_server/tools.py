@@ -282,6 +282,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "sysdig": "falco",
     "harfanglab": "yara",
     "bitdefender": "yara",
+    "graylog": "lucene",
 }
 
 

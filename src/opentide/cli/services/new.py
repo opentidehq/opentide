@@ -778,7 +778,7 @@ def fill_template(
 def keep_platform_blocks(text: str, platforms: Iterable[str], pointer: str) -> str:
     """Drop the commented ``configurations`` blocks of every platform not in *platforms*.
 
-    The template lists all ten platforms, about 400 commented lines; a new
+    The template lists all eleven platforms, about 400 commented lines; a new
     rule keeps its own blocks and one comment that points at *pointer*, the
     template, for the others.
     """

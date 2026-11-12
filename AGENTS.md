@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across ten security platforms.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across eleven security platforms.
 
 **Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
 
@@ -105,6 +105,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | HarfangLab | ✅ | ❌ | ✅ YARA | ✅ telemetry filters (no `--rule`) |
 | Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 | Bitdefender GravityZone | ✅ | ❌ | ✅ YARA | ❌ |
+| Graylog | ✅ | ✅ Graylog search (`/api/search/validate`) | ✅ Lucene, Graylog dialect | ✅ Lucene (`/api/search/messages`) |
 
 CrowdStrike, HarfangLab, Sysdig and Bitdefender: `can_validate is False` — return `supported: False` for `--live`, never fake validation. HarfangLab's and Bitdefender's YARA (the engine's bitdefender profile) and Sysdig's Falco are checked offline only; Bitdefender's criteria are checked by `opentide validate`.
 Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
@@ -112,6 +113,9 @@ id in deployment state; block macros and lists are expanded into the condition.
 Bitdefender (`src/opentide/platforms/bitdefender/`) deploys GravityZone custom detection rules over
 the Incidents API (JSON-RPC), the 24-hex rule id in deployment state; every update sends the whole
 payload, and exclusion rules (`type: 2`) are never touched.
+Graylog (`src/opentide/platforms/graylog/`) deploys event definitions (Filter & Aggregation) over the
+REST API on 6.3 to 7.2: the server version is read once per tenant and every body is built for it, the
+query is checked with `/api/search/validate` before every save but a disable, and the 24-hex id is in deployment state.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
 search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
 `kuery` is the one write: its rule preview's alerts, in the preview index.

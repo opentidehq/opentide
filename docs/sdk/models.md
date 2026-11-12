@@ -64,6 +64,7 @@ rule.configurations.sentinel.query
 | `CarbonBlackConfig` | `carbon_black_cloud` | `platform::carbon_black_cloud::1.0` | [carbon-black-cloud-1.0](/docs/specifications/specs/platforms/carbon-black-cloud-1.0/) |
 | `SysdigConfig` | `sysdig` | `platform::sysdig::1.0` | [sysdig-1.0](/docs/specifications/specs/platforms/sysdig-1.0/) |
 | `BitdefenderConfig` | `bitdefender` | `platform::bitdefender::1.0` | [bitdefender-1.0](/docs/specifications/specs/platforms/bitdefender-1.0/) |
+| `GraylogConfig` | `graylog` | `platform::graylog::1.0` | [graylog-1.0](/docs/specifications/specs/platforms/graylog-1.0/) |
 
 ```python
 rule.configurations.sentinel.query
