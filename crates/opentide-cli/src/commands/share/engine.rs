@@ -210,6 +210,7 @@ impl Validator {
                 queries: QueriesMode::Off,
                 query_check: None,
                 cve_check: None,
+                platform_configurations: crate::plugins::configurations(),
             });
             for issue in validation.report.issues {
                 if issue.severity == opentide_workspace::Severity::Error && !errors.contains(&issue)

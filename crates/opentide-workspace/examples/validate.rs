@@ -74,6 +74,7 @@ fn main() -> ExitCode {
         queries,
         query_check: None,
         cve_check: None,
+        platform_configurations: None,
     });
     let document = serde_json::json!({
         "checks": validation.checks_json(),

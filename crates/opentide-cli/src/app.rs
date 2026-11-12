@@ -835,6 +835,14 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "deploy"
+                if leaf(&matches)
+                    .get_one::<crate::tree::PlatformValue>("platform")
+                    .is_some_and(|platform| crate::plugins::is_plugin(&platform.0)) =>
+            {
+                let report = self.deploy_plugin(&matches);
+                self.emit_report(&report, out, err)
+            }
             "deploy" if leaf(&matches).get_flag("dry_run") => {
                 let run = self.deploy(&matches);
                 self.emit_deploy(&run, out, err)
@@ -1357,7 +1365,6 @@ impl Run<'_> {
     /// (`hand_down`); the others are refused, as is one typed on both.
     fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::validate_query::{Args, COMMAND, Context, run};
-        use clap::ValueEnum;
         let args = leaf(matches);
         let group = matches.subcommand_matches("validate");
         let typed =
@@ -1437,9 +1444,8 @@ impl Run<'_> {
         };
         let parsed = Args {
             platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned()),
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.clone()),
             strategies: strings("strategy"),
             plan: args.get_one::<String>("plan").cloned(),
             wide: args.get_flag("wide"),
@@ -1458,10 +1464,18 @@ impl Run<'_> {
             check_timeout: args.get_one::<String>("check_timeout").cloned(),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        if parsed.live {
+        // A platform plugin's live check (UC-4.5) is `run`'s.
+        if parsed.live
+            && !parsed
+                .platform
+                .as_deref()
+                .is_some_and(crate::plugins::is_plugin)
+        {
             return self.validate_query_live(&parsed, &cwd);
         }
         let terminal = self.terminal();
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
         run(
             &parsed,
             &Context {
@@ -1469,6 +1483,45 @@ impl Run<'_> {
                 env: self.env,
                 cwd: &cwd,
                 terminal: &terminal,
+                proxy: self.globals.proxy.as_deref(),
+                interrupted: &interrupted,
+            },
+        )
+    }
+
+    /// `opentide deploy --platform <plugin>` (UC-4.5): the plugin's
+    /// deployer, or with `--dry-run` what it would be sent.
+    fn deploy_plugin(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::plugin::{Context, Selection, deploy};
+        let args = leaf(matches);
+        let strings = |id: &str| -> Vec<String> {
+            args.get_many::<String>(id)
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let platform = args
+            .get_one::<crate::tree::PlatformValue>("platform")
+            .map(|platform| platform.0.clone())
+            .unwrap_or_default();
+        let selection = Selection {
+            all: args.get_flag("all_files"),
+            uuids: strings("uuids"),
+            files: strings("files"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        deploy(
+            &platform,
+            &selection,
+            args.get_flag("dry_run"),
+            &Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                proxy: self.globals.proxy.as_deref(),
+                interrupted: &interrupted,
+                now: jiff::Timestamp::now(),
             },
         )
     }
@@ -1573,7 +1626,6 @@ impl Run<'_> {
     /// `opentide query`, from its parsed arguments (UC-4.2c).
     fn query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::query::{Args, Context, RowFormat, run};
-        use clap::ValueEnum;
         let args = leaf(matches);
         let text = |id: &str| args.get_one::<String>(id).cloned();
         let strings = |id: &str| -> Vec<String> {
@@ -1584,9 +1636,8 @@ impl Run<'_> {
         let parsed = Args {
             query: text("query"),
             platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned())
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.clone())
                 .unwrap_or_default(),
             tenants: strings("tenant"),
             rule: text("rule"),
@@ -1722,7 +1773,6 @@ impl Run<'_> {
 
     /// `opentide deploy`'s parsed arguments.
     fn deploy_args(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::Args {
-        use clap::ValueEnum;
         let args = leaf(matches);
         let strings = |id: &str| -> Vec<String> {
             args.get_many::<String>(id)
@@ -1742,9 +1792,8 @@ impl Run<'_> {
             uuids: strings("uuids"),
             files: strings("files"),
             platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned()),
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.clone()),
             plan: args.get_one::<String>("plan").cloned(),
             wide: args.get_flag("wide"),
             keep_deprecated,

@@ -310,9 +310,40 @@ pub struct Coverage {
     /// apply: `deploy --dry-run`.
     #[serde(default)]
     pub offline: Vec<String>,
+    /// The platform plugins installed, for a command that runs on them
+    /// (`RustCommand.plugins`, UC-4.5): a run whose every `--platform` is
+    /// one is covered whatever `requires` and `platforms` say. Empty where no
+    /// plugin is installed, as in the goldens' environment.
+    #[serde(default)]
+    pub plugins: Vec<String>,
+}
+
+/// Every `--platform` value of *options*, in order.
+fn platform_values(options: &[String]) -> Vec<&str> {
+    let mut named = Vec::new();
+    for (index, token) in options.iter().enumerate() {
+        if token == "--platform" {
+            if let Some(value) = options.get(index + 1) {
+                named.push(value.as_str());
+            }
+        } else if let Some(value) = token.strip_prefix("--platform=") {
+            named.push(value);
+        }
+    }
+    named
 }
 
 impl Coverage {
+    /// Whether every `--platform` the run names is an installed plugin's
+    /// (`RustCommand.plugin_run`).
+    fn plugin_run(&self, options: &[String]) -> bool {
+        let named = platform_values(options);
+        !named.is_empty()
+            && named
+                .iter()
+                .all(|name| self.plugins.iter().any(|plugin| plugin == name))
+    }
+
     /// Whether the run's `--platform` values all have a Rust connector, or
     /// `platforms` does not apply to it.
     fn platforms_covered(&self, options: &[String]) -> bool {
@@ -326,16 +357,7 @@ impl Coverage {
         {
             return true;
         }
-        let mut named = Vec::new();
-        for (index, token) in options.iter().enumerate() {
-            if token == "--platform" {
-                if let Some(value) = options.get(index + 1) {
-                    named.push(value.as_str());
-                }
-            } else if let Some(value) = token.strip_prefix("--platform=") {
-                named.push(value);
-            }
-        }
+        let named = platform_values(options);
         !named.is_empty()
             && named
                 .iter()
@@ -352,12 +374,15 @@ pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
         .args([
             "-I",
             "-c",
-            "import json; from opentide.cli.engines import RUST_COMMANDS; \
+            "import json; from opentide.cli import engines; \
+             from opentide.cli.engines import RUST_COMMANDS; \
+             plugins = sorted(getattr(engines, 'plugin_platforms', frozenset)()); \
              print(json.dumps({' '.join(path): {'requires': list(command.requires), \
              'refuses': list(getattr(command, 'refuses', ())), \
              'platforms': list(getattr(command, 'platforms', ())), \
              'platform_scope': list(getattr(command, 'platform_scope', ())), \
-             'offline': list(getattr(command, 'offline', ()))} \
+             'offline': list(getattr(command, 'offline', ())), \
+             'plugins': plugins if getattr(command, 'plugins', False) else []} \
              for path, command in RUST_COMMANDS.items()}))",
         ])
         .output()
@@ -382,8 +407,13 @@ pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
-    !coverage.refuses.iter().any(|flag| options.contains(flag))
-        && coverage.platforms_covered(options)
+    if coverage.refuses.iter().any(|flag| options.contains(flag)) {
+        return false;
+    }
+    if coverage.plugin_run(options) {
+        return true;
+    }
+    coverage.platforms_covered(options)
         && (coverage.requires.is_empty()
             || coverage.requires.iter().any(|flag| options.contains(flag)))
 }
@@ -653,6 +683,44 @@ mod tests {
             }
         }
         assert!(seen >= 6, "{seen} doctor recordings");
+    }
+
+    #[test]
+    fn a_run_on_installed_plugins_is_covered_whatever_it_requires() {
+        use std::collections::BTreeMap;
+        let argv =
+            |args: &[&str]| -> Vec<String> { args.iter().map(|arg| (*arg).to_owned()).collect() };
+        let table = BTreeMap::from([(
+            "deploy".to_owned(),
+            super::Coverage {
+                requires: vec!["--dry-run".to_owned()],
+                refuses: vec!["--plan".to_owned()],
+                plugins: vec!["acme".to_owned()],
+                ..super::Coverage::default()
+            },
+        )]);
+        let covers = |args: &[&str]| super::covers(&table, "deploy", &argv(args));
+        assert!(covers(&[
+            "opentide",
+            "deploy",
+            "--platform",
+            "acme",
+            "--all"
+        ]));
+        assert!(covers(&["opentide", "deploy", "--platform=acme"]));
+        assert!(!covers(&["opentide", "deploy", "--platform", "other"]));
+        assert!(!covers(&["opentide", "deploy", "--platform", "sentinel"]));
+        assert!(!covers(&["opentide", "deploy", "--all"]));
+        assert!(!covers(&[
+            "opentide",
+            "deploy",
+            "--platform",
+            "acme",
+            "--plan",
+            "x"
+        ]));
+        // Without plugins installed (the goldens'), nothing changes.
+        assert!(covers(&["opentide", "deploy", "--dry-run"]));
     }
 
     #[test]

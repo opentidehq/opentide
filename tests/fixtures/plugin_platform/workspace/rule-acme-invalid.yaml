@@ -1,0 +1,27 @@
+name: Acme Misconfigured Rule
+
+metadata:
+  uuid: 7f0c2a51-3a9e-4d7e-9d6b-2f1a8c0e5a02
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: |
+  A rule whose Acme block the plugin's model refuses.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  acme:
+    status: STAGING
+    query: process where name == "powershell.exe"
+    severity: high
+    colour: red

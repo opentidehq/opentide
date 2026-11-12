@@ -25,6 +25,7 @@ pub mod lsp;
 pub mod migrate;
 pub mod migrate_state;
 pub mod new;
+pub mod plugin;
 pub mod query;
 pub mod query_rule;
 pub mod rules;

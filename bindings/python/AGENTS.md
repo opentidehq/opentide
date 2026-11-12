@@ -12,14 +12,15 @@ there, then imports its submodule `sdk`. [`README.md`](README.md) describes the 
 | `src/lib.rs` | The module `_native`: the engine's functions, the CLI's entry points, the submodules |
 | `src/sdk.rs` | `opentide._native.sdk` (UC-5.2, #837): the facade's `Workspace` and `run_json`, one to one, documents as JSON text; `SdkError(code, message)` |
 | `src/serve.rs` | `ServeHost`, `opentide serve`'s Rust host |
+| `src/plugins.rs` | The platform plugin host (UC-4.5, #835), installed at module init: `opentide.plugins._discover()` and `_invoke()` behind the connectors' traits, JSON text across, the GIL taken on a blocking thread for the plugin call alone |
 
 ## Place
 
 bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-lsp and opentide-compare
 (`compare_runs`, for the CLI's `OPENTIDE_ENGINE=compare`), opentide-schema (`models`) and
 opentide-cli (`cli_main`; `opentide_cli::embed` for `run_cli`, `interrupt_cli`, the warm
-workspaces of `serve` and `validate_report`, UC-2.7), and the facade `opentide` (`sdk`, UC-5.2);
-nothing depends on it. The plan's `bindings/python` (§4): once the engine functions move behind the
+workspaces of `serve` and `validate_report`, UC-2.7), the facade `opentide` (`sdk`, UC-5.2), and
+opentide-connectors with opentide-compile and tokio (the plugin host, UC-4.5); nothing depends on it. The plan's `bindings/python` (§4): once the engine functions move behind the
 facade it depends on `opentide` alone (D-5). It inherits the workspace lints, `unsafe_code = "forbid"` included: PyO3's macros
 need no `unsafe` of its own.
 

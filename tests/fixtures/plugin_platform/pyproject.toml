@@ -1,0 +1,16 @@
+# A sample platform plugin (UC-4.5, #835): the platform "acme", added to
+# opentide through the opentide.platforms entry-point group. docs/sdk/platforms.md
+# walks through it; tests/test_platforms/test_plugin_hook.py runs it.
+[project]
+name = "acme-opentide"
+version = "0.1.0"
+description = "The Acme detection platform for opentide (a sample plugin)"
+requires-python = ">=3.10"
+dependencies = ["opentide"]
+
+[project.entry-points."opentide.platforms"]
+acme = "acme_opentide:AcmePlatform"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

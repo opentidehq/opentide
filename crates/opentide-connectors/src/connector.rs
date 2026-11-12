@@ -7,7 +7,9 @@
 //! its client, the run's cancellation) and returns a [`ConnectorError`] on
 //! failure. The methods return boxed futures so a registry holds platforms
 //! as trait objects; UC-4.2 to UC-4.4 implement them, and UC-4.5 adds the
-//! Python plugin hook through [`Registry::register`].
+//! Python plugin hook ([`crate::plugin`]): a plugin is a [`Platform`] too,
+//! registered after the built-in ones, with a [`ConfigurationCheck`] of its
+//! own for its block of a rule's `configurations`.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -377,10 +379,31 @@ pub trait StateMigrator: Send + Sync {
     ) -> BoxFuture<'a, Result<Vec<Option<String>>, ConnectorError>>;
 }
 
+/// One finding of a platform's own check of a rule's configuration block.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConfigurationFinding {
+    /// Where, inside the block: keys and list indexes as strings.
+    pub path: Vec<String>,
+    /// One sentence.
+    pub message: String,
+    /// A warning rather than an error.
+    pub warning: bool,
+}
+
+/// Checks a rule's `configurations.<platform>` block with the platform's own
+/// model: a plugin's (its Python model), since the built-in blocks are the
+/// schema's.
+pub trait ConfigurationCheck: Send + Sync {
+    /// The findings of *block*, the block as JSON; an error when the check
+    /// itself could not run.
+    fn check(&self, block: &serde_json::Value)
+    -> Result<Vec<ConfigurationFinding>, ConnectorError>;
+}
+
 /// A platform and what it can do.
 pub trait Platform: Send + Sync {
-    /// Its identifier (`sentinel`, `elastic`).
-    fn id(&self) -> &'static str;
+    /// Its identifier (`sentinel`, `elastic`, a plugin's entry-point name).
+    fn id(&self) -> &str;
     /// Its deployer.
     fn deployer(&self) -> Option<&dyn Deployer> {
         None
@@ -401,6 +424,16 @@ pub trait Platform: Send + Sync {
     /// Its state migrator.
     fn state_migrator(&self) -> Option<&dyn StateMigrator> {
         None
+    }
+    /// Its check of a rule's configuration block; `None` for a built-in
+    /// platform, whose block the schema checks.
+    fn configuration_check(&self) -> Option<&dyn ConfigurationCheck> {
+        None
+    }
+    /// Whether it is a plugin (an `opentide.platforms` entry point), not one
+    /// of the built-in platforms.
+    fn is_plugin(&self) -> bool {
+        false
     }
 }
 
@@ -443,7 +476,7 @@ impl Registry {
     }
 
     /// Every platform's identifier, in registration order.
-    pub fn ids(&self) -> Vec<&'static str> {
+    pub fn ids(&self) -> Vec<&str> {
         self.platforms
             .iter()
             .map(|platform| platform.id())

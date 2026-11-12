@@ -686,12 +686,19 @@ fn run_on_tenant(
         .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
         .collect();
     let settings = http_settings(platform, request.timeout);
+    // A plugin reads its setup itself: an unset variable fails here, before
+    // the plugin is called, as no built-in pre-check names its keys.
+    let resolve = if crate::plugins::is_plugin(platform) {
+        Resolve::Required
+    } else {
+        Resolve::Counting
+    };
     let tenant = match Tenant::from_setup(
         platform,
         &configured.name,
         &setup,
         environment,
-        Resolve::Counting,
+        resolve,
         &settings,
     ) {
         Ok(tenant) => tenant,
@@ -707,7 +714,7 @@ fn run_on_tenant(
             return finish(outcome);
         }
     };
-    let registry = opentide_connectors::builtin();
+    let registry = crate::plugins::registry();
     let Some(runner) = registry
         .get(platform)
         .and_then(opentide_connectors::Platform::query_runner)
@@ -856,6 +863,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             &[],
         );
     }
+    // A platform plugin (UC-4.5) runs through the same runner trait; a rule's
+    // query on one (the rule's block is the plugin's to read) is not ported.
+    let plugin = crate::plugins::is_plugin(platform);
+    if plugin && sources[0] != "QUERY" {
+        return not_ported(&format!("query {} on {platform}", sources[0]));
+    }
     let rule = if sources[0] == "QUERY" {
         None
     } else {
@@ -879,7 +892,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             }
         }
     };
-    if !PLATFORMS.contains(&platform) {
+    if !PLATFORMS.contains(&platform) && !plugin {
         return not_ported(&format!("query on {platform}"));
     }
     if !(1..=MAX_LIMIT).contains(&args.limit) {
@@ -899,6 +912,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     let languages = languages(platform);
     if let Some(language) = &args.language
+        && !plugin
         && !languages.contains(&language.as_str())
     {
         let choices: Vec<String> = languages.iter().map(|l| (*l).to_owned()).collect();

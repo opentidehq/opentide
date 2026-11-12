@@ -525,6 +525,7 @@ fn run_case(
         cve_check: cve
             .as_ref()
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
+        platform_configurations: None,
     };
     let validation = match args.fix {
         None => workspace.validate(&options),

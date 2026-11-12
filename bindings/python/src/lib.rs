@@ -20,6 +20,7 @@ use std::path::PathBuf;
 
 use opentide_cli::env::Env;
 
+mod plugins;
 mod sdk;
 mod serve;
 
@@ -775,6 +776,9 @@ mod _native {
 
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        // Every run of the command line in this process reaches the
+        // platforms the Python packages register (UC-4.5, #835).
+        opentide_cli::plugins::set_host(Box::new(super::plugins::PythonPlugins::default()));
         module.add("ENGINE_VERSION", opentide_analysis::VERSION)?;
         module.add("CODES", codes::ALL.to_vec())?;
         module.add("LANGUAGES", languages())?;

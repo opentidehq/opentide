@@ -439,6 +439,10 @@ pub struct Coverage {
     /// Flags under which a run reaches no tenant (`deploy --dry-run`):
     /// `platforms` does not apply to it.
     pub offline: Vec<String>,
+    /// Whether a run on installed platform plugins is covered
+    /// (`RustCommand.plugins`, UC-4.5): the command line here has no plugin
+    /// host, so none is installed and no run is one.
+    pub plugins: bool,
 }
 
 /// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
@@ -506,6 +510,7 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
         }
         panic!("engines.py: {constant}: aliases nest too deep")
     };
+    let plugins = regex::Regex::new(r"\bplugins\s*=\s*True\b").unwrap();
     let keys: Vec<_> = key.captures_iter(body).collect();
     let mut table = BTreeMap::new();
     for (index, found) in keys.iter().enumerate() {
@@ -523,6 +528,7 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
                 platforms: tuple(arguments, "platforms"),
                 platform_scope: tuple(arguments, "platform_scope"),
                 offline: tuple(arguments, "offline"),
+                plugins: plugins.is_match(arguments),
             },
         );
     }
@@ -547,6 +553,29 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    let named = || {
+        let mut named = Vec::new();
+        for (index, token) in options.iter().enumerate() {
+            if token == "--platform" {
+                named.extend(options.get(index + 1).map(String::as_str));
+            } else if let Some(value) = token.strip_prefix("--platform=") {
+                named.push(value);
+            }
+        }
+        named
+    };
+    if coverage.refuses.iter().any(|flag| options.contains(flag)) {
+        return false;
+    }
+    if coverage.plugins && {
+        let named = named();
+        !named.is_empty()
+            && named
+                .iter()
+                .all(|name| opentide_cli::plugins::is_plugin(name))
+    } {
+        return true;
+    }
     let platforms = coverage.platforms.is_empty()
         || coverage.offline.iter().any(|flag| options.contains(flag))
         || (!coverage.platform_scope.is_empty()
@@ -555,21 +584,13 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
                 .iter()
                 .any(|flag| options.contains(flag)))
         || {
-            let mut named = Vec::new();
-            for (index, token) in options.iter().enumerate() {
-                if token == "--platform" {
-                    named.extend(options.get(index + 1).map(String::as_str));
-                } else if let Some(value) = token.strip_prefix("--platform=") {
-                    named.push(value);
-                }
-            }
+            let named = named();
             !named.is_empty()
                 && named
                     .iter()
                     .all(|name| coverage.platforms.iter().any(|p| p == name))
         };
-    !coverage.refuses.iter().any(|flag| options.contains(flag))
-        && platforms
+    platforms
         && (coverage.requires.is_empty()
             || coverage.requires.iter().any(|flag| options.contains(flag)))
 }
