@@ -9,7 +9,7 @@ Every version of the [`opentide`](https://pypi.org/project/opentide/) package, n
 
 ## 0.26.0 — 12 November 2026
 
-Graylog event definitions deploy from a `configurations.graylog` block on Graylog 6.3 to 7.2, checked by `validate`, the editor and `opentide tui`. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage. The engine is [language-server 0.14.0](https://github.com/opentidehq/language-server/releases/tag/v0.14.0).
+Graylog support: deploy rules to Graylog 6.3–7.2 as event definitions. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage.
 
 **Install**
 
@@ -55,7 +55,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.25.0 — 11 November 2026
 
-Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
+Bitdefender GravityZone support. YARA in HarfangLab and Bitdefender rules is checked before you deploy.
 
 **Install**
 
@@ -93,7 +93,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.24.1 — 10 November 2026
 
-`pip install opentide` works again: Typer 0.29.0 crashed every opentide on start, and opentide now requires a Typer it runs on. The diagnostic codes reference publishes on opentide.org again.
+`pip install opentide` works again: Typer 0.29.0 made opentide crash on start.
 
 **Install**
 
@@ -118,7 +118,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.24.0 — 9 November 2026
 
-A Splunk block's `advanced` table validates and deploys again, so catalogues whose rules set a custom alert action's parameters, such as MISP's, pass `validate`. The editor and `opentide tui` check CrowdStrike queries as CQL.
+Splunk rules with custom alert action settings deploy again. CrowdStrike queries are checked in the editor and `opentide tui`.
 
 **Install**
 
@@ -150,7 +150,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.23.0 — 6 November 2026
 
-`opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility.
+A redesigned `opentide tui`: each object opens as a page with its findings, plus Visibility, Configuration and Chains tabs.
 
 **Install**
 
@@ -187,7 +187,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.22.0 — 4 November 2026
 
-The [opentide VS Code extension](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) ships its first release, built on `opentide --json info catalog` and `opentide serve`. Installs are smaller without pandas and numpy, and Windows on Arm gets a wheel.
+The [opentide VS Code extension](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) is out. Installs are smaller without pandas and numpy, and Windows on Arm gets a wheel.
 
 **Install**
 
@@ -249,7 +249,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.21.0 — 3 November 2026
 
-Sysdig Secure and Falco become the ninth platform, with Falco conditions checked offline. CoreTIDE files, keys and commands are retired: migrating CoreTIDE content is not a supported path.
+Sysdig Secure support, with Falco rules checked offline. CoreTIDE files, keys and commands are retired.
 
 **Install**
 
@@ -325,7 +325,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.20.1 — 3 November 2026
 
-A `visibility.toml` log source is one dataset, named by its `name`, and can declare its columns for the query checks. The dataset lists of 0.20.0 were a defect of `visibility::1.0`, corrected here in place.
+Fixes the `visibility.toml` format from 0.20.0: each log source is one dataset, and can list its columns.
 
 **Install**
 
@@ -375,7 +375,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.20.0 — 2 November 2026
 
-`validate` catches what a deploy would reject: it compiles every rule, and the query checks know the documented tables and their columns.
+`validate` catches what a deploy would reject: it compiles every rule and checks queries against the documented tables and columns.
 
 **Install**
 
@@ -431,7 +431,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.19.0 — 29 October 2026
 
-The language server and its query engine ship in every install, so `validate` checks every rule query offline, `lint` checks query style and `opentide lsp start` serves editors. `opentide query` runs a query on a tenant.
+Offline query checks: `validate` checks every rule query without a tenant, and `opentide query` runs a query on one.
 
 **Install**
 
@@ -481,7 +481,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.18.0 — 27 October 2026
 
-Configuration files are validated, rule `severity` uses the alert labels, and the CLI gains commands for authoring and for agents: `new`, `doctor`, `explain`, `tui` and `commands`.
+Configuration files are validated. New commands for authors and agents: `new`, `doctor`, `explain`, `tui` and `commands`.
 
 **Install**
 
@@ -554,7 +554,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.17.2 — 22 October 2026
 
-`uv` installs resolve a current boto3 again, and a Splunk tenant behind a proxy that answers with an HTML page fails with a message naming the proxy and the `NO_PROXY` entry to add.
+`uv` installs get a working boto3 again, and a proxy blocking a Splunk tenant gives a clear error.
 
 **Install**
 
@@ -588,7 +588,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.17.1 — 21 October 2026
 
-A tenant's `ssl` applies to every call made to it, on every platform, so Splunk works again with `ssl = false`. Splunk rules with a `trigger` block deploy.
+Splunk works again with self-signed certificates (`ssl = false`), and Splunk rules with a `trigger` block deploy.
 
 **Install**
 
@@ -621,7 +621,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.17.0 — 20 October 2026
 
-Deployment plans are removed: a deploy names the status strategy it carries out, and a tenant lists the strategies it accepts. Each old setting fails with a message naming its replacement.
+Deployment plans are replaced by status strategies: `--plan` becomes `--strategy`. Every old setting fails with a message naming its replacement.
 
 **Install**
 
@@ -675,7 +675,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.16.1 — 20 October 2026
 
-The SDK class is spelled `Opentide`, and `OpenTide` still imports with a deprecation warning; CLI help, docs, generated pipelines and the MCP server name spell the project in lowercase.
+The SDK class is spelled `Opentide`. `OpenTide` still works, with a deprecation warning.
 
 **Install**
 
@@ -710,7 +710,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.16.0 — 19 October 2026
 
-`pip install opentide` is the only install and carries every vendor SDK, so generated pipelines validate Sentinel live. They stop a pull request from redirecting platform credentials, and technique pins follow ATT&CK 20.0.
+One install for everything: `pip install opentide` includes every platform SDK. Technique pins move to ATT&CK 20.0.
 
 **Install**
 
@@ -784,7 +784,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.15.0 — 16 October 2026
 
-Vendor rule ids move out of rule YAML into committed deployment state shards, and generated pipelines retire rules and persist their write-backs. Elastic Security joins as a supported platform.
+Elastic Security support. Vendor rule ids move out of rule YAML into committed deployment state.
 
 **Install**
 
@@ -864,7 +864,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.14.2 — 14 October 2026
 
-`opentide setup skills` can no longer be steered into installing skill content from a repository other than the pinned catalogue; upgrade promptly if you or your agents run it.
+Security fix: `opentide setup skills` installs only from the pinned catalogue. Upgrade promptly if you use it.
 
 **Install**
 
@@ -888,7 +888,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.14.1 — 14 October 2026
 
-Documentation generation takes 1.44 s instead of 722 s on a 265-object corpus, with byte-identical output, and techniques are read only from the fields models declare.
+Documentation generation is fast again: 1.4 s instead of 722 s on a 265-object corpus.
 
 **Install**
 
@@ -916,7 +916,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.14.0 — 14 October 2026
 
-Signal entities are stage-scoped, and `opentide migrate vocab-scope` adds the prefix for you. `response.responders` accepts the teams `deployment.toml` declares, and documentation generation finishes on catalogues that timed out.
+Signal entities carry their stage, and `opentide migrate vocab-scope` updates them for you. Documentation generation finishes on large catalogues.
 
 **Install**
 
@@ -968,7 +968,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.13.0 — 12 October 2026
 
-`threat.surface` values carry their stage, so every surface is reachable, and generated CI deploys and pushes only for pull requests that target the default branch.
+`threat.surface` values carry their stage. Generated CI deploys only for pull requests to the default branch.
 
 **Install**
 
@@ -1012,7 +1012,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.12.1 — 9 October 2026
 
-A missing credential is logged once instead of once per object, and the generated live query job checks only the variables your platform file uses.
+A missing credential is logged once, not once per object.
 
 **Install**
 
@@ -1041,7 +1041,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.12.0 — 9 October 2026
 
-The MCP server starts with `opentide mcp start`, replacing the removed `opentide-mcp` command, and a live query check fails on a credential still written as `$VARIABLE`.
+The MCP server starts with `opentide mcp start`. The `opentide-mcp` command is removed.
 
 **Install**
 
@@ -1080,7 +1080,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.11.0 — 7 October 2026
 
-`validate query --live` is the tenant check, and bare `validate query` no longer scans query text; generated pipelines pass `--live` and skip a platform without credentials.
+`validate query --live` checks queries on your tenant. Plain `validate query` no longer scans query text.
 
 **Install**
 
@@ -1127,7 +1127,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.10.0 — 6 October 2026
 
-Signals name the log sources your `visibility.toml` declares and take alert-label severities, technique lists are `mitre_attack`, and `opentide --proxy` sets the HTTP proxy for a run.
+Signals reference the log sources in `visibility.toml`, technique lists are called `mitre_attack`, and `--proxy` sets an HTTP proxy.
 
 **Install**
 
@@ -1183,7 +1183,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.9.0 — 5 October 2026
 
-`rule::1.1` can record `metadata.reviewed`, and `opentide rules unreviewed` lists rules with no review or a review older than the window you give.
+Rule reviews: rules record `metadata.reviewed`, and `opentide rules unreviewed` lists the ones due.
 
 **Install**
 
@@ -1225,7 +1225,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.8.2 — 2 October 2026
 
-The SDK's object index is built once per registry snapshot, and vocabulary writers quote dotted list keys so TOML does not read them as nested tables.
+A faster object index in the SDK, and vocabulary files keep dotted keys quoted.
 
 **Install**
 
@@ -1254,7 +1254,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.8.1 — 1 October 2026
 
-Generated GitLab pipelines wait for query validation before `generate` and deploy, as GitHub and Azure pipelines already did.
+Generated GitLab pipelines wait for query validation before deploying, as GitHub and Azure already did.
 
 **Install**
 
@@ -1284,7 +1284,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.8.0 — 30 September 2026
 
-Generated pipelines gate on strict validation and lint and skip a deploy plan whose platforms have no tenants, and an object file with no `uuid` fails validation.
+Generated pipelines gate deploys on strict validation and lint. Object files without a `uuid` fail validation.
 
 **Install**
 
@@ -1338,7 +1338,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.7.0 — 29 September 2026
 
-`opentide share` publishes threats, objectives and rules to MISP, one Event each, and `setup ci --sharing` adds a job that shares changed objects on the default branch.
+MISP sharing: `opentide share` publishes threats, objectives and rules as MISP events.
 
 **Install**
 
@@ -1379,7 +1379,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.6.4 — 28 September 2026
 
-A push to the default branch deploys from a regenerated GitHub pipeline even when staging is skipped, and re-running setup keeps your edited README, `.gitignore` and platform comments.
+GitHub production deploys run again, and re-running setup keeps your edited README, `.gitignore` and platform comments.
 
 **Install**
 
@@ -1414,7 +1414,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.6.3 — 24 September 2026
 
-CI diff plans say what is wrong instead of crashing with `encode`, `KeyError`, `Invalid object name` or `list index out of range`, and a GitLab merged-result commit with one parent no longer fails.
+CI diff plans say what is wrong instead of crashing.
 
 **Install**
 
@@ -1442,7 +1442,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.6.2 — 24 September 2026
 
-GitLab diff plans with a missing base commit report `No Source Commit Found` instead of crashing on `lookup_ref`, and GitHub `STAGING` names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` instead of Azure variables.
+GitLab and GitHub diff plans report a missing commit or variable instead of crashing.
 
 **Install**
 
@@ -1467,7 +1467,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.6.1 — 23 September 2026
 
-CI `STAGING` and `PRODUCTION` plans deploy a changed rule file that sits directly in `objects/rules/`, which 0.6.0 left out; a file in a subfolder is still not deployed.
+CI deploys pick up changed rule files that sit directly in `objects/rules/`.
 
 **Install**
 
@@ -1497,7 +1497,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.6.0 — 23 September 2026
 
-Commands find the detection workspace from any folder inside it, human output shows what `--json` already showed, and `deploy` handles a repository with no rules or tenants yet instead of crashing.
+Commands work from any folder in your workspace, and `deploy` handles a workspace with no rules or tenants yet.
 
 **Install**
 
@@ -1550,7 +1550,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.5.0 — 23 September 2026
 
-Threats written to `threat::1.0` validate: `impact` and `leverage` are lists of vocabulary names, so a single string, which 0.4.0 required, fails until it becomes a one-item list.
+Threats written to `threat::1.0` validate: `impact` and `leverage` are lists.
 
 **Install**
 
@@ -1585,7 +1585,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.4.0 — 22 September 2026
 
-First-run commands stop crashing, printing tracebacks or quietly doing nothing, a regenerated GitHub inflight job no longer lands pull requests unreviewed, and `validate query` checks syntax offline by default.
+Fixes for first-run crashes and tracebacks. `validate query` checks syntax offline by default.
 
 **Install**
 
@@ -1659,7 +1659,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.3.0 — 21 September 2026
 
-The runtime floors rise to cryptography 50.x (CVE-2026-69247) and typer 0.27.
+Dependency update: cryptography 50.x (CVE-2026-69247) and Typer 0.27.
 
 **Install**
 
@@ -1683,7 +1683,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.2.1 — 18 September 2026
 
-CVE checks and generated threat CVE tables use CIRCL Vulnerability-Lookup instead of NVD, and `validate --check cve` also looks up GHSA and GCVE identifiers.
+CVE checks use CIRCL Vulnerability-Lookup instead of NVD, and look up GHSA and GCVE ids too.
 
 **Install**
 
@@ -1713,7 +1713,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.2.0 — 18 September 2026
 
-Generated templates hug `#` to each optional key, keep spacer lines blank and write rule `configurations` as commented platform stubs instead of `{}`.
+Cleaner generated templates: optional keys are commented in place, and rule `configurations` are platform stubs.
 
 **Install**
 
@@ -1740,7 +1740,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.8 — 16 September 2026
 
-First-time `setup` and `generate` write templates without YAML `null` or misplaced children, and VS Code snippets get `tide-*` prefixes, descriptions and tabstops.
+First-run `setup` and `generate` write clean templates. VS Code snippets get prefixes, descriptions and tab stops.
 
 **Install**
 
@@ -1774,7 +1774,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.7 — 16 September 2026
 
-VS Code no longer reports "Matches multiple schemas", generated templates show required nested fields, and `opentide --json validate` reports each check's own status.
+VS Code stops reporting "Matches multiple schemas", and templates show required nested fields.
 
 **Install**
 
@@ -1808,7 +1808,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.6 — 15 September 2026
 
-`opentide generate` handles unquoted YAML dates, and interactive `opentide setup` no longer crashes after you choose a CI provider.
+Fixes two crashes: `opentide generate` on unquoted YAML dates, and interactive `setup` after choosing a CI provider.
 
 **Install**
 
@@ -1833,7 +1833,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.5 — 13 September 2026
 
-MITRE ATT&CK and MISP threat-actor vocabularies are ingested weekly with per-key versions, and ATT&CK groups stay catalogue-only, pinned through `threat.actors.name`.
+ATT&CK and MISP threat-actor vocabularies update weekly.
 
 **Install**
 
@@ -1861,7 +1861,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.4 — 13 September 2026
 
-`threat.actors` takes objects with a scoped `name`, so `opentide generate` no longer crashes on actors, and nested vocabulary fields are checked against the pinned vocabularies.
+Fixes the `opentide generate` crash on `threat.actors`: actors are objects with a `name`.
 
 **Install**
 
@@ -1892,7 +1892,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.3 — 11 September 2026
 
-`opentide setup ci` writes YAML that GitHub, GitLab and Azure parse, and `deploy` and `validate query` work locally without `DEPLOYMENT_PLAN` set.
+`setup ci` writes pipelines GitHub, GitLab and Azure accept, and `deploy` runs locally.
 
 **Install**
 
@@ -1921,7 +1921,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.2 — 11 September 2026
 
-`opentide lint` checks filename slugs and recommended metadata, `setup hooks` installs a validate-on-commit hook, and `opentide generate` completes on a freshly scaffolded repository.
+`opentide lint` checks filenames and metadata, and `setup hooks` validates on every commit.
 
 **Install**
 
@@ -1957,7 +1957,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.1 — 11 September 2026
 
-`opentide validate` and `generate` no longer crash with `UnicodeDecodeError` once pip has compiled bytecode beside the bundled configuration, and `setup skills discover` and `show` run as subcommands.
+Fixes the `UnicodeDecodeError` crash in `validate` and `generate` after a pip install.
 
 **Install**
 
@@ -1983,7 +1983,7 @@ See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHAN
 
 ## 0.1.0 — 9 September 2026
 
-First public beta, not 1.0: the DetectionOps engine is a PyPI package you pin instead of a CoreTide submodule SHA, with the CLI, MCP server, SDK and seven platform adapters in one wheel.
+First public beta: the CLI, MCP server, SDK and seven platforms in one PyPI package.
 
 **Install**
 
