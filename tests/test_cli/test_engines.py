@@ -163,6 +163,20 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     assert doctor.covers(["doctor"])
 
 
+def test_help_is_covered_on_every_path_whatever_the_run_requires() -> None:
+    """``--help`` is the command tree's, printed by the Rust command line (UC-6.0b, #841)."""
+    command = RustCommand(launch=("x",), requires=("--dry-run",), refuses=("--plan",))
+    assert command.covers(["deploy", "--help"])
+    assert command.covers(["deploy", "--plan", "x", "--help"])
+    # After ``--`` it is an argument, not the option.
+    assert not command.covers(["deploy", "--", "--help"])
+    assert engines.RUST_COMMANDS[("query",)].covers(["query", "--help"])
+    # The root and the bare groups are the Rust command line's too.
+    groups = [(), ("generate", "extract"), ("lsp",), ("mcp",), ("migrate",), ("new",), ("rules",)]
+    for path in groups:
+        assert engines.RUST_COMMANDS[path].covers([*path])
+
+
 def test_generate_is_rust_with_or_without_a_phase_named() -> None:
     """``generate <phase>`` and a bare ``generate`` (the full pipeline, UC-6.0) run on Rust."""
     generate = engines.RUST_COMMANDS[("generate",)]

@@ -232,10 +232,9 @@ pub const PLATFORM_FIXTURES: [&str; 3] = ["fault", "heavy-small", "tide-corpus"]
 /// still answers in Python although its command has a Rust implementation,
 /// which the npm bin (the Rust command line alone, with no Python) answers
 /// differently. `golden check --runner node` counts these cases and says why;
-/// `--engine compare` compares them.
+/// `--engine compare` compares them. `--help` is the Rust command line's on
+/// both since UC-6.0b (#841, #977), and compared.
 ///
-/// - `--help`: the PyPI launcher prints Typer's help (Rich panels), the npm
-///   bin the Rust command line's (clap) (#977).
 /// - `doctor` on a workspace that enables a platform: for each one,
 ///   `platform_sdk` reports which Python modules the platform's live calls
 ///   import, which the Python launcher reads and hands to the Rust command
@@ -244,13 +243,6 @@ pub const PLATFORM_FIXTURES: [&str; 3] = ["fault", "heavy-small", "tide-corpus"]
 ///   without one checks nothing in Python beyond `python_version`, which the
 ///   ledger approves for every candidate, and is compared.
 pub fn node_leaves_out(case: &crate::golden::case::Case) -> Option<&'static str> {
-    let mut options = case.argv.iter().skip(1).take_while(|arg| *arg != "--");
-    if options.any(|arg| arg == "--help" || arg == "-h") {
-        return Some(
-            "`--help`: the PyPI CLI prints Typer's help (Rich panels), the npm bin the Rust \
-             command line's (clap)",
-        );
-    }
     if case.command == "doctor" && PLATFORM_FIXTURES.contains(&case.fixture.as_str()) {
         return Some(
             "`doctor` on a workspace that enables a platform: platform_sdk reports which Python \
@@ -398,7 +390,8 @@ pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
 
 /// Whether the Rust implementation covers a case of `command` run with
 /// `argv`: its command is in `table`, and the arguments before `--` carry
-/// one of the flags it requires, if it requires any, and none it refuses.
+/// `--help` (the command tree's, whatever else they carry: #841), or one of
+/// the flags it requires, if it requires any, and none it refuses.
 pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]) -> bool {
     let Some(coverage) = table.get(command) else {
         return false;
@@ -407,6 +400,9 @@ pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    if options.iter().any(|arg| arg == "--help") {
+        return true;
+    }
     if coverage.refuses.iter().any(|flag| options.contains(flag)) {
         return false;
     }
@@ -670,9 +666,12 @@ changelog = "**c**"
         };
         let left_out =
             |command: &str, argv: &[&str]| super::node_leaves_out(&on("none", command, argv));
-        assert!(left_out("validate", &["opentide", "validate", "--help"]).is_some());
-        assert!(left_out("info", &["opentide", "-h", "info"]).is_some());
-        assert!(left_out("doctor", &["opentide", "doctor", "--help"]).is_some());
+        // `--help` is the Rust command line's under both runners (#841).
+        assert_eq!(
+            left_out("validate", &["opentide", "validate", "--help"]),
+            None
+        );
+        assert_eq!(left_out("doctor", &["opentide", "doctor", "--help"]), None);
         // doctor's platform_sdk checks read Python's modules only where a
         // platform is enabled; elsewhere the npm bin's doctor is compared.
         let doctor = ["opentide", "doctor", "--offline"];
@@ -690,11 +689,6 @@ changelog = "**c**"
             );
         }
         assert_eq!(left_out("validate", &["opentide", "validate"]), None);
-        // After `--`, `--help` is an argument, not the option.
-        assert_eq!(
-            left_out("new rule", &["opentide", "new", "rule", "--", "--help"]),
-            None
-        );
     }
 
     /// `PLATFORM_FIXTURES` names exactly the fixtures on which the oracle's
@@ -898,6 +892,28 @@ changelog = "**c**"
             &argv(&["opentide", "deploy", "--platform", "elastic", "--all"])
         ));
         assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
+        // `--help` is the command tree's, whatever the run requires (#841);
+        // after `--` it is an argument.
+        assert!(super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--help"])
+        ));
+        assert!(super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--all", "--help"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--", "--help"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "lint",
+            &argv(&["opentide", "lint", "--help"])
+        ));
     }
 
     #[test]

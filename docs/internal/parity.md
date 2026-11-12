@@ -14,15 +14,15 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | | |
 |---|---:|
 | Commands | 59 |
-| Commands with a Rust implementation | 52 |
+| Commands with a Rust implementation | 59 |
 | Commands flipped to Rust | 0 |
 | Recordings (command × corpus × mode) | 770 |
-| … no Rust yet | 32 (4.1%) |
+| … no Rust yet | 0 (0.0%) |
 | … compare passing | 0 (0.0%) |
 | … compare failing | 0 (0.0%) |
-| … compare not run | 738 (95.8%) |
+| … compare not run | 770 (100.0%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1078 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1136 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
@@ -33,14 +33,16 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide`
 
+3 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
-| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
+| tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide commands`
 
-4 approved diff(s).
+5 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -48,7 +50,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy`
 
-114 approved diff(s).
+115 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -65,7 +67,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide deploy migrate-state`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -77,7 +79,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide doctor`
 
-111 approved diff(s).
+112 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -90,7 +92,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide explain`
 
-18 approved diff(s).
+19 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -98,7 +100,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate`
 
-15 approved diff(s).
+16 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -108,7 +110,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs`
 
-11 approved diff(s).
+12 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -119,7 +121,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs index`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -129,7 +131,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs objectives`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -139,7 +141,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs rules`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -149,7 +151,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate docs threats`
 
-3 approved diff(s).
+4 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -160,7 +162,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate explorer`
 
-9 approved diff(s).
+10 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -171,7 +173,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate exports`
 
-8 approved diff(s).
+9 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -182,7 +184,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate exports navigator`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -192,7 +194,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate exports objects`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -202,7 +204,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate exports revisions`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -212,13 +214,15 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate extract`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide generate extract defender`
 
-2 approved diff(s).
+3 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -228,7 +232,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate extract elastic`
 
-19 approved diff(s).
+20 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -238,7 +242,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate extract sentinel`
 
-7 approved diff(s).
+8 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -247,7 +251,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate inflight`
 
-10 approved diff(s).
+11 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -258,7 +262,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide generate inflight prune`
 
-8 approved diff(s).
+9 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -269,7 +273,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide info`
 
-27 approved diff(s).
+28 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -282,7 +286,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide lint`
 
-133 approved diff(s).
+134 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -295,11 +299,15 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide lsp`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide lsp start`
+
+1 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -307,13 +315,15 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide mcp`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide mcp start`
 
-3 approved diff(s).
+4 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -321,13 +331,15 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide migrate`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide migrate vocab-scope`
 
-9 approved diff(s).
+10 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -340,13 +352,15 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide new`
 
+2 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide new objective`
 
-7 approved diff(s).
+8 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -355,7 +369,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide new rule`
 
-12 approved diff(s).
+13 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -365,7 +379,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide new threat`
 
-27 approved diff(s).
+28 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -377,7 +391,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide query`
 
-1 approved diff(s).
+2 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -389,13 +403,15 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide rules`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
-| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide rules unreviewed`
 
-6 approved diff(s).
+7 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -406,7 +422,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide serve`
 
-1 approved diff(s).
+2 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -416,7 +432,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup`
 
-12 approved diff(s).
+13 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -427,7 +443,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup ci`
 
-7 approved diff(s).
+8 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -437,6 +453,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup env`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | empty | compare not run | compare not run | compare not run | compare not run |
@@ -445,6 +463,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup hooks`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -452,7 +472,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup mcp`
 
-4 approved diff(s).
+5 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -461,6 +481,8 @@ No compare results were given: every command with a Rust implementation that is 
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide setup platforms`
+
+1 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -471,6 +493,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup repo`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -478,7 +502,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup skills`
 
-8 approved diff(s).
+9 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -488,7 +512,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup skills discover`
 
-3 approved diff(s).
+4 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -497,7 +521,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup skills show`
 
-6 approved diff(s).
+7 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -506,7 +530,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide setup vscode`
 
-12 approved diff(s).
+13 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -517,6 +541,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide share`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -526,6 +552,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide share preview`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -534,6 +562,8 @@ No compare results were given: every command with a Rust implementation that is 
 | vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share push`
+
+1 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -545,6 +575,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide share retract`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -552,6 +584,8 @@ No compare results were given: every command with a Rust implementation that is 
 | tide-corpus | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share status`
+
+1 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -561,6 +595,8 @@ No compare results were given: every command with a Rust implementation that is 
 | vscode | compare not run | compare not run | compare not run | compare not run |
 
 ### `opentide share targets`
+
+1 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -572,6 +608,8 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide tui`
 
+1 approved diff(s).
+
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
 | none | compare not run | compare not run | compare not run | compare not run |
@@ -579,7 +617,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide validate`
 
-406 approved diff(s).
+407 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|
@@ -594,7 +632,7 @@ No compare results were given: every command with a Rust implementation that is 
 
 ### `opentide validate query`
 
-41 approved diff(s).
+36 approved diff(s).
 
 | Corpus | agent | human | json | plain |
 |--------|------|------|------|------|

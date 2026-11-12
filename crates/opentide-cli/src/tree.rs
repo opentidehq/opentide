@@ -277,6 +277,16 @@ pub struct Cli {
         help = "Print the installed opentide version and exit"
     )]
     pub version: bool,
+    #[arg(
+        long = "install-completion",
+        help = "Install completion; name a shell after it to pick one"
+    )]
+    pub install_completion: bool,
+    #[arg(
+        long = "show-completion",
+        help = "Print the script instead; name a shell after it to pick one"
+    )]
+    pub show_completion: bool,
     #[command(subcommand)]
     pub command: Option<RootCommand>,
 }

@@ -10,8 +10,10 @@
 //! one value normalised, as the goldens normalise it.
 //!
 //! Intended differences are not here: `--help` and the help a bare `mcp`,
-//! `lsp` or `new` prints to a person (clap's help, see
-//! `tests/golden/APPROVED_DIFFS.toml` and the CHANGELOG), and the home screen.
+//! `lsp` or `new` prints to a person (clap's help, held to the oracle's by
+//! content under `tests/golden/APPROVED_DIFFS.toml`'s `help` entries). They,
+//! and the home screen on the `tide-corpus` fixture with its objects, are
+//! replayed by `tests/command_goldens.rs`.
 
 #![expect(
     clippy::unwrap_used,
@@ -69,9 +71,9 @@ const CASES: &[(&str, &[&str])] = &[
 /// Recordings of those variants left out, and why.
 const LEFT_OUT: &[(&str, &str)] = &[
     // A bare `opentide` prints the home screen (human) or the root's help:
-    // the help is clap's (an approved difference) and the home screen needs
-    // the workspace index (UC-3.5's `info`).
-    ("_root/human/none/bare", "home screen"),
+    // the help is clap's (an approved difference), and the home screen of
+    // the corpus counts its objects, which this test's fixture leaves out
+    // (`command_goldens.rs` replays both).
     ("_root/human/tide-corpus/bare", "home screen"),
     ("_root/plain/none/bare", "help"),
     ("_root/plain/tide-corpus/bare", "help"),

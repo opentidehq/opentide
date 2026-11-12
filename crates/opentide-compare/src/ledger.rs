@@ -52,6 +52,13 @@
 //! a file in the workspace, which a user commits. An entry applies only
 //! where both values are found as written; an entry that applies nowhere in a
 //! complete run is stale, and a stale entry fails the run.
+//!
+//! A `help` rule (target `stdout`, `oracle = "typer"`, `candidate =
+//! "clap"`) approves the layout of a help screen, and only where both sides
+//! are help screens of the entry's command that say the same thing
+//! ([`crate::help`]); a `help-text` rule approves one change of wording on
+//! them (an item's description, the about text or the epilog), where a
+//! `help` entry applies. The root's command path is empty: `command = ""`.
 
 use crate::glob;
 use crate::json::{self, Json};
@@ -61,6 +68,12 @@ use std::fmt;
 /// The value of `oracle` or `candidate` that says this side has no value at
 /// the pointer.
 pub const ABSENT: &str = "(absent)";
+
+/// A `help` rule's `oracle`: the oracle's help screens are Typer's.
+pub const HELP_ORACLE: &str = "typer";
+
+/// A `help` rule's `candidate`: the candidate's help screens are clap's.
+pub const HELP_CANDIDATE: &str = "clap";
 
 /// What a `presence` rule's `oracle` holds: the oracle wrote the file.
 pub const WRITTEN: &str = "written";
@@ -199,6 +212,21 @@ pub enum Rule {
         /// The oracle's digest, 64 lower-case hex digits.
         oracle: String,
         /// The candidate's digest.
+        candidate: String,
+    },
+    /// A help screen: the oracle's laid out by Typer, the candidate's by
+    /// clap (`help`, `oracle = "typer"`, `candidate = "clap"`), approved
+    /// where both are help screens of the entry's command and say the same
+    /// thing ([`crate::help`]): the layout is approved, never the content.
+    Help,
+    /// What a help screen says, changed on purpose (`help-text`): where a
+    /// `help` entry applies, an item's description, the about text or the
+    /// epilog that reads `oracle` on the oracle's screen (words separated by
+    /// one space) and `candidate` on the candidate's.
+    HelpText {
+        /// The oracle's text.
+        oracle: String,
+        /// The candidate's text in its place.
         candidate: String,
     },
     /// The exit code.
@@ -410,8 +438,8 @@ fn location(text: &str, span: Option<std::ops::Range<usize>>) -> String {
 
 fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
     let mut problems = Vec::new();
+    // The root's command path is empty: `command = ""`.
     for (field, value) in [
-        ("command", &raw.command),
         ("case", &raw.case),
         ("target", &raw.target),
         ("rule", &raw.rule),
@@ -431,7 +459,7 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
                 .bytes()
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
     });
-    if !raw.command.trim().is_empty() && !command_ok {
+    if !raw.command.is_empty() && !command_ok {
         problems.push(format!(
             "`command` {:?} is not a command path (lowercase words, one space apart)",
             raw.command
@@ -485,6 +513,42 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         }
         (_, "sha256") => {
             problems.push("a `sha256` rule approves a file: `target` is file:<path>".to_owned());
+            None
+        }
+        (Some(Target::Stdout), "help") => {
+            if raw.oracle == HELP_ORACLE && raw.candidate == HELP_CANDIDATE {
+                Some(Rule::Help)
+            } else {
+                problems.push(format!(
+                    "a `help` rule approves clap's layout of a help screen where the oracle's is \
+                     Typer's: `oracle = \"{HELP_ORACLE}\"`, `candidate = \"{HELP_CANDIDATE}\"`"
+                ));
+                None
+            }
+        }
+        (Some(Target::Stdout), "help-text") => {
+            if [&raw.oracle, &raw.candidate]
+                .iter()
+                .any(|value| value.contains('\n') || value.trim() != value.as_str())
+            {
+                problems.push(
+                    "a `help-text` rule's `oracle` and `candidate` are one line each, without \
+                     leading or trailing spaces: a description, the about text or the epilog"
+                        .to_owned(),
+                );
+                None
+            } else {
+                Some(Rule::HelpText {
+                    oracle: raw.oracle.clone(),
+                    candidate: raw.candidate.clone(),
+                })
+            }
+        }
+        (Some(_), "help" | "help-text") => {
+            problems.push(format!(
+                "a `{}` rule approves a help screen: `target` is stdout",
+                raw.rule
+            ));
             None
         }
         (_, "text")
@@ -607,8 +671,8 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
             None => {
                 if !rule.trim().is_empty() {
                     problems.push(format!(
-                        "`rule` {rule:?} is not `text`, `lines`, `sha256`, `presence`, \
-                         `json:<pointer>` or \
+                        "`rule` {rule:?} is not `text`, `lines`, `sha256`, `presence`, `help`, \
+                         `help-text`, `json:<pointer>` or \
                          `json-extend:<pointer>`"
                     ));
                 }
@@ -624,6 +688,8 @@ fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
         Some(Rule::Lines { oracle, candidate }) => oracle == candidate,
         Some(Rule::ExitCode { oracle, candidate }) => oracle == candidate,
         Some(Rule::Sha256 { oracle, candidate }) => oracle == candidate,
+        Some(Rule::HelpText { oracle, candidate }) => oracle == candidate,
+        Some(Rule::Help) => false,
         // A JsonExtend is parsed only with at least one added element.
         Some(Rule::Presence | Rule::JsonExtend { .. }) | None => false,
     };
@@ -711,6 +777,7 @@ fn same_place(left: &Rule, right: &Rule) -> bool {
         (Rule::Text { oracle: a, .. }, Rule::Text { oracle: b, .. }) => a == b,
         (Rule::Lines { oracle: a, .. }, Rule::Lines { oracle: b, .. }) => a == b,
         (Rule::Sha256 { oracle: a, .. }, Rule::Sha256 { oracle: b, .. }) => a == b,
+        (Rule::HelpText { oracle: a, .. }, Rule::HelpText { oracle: b, .. }) => a == b,
         _ => true,
     }
 }

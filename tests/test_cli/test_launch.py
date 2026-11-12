@@ -103,6 +103,25 @@ def test_every_rust_command_path_is_a_path_of_the_rust_tree() -> None:
         ["setup", "--path", "missing", "--yes"],
         ["--repo", "missing", "setup", "env"],
         ["explain", "--", "--help"],
+        # The root's own runs and the bare groups (UC-6.0b, #841).
+        ["explain", "vocab_unknown", "--help"],
+        ["query", "--help"],
+        ["--help"],
+        [],
+        ["--version"],
+        ["-V", "explain"],
+        ["--install-completion"],
+        ["--show-completion", "zsh"],
+        ["--bogus", "explain", "x"],
+        ["--json=1", "explain", "x"],
+        ["--repo"],
+        ["--repo", "missing", "validate"],
+        ["--repo=missing", "validate"],
+        ["validat"],
+        ["tui-x"],
+        ["mcp"],
+        ["generate", "extract"],
+        ["--json", "rules"],
     ],
 )
 def test_rust_runs_what_the_dispatcher_would_give_it(argv: list[str]) -> None:
@@ -112,20 +131,8 @@ def test_rust_runs_what_the_dispatcher_would_give_it(argv: list[str]) -> None:
 @pytest.mark.parametrize(
     ("argv", "why"),
     [
-        (["explain", "vocab_unknown", "--help"], "help is the command tree's"),
-        (["--help"], "help"),
-        ([], "no command: the help"),
-        (["--version"], "answered before the callback"),
-        (["-V", "explain"], "answered before the callback"),
-        (["--install-completion"], "Typer's own option"),
-        (["--bogus", "explain", "x"], "a root option the root does not know"),
-        (["--json=1", "explain", "x"], "a flag given a value"),
-        (["--repo"], "a root option without its value"),
-        (["--repo", "missing", "validate"], "the root refuses a --repo that is no folder"),
-        (["--repo=missing", "validate"], "the same, written with ="),
         (["query", "--platform", "sysdig", "x"], "a query on a platform without a runner"),
-        (["validat"], "no command: Click's suggestion"),
-        (["tui-x"], "no command"),
+        (["query", "x"], "a query that names no platform"),
     ],
 )
 def test_everything_else_goes_to_the_python_cli(argv: list[str], why: str) -> None:

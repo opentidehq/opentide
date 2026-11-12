@@ -19,6 +19,7 @@
 //! | [`progress`] | The step lines and checklist; `OPENTIDE_PROGRESS=json` events |
 //! | [`table`] | `info`'s tables and aligned columns |
 
+pub mod brand;
 pub mod ci;
 pub mod codeframe;
 pub mod diagnostic;

@@ -74,6 +74,41 @@ fn skills_install_cases_are_the_oracles() {
     check(&["setup.skills"], 40);
 }
 
+/// The root's own runs (UC-6.0b, #841): `--version`, a mistyped command or
+/// root option, a `--repo` that is not a folder, `--debug info`, the home
+/// screen of a bare `opentide` at a terminal and its help elsewhere; and the
+/// bare groups, which print their help to a person and a usage error to a
+/// program.
+#[test]
+fn root_and_group_cases_are_the_oracles() {
+    check(
+        &[
+            "_root",
+            "generate.extract",
+            "lsp",
+            "mcp",
+            "migrate",
+            "new",
+            "rules",
+        ],
+        60,
+    );
+}
+
+/// `--help` on every command path, in every mode (#841): clap's help, held
+/// to the oracle's by what it says (the ledger's `help` entries).
+#[test]
+fn help_cases_are_the_oracles() {
+    let (problems, ran) = replay::replay_variant("help");
+    assert!(ran >= 236, "only {ran} help cases found");
+    assert!(
+        problems.is_empty(),
+        "{} problem(s):\n\n{}",
+        problems.len(),
+        problems.join("\n\n")
+    );
+}
+
 #[test]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);

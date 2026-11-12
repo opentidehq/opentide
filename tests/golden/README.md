@@ -49,7 +49,12 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    off, or one the output extends by a line, is not approved, and the lines after an approved
    block are compared at their new place; a case may take one lines entry per block, each placed
    by its oracle lines; a
-   JSON rule is one value at one pointer; a `json-extend:` rule names the elements a candidate
+   JSON rule is one value at one pointer; a `help` rule (`oracle = "typer"`, `candidate =
+   "clap"`, stdout only) approves the layout of a help screen, and only where both sides are
+   help of the entry's command that say the same thing, read by `opentide_compare::help`: the
+   usage path, the about text, every section's options, arguments and commands in order with
+   their descriptions, defaults and environment variables, and the examples; a `help-text`
+   rule approves one description, about text or epilog worded otherwise on such a screen; a `json-extend:` rule names the elements a candidate
    adds to the oracle's array at one pointer, each by its index in the candidate's array: the
    rest must be the oracle's elements, in order, compared as any value is, so it fixes the
    candidate's array as a whole-value entry would without quoting the oracle's elements, and a
@@ -193,6 +198,7 @@ recorded), one more rule applies to each side:
 | Rule | Becomes | Why |
 |------|---------|-----|
 | opentide's own version, the exact string each side reports (the oracle's: `version` in `ORACLE`; the candidate's: what `.venv/bin/opentide --version` prints), as a whole token | `<OPENTIDE_VERSION>` | the oracle is a release and the candidate a build of this checkout; the installed version is not behaviour. Another package's version, a rule's `version`, a longer version containing it (`10.23.0`, `0.23.0.dev1`) and any other version-shaped text stay (`normalise::opentide_version`) |
+| The spaces that pad a line holding that version to a width (the home screen's title row) | as many as keep the line as wide as it was printed | the padding follows the version's length, not behaviour; only a line's trailing spaces change, and only on a line that held the version (`normalise::opentide_version_padded`) |
 
 Known limits, each a one-in-a-million chance or a case no fixture has today: a timestamp whose
 microseconds are exactly 0 loses its fraction in Python's `isoformat()`, so it records shorter; two
