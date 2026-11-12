@@ -237,6 +237,14 @@ pub fn analyze_with_index(
                 symbols: Vec::new(),
             }
         }
+        LanguageId::Yaral => {
+            let r = opentide_yaral::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::TideYaml => {
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
@@ -613,6 +621,7 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Cql => opentide_cql::hover(text, offset),
         LanguageId::Yara => opentide_yara::editor::hover(text, offset),
         LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -688,6 +697,7 @@ fn query_completions(
         LanguageId::Cql => opentide_cql::completions(text, offset),
         LanguageId::Yara => opentide_yara::editor::completions(text, offset),
         LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
     }
@@ -740,6 +750,7 @@ fn query_signature_help(
         LanguageId::Eql => opentide_eql::signature_help(text, offset),
         LanguageId::Cql => opentide_cql::signature_help(text, offset),
         LanguageId::Yara => opentide_yara::editor::signature_help(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::signature_help(text, offset),
         LanguageId::Kuery
         | LanguageId::Lucene
         | LanguageId::Falco

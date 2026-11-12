@@ -25,6 +25,7 @@ opentide-falco.workspace = true
 opentide-cql.workspace = true
 opentide-exabeam.workspace = true
 opentide-yara.workspace = true
+opentide-yaral.workspace = true
 opentide-ecs.workspace = true
 opentide-tide.workspace = true
 serde.workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "opentide-yaral"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: I/O-free YARA-L 2.0 engine (Google Security Operations rules and searches). Depend on opentide-analysis."
+readme = "../COMPONENT.md"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-highlight.workspace = true
+opentide-syntax.workspace = true
+tree-sitter.workspace = true
+serde.workspace = true
+toml.workspace = true
+regex-syntax.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

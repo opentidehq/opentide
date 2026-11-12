@@ -9624,6 +9624,434 @@
       "title": "ExabeamThreshold",
       "type": "object"
     },
+    "GoogleSecopsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether this platform block is active.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "description": "Platform-specific rule name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
+          "title": "Schema",
+          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`."
+        },
+        "status": {
+          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
+          "title": "Status",
+          "type": "string",
+          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it."
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform flags.",
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target tenant identifiers.",
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform contributors.",
+          "title": "Contributors"
+        },
+        "setup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "YARA-L setup section text.",
+          "title": "Setup",
+          "markdownDescription": "YARA-L `setup` section text."
+        },
+        "events": {
+          "description": "YARA-L events section text.",
+          "title": "Events",
+          "type": "string",
+          "markdownDescription": "YARA-L `events` section text."
+        },
+        "match": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoogleSecopsMatch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "group_by, window, and type (hop, tumbling, sliding with pivot and direction). Required with two or more event variables.",
+          "title": "Match",
+          "markdownDescription": "`group_by`, `window`, and `type` (`hop`, `tumbling`, `sliding` with `pivot` and\n`direction`). Required with two or more event variables."
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "YARA-L outcome section text.",
+          "title": "Outcome",
+          "markdownDescription": "YARA-L `outcome` section text."
+        },
+        "condition": {
+          "description": "YARA-L condition section text.",
+          "title": "Condition",
+          "type": "string",
+          "markdownDescription": "YARA-L `condition` section text."
+        },
+        "options": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoogleSecopsOptions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "allow_zero_values, suppression_window.",
+          "title": "Options",
+          "markdownDescription": "`allow_zero_values`, `suppression_window`."
+        },
+        "export": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "YARA-L export section text.",
+          "title": "Export",
+          "markdownDescription": "YARA-L `export` section text."
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "Info",
+                "Low",
+                "Medium",
+                "High",
+                "Critical"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Info, Low, Medium, High, or Critical. Written as meta severity. Derived from response.alert_severity when omitted.",
+          "title": "Severity",
+          "markdownDescription": "`Info`, `Low`, `Medium`, `High`, or `Critical`. Written as meta `severity`. Derived from\n`response.alert_severity` when omitted."
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "enum": [
+                "Info",
+                "Low",
+                "Medium",
+                "High",
+                "Critical"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Same values. Written as meta priority. Default: the severity.",
+          "title": "Priority",
+          "markdownDescription": "Same values. Written as meta `priority`. Default: the severity."
+        },
+        "alerting": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether detections become alerts (RuleDeployment.alerting). Default: false under PREVIEW, true under RELEASE and UNIVERSAL.",
+          "title": "Alerting",
+          "markdownDescription": "Whether detections become alerts (`RuleDeployment.alerting`). Default: `false` under\n`PREVIEW`, `true` under `RELEASE` and `UNIVERSAL`."
+        },
+        "run_frequency": {
+          "anyOf": [
+            {
+              "enum": [
+                "LIVE",
+                "LIVE_CUSTOMIZABLE",
+                "HOURLY_CUSTOMIZABLE",
+                "DAILY"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "LIVE, LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, or DAILY. Not sent when omitted: a new rule gets Google's default, and an existing rule keeps its own.",
+          "title": "Run Frequency",
+          "markdownDescription": "`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Not sent when omitted: a new\nrule gets Google's default, and an existing rule keeps its own."
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoogleSecopsSchedule"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Schedule customizations, for LIVE_CUSTOMIZABLE and HOURLY_CUSTOMIZABLE only.",
+          "title": "Schedule",
+          "markdownDescription": "Schedule customizations, for `LIVE_CUSTOMIZABLE` and `HOURLY_CUSTOMIZABLE` only."
+        },
+        "meta": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra meta keys, written after the derived meta in the order given.",
+          "title": "Meta"
+        }
+      },
+      "required": [
+        "status",
+        "events",
+        "condition"
+      ],
+      "title": "GoogleSecopsConfig",
+      "type": "object"
+    },
+    "GoogleSecopsMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "group_by": {
+          "description": "The placeholders the rule groups by, each $name, non-empty, no repeats. Rendered joined with , .",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Group By",
+          "type": "array",
+          "markdownDescription": "The placeholders the rule groups by, each `$name`, non-empty, no repeats. Rendered joined\nwith `, `."
+        },
+        "window": {
+          "description": "The match window: <n>m, <n>h, or <n>d. A hop or sliding window is at most 14d, a tumbling window at most 72h.",
+          "title": "Window",
+          "type": "string",
+          "markdownDescription": "The match window: `<n>m`, `<n>h`, or `<n>d`. A hop or sliding window is at most `14d`, a\ntumbling window at most `72h`."
+        },
+        "type": {
+          "anyOf": [
+            {
+              "enum": [
+                "hop",
+                "tumbling",
+                "sliding"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "hop (the default) renders over, tumbling renders by, sliding renders over \u2026 before|after $pivot.",
+          "title": "Type",
+          "markdownDescription": "`hop` (the default) renders `over`, `tumbling` renders `by`, `sliding` renders\n`over \u2026 before|after $pivot`."
+        },
+        "pivot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "With sliding: the event variable the window is anchored on, $name.",
+          "title": "Pivot",
+          "markdownDescription": "With `sliding`: the event variable the window is anchored on, `$name`."
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "before",
+                "after"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "With sliding: before or after.",
+          "title": "Direction",
+          "markdownDescription": "With `sliding`: `before` or `after`."
+        }
+      },
+      "required": [
+        "group_by",
+        "window"
+      ],
+      "title": "GoogleSecopsMatch",
+      "type": "object"
+    },
+    "GoogleSecopsOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_zero_values": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Keep zero values of match placeholders (false by default). Rendered allow_zero_values = true.",
+          "title": "Allow Zero Values",
+          "markdownDescription": "Keep zero values of match placeholders (`false` by default). Rendered\n`allow_zero_values = true`."
+        },
+        "suppression_window": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Suppress repeated detections for this duration (m, h, d). Rendered suppression_window = 1h.",
+          "title": "Suppression Window",
+          "markdownDescription": "Suppress repeated detections for this duration (`m`, `h`, `d`). Rendered\n`suppression_window = 1h`."
+        }
+      },
+      "title": "GoogleSecopsOptions",
+      "type": "object"
+    },
+    "GoogleSecopsSchedule": {
+      "additionalProperties": false,
+      "properties": {
+        "ensure_enrichment_completeness": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sent as scheduleCustomizations.ensureEnrichmentCompleteness. Google's default when omitted.",
+          "title": "Ensure Enrichment Completeness",
+          "markdownDescription": "Sent as `scheduleCustomizations.ensureEnrichmentCompleteness`. Google's default when\nomitted."
+        },
+        "late_arriving_data_adjustment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A duration (30m, 2h), sent as scheduleCustomizations.lateArrivingDataAdjustment in seconds (\"1800s\"). Google's default when omitted.",
+          "title": "Late Arriving Data Adjustment",
+          "markdownDescription": "A duration (`30m`, `2h`), sent as `scheduleCustomizations.lateArrivingDataAdjustment` in\nseconds (`\"1800s\"`). Google's default when omitted."
+        }
+      },
+      "title": "GoogleSecopsSchedule",
+      "type": "object"
+    },
     "GraylogAggregation": {
       "additionalProperties": false,
       "properties": {
@@ -10991,6 +11419,20 @@
           "description": "Exabeam New-Scale SIEM correlation rule (platform::exabeam::1.0).",
           "title": "Exabeam",
           "markdownDescription": "Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."
+        },
+        "google_secops": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoogleSecopsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Google Security Operations YARA-L 2.0 detection rule (platform::google_secops::1.0).",
+          "title": "Google Secops",
+          "markdownDescription": "Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`)."
         }
       },
       "title": "RuleConfigurations",

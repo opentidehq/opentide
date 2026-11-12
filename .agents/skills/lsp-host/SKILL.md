@@ -97,7 +97,7 @@ CrowdStrike queries are CQL (`opentide-cql`). Falcon FQL (the API filter languag
 
 `editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is a separate repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
-Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara` (`.yar`, `.yara`), `exabeam` (`.exabeam`), `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
+Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara` (`.yar`, `.yara`), `exabeam` (`.exabeam`), `yaral` (`.yaral`, `.yl2`), `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
 
 ## Tests
 

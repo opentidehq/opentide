@@ -110,6 +110,17 @@ YARA conformance data is generated too, never hand-edited:
 
 A difference from either engine is a `[[yara]]` entry of `testdata/oracles/exceptions.toml` (`check = "libyara" | "yara_x" | "both"`). `conformance.rs` and `scripts/oracles/yara/oracle.py` both read it.
 
+## YARA-L catalogs
+
+| Path | Contents |
+| --- | --- |
+| `catalogs/yaral/udm.toml` | the Unified Data Model as a type graph: every message of the event model, the entity model (`graph`) and the detection model (the Chronicle API `Collection`, `detection`), each field's type, `repeated`, `enum` and `deprecated`, Google's first sentence; every enumerated type's values; `[roots]` names each data source's message |
+| `catalogs/yaral/functions.toml` | every YARA-L function (Google's function list, the `metrics.*` names, the outcome aggregations): signature, `min_args`/`max_args`, parameter and result types, `availability` (`rules`, `search`, `dashboards`), `aggregation`, summary and page |
+
+`scripts/sync_yaral_catalogs.py --cache <dir>` regenerates both from Google's pages (`--offline` reads only the cache; `--check` compares and makes no request); never hand-edit them. The pages are CC BY 4.0 (`catalogs/yaral/NOTICE`). The functions page's "Supported in" chips are only in its HTML, so the script reads the HTML; the UDM and `Collection` pages are read as Markdown (`.md.txt`). Where a page is wrong (`NAME_FIXES`, `ARITY_FIXES`, a message labelled "(Enumerated list)") the script corrects it with its evidence, and a field name that is not an identifier fails the run. A type the pages give no table (`ThreatIntel`, `Int64`) is free: nothing under it is checked. Reference lists, data tables and Struct keys are never checked.
+
+`scripts/sync_yaral_corpus.py --rules <chronicle/detection-rules checkout>` writes `testdata/conformance/external/yaral/` and its `.broken.` twins (`--check` compares). There is no offline oracle (`scripts/oracles/README.md`).
+
 ## Bitdefender catalogue
 
 | Path | Contents |
@@ -152,6 +163,8 @@ Injection, from `language_for_field_path`:
 | `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |
 | `configurations.crowdstrike.query`, hunts with `system: crowdstrike` | CQL (Next-Gen SIEM correlation checks on the rule block) |
 | `configurations.exabeam.sequences[].query`, hunts with `system: exabeam` | Exabeam Query Language, profile `rule` for a sequence and `search` for a hunt; the block's constraint codes are `crates/opentide-tide/src/exabeam.rs` |
+| `configurations.google_secops.{setup,events,outcome,condition,export}` | YARA-L, `rule` profile: one injection, the rule deploy assembles (`crates/opentide-tide/src/google_secops.rs`) |
+| hunts with `system: google_secops` | YARA-L, `search` profile |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
 Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), not from line prefixes, and carry their real path and their platform. The analysed text is the scalar's value (folded, unquoted, escapes decoded, block indent stripped). Tokens are remapped onto the original YAML coordinates through the byte map. Do not highlight the dedented buffer's offsets. `scripts/oracles/oracle.py` extracts the same paths with PyYAML, and `crates/opentide-tide/tests/query_extraction.rs` holds every `testdata/` object to it.

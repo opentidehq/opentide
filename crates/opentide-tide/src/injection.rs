@@ -16,6 +16,8 @@
 //! | `configurations.exabeam.sequences.<n>.query` | Exabeam Query Language, `rule` profile | `exabeam` |
 //! | `response.procedure.searches.<n>.query` with `system: exabeam` | Exabeam Query Language, `search` profile | `exabeam` |
 //! | `configurations.harfanglab.yara.{strings,condition,imports}` | YARA: the one rule deploy assembles ([`crate::yara`]) | `harfanglab` |
+//! | `configurations.google_secops.{setup,events,outcome,condition,export}` | YARA-L, `rule` profile: the one rule deploy assembles, `match` and `options` rendered from YAML ([`crate::google_secops`]) | `google_secops` |
+//! | `response.procedure.searches.<n>.query` with `system: google_secops` | YARA-L, `search` profile | `google_secops` |
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
@@ -45,6 +47,7 @@ pub(crate) fn extract_injections(source: &str) -> Vec<InjectedQuery> {
         })
         .collect();
     out.extend(crate::yara::decomposed_injection(source, &keys));
+    out.extend(crate::google_secops::assembled_injection(source, &keys));
     out.sort_by_key(|query| query.host_span.start);
     out
 }
@@ -60,6 +63,10 @@ pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<Langu
     // sequences', not a `query` key.
     if system == "exabeam" {
         return Some(LanguageId::Exabeam);
+    }
+    // A Google SecOps hunt is a YARA-L search (yara-l-1.0 `YaraLSearch`).
+    if system == "google_secops" {
+        return Some(LanguageId::Yaral);
     }
     language_for_field_path(&["configurations", system, "query"])
 }

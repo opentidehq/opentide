@@ -71,6 +71,7 @@ fn main() {
         ("cql", LanguageId::Cql),
         ("yara", LanguageId::Yara),
         ("exabeam", LanguageId::Exabeam),
+        ("yaral", LanguageId::Yaral),
     ] {
         let texts = corpus(name);
         if texts.is_empty() {

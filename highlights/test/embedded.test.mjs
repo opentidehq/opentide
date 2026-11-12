@@ -131,5 +131,6 @@ test('package-contributions.json maps each region to its language id', () => {
     'meta.embedded.block.lucene': 'lucene',
     'meta.embedded.block.falco': 'falco',
     'meta.embedded.block.cql': 'cql',
+    'meta.embedded.block.yaral': 'yaral',
   });
 });

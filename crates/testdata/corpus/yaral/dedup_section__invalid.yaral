@@ -1,0 +1,4 @@
+// prod:dedup_section invalid
+metadata.event_type = "USER_LOGIN"
+dedup:
+  target.user.userid,

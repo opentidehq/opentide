@@ -49,6 +49,11 @@ pub enum LanguageId {
     /// call it "EQL"; opentide never does, because `eql` is Elastic's.
     #[serde(rename = "exabeam", alias = "opentide-exabeam")]
     Exabeam,
+    /// YARA-L 2.0, the detection and search language of Google Security
+    /// Operations (yara-l-1.0; `configurations.google_secops`, `.yaral` and
+    /// `.yl2` files). Not YARA: no code is shared.
+    #[serde(rename = "yaral", alias = "opentide-yaral", alias = "yara-l")]
+    Yaral,
 }
 
 impl LanguageId {
@@ -66,6 +71,7 @@ impl LanguageId {
             Self::Cql => "cql",
             Self::Yara => "yara",
             Self::Exabeam => "exabeam",
+            Self::Yaral => "yaral",
         }
     }
 
@@ -83,6 +89,7 @@ impl LanguageId {
             "cql" | "opentide-cql" | "CQL" | "logscale" | "crowdstrike" => Some(Self::Cql),
             "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
             "exabeam" | "opentide-exabeam" | "Exabeam" => Some(Self::Exabeam),
+            "yaral" | "opentide-yaral" | "yara-l" | "YARA-L" => Some(Self::Yaral),
             _ => None,
         }
     }
@@ -101,12 +108,13 @@ impl LanguageId {
             "cql" => Some(Self::Cql),
             "yar" | "yara" => Some(Self::Yara),
             "exabeam" => Some(Self::Exabeam),
+            "yaral" | "yl2" => Some(Self::Yaral),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 10] = [
+    pub const QUERY_LANGUAGES: [Self; 11] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -117,6 +125,7 @@ impl LanguageId {
         Self::Cql,
         Self::Yara,
         Self::Exabeam,
+        Self::Yaral,
     ];
 }
 
@@ -731,6 +740,52 @@ pub mod codes {
     pub const HARFANGLAB_YARA_CONTEXT: &str = "harfanglab_yara_context";
     pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
     pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
+    // YARA-L 2.0 (yara-l-1.0). Errors are what Google's compiler refuses;
+    // the warnings are yaral_string_escape and yaral_deprecated_field
+    // through yaral_reference_list_deprecated.
+    pub const YARAL_PARSE_ERROR: &str = "yaral_parse_error";
+    pub const YARAL_SECTION_HEADER: &str = "yaral_section_header";
+    pub const YARAL_SECTION_EMPTY: &str = "yaral_section_empty";
+    pub const YARAL_SECTION_ALIAS: &str = "yaral_section_alias";
+    pub const YARAL_SECTION_MISSING: &str = "yaral_section_missing";
+    pub const YARAL_SECTION_ORDER: &str = "yaral_section_order";
+    pub const YARAL_SECTION_UNAVAILABLE: &str = "yaral_section_unavailable";
+    pub const YARAL_META_DUPLICATE: &str = "yaral_meta_duplicate";
+    pub const YARAL_RESERVED_IDENTIFIER: &str = "yaral_reserved_identifier";
+    pub const YARAL_UNDEFINED_VARIABLE: &str = "yaral_undefined_variable";
+    pub const YARAL_MULTI_EVENT_MATCH: &str = "yaral_multi_event_match";
+    pub const YARAL_MATCH_SHAPE: &str = "yaral_match_shape";
+    pub const YARAL_MATCH_VARIABLE: &str = "yaral_match_variable";
+    pub const YARAL_MATCH_WINDOW: &str = "yaral_match_window";
+    pub const YARAL_CONDITION_SHAPE: &str = "yaral_condition_shape";
+    pub const YARAL_NOCASE_ON_ENUM: &str = "yaral_nocase_on_enum";
+    pub const YARAL_OUTCOME_LIMIT: &str = "yaral_outcome_limit";
+    pub const YARAL_OUTCOME_AGGREGATION: &str = "yaral_outcome_aggregation";
+    pub const YARAL_UNKNOWN_FUNCTION: &str = "yaral_unknown_function";
+    pub const YARAL_FUNCTION_UNAVAILABLE: &str = "yaral_function_unavailable";
+    pub const YARAL_UNKNOWN_UDM_FIELD: &str = "yaral_unknown_udm_field";
+    pub const YARAL_ENUM_VALUE: &str = "yaral_enum_value";
+    pub const YARAL_TYPE: &str = "yaral_type";
+    pub const YARAL_REGEX: &str = "yaral_regex";
+    pub const YARAL_STRING_ESCAPE: &str = "yaral_string_escape";
+    pub const YARAL_REFERENCE_LIST_LIMIT: &str = "yaral_reference_list_limit";
+    pub const YARAL_OPTION: &str = "yaral_option";
+    pub const YARAL_EXPORT_VALUE: &str = "yaral_export_value";
+    pub const YARAL_WINDOW_BOUND: &str = "yaral_window_bound";
+    pub const YARAL_DEPRECATED_FIELD: &str = "yaral_deprecated_field";
+    pub const YARAL_UNFILTERED_EVENT: &str = "yaral_unfiltered_event";
+    pub const YARAL_LEADING_WILDCARD_REGEX: &str = "yaral_leading_wildcard_regex";
+    pub const YARAL_REFERENCE_LIST_DEPRECATED: &str = "yaral_reference_list_deprecated";
+    // The constraints and advisories of google-secops-1.0.
+    pub const GOOGLE_SECOPS_RULE_NAME: &str = "google_secops_rule_name";
+    pub const GOOGLE_SECOPS_SEVERITY: &str = "google_secops_severity";
+    pub const GOOGLE_SECOPS_RUN_FREQUENCY: &str = "google_secops_run_frequency";
+    pub const GOOGLE_SECOPS_SCHEDULE: &str = "google_secops_schedule";
+    pub const GOOGLE_SECOPS_META_KEY: &str = "google_secops_meta_key";
+    pub const GOOGLE_SECOPS_RISK_SCORE_MISSING: &str = "google_secops_risk_score_missing";
+    pub const GOOGLE_SECOPS_RULE_ID_LITERAL: &str = "google_secops_rule_id_literal";
+    pub const GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE: &str =
+        "google_secops_live_frequency_unavailable";
 
     // The Exabeam Query Language (specifications exabeam-1.0, language).
     pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
@@ -1052,6 +1107,47 @@ pub mod codes {
         EXABEAM_NAME_DUPLICATE,
         EXABEAM_OUTCOME_SILENT,
         EXABEAM_CORRELATION_WINDOW,
+        YARAL_PARSE_ERROR,
+        YARAL_SECTION_HEADER,
+        YARAL_SECTION_EMPTY,
+        YARAL_SECTION_ALIAS,
+        YARAL_SECTION_MISSING,
+        YARAL_SECTION_ORDER,
+        YARAL_SECTION_UNAVAILABLE,
+        YARAL_META_DUPLICATE,
+        YARAL_RESERVED_IDENTIFIER,
+        YARAL_UNDEFINED_VARIABLE,
+        YARAL_MULTI_EVENT_MATCH,
+        YARAL_MATCH_SHAPE,
+        YARAL_MATCH_VARIABLE,
+        YARAL_MATCH_WINDOW,
+        YARAL_CONDITION_SHAPE,
+        YARAL_NOCASE_ON_ENUM,
+        YARAL_OUTCOME_LIMIT,
+        YARAL_OUTCOME_AGGREGATION,
+        YARAL_UNKNOWN_FUNCTION,
+        YARAL_FUNCTION_UNAVAILABLE,
+        YARAL_UNKNOWN_UDM_FIELD,
+        YARAL_ENUM_VALUE,
+        YARAL_TYPE,
+        YARAL_REGEX,
+        YARAL_STRING_ESCAPE,
+        YARAL_REFERENCE_LIST_LIMIT,
+        YARAL_OPTION,
+        YARAL_EXPORT_VALUE,
+        YARAL_WINDOW_BOUND,
+        YARAL_DEPRECATED_FIELD,
+        YARAL_UNFILTERED_EVENT,
+        YARAL_LEADING_WILDCARD_REGEX,
+        YARAL_REFERENCE_LIST_DEPRECATED,
+        GOOGLE_SECOPS_RULE_NAME,
+        GOOGLE_SECOPS_SEVERITY,
+        GOOGLE_SECOPS_RUN_FREQUENCY,
+        GOOGLE_SECOPS_SCHEDULE,
+        GOOGLE_SECOPS_META_KEY,
+        GOOGLE_SECOPS_RISK_SCORE_MISSING,
+        GOOGLE_SECOPS_RULE_ID_LITERAL,
+        GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -1706,6 +1802,113 @@ pub mod codes {
             }
             BITDEFENDER_YARA_SIZE => {
                 "A Bitdefender YARA signature is longer than 30,000 characters."
+            }
+            YARAL_PARSE_ERROR => "The YARA-L text does not parse, or a text holds a second rule.",
+            YARAL_SECTION_HEADER => {
+                "A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only."
+            }
+            YARAL_SECTION_EMPTY => {
+                "A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`)."
+            }
+            YARAL_SECTION_ALIAS => {
+                "A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys."
+            }
+            YARAL_SECTION_MISSING => {
+                "A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule."
+            }
+            YARAL_SECTION_ORDER => {
+                "A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export)."
+            }
+            YARAL_SECTION_UNAVAILABLE => {
+                "The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections."
+            }
+            YARAL_META_DUPLICATE => {
+                "A meta key appears twice, or a meta value is not a double-quoted string."
+            }
+            YARAL_RESERVED_IDENTIFIER => {
+                "A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`."
+            }
+            YARAL_UNDEFINED_VARIABLE => {
+                "A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`."
+            }
+            YARAL_MULTI_EVENT_MATCH => {
+                "A rule with two or more event variables has no `match` section."
+            }
+            YARAL_MATCH_SHAPE => {
+                "The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`."
+            }
+            YARAL_MATCH_VARIABLE => "A `match` name is not a placeholder bound in `events`.",
+            YARAL_MATCH_WINDOW => {
+                "The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d."
+            }
+            YARAL_CONDITION_SHAPE => {
+                "The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event."
+            }
+            YARAL_NOCASE_ON_ENUM => {
+                "`nocase` is applied to a comparison with an enumerated UDM field."
+            }
+            YARAL_OUTCOME_LIMIT => "A rule or search assigns more than 20 outcome variables.",
+            YARAL_OUTCOME_AGGREGATION => {
+                "With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable."
+            }
+            YARAL_UNKNOWN_FUNCTION => {
+                "The function is not in Google's YARA-L function list, or it takes a different number of arguments."
+            }
+            YARAL_FUNCTION_UNAVAILABLE => {
+                "The function exists, but not in this profile (rules or search)."
+            }
+            YARAL_UNKNOWN_UDM_FIELD => "The field path is not in the Unified Data Model.",
+            YARAL_ENUM_VALUE => "The value is not one of the enumerated UDM field's values.",
+            YARAL_TYPE => {
+                "An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number."
+            }
+            YARAL_REGEX => "The regular expression is not valid RE2.",
+            YARAL_STRING_ESCAPE => {
+                "A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles."
+            }
+            YARAL_REFERENCE_LIST_LIMIT => {
+                "More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2)."
+            }
+            YARAL_OPTION => "An unknown option, or an option value of the wrong kind.",
+            YARAL_EXPORT_VALUE => {
+                "An `export` `write_row` value is not an outcome variable: Google exports outcome variables only."
+            }
+            YARAL_WINDOW_BOUND => {
+                "`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window."
+            }
+            YARAL_DEPRECATED_FIELD => "The UDM field is deprecated.",
+            YARAL_UNFILTERED_EVENT => {
+                "An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event."
+            }
+            YARAL_LEADING_WILDCARD_REGEX => {
+                "The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time."
+            }
+            YARAL_REFERENCE_LIST_DEPRECATED => {
+                "Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`)."
+            }
+            GOOGLE_SECOPS_RULE_NAME => {
+                "The Google SecOps rule `name` is not a YARA-L identifier, or is a keyword."
+            }
+            GOOGLE_SECOPS_SEVERITY => {
+                "`severity` or `priority` is not `Info`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            GOOGLE_SECOPS_RUN_FREQUENCY => {
+                "`run_frequency` is not `LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`; Google's legacy `HOURLY` is refused."
+            }
+            GOOGLE_SECOPS_SCHEDULE => {
+                "`schedule` is set without a customizable `run_frequency`, or its `late_arriving_data_adjustment` is not a positive duration."
+            }
+            GOOGLE_SECOPS_META_KEY => {
+                "A block `meta` key is not an identifier, is a keyword or a key deploy derives, or its value is not a string."
+            }
+            GOOGLE_SECOPS_RISK_SCORE_MISSING => {
+                "`outcome` assigns no `$risk_score`, so every detection gets the instance's default score."
+            }
+            GOOGLE_SECOPS_RULE_ID_LITERAL => {
+                "The rule compares `detection.detection.rule_id` with a literal `ru_` id, which differs per tenant: match `detection.detection.rule_name` instead."
+            }
+            GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE => {
+                "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy."
             }
             _ => return None,
         })

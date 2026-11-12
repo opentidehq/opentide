@@ -61,6 +61,7 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "cql", name: "CrowdStrike Query Language", patterns: ["**/*.cql"] },
   { id: "yara", name: "YARA", patterns: ["**/*.yar", "**/*.yara"] },
   { id: "exabeam", name: "Exabeam Query Language", patterns: ["**/*.exabeam"] },
+  { id: "yaral", name: "YARA-L", patterns: ["**/*.yaral", "**/*.yl2"] },
   { id: "opentide-config", name: "opentide configuration", patterns: ["**/.opentide/configurations/**/*.toml"] },
 ];
 

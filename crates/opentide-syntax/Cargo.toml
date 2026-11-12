@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "opentide engine component: Tree-sitter language bindings for opentide KQL, SPL, ES|QL, EQL, kuery, Lucene, Falco, CQL, YARA, and the Exabeam Query Language. Depend on opentide-analysis."
+description = "opentide engine component: Tree-sitter language bindings for opentide KQL, SPL, ES|QL, EQL, kuery, Lucene, Falco, CQL, YARA, the Exabeam Query Language, and YARA-L. Depend on opentide-analysis."
 readme = "../COMPONENT.md"
 build = "build.rs"
 
@@ -35,4 +35,5 @@ assets = [
     "grammars/tree-sitter-opentide-cql/src",
     "grammars/tree-sitter-opentide-yara/src",
     "grammars/tree-sitter-opentide-exabeam/src",
+    "grammars/tree-sitter-opentide-yaral/src",
 ]

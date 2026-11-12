@@ -467,3 +467,58 @@ Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles th
 | yara.string-length | `string_length` | `string_length__valid`, `string_length__invalid` | `variable` |
 | yara.float | `float` | `float__valid`, `float__invalid` | `number` |
 | yara.regexp | `regexp` | `regexp__valid`, `regexp__invalid` | `string` |
+
+## YARA-L
+
+Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations ([yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md)): `configurations.google_secops` sections, Google SecOps hunts, and rule files. `docs/YARAL.md` has the codes.
+
+- **The grammar is the verdict parser** (`grammars/tree-sitter-opentide-yaral`, written for the spec: Google publishes none). It parses a rule or a search: sections in any order (the engine reports order and profile), newline-separated predicates as juxtaposed statements, field paths whose `.segment` and `[index]` accessors follow without blanks, so a UDM segment named like a keyword (`network.dhcp.options`) stays a name.
+- **Keywords** are case-insensitive in any mix (`and`, `AND`, `aNd`): each is a token rule matching every spelling (`_kw_and`), aliased to the lower-case node, and the language's keywords are a `reserved` set, so `word` extraction keeps `metadata` an identifier and a keyword is never a name.
+- **Coverage**: every rule of chronicle/detection-rules' `rules/community` (410) parses; `testdata/conformance/external/yaral/` holds 79 of them with fault twins.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| yaral.rule | `rule_declaration` | `rule_declaration__valid`, `rule_declaration__invalid` | `keyword`, `type` |
+| yaral.meta | `meta_section` | `meta_section__valid`, `meta_section__invalid` | `keyword`, `property` |
+| yaral.setup | `setup_section` | `setup_section__valid`, `setup_section__invalid` | `keyword` |
+| yaral.graph-operation | `graph_operation` | `graph_operation__valid`, `graph_operation__invalid` | `keyword` |
+| yaral.events | `events_section` | `events_section__valid`, `events_section__invalid` | `keyword` |
+| yaral.search-events | `search_events` | `search_events__valid`, `search_events__invalid` | `property`, `string` |
+| yaral.search | `search_query` | `search_query__valid`, `search_query__invalid` | `keyword` |
+| yaral.stage | `stage` | `stage__valid`, `stage__invalid` | `keyword`, `type` |
+| yaral.cross-join | `cross_join` | `cross_join__valid`, `cross_join__invalid` | `keyword`, `variable` |
+| yaral.match | `match_section` | `match_section__valid`, `match_section__invalid` | `keyword`, `variable` |
+| yaral.match-window | `match_window` | `match_window__valid`, `match_window__invalid` | `keyword`, `number` |
+| yaral.duration | `duration` | `duration__valid`, `duration__invalid` | `number` |
+| yaral.outcome | `outcome_section` | `outcome_section__valid`, `outcome_section__invalid` | `keyword`, `constant` |
+| yaral.condition | `condition_section` | `condition_section__valid`, `condition_section__invalid` | `keyword`, `variable` |
+| yaral.options | `options_section` | `options_section__valid`, `options_section__invalid` | `keyword`, `property` |
+| yaral.export | `export_section` | `export_section__valid`, `export_section__invalid` | `keyword` |
+| yaral.table-call | `table_call` | `table_call__valid`, `table_call__invalid` | `constant`, `function.builtin` |
+| yaral.named-argument | `named_argument` | `named_argument__valid`, `named_argument__invalid` | `property` |
+| yaral.dedup | `dedup_section` | `dedup_section__valid`, `dedup_section__invalid` | `keyword` |
+| yaral.order | `order_section` | `order_section__valid`, `order_section__invalid` | `keyword` |
+| yaral.limit | `limit_section` | `limit_section__valid`, `limit_section__invalid` | `keyword`, `number` |
+| yaral.select | `select_section` | `select_section__valid`, `select_section__invalid` | `keyword` |
+| yaral.unselect | `unselect_section` | `unselect_section__valid`, `unselect_section__invalid` | `keyword` |
+| yaral.or | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| yaral.and | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| yaral.not | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| yaral.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | `operator`, `keyword` (`nocase`) |
+| yaral.in | `in_expression` | `in_expression__valid`, `in_expression__invalid` | `keyword`, `constant` |
+| yaral.binary | `binary_expression` | `binary_expression__valid`, `binary_expression__invalid` | `operator` |
+| yaral.unary | `unary_expression` | `unary_expression__valid`, `unary_expression__invalid` | `operator` |
+| yaral.of | `of_expression` | `of_expression__valid`, `of_expression__invalid` | `keyword` |
+| yaral.parenthesized | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| yaral.quantified-field | `quantified_field` | `quantified_field__valid`, `quantified_field__invalid` | `keyword` |
+| yaral.udm-field | `udm_field` | `udm_field__valid`, `udm_field__invalid` | `variable`, `property` |
+| yaral.bare-field | `bare_field` | `bare_field__valid`, `bare_field__invalid` | `property` |
+| yaral.index | `index` | `index__valid`, `index__invalid` | `punctuation.bracket`, `string` |
+| yaral.function-call | `function_call` | `function_call__valid`, `function_call__invalid` | `type`, `function.builtin` |
+| yaral.if | `if_expression` | `if_expression__valid`, `if_expression__invalid` | `keyword` |
+| yaral.array | `array` | `array__valid`, `array__invalid` | `punctuation.bracket` |
+| yaral.reference-list | `reference_list` | `reference_list__valid`, `reference_list__invalid` | `constant` |
+| yaral.data-table-column | `data_table_column` | `data_table_column__valid`, `data_table_column__invalid` | `constant`, `property` |
+| yaral.raw-string | `raw_string` | `raw_string__valid`, `raw_string__invalid` | `string` |
+| yaral.regex | `regex` | `regex__valid`, `regex__invalid` | `string` |
+| yaral.comment | `comment` | `comment__valid`, `comment__invalid` | `comment` |

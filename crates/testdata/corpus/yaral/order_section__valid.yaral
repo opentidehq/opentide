@@ -1,0 +1,9 @@
+// prod:order_section valid
+metadata.event_type = "USER_LOGIN"
+$user = target.user.userid
+match:
+  $user
+outcome:
+  $n = count(metadata.id)
+order:
+  $n desc, $user asc

@@ -42,7 +42,7 @@ SQL stays unsupported until a real dialect and grammar are chosen. A stub parser
 
 ## Dispatch
 
-`Session::language_for` selects the engine from a reported language id, then from the URI suffix. A reported id the parser does not know is ignored and the suffix is used. Raw query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`) are first-class documents with an empty Tide workspace; a new suffix goes in `LanguageId::from_extension`. `crates/opentide-analysis/tests/raw_query_composability.rs` is the pattern: the same diagnostic fires for a standalone file and for the same text injected into a Tide query block.
+`Session::language_for` selects the engine from a reported language id, then from the URI suffix. A reported id the parser does not know is ignored and the suffix is used. Raw query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.yaral`, `.yl2`) are first-class documents with an empty Tide workspace; a new suffix goes in `LanguageId::from_extension`. `crates/opentide-analysis/tests/raw_query_composability.rs` is the pattern: the same diagnostic fires for a standalone file and for the same text injected into a Tide query block.
 
 ## Out of scope
 

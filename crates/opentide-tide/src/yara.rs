@@ -103,18 +103,18 @@ fn escape(s: &str) -> String {
 }
 
 /// The assembled text and its map, built part by part.
-struct Builder {
-    text: String,
-    map: Vec<usize>,
-    parts: Vec<InjectionPart>,
+pub(crate) struct Builder {
+    pub(crate) text: String,
+    pub(crate) map: Vec<usize>,
+    pub(crate) parts: Vec<InjectionPart>,
 }
 
 impl Builder {
-    fn synthetic(&mut self, s: &str, host: usize, path: &[String]) {
+    pub(crate) fn synthetic(&mut self, s: &str, host: usize, path: &[String]) {
         self.push(s, &vec![host; s.len()], path, true);
     }
 
-    fn push(&mut self, s: &str, map: &[usize], path: &[String], synthetic: bool) {
+    pub(crate) fn push(&mut self, s: &str, map: &[usize], path: &[String], synthetic: bool) {
         debug_assert_eq!(s.len(), map.len());
         let start = self.text.len();
         self.text.push_str(s);
@@ -155,11 +155,11 @@ fn confidence_of(value: &str) -> &'static str {
     }
 }
 
-fn path(parts: &[&str]) -> Vec<String> {
+pub(crate) fn path(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|p| p.to_string()).collect()
 }
 
-fn find<'a>(keys: &'a [YamlKey], p: &[&str]) -> Option<&'a YamlKey> {
+pub(crate) fn find<'a>(keys: &'a [YamlKey], p: &[&str]) -> Option<&'a YamlKey> {
     keys.iter().find(|k| k.path_is(p))
 }
 
@@ -218,21 +218,21 @@ fn strs(p: &[String]) -> Vec<&str> {
 }
 
 /// One item of a sequence deploy reads.
-struct Item {
+pub(crate) struct Item {
     /// The value as deploy's YAML loader gives it.
-    text: String,
+    pub(crate) text: String,
     /// The source byte of each byte of `text`: exact where the item reads
     /// in place, else every byte at the item's start.
-    map: Vec<usize>,
+    pub(crate) map: Vec<usize>,
     /// `p.0`, `p.1`, ...
-    path: Vec<String>,
+    pub(crate) path: Vec<String>,
     /// Where the item starts in the source.
-    start: usize,
+    pub(crate) start: usize,
 }
 
 impl Item {
     /// The item's span in the source; one byte at its start when empty.
-    fn span(&self) -> ByteSpan {
+    pub(crate) fn span(&self) -> ByteSpan {
         match (self.map.first(), self.map.last()) {
             (Some(first), Some(last)) if last >= first => ByteSpan::new(*first, *last + 1),
             _ => ByteSpan::new(self.start, self.start + 1),
@@ -241,12 +241,15 @@ impl Item {
 }
 
 /// The document as deploy's YAML loader reads it, when it is valid YAML.
-fn document(source: &str) -> Option<serde_yaml::Value> {
+pub(crate) fn document(source: &str) -> Option<serde_yaml::Value> {
     serde_yaml::from_str(source).ok()
 }
 
 /// The value at `p` in `doc`; a list index is a path component too.
-fn value_at<'a>(doc: &'a serde_yaml::Value, p: &[&str]) -> Option<&'a serde_yaml::Value> {
+pub(crate) fn value_at<'a>(
+    doc: &'a serde_yaml::Value,
+    p: &[&str],
+) -> Option<&'a serde_yaml::Value> {
     p.iter().try_fold(doc, |v, k| match v {
         serde_yaml::Value::Sequence(items) => items.get(k.parse::<usize>().ok()?),
         serde_yaml::Value::Mapping(_) => v.get(*k),
@@ -261,7 +264,12 @@ fn value_at<'a>(doc: &'a serde_yaml::Value, p: &[&str]) -> Option<&'a serde_yaml
 /// them, and an empty item stays an item. The source maps come from reading
 /// the items in place, a block sequence (`- pe`) or a flow one
 /// (`[pe, "a,b"]`); an item read differently maps to its start.
-fn items(keys: &[YamlKey], source: &str, doc: Option<&serde_yaml::Value>, p: &[&str]) -> Vec<Item> {
+pub(crate) fn items(
+    keys: &[YamlKey],
+    source: &str,
+    doc: Option<&serde_yaml::Value>,
+    p: &[&str],
+) -> Vec<Item> {
     let raw = raw_items(keys, source, p);
     let item = |index: usize, text: String| {
         let mut item_path = path(p);
@@ -937,13 +945,18 @@ pub(crate) fn on_assembled(
     Some(d)
 }
 
-fn diag(source: &str, code: &'static str, message: String, field: &[&str]) -> Diagnostic {
+pub(crate) fn diag(
+    source: &str,
+    code: &'static str,
+    message: String,
+    field: &[&str],
+) -> Diagnostic {
     Diagnostic::error(code, message, crate::elastic::path_range(source, field))
         .with_field_path(field.iter().map(|p| p.to_string()).collect())
 }
 
 /// Whether the value after `key` is a YAML alias (`signature: *name`).
-fn is_alias(source: &str, key: &YamlKey) -> bool {
+pub(crate) fn is_alias(source: &str, key: &YamlKey) -> bool {
     let rest = &source[key.key_start..];
     let Some(colon) = rest.find(':') else {
         return false;

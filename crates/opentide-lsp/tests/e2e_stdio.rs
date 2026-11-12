@@ -2228,3 +2228,66 @@ fn exabeam_over_stdio() {
         "semantic tokens for .exabeam: {tokens}"
     );
 }
+
+#[test]
+fn yaral_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // `.yaral` and `.yl2` select the engine when the client reports no known id.
+    let broken = "rule a {\n  meta:\n    author = \"x\"\n  events:\n    $e.metadata.event_type = \"USER_LOGIN\" and\n  condition:\n    $e\n}\n";
+    for uri in ["file:///tmp/r.yaral", "file:///tmp/r.yl2"] {
+        let codes = published_codes(&mut lsp, uri, "plaintext", broken);
+        assert_eq!(codes, ["yaral_parse_error"], "{uri}");
+    }
+    let uri = "file:///tmp/clean.yaral";
+    let text = "rule clean {\n  meta:\n    author = \"x\"\n  events:\n    $e.metadata.event_type = \"PROCESS_LAUNCH\"\n    $h = strings.to_lower($e.principal.hostname)\n  outcome:\n    $risk_score = 10\n  condition:\n    $e\n}\n";
+    let codes = published_codes(&mut lsp, uri, "yaral", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 5 * 12, "semantic tokens for .yaral: {tokens}");
+    let pos = |needle: &str, delta: usize| {
+        let at = text.find(needle).unwrap() + delta;
+        let line = text[..at].matches('\n').count();
+        let col = at - text[..at].rfind('\n').map_or(0, |i| i + 1);
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": col } })
+    };
+    let hover = lsp.request("textDocument/hover", pos("event_type", 2));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("metadata.event_type"), "{hover}");
+    let hover = lsp.request("textDocument/hover", pos("to_lower", 2));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("strings.to_lower("), "{hover}");
+    let help = lsp.request(
+        "textDocument/signatureHelp",
+        pos("$e.principal.hostname)", 0),
+    );
+    assert!(
+        help["result"]["signatures"][0]["label"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("strings.to_lower("),
+        "{help}"
+    );
+    let completion = lsp.request("textDocument/completion", pos("principal.hostname", 10));
+    let items = completion["result"]["items"]
+        .as_array()
+        .or(completion["result"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        items.iter().any(|i| i["label"] == "hostname"),
+        "{completion}"
+    );
+}

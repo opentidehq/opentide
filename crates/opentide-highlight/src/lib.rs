@@ -64,6 +64,10 @@ pub const EXABEAM_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/exabeam/highlights.scm"
 ));
+pub const YARAL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/yaral/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language. Configuration TOML has
 /// none: the editor's TOML grammar highlights it.
@@ -81,6 +85,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
         LanguageId::Yara => YARA_HIGHLIGHTS_SCM,
         LanguageId::Exabeam => EXABEAM_HIGHLIGHTS_SCM,
+        LanguageId::Yaral => YARAL_HIGHLIGHTS_SCM,
     }
 }
 
@@ -783,6 +788,8 @@ pub fn tokens_from_spans(
 /// CQL is `source.opentide.cql` for the same reason: Cassandra's CQL
 /// extensions own `source.cql`.
 /// YARA is `source.opentide.yara`: the YARA extensions own `source.yara`.
+/// YARA-L is `source.yaral` (yara-l-1.0): Google's own grammar is
+/// `source.yara-l`, so both can be installed.
 /// This is not a HighlightSpec capture, so the rename does not bump
 /// `highlights/spec.toml`.
 pub fn tm_scope_name(language: LanguageId) -> String {
@@ -815,9 +822,11 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         .unwrap_or("constant.numeric");
     let comment_match = match language {
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
-        LanguageId::Kql | LanguageId::Esql | LanguageId::Eql | LanguageId::Yara => {
-            Some("//.*$|/\\*[\\s\\S]*?\\*/")
-        }
+        LanguageId::Kql
+        | LanguageId::Esql
+        | LanguageId::Eql
+        | LanguageId::Yara
+        | LanguageId::Yaral => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
         LanguageId::Spl => Some("```[^`]*```"),
         // A CQL comment starts only where a token may: `https://x` is one pattern.
         LanguageId::Cql => Some("(?:^|(?<=[\\s|(\\[{,;]))//.*$|/\\*[\\s\\S]*?\\*/"),
@@ -987,6 +996,13 @@ pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
     // deeper and is left to semantic tokens.
     (&["sysdig"], &["condition"], LanguageId::Falco),
     (&["crowdstrike"], &["query"], LanguageId::Cql),
+    // The section texts of a Google SecOps block; `match` and `options` are
+    // YAML.
+    (
+        &["google_secops"],
+        &["setup", "events", "outcome", "condition", "export"],
+        LanguageId::Yaral,
+    ),
 ];
 
 /// The embedded region a query of `language` gets: `meta.embedded.block.<id>`.
@@ -1261,6 +1277,13 @@ mod tests {
                 include_str!(concat!(
                     env!("OPENTIDE_ASSETS"),
                     "/grammars/tree-sitter-opentide-exabeam/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Yaral,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-yaral/queries/highlights.scm"
                 )),
             ),
         ];
