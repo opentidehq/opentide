@@ -9,11 +9,11 @@ skipped by its ``if`` would pass without running.
 The full set adds everything else (Python 3.11-3.13, the engine release dry
 run, WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 Windows CLI smoke, the facade crate's every feature and semver checks, the
-Node package, the cross-SDK conformance suite, LSP clients, benchmarks, Rust
-coverage, golden determinism, the parity dashboard, the docs check and the
-publish dry run). It runs nightly,
-on every push to development and integration/unified-core, on Run workflow,
-and on a pull request that carries the ``full-ci`` label: each such job's
+Node package, the cross-SDK conformance suite, LSP clients, benchmarks, the
+E2E tests marked ``full_set``, Rust coverage, golden determinism, the parity
+dashboard, the docs check and the publish dry run). It runs nightly, on every
+push to development and integration/unified-core, on Run workflow, and on a
+pull request that carries the ``full-ci`` label: each such job's
 ``if`` is exactly ``FULL_SET``. The engine release dry run (and crate
 packaging) also runs on a pull request that changes the release's inputs, and
 the grammar checks on one that changes the grammars, through ci.yml's
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -78,6 +79,7 @@ CI_FULL = {
     "clients",
     "bench",
     "cli-windows-smoke",
+    "cli-e2e-full",
     "facade",
     "node",
     "conformance",
@@ -417,3 +419,35 @@ def test_the_filter_fails_open(tmp_path: Path) -> None:
     # Not a merge commit (no pull request merge ref): everything runs.
     golden._git(repo, "reset", "-q", "--hard", "HEAD^1")
     assert _run_filter(repo, tmp_path) == everything
+
+
+def _pytest_markers(job_id: str) -> list[str]:
+    """The ``-m`` expression of each pytest step of ci.yml's *job_id*."""
+    markers = []
+    for step in _ci_jobs()[job_id]["steps"]:
+        run = str(step.get("run", ""))
+        if "pytest" in run:
+            words = shlex.split(run.replace("\\\n", " "))
+            markers.append(words[words.index("-m") + 1])
+    return markers
+
+
+def test_the_full_set_e2e_tests_run_in_the_full_set_only() -> None:
+    """A test marked ``full_set`` (a wheel built per test, UC-4.5c, #835)
+    runs in ``cli-e2e-full``, never on every pull request: ``cli-e2e`` leaves
+    it out, and the unit matrix leaves out ``cli_e2e``, which it carries."""
+    assert _pytest_markers("cli-e2e") == ["(cli_e2e or cli_smoke) and not full_set"]
+    assert _pytest_markers("cli-e2e-full") == ["full_set"]
+    for job_id in ("test", "test-full"):
+        markers = _pytest_markers(job_id)
+        assert markers, job_id
+        assert all("not cli_e2e" in marker for marker in markers), (job_id, markers)
+    here = Path(__file__).resolve()
+    marked = [
+        path
+        for path in sorted((ROOT / "tests").rglob("*.py"))
+        if path.resolve() != here and "mark.full_set" in path.read_text(encoding="utf-8")
+    ]
+    assert marked, "no test is marked full_set: drop the marker and cli-e2e-full"
+    for path in marked:
+        assert "mark.cli_e2e" in path.read_text(encoding="utf-8"), path

@@ -250,7 +250,7 @@ class CommandRunner:
             message = f"opentide {' '.join(self.command_words(argv))} cannot run under serve"
             return RunOutcome(self._usage_document(argv, message), 2)
         keep = self.keeps_registry(argv)
-        rust = self._rust_command(argv, env, cwd_given=bool(cwd))
+        rust = self._rust_command(argv, env, cwd_given=bool(cwd), cwd=cwd)
         if rust is not None:
             return self._run_rust(argv, env, cwd, keep=keep, on_done=on_done)
         saved_stdout = sys.stdout
@@ -314,14 +314,21 @@ class CommandRunner:
         return values
 
     def _rust_command(
-        self, argv: Sequence[str], env: Mapping[str, str] | None, *, cwd_given: bool
+        self,
+        argv: Sequence[str],
+        env: Mapping[str, str] | None,
+        *,
+        cwd_given: bool,
+        cwd: str | None = None,
     ) -> Any:
         """The Rust implementation that runs *argv*, or ``None`` when it goes through Python.
 
         Help is the command tree's (Click's), and ``compare``, an engine that
         is none and ``rust`` for a command without a Rust implementation, or
         for a run it does not cover (``doctor`` without ``--offline``), are
-        the dispatcher's, as at a terminal.
+        the dispatcher's, as at a terminal. *cwd* is the run's directory
+        (the server's when ``None``), where a ``validate`` looks for the
+        workspace whose platform plugins send it to Rust (UC-4.5c).
         """
         options = list(argv[: list(argv).index("--")] if "--" in argv else argv)
         if "--help" in options or "-h" in options:
@@ -331,7 +338,12 @@ class CommandRunner:
             return None
         from opentide.cli.engines import rust_command
 
-        return rust_command(words, self.run_environment(env, cwd_given=cwd_given), argv)
+        return rust_command(
+            words,
+            self.run_environment(env, cwd_given=cwd_given),
+            argv,
+            str(cwd or self.cwd),
+        )
 
     def _run_rust(
         self,

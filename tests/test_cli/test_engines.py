@@ -1034,3 +1034,147 @@ def test_the_dispatcher_runs_a_plugin_run_on_rust_under_the_default_engine(
     else:
         # The Python command line knows the built-in platforms only.
         assert document(stdout)["failure"]["code"] == "usage_invalid_choice"
+
+
+def _platform_file(root: Path, name: str, text: str) -> Path:
+    folder = root / ".opentide" / "configurations" / "platforms"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{name}.toml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+ENABLED = '[platform]\nenabled = true\nname = "Acme"\n'
+
+
+def test_the_workspace_platforms_outside_the_built_in_ones_are_read_cheaply(
+    tmp_path: Path,
+) -> None:
+    """``validate`` of a plugin workspace goes to Rust (UC-4.5c): the enabled platforms read."""
+    ws = tmp_path / "ws"
+    env = {"OPENTIDE_REPO_ROOT": str(ws)}
+    assert engine_defaults.enabled_other_platforms(["validate"], env) == []
+    _platform_file(ws, "sentinel", ENABLED)
+    assert engine_defaults.enabled_other_platforms(["validate"], env) == []
+    _platform_file(ws, "acme", ENABLED)
+    _platform_file(ws, "beta", ENABLED)
+    _platform_file(ws, "off", "[platform]\nenabled = false\n")
+    _platform_file(ws, "loose", "platform = true\n")
+    _platform_file(ws, "broken", "[platform\nenabled = true\n")
+    _platform_file(ws, "quoted", '[platform]\nenabled = "true"\n')
+    assert engine_defaults.enabled_other_platforms(["validate"], env) == ["acme", "beta"]
+    # --repo wins over the variables; OPENTIDE_TIDE_WORKSPACE over OPENTIDE_REPO_ROOT.
+    other = tmp_path / "other"
+    assert engine_defaults.enabled_other_platforms(["--repo", str(other), "validate"], env) == []
+    assert engine_defaults.enabled_other_platforms([f"--repo={ws}", "validate"], {}) == [
+        "acme",
+        "beta",
+    ]
+    assert (
+        engine_defaults.enabled_other_platforms(
+            ["validate"], {**env, "OPENTIDE_TIDE_WORKSPACE": str(other)}
+        )
+        == []
+    )
+    assert engine_defaults.enabled_other_platforms(
+        ["--repo", str(ws), "validate"], {"OPENTIDE_TIDE_WORKSPACE": str(other)}
+    ) == ["acme", "beta"]
+
+
+def test_without_a_named_workspace_the_nearest_root_above_the_directory_is_read(
+    tmp_path: Path,
+) -> None:
+    ws = tmp_path / "repo" / "detections"
+    _platform_file(ws, "acme", ENABLED)
+    (tmp_path / "repo" / ".git").mkdir()
+    deep = ws / "Objects" / "Detection Rules"
+    deep.mkdir(parents=True)
+    for cwd in (ws, deep):
+        assert engine_defaults.run_workspace(["validate"], {}, str(cwd)) == str(ws.resolve())
+        assert engine_defaults.enabled_other_platforms(["validate"], {}, str(cwd)) == ["acme"]
+    # Outside any workspace: the git root, or the directory itself.
+    assert engine_defaults.run_workspace([], {}, str(tmp_path / "repo")) == str(
+        (tmp_path / "repo").resolve()
+    )
+    assert engine_defaults.run_workspace([], {}, str(tmp_path)) == str(tmp_path.resolve())
+
+
+def test_the_default_engine_validates_a_plugin_workspace_on_rust(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the Rust core checks a plugin's blocks (UC-4.5c, #835)."""
+    ws = tmp_path / "ws"
+    env = {"OPENTIDE_REPO_ROOT": str(ws)}
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    validate = engines.RUST_COMMANDS[("validate",)]
+    assert not engines.plugin_default(("validate",), ["validate"], env)
+    _platform_file(ws, "other", ENABLED)
+    # Enabled, but no installed plugin provides it: Python, as before.
+    assert not engines.plugin_default(("validate",), ["validate"], env)
+    assert not engine_defaults.may_check_plugins(("validate",), ["validate"], {})
+    assert engine_defaults.may_check_plugins(("validate",), ["validate"], env)
+    _platform_file(ws, "acme", ENABLED)
+    assert engines.workspace_plugins(["validate"], env) == ["acme"]
+    assert engines.plugin_default(("validate",), ["validate"], env)
+    assert engines.plugin_default(("validate",), ["validate", "--check", "schema"], env)
+    assert engines.rust_command(("validate",), env, ["validate"]) is validate
+    assert engines.plugin_default(("validate",), ["validate"], {}, str(ws))
+    for engine in ("python", "compare", "rust"):
+        named = {**env, "OPENTIDE_ENGINE": engine}
+        assert not engines.plugin_default(("validate",), ["validate"], named)
+    # Only validate: the other commands keep their routing.
+    assert not engines.plugin_default(("lint",), ["lint"], env)
+    assert not engines.plugin_default(("validate", "query"), ["validate", "query"], env)
+    assert not engine_defaults.may_check_plugins(("validate", "query"), ["validate"], env)
+    assert not engine_defaults.may_check_plugins(("lint",), ["lint"], env)
+    _platform_file(ws, "acme", "[platform]\nenabled = false\n")
+    assert not engines.plugin_default(("validate",), ["validate"], env)
+
+
+@pytest.mark.parametrize(("engine", "rust"), [(None, True), ("", True), ("python", False)])
+def test_the_dispatcher_validates_a_plugin_workspace_on_rust_under_the_default_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str | None, rust: bool
+) -> None:
+    ws = tmp_path / "ws"
+    _platform_file(ws, "acme", ENABLED)
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    monkeypatch.chdir(ws)
+    monkeypatch.setitem(
+        engines.RUST_COMMANDS,
+        ("validate",),
+        RustCommand(launch=(sys.executable, str(FAKE), "refuse")),
+    )
+    code, stdout, _ = invoke(["--json", "--repo", str(ws), "validate"], engine)
+    if rust:
+        assert (code, stdout) == (2, "refused by the fake\n")
+    else:
+        # The Python implementation: its own report.
+        assert document(stdout)["command"] == "validate"
+
+
+def test_compare_refuses_to_validate_a_plugin_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Python reports a plugin's block as an extra key, Rust the plugin's
+    findings inside it: ``compare`` has no oracle there (UC-4.5c, #835)."""
+    ws = tmp_path / "ws"
+    _platform_file(ws, "acme", ENABLED)
+    monkeypatch.chdir(ws)
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    ran: list[object] = []
+    monkeypatch.setattr(engines, "_compare", lambda *args: ran.append(args))
+    code, stdout, _ = invoke(["--json", "--repo", str(ws), "validate"], "compare")
+    assert code == 2
+    failure = document(stdout)["failure"]
+    assert failure["code"] == "usage_error"
+    assert failure["message"] == (
+        "OPENTIDE_ENGINE=compare cannot compare opentide validate on this workspace: it "
+        "enables acme, from a platform plugin, whose blocks only the Rust core checks (the "
+        "Python implementation reports each one as an extra key). Use rust, or unset "
+        "OPENTIDE_ENGINE."
+    )
+    assert ran == []
+    # Without the plugin installed, both implementations report the block as an extra key.
+    monkeypatch.setattr(engines, "plugin_platforms", frozenset)
+    invoke(["--json", "--repo", str(ws), "validate"], "compare")
+    assert len(ran) == 1

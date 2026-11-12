@@ -30,7 +30,8 @@ from tests.test_cli.e2e.test_wheel_install_regression import (
 )
 from tests.test_platforms.test_plugin_hook import CASSETTE, FIXTURE, TOKEN, VALID_RULE, StandIn
 
-pytestmark = pytest.mark.cli_e2e
+# A wheel build takes minutes: CI runs this in its full set only (cli-e2e-full).
+pytestmark = [pytest.mark.cli_e2e, pytest.mark.full_set]
 
 
 def _install_plugin(python: Path) -> None:

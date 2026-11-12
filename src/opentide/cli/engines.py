@@ -36,9 +36,11 @@ import sys
 from opentide.cli.engine_defaults import (
     BUILTIN_PLATFORMS,
     ENGINE_ENV,
+    PLUGIN_WORKSPACE_COMMANDS,
     PYTHON,
     RUST,
     default_engine,
+    enabled_other_platforms,
     platform_values,
 )
 
@@ -248,6 +250,22 @@ def plugin_platforms() -> frozenset[str]:
     )
 
 
+def workspace_plugins(
+    args: Sequence[str], env: Mapping[str, str], cwd: str | None = None
+) -> list[str]:
+    """The installed platform plugins the workspace of a run of *args* enables, sorted.
+
+    :func:`opentide.cli.engine_defaults.enabled_other_platforms` that an
+    installed plugin provides (:func:`plugin_platforms`). The entry points are
+    read only when the workspace enables a platform that is not built in.
+    """
+    enabled = enabled_other_platforms(args, env, cwd)
+    if not enabled:
+        return []
+    installed = plugin_platforms()
+    return [name for name in enabled if name in installed]
+
+
 #: The platforms with a Rust connector (``crates/opentide-connectors``) whose
 #: ``query`` runs on Rust: every platform with a query runner. The REST
 #: platforms came with UC-4.2 (#832); Sentinel, Splunk and Carbon Black Cloud,
@@ -336,7 +354,10 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: ``deploy``, ``query`` and ``validate query --live`` on an installed platform
 #: plugin's platform run on Rust, the one engine with the plugin hook
 #: (*plugins*, UC-4.5, #835), under the default engine too (UC-4.5b:
-#: :func:`plugin_default`).
+#: :func:`plugin_default`). ``validate`` of a workspace that enables an
+#: installed plugin's platform runs on Rust under the default engine
+#: (UC-4.5c, :data:`~opentide.cli.engine_defaults.PLUGIN_WORKSPACE_COMMANDS`),
+#: and ``compare`` refuses it.
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
@@ -425,40 +446,61 @@ def selected(words: Sequence[str], env: Mapping[str, str] | None = None) -> str:
 
 
 def plugin_default(
-    words: Sequence[str], args: Sequence[str], env: Mapping[str, str] | None = None
+    words: Sequence[str],
+    args: Sequence[str],
+    env: Mapping[str, str] | None = None,
+    cwd: str | None = None,
 ) -> bool:
     """Whether the default engine runs *args* on Rust: a run on an installed platform plugin.
 
-    Only the Rust core has the plugin hook (UC-4.5, #835), so ``query``,
-    ``validate query`` and ``deploy`` with a ``--platform`` every value of
-    which names an installed plugin (:meth:`RustCommand.plugin_run`) run on
-    Rust when ``OPENTIDE_ENGINE`` is unset or blank (UC-4.5b): the Python
-    command line never parses a plugin's name. ``OPENTIDE_ENGINE`` set to any
-    value keeps its meaning: under ``python`` the Python command line refuses
-    the name, and ``compare`` refuses the run.
+    Only the Rust core has the plugin hook (UC-4.5, #835), so when
+    ``OPENTIDE_ENGINE`` is unset or blank these run on Rust:
+
+    - ``query``, ``validate query`` and ``deploy`` with a ``--platform``
+      every value of which names an installed plugin
+      (:meth:`RustCommand.plugin_run`, UC-4.5b): the Python command line
+      never parses a plugin's name;
+    - ``validate`` (:data:`~opentide.cli.engine_defaults.PLUGIN_WORKSPACE_COMMANDS`)
+      of a workspace that enables an installed plugin's platform
+      (:func:`workspace_plugins`, UC-4.5c): the plugin checks its blocks,
+      which the Python implementation reports as extra keys. *cwd* is the
+      run's directory (the process's when ``None``), where the workspace is
+      looked for without ``--repo`` or ``OPENTIDE_REPO_ROOT``.
+
+    ``OPENTIDE_ENGINE`` set to any value keeps its meaning: under ``python``
+    the Python command line refuses the name (and reports a plugin's block as
+    an extra key), and ``compare`` refuses the run.
     """
     env = os.environ if env is None else env
     if env.get(ENGINE_ENV, "").strip():
         return False
     rust = RUST_COMMANDS.get(tuple(words))
-    return rust is not None and rust.plugin_run(args) and rust.covers(args)
+    if rust is None or not rust.covers(args):
+        return False
+    if tuple(words) in PLUGIN_WORKSPACE_COMMANDS:
+        return bool(workspace_plugins(args, env, cwd))
+    return rust.plugin_run(args)
 
 
 def rust_command(
     words: Sequence[str],
     env: Mapping[str, str] | None = None,
     args: Sequence[str] | None = None,
+    cwd: str | None = None,
 ) -> RustCommand | None:
     """The Rust implementation that runs *words* now, or ``None`` when Python does (or must refuse).
 
     For hosts that run commands in their own process (``serve``): ``rust``
     selected (or, under the default engine, a platform plugin's run:
     :func:`plugin_default`) and a Rust implementation that covers *args*, the
-    run's command line (:meth:`RustCommand.covers`). ``compare``, an unknown engine and
+    run's command line (:meth:`RustCommand.covers`), run from *cwd* (the
+    process's directory when ``None``). ``compare``, an unknown engine and
     ``rust`` for a command, or a run of it, without one go through
     :func:`dispatch`, which refuses as at a terminal.
     """
-    if selected(words, env) != RUST and not (args is not None and plugin_default(words, args, env)):
+    if selected(words, env) != RUST and not (
+        args is not None and plugin_default(words, args, env, cwd)
+    ):
         return None
     rust = RUST_COMMANDS.get(tuple(words))
     if rust is None or (args is not None and not rust.covers(args)):
@@ -475,6 +517,7 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
     from opentide.cli.lazy import ROOT_ARGS_KEY, command_words
     from opentide.cli.ui.contract import (
         ENGINE_NOT_PORTED,
+        USAGE_ERROR,
         USAGE_EXIT_CODE,
         USAGE_INVALID_CHOICE,
         did_you_mean,
@@ -540,6 +583,23 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
                 # The command line is compiled into the engine, which does not load.
                 _fail(cli_ctx, path, str(exc), code=exc.code, exit_code=1)
         raise SystemExit(_run_rust(rust, args))
+    plugins = workspace_plugins(args, os.environ) if words in PLUGIN_WORKSPACE_COMMANDS else []
+    if plugins:
+        # Python reports a plugin's block as an extra key, Rust the plugin's
+        # findings inside it (UC-4.5c): there is no oracle to compare with.
+        named = ", ".join(plugins)
+        source = "a platform plugin" if len(plugins) == 1 else "platform plugins"
+        _fail(
+            cli_ctx,
+            path,
+            f"{ENGINE_ENV}={COMPARE} cannot compare opentide {path} on this workspace: it "
+            f"enables {named}, from {source}, "
+            f"whose blocks only the Rust core checks (the Python implementation reports each "
+            f"one as an extra key). Use {RUST}, or unset {ENGINE_ENV}.",
+            code=USAGE_ERROR,
+            exit_code=USAGE_EXIT_CODE,
+            argument=ENGINE_ENV,
+        )
     _compare(cli_ctx, path, args, rust)
 
 

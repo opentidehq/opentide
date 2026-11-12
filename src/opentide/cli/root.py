@@ -152,14 +152,21 @@ def main_callback(
     # exits. Python by default, nothing more is imported.
     import os
 
-    from opentide.cli.engine_defaults import any_default, names_other_platform
+    from opentide.cli.engine_defaults import any_default, may_check_plugins, names_other_platform
     from opentide.cli.lazy import ROOT_ARGS_KEY
 
     engine = os.environ.get("OPENTIDE_ENGINE", "").strip()
-    # A --platform outside the built-in ones may be a platform plugin's,
-    # which only the Rust core reaches (UC-4.5b): the dispatcher decides.
+    root_args = ctx.meta.get(ROOT_ARGS_KEY, ())
+    # A --platform outside the built-in ones may be a platform plugin's
+    # (UC-4.5b), and so may a platform a validated workspace enables
+    # (UC-4.5c): only the Rust core reaches a plugin, and the dispatcher decides.
     if engine not in ("", "python") or (
-        not engine and (any_default(words) or names_other_platform(ctx.meta.get(ROOT_ARGS_KEY, ())))
+        not engine
+        and (
+            any_default(words)
+            or names_other_platform(root_args)
+            or may_check_plugins(words, root_args, os.environ)
+        )
     ):
         from opentide.cli.engines import dispatch
 

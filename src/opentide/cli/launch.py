@@ -28,9 +28,10 @@ The decision reads ``OPENTIDE_ENGINE``, the defaults
 the command path from the Rust command tree
 (``opentide._native.command_words``). Under the default engine, with no
 command's default flipped, it reads nothing but the environment and the
-arguments: a ``--platform`` outside the built-in platforms may name a
-platform plugin, whose run goes to Rust (UC-4.5b,
-:func:`opentide.cli.engines.plugin_default`).
+arguments, and for ``validate`` the workspace's platform files: a
+``--platform`` outside the built-in platforms may name a platform plugin,
+whose run goes to Rust (UC-4.5b), and so does a ``validate`` of a workspace
+that enables one (UC-4.5c, :func:`opentide.cli.engines.plugin_default`).
 """
 
 from __future__ import annotations
@@ -160,21 +161,30 @@ def _may_run_on_rust(args: Sequence[str], env: Mapping[str, str]) -> bool:
         DEFAULT_ENGINES,
         ENGINE_ENV,
         RUST,
+        enabled_other_platforms,
         names_other_platform,
     )
 
     written = env.get(ENGINE_ENV, "").strip()
-    if written not in ("", RUST) or (
-        not written and not DEFAULT_ENGINES and not names_other_platform(args)
-    ):
-        # python, compare or not an engine; or no default to read and no
-        # platform that may be a plugin's (UC-4.5b).
+    if written not in ("", RUST):
+        # python, compare or not an engine.
         return False
     if any(name.startswith("_") and name.endswith("_COMPLETE") for name in env):
         # Click's shell completion.
         return False
     options = args[: args.index("--")] if "--" in args else args
-    return "--help" not in options and _plain_root_options(options)
+    if "--help" in options or not _plain_root_options(options):
+        return False
+    # No default to read: only a run that may be a platform plugin's goes to
+    # Rust, one that names a --platform outside the built-in ones (UC-4.5b)
+    # or a validate of a workspace that enables one (UC-4.5c). runs_on_rust
+    # then reads the command path and the installed plugins.
+    return bool(
+        written
+        or DEFAULT_ENGINES
+        or names_other_platform(args)
+        or ("validate" in options and enabled_other_platforms(args, env))
+    )
 
 
 def _plain_root_options(options: Sequence[str]) -> bool:

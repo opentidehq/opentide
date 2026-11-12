@@ -190,10 +190,14 @@ def test_the_sample_plugin_is_discovered_with_what_it_can_do(
     }
 
 
+@pytest.mark.parametrize("module", ["opentide.cli.rust", "opentide"])
 def test_validate_reports_the_plugin_models_findings_at_their_positions(
-    plugin_site: Path, workspace: Path
+    plugin_site: Path, workspace: Path, module: str
 ) -> None:
-    code, document = _run(["validate"], _env(plugin_site, workspace), workspace)
+    # `python -m opentide` is the console script's launcher: under the default
+    # engine, validate of a workspace that enables a plugin's platform runs on
+    # the Rust core, which checks the plugin's blocks (UC-4.5c).
+    code, document = _run(["validate"], _env(plugin_site, workspace), workspace, module=module)
     assert code == 1
     issues = document["report"]["issues"]
     acme = [issue for issue in issues if issue["field_path"][:2] == ["configurations", "acme"]]
@@ -492,6 +496,37 @@ def test_the_default_engine_queries_a_plugin_through_python_m_opentide(
     assert code == 0, document
     assert tenant.received == tenant.requests()
     assert document["row_count"] == 2
+
+
+def test_the_python_engine_reports_a_plugin_block_as_an_extra_key(
+    plugin_site: Path, workspace: Path
+) -> None:
+    # OPENTIDE_ENGINE=python is the escape hatch: the Python implementation,
+    # which cannot load a plugin, as before UC-4.5c.
+    env = _env(plugin_site, workspace)
+    env["OPENTIDE_ENGINE"] = "python"
+    code, document = _run(["validate"], env, workspace, module="opentide")
+    assert code == 1
+    extra = [
+        issue
+        for issue in document["report"]["issues"]
+        if issue["field_path"][:2] == ["configurations", "acme"]
+    ]
+    assert {issue["object_uuid"] for issue in extra} == {VALID_RULE, INVALID_RULE}
+    assert all(issue["field_path"] == ["configurations", "acme"] for issue in extra), extra
+
+
+def test_compare_refuses_to_validate_a_plugin_workspace(plugin_site: Path, workspace: Path) -> None:
+    # The two implementations cannot agree on a plugin's blocks (UC-4.5c).
+    env = _env(plugin_site, workspace)
+    env["OPENTIDE_ENGINE"] = "compare"
+    code, document = _run(["validate"], env, workspace, module="opentide")
+    assert code == 2
+    assert document["failure"]["code"] == "usage_error"
+    assert document["failure"]["message"].startswith(
+        "OPENTIDE_ENGINE=compare cannot compare opentide validate on this workspace: "
+        "it enables acme, from a platform plugin"
+    )
 
 
 def test_without_the_plugin_installed_the_workspace_is_told(workspace: Path) -> None:

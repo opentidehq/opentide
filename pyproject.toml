@@ -275,6 +275,7 @@ markers = [
     "cli_e2e: in-process Typer CliRunner end-to-end tests (separate CI job, Python 3.14)",
     "cli_smoke: subprocess console-script smoke (same CI job as cli_e2e)",
     "gitlab_ci_lint: glint and gitlab-ci-verify on generated GitLab CI (CI job, needs the binaries)",
+    "full_set: too slow for every pull request; CI runs it in the full set only (cli-e2e-full)",
 ]
 
 [tool.coverage.run]

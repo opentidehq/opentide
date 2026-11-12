@@ -159,7 +159,7 @@ Rules give the platform a block under `configurations.acme`. `opentide validate`
 
 ### Run it
 
-Plugin platforms run on the Rust core. `query`, `validate query` and `deploy` with a `--platform` that names an installed plugin go to it under the default engine, with nothing to set; the Python command line never reads a plugin's name. `<plugin>` is the entry point's name (`acme` in the sample):
+Plugin platforms run on the Rust core. Under the default engine, with nothing to set, these runs go to it: `query`, `validate query` and `deploy` with a `--platform` that names an installed plugin, and `validate` of a workspace that enables an installed plugin's platform. The Python command line never reads a plugin's name, and a workspace with only built-in platforms validates as before. `<plugin>` is the entry point's name (`acme` in the sample):
 
 ```bash
 opentide validate
@@ -168,7 +168,7 @@ opentide validate query --live --platform <plugin>
 opentide query --platform <plugin> --since 1h 'process | head'
 ```
 
-`OPENTIDE_ENGINE=rust` runs every command on the Rust core, plugin runs included. `OPENTIDE_ENGINE=python` keeps the Python command line, which knows the built-in platforms only, and `OPENTIDE_ENGINE=compare` refuses a plugin run, since both runs would reach the tenant. `opentide validate` itself checks a plugin's blocks under the Rust core (`OPENTIDE_ENGINE=rust`) and in the SDK (`opentide.Workspace.validate`); the Python command line reports each one as an extra key.
+`opentide validate` and the SDK's `opentide.Workspace.validate` check each plugin block with the plugin's model. `OPENTIDE_ENGINE=rust` runs every command on the Rust core, plugin runs included. `OPENTIDE_ENGINE=python` keeps the Python command line, which knows the built-in platforms only: it refuses a plugin's name, and its `validate` reports each plugin block as an extra key. `OPENTIDE_ENGINE=compare` refuses a plugin run, since both runs would reach the tenant, and a `validate` of a workspace that enables a plugin's platform, since the Python implementation cannot check its blocks.
 
 </Step>
 
@@ -212,7 +212,7 @@ Plugins load only when opentide runs from its Python package. The native binary 
 acme is not a built-in platform: if it is a platform plugin (an opentide.platforms entry point), it loads only when opentide runs from its Python package (pip install opentide, then OPENTIDE_ENGINE=rust opentide ...); this command line cannot check its configuration or reach its tenants
 ```
 
-Inside the package, `validate` warns instead about an enabled platform no installed plugin provides, and about a plugin that failed to load.
+Inside the package, the Rust core's `validate` warns instead about an enabled platform no installed plugin provides, and about a plugin that failed to load. Under the default engine, a workspace whose enabled platforms outside the built-in ones no installed package declares validates on the Python implementation, which reports their blocks as extra keys; `OPENTIDE_ENGINE=rust opentide validate` names the missing plugin.
 
 ### Before 0.24: `declare()`
 

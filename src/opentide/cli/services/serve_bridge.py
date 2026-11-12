@@ -79,7 +79,7 @@ class Bridge:
         """The Rust run of *argv*, or ``None`` when the engine selection gives it to Python."""
         from opentide.core import progress_events
 
-        if self.runner._rust_command(argv, env, cwd_given=bool(cwd)) is None:
+        if self.runner._rust_command(argv, env, cwd_given=bool(cwd), cwd=cwd) is None:
             return None
         values = self.runner.run_environment(env, cwd_given=bool(cwd))
         values["OPENTIDE_ENGINE"] = "rust"

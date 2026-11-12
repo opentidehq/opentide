@@ -383,3 +383,28 @@ def test_the_default_engine_runs_a_plugin_run_on_rust(monkeypatch: pytest.Monkey
     assert not launch.runs_on_rust(run, {"OPENTIDE_ENGINE": "python"})
     assert not launch.runs_on_rust(["deploy", "--platform", "other", "--all"], {})
     assert not launch.runs_on_rust(["deploy", "--platform", "sentinel", "--all"], {})
+
+
+def test_the_default_engine_validates_a_plugin_workspace_on_rust(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``validate`` of a workspace that enables a plugin's platform (UC-4.5c, #835)."""
+    ws = tmp_path / "ws"
+    platforms = ws / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    monkeypatch.setattr(engines, "plugin_platforms", lambda: frozenset({"acme"}))
+    env = {"OPENTIDE_REPO_ROOT": str(ws)}
+    # Only built-in platforms: Python answers, without the engine or the tree.
+    (platforms / "sentinel.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
+    assert not launch._may_run_on_rust(["validate"], env)
+    (platforms / "acme.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
+    assert launch.runs_on_rust(["validate"], env)
+    assert launch.runs_on_rust(["--json", "validate", "--check", "schema"], env)
+    assert launch.runs_on_rust(["--repo", str(ws), "validate"], {})
+    assert not launch.runs_on_rust(["validate"], {**env, "OPENTIDE_ENGINE": "python"})
+    assert not launch.runs_on_rust(["validate", "--help"], env)
+    # validate query without --platform, lint: their routing is unchanged.
+    assert not launch.runs_on_rust(["validate", "query", "--live"], env)
+    assert not launch.runs_on_rust(["lint"], env)
+    monkeypatch.setattr(engines, "plugin_platforms", frozenset)
+    assert not launch.runs_on_rust(["validate"], env)

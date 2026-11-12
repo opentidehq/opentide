@@ -1517,12 +1517,53 @@ jobs:
       # whatever the runner reports, so it would sit on that cliff silently if
       # the hosted spec changed; 4 matches today's ubuntu-latest (4 vCPU) and
       # stays put. Raise it only with a measurement from a real run.
+      # The tests marked `full_set` (a wheel built and installed per test)
+      # run in `cli-e2e-full` instead.
       - name: E2E pytest (CLI + MCP stdio)
         run: >-
-          uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov -n 4
+          uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -q --no-cov -n 4
           --splits 4
           --group ${{ matrix.shard }}
           --durations-path .test_durations_e2e
+
+  # The E2E tests too slow for every pull request, marked `full_set`: the
+  # platform plugin on opentide installed from its wheel (UC-4.5c, #835),
+  # whose `uv build` alone takes minutes. The full set (the workflow's header).
+  cli-e2e-full:
+    name: E2E (3.14, full set)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      # The `test` job's cache of the binding `uv sync` builds.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: python-engine
+          save-if: false
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: E2E pytest (full set)
+        run: uv run pytest tests/ -m full_set -q --no-cov
 
   # Was two trailing steps on cli-e2e, which made a ~20 s check wait out the
   # longest job in the workflow. It renders the pipeline from
