@@ -6,7 +6,7 @@
 //! offline compiler, so the rules' presence in Google's repository is the
 //! evidence that they compile: every public file must parse and have no error,
 //! except the findings listed in `EXCEPTIONS`, where yara-l-1.0 and Google's
-//! repository disagree. Every twin must get an error.
+//! repository disagree (none today). Every twin must get an error.
 
 use opentide_core::{Severity, codes};
 use opentide_yaral::analyze;
@@ -14,11 +14,8 @@ use std::fs;
 use std::path::PathBuf;
 
 /// `(file, code, why)`: errors yara-l-1.0 requires on rules Google ships.
-const EXCEPTIONS: &[(&str, &str, &str)] = &[(
-    "ttp_windows_suspicious_filewrites_to_sharepoint_layouts.yaral",
-    codes::YARAL_STRING_ESCAPE,
-    "its meta description writes `\\TEMPLATE\\LAYOUTS`; yara-l-1.0 allows only \\\\, \\\", \\n, \\r and \\t",
-)];
+/// None since 1.1, which made `yaral_string_escape` a warning.
+const EXCEPTIONS: &[(&str, &str, &str)] = &[];
 
 /// `(file name, text, broken twin)`.
 fn corpus() -> Vec<(String, String, String)> {
@@ -92,4 +89,20 @@ fn every_broken_twin_is_an_error() {
             found.iter().map(|d| d.code.as_str()).collect::<Vec<_>>()
         );
     }
+}
+
+#[test]
+fn an_unknown_escape_in_a_community_rule_is_a_warning() {
+    // Its meta description writes `\TEMPLATE\LAYOUTS`: yara-l-1.0 1.1 warns.
+    let (_, text, _) = corpus()
+        .into_iter()
+        .find(|(n, ..)| n == "ttp_windows_suspicious_filewrites_to_sharepoint_layouts.yaral")
+        .expect("in the corpus");
+    let escapes: Vec<_> = analyze(&text)
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::YARAL_STRING_ESCAPE)
+        .collect();
+    assert!(!escapes.is_empty());
+    assert!(escapes.iter().all(|d| d.severity == Severity::Warning));
 }

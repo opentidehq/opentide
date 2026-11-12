@@ -32,7 +32,8 @@ fn in_profile(name: &str, profile: Profile) -> bool {
             name,
             "meta" | "setup" | "events" | "match" | "outcome" | "condition" | "options" | "export"
         ),
-        Profile::Search => !matches!(name, "meta" | "setup" | "options"),
+        // `meta` is optional in a search and ignored (getting-started).
+        Profile::Search => !matches!(name, "setup" | "options"),
     }
 }
 
@@ -45,7 +46,20 @@ fn reference_limits(profile: Profile) -> (usize, usize, usize) {
 }
 
 const MAX_OUTCOMES: usize = 20;
-const MAX_NESTING: usize = 20;
+
+/// A search's grouped fields: aliases for groups of UDM fields
+/// (search-syntax-reference, "Search grouped fields").
+const GROUPED_FIELDS: &[&str] = &[
+    "domain",
+    "email",
+    "file_path",
+    "hash",
+    "hostname",
+    "ip",
+    "namespace",
+    "process_id",
+    "user",
+];
 const DAY: u64 = 24 * 60;
 
 #[derive(Clone, Copy)]
@@ -482,7 +496,7 @@ impl<'s> Checker<'s> {
                         s.name
                     ),
                     Profile::Search => format!(
-                        "`{}` is not part of a search: Google ignores meta in search, and setup and options are rule sections",
+                        "`{}` is not part of a search: setup and options are rule sections",
                         s.name
                     ),
                 };
@@ -523,7 +537,9 @@ impl<'s> Checker<'s> {
                 required.push("meta");
             }
             required.extend(["events", "condition"]);
-        } else {
+        } else if !self.reads_stages(sections) {
+            // A stage or root query that reads only earlier stages
+            // (`$stage.field`) has no `events` of its own.
             required.push("events");
         }
         for name in required {
@@ -537,8 +553,10 @@ impl<'s> Checker<'s> {
         }
 
         let find = |name: &str| sections.iter().find(|s| s.name == name).copied();
-        // Meta.
-        if let Some(meta) = find("meta") {
+        // Meta: a search's is ignored.
+        if let Some(meta) = find("meta")
+            && profile == Profile::Rule
+        {
             self.meta(meta.node);
         }
         // Scope: events and setup define event variables and placeholders.
@@ -551,7 +569,8 @@ impl<'s> Checker<'s> {
         }
         let events = find("events");
         // Match.
-        let window = find("match").and_then(|m| self.match_section(m.node, &scope));
+        let joined = self.joined(sections, &scope);
+        let window = find("match").and_then(|m| self.match_section(m.node, &scope, joined));
         let has_match = find("match").is_some_and(|m| m.node.named_child_count() > 0);
         if profile == Profile::Rule && scope.events.len() >= 2 && !has_match {
             let names: Vec<&str> = scope.events.keys().map(String::as_str).collect();
@@ -566,10 +585,15 @@ impl<'s> Checker<'s> {
                 at,
             );
         }
+        let matched = find("match")
+            .map(|m| self.match_names(m.node))
+            .unwrap_or_default();
         // Outcome.
         if let Some(outcome) = find("outcome") {
-            self.outcome(outcome.node, &mut scope, has_match);
+            self.outcome(outcome.node, &mut scope, has_match.then_some(&matched));
         }
+        // Window bounds: never in `events`, and only with a `match` window.
+        self.window_bounds(sections, window.is_some());
         // Condition.
         if let Some(condition) = find("condition") {
             self.condition(condition.node, &scope, window.as_ref());
@@ -608,9 +632,10 @@ impl<'s> Checker<'s> {
         if let Some(options) = find("options") {
             self.options(options.node, window.as_ref());
         }
-        // Export.
+        // Export: outcome variables only.
         if let Some(export) = find("export") {
             self.references(export.node, &scope, "export");
+            self.export_values(export.node, &scope, &matched);
         }
         // Order and dedup read outcomes and placeholders.
         for name in ["order", "dedup"] {
@@ -625,6 +650,129 @@ impl<'s> Checker<'s> {
             && let Some(events) = events
         {
             self.unfiltered(events.node, &scope);
+        }
+    }
+
+    /// Whether a search body reads an earlier stage (`$stage.field`, `cross join`).
+    fn reads_stages(&self, sections: &[Section<'_>]) -> bool {
+        let mut reads = false;
+        for s in sections {
+            opentide_syntax::walk_with_ancestors(s.node, |n, _| match n.kind() {
+                "cross_join" => reads = true,
+                "udm_field" => reads |= self.stage_field(n),
+                _ => {}
+            });
+        }
+        reads
+    }
+
+    /// Whether a body joins: `cross join`, two event variables, or events
+    /// read with an earlier stage (multi-stage "Window size limits").
+    fn joined(&self, sections: &[Section<'_>], scope: &Scope) -> bool {
+        let mut cross = false;
+        let mut events = false;
+        for s in sections {
+            opentide_syntax::walk_with_ancestors(s.node, |n, _| match n.kind() {
+                "cross_join" => cross = true,
+                "bare_field" => events = true,
+                "udm_field" => events |= !self.stage_field(n),
+                _ => {}
+            });
+        }
+        cross || scope.events.len() >= 2 || (events && self.reads_stages(sections))
+    }
+
+    /// The `$names` a `match` groups by.
+    fn match_names(&self, node: Node<'_>) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for clause in named_children(node)
+            .into_iter()
+            .filter(|n| n.kind() == "match_clause")
+        {
+            let mut cursor = clause.walk();
+            for key in clause.children_by_field_name("key", &mut cursor) {
+                // `$user`, or a search's field key (`principal.hostname`).
+                out.insert(self.text(key).to_string());
+            }
+        }
+        out
+    }
+
+    /// `yaral_window_bound`: `window_start` or `window_end` in `events` or
+    /// `setup`, or in a body with no `match` window (windowing-logic,
+    /// "Troubleshooting").
+    fn window_bounds(&mut self, sections: &[Section<'_>], windowed: bool) {
+        let mut found: Vec<(Node<'_>, bool)> = Vec::new();
+        for s in sections {
+            let predicates = matches!(s.name, "events" | "setup");
+            opentide_syntax::walk_with_ancestors(s.node, |n, _| {
+                if n.kind() == "window_bound" {
+                    found.push((n, predicates));
+                }
+            });
+        }
+        for (n, predicates) in found {
+            let name = self.text(n).to_ascii_lowercase();
+            if predicates {
+                self.error(
+                    codes::YARAL_WINDOW_BOUND,
+                    format!("`{name}` is the match window's bound: use it in outcome, condition or order, not in events"),
+                    n,
+                );
+            } else if !windowed {
+                self.error(
+                    codes::YARAL_WINDOW_BOUND,
+                    format!("`{name}` needs a `match` window (`over` or `by` a duration)"),
+                    n,
+                );
+            }
+        }
+    }
+
+    /// `yaral_export_value`: a `write_row` value that is not an outcome
+    /// variable (data-tables: "You can only export outcome variables").
+    fn export_values(&mut self, node: Node<'_>, scope: &Scope, matched: &BTreeSet<String>) {
+        let mut values: Vec<Node<'_>> = Vec::new();
+        opentide_syntax::walk_with_ancestors(node, |n, ancestors| {
+            if n.kind() == "named_argument"
+                && ancestors.iter().any(|a| a.kind() == "table_call")
+                && let Some(value) = n.child_by_field_name("value")
+            {
+                values.push(value);
+            }
+        });
+        for value in values {
+            let value = unparen(value);
+            // A search writes scalar values too (data-tables: "the support
+            // offered in Search for writing scalar values to data tables",
+            // `write_row(col_name: $e.metadata.product_name)`).
+            // A `match` key is not exported ("You can't include a match
+            // variable in the export section of a statistics query").
+            if self.profile == Profile::Search
+                && matches!(value.kind(), "udm_field" | "bare_field")
+                && !self.stage_field(value)
+                && !matched.contains(self.text(value))
+            {
+                continue;
+            }
+            if value.kind() == "variable" {
+                let name = self.text(value);
+                let defined = scope.events.contains_key(name)
+                    || scope.placeholders.contains_key(name)
+                    || self.stages.contains(name);
+                if scope.outcomes.contains(name) || !defined {
+                    // Undefined names are `yaral_undefined_variable`.
+                    continue;
+                }
+            }
+            self.error(
+                codes::YARAL_EXPORT_VALUE,
+                format!(
+                    "`{}` is not an outcome variable: `export` writes outcome variables only; assign it in `outcome` first",
+                    self.text(value)
+                ),
+                value,
+            );
         }
     }
 
@@ -715,7 +863,7 @@ impl<'s> Checker<'s> {
         }
     }
 
-    fn match_section(&mut self, node: Node<'_>, scope: &Scope) -> Option<Window> {
+    fn match_section(&mut self, node: Node<'_>, scope: &Scope, joined: bool) -> Option<Window> {
         let clause = named_children(node)
             .into_iter()
             .find(|n| n.kind() == "match_clause")?;
@@ -787,13 +935,6 @@ impl<'s> Checker<'s> {
                 );
             }
         }
-        if sliding && self.profile == Profile::Search {
-            self.error(
-                codes::YARAL_MATCH_WINDOW,
-                "a sliding window (`before`/`after` a pivot) is for rules only".into(),
-                direction.unwrap_or(window),
-            );
-        }
         if let Some(pivot) = window.child_by_field_name("pivot") {
             let name = self.text(pivot);
             if !scope.events.contains_key(name) {
@@ -804,72 +945,88 @@ impl<'s> Checker<'s> {
                 );
             }
         }
-        let length = window.child_by_field_name("length");
+        let tumbling = kind == "by";
+        // yara-l-1.0 1.1 `match`: rule hop and sliding 1m-14d, tumbling
+        // 1m-72h; search hop and sliding 1m-48h, tumbling 1m-30d, or 48h
+        // with a join.
+        let (max, what) = match (self.profile, tumbling) {
+            (Profile::Rule, true) => (72 * 60, "a tumbling (`by`) window"),
+            (Profile::Rule, false) if sliding => (14 * DAY, "a sliding window"),
+            (Profile::Rule, false) => (14 * DAY, "a hop (`over`) window"),
+            (Profile::Search, true) if joined => {
+                (48 * 60, "a search's tumbling (`by`) window with a join")
+            }
+            (Profile::Search, true) => (30 * DAY, "a search's tumbling (`by`) window"),
+            (Profile::Search, false) if sliding => (48 * 60, "a search's sliding window"),
+            (Profile::Search, false) => (48 * 60, "a search's hop (`over`) window"),
+        };
         let mut minutes = None;
-        match length.map(|l| (l.kind(), l)) {
-            Some(("duration", node)) => {
-                let text = self.text(node);
+        // `by 2 week` puts the count and the unit under `length`: the unit
+        // (or a duration) is what is measured.
+        let length = named_children(window)
+            .into_iter()
+            .find(|n| matches!(n.kind(), "duration" | "time_unit"));
+        let Some(length) = length else {
+            return Some(Window { minutes });
+        };
+        let text = self.text(length);
+        let measured = match length.kind() {
+            "duration" => {
                 let units: &[&str] = match self.profile {
                     Profile::Rule => &["m", "h", "d"],
                     Profile::Search => &["m", "h", "d", "w", "mo"],
                 };
-                match duration(text) {
-                    Some((value, unit)) if units.contains(&unit) => {
-                        minutes = Some(value);
-                        let tumbling = kind == "by";
-                        let (max, name) = match (tumbling, self.profile) {
-                            (true, _) => (72 * 60, "a tumbling (`by`) window"),
-                            (false, Profile::Rule) if sliding => (14 * DAY, "a sliding window"),
-                            (false, Profile::Rule) => (14 * DAY, "a hop (`over`) window"),
-                            (false, Profile::Search) => (48 * 60, "a search's hop (`over`) window"),
-                        };
-                        let checked = !(self.profile == Profile::Search
-                            && tumbling
-                            && unit != "m"
-                            && unit != "h"
-                            && unit != "d");
-                        if checked && (value < 1 || value > max) {
-                            self.error(
-                                codes::YARAL_MATCH_WINDOW,
-                                format!("{text}: {name} is 1m to {}", format_minutes(max)),
-                                node,
-                            );
-                        }
-                    }
-                    _ => {
-                        self.error(
-                            codes::YARAL_MATCH_WINDOW,
-                            format!(
-                                "`{text}` is not a window: write a number of minutes, hours or days (`10m`, `1h`, `2d`)"
-                            ),
-                            node,
-                        );
-                    }
-                }
+                duration(text).filter(|(_, unit)| units.contains(unit))
             }
-            Some(("time_unit", node)) => {
-                let unit = self.text(node).to_ascii_lowercase();
-                let known = [
-                    "m", "minute", "minutes", "h", "hour", "hours", "d", "day", "days", "w",
-                    "week", "weeks", "mo", "month", "months",
-                ];
-                if self.profile == Profile::Rule || !known.contains(&unit.as_str()) {
+            // `by day`, `over every 2 hour`: a search's unit words.
+            _ => {
+                let count: u64 = named_children(window)
+                    .into_iter()
+                    .find(|n| n.kind() == "integer")
+                    .and_then(|n| self.text(n).parse().ok())
+                    .unwrap_or(1);
+                let per = match text.to_ascii_lowercase().as_str() {
+                    "m" | "minute" | "minutes" => Some(1),
+                    "h" | "hour" | "hours" => Some(60),
+                    "d" | "day" | "days" => Some(DAY),
+                    "w" | "week" | "weeks" => Some(7 * DAY),
+                    "mo" | "month" | "months" => Some(30 * DAY),
+                    _ => None,
+                };
+                per.filter(|_| self.profile == Profile::Search)
+                    .map(|per| (count.saturating_mul(per), ""))
+            }
+        };
+        match measured {
+            Some((value, _)) => {
+                minutes = Some(value);
+                if value < 1 || value > max {
                     self.error(
                         codes::YARAL_MATCH_WINDOW,
-                        format!(
-                            "`{}` is not a window length: write a duration (`10m`, `1h`, `2d`)",
-                            self.text(node)
-                        ),
-                        node,
+                        format!("{text}: {what} is 1m to {}", format_minutes(max)),
+                        length,
                     );
                 }
             }
-            _ => {}
+            None => {
+                let hint = match self.profile {
+                    Profile::Rule => "a number of minutes, hours or days (`10m`, `1h`, `2d`)",
+                    Profile::Search => {
+                        "a number of minutes, hours, days, weeks or months (`10m`, `1h`, `2d`, `1w`, `1mo`), or a unit word (`by day`)"
+                    }
+                };
+                self.error(
+                    codes::YARAL_MATCH_WINDOW,
+                    format!("`{text}` is not a window length: write {hint}"),
+                    length,
+                );
+            }
         }
         Some(Window { minutes })
     }
 
-    fn outcome(&mut self, node: Node<'_>, scope: &mut Scope, has_match: bool) {
+    /// `matched`: the `match` names, when the body has a `match`.
+    fn outcome(&mut self, node: Node<'_>, scope: &mut Scope, matched: Option<&BTreeSet<String>>) {
         let mut count = 0;
         for statement in named_children(node) {
             let assignment = statement.kind() == "comparison"
@@ -907,8 +1064,8 @@ impl<'s> Checker<'s> {
                     .or_default()
                     .extend(read);
                 self.references(right, scope, "outcome");
-                if has_match {
-                    self.aggregation(right, scope, false);
+                if let Some(matched) = matched {
+                    self.aggregation(right, scope, matched, false);
                 }
             }
             if !scope.outcomes.contains(&name) {
@@ -926,18 +1083,26 @@ impl<'s> Checker<'s> {
     }
 
     /// `yaral_outcome_aggregation` on an outcome's value, in a rule or search
-    /// with `match`.
-    fn aggregation(&mut self, node: Node<'_>, scope: &Scope, inside: bool) {
+    /// with `match`: event fields, and placeholders that are not `match`
+    /// variables, are read through an aggregation (outcome-syntax,
+    /// "Aggregations").
+    fn aggregation(
+        &mut self,
+        node: Node<'_>,
+        scope: &Scope,
+        matched: &BTreeSet<String>,
+        inside: bool,
+    ) {
         match node.kind() {
             "function_call" => {
                 let name = self.function_name(node);
-                let aggregate = Functions::cached().get(&name).is_some_and(|f| {
-                    f.aggregation || (self.profile == Profile::Rule && name.starts_with("window."))
-                });
+                let aggregate = Functions::cached()
+                    .get(&name)
+                    .is_some_and(|f| f.aggregation || name.starts_with("window."));
                 for child in named_children(node) {
                     if child.kind() == "arguments" {
                         for argument in named_children(child) {
-                            self.aggregation(argument, scope, inside || aggregate);
+                            self.aggregation(argument, scope, matched, inside || aggregate);
                         }
                     }
                 }
@@ -959,6 +1124,22 @@ impl<'s> Checker<'s> {
                     node,
                 );
             }
+            "variable" if !inside => {
+                let name = self.text(node);
+                if scope.placeholders.contains_key(name)
+                    && !matched.contains(name)
+                    && !scope.outcomes.contains(name)
+                {
+                    self.error(
+                        codes::YARAL_OUTCOME_AGGREGATION,
+                        format!(
+                            "`{name}` is a placeholder, not a `match` variable: in a {} with `match`, read it through an aggregation (max, min, count_distinct, array_distinct, ...)",
+                            self.profile.noun()
+                        ),
+                        node,
+                    );
+                }
+            }
             "variable" if inside => {
                 let name = self.text(node);
                 if scope.outcomes.contains(name) {
@@ -972,7 +1153,7 @@ impl<'s> Checker<'s> {
             "named_argument" => {}
             _ => {
                 for child in named_children(node) {
-                    self.aggregation(child, scope, inside);
+                    self.aggregation(child, scope, matched, inside);
                 }
             }
         }
@@ -1399,36 +1580,20 @@ impl<'s> Checker<'s> {
 
     /// The checks that read one node at a time, over the whole text.
     fn walk_all(&mut self, root: Node<'_>) {
-        let mut nodes: Vec<(Node<'_>, usize, Option<&'static str>)> = Vec::new();
+        // (node, section, inside a named argument's value or a meta/option entry)
+        let mut nodes: Vec<(Node<'_>, Option<&'static str>, bool)> = Vec::new();
         opentide_syntax::walk_with_ancestors(root, |n, ancestors| {
-            let depth = ancestors
-                .iter()
-                .filter(|a| matches!(a.kind(), "function_call" | "if_expression" | "table_call"))
-                .count();
             let section = ancestors.iter().rev().find_map(|a| section_name(a.kind()));
-            nodes.push((n, depth, section));
+            let free = ancestors
+                .iter()
+                .any(|a| matches!(a.kind(), "named_argument" | "meta_entry" | "option_entry"));
+            nodes.push((n, section, free));
         });
-        let mut nested = false;
-        for (n, depth, section) in nodes {
+        for (n, section, free) in nodes {
             match n.kind() {
-                "function_call" | "if_expression" | "table_call" => {
-                    if depth + 1 > MAX_NESTING && !nested {
-                        nested = true;
-                        self.error(
-                            codes::YARAL_NESTING_DEPTH,
-                            format!(
-                                "calls nest {} deep here: Google allows {MAX_NESTING}",
-                                depth + 1
-                            ),
-                            n,
-                        );
-                    }
-                    if n.kind() == "function_call" {
-                        self.call(n);
-                    } else if n.kind() == "table_call" {
-                        self.table_call(n, section);
-                    }
-                }
+                "function_call" => self.call(n),
+                "table_call" => self.table_call(n, section),
+                "identifier" if !free => self.bare_name(n),
                 "udm_field" | "bare_field" => self.field(n),
                 "comparison" => self.comparison(n),
                 "quantified_field" => self.quantified(n),
@@ -1475,6 +1640,26 @@ impl<'s> Checker<'s> {
                 _ => {}
             }
         }
+    }
+
+    /// A bare name as a term: a search's grouped field or `raw`
+    /// (search-syntax-reference); a metric field only inside a `metrics.*`
+    /// argument, which `walk_all` leaves alone.
+    fn bare_name(&mut self, node: Node<'_>) {
+        let name = self.text(node);
+        if self.profile == Profile::Search && (GROUPED_FIELDS.contains(&name) || name == "raw") {
+            return;
+        }
+        let message = match self.profile {
+            Profile::Search => format!(
+                "`{name}` is not a UDM field: a search names a full path (`principal.hostname`), a grouped field ({}) or `raw`",
+                GROUPED_FIELDS.join(", ")
+            ),
+            Profile::Rule => format!(
+                "`{name}` is not a field: a rule reads fields through an event variable (`$e.principal.hostname`); grouped fields and `raw` are search only"
+            ),
+        };
+        self.error(codes::YARAL_UNKNOWN_UDM_FIELD, message, node);
     }
 
     fn call(&mut self, call: Node<'_>) {
@@ -1615,7 +1800,7 @@ impl<'s> Checker<'s> {
                     let start = node.start_byte() + i;
                     self.push(
                         codes::YARAL_STRING_ESCAPE,
-                        Severity::Error,
+                        Severity::Warning,
                         format!("`\\{next}` is not an escape: a double-quoted string takes \\\\, \\\", \\n, \\r and \\t; write `\\\\{next}`, or a back-quoted string for a regex"),
                         (start, start + 1 + next.len_utf8()),
                     );
@@ -1659,6 +1844,18 @@ impl<'s> Checker<'s> {
         let segs = self.field_segments(field);
         let udm = Udm::cached();
         let resolution = udm.resolve(&segs);
+        if self.profile == Profile::Search
+            && resolution.unknown.is_some_and(|(index, _)| index == 0)
+        {
+            // `$zzz.u`: a stage reference the tenant checks (yara-l-1.0
+            // 1.1, "Checked by the tenant only"); `labels["k"]`: a search's
+            // top-level map.
+            let top_map = field.kind() == "bare_field"
+                && matches!(segs.as_slice(), [Segment::Name(n, _), Segment::Key(_), ..] if n == "labels");
+            if field.kind() == "udm_field" || top_map {
+                return;
+            }
+        }
         if let Some((index, message)) = resolution.unknown
             && let Some(Segment::Name(name, at)) = segs.get(index)
         {
@@ -1785,6 +1982,8 @@ impl<'s> Checker<'s> {
                         ),
                         nocase.unwrap_or(node),
                     );
+                    // One finding per `nocase`.
+                    return;
                 }
                 _ => {}
             }
@@ -1800,11 +1999,18 @@ impl<'s> Checker<'s> {
         }
     }
 
+    /// `any`/`all` on a map index: a Label (`ingestion_labels["k"]`) or a
+    /// Struct (`additional.fields["k"]`, Google's own unsupported example in
+    /// expressions, "Unsupported use of maps").
     fn quantified(&mut self, node: Node<'_>) {
         let Some(field) = node.child_by_field_name("field") else {
             return;
         };
-        if let Some((_, true)) = self.operand_kind(field) {
+        let keyed = matches!(field.kind(), "udm_field" | "bare_field")
+            && segments(field, self.source)
+                .iter()
+                .any(|s| matches!(s, Segment::Key(_)));
+        if keyed {
             let q = node
                 .child_by_field_name("quantifier")
                 .map(|q| self.text(q))

@@ -1,0 +1,12 @@
+# file	profile	expected error codes (comma-separated; - for none)	what the example shows
+investigation_multi-stage-yaral__L222.yaral	search	-	a root query that reads a stage only; window.avg and window.stddev in a search; `by day`
+investigation_multi-stage-yaral__L397.yaral	search	-	window.median in a search; stages joined through placeholders
+investigation_multi-stage-yaral__L496.yaral	search	-	a stage without events; `cross join`
+yara-l_yara-l-2-0-examples__L606.yaral	search	-	a sliding window in a search
+yara-l_yara-l-2-0-examples__L624.yaral	search	-	a sliding window in a dashboard query
+yara-l_functions__L1117.yaral	search	-	math.round with one argument
+yara-l_transition_spl_yaral__L437.yaral	search	-	window.first and window.last in a search
+investigation_search-syntax-reference__L113.yaral	search	-	map keys on a Struct and a Label in a search
+investigation_data-tables__L698.yaral	search	-	a search writing scalar fields to a data table
+investigation_data-tables__L1205.yaral	search	yaral_export_value,yaral_section_missing	Google's unsupported example: a match key exported (a fragment, so no events)
+yara-l_expressions__L477.yaral	search	yaral_type	Google's unsupported example: `all` on a Struct map key

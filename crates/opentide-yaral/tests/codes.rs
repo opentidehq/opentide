@@ -114,6 +114,13 @@ fn section_unavailable() {
     );
     let search = "metadata.event_type = \"USER_LOGIN\"\noptions:\n  allow_zero_values = true\n";
     assert!(has(&search_codes(search), codes::YARAL_SECTION_UNAVAILABLE));
+    // `meta` in a search is optional and ignored (getting-started).
+    let search = "meta:\n  author = \"a\"\nevents:\n  metadata.event_type = \"USER_LOGIN\"\n";
+    assert!(
+        search_codes(search).is_empty(),
+        "{:?}",
+        search_codes(search)
+    );
     assert!(search_codes("metadata.event_type = \"USER_LOGIN\"\nlimit:\n  10\n").is_empty());
 }
 
@@ -285,18 +292,6 @@ fn nocase_on_enum() {
 }
 
 #[test]
-fn nesting_depth() {
-    let mut call = "$e.principal.hostname".to_string();
-    for _ in 0..21 {
-        call = format!("strings.to_lower({call})");
-    }
-    assert_code(
-        &rule(&format!("{EVENTS}\n    {call} = \"x\""), CONDITION),
-        codes::YARAL_NESTING_DEPTH,
-    );
-}
-
-#[test]
 fn outcome_limit() {
     let outcome: String = (0..21).map(|i| format!("    $o{i} = {i}\n")).collect();
     assert_code(
@@ -382,12 +377,58 @@ fn function_unavailable() {
         EVENTS,
         &format!("{MATCHED}  outcome:\n    $a = window.avg($e.network.sent_bytes)\n{CONDITION}"),
     ));
-    // window.avg is a rule function.
+    // window.* runs in a search too (yara-l-1.0 1.1: Google's multi-stage
+    // and SPL-transition searches call them); hash.sha256 does not.
     let search = "metadata.event_type = \"USER_LOGIN\"\n$u = target.user.userid\nmatch:\n  $u\noutcome:\n  $a = window.avg(network.sent_bytes)\n";
+    assert!(
+        search_codes(search).is_empty(),
+        "{:?}",
+        search_codes(search)
+    );
+    let search = "metadata.event_type = \"USER_LOGIN\"\nhash.sha256(principal.hostname) = \"x\"\n";
     assert!(has(
         &search_codes(search),
         codes::YARAL_FUNCTION_UNAVAILABLE
     ));
+    // math.round takes one or two arguments (functions page:
+    // `math.round(10.7) // returns 11`).
+    let search = "metadata.event_type = \"USER_LOGIN\"\nmath.round(network.sent_bytes) > 10\n";
+    assert!(
+        search_codes(search).is_empty(),
+        "{:?}",
+        search_codes(search)
+    );
+}
+
+#[test]
+fn metrics_functions() {
+    // Every function of the metrics page, with its named arguments: `filter:`
+    // over the metric's fields and `*` as a grouping value (metrics-functions,
+    // "Filter" and "Count unique metrics").
+    let rule_text = |outcome: &str| {
+        rule(
+            "    $e.metadata.event_type = \"USER_LOGIN\"\n    $ip = $e.principal.ip",
+            &format!("  match:\n    $ip over 1h\n  outcome:\n    {outcome}\n{CONDITION}"),
+        )
+    };
+    assert_clean(&rule_text(
+        "$o = max(metrics.dns_queries_total(period:1d, window:30d, metric:event_count_sum, agg:max, principal.asset.ip:$ip))",
+    ));
+    assert_clean(&rule_text(
+        "$o = max(metrics.network_bytes_outbound(period:1d, window:30d, metric:value_sum, agg:max, principal.asset.ip:$ip, filter:value_sum > 10 AND event_count_sum > 2))",
+    ));
+    assert_clean(&rule_text(
+        "$o = max(metrics.auth_attempts_success(period:1d, window:30d, metric:first_seen, agg:max, filter:timestamp.get_day_of_week(first_seen) = 3, principal.asset.ip:$ip))",
+    ));
+    assert_clean(&rule_text(
+        "$o = max(metrics.auth_attempts_total(period: 1d, window: 30d, metric: num_unique_filter_values, agg: max, target.user.userid: $ip, principal.ip_geo_artifact.location.country_or_region: *))",
+    ));
+    assert_code(
+        &rule_text(
+            "$o = max(metrics.dns_queries_totl(period:1d, window:30d, metric:value_sum, agg:max))",
+        ),
+        codes::YARAL_UNKNOWN_FUNCTION,
+    );
 }
 
 #[test]
@@ -475,13 +516,14 @@ fn regex() {
 
 #[test]
 fn string_escape() {
-    assert_code(
-        &rule(
-            &format!("{EVENTS}\n    $e.principal.hostname = \"web\\d\""),
-            CONDITION,
-        ),
-        codes::YARAL_STRING_ESCAPE,
+    // A warning: Google's own examples use `\.` (re.replace) and its
+    // community rules `\T`, so only the tenant knows.
+    let text = rule(
+        &format!("{EVENTS}\n    $e.principal.hostname = \"web\\d\""),
+        CONDITION,
     );
+    assert!(warnings(&text).contains(&codes::YARAL_STRING_ESCAPE.to_string()));
+    assert_clean(&text);
     assert_clean(&rule(
         &format!("{EVENTS}\n    $e.principal.hostname = \"a\\\\b\\\"c\\n\""),
         CONDITION,
@@ -623,7 +665,6 @@ fn every_spec_code_is_registered() {
         "yaral_match_window",
         "yaral_condition_shape",
         "yaral_nocase_on_enum",
-        "yaral_nesting_depth",
         "yaral_outcome_limit",
         "yaral_outcome_aggregation",
         "yaral_unknown_function",
@@ -635,12 +676,15 @@ fn every_spec_code_is_registered() {
         "yaral_string_escape",
         "yaral_reference_list_limit",
         "yaral_option",
+        "yaral_export_value",
+        "yaral_window_bound",
         "yaral_deprecated_field",
         "yaral_unfiltered_event",
         "yaral_leading_wildcard_regex",
         "yaral_reference_list_deprecated",
     ];
-    assert_eq!(spec.len(), 32);
+    assert_eq!(spec.len(), 33);
+    assert!(!codes::ALL.contains(&"yaral_nesting_depth"));
     for code in spec {
         assert!(codes::ALL.contains(&code), "{code}");
         assert!(codes::describe(code).is_some(), "{code}");
@@ -660,4 +704,185 @@ fn the_spec_goldens_are_clean() {
         let found = analyze(&text).diagnostics;
         assert!(found.is_empty(), "{stem}: {found:?}");
     }
+}
+
+#[test]
+fn export_value() {
+    // data-tables: "You can only export outcome variables".
+    let outcome = "  outcome:\n    $user = array_distinct($e.target.user.userid)\n";
+    assert_clean(&rule(
+        EVENTS,
+        &format!("{MATCHED}{outcome}{CONDITION}  export:\n    %t.write_row(user: $user)\n"),
+    ));
+    assert_code(
+        &rule(
+            EVENTS,
+            &format!("{MATCHED}{outcome}{CONDITION}  export:\n    %t.write_row(user: $u)\n"),
+        ),
+        codes::YARAL_EXPORT_VALUE,
+    );
+    assert_code(
+        &rule(
+            EVENTS,
+            &format!("{CONDITION}  export:\n    %t.write_row(host: $e.principal.hostname)\n"),
+        ),
+        codes::YARAL_EXPORT_VALUE,
+    );
+    // A search writes scalar fields (data-tables), but not a match key.
+    let search = "metadata.event_type = \"NETWORK_CONNECTION\"\nexport:\n  %summary.write_row(product: metadata.product_name)\n";
+    assert!(
+        search_codes(search).is_empty(),
+        "{:?}",
+        search_codes(search)
+    );
+    let search = "metadata.event_type = \"NETWORK_CONNECTION\"\nmatch:\n  principal.hostname\nexport:\n  %sample.write_row(row: principal.hostname)\n";
+    assert!(has(&search_codes(search), codes::YARAL_EXPORT_VALUE));
+}
+
+#[test]
+fn window_bound() {
+    // windowing-logic, "Troubleshooting": in events, and without a window.
+    assert_code(
+        &rule(
+            &format!("{EVENTS}\n    $e.metadata.event_timestamp.seconds > window_start"),
+            &format!("{MATCHED}{CONDITION}"),
+        ),
+        codes::YARAL_WINDOW_BOUND,
+    );
+    assert_code(
+        &rule(
+            EVENTS,
+            "  outcome:\n    $w = window_start\n  condition:\n    $e\n",
+        ),
+        codes::YARAL_WINDOW_BOUND,
+    );
+    assert_clean(&rule(
+        EVENTS,
+        &format!("{MATCHED}  outcome:\n    $w = max(window_start)\n{CONDITION}"),
+    ));
+    // Case-insensitive like every keyword.
+    assert_code(
+        &rule(
+            EVENTS,
+            "  outcome:\n    $w = WINDOW_END\n  condition:\n    $e\n",
+        ),
+        codes::YARAL_WINDOW_BOUND,
+    );
+}
+
+#[test]
+fn outcome_aggregation_reads_placeholders_through_aggregations() {
+    // outcome-syntax, "Aggregations": event placeholders are aggregated when
+    // the query uses `match`; a match variable is a single value.
+    let events = "    $e.metadata.event_type = \"USER_LOGIN\"\n    $u = $e.target.user.userid\n    $h = $e.principal.hostname";
+    assert_code(
+        &rule(
+            events,
+            &format!("{MATCHED}  outcome:\n    $host = $h\n{CONDITION}"),
+        ),
+        codes::YARAL_OUTCOME_AGGREGATION,
+    );
+    assert_clean(&rule(
+        events,
+        &format!(
+            "{MATCHED}  outcome:\n    $hosts = array_distinct($h)\n    $user = $u\n{CONDITION}"
+        ),
+    ));
+}
+
+#[test]
+fn any_or_all_on_a_struct_map_key() {
+    // Google's unsupported example (expressions, "Unsupported use of maps").
+    assert_code(
+        &rule(
+            &format!(
+                "{EVENTS}\n    all $e.udm.additional.fields[\"pod_name\"] = \"kube-scheduler\""
+            ),
+            CONDITION,
+        ),
+        codes::YARAL_TYPE,
+    );
+}
+
+#[test]
+fn nocase_on_a_number_is_one_finding() {
+    let found = codes_of(&rule(
+        &format!("{EVENTS}\n    $e.target.port = 22 nocase"),
+        CONDITION,
+    ));
+    assert_eq!(
+        found.iter().filter(|c| *c == codes::YARAL_TYPE).count(),
+        1,
+        "{found:?}"
+    );
+}
+
+#[test]
+fn keywords_are_case_insensitive_in_any_mix() {
+    let text = "RuLe r {\n  MeTa:\n    author = \"a\"\n  EvEnTs:\n    $e.metadata.event_type = \"USER_LOGIN\" aNd $e.target.port > 0\n  cOnDiTiOn:\n    $e\n}\n";
+    assert_clean(text);
+    // A keyword is never a name.
+    assert_code(
+        &rule("    $e.target.port = 1 or or $e.target.port = 2", CONDITION),
+        codes::YARAL_PARSE_ERROR,
+    );
+}
+
+#[test]
+fn search_profile_1_1() {
+    let clean = |text: &str| {
+        let found = search_codes(text);
+        assert!(found.is_empty(), "{found:?}\n{text}");
+    };
+    // A stage, or a root, that reads only earlier stages has no events;
+    // `cross join`; more than four stages and undefined stage references
+    // are the tenant's.
+    clean(
+        "stage counts {\n  $user = principal.user.userid\n  metadata.event_type = \"USER_LOGIN\"\n  match:\n    $user\n  outcome:\n    $n = count(metadata.id)\n}\nstage total {\n  outcome:\n    $count = count($counts.user)\n  limit:\n    1\n}\ncross join $total, $counts\n$n = $counts.n\nmatch:\n  $n\noutcome:\n  $users = max($total.count)\n",
+    );
+    let five: String = (1..=5)
+        .map(|i| format!("stage s{i} {{\n  metadata.event_type = \"USER_LOGIN\"\n  $u = principal.user.userid\n  match:\n    $u\n}}\n"))
+        .collect();
+    clean(&format!("{five}$u = $s5.u\nmatch:\n  $u\n"));
+    clean("$u = $nowhere.user\nmatch:\n  $u\n");
+    // Sliding windows run in a search, up to 48h.
+    clean(
+        "$a.metadata.product_name = \"fw1\"\n$a.principal.hostname = $h\n$b.metadata.product_name = \"fw2\"\n$b.principal.hostname = $h\nmatch:\n  $h over 10m after $a\ncondition:\n  $a and !$b\n",
+    );
+    assert!(has(
+        &search_codes(
+            "$a.metadata.product_name = \"fw1\"\n$a.principal.hostname = $h\nmatch:\n  $h over 3d after $a\n"
+        ),
+        codes::YARAL_MATCH_WINDOW
+    ));
+    // Tumbling: 30 days, 48 hours with a join; w and mo are 7 and 30 days,
+    // checked like any other unit.
+    let tumbling = |window: &str| {
+        search_codes(&format!(
+            "metadata.event_type = \"USER_LOGIN\"\n$h = principal.hostname\nmatch:\n  $h by {window}\n"
+        ))
+    };
+    for ok in ["30d", "7d", "1w", "4w", "1mo", "day", "2 week", "month"] {
+        assert!(tumbling(ok).is_empty(), "{ok}: {:?}", tumbling(ok));
+    }
+    for bad in ["31d", "5w", "2mo", "2 month"] {
+        assert!(has(&tumbling(bad), codes::YARAL_MATCH_WINDOW), "{bad}");
+    }
+    let joined = "$a.metadata.event_type = \"USER_LOGIN\"\n$a.principal.hostname = $h\n$b.metadata.event_type = \"USER_LOGOUT\"\n$b.principal.hostname = $h\nmatch:\n  $h by 3d\n";
+    assert!(has(&search_codes(joined), codes::YARAL_MATCH_WINDOW));
+    // Grouped fields, raw-log search and top-level maps (search-syntax-reference).
+    clean(
+        "ip = \"5.6.7.8\" AND metadata.event_type = \"NETWORK_CONNECTION\"\nhostname = \"abc\" nocase\n",
+    );
+    clean("raw = /mimi.atz/ nocase\n");
+    clean("labels[\"key\"] = \"value\"\n");
+    assert!(has(
+        &search_codes("hostnam = \"abc\"\n"),
+        codes::YARAL_UNKNOWN_UDM_FIELD
+    ));
+    // In a rule, a grouped field is not a field.
+    assert_code(
+        &rule(&format!("{EVENTS}\n    ip = \"10.0.0.1\""), CONDITION),
+        codes::YARAL_UNKNOWN_UDM_FIELD,
+    );
 }

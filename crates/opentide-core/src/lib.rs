@@ -712,8 +712,8 @@ pub mod codes {
     pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
     pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
     // YARA-L 2.0 (yara-l-1.0). Errors are what Google's compiler refuses;
-    // the warnings are yaral_deprecated_field through
-    // yaral_reference_list_deprecated.
+    // the warnings are yaral_string_escape and yaral_deprecated_field
+    // through yaral_reference_list_deprecated.
     pub const YARAL_PARSE_ERROR: &str = "yaral_parse_error";
     pub const YARAL_SECTION_HEADER: &str = "yaral_section_header";
     pub const YARAL_SECTION_EMPTY: &str = "yaral_section_empty";
@@ -730,7 +730,6 @@ pub mod codes {
     pub const YARAL_MATCH_WINDOW: &str = "yaral_match_window";
     pub const YARAL_CONDITION_SHAPE: &str = "yaral_condition_shape";
     pub const YARAL_NOCASE_ON_ENUM: &str = "yaral_nocase_on_enum";
-    pub const YARAL_NESTING_DEPTH: &str = "yaral_nesting_depth";
     pub const YARAL_OUTCOME_LIMIT: &str = "yaral_outcome_limit";
     pub const YARAL_OUTCOME_AGGREGATION: &str = "yaral_outcome_aggregation";
     pub const YARAL_UNKNOWN_FUNCTION: &str = "yaral_unknown_function";
@@ -742,6 +741,8 @@ pub mod codes {
     pub const YARAL_STRING_ESCAPE: &str = "yaral_string_escape";
     pub const YARAL_REFERENCE_LIST_LIMIT: &str = "yaral_reference_list_limit";
     pub const YARAL_OPTION: &str = "yaral_option";
+    pub const YARAL_EXPORT_VALUE: &str = "yaral_export_value";
+    pub const YARAL_WINDOW_BOUND: &str = "yaral_window_bound";
     pub const YARAL_DEPRECATED_FIELD: &str = "yaral_deprecated_field";
     pub const YARAL_UNFILTERED_EVENT: &str = "yaral_unfiltered_event";
     pub const YARAL_LEADING_WILDCARD_REGEX: &str = "yaral_leading_wildcard_regex";
@@ -973,7 +974,6 @@ pub mod codes {
         YARAL_MATCH_WINDOW,
         YARAL_CONDITION_SHAPE,
         YARAL_NOCASE_ON_ENUM,
-        YARAL_NESTING_DEPTH,
         YARAL_OUTCOME_LIMIT,
         YARAL_OUTCOME_AGGREGATION,
         YARAL_UNKNOWN_FUNCTION,
@@ -985,6 +985,8 @@ pub mod codes {
         YARAL_STRING_ESCAPE,
         YARAL_REFERENCE_LIST_LIMIT,
         YARAL_OPTION,
+        YARAL_EXPORT_VALUE,
+        YARAL_WINDOW_BOUND,
         YARAL_DEPRECATED_FIELD,
         YARAL_UNFILTERED_EVENT,
         YARAL_LEADING_WILDCARD_REGEX,
@@ -1519,10 +1521,9 @@ pub mod codes {
             YARAL_NOCASE_ON_ENUM => {
                 "`nocase` is applied to a comparison with an enumerated UDM field."
             }
-            YARAL_NESTING_DEPTH => "Function calls nest more than 20 deep.",
             YARAL_OUTCOME_LIMIT => "A rule or search assigns more than 20 outcome variables.",
             YARAL_OUTCOME_AGGREGATION => {
-                "An outcome reads an event field outside an aggregation in a rule with `match`, or aggregates an outcome variable."
+                "With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable."
             }
             YARAL_UNKNOWN_FUNCTION => {
                 "The function is not in Google's YARA-L function list, or it takes a different number of arguments."
@@ -1532,15 +1533,23 @@ pub mod codes {
             }
             YARAL_UNKNOWN_UDM_FIELD => "The field path is not in the Unified Data Model.",
             YARAL_ENUM_VALUE => "The value is not one of the enumerated UDM field's values.",
-            YARAL_TYPE => "An operator or function is applied to a value of the wrong type.",
+            YARAL_TYPE => {
+                "An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number."
+            }
             YARAL_REGEX => "The regular expression is not valid RE2.",
             YARAL_STRING_ESCAPE => {
-                "A double-quoted string holds an escape YARA-L does not define; the escapes are backslash, double quote, n, r and t."
+                "A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles."
             }
             YARAL_REFERENCE_LIST_LIMIT => {
                 "More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2)."
             }
             YARAL_OPTION => "An unknown option, or an option value of the wrong kind.",
+            YARAL_EXPORT_VALUE => {
+                "An `export` `write_row` value is not an outcome variable: Google exports outcome variables only."
+            }
+            YARAL_WINDOW_BOUND => {
+                "`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window."
+            }
             YARAL_DEPRECATED_FIELD => "The UDM field is deprecated.",
             YARAL_UNFILTERED_EVENT => {
                 "An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event."
