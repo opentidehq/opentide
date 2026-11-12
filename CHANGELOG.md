@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **Exabeam New-Scale SIEM correlation rules deploy from opentide.** A `configurations.exabeam` block (`platform::exabeam::1.0`) is one correlation rule: one or more sequences, each an Exabeam Query Language filter that triggers on any match or on a threshold, with correlation, suppression, delay, schedule, outcome and email. Deploy derives the name, description (with the ATT&CK line) and severity, checks the name is free before a create (`exabeam_name_conflict`), sends the whole rule on every update, disables with `enabled: false`, keeps the rule UUID in `.opentide/states/deployment/`, and paces requests to 100 a minute. Enable it with `opentide setup platforms --exabeam`; a tenant names its `region`, and `client_id` and `client_secret` as `$VAR`s.
+- **`validate` checks Exabeam blocks.** It reports the 13 `exabeam_*` constraint codes of the spec, each at the `field_path` the spec fixes for it, and two enabled blocks sharing an Exabeam rule name, case-insensitively (`exabeam_name_duplicate`). `validate` and `lint` warn on `outcome: none` without an email (`exabeam_outcome_silent`) and on a correlation window shorter than a sequence's (`exabeam_correlation_window`). `deploy --dry-run` shows the create request.
+- **`validate query --platform exabeam --live` and `opentide query --platform exabeam`.** `--live` sends each sequence filter to Exabeam Search over the last 15 minutes: a `400` fails it, and any answer but `200` is an error, never a pass. `opentide query` runs a hunt through Search, at most 3,000 rows. Sequence queries, `system: exabeam` hunts and `.exabeam` files are handed to the analysis engine as the `exabeam` language; until an engine that knows the language is pinned, an offline check of one fails as `engine_unavailable`.
+
 ## [0.25.0] — 2026-11-11
 
 Bitdefender GravityZone rules deploy from a `configurations.bitdefender` block, as a custom detection rule or a YARA rule. HarfangLab rules take a whole YARA signature, and `validate`, `lint`, the editor and `opentide tui` check YARA as libyara 4.5 compiles it.
