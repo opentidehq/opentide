@@ -22,7 +22,7 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | … compare failing | 0 (0.0%) |
 | … compare not run | 738 (95.8%) |
 | … flipped | 0 (0.0%) |
-| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1078 |
+| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 1080 |
 | Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
 | … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
