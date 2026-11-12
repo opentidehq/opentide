@@ -7482,12 +7482,12 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate query
+opentide lint --check queries
 ```
 
 ### How to fix
@@ -7582,12 +7582,12 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The YARA module is known but not confirmed on the platform's agents.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate query
+opentide lint --check queries
 ```
 
 ### How to fix
@@ -7696,12 +7696,12 @@ configurations:
 
 libyara warns that this YARA string or loop may slow scanning down.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate query
+opentide lint --check queries
 ```
 
 ### How to fix
@@ -7728,12 +7728,12 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate query
+opentide lint --check queries
 ```
 
 ### How to fix

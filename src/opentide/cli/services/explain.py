@@ -68,6 +68,7 @@ def engine_page(code: str) -> ExplainPage | None:
         ELASTIC_ADVISORY_CODES,
         HARFANGLAB_ADVISORY_CODES,
         SYSDIG_ADVISORY_CODES,
+        YARA_WARNING_CODES,
         describe,
     )
     from opentide.cli.ui.diagnostics import engine_reference
@@ -79,15 +80,23 @@ def engine_page(code: str) -> ExplainPage | None:
     if reference is not None:
         language, url = reference
         article = "an" if language[:1] in "AEIOU" else "a"
-        where = (
-            f"Reported by the analysis engine in {article} {language} query, at the place in "
-            "the query: "
-            "as an error, a query the platform would reject, by `opentide validate` (its "
-            "`queries` check) and `opentide validate query`; as a warning or a note, style, by "
-            "`opentide lint` (its `queries` check). An editor running `opentide lsp start` "
-            "shows both."
-        )
-        example = "opentide validate query"
+        if code in YARA_WARNING_CODES:
+            where = (
+                f"Reported by the analysis engine in {article} {language} query, at the place "
+                "in the query, always as a warning: the platform takes the rule, so "
+                "`opentide validate` does not fail on it, and `opentide lint` (its `queries` "
+                "check) and an editor running `opentide lsp start` show it."
+            )
+            example = "opentide lint --check queries"
+        else:
+            where = (
+                f"Reported by the analysis engine in {article} {language} query, at the place "
+                "in the query: as an error, a query the platform would reject, by "
+                "`opentide validate` (its `queries` check) and `opentide validate query`; as a "
+                "warning or a note, style, by `opentide lint` (its `queries` check). An editor "
+                "running `opentide lsp start` shows both."
+            )
+            example = "opentide validate query"
         fix = (
             "Change the query where the frame points, then run `opentide validate query` "
             "(`--file` for one rule or query file) or `opentide lint --check queries` again. "

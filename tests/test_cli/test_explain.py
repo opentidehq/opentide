@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from opentide.analysis import YARA_WARNING_CODES
 from opentide.cli import app
 from opentide.cli.services.explain import (
     REFERENCE_PAGE,
@@ -226,6 +227,23 @@ def test_every_page_has_a_summary_an_example_and_a_fix(code: str) -> None:
     assert page.summary and page.summary.endswith(".")
     assert "\n## Example\n" in page.markdown
     assert "\n## How to fix\n" in page.markdown
+
+
+@pytest.mark.parametrize("code", sorted(YARA_WARNING_CODES))
+def test_a_warning_only_yara_code_is_not_described_as_an_error(code: str) -> None:
+    # The generic engine page says a code is an error that fails `opentide validate`;
+    # yara_module_unconfirmed's page said so while the platform page called it a warning.
+    page = load_page(code)
+    assert page is not None, f"{code} is not an engine code"
+    assert "always as a warning" in page.markdown
+    assert "`opentide validate` does not fail on it" in page.markdown
+    assert "as an error" not in page.markdown
+
+
+def test_a_yara_error_keeps_the_generic_page() -> None:
+    page = load_page("yara_unknown_module")
+    assert page is not None
+    assert "as an error, a query the platform would reject" in page.markdown
 
 
 def test_the_reference_page_is_generated_from_the_pages() -> None:

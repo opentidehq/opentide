@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **`opentide explain` calls a warning-only YARA code a warning.** The pages for `yara_module_unconfirmed`, `yara_entrypoint_deprecated`, `yara_slow_pattern` and `yara_suspicious_expression` said `opentide validate` fails on them; the engine only ever warns on these, so `validate` passes and `opentide lint` reports them. The Bitdefender and validate docs already called `yara_module_unconfirmed` a warning.
+- **The validate docs say Elastic `--live` writes preview alerts.** `validate query --platform elastic --live` previews each rule in Kibana, which creates no rule but writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as `opentide query` with `kuery` does.
+
 ## [0.28.0] — 2026-11-12
 
 Google Security Operations support: deploy YARA-L rules to Google SecOps, with their sections checked as you type.
