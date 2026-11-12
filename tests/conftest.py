@@ -199,9 +199,22 @@ def rule_payload(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 def _restore_environment(saved: dict[str, str]) -> None:
+    """Put ``os.environ`` back to *saved* and forget what was resolved from it.
+
+    ``get_repo_root`` and ``get_data_root`` cache the root that
+    ``OPENTIDE_REPO_ROOT`` / ``OPENTIDE_DATA_ROOT`` named when first called.
+    ``CliRunner(env=...)`` and ``monkeypatch`` take those variables back, but
+    the cached root stayed, so a later test resolved the earlier test's
+    temporary workspace. The caches are cleared even when the environment is
+    already as saved, since the variables are often gone by then.
+    """
+    from opentide.core.root import get_data_root, get_repo_root
+
     if dict(os.environ) != saved:
         os.environ.clear()
         os.environ.update(saved)
+    get_repo_root.cache_clear()
+    get_data_root.cache_clear()
 
 
 @pytest.hookimpl(wrapper=True)
