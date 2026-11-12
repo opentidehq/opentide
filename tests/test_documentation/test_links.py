@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from opentide.documentation.catalog import DocumentationCatalog, SignalRecord
 from opentide.documentation.format.generic import GenericFormatter
 from opentide.documentation.format.github import GitHubFormatter
@@ -76,7 +78,10 @@ def test_object_link_resolves_signal_to_parent_heading() -> None:
     assert heading_anchor("Exec signal") == "exec-signal"
 
 
-def test_object_link_missing_uuid_is_code() -> None:
+def test_object_link_missing_uuid_is_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    # resolve_name falls back to the process-wide registry: an earlier test's
+    # workspace (test_lint's holds an invalid threat) must not answer for it.
+    monkeypatch.setattr("opentide.documentation.catalog.Opentide.lookup", lambda uuid: None)
     catalog = DocumentationCatalog(rules=[], objectives=[], threats=[])
     assert object_link(GitHubFormatter(), catalog, "missing", from_folder="rules") == "`missing`"
 
