@@ -79,6 +79,9 @@ pub const FIXTURES: &[&str] = &[
     "empty",
     "tide-corpus",
     "tide-corpus-typo",
+    "tide-corpus-cve",
+    "tide-corpus-legacy-ids",
+    "tide-corpus-legacy-id-error",
     "vscode",
     "setup-merge",
     "vscode-docs-folder",
@@ -175,7 +178,30 @@ pub fn fixture(name: &str, ws: &Path) {
             )
             .unwrap();
         }
+        // UC-4.4 (#834): tide-corpus with the edits cases.toml declares.
+        "tide-corpus-cve" | "tide-corpus-legacy-ids" | "tide-corpus-legacy-id-error" => {
+            fixture("tide-corpus", ws);
+            apply_edits(name, ws);
+        }
         other => panic!("{other}: a fixture this test does not lay out"),
+    }
+}
+
+/// The `edits` of fixture `name` in `tests/golden/cases.toml`, each `find`
+/// found once and replaced (`xtask/src/golden/fixture.rs`).
+fn apply_edits(name: &str, ws: &Path) {
+    let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
+    let spec: toml::Table = toml::from_str(&text).unwrap();
+    let edits = spec["fixtures"][name]["edits"].as_array().unwrap();
+    for edit in edits {
+        let path = ws.join(edit["path"].as_str().unwrap());
+        let (find, replace) = (
+            edit["find"].as_str().unwrap(),
+            edit["replace"].as_str().unwrap(),
+        );
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text.matches(find).count(), 1, "{name}: {}", path.display());
+        std::fs::write(&path, text.replacen(find, replace, 1)).unwrap();
     }
 }
 

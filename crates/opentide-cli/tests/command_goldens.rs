@@ -152,6 +152,13 @@ fn query_cases_are_the_oracles() {
     check(&["query"], 60);
 }
 
+/// `deploy migrate-state` (UC-4.4, #834): ids moved into shards, a rule
+/// refused, a clean run.
+#[test]
+fn deploy_migrate_state_cases_are_the_oracles() {
+    check(&["deploy.migrate-state"], 16);
+}
+
 #[test]
 fn lint_cases_are_the_oracles() {
     check(&["lint"], 50);
@@ -402,7 +409,12 @@ fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_ru
     assert!(!replay::covers("generate", &words("generate -- schemas")));
     assert!(replay::covers("new threat", &words("new threat --name x")));
     assert!(replay::covers("doctor", &words("doctor --offline")));
-    assert!(!replay::covers("doctor", &words("doctor")));
+    // doctor's network checks run on Rust too (UC-4.4, #834).
+    assert!(replay::covers("doctor", &words("doctor")));
+    assert!(replay::covers(
+        "deploy migrate-state",
+        &words("deploy migrate-state")
+    ));
     assert!(replay::covers("setup", &words("setup --plan")));
     assert!(!replay::covers("setup", &words("setup --skills")));
     assert!(replay::covers("setup vscode", &words("setup vscode")));

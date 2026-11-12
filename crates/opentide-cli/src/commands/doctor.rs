@@ -1,5 +1,5 @@
-//! `opentide doctor --offline` (`cli/commands/doctor.py`,
-//! `cli/services/doctor.py`; UC-3.5c, #928): one checklist for the
+//! `opentide doctor` (`cli/commands/doctor.py`, `cli/services/doctor.py`;
+//! UC-3.5c, #928; its network checks UC-4.4, #834): one checklist for the
 //! installation, the workspace and its integrations.
 //!
 //! Every check has a stable `code` (`docs/cli/doctor.md`), a status (`pass`,
@@ -8,9 +8,7 @@
 //! set or unset by variable name, a proxy URL without its user and password.
 //!
 //! The network checks (the newest release on PyPI, the proxy's reachability)
-//! are UC-4.1's: this engine runs `doctor --offline` only, and refuses a run
-//! without it with `engine_not_ported` (`OPENTIDE_ENGINE=compare` then runs
-//! Python alone).
+//! are [`super::doctor_network`]'s; `--offline` skips them.
 //!
 //! What the Rust command line reports differently, and why:
 //!
@@ -38,9 +36,10 @@ use opentide_workspace::root::{self, RootOptions};
 use opentide_workspace::{OsFs, config};
 use serde_json::Value as JsonValue;
 
+use super::doctor_network as network;
 use super::{Block, Report, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, USAGE_EXIT_CODE, code};
+use crate::envelope::Failure;
 use crate::json::Json;
 use crate::render::glyphs;
 use crate::render::text::{Style, Text};
@@ -153,6 +152,8 @@ pub struct Context<'a> {
     pub version: &'a str,
     /// Whether the run prints text (the checklist), not JSON.
     pub text: bool,
+    /// `--proxy`, from the command line or `OPENTIDE_PROXY`.
+    pub proxy: Option<&'a str>,
 }
 
 /// What the checks share: the workspace and its configuration.
@@ -167,13 +168,6 @@ struct Doctor<'a> {
 
 /// Runs `opentide doctor`.
 pub fn run(offline: bool, cx: &Context<'_>) -> Report {
-    if !offline {
-        let message = "opentide doctor without --offline has no Rust implementation yet: unset \
-                       OPENTIDE_ENGINE, or set it to python or compare.";
-        let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-        failure.argument = Some("OPENTIDE_ENGINE".into());
-        return Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
-    }
     let (shown, options) = placement(cx.repo, cx.env, cx.cwd);
     let cwd = resolve(cx.cwd);
     let workspace = resolve(&cx.cwd.join(&shown));
@@ -199,11 +193,7 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
         "pass",
         format!("opentide {}", cx.version),
     ));
-    checks.push(Check::new(
-        "opentide_latest",
-        "skip",
-        "Not checked: --offline",
-    ));
+    checks.push(latest_version(offline, cx));
     checks.push(doctor.workspace_check());
     checks.extend(doctor.git());
     let configuration = doctor.configuration(loaded.as_ref().map(|_| ()).map_err(|_| ()));
@@ -243,7 +233,7 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     } else {
         checks.extend(doctor.credentials());
     }
-    checks.push(doctor.proxy());
+    checks.push(doctor.proxy(offline));
     if configuration_failed {
         checks.push(skipped("vscode_settings"));
         checks.push(skipped("vscode_snippets"));
@@ -252,6 +242,36 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     }
     checks.push(doctor.mcp());
     report(&checks, cx.text)
+}
+
+/// `check_latest_version`: whether PyPI has a newer opentide.
+fn latest_version(offline: bool, cx: &Context<'_>) -> Check {
+    if offline {
+        return Check::new("opentide_latest", "skip", "Not checked: --offline");
+    }
+    let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
+    match network::fetch_latest(&environment, cx.proxy) {
+        Err(network::Failed(name)) => Check::new(
+            "opentide_latest",
+            "warn",
+            format!("Could not ask PyPI for the latest release ({name})"),
+        )
+        .fix("check the network or --proxy, or pass --offline to skip network checks"),
+        Ok(latest) if network::newer(&latest, cx.version) => Check::new(
+            "opentide_latest",
+            "warn",
+            format!(
+                "opentide {latest} is available; {} is installed",
+                cx.version
+            ),
+        )
+        .fix(network::UPGRADE_COMMAND),
+        Ok(_) => Check::new(
+            "opentide_latest",
+            "pass",
+            format!("No newer release on PyPI than {}", cx.version),
+        ),
+    }
 }
 
 fn options_for(options: &RootOptions) -> RootOptions {
@@ -886,18 +906,60 @@ impl Doctor<'_> {
         checks
     }
 
-    fn proxy(&self) -> Check {
-        let url = PROXY_VARIABLES
-            .iter()
-            .find_map(|name| self.cx.env.get(name).filter(|value| !value.is_empty()));
+    /// `check_proxy`: whether the proxy accepts a TCP connection.
+    fn proxy(&self, offline: bool) -> Check {
+        let url = self.cx.proxy.filter(|value| !value.is_empty()).or_else(|| {
+            PROXY_VARIABLES
+                .iter()
+                .find_map(|name| self.cx.env.get(name).filter(|value| !value.is_empty()))
+        });
         let Some(url) = url else {
             return Check::new("proxy", "skip", "No proxy set (--proxy, HTTPS_PROXY)");
         };
-        Check::new(
-            "proxy",
-            "skip",
-            format!("Proxy {} not checked: --offline", redact_url(url)),
-        )
+        let shown = redact_url(url);
+        if offline {
+            return Check::new(
+                "proxy",
+                "skip",
+                format!("Proxy {shown} not checked: --offline"),
+            );
+        }
+        let no_proxy = self
+            .cx
+            .env
+            .get("NO_PROXY")
+            .filter(|value| !value.is_empty())
+            .or_else(|| self.cx.env.get("no_proxy"))
+            .unwrap_or_default();
+        let note = if network::bypasses_proxy("pypi.org", no_proxy) {
+            "; pypi.org bypasses it (NO_PROXY)"
+        } else {
+            ""
+        };
+        let endpoint = network::proxy_endpoint(url);
+        let Some((scheme, host, port)) = endpoint.clone().filter(|(_, host, _)| !host.is_empty())
+        else {
+            let message = if endpoint.is_some() {
+                format!("Proxy {shown} has no host")
+            } else {
+                "The proxy URL cannot be parsed".to_owned()
+            };
+            return Check::new("proxy", "fail", message).fix("pass --proxy http://host:port");
+        };
+        let port = port.unwrap_or(if scheme == "https" { 443 } else { 80 });
+        match network::connect(&host, port, network::NETWORK_TIMEOUT) {
+            Ok(()) => Check::new(
+                "proxy",
+                "pass",
+                format!("Proxy {shown} accepts connections{note}"),
+            ),
+            Err(name) => Check::new(
+                "proxy",
+                "fail",
+                format!("Cannot connect to proxy {shown} ({name})"),
+            )
+            .fix("check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up"),
+        }
     }
 
     fn snippet_file(&self) -> String {
@@ -1254,27 +1316,19 @@ fn toml_problem(path: &Path) -> Option<(Option<usize>, String)> {
     }
 }
 
-/// `url` without its user and password: `http://proxy:8080`.
+/// `url` without its user and password: `http://proxy:8080` (`redact_url`).
 fn redact_url(url: &str) -> String {
-    let url = url.trim();
-    let (scheme, rest) = match url.split_once("://") {
-        Some((scheme, rest)) => (scheme, rest),
-        None => ("http", url),
-    };
-    if scheme.is_empty() || !scheme.chars().all(char::is_alphanumeric) {
+    let Some((scheme, host, port)) = network::proxy_endpoint(url) else {
         return "<unparseable proxy URL>".to_owned();
-    }
-    let host_port = rest.rsplit_once('@').map_or(rest, |(_, after)| after);
-    let host_port = host_port.split(['/', '?', '#']).next().unwrap_or_default();
-    match url::Url::parse(&format!("{scheme}://{host_port}")) {
-        Ok(parsed) => {
-            let host = parsed.host_str().unwrap_or_default();
-            match parsed.port() {
-                Some(port) => format!("{scheme}://{host}:{port}"),
-                None => format!("{scheme}://{host}"),
-            }
-        }
-        Err(_) => "<unparseable proxy URL>".to_owned(),
+    };
+    let host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host
+    };
+    match port.filter(|port| *port != 0) {
+        Some(port) => format!("{scheme}://{host}:{port}"),
+        None => format!("{scheme}://{host}"),
     }
 }
 
@@ -1436,6 +1490,7 @@ mod tests {
             cwd,
             version: "9.9.9",
             text: false,
+            proxy: None,
         }
     }
 
@@ -1461,17 +1516,81 @@ mod tests {
     }
 
     #[test]
-    fn without_offline_it_is_refused() {
-        let env = Env::from_pairs(Vec::<(String, String)>::new());
+    fn without_offline_it_asks_pypi_and_the_proxy() {
+        // A port nothing listens on: the proxy refuses, so nothing leaves
+        // this machine.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        drop(listener);
+        let env = Env::from_pairs([("HTTPS_PROXY".to_owned(), proxy.clone())]);
         let dir = tempfile::tempdir().unwrap();
         let report = run(false, &context(&env, dir.path()));
-        assert_eq!(report.outcome.exit_code, 2);
-        let failure = report.outcome.failure.unwrap();
-        assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
-        assert!(
-            failure
-                .message
-                .starts_with("opentide doctor without --offline")
+        let found = checks(&report);
+        let latest = found
+            .iter()
+            .find(|(code, ..)| code == "opentide_latest")
+            .unwrap();
+        assert_eq!(latest.1, "warn");
+        assert_eq!(
+            latest.2,
+            "Could not ask PyPI for the latest release (ProxyError)"
+        );
+        let checked = found.iter().find(|(code, ..)| code == "proxy").unwrap();
+        assert_eq!(checked.1, "fail");
+        assert_eq!(
+            checked.2,
+            format!("Cannot connect to proxy {proxy} (ConnectionRefusedError)")
+        );
+    }
+
+    #[test]
+    fn a_proxy_that_accepts_passes_and_names_a_no_proxy_bypass() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let env = Env::from_pairs([("NO_PROXY".to_owned(), "pypi.org".to_owned())]);
+        let dir = tempfile::tempdir().unwrap();
+        let cx = Context {
+            proxy: Some(&proxy),
+            ..context(&env, dir.path())
+        };
+        let doctor = Doctor {
+            cx: &cx,
+            workspace: dir.path().to_path_buf(),
+            explicit: false,
+            cwd: dir.path().to_path_buf(),
+            config: None,
+        };
+        let check = doctor.proxy(false);
+        assert_eq!(check.status, "pass");
+        assert_eq!(
+            check.message,
+            format!("Proxy {proxy} accepts connections; pypi.org bypasses it (NO_PROXY)")
+        );
+        let unparsed = Context {
+            proxy: Some("ht tp://x"),
+            ..context(&env, dir.path())
+        };
+        let doctor = Doctor {
+            cx: &unparsed,
+            ..doctor
+        };
+        let check = doctor.proxy(false);
+        assert_eq!(
+            (check.status, check.message.as_str()),
+            ("fail", "The proxy URL cannot be parsed")
+        );
+        let hostless = Context {
+            proxy: Some("http://:8080"),
+            ..context(&env, dir.path())
+        };
+        let doctor = Doctor {
+            cx: &hostless,
+            ..doctor
+        };
+        let check = doctor.proxy(false);
+        assert_eq!(
+            (check.status, check.message.as_str()),
+            ("fail", "Proxy http://:8080 has no host")
         );
     }
 

@@ -142,12 +142,12 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     # After ``--`` it is an argument, not the flag.
     assert not command.covers(["deploy", "--", "--dry-run"])
     assert RustCommand(launch=("x",)).covers(["info"])
-    # ``doctor`` reaches PyPI and the proxy without ``--offline``: that run stays Python's.
+    # ``doctor`` runs on Rust with and without ``--offline`` (its network checks, #834).
     doctor = engines.RUST_COMMANDS[("doctor",)]
-    assert doctor.requires == ("--offline",)
+    assert doctor.requires == ()
     assert doctor.rules == ("host-git",)
     assert doctor.covers(["doctor", "--offline"])
-    assert not doctor.covers(["doctor"])
+    assert doctor.covers(["doctor"])
 
 
 def test_generate_is_rust_only_with_a_phase_named() -> None:
@@ -856,10 +856,10 @@ def test_the_variable_wins_over_the_default(monkeypatch: pytest.MonkeyPatch) -> 
 def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
     """``serve`` asks with the run's arguments: an uncovered run goes to the dispatcher."""
     rust = {"OPENTIDE_ENGINE": "rust"}
-    doctor = engines.RUST_COMMANDS[("doctor",)]
-    assert engines.rust_command(("doctor",), rust, ["doctor", "--offline"]) is doctor
-    assert engines.rust_command(("doctor",), rust, ["doctor"]) is None
-    assert engines.rust_command(("doctor",), rust, ["doctor", "--", "--offline"]) is None
+    generate = engines.RUST_COMMANDS[("generate",)]
+    assert engines.rust_command(("generate",), rust, ["generate", "schemas"]) is generate
+    assert engines.rust_command(("generate",), rust, ["generate"]) is None
+    assert engines.rust_command(("generate",), rust, ["generate", "--", "schemas"]) is None
     deploy = engines.RUST_COMMANDS[("deploy",)]
     assert engines.rust_command(("deploy",), rust, ["deploy", "--dry-run"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy"]) is None

@@ -1074,6 +1074,100 @@ mod validate {
         assert!(off.checks.iter().all(|(c, _)| *c != Check::Queries));
         assert_eq!(off.report.stats.queries_checked, None);
     }
+    mod cve {
+        use super::*;
+        use opentide_workspace::validate::{CveCheck, CveLookup, cve_identifiers};
+
+        /// Answers from a table, as the CLI's lookup would.
+        struct Table(Mutex<Vec<String>>);
+
+        impl CveCheck for Table {
+            fn canonical(&self, text: &str) -> String {
+                text.trim().to_uppercase()
+            }
+
+            fn lookup(&self, threat: &str, id: &str) -> CveLookup {
+                self.0.lock().unwrap().push(format!("{threat} {id}"));
+                match id {
+                    "CVE-2024-1" => CveLookup::Found,
+                    "CVE-2024-2" => CveLookup::NotFound,
+                    _ => CveLookup::Unavailable("down".to_owned()),
+                }
+            }
+        }
+
+        fn threat(uuid: &str, cve: &str) -> String {
+            format!(
+                "name: T\nmetadata:\n  uuid: {uuid}\n  schema: threat::1.0\nthreat:\n  cve: {cve}\n"
+            )
+        }
+
+        #[test]
+        fn unknown_references_are_errors_and_unreachable_ones_warnings() {
+            let fs = workspace();
+            fs.write(
+                "/ws/objects/threats/a.yaml",
+                threat(U1, "[cve-2024-1, CVE-2024-2, x, ' cve-2024-2']"),
+            );
+            fs.write("/ws/objects/threats/b.yaml", threat(U2, "null"));
+            let table = Table(Mutex::new(Vec::new()));
+            let validation = run(
+                &fs,
+                &Options {
+                    check: Some(Check::Cve),
+                    cve_check: Some(&table),
+                    ..Options::default()
+                },
+            );
+            assert_eq!(
+                *table.0.lock().unwrap(),
+                [
+                    format!("{U1} CVE-2024-1"),
+                    format!("{U1} CVE-2024-2"),
+                    format!("{U1} X")
+                ]
+            );
+            let invalid = with_code(&validation, "invalid_cve");
+            assert_eq!(invalid.len(), 1);
+            assert_eq!(invalid[0].message, "Invalid CVE references: CVE-2024-2");
+            assert_eq!(invalid[0].field_path, ["threat", "cve"]);
+            let unchecked = with_code(&validation, "cve_lookup_unavailable");
+            assert_eq!(
+                unchecked[0].message,
+                "Could not check CVE references on Vulnerability-Lookup: X (down)"
+            );
+            assert_eq!(unchecked[0].severity, Severity::Warning);
+            assert_eq!(status(&validation, Check::Cve), "failed");
+            // Without a lookup the check reports nothing.
+            let quiet = run(
+                &fs,
+                &Options {
+                    check: Some(Check::Cve),
+                    ..Options::default()
+                },
+            );
+            assert!(with_code(&quiet, "invalid_cve").is_empty());
+        }
+
+        #[test]
+        fn identifiers_read_as_python_reads_the_field() {
+            let canonical = |text: &str| text.trim().to_owned();
+            let doc = opentide_schema::node::load(
+                "a: CVE-1\nb: [1, true, null, CVE-1, CVE-1]\nc: 5\nd: ' '\n",
+            )
+            .unwrap();
+            let root = doc.root().unwrap();
+            let get = |key: &str| root.get(key).map(AsRef::as_ref);
+            assert_eq!(cve_identifiers(get("a"), &canonical), ["CVE-1"]);
+            assert_eq!(
+                cve_identifiers(get("b"), &canonical),
+                ["1", "True", "None", "CVE-1"]
+            );
+            assert_eq!(cve_identifiers(get("c"), &canonical), ["5"]);
+            assert!(cve_identifiers(get("d"), &canonical).is_empty());
+            assert!(cve_identifiers(None, &canonical).is_empty());
+        }
+    }
 }
 
 /// Every finding recorded by the oracle's `validate --json` reads into the

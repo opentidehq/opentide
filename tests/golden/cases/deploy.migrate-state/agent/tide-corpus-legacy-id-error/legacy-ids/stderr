@@ -1,0 +1,4 @@
+error: External id shape · detail: sentinel_one tenant 'soc': sentinel_one external id '0901' is not a canonical decimal integer (no sign, no leading zeroes) · file: Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml · uuid: 00000000-0000-4000-8003-000000000004
+error: 1 rule file(s) could not be migrated; 1 migrated. Fix them and re-run
+  note: external_id_shape: Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml: sentinel_one tenant 'soc': sentinel_one external id '0901' is not a canonical decimal integer (no sign, no leading zeroes)
+tip: add --json for machine-readable output

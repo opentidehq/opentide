@@ -49,6 +49,7 @@ pub const PORTED: &[&str] = &[
     "generate docs threats",
     "generate docs index",
     "deploy",
+    "deploy migrate-state",
     "serve",
     "query",
 ];
@@ -468,6 +469,8 @@ impl Run<'_> {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
                         cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                        version: &self.host.version,
                     },
                 );
                 self.emit_report(&report, out, err)
@@ -480,6 +483,8 @@ impl Run<'_> {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
                         cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                        version: &self.host.version,
                     },
                     &self.host.version,
                 );
@@ -505,6 +510,8 @@ impl Run<'_> {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
                         cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                        version: &self.host.version,
                     },
                 );
                 self.emit_report(&report, out, err)
@@ -516,8 +523,15 @@ impl Run<'_> {
                     && self.host.stderr_tty
                     && !self.globals.quiet
                     && self.console(true).colour != Colour::None;
-                // Log lines follow under `--debug`: the line stays above them.
-                let logging = self.globals.debug || self.env.debug_requested();
+                // Log lines follow under `--debug`, and from the CVE check's
+                // lookups (warnings when they fail): the line stays above them.
+                let logging = self.globals.debug
+                    || self.env.debug_requested()
+                    || leaf(&matches)
+                        .try_get_one::<crate::tree::Check>("check")
+                        .ok()
+                        .flatten()
+                        .is_some_and(|check| *check == crate::tree::Check::Cve);
                 // A report on stdout is whole: no status line then either.
                 let status = status
                     && !leaf(&matches).get_flag("watch")
@@ -557,6 +571,7 @@ impl Run<'_> {
                         cwd: &cwd,
                         version: &self.host.version,
                         terminal: &terminal,
+                        proxy: self.globals.proxy.as_deref(),
                     },
                     out,
                     err,
@@ -620,6 +635,8 @@ impl Run<'_> {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
                         cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                        version: &self.host.version,
                     },
                 );
                 self.emit_report(&report, out, err)
@@ -634,7 +651,17 @@ impl Run<'_> {
                         cwd: &cwd,
                         version: &self.host.version,
                         text: self.mode != Mode::Json && !self.globals.quiet,
+                        proxy: self.globals.proxy.as_deref(),
                     },
+                );
+                self.emit_report(&report, out, err)
+            }
+            "deploy migrate-state" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::migrate_state::run(
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
                 );
                 self.emit_report(&report, out, err)
             }
@@ -663,6 +690,8 @@ impl Run<'_> {
                     repo: self.globals.repo.as_deref(),
                     env: self.env,
                     cwd: &cwd,
+                    proxy: self.globals.proxy.as_deref(),
+                    version: &self.host.version,
                 };
                 let report = if path == "generate inflight" {
                     crate::commands::generate::inflight_shards(&cx)
@@ -1219,6 +1248,7 @@ impl Run<'_> {
                 cwd: &cwd,
                 version: &self.host.version,
                 terminal: &terminal,
+                proxy: self.globals.proxy.as_deref(),
             },
         );
         (parsed, Some(report))
@@ -2948,15 +2978,18 @@ mod tests {
             );
             std::fs::remove_file(&file).unwrap();
         }
-        // doctor runs here with --offline only: without it, the network
-        // checks are Python's, and compare runs Python alone on the refusal.
-        for line in ["--json doctor", "doctor"] {
+        // A deploy that sends runs here when it names its --platform: without
+        // one, compare runs Python alone on the refusal.
+        for line in [
+            "--json deploy --strategy PREVIEW",
+            "deploy --strategy PREVIEW",
+        ] {
             let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
             assert_eq!(refused.code, 2, "{line}");
             let recorded = std::fs::read_to_string(&file).unwrap();
             assert!(
                 recorded.starts_with(
-                    "opentide doctor without --offline has no Rust implementation yet"
+                    "opentide deploy without --platform has no Rust implementation yet"
                 ),
                 "{line}: {recorded}"
             );
@@ -2967,7 +3000,7 @@ mod tests {
         assert!(!file.exists());
         // Without the variable, nothing is written.
         assert_eq!(dispatched("share push", &[], false).code, 2);
-        assert_eq!(dispatched("doctor", &[], false).code, 2);
+        assert_eq!(dispatched("deploy --strategy PREVIEW", &[], false).code, 2);
         assert!(!file.exists());
     }
 

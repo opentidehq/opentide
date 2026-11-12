@@ -1,0 +1,2 @@
+{"cve":"CVE-2024-3094","threat":"00000000-0000-4000-8001-000000000001","detail":"Vulnerability-Lookup request failed for CVE-2024-3094","event":"cve_lookup_unavailable","logger":"opentide.validation.cve_check","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"cve":"GHSA-rxwq-x6h5-qc8m","threat":"00000000-0000-4000-8001-000000000001","detail":"Vulnerability-Lookup request failed for GHSA-rxwq-x6h5-qc8m","event":"cve_lookup_unavailable","logger":"opentide.validation.cve_check","level":"warning","timestamp":"0000-00-00 00:00:00"}

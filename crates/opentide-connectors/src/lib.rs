@@ -46,6 +46,7 @@ pub mod splunk;
 pub mod sysdig;
 pub mod tenant;
 pub mod tls;
+pub mod vulnerability;
 
 pub use connector::{Platform, Registry};
 pub use credentials::{Credential, Secret};

@@ -15,8 +15,8 @@ use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::render::{Pages, Templates};
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
-    Counts, FlavorHints, Settings as DocsSettings, changed, cve_details_needed, index_pages,
-    inflight as docs_inflight, pages, stale_pages,
+    Counts, FlavorHints, Settings as DocsSettings, changed, index_pages, inflight as docs_inflight,
+    pages, stale_pages,
 };
 use opentide_compile::generate::exports::{Settings, Target, export};
 use opentide_compile::generate::files::{Snapshot, common_dir, remove_all, write_all};
@@ -41,6 +41,10 @@ pub struct Context<'a> {
     pub env: &'a Env,
     /// The working directory.
     pub cwd: &'a Path,
+    /// `--proxy`: `generate docs` fetches CVE details through it.
+    pub proxy: Option<&'a str>,
+    /// opentide's version, for the CVE lookups' `User-Agent`.
+    pub version: &'a str,
 }
 
 /// `failure.code` of a phase that failed (`default_failure_code("failed")`).
@@ -325,36 +329,44 @@ struct DocsRun {
     message: Option<String>,
     /// `--changed` outside a checkout: the run's own failure.
     failure: Option<String>,
-    /// Why this engine does not write this run ([`needs_python`]): it is
-    /// refused with `engine_not_ported`, before any page is written.
-    not_ported: Option<String>,
 }
 
-/// Whether the pages of `scopes` (of `targets` when given) need what only
-/// the Python engine does: the details of a threat's CVEs, with `[cve]
-/// retrieve_details` on ([`cve_details_needed`]). If so, `run` gets the
-/// refusal; `OPENTIDE_ENGINE=compare` then runs Python alone.
-fn needs_python(
-    pages_of: &Pages<'_, '_>,
-    scopes: &[Scope],
-    targets: Option<&std::collections::BTreeSet<String>>,
-    run: &mut DocsRun,
-) -> bool {
-    let threats = cve_details_needed(pages_of, scopes, targets);
-    let Some(first) = threats.first() else {
-        return false;
-    };
-    let others = match threats.len() - 1 {
-        0 => String::new(),
-        1 => " and 1 other threat".to_owned(),
-        more => format!(" and {more} other threats"),
-    };
-    run.not_ported = Some(format!(
-        "The CVE details of {first}{others} ([cve] retrieve_details) are fetched by the Python \
-         engine only: unset OPENTIDE_ENGINE, or set it to python or compare, or turn \
-         retrieve_details off in documentation.toml for a list of links."
-    ));
-    true
+/// The CVE details `generate docs` writes with `[cve] retrieve_details` on
+/// (UC-4.4, #834): each identifier asked of Vulnerability-Lookup with its
+/// linked records, once per run, through the run's proxy.
+fn cve_source(
+    resolved: &opentide_schema::configuration::resolve::Resolved,
+    cx: &Context<'_>,
+) -> opentide_compile::generate::docs::cve::CveSource {
+    use opentide_compile::generate::docs::cve::{CveDetail, CveRecord, CveSource};
+    let settings = super::cve::Settings::from_documentation(resolved.get("documentation"));
+    let links = settings.links();
+    let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
+    let lookup = opentide_connectors::vulnerability::VulnerabilityLookup::new(
+        opentide_connectors::vulnerability::LookupSettings {
+            base_url: settings.base_url.clone(),
+            timeout: settings.timeout,
+        },
+        &environment,
+        cx.proxy,
+        cx.version,
+    );
+    CveSource::new(
+        move |id: &str| match lookup.get(id, true, &|key: &str| links.page_url(key)) {
+            Ok(Some(record)) => CveDetail::Found(CveRecord {
+                identifier: record.identifier,
+                title: record.title,
+                description: record.description,
+                published: record.published,
+                state: record.state,
+                severity: record.severity,
+                aliases: record.aliases,
+                page_url: record.page_url,
+            }),
+            Ok(None) => CveDetail::NotFound,
+            Err(_) => CveDetail::Unavailable,
+        },
+    )
 }
 
 fn counts_json(counts: Counts) -> Json {
@@ -439,13 +451,6 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         report.warnings = warnings;
         return report;
     }
-    if let Some(message) = run.not_ported {
-        let mut failure = Failure::new(crate::envelope::code::ENGINE_NOT_PORTED, message);
-        failure.argument = Some("OPENTIDE_ENGINE".into());
-        let mut report = Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
-        report.warnings = warnings;
-        return report;
-    }
     if let Some(message) = run.failure {
         let mut step = phase.step;
         step.status = StepStatus::Failed;
@@ -484,7 +489,7 @@ fn docs_phase(
     let root = workspace.root();
     let env = |name: &str| cx.env.get(name).map(str::to_owned);
     let hints = FlavorHints::new(&env, opentide_compile::git::origin_url(root));
-    let settings = DocsSettings::resolve(
+    let mut settings = DocsSettings::resolve(
         resolved,
         &output_base(workspace),
         args.output.as_deref(),
@@ -492,6 +497,9 @@ fn docs_phase(
         &hints,
     )
     .map_err(|error| error.detail)?;
+    if settings.cve_details {
+        settings.cve_source = cve_source(resolved, cx);
+    }
     // Documentation previews open pull requests: their inflight shards are
     // overlaid on the index for the run (`inflight_preview`).
     let overlaid = docs_inflight::overlay(workspace.index(), &root.join(".opentide/inflight"));
@@ -530,9 +538,6 @@ fn docs_phase(
             run.message = Some("Index pages written".into());
         }
         Some(DocsScope::Objects(_)) if args.scope.is_none() && flagged.len() > 1 => {
-            if needs_python(&pages_of, &flagged, None, run) {
-                return Ok(());
-            }
             let mut counts = Counts::default();
             for scope in &flagged {
                 let (outputs, scoped) =
@@ -556,9 +561,6 @@ fn docs_phase(
             ];
         }
         Some(DocsScope::Objects(scope)) => {
-            if needs_python(&pages_of, &[scope], None, run) {
-                return Ok(());
-            }
             let (outputs, counts) =
                 pages(&pages_of, &[scope], None).map_err(|error| error.detail)?;
             let stale = stale_pages(&pages_of, &[scope]);
@@ -570,9 +572,6 @@ fn docs_phase(
             ];
         }
         None => {
-            if needs_python(&pages_of, &Scope::ALL, None, run) {
-                return Ok(());
-            }
             let (outputs, counts) =
                 pages(&pages_of, &Scope::ALL, None).map_err(|error| error.detail)?;
             let stale = stale_pages(&pages_of, &Scope::ALL);
@@ -618,9 +617,6 @@ fn changed_phase(
         }
     };
     let changes = changed::changes(pages_of.catalog, &files);
-    if needs_python(pages_of, &Scope::ALL, Some(&changes.targets), run) {
-        return Ok(());
-    }
     if changes.paths.is_empty() {
         run.message = Some("No changed object documentation detected".into());
         run.data = vec![
@@ -1301,6 +1297,8 @@ mod tests {
             repo: None,
             env: &env,
             cwd: &cwd,
+            proxy: None,
+            version: "0.0.0",
         };
         let alone = explorer(
             &ExplorerOptions {
@@ -1363,6 +1361,8 @@ mod tests {
             repo: None,
             env: &env,
             cwd: &repo,
+            proxy: None,
+            version: "0.0.0",
         };
         let report = docs(&DocsArgs::default(), &cx);
         assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);

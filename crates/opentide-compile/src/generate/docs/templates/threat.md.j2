@@ -30,10 +30,22 @@
 ## CVE
 Identifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), which aggregates CVE, GHSA, CSAF, NVD, and related feeds.
 
+{% if cve.rows is not none %}
+{{ md.table(["Identifier", "Published", "Severity", "Summary"], cve.rows) }}
+{% if cve.missing %}
+Could not resolve: {% for id in cve.missing %}`{{ id }}`{% if not loop.last %}, {% endif %}{% endfor %}.
+
+{% endif %}
+{% if cve.unreachable %}
+Vulnerability-Lookup was unreachable for at least one identifier; links still point at the CIRCL record page.
+
+{% endif %}
+{% else %}
 {% for link in cve.links %}
 - {{ link }}
 {% endfor %}
 
+{% endif %}
 {% endif %}
 {% if techniques %}
 ## ATT&CK Techniques
