@@ -122,9 +122,10 @@ commands:
                  and their verdict on every object file of every corpus
                  (UC-1.3, #809); `cargo xtask schema help` lists the options
   stubs [--check] [--library FILE]
-                 generate src/opentide/_native/models.pyi, the stubs of the
-                 Tide models' Python classes, from the extension's
-                 introspection data (UC-1.9, #815); --check fails on drift
+                 generate src/opentide/_native/models.pyi and sdk.pyi, the
+                 stubs of the Tide models' Python classes and of the SDK's
+                 core, from the extension's introspection data (UC-1.9,
+                 #815; UC-5.2b, #837); --check fails on drift
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,

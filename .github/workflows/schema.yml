@@ -22,6 +22,8 @@ on:
       - "crates/opentide-schema-derive/**"
       - "crates/opentide-core/**"
       - "src/opentide/_native/**"
+      # The SDK's core, whose stub (src/opentide/_native/sdk.pyi) is generated too.
+      - "bindings/python/**"
       - "xtask/src/stubs.rs"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -105,9 +107,10 @@ jobs:
           cargo nextest run --locked -p opentide-schema --features python --profile ci
           cargo test --locked -p opentide-schema --features python --doc
 
-      # The stubs of opentide._native.models are generated from the extension
-      # (UC-1.9, ADR 0011): build it with PyO3's introspection data, as Python
-      # 3.10 (the abi3 floor) sees it, and fail when the committed stub differs.
+      # The stubs of opentide._native.models and opentide._native.sdk are
+      # generated from the extension (UC-1.9, ADR 0011; UC-5.2b): build it with
+      # PyO3's introspection data, as Python 3.10 (the abi3 floor) sees it, and
+      # fail when a committed stub differs.
       - name: Generated stubs are up to date
         env:
           PYO3_PYTHON: ${{ steps.python.outputs.python-path }}
