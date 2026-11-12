@@ -8,9 +8,12 @@
 //! `threat.query` takes `threat.language` the same way.
 
 use crate::vocabs::bundled_vocabs;
+use crate::yaml::YamlNode;
 use crate::yaml_scalar::mapping_keys;
 use crate::{IndexedObject, InjectedQuery, remap_span};
+use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
+use std::sync::Arc;
 
 /// Query language of `configurations.elastic.query`, or of `threat.query`
 /// when `rule_type` is `threat_match` and `language` is `threat.language`.
@@ -62,7 +65,7 @@ pub fn duration_millis(text: &str) -> Option<u64> {
 /// `lookback: 1m`.
 pub(crate) fn maxspan_advisories(
     source: &str,
-    configurations: Option<&serde_yaml::Value>,
+    configurations: Option<&Arc<Node>>,
     injection: &InjectedQuery,
 ) -> Vec<Diagnostic> {
     let scheduling = configurations
@@ -190,7 +193,7 @@ pub fn elastic_tenants(toml_text: &str) -> Vec<ElasticTenant> {
 /// tenant when omitted). `None` (the 8.19 floor) when there are no tenants,
 /// a target is unknown, or a target declares no valid version.
 pub(crate) fn stack_target(
-    block: Option<&serde_yaml::Value>,
+    block: Option<&Arc<Node>>,
     tenants: &[ElasticTenant],
 ) -> Option<opentide_esql::StackTarget> {
     let named: Vec<&str> = block
@@ -238,13 +241,13 @@ pub(crate) fn path_range(source: &str, path: &[&str]) -> Range {
 }
 
 /// A YAML list of strings, or a single string, as names.
-fn names(value: Option<&serde_yaml::Value>) -> Vec<String> {
-    match value {
-        Some(serde_yaml::Value::Sequence(items)) => items
+fn names(value: Option<&Arc<Node>>) -> Vec<String> {
+    match value.map(|v| &v.value) {
+        Some(Value::Seq(items)) => items
             .iter()
             .filter_map(|v| v.as_str().map(str::to_string))
             .collect(),
-        Some(serde_yaml::Value::String(s)) => vec![s.clone()],
+        Some(Value::Str(s)) => vec![s.clone()],
         _ => Vec::new(),
     }
 }
@@ -255,7 +258,7 @@ fn names(value: Option<&serde_yaml::Value>) -> Vec<String> {
 /// (its fields are Kibana's), or `index` omitted (the tenant's
 /// `setup.index`).
 pub(crate) fn query_indices(
-    configurations: Option<&serde_yaml::Value>,
+    configurations: Option<&Arc<Node>>,
     field_path: &[String],
 ) -> Option<Vec<String>> {
     let block = configurations?.get("elastic")?;
@@ -281,7 +284,7 @@ pub(crate) fn query_indices(
 /// ECS and the fields `visibility.toml` declares for them. A query whose
 /// indices are not known reads none.
 pub(crate) fn ecs_indices(
-    configurations: Option<&serde_yaml::Value>,
+    configurations: Option<&Arc<Node>>,
     field_path: &[String],
 ) -> Option<Vec<String>> {
     query_indices(configurations, field_path).filter(|i| opentide_ecs::indices_are_ecs(i))
@@ -310,7 +313,7 @@ fn item_range(source: &str, path: &[&str], item: &str) -> Range {
 /// `threat.index`, against the index patterns the workspace's elastic log
 /// sources name (opt-in: nothing when it has none). A `data_view_id` is not
 /// checked: `visibility.toml` declares no data views.
-pub(crate) fn dataset_declarations(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+pub(crate) fn dataset_declarations(source: &str, block: &Node) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let threat_index = block.get("threat").and_then(|t| t.get("index"));
     for (path, list) in [
@@ -348,7 +351,7 @@ fn risk_band(alert_severity: &str) -> Option<(&'static str, i64, i64)> {
 /// Techniques a rule inherits through `detection_model`: the objective's
 /// `mitre_attack`, else those of its threats.
 fn inherited_techniques(detection_model: &str, workspace: &[IndexedObject]) -> Vec<String> {
-    let strings = |v: Option<&serde_yaml::Value>| -> Vec<String> {
+    let strings = |v: Option<&Arc<Node>>| -> Vec<String> {
         v.and_then(|v| v.as_sequence())
             .map(|s| {
                 s.iter()
@@ -385,7 +388,7 @@ fn inherited_techniques(detection_model: &str, workspace: &[IndexedObject]) -> V
 /// techniques that deploy skips because they are not Enterprise ATT&CK.
 pub(crate) fn block_advisories(
     source: &str,
-    rule: &serde_yaml::Value,
+    rule: &Node,
     workspace: &[IndexedObject],
 ) -> Vec<Diagnostic> {
     let Some(block) = rule.get("configurations").and_then(|c| c.get("elastic")) else {
@@ -557,7 +560,7 @@ mod tests {
     use super::*;
 
     fn advisory_codes(source: &str, workspace: &[IndexedObject]) -> Vec<String> {
-        let rule: serde_yaml::Value = serde_yaml::from_str(source).unwrap();
+        let rule = crate::yaml::parse(source).unwrap();
         block_advisories(source, &rule, workspace)
             .into_iter()
             .map(|d| d.code)
@@ -626,8 +629,8 @@ ssl = true
 "#;
         let tenants = elastic_tenants(toml);
         assert_eq!(tenants.len(), 3);
-        let block = |names: &str| -> serde_yaml::Value {
-            serde_yaml::from_str(&format!("tenants: [{names}]")).unwrap()
+        let block = |names: &str| -> Arc<Node> {
+            crate::yaml::parse(&format!("tenants: [{names}]")).unwrap()
         };
         let target =
             |names: &str| stack_target(Some(&block(names)), &tenants).map(|t| t.to_string());
@@ -664,7 +667,7 @@ ssl = true
             advisory_codes(threshold, &[]),
             vec![codes::THRESHOLD_LOOKBACK]
         );
-        let rule: serde_yaml::Value = serde_yaml::from_str(&zero).unwrap();
+        let rule = crate::yaml::parse(&zero).unwrap();
         let d = &block_advisories(&zero, &rule, &[])[0];
         assert_eq!(d.range.start.line, 6, "points at the lookback key");
         assert_eq!(
@@ -728,18 +731,18 @@ ssl = true
             "objective",
             "o-1",
             "o",
-            serde_yaml::from_str("objective:\n  threats: [t-1]\n").unwrap(),
+            crate::yaml::parse("objective:\n  threats: [t-1]\n").unwrap(),
         );
         let threat = IndexedObject::from_body(
             "threats/t.yaml",
             "threat",
             "t-1",
             "t",
-            serde_yaml::from_str("threat:\n  mitre_attack: [T1626, T1059]\n").unwrap(),
+            crate::yaml::parse("threat:\n  mitre_attack: [T1626, T1059]\n").unwrap(),
         );
         let inherited = format!("detection_model: o-1\n{}", block(""));
         let source = inherited.clone();
-        let rule: serde_yaml::Value = serde_yaml::from_str(&source).unwrap();
+        let rule = crate::yaml::parse(&source).unwrap();
         let found = block_advisories(&source, &rule, &[objective, threat]);
         assert_eq!(found.len(), 1);
         assert!(

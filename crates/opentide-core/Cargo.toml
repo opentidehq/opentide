@@ -20,3 +20,7 @@ serde.workspace = true
 toml.workspace = true
 thiserror.workspace = true
 strsim.workspace = true
+# YAML 1.2 (`node`, the node tree every crate reads YAML with, #850):
+# saphyr-parser's events with their spans and saphyr's core-schema scalars.
+saphyr.workspace = true
+saphyr-parser.workspace = true

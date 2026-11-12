@@ -14,7 +14,7 @@
 //! Falco's terms (operators, modifiers, priorities, keywords, the name rule)
 //! are `opentide_core::falco`'s, the one copy opentide-schema's
 //! `sysdig_rule_shape` (the CLI's model) uses too; this module walks
-//! `serde_yaml` values and places each finding.
+//! the block's YAML nodes and places each finding.
 //! `the_editor_and_the_model_agree_on_the_sysdig_cases` runs both on the
 //! model's oracle cases and compares the codes.
 
@@ -22,40 +22,41 @@ use opentide_core::falco::{
     TUNING_FORBIDDEN, definition_name_ok, flatten_lists, is_blank, is_exception_operator,
     is_list_comparison, list_inside, normalize_comp, priority_ok, source_ok, value_passes,
 };
+use opentide_core::node::{Node, Value};
 use opentide_core::{Diagnostic, codes};
 use opentide_falco::Context;
-use serde_yaml::Value;
+use std::sync::Arc;
+
+use crate::yaml::YamlNode;
 
 const BLOCK: [&str; 2] = ["configurations", "sysdig"];
 
-fn non_blank(v: Option<&Value>) -> bool {
-    v.and_then(Value::as_str).is_some_and(|s| !is_blank(s))
+fn non_blank(v: Option<&Arc<Node>>) -> bool {
+    v.and_then(|v| v.as_str()).is_some_and(|s| !is_blank(s))
 }
 
-fn set(v: Option<&Value>) -> bool {
-    !matches!(v, None | Some(Value::Null)) && v.and_then(Value::as_str) != Some("")
+fn set(v: Option<&Arc<Node>>) -> bool {
+    v.is_some_and(|v| !v.is_null()) && v.and_then(|v| v.as_str()) != Some("")
 }
 
-fn scalar(v: &Value) -> bool {
-    !matches!(v, Value::Sequence(_) | Value::Mapping(_))
+fn scalar(v: &Node) -> bool {
+    v.is_scalar()
 }
 
-fn text_of(v: &Value) -> String {
-    match v {
-        Value::String(s) => s.clone(),
-        Value::Number(n) => n.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Null => "None".into(),
-        _ => String::new(),
+fn text_of(v: &Node) -> String {
+    if v.is_null() {
+        return "None".into();
     }
+    v.scalar_text().unwrap_or_default()
 }
 
 /// One exception, by Falco's `validate_exception_info` and
 /// `build_rule_exception_infos` shape checks.
-fn exception_ok(entry: &Value) -> bool {
-    let Some(map) = entry.as_mapping() else {
+fn exception_ok(entry: &Node) -> bool {
+    if !entry.is_mapping() {
         return false;
-    };
+    }
+    let map = entry;
     if !non_blank(map.get("name")) {
         return false;
     }
@@ -66,10 +67,10 @@ fn exception_ok(entry: &Value) -> bool {
         return false;
     }
     let rows = values
-        .and_then(Value::as_sequence)
-        .cloned()
+        .and_then(|v| v.as_sequence())
+        .map(<[_]>::to_vec)
         .unwrap_or_default();
-    if let Some(field) = fields.and_then(Value::as_str) {
+    if let Some(field) = fields.and_then(|f| f.as_str()) {
         if is_blank(field) {
             return false;
         }
@@ -81,9 +82,9 @@ fn exception_ok(entry: &Value) -> bool {
                 return false;
             }
         }
-        return rows.iter().all(scalar);
+        return rows.iter().all(|row| scalar(row));
     }
-    let Some(fields) = fields.and_then(Value::as_sequence) else {
+    let Some(fields) = fields.and_then(|f| f.as_sequence()) else {
         return false;
     };
     if fields.is_empty() || !fields.iter().all(|f| non_blank(Some(f))) {
@@ -111,9 +112,9 @@ fn exception_ok(entry: &Value) -> bool {
             return false; // "Fields and values lists must have equal length"
         }
         for item in row {
-            match item {
-                Value::Mapping(_) => return false,
-                Value::Sequence(vs) if !vs.iter().all(scalar) => return false,
+            match &item.value {
+                Value::Map(_) => return false,
+                Value::Seq(vs) if !vs.iter().all(|v| scalar(v)) => return false,
                 _ => {}
             }
         }
@@ -135,18 +136,18 @@ struct Definitions {
 
 /// The block's macros and lists in order, with `sysdig_definition_name` and
 /// `sysdig_definition_duplicate` findings.
-fn definitions(source: &str, block: &Value, out: &mut Vec<Diagnostic>) -> Definitions {
+fn definitions(source: &str, block: &Node, out: &mut Vec<Diagnostic>) -> Definitions {
     let mut defs = Definitions {
         macros: Vec::new(),
         lists: Vec::new(),
     };
     let mut seen: Vec<String> = Vec::new();
     for key in ["macros", "lists"] {
-        let Some(entries) = block.get(key).and_then(Value::as_sequence) else {
+        let Some(entries) = block.get(key).and_then(|e| e.as_sequence()) else {
             continue;
         };
         for (index, entry) in entries.iter().enumerate() {
-            let Some(name) = entry.get("name").and_then(Value::as_str) else {
+            let Some(name) = entry.get("name").and_then(|n| n.as_str()) else {
                 continue;
             };
             let at = index.to_string();
@@ -172,13 +173,16 @@ fn definitions(source: &str, block: &Value, out: &mut Vec<Diagnostic>) -> Defini
             }
             seen.push(name.to_string());
             if key == "macros" {
-                if let Some(condition) = entry.get("condition").and_then(Value::as_str) {
+                if let Some(condition) = entry.get("condition").and_then(|c| c.as_str()) {
                     defs.macros
                         .push((index, name.to_string(), condition.to_string()));
                 }
-            } else if let Some(items) = entry.get("items").and_then(Value::as_sequence) {
-                defs.lists
-                    .push((index, name.to_string(), items.iter().map(text_of).collect()));
+            } else if let Some(items) = entry.get("items").and_then(|i| i.as_sequence()) {
+                defs.lists.push((
+                    index,
+                    name.to_string(),
+                    items.iter().map(|i| text_of(i)).collect(),
+                ));
             }
         }
     }
@@ -266,7 +270,7 @@ fn order(source: &str, defs: &Definitions, out: &mut Vec<Diagnostic>) -> bool {
 
 /// `sysdig_list_in_value`: a block list name in an exception value where
 /// Falco's expansion would not produce a value list.
-fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<Diagnostic>) {
+fn list_in_value(source: &str, block: &Node, defs: &Definitions, out: &mut Vec<Diagnostic>) {
     if defs.lists.is_empty() {
         return;
     }
@@ -281,11 +285,11 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
     );
     let names: Vec<&str> = flat.iter().map(|(n, _)| n.as_str()).collect();
     let inside = |text: &str| list_inside(&flat, text);
-    let Some(entries) = block.get("exceptions").and_then(Value::as_sequence) else {
+    let Some(entries) = block.get("exceptions").and_then(|e| e.as_sequence()) else {
         return;
     };
     for (index, entry) in entries.iter().enumerate() {
-        let name = entry.get("name").map(text_of).unwrap_or_default();
+        let name = entry.get("name").map(|n| text_of(n)).unwrap_or_default();
         let at = index.to_string();
         let report = |list: &str, out: &mut Vec<Diagnostic>| {
             out.push(err(
@@ -299,7 +303,7 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
         };
         // A value list: each member through the passes (a member naming a
         // block list becomes its items), then no block list inside one.
-        let members = |values: &[Value], out: &mut Vec<Diagnostic>| -> bool {
+        let members = |values: &[Arc<Node>], out: &mut Vec<Diagnostic>| -> bool {
             let passed = value_passes(
                 &flat,
                 values
@@ -317,10 +321,10 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
         };
         let values = entry
             .get("values")
-            .and_then(Value::as_sequence)
-            .cloned()
+            .and_then(|v| v.as_sequence())
+            .map(<[_]>::to_vec)
             .unwrap_or_default();
-        if entry.get("fields").is_some_and(Value::is_string) {
+        if entry.get("fields").is_some_and(|f| f.is_string()) {
             if members(&values, out) {
                 return;
             }
@@ -328,16 +332,16 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
         }
         let width = entry
             .get("fields")
-            .and_then(Value::as_sequence)
-            .map_or(0, Vec::len);
-        let comps: Vec<String> = match entry.get("comps").and_then(Value::as_sequence) {
+            .and_then(|f| f.as_sequence())
+            .map_or(0, <[_]>::len);
+        let comps: Vec<String> = match entry.get("comps").and_then(|c| c.as_sequence()) {
             Some(cs) => cs
                 .iter()
                 .map(|c| normalize_comp(&text_of(c)).to_string())
                 .collect(),
             None => vec!["=".into(); width],
         };
-        for row in values.iter().filter_map(Value::as_sequence) {
+        for row in values.iter().filter_map(|v| v.as_sequence()) {
             for (comp, item) in comps.iter().zip(row) {
                 if let Some(vs) = item.as_sequence() {
                     if members(vs, out) {
@@ -367,7 +371,7 @@ fn list_in_value(source: &str, block: &Value, defs: &Definitions, out: &mut Vec<
 }
 
 /// Every constraint code of the block, as opentide reports them.
-pub(crate) fn constraint_diagnostics(source: &str, block: &Value) -> Vec<Diagnostic> {
+pub(crate) fn constraint_diagnostics(source: &str, block: &Node) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     if !set(block.get("status")) {
         return out;
@@ -389,7 +393,7 @@ pub(crate) fn constraint_diagnostics(source: &str, block: &Value) -> Vec<Diagnos
             let has_condition = non_blank(condition);
             let has_exceptions = block
                 .get("exceptions")
-                .and_then(Value::as_sequence)
+                .and_then(|e| e.as_sequence())
                 .is_some_and(|e| !e.is_empty());
             if !non_blank(Some(t))
                 || (condition.is_some() && !has_condition)
@@ -445,8 +449,12 @@ pub(crate) fn constraint_diagnostics(source: &str, block: &Value) -> Vec<Diagnos
         }
     }
     let mut shaped = true;
-    match block.get("exceptions").filter(|v| !v.is_null()) {
-        Some(Value::Sequence(entries)) => {
+    match block
+        .get("exceptions")
+        .filter(|v| !v.is_null())
+        .map(|v| (v, v.as_sequence()))
+    {
+        Some((_, Some(entries))) => {
             for (index, entry) in entries.iter().enumerate() {
                 if !exception_ok(entry) {
                     shaped = false;
@@ -487,8 +495,8 @@ mod tests {
 
     fn codes_for(block: &str) -> Vec<(String, Vec<String>)> {
         let source = format!("configurations:\n  sysdig:\n{block}");
-        let object: Value = serde_yaml::from_str(&source).unwrap();
-        let block = &object["configurations"]["sysdig"];
+        let object = crate::yaml::parse(&source).unwrap();
+        let block = object.get("configurations").unwrap().get("sysdig").unwrap();
         constraint_diagnostics(&source, block)
             .into_iter()
             .map(|d| (d.code, d.field_path.unwrap_or_default()))

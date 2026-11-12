@@ -462,6 +462,7 @@ impl Diagnostic {
 pub mod datasets;
 pub mod duration;
 pub mod falco;
+pub mod node;
 pub mod suggest;
 
 /// Well-known diagnostic codes. Extra query diagnostics are allowed.

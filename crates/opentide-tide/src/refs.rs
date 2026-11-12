@@ -6,6 +6,7 @@
 //! body again.
 
 use crate::yaml_path::{key_span, key_span_in};
+use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, LineIndex, Range};
 use std::collections::BTreeSet;
 
@@ -57,7 +58,7 @@ fn is_reference(path: &[Step]) -> bool {
 /// each placed in `source`, the text `body` was parsed from. A value that is
 /// not a UUID (a typo, `TODO`) is kept: `invalid_ref` reports it, and it is
 /// a ref no object carries.
-pub fn object_refs(source: &str, body: &serde_yaml::Value, own: &str) -> Vec<ObjectRef> {
+pub fn object_refs(source: &str, body: &Node, own: &str) -> Vec<ObjectRef> {
     let mut found: Vec<(Vec<Step>, String)> = Vec::new();
     let mut path = Vec::new();
     collect(body, &mut path, own, &mut found);
@@ -81,14 +82,9 @@ pub fn object_refs(source: &str, body: &serde_yaml::Value, own: &str) -> Vec<Obj
         .collect()
 }
 
-fn collect(
-    value: &serde_yaml::Value,
-    path: &mut Vec<Step>,
-    own: &str,
-    out: &mut Vec<(Vec<Step>, String)>,
-) {
-    match value {
-        serde_yaml::Value::String(text) => {
+fn collect(value: &Node, path: &mut Vec<Step>, own: &str, out: &mut Vec<(Vec<Step>, String)>) {
+    match &value.value {
+        Value::Str(text) => {
             if text != own && !text.trim().is_empty() && is_reference(path) {
                 let steps = path
                     .iter()
@@ -100,27 +96,28 @@ fn collect(
                 out.push((steps, text.clone()));
             }
         }
-        serde_yaml::Value::Sequence(items) => {
+        Value::Seq(items) => {
             for (i, item) in items.iter().enumerate() {
                 path.push(Step::Index(i));
                 collect(item, path, own, out);
                 path.pop();
             }
         }
-        serde_yaml::Value::Mapping(map) => {
-            for (key, item) in map {
-                let key = match key {
-                    serde_yaml::Value::String(k) => k.clone(),
-                    serde_yaml::Value::Number(n) => n.to_string(),
-                    serde_yaml::Value::Bool(b) => b.to_string(),
+        Value::Map(entries) => {
+            for entry in entries {
+                let key = match &entry.key.value {
+                    Value::Str(k) => k.clone(),
+                    number @ (Value::Int(_) | Value::Float(_)) => {
+                        crate::yaml::number_text(number).unwrap_or_default()
+                    }
+                    Value::Bool(b) => b.to_string(),
                     _ => continue,
                 };
                 path.push(Step::Key(key));
-                collect(item, path, own, out);
+                collect(&entry.value, path, own, out);
                 path.pop();
             }
         }
-        serde_yaml::Value::Tagged(tagged) => collect(&tagged.value, path, own, out),
         _ => {}
     }
 }
@@ -240,7 +237,7 @@ mod tests {
     const MODEL: &str = "00000000-0000-4000-8002-000000000001";
 
     fn refs(source: &str) -> Vec<ObjectRef> {
-        let body: serde_yaml::Value = serde_yaml::from_str(source).unwrap();
+        let body = crate::yaml::parse(source).unwrap();
         object_refs(source, &body, OWN)
     }
 

@@ -204,6 +204,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - an optional field is `"type": ["string", "null"]` rather than `anyOf` with a `null` branch, and its `enum` lists `null`;
   - `metadata` and `references` refer to their definition (`$ref`) instead of repeating it, and `references: null` is accepted, as the model accepts it; each document declares `$schema` (draft 2020-12);
   - descriptions are the Rust models' doc comments, and a dropdown leaves out its empty lines and icon placeholders and title-cases an all-lower-case name by English rules (`Command and Control`, `It's`, where Python wrote `Command And Control`, `It'S`).
+- **The editor reads a Tide object's YAML as `opentide validate` does** ([#850](https://github.com/opentidehq/opentide/issues/850)). `opentide lsp start`, `opentide tui` and the `opentide-lsp` binary checked an object's queries, Elastic and Sysdig blocks, outline, links and lens on a second YAML parse; they now use the loader `validate` uses (YAML 1.2), and the same findings, ranges, outline, links and lens come out on every object opentide's corpora hold. Where the two parsers disagreed:
+  - an object `validate` cannot load (a tag outside YAML 1.2's core schema such as `!Ref`, a key written twice, a key that is a list or a mapping, an integer past 64 bits) shows its `yaml_parse` error and no query findings, outline symbol or query highlighting, as an object with a YAML syntax error always did;
+  - an object nested more than 128 levels deep (and at most 512) gets its query findings, where the editor showed none;
+  - an unsaved object whose YAML does not load is checked as an object of the family its `schema:` line names, so it shows its `yaml_parse` error as it does in a workspace, where it showed nothing.
 
 ### Fixed
 
