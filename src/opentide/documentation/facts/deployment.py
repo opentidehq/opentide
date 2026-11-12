@@ -58,19 +58,15 @@ class DeploymentEnvironment(Protocol):
 
     def statuses(self) -> Sequence[StatusDefinition]:
         """Every configured status, in file order."""
-        ...
 
     def platform_enabled(self, platform: str) -> bool | None:
         """Whether the workspace enables *platform*; ``None`` when unknown."""
-        ...
 
     def tenants(self, platform: str) -> Sequence[TenantInfo] | None:
         """The configured tenants of *platform*; ``None`` when they cannot be read."""
-        ...
 
     def remote_ids(self, rule_uuid: str) -> Mapping[str, Mapping[str, str]]:
         """``platform -> tenant -> remote id`` from the rule's deployment state."""
-        ...
 
 
 @dataclass(frozen=True)
