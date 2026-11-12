@@ -30,16 +30,30 @@ fn check(commands: &[&str], at_least: usize) {
 /// A replayed case's root is named and placed as `cargo xtask golden
 /// check` places it (`/tmp/golden-XXXXXX`): a frame wraps a message by the
 /// length of the path in it, so a root of another length (`tempfile`'s
-/// `.tmpXXXXXX`) let a replay pass where the real compare differed.
+/// `.tmpXXXXXX`) let a replay pass where the real compare differed. Where
+/// `/tmp` is a link to a longer folder (macOS), the name is shortened to
+/// keep the canonical root, the path the replay reads, that length.
 #[test]
 fn a_case_root_is_as_long_as_the_golden_checks() {
     let root = replay::case_root();
     let name = root.path().file_name().unwrap().to_str().unwrap();
+    let canonical = std::fs::canonicalize(root.path()).unwrap();
+    let (prefix, random) = replay::root_name(canonical.parent().unwrap());
     assert!(
-        name.starts_with("golden-") && name.len() == "golden-".len() + 6,
+        name.starts_with(prefix) && name.len() == prefix.len() + random,
         "{name}"
     );
     assert_eq!(root.path().parent().unwrap(), std::path::Path::new("/tmp"));
+    if canonical.parent() == Some(std::path::Path::new("/tmp")) {
+        assert_eq!((prefix, random), ("golden-", 6));
+    } else if cfg!(unix) {
+        assert_eq!(
+            canonical.as_os_str().len(),
+            "/tmp/golden-XXXXXX".len(),
+            "{}",
+            canonical.display()
+        );
+    }
 }
 
 /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
