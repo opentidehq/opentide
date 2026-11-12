@@ -5,11 +5,15 @@ loaded rule that attribute was Pydantic's deprecated ``BaseModel.schema``
 classmethod, so the documented line evaluated to a bound method and nothing
 noticed: the golden runner reads shell fences only, never Python ones.
 
-Only statements without side effects run — imports, and expressions or name
-assignments that contain no call — so every attribute path a page prints is
-resolved without deploying, writing files, or reaching a vendor API. A trailing
-comment that opens with a literal (``# "rule::1.0"``, ``# ["T1059"]``) states
-the value the line evaluates to, and has to match.
+The pages of the SDK's ``Workspace`` (UC-5.2, #837: ``RUN_PAGES``) run whole,
+every statement of every fence in order, from a copy of the tide corpus: nothing
+they do leaves it or reaches a vendor API. On the other pages, which document
+the deprecated registry and the platform plugins, only statements without side
+effects run — imports, and expressions or name assignments that contain no
+call — so every attribute path a page prints is resolved without deploying,
+writing files, or reaching a vendor API. A trailing comment that opens with a
+literal (``# "rule::1.0"``, ``# ["T1059"]``) states the value the line evaluates
+to, and has to match.
 """
 
 from __future__ import annotations
@@ -29,6 +33,9 @@ from tests.corpus_support import CORPUS_RULE_UUIDS
 from tests.docs_commands import DOCS, ROOT, _iter_fenced
 
 SDK_PAGES = sorted((DOCS / "sdk").glob("*.md"))
+#: The pages whose Python fences run whole, calls included.
+RUN_PAGES = frozenset({"index.md", "workspace.md", "migration.md"})
+INERT_PAGES = [page for page in SDK_PAGES if page.name not in RUN_PAGES]
 
 #: Names the pages leave for the reader to fill in, bound to a corpus object.
 PLACEHOLDERS: dict[str, Any] = {"uuid": CORPUS_RULE_UUIDS["sentinel"], "platform": "sentinel"}
@@ -114,8 +121,11 @@ class PageReport:
     problems: list[str] = field(default_factory=list)
 
 
-def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
-    """Run the inert statements of *fences* in order, sharing one namespace per page."""
+def check_page(
+    fences: list[Fence], namespace: dict[str, Any], *, run_all: bool = False
+) -> PageReport:
+    """Run the inert statements of *fences* (every statement with *run_all*) in order,
+    sharing one namespace per page."""
     report = PageReport()
     unbound: set[str] = set()
     for fence in fences:
@@ -128,11 +138,13 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
         for node in tree.body:
             where = f"{fence.page}:{fence.line + node.lineno - 1}"
             text = ast.get_source_segment(fence.source, node) or ""
-            if not _is_inert(node) or _mentions_invented(node):
+            if not run_all and (not _is_inert(node) or _mentions_invented(node)):
                 unbound |= _bound_names(node)
                 continue
             try:
-                if isinstance(node, ast.Assign):
+                if isinstance(node, ast.Assign) and all(
+                    isinstance(t, ast.Name) for t in node.targets
+                ):
                     value = eval(compile(ast.Expression(node.value), where, "eval"), namespace)
                     namespace.update(dict.fromkeys(_bound_names(node), value))
                 elif isinstance(node, ast.Expr):
@@ -142,7 +154,7 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
                     report.checked.append(f"{where}: {text}")
                     continue
             except NameError as exc:
-                if exc.name in unbound:
+                if not run_all and exc.name in unbound:
                     unbound |= _bound_names(node)
                     continue
                 report.problems.append(f"{where}: {text}\n    raised {exc!r}")
@@ -167,9 +179,10 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
 
 @pytest.fixture
 def sdk_namespace(tide_corpus_repo: Path) -> Iterator[dict[str, Any]]:
-    from opentide import Opentide
+    from opentide.core.registry import Opentide
 
-    Opentide.initialise()
+    with pytest.warns(DeprecationWarning):
+        Opentide.initialise()
     yield {"Opentide": Opentide, **PLACEHOLDERS}
 
 
@@ -178,7 +191,34 @@ def sdk_namespace(tide_corpus_repo: Path) -> Iterator[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("page", SDK_PAGES, ids=lambda page: page.name)
+@pytest.mark.parametrize("page", sorted(RUN_PAGES))
+def test_the_workspace_pages_run_whole(
+    page: str, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tide_corpus_repo)
+    fences = python_fences(DOCS / "sdk" / page)
+    report = check_page(fences, {**PLACEHOLDERS}, run_all=True)
+    assert not report.problems, "\n".join(report.problems)
+    statements = sum(len(ast.parse(fence.source).body) for fence in fences)
+    assert len(report.checked) == statements, report.checked
+
+
+def test_a_failing_statement_on_a_run_page_is_reported(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tide_corpus_repo)
+    source = "\n".join(
+        [
+            "from opentide import Workspace",
+            'ws = Workspace.open(".")',
+            'ws.coverage("T1059")["count"]  # 0',
+        ]
+    )
+    (problem,) = check_page(_fence(source), {}, run_all=True).problems
+    assert "documented 0" in problem
+
+
+@pytest.mark.parametrize("page", INERT_PAGES, ids=lambda page: page.name)
 def test_sdk_samples_resolve_to_their_documented_values(
     page: Path, sdk_namespace: dict[str, Any]
 ) -> None:
@@ -205,7 +245,7 @@ def test_the_sdk_pages_yield_enough_samples(sdk_namespace: dict[str, Any]) -> No
     """A filter that silently skips everything would make the page test pass."""
     checked = [
         line
-        for page in SDK_PAGES
+        for page in INERT_PAGES
         for line in check_page(python_fences(page), dict(sdk_namespace)).checked
     ]
     assert len(checked) > 40, checked

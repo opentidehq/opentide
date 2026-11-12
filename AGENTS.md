@@ -16,7 +16,7 @@
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide/` | The `opentide` crate: the Rust SDK (the facade), the only crate with a stability promise | [`crates/opentide/AGENTS.md`](crates/opentide/AGENTS.md) |
 | `crates/opentide-*/` | The engine and language server crates, one guide each | `crates/<crate>/AGENTS.md` |
-| `analysis/` | The PyO3 binding compiled into the package as `opentide._native` | [`analysis/AGENTS.md`](analysis/AGENTS.md) |
+| `bindings/python/` | The PyO3 binding compiled into the package as `opentide._native` | [`bindings/python/AGENTS.md`](bindings/python/AGENTS.md) |
 | `bindings/node/` | The npm package `@opentide/opentide`: the napi-rs binding of the facade, the SDK and the `opentide` bin for Node.js | [`bindings/node/AGENTS.md`](bindings/node/AGENTS.md) |
 | `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), the benchmarks (`bench`, budgets in `tests/bench/`), `codegen`, `golden` and the oracle comparisons | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
 | `grammars/`, `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |

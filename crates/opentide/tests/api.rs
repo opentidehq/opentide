@@ -200,6 +200,29 @@ fn the_catalogue_lists_every_object_and_coverage_finds_the_rules() {
 }
 
 #[test]
+fn rules_objectives_and_threats_are_the_catalogues_rows_of_each_family() {
+    let (_dir, ws) = corpus();
+    let (rules, objectives, threats) = (ws.rules(), ws.objectives(), ws.threats());
+    assert_eq!((rules.len(), objectives.len(), threats.len()), (10, 1, 1));
+    assert!(rules.iter().all(|row| row.family == "rule"));
+    assert_eq!(objectives[0].family, "objective");
+    assert_eq!(threats[0].family, "threat");
+    // In the catalogue's order.
+    let catalogue: Vec<String> = ws
+        .catalog()
+        .objects
+        .iter()
+        .filter(|row| row.loaded_family() == Some("rule"))
+        .map(|row| serde_json::to_value(row).unwrap()["uuid"].to_string())
+        .collect();
+    let listed: Vec<String> = rules
+        .iter()
+        .map(|row| serde_json::to_value(&row.uuid).unwrap().to_string())
+        .collect();
+    assert_eq!(listed, catalogue);
+}
+
+#[test]
 fn a_deploy_plan_compiles_every_rule_and_sends_nothing() {
     let (dir, ws) = corpus();
     let plan = ws

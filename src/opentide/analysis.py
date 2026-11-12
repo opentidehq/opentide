@@ -1,7 +1,7 @@
 """The analysis engine: offline query checks, editor diagnostics and the language server.
 
 The engine is Rust, from opentidehq/language-server, compiled into this package
-as ``opentide._native`` (``analysis/``, built by ``hatch_build.py``): ``pip
+as ``opentide._native`` (``bindings/python/``, built by ``hatch_build.py``): ``pip
 install opentide`` is the one install. This module is opentide's one door to
 it: commands, MCP tools and validation import it, never ``opentide._native``
 directly, so a damaged install fails in one place, with one message

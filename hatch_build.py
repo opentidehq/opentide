@@ -1,6 +1,6 @@
 """Build the analysis engine into the opentide wheel.
 
-The engine is Rust: ``analysis/``, the PyO3 bindings for the engine crates in
+The engine is Rust: ``bindings/python/``, the PyO3 bindings for the engine crates in
 ``crates/``, all members of the Cargo workspace at the repository root. This
 hook compiles it with cargo and puts it in the wheel as ``opentide/_native``
 (``.abi3.so``, or ``.pyd`` on Windows), so ``pip install opentide`` is the one
@@ -42,7 +42,7 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "Cargo.toml"
-#: The workspace member ``analysis/``, and its ``cdylib`` target.
+#: The workspace member ``bindings/python/``, and its ``cdylib`` target.
 PACKAGE = "opentide-native"
 LIBRARY = "_native"
 PROFILE_ENV = "OPENTIDE_ENGINE_PROFILE"
@@ -156,7 +156,7 @@ def build_engine(profile: str) -> Path:
 
 
 class EngineBuildHook(BuildHookInterface):
-    """Compile ``analysis/`` into ``opentide/_native`` for every wheel, editable included."""
+    """Compile ``bindings/python/`` into ``opentide/_native`` for every wheel, editable included."""
 
     PLUGIN_NAME = "opentide-engine"
 

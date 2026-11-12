@@ -42,7 +42,7 @@
 # `skip-existing: true` makes it upload only the files PyPI does not have yet,
 # and the verify step fails the job unless PyPI lists every file in dist/.
 #
-# opentide compiles its analysis engine (analysis/ and the engine crates in
+# opentide compiles its analysis engine (bindings/python/ and the engine crates in
 # crates/, one Cargo workspace, Rust) into the package (hatch_build.py), so a
 # release is one wheel per platform and an sdist, all of opentide: cibuildwheel
 # builds the wheels ([tool.cibuildwheel] in pyproject.toml), each tagged

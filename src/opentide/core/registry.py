@@ -58,7 +58,14 @@ class OpentideRegistry:
         return self.is_initialised
 
     def initialise(self) -> None:
-        """Load index into memory (typed objects load on first access)."""
+        """Load index into memory (typed objects load on first access).
+
+        Deprecated outside opentide (UC-5.2, #837): open a workspace with
+        :meth:`opentide.Workspace.open` instead.
+        """
+        from opentide._deprecation import warn_external
+
+        warn_external("Opentide.initialise()", "opentide.Workspace.open()")
         index = IndexManager.load()
         if self._index is not None and index is not self._index:
             # Callers drop the snapshot with ``IndexManager._cache = None``; the
