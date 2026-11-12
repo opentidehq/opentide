@@ -68,7 +68,7 @@ struct Server {
 
 impl Server {
     fn start(cwd: &Path, flags: &[&str]) -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_opentide"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
             .args(["lsp", "start"])
             .args(flags)
             .current_dir(cwd)

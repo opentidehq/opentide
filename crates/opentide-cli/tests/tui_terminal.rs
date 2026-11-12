@@ -75,7 +75,7 @@ fn tui_reading(
     let (out_master, out) = terminal();
     let (err_master, err) = terminal();
     let dir = tempfile::tempdir().unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_opentide"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
         .args(args)
         .arg("tui")
         .current_dir(dir.path())
