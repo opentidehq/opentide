@@ -9063,7 +9063,41 @@
       "title": "ElasticTimeline",
       "type": "object"
     },
-    "ExabeamConfig": {
+    "GraylogAggregation": {
+      "additionalProperties": false,
+      "properties": {
+        "group_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Message fields the events are grouped by",
+          "title": "Group By"
+        },
+        "condition": {
+          "description": "A boolean expression over series, in the condition grammar",
+          "title": "Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "condition"
+      ],
+      "title": "GraylogAggregation",
+      "type": "object"
+    },
+    "GraylogConfig": {
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -9146,95 +9180,12 @@
           "description": "Platform contributors.",
           "title": "Contributors"
         },
-        "sequences": {
-          "description": "One or more sequences, in the order the events happen. Each is a filter and a condition: any match, or a threshold.",
-          "items": {
-            "$ref": "#/$defs/ExabeamSequence"
-          },
-          "minItems": 1,
-          "title": "Sequences",
-          "type": "array"
+        "query": {
+          "description": "A Graylog search query, in the Graylog dialect",
+          "title": "Query",
+          "type": "string"
         },
-        "correlation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ExabeamCorrelation"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Required with two or more sequences; not allowed with one.",
-          "title": "Correlation"
-        },
-        "severity": {
-          "anyOf": [
-            {
-              "enum": [
-                "none",
-                "low",
-                "medium",
-                "high",
-                "critical"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "none, low, medium, high, or critical. Derived from response.alert_severity when omitted.",
-          "title": "Severity",
-          "markdownDescription": "`none`, `low`, `medium`, `high`, or `critical`. Derived from `response.alert_severity`\nwhen omitted."
-        },
-        "outcome": {
-          "anyOf": [
-            {
-              "enum": [
-                "alert",
-                "case",
-                "none"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "alert (an alert in Threat Center), case, or none. Default: alert.",
-          "title": "Outcome",
-          "markdownDescription": "`alert` (an alert in Threat Center), `case`, or `none`. Default: `alert`."
-        },
-        "email": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ExabeamEmail"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Also send an email when the rule triggers.",
-          "title": "Email"
-        },
-        "suppression": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ExabeamSuppression"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Suppress repeated triggers.",
-          "title": "Suppression"
-        },
-        "delay": {
+        "priority": {
           "anyOf": [
             {
               "type": "string"
@@ -9244,381 +9195,148 @@
             }
           ],
           "default": null,
-          "description": "Evaluation delay, 7m to 180m (3h). Omitted: Exabeam's default of 7 minutes.",
-          "title": "Delay",
-          "markdownDescription": "Evaluation delay, `7m` to `180m` (`3h`). Omitted: Exabeam's default of 7 minutes."
+          "description": "Informational, Low, Medium, High, or Critical",
+          "title": "Priority",
+          "markdownDescription": "`Informational`, `Low`, `Medium`, `High`, or `Critical`"
+        },
+        "alert": {
+          "default": true,
+          "description": "false makes fired events plain events, not alerts",
+          "title": "Alert",
+          "type": "boolean",
+          "markdownDescription": "`false` makes fired events plain events, not alerts"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra Graylog tags (Graylog 7.2+). Deploy adds the derived tags.",
+          "title": "Tags"
+        },
+        "streams": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Aliases from the tenant's stream_ids table",
+          "title": "Streams",
+          "markdownDescription": "Aliases from the tenant's `stream_ids` table"
+        },
+        "stream_categories": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Graylog stream categories, as written",
+          "title": "Stream Categories"
         },
         "schedule": {
           "anyOf": [
             {
-              "items": {
-                "$ref": "#/$defs/ExabeamRecurrence"
-              },
-              "type": "array"
+              "$ref": "#/$defs/GraylogSchedule"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "When the rule is active. Omitted: always.",
+          "description": "When the definition runs and the time range it searches",
           "title": "Schedule"
         },
-        "test_mode": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Run the rule in test mode: it triggers and writes a rule-trigger-test event, with no outcome. Default: the tenant test_mode.",
-          "title": "Test Mode",
-          "markdownDescription": "Run the rule in test mode: it triggers and writes a `rule-trigger-test` event, with no\noutcome. Default: the tenant `test_mode`."
-        }
-      },
-      "required": [
-        "status",
-        "sequences"
-      ],
-      "title": "ExabeamConfig",
-      "type": "object"
-    },
-    "ExabeamCorrelation": {
-      "additionalProperties": false,
-      "properties": {
-        "within": {
-          "description": "The window every sequence's condition must be met in: whole m, h, or d",
-          "title": "Within",
-          "type": "string",
-          "markdownDescription": "The window every sequence's condition must be met in: whole `m`, `h`, or `d`"
-        },
-        "group_by": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Up to three fields every sequence shares (the API's limit; the console allows more)",
-          "title": "Group By"
-        }
-      },
-      "required": [
-        "within"
-      ],
-      "title": "ExabeamCorrelation",
-      "type": "object"
-    },
-    "ExabeamEmail": {
-      "additionalProperties": false,
-      "properties": {
-        "recipients": {
-          "description": "One or more email addresses",
-          "items": {
-            "type": "string"
-          },
-          "minItems": 1,
-          "title": "Recipients",
-          "type": "array"
-        },
-        "subject": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Email subject",
-          "title": "Subject"
-        },
-        "attach_csv": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Attach the matching events as CSV",
-          "title": "Attach Csv"
-        }
-      },
-      "required": [
-        "recipients"
-      ],
-      "title": "ExabeamEmail",
-      "type": "object"
-    },
-    "ExabeamRecurrence": {
-      "additionalProperties": false,
-      "properties": {
-        "every": {
-          "description": "day, week, month, or days (a range of weekdays)",
-          "enum": [
-            "day",
-            "week",
-            "month",
-            "days"
-          ],
-          "title": "Every",
-          "type": "string",
-          "markdownDescription": "`day`, `week`, `month`, or `days` (a range of weekdays)"
-        },
-        "from": {
-          "description": "Start time, UTC, H:MMZ or HH:MMZ (8:00Z, 08:00Z)",
-          "title": "From",
-          "type": "string",
-          "markdownDescription": "Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)"
-        },
-        "to": {
-          "description": "End time, UTC, H:MMZ or HH:MMZ",
-          "title": "To",
-          "type": "string",
-          "markdownDescription": "End time, UTC, `H:MMZ` or `HH:MMZ`"
-        },
-        "days": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "items": {
-                "type": "integer"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "week: one or more weekday names (monday \u2026 sunday). month: day numbers 1\u201331. Not allowed otherwise.",
-          "title": "Days",
-          "markdownDescription": "`week`: one or more weekday names (`monday` \u2026 `sunday`). `month`: day numbers 1\u201331. Not\nallowed otherwise."
-        },
-        "last_day": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "month only: also the last day of the month. A month recurrence has days, last_day: true, or both.",
-          "title": "Last Day",
-          "markdownDescription": "`month` only: also the last day of the month. A `month` recurrence has `days`,\n`last_day: true`, or both."
-        },
-        "first": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "days only: the first weekday of the range",
-          "title": "First",
-          "markdownDescription": "`days` only: the first weekday of the range"
-        },
-        "last": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "days only: the last weekday of the range",
-          "title": "Last",
-          "markdownDescription": "`days` only: the last weekday of the range"
-        }
-      },
-      "required": [
-        "every",
-        "from",
-        "to"
-      ],
-      "title": "ExabeamRecurrence",
-      "type": "object"
-    },
-    "ExabeamSequence": {
-      "additionalProperties": false,
-      "properties": {
-        "query": {
-          "description": "A filter in the Exabeam Query Language, profile rule. Multiline in YAML.",
-          "title": "Query",
-          "type": "string",
-          "markdownDescription": "A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML."
-        },
-        "name": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Sequence name, shown in the console",
-          "title": "Name"
-        },
-        "threshold": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ExabeamThreshold"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The condition. Without it, the sequence triggers on any matching event.",
-          "title": "Threshold"
-        },
-        "group_by": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "One to three fields. A threshold counts per value; any match triggers once per value.",
-          "title": "Group By"
-        }
-      },
-      "required": [
-        "query"
-      ],
-      "title": "ExabeamSequence",
-      "type": "object"
-    },
-    "ExabeamSuppression": {
-      "additionalProperties": false,
-      "properties": {
-        "for": {
-          "description": "Suppress repeated triggers for this long: whole m, h, d, or w",
-          "title": "For",
-          "type": "string",
-          "markdownDescription": "Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`"
-        },
-        "group_by": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "One to three fields. Suppress per value instead of for the whole rule.",
-          "title": "Group By"
-        }
-      },
-      "required": [
-        "for"
-      ],
-      "title": "ExabeamSuppression",
-      "type": "object"
-    },
-    "ExabeamThreshold": {
-      "additionalProperties": false,
-      "properties": {
-        "function": {
-          "description": "count, unique_count, value, max, min, sum, or average",
-          "enum": [
-            "count",
-            "unique_count",
-            "value",
-            "max",
-            "min",
-            "sum",
-            "average"
-          ],
-          "title": "Function",
-          "type": "string",
-          "markdownDescription": "`count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`"
-        },
-        "field": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The field the function reads. Required except for count. count without a field counts events.",
-          "title": "Field",
-          "markdownDescription": "The field the function reads. Required except for `count`. `count` without a field counts\nevents."
-        },
-        "operator": {
-          "description": "more_than, less_than, in, or not_in",
-          "enum": [
-            "more_than",
-            "less_than",
-            "in",
-            "not_in"
-          ],
-          "title": "Operator",
-          "type": "string",
-          "markdownDescription": "`more_than`, `less_than`, `in`, or `not_in`"
-        },
-        "value": {
+        "event_limit": {
           "anyOf": [
             {
               "type": "integer"
             },
             {
-              "type": "number"
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filters only: the most events one run creates, 1\u20131,000",
+          "title": "Event Limit"
+        },
+        "aggregation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GraylogAggregation"
             },
             {
-              "items": {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Turns the filter into an aggregation",
+          "title": "Aggregation"
+        },
+        "event_fields": {
+          "anyOf": [
+            {
+              "additionalProperties": {
                 "anyOf": [
                   {
                     "type": "string"
                   },
                   {
-                    "type": "integer"
+                    "$ref": "#/$defs/GraylogEventTemplate"
                   },
                   {
-                    "type": "number"
+                    "$ref": "#/$defs/GraylogEventLookup"
                   }
                 ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Event field name \u2192 a value",
+          "title": "Event Fields"
+        },
+        "event_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
               },
               "type": "array"
             },
@@ -9627,23 +9345,203 @@
             }
           ],
           "default": null,
-          "description": "more_than and less_than: a number (count and unique_count: a non-negative integer). in and not_in: a non-empty list of strings or numbers.",
-          "title": "Value",
-          "markdownDescription": "`more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative\ninteger). `in` and `not_in`: a non-empty list of strings or numbers."
+          "description": "Event fields that make up the event key",
+          "title": "Event Key"
         },
-        "within": {
-          "description": "The window: whole m, h, or d",
-          "title": "Within",
-          "type": "string",
-          "markdownDescription": "The window: whole `m`, `h`, or `d`"
+        "notifications": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Aliases from the tenant's notification_ids table",
+          "title": "Notifications",
+          "markdownDescription": "Aliases from the tenant's `notification_ids` table"
+        },
+        "grace_period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "No second notification for the same event key within this time",
+          "title": "Grace Period"
+        },
+        "backlog": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Messages attached to a notification, 0 or more",
+          "title": "Backlog"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Event summary template (Graylog 7.1+)",
+          "title": "Summary"
+        },
+        "remediation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Remediation steps shown with the event",
+          "title": "Remediation"
         }
       },
       "required": [
-        "function",
-        "operator",
-        "within"
+        "status",
+        "query"
       ],
-      "title": "ExabeamThreshold",
+      "title": "GraylogConfig",
+      "type": "object"
+    },
+    "GraylogEventLookup": {
+      "additionalProperties": false,
+      "properties": {
+        "lookup": {
+          "$ref": "#/$defs/GraylogLookupTable",
+          "description": "A lookup-table value keyed by a message field.",
+          "title": "Lookup"
+        }
+      },
+      "required": [
+        "lookup"
+      ],
+      "title": "GraylogEventLookup",
+      "type": "object"
+    },
+    "GraylogEventTemplate": {
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "description": "A Graylog template (${source.<field>}) or constant text, sent as written.",
+          "title": "Template",
+          "type": "string",
+          "markdownDescription": "A Graylog template (`${source.<field>}`) or constant text, sent as written."
+        }
+      },
+      "required": [
+        "template"
+      ],
+      "title": "GraylogEventTemplate",
+      "type": "object"
+    },
+    "GraylogLookupTable": {
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "description": "The Graylog lookup table name.",
+          "title": "Table",
+          "type": "string"
+        },
+        "key_field": {
+          "description": "The message field whose value is the lookup key.",
+          "title": "Key Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "key_field"
+      ],
+      "title": "GraylogLookupTable",
+      "type": "object"
+    },
+    "GraylogSchedule": {
+      "additionalProperties": false,
+      "properties": {
+        "every": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How often the definition runs (execute_every_ms). Exclusive with cron.",
+          "title": "Every",
+          "markdownDescription": "How often the definition runs (`execute_every_ms`). Exclusive with `cron`."
+        },
+        "window": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time range each run searches (search_within_ms)",
+          "title": "Window",
+          "markdownDescription": "The time range each run searches (`search_within_ms`)"
+        },
+        "cron": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A Quartz cron expression of 6 or 7 fields (0 */5 * * * ?). Exclusive with every.",
+          "title": "Cron",
+          "markdownDescription": "A Quartz cron expression of 6 or 7 fields (`0 */5 * * * ?`). Exclusive with `every`."
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The IANA time zone cron runs in",
+          "title": "Timezone",
+          "markdownDescription": "The IANA time zone `cron` runs in"
+        }
+      },
+      "title": "GraylogSchedule",
       "type": "object"
     },
     "HarfangLabConfig": {
@@ -10380,19 +10278,19 @@
           "title": "Bitdefender",
           "markdownDescription": "Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."
         },
-        "exabeam": {
+        "graylog": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ExabeamConfig"
+              "$ref": "#/$defs/GraylogConfig"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Exabeam New-Scale SIEM correlation rule (platform::exabeam::1.0).",
-          "title": "Exabeam",
-          "markdownDescription": "Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."
+          "description": "Graylog event definition (platform::graylog::1.0).",
+          "title": "Graylog",
+          "markdownDescription": "Graylog event definition (`platform::graylog::1.0`)."
         }
       },
       "title": "RuleConfigurations",

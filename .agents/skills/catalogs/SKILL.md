@@ -118,6 +118,10 @@ A difference from either engine is a `[[yara]]` entry of `testdata/oracles/excep
 
 `scripts/sync_bitdefender_criteria.py --cache <dir>` regenerates it from Bitdefender's "Detection and exclusion criteria for Basic rules" page (`--offline` reads only the cached page; `--check` compares and makes no request); never hand-edit. The page is all rights reserved: facts only, no sentence copied (`catalogs/bitdefender/NOTICE`). Every note in the page's table must match a pattern in the script or be listed in `IGNORED_NOTES` with its reason, so a page change fails the run until someone reads it. `closed` marks the four targets whose field list bitdefender-1.0 states (process, file, connection, registry): an unknown field there is `bitdefender_criterion_field` as an error, on another target a warning. `crates/opentide-tide/tests/bitdefender_spec.rs` holds the catalogue to the spec's EDR and enum tables (`testdata/conformance/bitdefender/spec-tables.md`, pasted verbatim) and the spec's fixtures; when the spec changes, paste its new sections there. The checks themselves are `crates/opentide-tide/src/bitdefender.rs`.
 
+## Graylog
+
+`catalogs/tz/zones.txt` lists the IANA zone and link names, so `graylog_schedule` checks `schedule.timezone` without I/O. `scripts/sync_tz_zones.py --tzdata <tzdata.zi>` regenerates it (`--check` compares); never hand-edit. The tz database is public domain (`catalogs/tz/NOTICE`). The block's checks are `crates/opentide-tide/src/graylog.rs`, held to the spec's fixtures (`testdata/conformance/graylog/`, copied unchanged, `SOURCES.md`) by `crates/opentide-tide/tests/graylog_spec.rs`. The query's Graylog dialect (`crates/opentide-lucene/src/graylog.rs`) is held to live verdicts: `testdata/oracles/graylog/*.lucene` are one-line probes, `expected.tsv` the status Graylog's `POST /api/search/validate` gave on each release line (`scripts/oracles/graylog/probes.py --write`, needs a server), and `graylog_verdicts.rs` the ledger of the disagreements. Add a probe with each new dialect rule and record its verdict.
+
 ## Exabeam catalogue
 
 | Path | Contents |

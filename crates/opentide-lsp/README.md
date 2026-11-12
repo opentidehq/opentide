@@ -65,7 +65,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 | `opentide-lsp --stdio` | Serve LSP on stdin and stdout. Exits `0` after `shutdown` then `exit`, `1` when the client exits or closes the stream without `shutdown` |
 | `opentide-lsp --listen <addr>` | Serve LSP to one TCP client (`127.0.0.1:2087`); says where it listens on stderr. Not in the WASI build |
 | `opentide-lsp --version` (`-V`) | Print `opentide-lsp <version>`. With `--json`, print what `initialize` reports in `capabilities.experimental.opentide` ([EDITORS.md](docs/EDITORS.md#structure-providers)), without starting a session |
-| `opentide-lsp analyze <file> [--language <id>] [--platform <key>]` | Print the file's diagnostics as a JSON array. The language comes from the extension (`.yaml` and `.yml` are Tide YAML) unless `--language` names it. `--platform` is the `configurations` key a query file is for: `carbon_black_cloud` checks Lucene in the Carbon Black dialect, `defender_for_endpoint` KQL against the Defender schema. A Tide file under an `objects/` folder is analysed with its workspace: the other object files, the catalog in `.opentide/lsp/catalogs/generated/` (else the bundled one) and the Elastic tenants' `setup.version`. A query file is analysed on its own |
+| `opentide-lsp analyze <file> [--language <id>] [--platform <key>]` | Print the file's diagnostics as a JSON array. The language comes from the extension (`.yaml` and `.yml` are Tide YAML) unless `--language` names it. `--platform` is the `configurations` key a query file is for: `carbon_black_cloud` and `graylog` check Lucene in the Carbon Black and Graylog dialects, `defender_for_endpoint` KQL against the Defender schema. A Tide file under an `objects/` folder is analysed with its workspace: the other object files, the catalog in `.opentide/lsp/catalogs/generated/` (else the bundled one) and the Elastic tenants' `setup.version`. A query file is analysed on its own |
 | `opentide-lsp highlight <file> [--language <id>] [--html]` | Print the file's highlight tokens as JSON, or with `--html` a page that shows them |
 | `opentide-lsp generate-highlights [--check]` | Rewrite `highlights/generated/` (the TextMate grammars, the Monaco and Helix maps, `package-contributions.json`) from `highlights/spec.toml`; `--check` fails when they are stale. For this repository's CI |
 
@@ -96,7 +96,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
 | `opentide-eql` | EQL catalog, sequence/sample/pipe rules, `eql_*` diagnostics |
 | `opentide-kuery` | Kibana KQL checks, Lucene-syntax-in-kuery warnings |
-| `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings |
+| `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings, the Carbon Black and Graylog dialects |
 | `opentide-falco` | Falco rule conditions (Sysdig Secure): a port of libsinsp's filter parser and compiler checks, field and event catalogs, `falco_*` diagnostics |
 | `opentide-cql` | CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM): function, event and field catalogs, Next-Gen SIEM correlation-rule checks, `cql_*` diagnostics |
 | `opentide-exabeam` | Exabeam Query Language (New-Scale SIEM): a port of the specification's reference checker with the `rule` and `search` profiles, RE2 pattern checks, the Common Information Model catalogue, `exabeam_*` diagnostics |

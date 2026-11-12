@@ -1,6 +1,7 @@
 //! I/O-free engine for the Lucene classic query syntax, as Elasticsearch's
 //! `query_string` reads it (Elastic Security rules with `language: lucene`),
-//! and as Carbon Black Cloud watchlist queries use it.
+//! as Carbon Black Cloud watchlist queries use it, and as Graylog event
+//! definitions and searches use it ([`graylog`]).
 //!
 //! Boolean operators are upper case only: a lower-case `and` between two
 //! clauses is a search term, so the clause list silently widens. Clauses have
@@ -11,6 +12,7 @@
 
 pub mod carbon_black;
 mod ecs;
+pub mod graylog;
 pub mod regexp;
 
 pub use ecs::ecs_diagnostics;
@@ -36,6 +38,24 @@ pub enum Dialect {
     /// Carbon Black Cloud watchlist queries (Solr's classic parser, default
     /// operator AND). Deploy joins the lines of the query with spaces.
     CarbonBlack,
+    /// Graylog searches and event definitions (graylog-1.0): OpenSearch or
+    /// Elasticsearch `query_string`, unchanged, with leading wildcards off.
+    /// Elastic's checks, without the ECS and Kibana KQL advice, plus
+    /// Graylog's own ([`graylog`]).
+    Graylog,
+}
+
+impl Dialect {
+    /// The dialect of a detection platform, as a `configurations` key:
+    /// `carbon_black_cloud` and `graylog` have their own, every other
+    /// platform (and none) is Elastic's.
+    pub fn for_platform(platform: &str) -> Self {
+        match platform {
+            "carbon_black_cloud" => Dialect::CarbonBlack,
+            "graylog" => Dialect::Graylog,
+            _ => Dialect::Elastic,
+        }
+    }
 }
 
 pub struct AnalyzeResult {
@@ -77,6 +97,7 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         ));
     }
     let elastic = dialect == Dialect::Elastic;
+    let graylog = dialect == Dialect::Graylog;
     opentide_syntax::walk_with_ancestors(root, |node, ancestors| match node.kind() {
         "boolean_query" => {
             lowercase_operators(node, text, &mut diagnostics);
@@ -87,18 +108,34 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
         }
         "field_name" => {
             field_wildcard(node, text, &mut diagnostics);
-            if !elastic {
+            if dialect == Dialect::CarbonBlack {
                 elasticsearch_field_syntax(node, text, &mut diagnostics);
                 carbon_black::check_field(node, text, &mut diagnostics);
             }
         }
         "field_query" => range_operator(node, text, dialect, &mut diagnostics),
-        "range_query" => range_whitespace(node, text, &mut diagnostics),
+        "range_query" => {
+            range_whitespace(node, text, &mut diagnostics);
+            if graylog {
+                graylog::open_range(node, text, &mut diagnostics);
+                graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
+            }
+        }
+        "term_query" if graylog => {
+            graylog::leading_wildcard(node, text, &mut diagnostics);
+            graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
+        }
+        "regexp_query" if graylog => {
+            graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
+        }
         "term" | "wildcard_term" | "phrase" | "range_term" => escapes(node, text, &mut diagnostics),
         "fuzzy" => fuzziness(node, ancestors, text, dialect, &mut diagnostics),
         "regexp" => regexp_body(node, ancestors, text, dialect, &mut diagnostics),
         _ => {}
     });
+    if graylog {
+        graylog::double_backslash(text, &mut diagnostics);
+    }
     if elastic && let Some(d) = looks_like_kuery(root, text, &diagnostics) {
         diagnostics.push(d);
     }
@@ -336,6 +373,7 @@ fn bare_terms(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diagnost
             .unwrap_or("");
         let (severity, place) = match dialect {
             Dialect::Elastic => (Severity::Hint, "Elasticsearch searches it in every field"),
+            Dialect::Graylog => (Severity::Hint, "Graylog searches it in every field"),
             Dialect::CarbonBlack => (
                 Severity::Warning,
                 "Carbon Black searches its default fields and requires it",
@@ -475,7 +513,7 @@ fn fuzziness(
     }
     let span = node_span(node);
     match dialect {
-        Dialect::Elastic => {
+        Dialect::Elastic | Dialect::Graylog => {
             if let Some(message) = elastic_fuzziness_error(slop) {
                 out.push(Diagnostic::error(
                     codes::LUCENE_FUZZY,
@@ -604,7 +642,30 @@ fn regexp_body(
             ByteSpan::new(start + b, start + b + width)
         }
     };
-    for problem in regexp::elasticsearch_problems(body) {
+    // Graylog: its PCRE-only syntax is `graylog_regex_unsupported`, and
+    // Lucene checks the rest with that syntax masked, so one construct is
+    // reported once.
+    let scan = (dialect == Dialect::Graylog).then(|| graylog::scan_regex(body));
+    let push_body = |finding: &graylog::BodyFinding,
+                     code: &str,
+                     severity: Severity,
+                     out: &mut Vec<Diagnostic>| {
+        let at = start + finding.at;
+        let mut d = Diagnostic::error(
+            code,
+            finding.message.clone(),
+            range(source, ByteSpan::new(at, at + finding.len)),
+        );
+        d.severity = severity;
+        out.push(d);
+    };
+    if let Some(scan) = &scan {
+        for f in &scan.unsupported {
+            push_body(f, codes::GRAYLOG_REGEX_UNSUPPORTED, Severity::Error, out);
+        }
+    }
+    let checked = scan.as_ref().map_or(body, |s| s.masked.as_str());
+    for problem in regexp::elasticsearch_problems(checked) {
         // Carbon Black's Solr version is not known: syntax advice only.
         if dialect == Dialect::CarbonBlack && !problem.syntax {
             continue;
@@ -612,8 +673,9 @@ fn regexp_body(
         let span = problem.at.map_or_else(|| node_span(node), at_char);
         // Without a field, `query_string` searches every field (`*`), which
         // Elasticsearch runs leniently: the term matches nothing instead of
-        // failing the query.
-        let fielded = has_field(ancestors);
+        // failing the query. Graylog's validator compiles every regex, so
+        // there it fails either way.
+        let fielded = has_field(ancestors) || dialect == Dialect::Graylog;
         let message = if fielded {
             problem.message
         } else {
@@ -624,12 +686,20 @@ fn regexp_body(
         };
         let mut d = Diagnostic::error(codes::LUCENE_REGEXP, message, range(source, span));
         d.severity = match dialect {
-            Dialect::Elastic if fielded => problem.severity,
-            Dialect::Elastic | Dialect::CarbonBlack => Severity::Warning,
+            Dialect::Elastic | Dialect::Graylog if fielded => problem.severity,
+            Dialect::Elastic | Dialect::Graylog | Dialect::CarbonBlack => Severity::Warning,
         };
         out.push(d);
         if problem.syntax {
             return;
+        }
+    }
+    if let Some(scan) = &scan {
+        for f in &scan.operators {
+            push_body(f, codes::GRAYLOG_REGEX_OPERATOR, Severity::Warning, out);
+        }
+        for f in &scan.quotes {
+            push_body(f, codes::GRAYLOG_REGEX_QUOTE, Severity::Warning, out);
         }
     }
     regexp_pcre_habits(body, start, source, dialect, out);
@@ -689,7 +759,8 @@ fn regexp_pcre_habits(
         i += 1;
     }
     let span = |b: usize, len: usize| range(source, ByteSpan::new(start + b, start + b + len));
-    if let Some(b) = group {
+    // Graylog reports `(?…)` as `graylog_regex_unsupported`.
+    if let Some(b) = group.filter(|_| dialect != Dialect::Graylog) {
         out.push(Diagnostic::warning(
             codes::LUCENE_REGEXP,
             "Lucene regular expressions have no `(?…)` groups or flags: `(?:` matches the text `?:` and `(?i)` the text `?i`; drop the `?…` part",
@@ -867,8 +938,24 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
 }
 
 /// Hover in a dialect: Carbon Black fields from its process search catalog,
-/// then the operators every dialect shares.
+/// Graylog's built-in message fields, then the operators every dialect
+/// shares.
 pub fn hover_dialect(source: &str, offset: usize, dialect: Dialect) -> Option<String> {
+    if dialect == Dialect::Graylog {
+        let offset = offset.min(source.len());
+        if let Some(tree) = ts_parse(LanguageId::Lucene, source) {
+            let mut node = tree.root_node().descendant_for_byte_range(offset, offset);
+            while let Some(n) = node {
+                if n.kind() == "field_name" {
+                    if let Some(docs) = graylog::field_docs(text(n, source)) {
+                        return Some(docs);
+                    }
+                    break;
+                }
+                node = n.parent();
+            }
+        }
+    }
     if dialect == Dialect::CarbonBlack {
         let offset = offset.min(source.len());
         if let Some(tree) = ts_parse(LanguageId::Lucene, source) {
@@ -889,10 +976,20 @@ pub fn hover_dialect(source: &str, offset: usize, dialect: Dialect) -> Option<St
 }
 
 /// Completion in a dialect: a Carbon Black query is offered its process
-/// search fields (or a field's values), never ECS fields.
+/// search fields (or a field's values), never ECS fields; a Graylog query
+/// the fields it names and Graylog's built-in message fields.
 pub fn completions_dialect(source: &str, offset: usize, dialect: Dialect) -> Vec<CompletionItem> {
     match dialect {
         Dialect::Elastic => completions(source, offset),
+        Dialect::Graylog => {
+            let mut items = completions(source, offset);
+            for item in graylog::completions() {
+                if !items.iter().any(|i| i.label == item.label) {
+                    items.push(item);
+                }
+            }
+            items
+        }
         Dialect::CarbonBlack => {
             let before = &source[..offset.min(source.len())];
             let mut items = Vec::new();
@@ -1163,6 +1260,276 @@ mod tests {
                 .iter()
                 .all(|(c, _)| c != codes::LUCENE_LOOKS_LIKE_KUERY)
         );
+    }
+
+    fn gl(src: &str) -> Vec<Diagnostic> {
+        analyze_dialect(src, Dialect::Graylog).diagnostics
+    }
+
+    fn gl_codes(src: &str) -> Vec<(String, Severity)> {
+        gl(src).into_iter().map(|d| (d.code, d.severity)).collect()
+    }
+
+    fn only(src: &str, code: &str) -> Vec<Diagnostic> {
+        gl(src).into_iter().filter(|d| d.code == code).collect()
+    }
+
+    #[test]
+    fn dialect_for_platform() {
+        assert_eq!(Dialect::for_platform("graylog"), Dialect::Graylog);
+        assert_eq!(
+            Dialect::for_platform("carbon_black_cloud"),
+            Dialect::CarbonBlack
+        );
+        assert_eq!(Dialect::for_platform("elastic"), Dialect::Elastic);
+        assert_eq!(Dialect::for_platform(""), Dialect::Elastic);
+    }
+
+    #[test]
+    fn graylog_spec_queries_are_clean() {
+        for src in [
+            r"EventID:1 AND image_lc:/.*\\mshta\.exe/",
+            r"EventID:1 AND image_lc:/.*\\mshta\.exe/ AND command_line_lc:/.*https?:\/\/.*/",
+            "EventID:1\nAND parent_image_lc:/.*\\\\(winword|excel|powerpnt|outlook)\\.exe/\nAND image_lc:/.*\\\\(powershell|pwsh)\\.exe/\nAND command_line_lc:/.*( -enc | -encodedcommand |frombase64string|iex\\().*/\nAND NOT command_line_lc:/.*\\\\program files\\\\contoso\\\\admintools\\\\.*/",
+            r"x:/\d{2,4}\s\w+/ AND y:/<16-31>/ AND z:/(a|b)c/",
+            "_exists_:CommandLine AND source:dc01 AND x:abc* AND x:a?c",
+        ] {
+            assert!(gl(src).is_empty(), "{src}: {:?}", gl(src));
+        }
+    }
+
+    #[test]
+    fn graylog_leading_wildcard() {
+        for src in [
+            "Image:*cmd.exe",
+            "x:?abc",
+            "*",
+            "x:*",
+            "x:(a OR *b)",
+            "-*",
+            "x:*~",
+        ] {
+            let found = only(src, codes::GRAYLOG_LEADING_WILDCARD);
+            assert_eq!(found.len(), 1, "{src}");
+            assert_eq!(found[0].severity, Severity::Error, "{src}");
+        }
+        let d = &only("Image:*cmd.exe", codes::GRAYLOG_LEADING_WILDCARD)[0];
+        assert!(d.message.contains(r"Image:/.*cmd\.exe/"), "{}", d.message);
+        assert_eq!((d.range.start.character, d.range.end.character), (6, 14));
+        assert!(
+            only("x:*", codes::GRAYLOG_LEADING_WILDCARD)[0]
+                .message
+                .contains("_exists_:x")
+        );
+        for src in ["*", "*:*"] {
+            assert!(
+                only(src, codes::GRAYLOG_LEADING_WILDCARD)[0]
+                    .message
+                    .contains("_exists_:<field>"),
+                "{src}"
+            );
+        }
+        for src in [
+            "x:abc*",
+            "x:a*b",
+            "x:\\*abc",
+            "x:\"*abc\"",
+            "x:[*a TO b]",
+            "x:\\\\*",
+        ] {
+            assert!(
+                only(src, codes::GRAYLOG_LEADING_WILDCARD).is_empty(),
+                "{src}"
+            );
+        }
+        // Not a Graylog code elsewhere.
+        assert!(codes_of("Image:*cmd.exe").is_empty());
+    }
+
+    #[test]
+    fn graylog_regex_unsupported_replaces_the_pcre_habit_warning() {
+        for src in [
+            "x:/(?i)cmd.*/",
+            "x:/(?:a|b)/",
+            "x:/(?=a)b/",
+            "x:/(?<!a)b/",
+            r"x:/(a)\1/",
+            r"x:/\bnet\b/",
+            r"x:/a\B/",
+        ] {
+            let found = gl_codes(src);
+            assert!(
+                found
+                    .iter()
+                    .any(|(c, s)| c == codes::GRAYLOG_REGEX_UNSUPPORTED && *s == Severity::Error),
+                "{src}: {found:?}"
+            );
+            assert!(
+                found.iter().all(|(c, _)| c != codes::LUCENE_REGEXP),
+                "{src}: reported twice {found:?}"
+            );
+        }
+        // Elastic keeps its own advice.
+        assert!(codes_of("x:/(?i)cmd.*/").contains(&codes::LUCENE_REGEXP.to_string()));
+        // An anchor is still Lucene advice; another Lucene error still counts.
+        assert!(
+            gl_codes("x:/^cmd/")
+                .iter()
+                .any(|(c, _)| c == codes::LUCENE_REGEXP)
+        );
+        let found = gl_codes("x:/(?i)[a/");
+        assert!(
+            found
+                .iter()
+                .any(|(c, _)| c == codes::GRAYLOG_REGEX_UNSUPPORTED)
+        );
+        assert!(
+            found
+                .iter()
+                .any(|(c, s)| c == codes::LUCENE_REGEXP && *s == Severity::Error)
+        );
+        // UTF-8: the range is the `\b`, after a two-byte character.
+        let d = &only(r"x:/é\b/", codes::GRAYLOG_REGEX_UNSUPPORTED)[0];
+        assert_eq!((d.range.start.character, d.range.end.character), (4, 6));
+    }
+
+    #[test]
+    fn graylog_regex_operators_and_quotes() {
+        let d = only("x:/.*f~g.*/", codes::GRAYLOG_REGEX_OPERATOR);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].severity, Severity::Warning);
+        assert_eq!(
+            (d[0].range.start.character, d[0].range.end.character),
+            (6, 7)
+        );
+        for src in ["x:/a#b/", "x:/a&b/", "x:/a>b/"] {
+            assert_eq!(only(src, codes::GRAYLOG_REGEX_OPERATOR).len(), 1, "{src}");
+        }
+        for src in [r"x:/a\~b/", "x:/[~#&<>]/", "x:/<1-5>/"] {
+            assert!(only(src, codes::GRAYLOG_REGEX_OPERATOR).is_empty(), "{src}");
+        }
+        // `<` alone is a Lucene syntax error: an error, not also a warning.
+        let found = gl_codes("x:/a<b/");
+        assert!(
+            found
+                .iter()
+                .any(|(c, s)| c == codes::LUCENE_REGEXP && *s == Severity::Error)
+        );
+        assert!(
+            found
+                .iter()
+                .all(|(c, _)| c != codes::GRAYLOG_REGEX_OPERATOR)
+        );
+        let q = only("x:/a\"b\"c/", codes::GRAYLOG_REGEX_QUOTE);
+        assert_eq!(q.len(), 1);
+        assert_eq!(
+            (q[0].range.start.character, q[0].range.end.character),
+            (4, 7)
+        );
+        assert!(only(r#"x:/a\"b/"#, codes::GRAYLOG_REGEX_QUOTE).is_empty());
+        // Unpaired: Lucene refuses it, which is the error.
+        let found = gl_codes("x:/a\"b/");
+        assert!(
+            found
+                .iter()
+                .any(|(c, s)| c == codes::LUCENE_REGEXP && *s == Severity::Error)
+        );
+        assert!(found.iter().all(|(c, _)| c != codes::GRAYLOG_REGEX_QUOTE));
+        // Unfielded regex errors are errors on Graylog (its validator
+        // compiles every regex).
+        assert!(
+            gl_codes("/[a/")
+                .iter()
+                .any(|(c, s)| c == codes::LUCENE_REGEXP && *s == Severity::Error)
+        );
+    }
+
+    #[test]
+    fn graylog_double_backslash() {
+        let d = only(
+            r"x:a\\\\b AND y:/c\\\\\\d/",
+            codes::GRAYLOG_DOUBLE_BACKSLASH,
+        );
+        assert_eq!(d.len(), 2);
+        assert_eq!(
+            (d[0].range.start.character, d[0].range.end.character),
+            (3, 7)
+        );
+        assert_eq!(
+            (d[1].range.start.character, d[1].range.end.character),
+            (17, 23)
+        );
+        assert!(only(r"x:a\\b", codes::GRAYLOG_DOUBLE_BACKSLASH).is_empty());
+        // Multibyte text before the run.
+        let d = only(r"x:ü\\\\", codes::GRAYLOG_DOUBLE_BACKSLASH);
+        assert_eq!(
+            (d[0].range.start.character, d[0].range.end.character),
+            (3, 7)
+        );
+    }
+
+    #[test]
+    fn graylog_analyzed_field() {
+        for src in [
+            "message:/foo.*/",
+            "full_message:foo*",
+            "message:[a TO b]",
+            "message:>5",
+            "message:(foo* OR bar)",
+        ] {
+            let d = only(src, codes::GRAYLOG_ANALYZED_FIELD);
+            assert_eq!(d.len(), 1, "{src}");
+            assert_eq!(d[0].severity, Severity::Warning);
+        }
+        for src in ["message:foo", "message_lc:/foo.*/", "source:dc*", "/foo.*/"] {
+            assert!(only(src, codes::GRAYLOG_ANALYZED_FIELD).is_empty(), "{src}");
+        }
+    }
+
+    #[test]
+    fn graylog_follows_elastic_elsewhere() {
+        let found = gl_codes("x:a and y:b");
+        assert!(
+            found
+                .iter()
+                .any(|(c, _)| c == codes::LUCENE_LOWERCASE_OPERATOR)
+        );
+        assert!(
+            gl_codes("x:(a")
+                .iter()
+                .any(|(c, _)| c == codes::LUCENE_PARSE_ERROR)
+        );
+        assert!(
+            gl_codes("x:b~1.5")
+                .iter()
+                .any(|(c, s)| c == codes::LUCENE_FUZZY && *s == Severity::Error)
+        );
+        assert!(
+            gl_codes("x:\\u12")
+                .iter()
+                .any(|(c, _)| c == codes::LUCENE_ESCAPE)
+        );
+        // No Kibana KQL or Carbon Black advice.
+        assert!(
+            gl_codes("a:1 and b >= 2")
+                .iter()
+                .all(|(c, _)| c != codes::LUCENE_LOOKS_LIKE_KUERY)
+        );
+        assert!(gl_codes("_exists_:x").is_empty());
+        let d = only("user:alice bob", codes::LUCENE_BARE_TERM);
+        assert!(d[0].message.contains("Graylog"), "{}", d[0].message);
+    }
+
+    #[test]
+    fn graylog_hover_and_completion() {
+        let h = hover_dialect("message:x", 2, Dialect::Graylog).expect("hover");
+        assert!(h.contains("Analysed"), "{h}");
+        assert!(hover_dialect("a:1 AND b:2", 5, Dialect::Graylog).is_some());
+        let items = completions_dialect("EventID:1 AND ", 14, Dialect::Graylog);
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        for want in ["AND", "EventID", "source", "full_message", "_exists_"] {
+            assert!(labels.contains(&want), "{want}: {labels:?}");
+        }
     }
 
     #[test]
