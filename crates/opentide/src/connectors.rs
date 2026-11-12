@@ -55,7 +55,9 @@ pub const OPERATION_UNSUPPORTED: &str = "operation_unsupported";
 /// assert!(opentide::connectors::platforms().contains(&"splunk"));
 /// ```
 pub fn platforms() -> Vec<&'static str> {
-    opentide_connectors::builtin().ids()
+    // The built-in platforms, in `builtin()`'s order: a registry's ids
+    // borrow from it, since a plugin's is its own (UC-4.5).
+    opentide_connectors::plugin::BUILTIN.to_vec()
 }
 
 /// What a platform's connector can do.
