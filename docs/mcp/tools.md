@@ -393,7 +393,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `google_secops`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one` and `google_secops` (whose YARA-L is checked by the instance's `verifyRuleText` with `live: true`), plus `sysdig` (Falco), `harfanglab` and `bitdefender` (YARA), which have no live check: with `live: true` they return `supported: false`. `bitdefender` checks YARA under the Bitdefender profile (`bitdefender_yara_ascii`, `bitdefender_yara_size`). The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `google_secops`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one`, plus `sysdig` (Falco), `harfanglab` and `bitdefender` (YARA), which have no live check: with `live: true` they return `supported: false`. `bitdefender` checks YARA under the Bitdefender profile (`bitdefender_yara_ascii`, `bitdefender_yara_size`). `google_secops` checks a whole YARA-L rule (a `.yaral` file's text) offline under the `rule` profile (`yaral_*` codes); `live: true` compiles the catalogue's rules with the instance's `verifyRuleText`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 

@@ -164,14 +164,22 @@ def test_validate_query_truncates_the_preview() -> None:
 def test_validate_query_google_secops_is_checked_by_the_instance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """YARA-L is compiled by verifyRuleText with live true; offline names live.
+    """The engine checks a YARA-L rule offline; live true compiles the catalogue's rules
+    with verifyRuleText.
 
-    google-secops-1.0, Query validation.
+    google-secops-1.0, Query validation; yara-l-1.0.
     """
-    offline = tools.tool_validate_query('metadata.event_type = "USER_LOGIN"', "google_secops")
-    assert offline["supported"] is True
-    assert offline["valid"] is None
-    assert "live: true" in offline["message"]
+    rule = (
+        'rule a {\n  meta:\n    author = "x"\n\n  events:\n'
+        '    $e.metadata.event_type = "USER_LOGIN"\n\n  outcome:\n    $risk_score = 40\n\n'
+        "  condition:\n    $e\n}\n"
+    )
+    good = tools.tool_validate_query(rule, "google_secops")
+    assert good["mode"] == "offline"
+    assert good["valid"] is True
+    bad = tools.tool_validate_query(rule.replace("USER_LOGIN", "USER_LOGGED_IN"), "google_secops")
+    assert bad["valid"] is False
+    assert [e["code"] for e in bad["errors"]] == ["yaral_enum_value"]
     seen: dict[str, object] = {}
 
     def _fake(ctx: object, platform: str, *, live: bool = False) -> dict[str, object]:
