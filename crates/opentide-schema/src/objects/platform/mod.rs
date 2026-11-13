@@ -33,6 +33,7 @@ pub mod deprecation;
 pub use opentide_core::duration as durations;
 pub mod elastic;
 pub mod falco_text;
+pub mod google_secops;
 pub mod harfanglab;
 pub mod schema;
 pub mod sentinel;
