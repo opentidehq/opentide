@@ -104,6 +104,9 @@ fn enum_hover(field: &TideField, value: &str) -> Option<String> {
 
 pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> Option<String> {
     let cursor = yaml_cursor(source, offset);
+    if let Some(md) = crate::bitdefender::hover(source, offset, &cursor) {
+        return Some(md);
+    }
     if cursor.on_key {
         return field_for(source, &cursor).map(|field| hover_markdown(field, &cursor));
     }
@@ -142,9 +145,26 @@ pub fn completions_tide(
     workspace: &[IndexedObject],
 ) -> Vec<CompletionItem> {
     let cursor = yaml_cursor(source, offset);
+    if let Some(mut items) = crate::bitdefender::completions(source, offset, &cursor) {
+        // The generated catalog may know the same keys and values.
+        for item in completions_at(source, &cursor, workspace) {
+            if !items.iter().any(|known| known.label == item.label) {
+                items.push(item);
+            }
+        }
+        return items;
+    }
+    completions_at(source, &cursor, workspace)
+}
+
+fn completions_at(
+    source: &str,
+    cursor: &YamlCursor,
+    workspace: &[IndexedObject],
+) -> Vec<CompletionItem> {
     let schema = document_schema_id(source);
     if cursor.on_key || cursor.value.is_none() {
-        return complete_keys(&cursor, &schema);
+        return complete_keys(cursor, &schema);
     }
     // An empty `- ` under an array of objects completes that object's keys.
     // An empty `- ` under an array of enums completes the enum.
@@ -154,10 +174,10 @@ pub fn completions_tide(
             .iter()
             .any(|field| !field.hidden)
         {
-            return complete_keys(&cursor, &schema);
+            return complete_keys(cursor, &schema);
         }
     }
-    complete_values(source, &cursor, workspace)
+    complete_values(source, cursor, workspace)
 }
 
 fn complete_keys(cursor: &YamlCursor, schema: &str) -> Vec<CompletionItem> {
