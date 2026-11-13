@@ -1060,6 +1060,40 @@ jobs:
       - name: cargo deny (publishing/ placeholder crate)
         run: cargo deny --config deny.toml --manifest-path publishing/placeholders/crates/opentide/Cargo.toml --locked check
 
+  # The catch-up train's report-only goldens (tests/golden/REPORT_ONLY,
+  # xtask's golden::report_only): the marker turns off the golden-diff gates
+  # while the train's oracle is still the one it is catching up from. It must
+  # never reach integration/unified-core or development with gating off, so a
+  # pull request into either fails while the marker is present
+  # (tests/test_ci/test_report_only_goldens.py).
+  report-only-guard:
+    name: Report-only goldens guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The report-only marker must not reach a gated base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ ! -f tests/golden/REPORT_ONLY ]; then
+            echo "tests/golden/REPORT_ONLY is absent: the goldens gate here."
+            exit 0
+          fi
+          case "${BASE_REF:-}" in
+            integration/unified-core|development)
+              echo "::error::tests/golden/REPORT_ONLY is committed and this pull request targets ${BASE_REF}, where the goldens gate. The marker belongs to the catch-up train alone; remove it before merging there (O2 removes it for good)."
+              exit 1
+              ;;
+            *)
+              echo "tests/golden/REPORT_ONLY is present; base '${BASE_REF:-<push>}' is not a gated base."
+              ;;
+          esac
+
   # The vendored parser.c of every grammar is what tree-sitter-cli generates
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
   grammars:

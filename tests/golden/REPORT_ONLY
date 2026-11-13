@@ -1,0 +1,15 @@
+The catch-up train (train/catchup-0.28) carries platforms ported from opentide
+0.24.0-0.28.0 while the golden oracle is still 0.23.0 (tests/golden/ORACLE).
+Every port adds explain pages and diagnostic codes the 0.23.0 recordings do
+not have, which changes `explain list` and the SARIF rule catalogues. Those
+differences are expected and cannot be approved in APPROVED_DIFFS.toml one
+port at a time without the entries conflicting between ports and going stale.
+
+While this file exists, the golden-diff gates (crates/opentide-cli's golden
+tests, `cargo xtask golden check --engine rust`, `cargo xtask mcp replay`)
+print every difference as a report and pass. Nothing else is relaxed: the
+unit, fixture and cassette tests and the ledger check still gate.
+
+O2 (the plan's golden oracle move) re-records every case from the 0.28.x
+oracle and removes this file. CI refuses any pull request into
+integration/unified-core or development while it is present.
