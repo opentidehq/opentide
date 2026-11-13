@@ -710,7 +710,8 @@ fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root
             mark_configuration(session);
         } else {
             if Session::is_lint(uri) {
-                // lint.toml decides the filename and metadata checks (#214).
+                // lint.toml decides the filename, metadata and recommended-field
+                // checks (#214, #249).
                 session.reactivate();
             }
             session.mark_all();

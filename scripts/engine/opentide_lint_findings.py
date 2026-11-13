@@ -8,12 +8,13 @@
 Each record is `{file, code}` with the file relative to DIR. The CLI's codes are
 mapped to the language server's: `filename_mismatch` is `filename_slug`, and a
 `metadata_recommended` finding is one `missing_<key>` per missing `author` or
-`organisation`. Other findings are left out: the engine's Tide checks have no
+`organisation`. `recommended_field_missing` is the engine's code in both.
+Other findings are left out: the engine's Tide checks have no
 counterpart for them. `crates/opentide-analysis/tests/lint_settings.rs` checks
 the engine against the recorded file, so `lint.toml` cannot be read two ways.
 
-Needs an opentide that reads `[filenames] style` and `pattern` (0.20.0 or later),
-on PATH as `opentide`: CI's pinned opentide is older, so the file is recorded
+Needs an opentide that reads `[filenames] style` and `pattern` and has the
+`recommended` check (the release after 0.28.0), on PATH as `opentide`: CI's pinned opentide is older, so the file is recorded
 and the Rust test reads it.
 """
 
@@ -43,6 +44,8 @@ def findings(root: Path) -> dict:
         code, path = finding.get("code"), finding.get("path")
         if code in ("filename_mismatch", "filename_pattern"):
             rows.add((path, "filename_slug" if code == "filename_mismatch" else code))
+        elif code == "recommended_field_missing":
+            rows.add((path, code))
         elif code == "metadata_recommended":
             match = _MISSING.search(finding.get("message", ""))
             keys = [k.strip() for k in match.group(1).split(",")] if match else []

@@ -10,11 +10,12 @@ use common::{
 use serde_json::{Value, json};
 use std::process::Command;
 
-const LINT_CODES: [&str; 4] = [
+const LINT_CODES: [&str; 5] = [
     "filename_slug",
     "filename_pattern",
     "missing_author",
     "missing_organisation",
+    "recommended_field_missing",
 ];
 
 fn lint_codes(codes: Vec<String>) -> Vec<String> {

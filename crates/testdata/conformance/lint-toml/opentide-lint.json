@@ -1,17 +1,29 @@
 {
-  "opentide": "opentide 0.22.0",
+  "opentide": "opentide development, opentidehq/opentide#1029",
   "findings": [
     {
       "file": "objects/objectives/O-0001.yaml",
       "code": "missing_author"
     },
     {
+      "file": "objects/rules/[SEN]Example rule.yaml",
+      "code": "recommended_field_missing"
+    },
+    {
       "file": "objects/rules/[SEN]Renamed rule.yaml",
       "code": "filename_slug"
     },
     {
+      "file": "objects/rules/[SEN]Renamed rule.yaml",
+      "code": "recommended_field_missing"
+    },
+    {
       "file": "objects/rules/example-untagged-rule.yaml",
       "code": "filename_pattern"
+    },
+    {
+      "file": "objects/rules/example-untagged-rule.yaml",
+      "code": "recommended_field_missing"
     }
   ]
 }
