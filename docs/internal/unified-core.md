@@ -95,8 +95,8 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 | D-3 | The CLI is `opentide-cli` (clap). Python's console script is `opentide = "opentide._native:main"`; npm's `bin` calls the same `main(argv)`; standalone binaries come from the same crate | 11–12 ms end to end through Python in the prototype. maturin cannot ship a PyO3 module and a binary in one wheel (PyO3/maturin#368); its guide recommends this route |
 | D-4 | `opentidehq/language-server` merges into this repository with its history and is archived with a pointer. Every crate keeps its name and is published from here | 11.7% of language-server commits (23 of 197, 13 of them regenerating the Tide catalog) and 28 engine pins in 10 days exist only to keep the repositories in step; its test suite needs this repository's Python package |
 | D-5 | An `opentide` facade crate is the Rust SDK and the only crate with a stability promise. Every binding depends on it alone | One API for Rust, Python and TypeScript. Internal crates are published for the facade's sake, documented as internal, as uv, ruff, polars and biome do |
-| D-6 | npm: `@opentide/opentide` is both the SDK and the CLI (`bin: opentide`), with `@opentide/<platform>` native packages (napi-rs 3) and `@opentide/wasm` for the browser. The plain `opentide` name is an alias | The same shape as PyPI. A split into `sdk` and `cli` would be one native module behind two names |
-| D-7 | `opentidehq/vscode-extension` stays a separate repository and consumes `@opentide/opentide` at one pinned version | Different toolchain, release channel and test harness; its coupling becomes one version number |
+| D-6 | npm: `@opentide/opentide` is both the SDK and the CLI (`bin: opentide`), with `@opentide/opentide-<platform>` native packages (napi-rs 3); it is for Node.js, not for the VS Code extension (D-7). The plain `opentide` name is an alias | The same shape as PyPI. A split into `sdk` and `cli` would be one native module behind two names (amended 2026-11-13, ADR 0006) |
+| D-7 | `opentidehq/vscode-extension` stays a separate repository and is WASI-native: it runs the `opentide` CLI compiled to `wasm32-wasip1` (one `.wasm`, pinned to one release) under VS Code's WASI host, the workspace as preopened folders and `opentide serve`, `opentide lsp start` and `opentide mcp start` on stdio. Tenant operations need the network, which WASI does not give: they fail with a clear error there | Different toolchain, release channel and test harness; its coupling becomes one version number. One light module for every platform, vscode.dev included, with the CLI's own behaviour, held to the goldens under wasmtime (amended 2026-11-13, ADR 0007) |
 | D-8 | Connectors are Rust (tokio + reqwest). Third-party platforms keep a Python plugin hook | Six of nine platforms already use plain `requests`; the other three wrap REST APIs. opentide uses only `ClientSecretCredential`, which `azure_identity` 1.0 covers |
 
 Each decision has an ADR on `integration/unified-core` ([index](https://github.com/opentidehq/opentide/blob/integration/unified-core/docs/internal/adr/index.md)): D-1 0002, D-2 0001, D-3 0003, D-4 0004, D-5 0005, D-6 0006, D-7 0007, D-8 0008 (#849, #853).
@@ -304,7 +304,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 
 | ID | Item | Exit |
 |----|------|------|
-| UC-6.1 | VS Code extension on `@opentide/opentide` and `@opentide/wasm`; CPython bundle removed (filed in `opentidehq/vscode-extension` #75); licence review of an EUPL-1.2 library loaded in-process by the MIT extension | Packages without CPython, about 12 MiB; the licence review recorded |
+| UC-6.1 | VS Code extension on the WASI build of the `opentide` CLI (`@vscode/wasm-wasi`), not on `@opentide/opentide`; CPython bundle removed (filed in `opentidehq/vscode-extension` #75); licence review of an EUPL-1.2 module run in-process by the MIT extension | One universal `.vsix` without CPython, ≤ 15 MiB; every golden case that needs no network passes against the WASI build; the licence review recorded |
 | UC-6.2 | Default flip and Python implementation removal | No Python implementation left; `compare` removed |
 | UC-6.3 | Archive language-server; docs and migration guide | Pointers in place; crates' repository URLs updated |
 
@@ -322,7 +322,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 2. The default flips per command with a changelog entry; `OPENTIDE_ENGINE=python` remains for one more release as an escape hatch.
 3. The Python implementation of a command is deleted one release after its flip.
 4. SDK names that change keep a deprecated alias for one minor release.
-5. The extension moves when `@opentide/opentide` passes the conformance suite.
+5. The extension moves when the WASI build passes every golden case that needs no network (`cargo xtask golden check --runner wasi`).
 
 ## 8. Distribution
 
@@ -330,7 +330,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 |---------|---------|----------|
 | PyPI | `opentide` | abi3 wheel (CPython 3.10+): `opentide._native` (SDK + `main`), a thin Python layer, `.pyi` |
 | crates.io | `opentide` and internal crates | Lockstep versions; internal crates documented as internal |
-| npm | `@opentide/opentide`, `@opentide/<platform>`, `@opentide/wasm`, `opentide` | napi-rs 3 SDK + CLI, native binaries, browser subset, alias |
+| npm | `@opentide/opentide`, `@opentide/opentide-<platform>`, `@opentide/wasm`, `opentide` | napi-rs 3 SDK + CLI (Node.js), native binaries, browser subset, alias |
 | GitHub Releases | `opentide`, `opentide-lsp` binaries | cargo-dist installers, checksums, attestations |
 | Editors | `opentide-lsp` | Neovim, Helix and Zed configurations under `editors/` |
 
