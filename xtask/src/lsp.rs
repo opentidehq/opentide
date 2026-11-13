@@ -354,11 +354,16 @@ fn block_own(path: &Path, text: &str) -> Vec<Key> {
 }
 
 /// Which of [`block_own`]'s findings the server published for the file
-/// (`published`): none, for a server that publishes `validate`'s findings.
-fn published_blocks(path: &Path, text: &str, published: &[Key]) -> Vec<Key> {
+/// (`published`) beyond what `validate` reports there (`validated`): none,
+/// for a server that publishes `validate`'s findings. A block finding that
+/// `validate` also reports, at the same place, under the same code (lint's
+/// engine-worded `graylog_overlapping_window` and validate's advisory) is
+/// the server's only when it shows up more often than `validate` has it.
+fn published_blocks(path: &Path, text: &str, published: &[Key], validated: &[Key]) -> Vec<Key> {
+    let count = |keys: &[Key], key: &Key| keys.iter().filter(|k| *k == key).count();
     block_own(path, text)
         .into_iter()
-        .filter(|key| published.contains(key))
+        .filter(|key| count(published, key) > count(validated, key))
         .collect()
 }
 
@@ -447,7 +452,7 @@ fn compare_kind(dir: &Path, targets: &[String]) -> Result<(usize, Vec<String>)> 
         }
         // The platform blocks are not taken out: a server that published
         // them shows them here, and as findings validate does not have.
-        let blocks = published_blocks(file, text, &got);
+        let blocks = published_blocks(file, text, &got, &want);
         want.sort();
         got.sort();
         count += want.len();
@@ -502,8 +507,27 @@ mod tests {
         let own = block_own(file, rule);
         let codes: Vec<&str> = own.iter().map(|(code, _, _, _)| code.as_str()).collect();
         assert_eq!(codes, ["falco_unknown_rule"], "{own:?}");
-        assert_eq!(published_blocks(file, rule, &own), own);
-        assert!(published_blocks(file, rule, &[]).is_empty());
+        assert_eq!(published_blocks(file, rule, &own, &[]), own);
+        assert!(published_blocks(file, rule, &[], &[]).is_empty());
+        // What validate reports at the same place is validate's.
+        assert!(published_blocks(file, rule, &own, &own).is_empty());
+    }
+
+    /// Lint's engine-worded `graylog_overlapping_window` has the key of
+    /// validate's advisory: the server publishing validate's is not the
+    /// engine's block analysis.
+    #[test]
+    fn a_block_finding_validate_also_reports_is_validate_s() {
+        let rule = "name: Overlap\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  \
+                    schema: rule::1.0\nconfigurations:\n  graylog:\n    status: STAGING\n    \
+                    schedule: {every: 5m, window: 15m}\n    query: 'EventID:1'\n";
+        let file = Path::new("objects/rules/overlap.yaml");
+        let own = block_own(file, rule);
+        let codes: Vec<&str> = own.iter().map(|(code, _, _, _)| code.as_str()).collect();
+        assert_eq!(codes, ["graylog_overlapping_window"], "{own:?}");
+        assert!(published_blocks(file, rule, &own, &own).is_empty());
+        let twice = [own.clone(), own.clone()].concat();
+        assert_eq!(published_blocks(file, rule, &twice, &own), own);
     }
 
     #[test]
