@@ -125,13 +125,13 @@ mod tests {
     }
 
     #[test]
-    fn float_lets_are_written_as_python_writes_them() {
-        // Past 1e16 and below 1e-4 Python's str takes an exponent.
+    fn float_lets_are_kql_reals() {
+        // The shortest digits that read back, with a point or an exponent.
         let list =
             exclusions("- {let: {big: 1.0e+16, small: 1.0e-5, whole: 1.0e+15, half: 0.5}}\n");
         assert_eq!(
             compile_query("T", Some(&list), "one"),
-            "let big = 1e+16;\nlet small = 1e-05;\nlet whole = 1000000000000000.0;\n\
+            "let big = 1e16;\nlet small = 1e-5;\nlet whole = 1000000000000000.0;\n\
              let half = 0.5;\nT"
         );
     }

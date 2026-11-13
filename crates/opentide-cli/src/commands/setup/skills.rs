@@ -907,7 +907,7 @@ mod tests {
             ),
             (
                 "{\"extraKnownMarketplaces\": []}",
-                "has a 'extraKnownMarketplaces' that is not a JSON object",
+                "has a \"extraKnownMarketplaces\" that is not a JSON object",
             ),
         ] {
             let dir = tempfile::tempdir().unwrap();

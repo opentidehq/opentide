@@ -174,7 +174,7 @@ mod validate {
         assert!(
             invalid
                 .iter()
-                .all(|d| d.message == "UUID 'bad-1' is not a valid UUIDv4")
+                .all(|d| d.message == "UUID \"bad-1\" is not a valid UUIDv4")
         );
         assert!(invalid.iter().all(|d| {
             d.help
@@ -466,7 +466,7 @@ mod validate {
         let validation = run(&fs, &Options::default());
         let refs = with_code(&validation, "invalid_ref");
         assert_eq!(refs.len(), 1, "{refs:?}");
-        assert_eq!(refs[0].message, format!("Unknown threat reference '{U2}'"));
+        assert_eq!(refs[0].message, format!("Unknown threat reference {U2:?}"));
         assert_eq!(
             refs[0].help.as_deref(),
             Some("opentide info threats lists the ones that exist")

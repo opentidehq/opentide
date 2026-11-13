@@ -586,7 +586,10 @@ mod tests {
         );
         assert_eq!(
             unknown.context,
-            [("error", "unknown schema identifier: \"rule:1.0\"".to_owned())]
+            [(
+                "error",
+                "unknown schema identifier: \"rule:1.0\"".to_owned()
+            )]
         );
     }
 }

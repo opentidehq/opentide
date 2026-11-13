@@ -553,13 +553,13 @@ mod tests {
     }
 
     #[test]
-    fn chaining_is_written_as_a_python_dict() {
+    fn chaining_is_written_as_json() {
         let chains = node(
             "- {relation: leads_to, vector: a}\n- {relation: leads_to, vector: b}\n- {relation: x, vector: c}\n",
         );
         assert_eq!(
             chaining_text(&chains).unwrap(),
-            "{\"leads_to\": [\"a\", \"b\"], \"x\": [\"c\"]}"
+            r#"{"leads_to":["a","b"],"x":["c"]}"#
         );
         let broken = node("- {vector: a}\n");
         assert_eq!(

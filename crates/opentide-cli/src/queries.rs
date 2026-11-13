@@ -674,7 +674,7 @@ mod tests {
         );
         assert_eq!(
             engine_help("spl_x", "is Not A Command here", Some("stats")),
-            "did you mean 'stats'?"
+            "did you mean \"stats\"?"
         );
         assert_eq!(
             engine_help("esql_x", "needs a source", Some("FROM logs-*")),

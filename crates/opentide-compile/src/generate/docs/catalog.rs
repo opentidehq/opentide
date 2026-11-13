@@ -1178,7 +1178,9 @@ mod tests {
         let root = opentide_schema::node::load("name: Threat\n").unwrap();
         let line = describe_constraints(&report, root.root().map(AsRef::as_ref));
         assert!(
-            line.starts_with("'Threat' does not validate: threat.impact[0]: 'a; b' packs several"),
+            line.starts_with(
+                "\"Threat\" does not validate: threat.impact[0]: \"a; b\" packs several"
+            ),
             "{line}"
         );
         assert!(

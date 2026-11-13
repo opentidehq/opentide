@@ -475,7 +475,7 @@ fn annotate_one(
     diagnostic.headline = (message != diagnostic.message).then_some(message);
 }
 
-/// `'clearr' is not a TLP value`, `'x' is not a configured status`: the
+/// `"clearr" is not a TLP value`, `"x" is not a configured status`: the
 /// sentence a person reads for a finding about one value.
 fn value_message(diagnostic: &Diagnostic, value: &str) -> Option<String> {
     let context = |key: &str| diagnostic.context.get(key).and_then(ContextValue::as_str);
@@ -592,11 +592,11 @@ mod tests {
         }
         assert_eq!(
             value_message(&vocab("signal.entities::1.0"), "Host::Gizmo").as_deref(),
-            Some("'Host::Gizmo' is not a signal entities value")
+            Some("\"Host::Gizmo\" is not a signal entities value")
         );
         assert_eq!(
             value_message(&vocab("alert_severity"), "high").as_deref(),
-            Some("'high' is not a alert severity value")
+            Some("\"high\" is not a alert severity value")
         );
         assert_eq!(
             value_message(&Diagnostic::error("vocab_unknown", "x"), "v"),
@@ -606,7 +606,7 @@ mod tests {
             |name: &str| Diagnostic::error("config_enum_unknown", "x").with("setting", name);
         assert_eq!(
             value_message(&setting("statuses"), "LIVE").as_deref(),
-            Some("'LIVE' is not a configured status")
+            Some("\"LIVE\" is not a configured status")
         );
         assert_eq!(
             value_message(&setting("responders"), "soc").as_deref(),

@@ -793,7 +793,7 @@ mod tests {
         assert_eq!(text("Ünïcode — ok"), "Ünïcode — ok");
         assert_eq!(text("two\nlines"), "\"two\\nlines\"");
         assert_eq!(scalar(&CJson::Int(5)), "\"5\"");
-        assert_eq!(scalar(&CJson::Bool(true)), "\"True\"");
+        assert_eq!(scalar(&CJson::Bool(true)), "\"true\"");
         let long = "x ".repeat(200);
         assert!(!scalar(&CJson::Str(long)).contains('\n'));
     }
