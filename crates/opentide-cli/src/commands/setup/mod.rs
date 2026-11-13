@@ -654,7 +654,7 @@ pub(crate) fn prepare(
     };
     let mut credentials = IndexMap::new();
     for platform in &platforms {
-        if ci::QUERY_VALIDATION_PLATFORMS.contains(&platform.as_str()) {
+        if ci::query_validation_platforms().contains(&platform.as_str()) {
             let file = root
                 .join(".opentide/configurations/platforms")
                 .join(format!("{platform}.toml"));
