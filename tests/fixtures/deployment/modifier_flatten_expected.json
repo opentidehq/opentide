@@ -1914,7 +1914,8 @@
     },
     "trigger": null,
     "actions": null,
-    "correlation_search": true
+    "correlation_search": true,
+    "advanced": null
    },
    "api_request": {
     "enabled": true,
@@ -1937,7 +1938,8 @@
     },
     "trigger": null,
     "actions": null,
-    "correlation_search": true
+    "correlation_search": true,
+    "advanced": null
    }
   },
   {
@@ -1976,7 +1978,8 @@
     },
     "trigger": null,
     "actions": null,
-    "correlation_search": null
+    "correlation_search": null,
+    "advanced": null
    },
    "api_request": {
     "enabled": true,
@@ -1999,7 +2002,8 @@
     },
     "trigger": null,
     "actions": null,
-    "correlation_search": null
+    "correlation_search": null,
+    "advanced": null
    }
   },
   {
