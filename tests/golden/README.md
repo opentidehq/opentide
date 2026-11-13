@@ -11,6 +11,7 @@ cargo xtask golden record                       # run every case through the ora
 cargo xtask golden record --check-determinism   # the same, each case twice: both runs must agree
 cargo xtask golden check --engine python        # a fresh run against the recordings
 cargo xtask golden diff --filter 'validate/*'   # check, printing every difference in full
+cargo xtask golden check --engine rust --keep DIR  # also write each differing case's candidate run to DIR
 cargo xtask golden lock                         # rewrite oracle-requirements.txt from ORACLE
 ```
 
