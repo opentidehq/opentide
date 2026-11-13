@@ -19,7 +19,6 @@ use opentide_compile::Json;
 use opentide_compile::google_secops::{self as compile, Request, RunState};
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::TenantContext;
 use crate::error::ConnectorError;
 
@@ -338,7 +337,7 @@ impl<'a> Client<'a> {
         let body = request
             .body
             .as_ref()
-            .map(python_json)
+            .map(serde_json::to_vec)
             .transpose()
             .map_err(|error| ConnectorError::Setup {
                 platform: PLATFORM.to_owned(),
