@@ -163,10 +163,10 @@ pub enum Platform {
     Elastic,
     #[value(name = "sysdig")]
     Sysdig,
-    #[value(name = "google_secops")]
-    GoogleSecops,
     #[value(name = "graylog")]
     Graylog,
+    #[value(name = "google_secops")]
+    GoogleSecops,
 }
 
 /// The values of `RowFormat`, as the command line spells them.

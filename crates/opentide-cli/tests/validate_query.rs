@@ -426,6 +426,49 @@ fn an_unreadable_rule_file_is_a_yaml_parse_finding_and_a_log_line() {
 }
 
 #[test]
+fn google_secops_sections_and_yaral_files_are_checked_offline() {
+    let (_scratch, ws) = corpus();
+    let rules = ws.join("objects/rules");
+    std::fs::write(
+        rules.join("secops.yaml"),
+        "name: Secops rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005ec\n  schema: \
+         rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+         clear\ndescription: d\nconfigurations:\n  google_secops:\n    status: STAGING\n    \
+         events: |\n      $a.metadata.event_type = \"USER_LOGIN\"\n      $b.metadata.event_type \
+         = \"USER_LOGIN\"\n    outcome: |\n      $risk_score = 40\n    condition: |\n      $a \
+         and $b\n",
+    )
+    .unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--platform", "google_secops"],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    // Two event variables need a `match`: the assembled rule says so.
+    assert!(codes.contains(&"yaral_multi_event_match"), "{codes:?}");
+    std::fs::write(
+        ws.join("search.yaral"),
+        "metadata.event_type = \"USER_LOGIN\"\n",
+    )
+    .unwrap();
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "search.yaral"],
+        &[],
+    );
+    assert_eq!(file.code, 0, "{}", file.stdout);
+    assert_eq!(file.json()["queries"][0]["language"], "yaral");
+}
+
+#[test]
 fn platforms_the_engine_cannot_parse_are_refused() {
     let (_scratch, ws) = corpus();
     let tenant_only = opentide(

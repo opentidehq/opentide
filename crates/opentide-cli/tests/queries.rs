@@ -504,6 +504,25 @@ fn lint_reports_every_elastic_block_advisory() {
 }
 
 #[test]
+fn lint_reports_yaral_warnings_on_their_section() {
+    // An event with no `metadata.event_type` filter scans every event
+    // (`yaral_unfiltered_event`, a warning): lint reports it on `events`.
+    let text = rule(
+        "  google_secops:\n    events: |\n      $e.principal.hostname = \"web01\"\n    outcome: \
+         |\n      $risk_score = 40\n    condition: |\n      $e\n",
+    );
+    let found = lint_check(&text);
+    assert!(
+        found
+            .iter()
+            .any(|(code, severity, line)| code == "yaral_unfiltered_event"
+                && severity == "warning"
+                && *line == 8),
+        "{found:?}"
+    );
+}
+
+#[test]
 fn lint_reports_the_google_secops_block_advisories() {
     let text = rule(
         "  google_secops:\n    run_frequency: LIVE\n    events: |\n      $a.metadata.event_type \
