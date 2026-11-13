@@ -51,6 +51,12 @@ about = "tide-corpus with one typo `validate --fix` repairs in place (`severity:
 vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
 
+[fixtures.tide-corpus-splunk-advanced]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with an `advanced` table on its Splunk rule: a custom alert action's parameters, which 0.21.0 to 0.23.0 refused as a splunk::2.x key and 0.24.0 validates and deploys again"
+edits = [{ path = "Objects/Detection Rules/rule-0003-splunk-spl.yaml", find = "\n    query: index=main | head 1\n", replace = "\n    query: index=main | head 1\n    advanced:\n      action.misp_alert_create_event.param.title: \"Canary token triggered\"\n      action.misp_alert_create_event.param.distribution: 0\n      action.misp_alert_create_event.param.publish_on_creation: false\n      action.misp_alert_create_event.param.tags:\n" }]
+
 [fixtures.vscode-unscoped]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -2393,6 +2399,30 @@ command = "validate"
 variant = "typo"
 args = ["validate"]
 fixtures = ["tide-corpus-typo"]
+
+# 0.24.0: a Splunk block's `advanced` table validates and deploys again
+# (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on
+# it: XDG_STATE_HOME names a folder no one can create, so it reports the crash
+# without writing a crash log, a file the ledger cannot approve (a presence
+# rule names the catalog cache alone); the candidate does not crash and writes
+# none either way. The crash is recorded in json mode alone: in plain mode the
+# oracle prints nothing on stdout, where the candidate prints its result, and
+# the ledger approves a block of the oracle's lines, not lines added to an
+# empty stream.
+[[case]]
+command = "validate"
+variant = "splunk-advanced"
+args = ["validate"]
+modes = ["plain", "json"]
+fixtures = ["tide-corpus-splunk-advanced"]
+
+[[case]]
+command = "deploy"
+variant = "splunk-advanced"
+args = ["deploy", "--platform", "splunk", "--dry-run", "--strategy", "PREVIEW", "--all"]
+modes = ["json"]
+fixtures = ["tide-corpus-splunk-advanced"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
 # ---- more examples from docs/cli ----
 

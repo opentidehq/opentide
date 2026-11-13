@@ -140,7 +140,14 @@ pub fn run(args: &[String]) -> Result<u8> {
         let (count, verdicts) = schema_verdicts(&root)?;
         judged = count;
         problems.extend(verdicts);
-        let (count, catalogs) = catalog_parity(&root)?;
+        let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
+        let ledger = opentide_compare::ledger::Ledger::parse(
+            &std::fs::read_to_string(&ledger_path)
+                .with_context(|| format!("read {}", ledger_path.display()))?,
+        )
+        .map_err(|error| anyhow::anyhow!("{}:\n{error}", ledger_path.display()))?;
+        let mut usage = opentide_compare::ledger::Usage::default();
+        let (count, catalogs) = catalog_parity(&root, &ledger, &mut usage)?;
         compared += count;
         problems.extend(catalogs);
     }
@@ -716,7 +723,18 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
 /// recording of an `opentide generate` that wrote them must hold, byte for
 /// byte, what the generator writes for the fixture with the oracle's version
 /// as the label. Returns the number of files compared and the differences.
-fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
+/// A file a run left written, world-readable (the mode does not matter here:
+/// only the bytes are compared).
+fn written(bytes: Vec<u8>) -> opentide_compare::FileState {
+    opentide_compare::FileState::Written { mode: 0o644, bytes }
+}
+
+fn catalog_parity(
+    root: &Path,
+    ledger: &opentide_compare::ledger::Ledger,
+    usage: &mut opentide_compare::ledger::Usage,
+) -> Result<(usize, Vec<String>)> {
+    use opentide_compare::Run;
     use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
     let mut problems = Vec::new();
     let mut compared = 0;
@@ -783,16 +801,53 @@ fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
             );
         }
         let ours = &generated[&fixture];
+        // The oracle's catalog and the generator's, compared through the
+        // approved-diffs ledger, as `golden check --engine rust` compares the
+        // same files: a field the models added after the oracle (Splunk's
+        // `advanced`, #878) is a `json-extend:` entry there, not drift here.
+        let mut oracle_run = Run::default();
+        let mut candidate_run = Run::default();
         for (name, bytes) in recorded {
+            let path = format!("{prefix}{name}");
+            oracle_run
+                .files
+                .insert(path.clone(), written(bytes.to_vec()));
             match ours.iter().find(|(known, _)| *known == name) {
-                Some((_, text)) if text.as_bytes() == bytes => compared += 1,
-                Some(_) => problems.push(format!(
-                    "{id}: {CATALOG_DIR}/{name} differs from the oracle's"
-                )),
+                Some((_, text)) => {
+                    candidate_run
+                        .files
+                        .insert(path, written(text.as_bytes().to_vec()));
+                }
                 None => problems.push(format!(
                     "{id}: {CATALOG_DIR}/{name}: the generator writes no such file"
                 )),
             }
+        }
+        compared += oracle_run.files.len();
+        let report = opentide_compare::compare(
+            opentide_compare::Case {
+                command: "generate",
+                id: &id,
+            },
+            &oracle_run,
+            &candidate_run,
+            ledger,
+            usage,
+        );
+        for difference in &report.differences {
+            problems.push(format!(
+                "{id}: {} {} differs from the oracle's{}",
+                difference.target,
+                difference.pointer.as_deref().unwrap_or(""),
+                if difference.kind == opentide_compare::Kind::JsonValue {
+                    format!(
+                        " (oracle {}, generator {})",
+                        difference.oracle, difference.candidate
+                    )
+                } else {
+                    String::new()
+                }
+            ));
         }
     }
     if generated.is_empty() {

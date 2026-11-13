@@ -82,6 +82,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
     "tide-corpus-legacy-id-error",
+    "tide-corpus-splunk-advanced",
     "vscode",
     "setup-merge",
     "skills-merge",
@@ -249,7 +250,10 @@ pub fn fixture(name: &str, ws: &Path) {
             .unwrap();
         }
         // UC-4.4 (#834): tide-corpus with the edits cases.toml declares.
-        "tide-corpus-cve" | "tide-corpus-legacy-ids" | "tide-corpus-legacy-id-error" => {
+        "tide-corpus-cve"
+        | "tide-corpus-legacy-ids"
+        | "tide-corpus-legacy-id-error"
+        | "tide-corpus-splunk-advanced" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }

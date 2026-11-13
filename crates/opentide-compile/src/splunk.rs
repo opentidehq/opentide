@@ -476,8 +476,24 @@ fn config_mdr(
         }
     }
     config.insert("alert.managedBy".into(), responders(cx, rule).into());
+    if let Some(Json::Object(advanced)) = block.get("advanced") {
+        for (key, value) in advanced {
+            config.insert(key.clone(), saved_search_value(value).into());
+        }
+    }
     config.insert("description".into(), rule.description().into());
     Ok(config)
+}
+
+/// A value of the block's `advanced` table as `savedsearches.conf` text
+/// (`saved_search_value`, 0.24.0): `null` is the empty value, a boolean `1`
+/// or `0` as every other boolean setting, anything else its text.
+fn saved_search_value(value: &Json) -> String {
+    match value {
+        Json::Null => String::new(),
+        Json::Bool(flag) => if *flag { "1" } else { "0" }.to_owned(),
+        other => deploy::text(other),
+    }
 }
 
 fn member(value: &Json, key: &str) -> Json {
