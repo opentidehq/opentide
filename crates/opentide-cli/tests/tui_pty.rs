@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, SlavePty, native_pty_system};
 
 const ROWS: u16 = 40;
 const COLUMNS: u16 = 120;
@@ -37,6 +37,13 @@ struct Session {
     ended: Arc<AtomicBool>,
     /// How much of `printed` [`Session::expect`] has consumed.
     seen: usize,
+    /// The test's own handle on the terminal's other end, held until the
+    /// child has exited ([`Session::finish`]). macOS discards what the child
+    /// wrote and the master has not read yet once every holder of that end
+    /// has closed it, so a child that prints and exits at once (a refusal)
+    /// could leave nothing to read; Linux keeps it. Held, the output stays
+    /// readable whenever the reader gets to it.
+    slave: Option<Box<dyn SlavePty + Send>>,
     _master: Box<dyn MasterPty + Send>,
 }
 
@@ -65,9 +72,9 @@ fn spawn(repo: &Path, home: &Path, extra: &[(&str, &str)]) -> Session {
         .slave
         .spawn_command(command)
         .expect("spawn opentide tui on a pseudo-terminal");
-    // The child holds the terminal's other end alone: its output ends when
-    // it, and anything it left behind, closes it.
-    drop(pair.slave);
+    // The test keeps its handle on the terminal's other end until the child
+    // has exited (`Session::slave`); the output then ends when anything the
+    // child left behind closes it too.
     let mut reader = pair.master.try_clone_reader().unwrap();
     let printed = Arc::new(Mutex::new(Vec::new()));
     let ended = Arc::new(AtomicBool::new(false));
@@ -89,6 +96,7 @@ fn spawn(repo: &Path, home: &Path, extra: &[(&str, &str)]) -> Session {
         printed,
         ended,
         seen: 0,
+        slave: Some(pair.slave),
         _master: pair.master,
     }
 }
@@ -152,9 +160,23 @@ impl Session {
         self.writer.flush().unwrap();
     }
 
-    /// Waits for the end of the output, then for the process: its exit code.
+    /// Waits for the process to exit, closes the test's end of the terminal,
+    /// then waits for the end of the output (nothing the run left behind
+    /// still holds the terminal): the exit code.
     fn finish(mut self) -> u32 {
         let deadline = Instant::now() + TIMEOUT;
+        let status = loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                break status;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the UI never exited; printed:\n{}",
+                String::from_utf8_lossy(&self.printed.lock().unwrap())
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        drop(self.slave.take());
         while !self.ended.load(Ordering::SeqCst) {
             assert!(
                 Instant::now() < deadline,
@@ -163,7 +185,7 @@ impl Session {
             );
             std::thread::sleep(Duration::from_millis(20));
         }
-        self.child.wait().unwrap().exit_code()
+        status.exit_code()
     }
 }
 

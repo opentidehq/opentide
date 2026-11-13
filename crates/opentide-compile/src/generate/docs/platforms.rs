@@ -3,7 +3,7 @@
 //! code, so a query is fenced and captioned in its own language (KQL, SPL,
 //! ES|QL, YARA) rather than as text.
 //!
-//! The labels are the workspace's ([`opentide_schema::platforms::PLATFORMS`]);
+//! The labels are the platform registry's ([`opentide_schema::platforms::PLATFORMS`]);
 //! `every_platform_has_a_profile` fails when the rule model gains a platform
 //! this table does not name.
 
@@ -175,7 +175,7 @@ mod tests {
     fn every_platform_has_a_profile() {
         for platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
             assert!(
-                opentide_schema::platforms::is_builtin(platform),
+                opentide_schema::platforms::get(platform).is_some(),
                 "{platform} has no label"
             );
             assert!(

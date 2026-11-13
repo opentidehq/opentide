@@ -56,7 +56,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
 | `setup hooks` | `.pre-commit-config.yaml` plus validate-on-commit Git hook |
 | `setup mcp` | Editor MCP config that runs `opentide mcp start` |
-| `setup skills` | Agent skills: four authoring skills from the package, other slugs as the full opentidehq/skills tree (`discover`, `show`, install) |
+| `setup skills` | Agent skills: three authoring skills from the package and `detection-engineering` from the catalogue (the package's copy when it cannot be downloaded), other slugs as the full opentidehq/skills tree (`discover`, `show`, install) |
 
 ### Expected layout after setup + generate
 

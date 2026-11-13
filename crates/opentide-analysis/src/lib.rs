@@ -130,23 +130,12 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
         .unwrap_or_default()
 }
 
+/// The engine's analysis of one document: the queries a Tide object carries,
+/// its highlighting and its symbols. It reads no other object of the
+/// workspace, so a host checking many files of one workspace calls it file
+/// by file: the object's own checks are `validate`'s (UC-2.6, #821) and its
+/// platform blocks' are [`analyze_blocks`], which `lint` reads.
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
-    let workspace: std::sync::Arc<[IndexedObject]> = if request.language == LanguageId::TideYaml {
-        workspace_index(host)
-    } else {
-        std::sync::Arc::from([])
-    };
-    analyze_with_index(host, &workspace, request)
-}
-
-/// [`analyze`] with the workspace already indexed ([`index_workspace`]), for a
-/// host that checks many files of one workspace: [`analyze`] parses every
-/// object file on each call.
-pub fn analyze_with_index(
-    host: &dyn WorkspaceHost,
-    workspace: &[IndexedObject],
-    request: AnalyzeRequest,
-) -> AnalyzeResponse {
     match request.language {
         LanguageId::Kql => {
             let r = opentide_kql::analyze(&request.text, Profile::Sentinel);
@@ -224,7 +213,6 @@ pub fn analyze_with_index(
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
                 source: &request.text,
-                workspace,
                 elastic_tenants: &elastic_tenants(host),
             });
             AnalyzeResponse {
@@ -282,6 +270,19 @@ pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport>
             diagnostics: query.diagnostics,
         })
         .collect()
+}
+
+/// What the Tide object `text`'s platform blocks say, apart from the queries
+/// they carry: the Elastic block's advisories and declared datasets, and the
+/// Sysdig block's Falco and constraint checks
+/// ([`opentide_tide::block_diagnostics`]).
+///
+/// `opentide lint` reports these; `validate` reports the constraints as the
+/// object's schema check, so [`analyze`] leaves them out and the language
+/// server, which publishes `validate`'s and `lint`'s findings, does not
+/// report a block fault twice (UC-2.6, #821).
+pub fn analyze_blocks(host: &dyn WorkspaceHost, text: &str) -> Vec<Diagnostic> {
+    opentide_tide::block_diagnostics(text, &workspace_index(host))
 }
 
 /// A query on its own, outside an object file.
@@ -478,10 +479,16 @@ pub fn catalog_is_workspace() -> bool {
     opentide_highlight::tide_catalog_is_workspace()
 }
 
+/// The semantic token legend: the HighlightSpec capture names, in the order
+/// the semantic tokens' type indices refer to.
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
+pub fn legend() -> Vec<String> {
+    HighlightSpec::load().expect("spec").legend
+}
+
 pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
     let host = MemoryWorkspace {
         files: vec![("memory".into(), text.to_string())],
@@ -494,11 +501,10 @@ pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
             text: text.to_string(),
         },
     );
-    let spec = HighlightSpec::load().expect("spec");
     HighlightResult {
         language_id: language.as_str().to_string(),
         tokens: response.tokens,
-        legend: spec.legend,
+        legend: legend(),
     }
 }
 

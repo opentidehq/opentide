@@ -77,49 +77,22 @@ fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
     (oracle != rendered).then(|| "line endings differ".to_owned())
 }
 
-/// The variables only a platform ported on the catch-up train names in its
-/// bundled file: a platform no case of the oracle (0.23.0) lists. The
-/// pipeline's header and GitHub's deploy jobs name them; the recordings do
-/// not, until the oracle moves (O2).
-fn ported_variables(oracle_platforms: &[String]) -> Vec<String> {
-    let references = |text: &str| -> Vec<String> {
-        text.split('$')
-            .skip(1)
-            .map(|rest| {
-                rest.chars()
-                    .take_while(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
-                    .collect::<String>()
-            })
-            .filter(|name| name.starts_with(|c: char| c.is_ascii_uppercase()))
-            .collect()
-    };
-    let file_of = |id: &str| format!("platforms/{id}.toml");
-    let mut known = Vec::new();
-    let mut ported = Vec::new();
-    for (path, text) in opentide_schema::configuration::bundled::FILES {
-        let Some(id) = path
-            .strip_prefix("platforms/")
-            .and_then(|name| name.strip_suffix(".toml"))
-        else {
-            continue;
-        };
-        if oracle_platforms
-            .iter()
-            .any(|known| file_of(known) == file_of(id))
-        {
-            known.extend(references(text));
-        } else {
-            ported.extend(references(text));
-        }
-    }
-    ported.retain(|name| !known.contains(name));
-    ported
-}
-
-/// `text` without the lines that name one of `variables`.
-fn without_lines_naming(text: &str, variables: &[String]) -> String {
+/// The pipeline with every line that mentions a platform the recorded oracle
+/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) removed: its id in
+/// underscore or hyphen form, matched case-insensitively, which also catches
+/// its credential variables (`$EXABEAM_CLIENT_ID`). No other platform id is a
+/// substring of these, and 0.23.0 output holds none of them, so a 0.23.0
+/// render is returned unchanged.
+fn without_since_oracle_lines(text: &str) -> String {
+    let tokens: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
+        .iter()
+        .flat_map(|id| [(*id).to_owned(), id.replace('_', "-")])
+        .collect();
     text.split_inclusive('\n')
-        .filter(|line| !variables.iter().any(|name| line.contains(name.as_str())))
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            !tokens.iter().any(|token| lower.contains(token.as_str()))
+        })
         .collect()
 }
 
@@ -133,16 +106,6 @@ fn pipelines_are_the_oracles() {
     let mut problems = Vec::new();
     let found = cases();
     assert!(found.len() >= 12, "only {} cases", found.len());
-    let mut oracle_platforms: Vec<String> = Vec::new();
-    for case in &found {
-        let inputs: toml::Table = std::fs::read_to_string(case).unwrap().parse().unwrap();
-        for platform in options(&inputs).platforms {
-            if !oracle_platforms.contains(&platform) {
-                oracle_platforms.push(platform);
-            }
-        }
-    }
-    let ported = ported_variables(&oracle_platforms);
     for case in found {
         let name = case.file_stem().unwrap().to_string_lossy().into_owned();
         let inputs: toml::Table = std::fs::read_to_string(&case).unwrap().parse().unwrap();
@@ -150,7 +113,7 @@ fn pipelines_are_the_oracles() {
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
         let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
-            Ok(rendered) => without_lines_naming(&rendered, &ported),
+            Ok(rendered) => rendered,
             Err(error) => {
                 problems.push(format!("{name}: {error}"));
                 continue;
@@ -171,6 +134,11 @@ fn pipelines_are_the_oracles() {
         if let Some(dir) = std::env::var_os("OPENTIDE_CI_RENDERED") {
             std::fs::write(Path::new(&dir).join(format!("{name}.yml")), &rendered).unwrap();
         }
+        // The recorded pipeline (0.23.0) predates the platforms the train ports
+        // onto it; their bundled credentials and query stages add lines the
+        // oracle lacks. Drop those lines before comparing. On this oracle none
+        // are present, so this is a no-op until a row lands.
+        let rendered = without_since_oracle_lines(&rendered);
         let same_data = data(&rendered).is_some() && data(&oracle) == data(&rendered);
         if !same_data {
             problems.push(format!(

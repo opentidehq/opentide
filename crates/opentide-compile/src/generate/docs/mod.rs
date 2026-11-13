@@ -14,8 +14,10 @@
 //!   by YAML path, described from the block models' schema; [`platforms`]:
 //!   platform labels and the languages of their code settings.
 //! - [`flavor`]: what GitHub, GitLab, Azure DevOps and plain Markdown change.
-//! - [`mermaid`]: diagrams as nodes and edges; [`vocab`]: vocabulary labels;
-//!   [`cve`]: CVE links.
+//! - [`diagrams`]: the diagrams pages show (coverage, deployment map,
+//!   chaining, kill-chain maps, the threat landscape), built as a model that
+//!   [`mermaid`] writes within each flavour's Mermaid; [`vocab`]: vocabulary
+//!   labels; [`cve`]: CVE links and details (CVSS, EPSS, KEV, CWE).
 //! - [`inflight`]: the open pull requests' objects, overlaid on the index for
 //!   the run (the inflight preview).
 //! - [`changed`]: `--changed`, the objects git reports as changed against the
@@ -28,6 +30,7 @@
 pub mod catalog;
 pub mod changed;
 pub mod cve;
+pub mod diagrams;
 pub mod facts;
 pub mod flavor;
 pub mod inflight;

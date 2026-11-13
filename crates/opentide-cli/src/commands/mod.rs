@@ -163,6 +163,10 @@ pub enum Block {
     Stderr(String),
 }
 
+/// Root flags a suggested re-run leaves out: they change how output looks,
+/// not what runs (`_PRESENTATION_FLAGS`).
+const PRESENTATION_FLAGS: [&str; 5] = ["--json", "--no-color", "--debug", "--quiet", "--verbose"];
+
 /// The streams a command lays its text out for.
 #[derive(Clone, Debug)]
 pub struct Terminal {
@@ -174,6 +178,11 @@ pub struct Terminal {
     pub stderr: crate::render::outcome::Console,
     /// `--quiet`.
     pub quiet: bool,
+    /// `--verbose`: `validate`, `lint` and `validate query` print notes.
+    pub verbose: bool,
+    /// The arguments as typed, the root's flags hoisted in front: what a
+    /// suggested re-run repeats.
+    pub typed: Vec<String>,
     /// Whether stdout is a terminal.
     pub stdout_tty: bool,
     /// The terminal's width, when there is one.
@@ -192,6 +201,8 @@ impl Terminal {
             stdout: console,
             stderr: console,
             quiet: false,
+            verbose: false,
+            typed: Vec::new(),
             stdout_tty: false,
             width: None,
         }
@@ -200,6 +211,38 @@ impl Terminal {
     /// Whether the run prints text (not `json`).
     pub fn text(&self) -> bool {
         self.mode != crate::mode::Mode::Json
+    }
+
+    /// This invocation as one shell command with `added` at the end, for a
+    /// next step (`rerun_command`): the arguments as typed (`--file`,
+    /// `--changed`, `--check`, `--repo` kept), less the flags that only
+    /// change how output looks.
+    pub fn rerun(&self, added: &[&str]) -> String {
+        let words: Vec<&str> = std::iter::once("opentide")
+            .chain(
+                self.typed
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|word| !PRESENTATION_FLAGS.contains(word)),
+            )
+            .chain(added.iter().copied())
+            .collect();
+        shlex::try_join(words.iter().copied()).unwrap_or_else(|_| words.join(" "))
+    }
+
+    /// `next` with the step that shows the `hidden` notes the code frames
+    /// left out (`with_hidden_notes_step`): the command as typed, with
+    /// `--verbose`. Nothing changes when no note was hidden.
+    pub fn hidden_notes_step(&self, next: &mut Vec<crate::envelope::NextAction>, hidden: usize) {
+        // MCP never prints frames, so it hides nothing.
+        if hidden == 0 || self.mode == crate::mode::Mode::Mcp {
+            return;
+        }
+        let noun = if hidden == 1 { "note" } else { "notes" };
+        next.push(crate::envelope::NextAction::new(
+            self.rerun(&["--verbose"]),
+            format!("show {hidden} {noun}, such as a missing optional field"),
+        ));
     }
 
     /// How code frames are drawn on stdout.
@@ -397,5 +440,61 @@ mod tests {
             &["rules"],
         );
         assert_eq!(none.outcome.failure.unwrap().suggestion, None);
+    }
+}
+
+#[cfg(test)]
+mod verbose_tests {
+    use super::Terminal;
+    use crate::mode::Mode;
+
+    fn terminal(mode: Mode, typed: &[&str]) -> Terminal {
+        Terminal {
+            typed: typed.iter().map(|word| (*word).to_owned()).collect(),
+            ..Terminal::plain(mode)
+        }
+    }
+
+    /// The step repeats the command as typed, less the flags that only
+    /// change how output looks, and quotes what a shell would split.
+    #[test]
+    fn hidden_notes_step_repeats_the_command_with_verbose() {
+        let typed = terminal(
+            Mode::Plain,
+            &[
+                "--no-color",
+                "--repo",
+                "my repo",
+                "lint",
+                "--check",
+                "recommended",
+                "--debug",
+            ],
+        );
+        assert_eq!(
+            typed.rerun(&["--verbose"]),
+            "opentide --repo 'my repo' lint --check recommended --verbose"
+        );
+        let mut next = Vec::new();
+        typed.hidden_notes_step(&mut next, 0);
+        assert!(next.is_empty());
+        typed.hidden_notes_step(&mut next, 1);
+        typed.hidden_notes_step(&mut next, 3);
+        assert_eq!(
+            next[0].reason,
+            "show 1 note, such as a missing optional field"
+        );
+        assert_eq!(
+            next[1].reason,
+            "show 3 notes, such as a missing optional field"
+        );
+        assert_eq!(
+            next[0].command,
+            "opentide --repo 'my repo' lint --check recommended --verbose"
+        );
+        // MCP prints no frames: nothing was hidden from it.
+        let mut none = Vec::new();
+        terminal(Mode::Mcp, &["lint"]).hidden_notes_step(&mut none, 2);
+        assert!(none.is_empty());
     }
 }

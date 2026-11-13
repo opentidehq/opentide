@@ -32,38 +32,6 @@ const CASES: &str = include_str!("oracle/config_cases.toml");
 const ROOT: &str = "<root>/parent/ws/.opentide/configurations";
 const PARENT: &str = "<root>/parent/.opentide/configurations";
 
-/// The platforms ported on the catch-up train: built in here, with no
-/// bundled `platforms/<id>.toml` in the oracle's recording (0.23.0). Their
-/// configuration is not the oracle's to judge until the oracle moves (O2),
-/// so their keys are left out of each comparison.
-fn ported(table: &Json) -> BTreeSet<String> {
-    let bundled: Vec<&str> = table["bundled"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|path| path.as_str().unwrap())
-        .collect();
-    opentide_schema::platforms::PLATFORMS
-        .iter()
-        .filter(|platform| !bundled.contains(&format!("platforms/{}.toml", platform.id).as_str()))
-        .map(|platform| platform.id.to_owned())
-        .collect()
-}
-
-/// `value` without the object keys `keys`, at any depth.
-fn without(value: &Json, keys: &BTreeSet<String>) -> Json {
-    match value {
-        Json::Object(map) => Json::Object(
-            map.iter()
-                .filter(|(key, _)| !keys.contains(*key))
-                .map(|(key, item)| (key.clone(), without(item, keys)))
-                .collect(),
-        ),
-        Json::Array(items) => Json::Array(items.iter().map(|item| without(item, keys)).collect()),
-        other => other.clone(),
-    }
-}
-
 fn finding_json(finding: &Finding) -> Json {
     json!({
         "code": finding.code,
@@ -327,6 +295,31 @@ fn compare(
     })
 }
 
+/// Whether `path` is the bundled configuration of a platform the recorded
+/// oracle lacks (`opentide_schema::platforms::SINCE_ORACLE`).
+fn is_since_oracle_platform_file(path: &str) -> bool {
+    path.strip_prefix("platforms/")
+        .and_then(|name| name.strip_suffix(".toml"))
+        .is_some_and(opentide_schema::platforms::after_oracle)
+}
+
+/// Removes, at any depth, every object member whose key names a platform the
+/// recorded oracle lacks (`SINCE_ORACLE`), so a case that configures such a
+/// platform compares with a recording that predates it. On 0.23.0 output no
+/// such key exists, so this changes nothing until a row lands.
+fn drop_since_oracle(value: &mut Json) {
+    match value {
+        Json::Object(members) => {
+            members.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
+            for member in members.values_mut() {
+                drop_since_oracle(member);
+            }
+        }
+        Json::Array(items) => items.iter_mut().for_each(drop_since_oracle),
+        _ => {}
+    }
+}
+
 #[test]
 fn configuration_cases_match_the_oracle_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
@@ -342,7 +335,6 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             (id, fields)
         })
         .collect();
-    let ported = ported(&table);
     let mut used = BTreeSet::new();
     let mut failures = Vec::new();
     for case in cases["case"].as_array().unwrap() {
@@ -354,23 +346,31 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             "sharing" => sharing_case(case),
             other => panic!("{id}: unknown kind {other}"),
         };
+        let mut rust = rust;
+        drop_since_oracle(&mut rust);
         let oracle = &table["cases"][id];
-        let difference = case
-            .get("difference")
-            .and_then(toml::Value::as_str)
-            .map(|name| {
-                let fields = differences
-                    .get(name)
-                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
-                used.insert(name.to_owned());
-                (name, fields)
-            });
-        failures.extend(compare(
-            id,
-            &without(oracle, &ported),
-            &without(&rust, &ported),
-            difference,
-        ));
+        // One difference's name, or a list of them: their fields together.
+        let names: Vec<&str> = match case.get("difference") {
+            Some(toml::Value::String(name)) => vec![name.as_str()],
+            Some(toml::Value::Array(names)) => {
+                names.iter().filter_map(toml::Value::as_str).collect()
+            }
+            _ => Vec::new(),
+        };
+        let mut fields = BTreeSet::new();
+        for name in &names {
+            fields.extend(
+                differences
+                    .get(*name)
+                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"))
+                    .iter()
+                    .cloned(),
+            );
+            used.insert((*name).to_owned());
+        }
+        let joined = names.join(" + ");
+        let difference = (!names.is_empty()).then_some((joined.as_str(), &fields));
+        failures.extend(compare(id, oracle, &rust, difference));
     }
     for name in differences.keys() {
         if !used.contains(name) {
@@ -407,23 +407,22 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 #[test]
 fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    let ported: Vec<String> = ported(&table)
-        .iter()
-        .map(|id| format!("platforms/{id}.toml"))
-        .collect();
-    let all: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
-    let compiled: Vec<&str> = all
-        .iter()
-        .copied()
-        .filter(|path| !ported.iter().any(|file| file == path))
-        .collect();
+    let compiled: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
     let oracle: Vec<&str> = table["bundled"]
         .as_array()
         .unwrap()
         .iter()
         .map(|path| path.as_str().unwrap())
         .collect();
-    assert_eq!(compiled, oracle);
+    // The recorded oracle (0.23.0) predates the platforms the train ports onto
+    // it; leave their bundled configuration out before comparing with it, and
+    // compare the whole set with the folder on disk (both live).
+    let without_since_oracle: Vec<&str> = compiled
+        .iter()
+        .copied()
+        .filter(|path| !is_since_oracle_platform_file(path))
+        .collect();
+    assert_eq!(without_since_oracle, oracle);
     let folder =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/opentide/data/configurations");
     let mut on_disk = Vec::new();
@@ -448,7 +447,7 @@ fn configuration_bundled_files_are_the_folder_and_the_oracles() {
         }
     }
     on_disk.sort();
-    assert_eq!(all, on_disk);
+    assert_eq!(compiled, on_disk);
     let keys: Vec<&str> = table["metadata_keys"]
         .as_array()
         .unwrap()

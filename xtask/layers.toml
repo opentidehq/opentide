@@ -18,9 +18,8 @@
 # - opentide-tide and opentide-analysis are Domain: the plan folds both into
 #   opentide-workspace (UC-2.x), and opentide-analysis depends on opentide-tide.
 # - Bindings sit above the facade, not at the bottom where the plan's table
-#   lists them: they wrap the facade (D-5), so they depend on everything below
-#   it. Today they depend on opentide-analysis and opentide-lsp; that each
-#   depends on the facade alone is the facade's rule (UC-5.1, #836).
+#   lists them: they wrap the facade (D-5), and the facade alone, which the
+#   layer's `may_depend_on` enforces (UC-5.1, #836).
 # - xtask is Tooling, the top layer: it may read any crate, and no crate may
 #   depend on it.
 # - bindings/python is the package `opentide-native` (the plan's bindings/python, UC-5.2, #837).
@@ -97,11 +96,16 @@ tiers = [
     ["opentide"],
 ]
 
+# The bindings and hosts wrap the facade and nothing else from the workspace
+# (ADR 0005, UC-5.1 #836): what one needs goes into the facade's API, behind a
+# feature when it is heavy. Their build tooling (pyo3, napi, wasm-bindgen) is
+# outside the workspace, so the rule does not reach it.
 [[layer]]
 name = "bindings"
 tiers = [
     ["opentide-native", "opentide-wasm", "opentide-node"],
 ]
+may_depend_on = ["opentide"]
 
 [[layer]]
 name = "tooling"

@@ -89,6 +89,12 @@ compared), with the goldens' normalisation. Everything else is compared byte for
 instead. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
 report.
 
+`uv sync` builds the console script's native module (`src/opentide/_native.*`) once and does not
+rebuild it when the Rust sources change: after a pull, a merge or an edit, the CLI would run the
+Rust code of an earlier checkout. So `golden check --engine rust` stops first (exit status 2) when
+the module is older than a file it is built from (cargo's dep-info for it, else the tracked Rust
+sources), names that file, and says to run `uv sync --group dev --reinstall-package opentide`.
+
 Until UC-6.2 (#841), `OPENTIDE_ENGINE=python|rust|compare` chose a command's implementation at run
 time and `--engine compare` ran only the cases the Python dispatch table covered; both went with
 the Python implementation. The oracle stays the frozen PyPI release (`tests/golden/ORACLE`).

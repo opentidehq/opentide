@@ -1,0 +1,32 @@
+name: 'Encoded PowerShell: "-enc" flag'
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000103
+  schema: rule::1.0
+  version: 1
+  created: '2026-01-01'
+  modified: '2026-01-01'
+  tlp: amber
+  author: Elastic Security
+description: Many failed logons from one source.
+response:
+  alert_severity: Medium
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: threshold
+    query: 'event.outcome : failure'
+    language: kuery
+    data_view_id: dv-logs
+    scheduling:
+      interval: 5m
+      lookback: 0s
+    risk: 47
+    threshold:
+      field:
+        - source.ip
+      value: 20
+      cardinality:
+        field: REDACTED
+        value: 5

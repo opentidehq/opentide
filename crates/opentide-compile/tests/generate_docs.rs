@@ -1,13 +1,13 @@
-//! `generate docs` (UC-3.2b, #915; the 0.26.0 page redesign): every page and
-//! folder index of the tide-corpus fixture, in the generic and GitHub
-//! flavours, compared with the files opentide 0.28.0 writes for it
-//! (`tests/docs_0_28/`, diagrams aside until D2 ports them), and the oracle's
-//! failure on the vscode fixture. The GitLab and Azure DevOps flavours, the
-//! flavour a run picks from its CI and `origin`, a rule with several
-//! platform blocks, a rule's tenants and remote ids, and a threat's CVEs
-//! have no recording: their tests assert what 0.28.0 writes for them
-//! (compared with its pages on the same edits of the fixture when they were
-//! written).
+//! `generate docs` (UC-3.2b, #915; the 0.26.0 redesign): every file a run
+//! writes for the tide-corpus fixture, in each of the four flavours,
+//! compared byte for byte with the files opentide 0.28.1 writes for it
+//! (`tests/docs_0_28/<flavor>`: pages, folder indexes, GitLab's `.order`
+//! files and the catalogue overview, diagrams included), and the oracle's
+//! failure on the vscode fixture. The flavour a run picks from its CI and
+//! `origin`, a rule with several platform blocks, a rule's tenants and
+//! remote ids, and a threat's CVEs have no recording: their tests assert
+//! what 0.28.x writes for them (compared with its pages on the same edits of
+//! the fixture when they were written).
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a broken fixture is a failure")]
@@ -21,8 +21,11 @@ use std::sync::Arc;
 
 use opentide_compile::generate::Output;
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
+use opentide_compile::generate::docs::cve::{
+    CveDetail, CveRecord, CveSource, Cvss, Epss, EpssDetail, Weakness,
+};
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
-use opentide_compile::generate::docs::render::{Pages, Templates};
+use opentide_compile::generate::docs::render::Pages;
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
     FlavorHints, Settings, cve_details_needed, index_pages, pages,
@@ -80,19 +83,30 @@ fn render_with(
     flavor: Option<&str>,
     hints: &FlavorHints,
 ) -> Result<BTreeMap<String, String>, String> {
+    render_cves(workspace, flavor, hints, None)
+}
+
+/// [`render_with`], the CVE details asked of `source` when given.
+fn render_cves(
+    workspace: &Workspace,
+    flavor: Option<&str>,
+    hints: &FlavorHints,
+    source: Option<CveSource>,
+) -> Result<BTreeMap<String, String>, String> {
     let resolved = &workspace.configuration().resolved;
-    let settings = Settings::resolve(resolved, workspace.root(), None, flavor, hints)
+    let mut settings = Settings::resolve(resolved, workspace.root(), None, flavor, hints)
         .map_err(|error| error.detail)?;
+    if let Some(source) = source {
+        settings.cve_source = source;
+    }
     let catalog = Catalog::build(workspace.index(), Statuses::from_resolved(resolved))
         .map_err(|error| error.detail)?;
     let vocabularies = Vocabularies::bundled();
-    let templates = Templates::new();
     let deployment = deployment_facts(workspace, &catalog);
     let pages_of = Pages {
         catalog: &catalog,
         settings: &settings,
         vocab: Vocab::new(&vocabularies),
-        templates: &templates,
         deployment: &deployment,
     };
     let (mut outputs, _) = pages(&pages_of, &Scope::ALL, None).map_err(|error| error.detail)?;
@@ -111,74 +125,40 @@ fn render_with(
         .collect())
 }
 
-/// `text` without its Mermaid diagrams and their legends: D2 (#790's
-/// catch-up plan, §5.2) ports 0.28.0's diagrams, and until then the pages
-/// are held to 0.28.0 on everything else.
-fn without_diagrams(text: &str) -> String {
-    let mut out = String::new();
-    let mut lines = text.lines().peekable();
-    let mut skip_blank = false;
-    while let Some(line) = lines.next() {
-        if line == "```mermaid" || line == "::: mermaid" {
-            let end = if line == "```mermaid" { "```" } else { ":::" };
-            for inner in lines.by_ref() {
-                if inner == end {
-                    break;
-                }
-            }
-            skip_blank = true;
-            continue;
+/// The files under `dir`, by path below `prefix`, recursively.
+fn files_under(dir: &Path, prefix: &str, out: &mut BTreeMap<String, String>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let key = format!("{prefix}/{name}");
+        if path.is_dir() {
+            files_under(&path, &key, out);
+        } else {
+            out.insert(key, std::fs::read_to_string(&path).unwrap());
         }
-        if line.starts_with("*Shapes:*") {
-            skip_blank = true;
-            continue;
-        }
-        if skip_blank && line.is_empty() {
-            skip_blank = false;
-            continue;
-        }
-        skip_blank = false;
-        out.push_str(line);
-        out.push('\n');
     }
-    out
 }
 
-/// Every page of the tide corpus is what opentide 0.28.0 writes
-/// (`tests/docs_0_28/<flavor>`, its output for that flavour), diagrams
-/// aside; the root README, 0.28.0's catalogue overview, is D2's.
+/// Every file a run writes for the tide corpus in `flavor` is the one
+/// opentide 0.28.1 writes (`tests/docs_0_28/<flavor>`).
 fn check(flavor: &str) {
     let (_dir, workspace) = open("tide-corpus");
     let written = render(&workspace, Some(flavor)).unwrap();
-    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/docs_0_28")
-        .join(flavor);
     let mut expected = BTreeMap::new();
-    for folder in ["rules", "objectives", "threats"] {
-        for entry in std::fs::read_dir(base.join(folder)).unwrap() {
-            let path = entry.unwrap().path();
-            let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            expected.insert(
-                format!("docs/{folder}/{name}"),
-                std::fs::read_to_string(&path).unwrap(),
-            );
-        }
-    }
-    let written: BTreeMap<&String, &String> = written
-        .iter()
-        .filter(|(path, _)| path.as_str() != "docs/README.md")
-        .collect();
+    files_under(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/docs_0_28")
+            .join(flavor),
+        "docs",
+        &mut expected,
+    );
     assert_eq!(
-        written.keys().map(|path| path.as_str()).collect::<Vec<_>>(),
-        expected.keys().map(String::as_str).collect::<Vec<_>>(),
+        written.keys().collect::<Vec<_>>(),
+        expected.keys().collect::<Vec<_>>(),
         "{flavor}: the files written"
     );
-    for (path, text) in written {
-        assert_eq!(
-            without_diagrams(text),
-            without_diagrams(&expected[path]),
-            "{flavor}: {path}"
-        );
+    for (path, text) in &written {
+        assert_eq!(text, &expected[path], "{flavor}: {path}");
     }
 }
 
@@ -193,13 +173,13 @@ fn every_github_page_is_0_28s() {
 }
 
 #[test]
-fn diagrams_are_left_out_of_the_comparison() {
-    assert_eq!(
-        without_diagrams(
-            "a\n\n```mermaid\nflowchart\n```\n\n*Shapes:* x\n\nb\n::: mermaid\ng\n:::\nc\n"
-        ),
-        "a\n\nb\nc\n"
-    );
+fn every_gitlab_page_is_0_28s() {
+    check("gitlab");
+}
+
+#[test]
+fn every_azure_devops_page_is_0_28s() {
+    check("azure_devops");
 }
 
 #[test]
@@ -427,7 +407,8 @@ fn azure_devops_pages_use_wiki_links_and_its_mermaid_blocks() {
         "{index}"
     );
     let objective = &written["docs/objectives/credential-access-objective.md"];
-    assert!(objective.contains("::: mermaid\ngraph TB\n"), "{objective}");
+    assert!(objective.contains("::: mermaid\ngraph LR\n"), "{objective}");
+    assert!(!objective.contains("classDef"), "{objective}");
     assert!(!objective.contains("```mermaid"), "{objective}");
     assert!(!objective.contains("subgraph"), "{objective}");
     assert!(
@@ -526,7 +507,25 @@ fn a_rules_tenants_and_remote_ids() {
         page.contains(
             "| Microsoft Defender for Endpoint | `STAGING` | PREVIEW runs | `lab` | yes |\n\n\
              - `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational \
-             testing\n\n### Tenant targeting\n\n\
+             testing\n\n```mermaid\n"
+        ),
+        "{page}"
+    );
+    // The deployment map: a solid line labelled with the runs that reach a
+    // tenant, a dotted one to a tenant no run reaches, each remote id under
+    // its tenant.
+    assert!(
+        page.contains(
+            "    subgraph lane3[\"Tenants\"]\n        ten1[[\"lab\"]]\n        \
+             ten2[[\"prod<br>id 7002\"]]\n    end\n    rul1 --> plt1\n    \
+             plt1 -->|\"PREVIEW\"| ten1\n    plt1 -.-> ten2\n"
+        ),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "*Lines:* solid line = deployed, by the runs named on the line; dotted line = not \
+             deployed: no run takes this status or tenant.\n\n### Tenant targeting\n\n\
              | Platform | Tenant | Reached by | Remote ID |\n| --- | --- | --- | --- |\n\
              | Microsoft Defender for Endpoint | `lab` | PREVIEW runs | - |\n\
              | Microsoft Defender for Endpoint | `prod`<br>Production SOC | no run: the tenant \
@@ -610,6 +609,111 @@ fn a_threats_cves_link_to_their_records() {
     );
 }
 
+/// With `[cve] retrieve_details` on, each record's severity, EPSS score,
+/// exploitation and weakness, as opentide 0.28.1's `render_cves`,
+/// `cve_overview` and `exploited_banner` write them for the same records
+/// (GitHub flavour): an advisory alias beside its CVE, a severity without a
+/// CVSS score, a CWE without a number, a score that rounds half to even, an
+/// EPSS score that never reads as certain, a CVE exploited by SSVC alone,
+/// and an identifier the instance could not be asked for.
+#[test]
+fn a_threats_cve_details_show_severity_epss_exploitation_and_weakness() {
+    let (_dir, workspace) = open_edited("tide-corpus", |ws: &Path| {
+        append(
+            ws,
+            "Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+            "  cve:\n    - CVE-2023-0001\n    - CVE-2023-0002\n    - CVE-2023-0003\n",
+        );
+    });
+    let source = CveSource::new(|id: &str| match id {
+        "CVE-2023-0001" => CveDetail::Found(Box::new(CveRecord {
+            identifier: id.into(),
+            description: Some(format!("A description {}", "that goes on ".repeat(30))),
+            severity: Some("HIGH | x".into()),
+            aliases: vec!["CVE-2023-0001".into(), "GHSA-aaaa-bbbb-cccc".into()],
+            weaknesses: vec![
+                Weakness {
+                    identifier: "CWE-NOINFO".into(),
+                    name: String::new(),
+                },
+                Weakness {
+                    identifier: "CWE-79".into(),
+                    name: "Cross | Site".into(),
+                },
+            ],
+            exploitation: Some("poc".into()),
+            epss: EpssDetail::Unavailable,
+            ..CveRecord::default()
+        })),
+        "CVE-2023-0002" => CveDetail::Found(Box::new(CveRecord {
+            identifier: id.into(),
+            title: Some("Second.".into()),
+            published: Some("2023-02-02".into()),
+            page_url: "https://x.example/2".into(),
+            cvss: Some(Cvss {
+                version: "4.0".into(),
+                score: 7.25,
+                ..Cvss::default()
+            }),
+            exploitation: Some("Active".into()),
+            affected: (0..5).map(|n| format!("p{n}")).collect(),
+            epss: EpssDetail::Score(Epss {
+                probability: 0.99999,
+                percentile: 0.5,
+                date: String::new(),
+            }),
+            ..CveRecord::default()
+        })),
+        _ => CveDetail::Unavailable,
+    });
+    let page = &render_cves(
+        &workspace,
+        Some("github"),
+        &FlavorHints::default(),
+        Some(source),
+    )
+    .unwrap()["docs/threats/simulated-actor.md"];
+    assert!(
+        page.contains("\n| CVE | 3 CVEs (highest CVSS 7.2, 1 known exploited) |\n"),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "\n> [!WARNING]\n> `CVE-2023-0002` (CISA SSVC: active) is known to be exploited \
+             in the wild.\n"
+        ),
+        "{page}"
+    );
+    let section = &page[page.find("## CVE\n").unwrap()..];
+    let section = &section[..section.find("\n## Detection coverage").unwrap()];
+    const PAGES: &str = "https://vulnerability.circl.lu/vuln/";
+    let summary = format!("{} that", " that goes on".repeat(20));
+    assert_eq!(
+        section,
+        format!(
+            "## CVE\n\nIdentifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
+             which aggregates CVE, GHSA, CSAF, NVD, and related feeds.\n\n\
+             | Identifier | Severity | EPSS | Exploitation | Weakness | Published |\n\
+             | --- | --- | --- | --- | --- | --- |\n\
+             | [CVE-2023-0001]({PAGES}CVE-2023-0001)<br>[GHSA-aaaa-bbbb-cccc]({PAGES}GHSA-aaaa-bbbb-cccc) \
+             | HIGH \\| x | - | Proof of concept<br>CISA SSVC \
+             | CWE-NOINFO<br>[CWE-79](https://cwe.mitre.org/data/definitions/79.html) Cross \\| Site | - |\n\
+             | [CVE-2023-0002](https://x.example/2) | **7.2**<br>CVSS 4.0 | >99.9%<br>top 50.0% \
+             | **Active**<br>CISA SSVC | - | 2023-02-02 |\n\
+             | [CVE-2023-0003]({PAGES}CVE-2023-0003) | - | - | - | - | Details unavailable from \
+             Vulnerability-Lookup. |\n\n\
+             - **CVE-2023-0001**: A description{summary}….\n\
+             - **CVE-2023-0002**: Second. Affects p0, p1, p2, p3 and 1 more.\n\n\
+             Vulnerability-Lookup was unreachable for at least one identifier; links still point \
+             at the CIRCL record page.\n\n\
+             Vulnerability-Lookup returned no EPSS score for at least one identifier; those rows \
+             show none.\n\n\
+             *EPSS: FIRST's probability of exploitation in the next 30 days. Exploitation: CISA's \
+             Known Exploited Vulnerabilities catalog, else its SSVC assessment.*\n"
+        )
+    );
+}
+
 /// With `[cve] retrieve_details` on (the default), the threats whose pages
 /// list CVEs need their details, which the host fetches (`CveSource`): by
 /// the scopes and targets a run writes. With it off, none do.
@@ -641,13 +745,11 @@ fn cve_details_are_needed_with_retrieve_details_on() {
         .unwrap();
         let catalog = Catalog::build(workspace.index(), Statuses::from_resolved(resolved)).unwrap();
         let vocabularies = Vocabularies::bundled();
-        let templates = Templates::new();
         let deployment = deployment_facts(workspace, &catalog);
         let pages_of = Pages {
             catalog: &catalog,
             settings: &settings,
             vocab: Vocab::new(&vocabularies),
-            templates: &templates,
             deployment: &deployment,
         };
         cve_details_needed(&pages_of, scopes, targets)

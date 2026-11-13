@@ -282,13 +282,12 @@ fn framework_goldens_are_identical() {
         }
     }
     let _ = std::fs::remove_dir_all(&scratch);
-    // On the catch-up train a ported platform changes `opentide commands`
-    // and the usage choices the 0.23.0 oracle recorded: report, do not fail,
-    // while `tests/golden/REPORT_ONLY` is present (the oracle moves at O2).
-    if !failures.is_empty() && repo().join("tests/golden/REPORT_ONLY").is_file() {
+    // The catch-up train's report-only marker (`tests/golden/REPORT_ONLY`,
+    // `common/replay.rs` `report_only`): its differences from the 0.23.0
+    // recordings are printed, not failed, until O2 re-records them.
+    if repo().join("tests/golden/REPORT_ONLY").is_file() && !failures.is_empty() {
         eprintln!(
-            "tests/golden/REPORT_ONLY is present: {} framework golden difference(s) reported, \
-             not failed:\n{}",
+            "tests/golden/REPORT_ONLY is present: {} framework golden difference(s) reported, not failed:\n{}",
             failures.len(),
             failures.join("\n")
         );

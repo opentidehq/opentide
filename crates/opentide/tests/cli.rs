@@ -54,14 +54,14 @@ fn the_binary_prints_the_pypi_command_tree() {
         Normalisation::default(),
         &ledger,
     );
-    // On the catch-up train a ported platform (Bitdefender) adds its
-    // `--platform` choice and help text, which the 0.23.0 recording does not
-    // have: report, do not fail, while `tests/golden/REPORT_ONLY` is present
-    // (the oracle moves at O2).
+    // The catch-up train's report-only marker (`tests/golden/REPORT_ONLY`):
+    // the 0.23.0 recording lacks what the ports add (0.28.1's `--verbose`,
+    // lint's `recommended` check), so the difference is printed, not failed,
+    // until O2 re-records it.
     if !report.equal && common::repo().join("tests/golden/REPORT_ONLY").is_file() {
         eprintln!(
-            "tests/golden/REPORT_ONLY is present: `opentide --json commands` differs from the \
-             PyPI CLI's, reported not failed: {}",
+            "tests/golden/REPORT_ONLY is present: opentide --json commands differs from the \
+             PyPI CLI's, reported, not failed: {}",
             report.to_json().unwrap()
         );
         return;

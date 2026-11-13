@@ -1,6 +1,6 @@
 //! Global flags typed after the command (`opentide validate --json`).
 //!
-//! `--json`, `--no-color`, `--debug` and `--quiet` are accepted anywhere
+//! `--json`, `--no-color`, `--debug`, `--quiet` and `--verbose` are accepted anywhere
 //! before `--`, except as the value of the option before them (`query --query
 //! --json` searches for `--json`) or where the command defines the flag
 //! itself. Root options that take a value (`--repo`, `--data`, `--proxy`)
@@ -10,7 +10,7 @@
 use clap::{Arg, ArgAction, Command};
 
 /// The flags hoisted to the root.
-pub const HOISTED_FLAGS: &[&str] = &["--json", "--no-color", "--debug", "--quiet"];
+pub const HOISTED_FLAGS: &[&str] = &["--json", "--no-color", "--debug", "--quiet", "--verbose"];
 
 /// Whether `arg` reads a value after it.
 pub fn takes_value(arg: &Arg) -> bool {

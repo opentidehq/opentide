@@ -8,7 +8,8 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 # Published by the release train (publish.yml, UC-5.5), for the facade.
-description = "opentide's tenant connectors: one HTTP client per tenant (TLS, CA, proxy, timeouts, retries), credentials, cancellation and progress"
+description = "opentide engine component: the tenant connectors (one HTTP client per tenant: TLS, CA, proxy, timeouts, retries; credentials, cancellation, progress). Internal: depend on the opentide facade (its `connectors` feature)."
+readme = "README.md"
 
 [lints]
 workspace = true
