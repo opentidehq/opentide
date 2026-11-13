@@ -152,3 +152,6 @@ highlights/test/node_modules
 
 # The YARA module generator's own build (scripts/engine/yara-modules)
 /scripts/engine/yara-modules/target/
+
+# sccache's directory in CI (SCCACHE_DIR, .github/workflows/ci.yml)
+.sccache/

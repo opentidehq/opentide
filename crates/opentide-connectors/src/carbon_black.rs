@@ -4,9 +4,8 @@
 //! (`opentide query`) and its `search_validation` check (`validate query
 //! --live`).
 //!
-//! Every call carries `X-Auth-Token: <token>`; a body is JSON with its keys
-//! sorted (`json.dumps(body, sort_keys=True)`) and `Content-Type:
-//! application/json`. A search is validated, started as a job, polled every
+//! Every call carries `X-Auth-Token: <token>`; a body is compact JSON with
+//! `Content-Type: application/json`. A search is validated, started as a job, polled every
 //! half second until every searcher completed (or the timeout passed), then
 //! read in pages. An error status is the SDK's exception, worded as it is.
 
@@ -16,7 +15,6 @@ use opentide_compile::json::Json;
 use serde_json::{Map, Value};
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
@@ -207,7 +205,7 @@ impl CarbonBlack {
             .request(method.clone(), &uri)
             .header("X-Auth-Token", org.token.expose());
         if let Some(body) = body {
-            let bytes = python_json(body).map_err(|error| ConnectorError::Setup {
+            let bytes = serde_json::to_vec(body).map_err(|error| ConnectorError::Setup {
                 platform: PLATFORM.into(),
                 tenant: cx.tenant.label.tenant.clone(),
                 message: format!("the request body cannot be written: {error}"),
@@ -594,6 +592,7 @@ impl CarbonBlack {
                 });
             }
             tokio::select! {
+                biased;
                 () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(POLL_DELAY) => {}
             }

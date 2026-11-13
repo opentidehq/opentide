@@ -35,14 +35,14 @@ starts on every pull request and can be required.
 
 | Job | What it checks |
 |-----|----------------|
-| `lint` | ruff, ty, `uv build` and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
+| `lint` | ruff, ty (the dependencies installed without the project), `uv build` (the wheel from the sdist, the `develop` profile, into the cached target directory) and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (after `uv sync`: one test compares with Python's difflib); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
+| `engine-test` | (`engine-test-part`: Linux in two shards, `nextest --partition hash:N/2`, macOS and Windows whole; `engine-test` gathers them under each OS's required check, as `corpus` does, #841) `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `test` | Python **3.10** and **3.14**, the coverage gate on 3.14 (`test-full` adds 3.11–3.13 in the full set) |
 | `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test` |
 | `golden-compare` | `cargo xtask golden check --engine rust` (UC-0.7; every case since UC-6.2, #841): every golden case through this repository's CLI, the Rust core, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; then `cargo xtask mcp replay --engine rust` (the recorded Python MCP sessions against the Rust server) and the MCP stdio tests. The check keeps its name, `Golden compare`, a required check's; the `golden-compare` artifact holds the report |
-| `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
+| `corpus` | (`corpus-part` in five parts on five runners: `Corpus (generator)`, `(faults)`, `(diffs)`, `(editor)`, `(vocabulary)`; `corpus` gathers them under the required check's name, with `if: ${{ !cancelled() }}` so that a failed part fails it, #841) The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
 | `changes` | `CI paths`: whether the pull request changes the release's inputs or the grammars (above) |
 
 **Full set** (nightly, pushes, Run workflow, the `full-ci` label; some also by path, above):
@@ -85,10 +85,28 @@ ci.yml names its cache (`shared-key`, plus `key` per OS or target), and each nam
 saves it; readers use `save-if: false` and repeat its runner and `CARGO*`/`RUST*` environment,
 which rust-cache hashes into the key. The names are split by what is built, because a check
 build, a debug test tree, a release binary and the binding `uv sync` builds share no artifacts and
-one key would hold only one of them: `engine-dev` (`engine-test` per OS; `clients` and
+one key would hold only one of them: `engine-dev` (`engine-test-part` per OS, its first shard; `clients` and
 `elastic-sweep` read Linux's), `python-engine` (the abi3 binding, saved by `test`'s 3.14 cell, read
 by the other Python jobs), `engine-check`, `engine-wasm`, `engine-package`, `engine-bench`, `fuzz`,
 `python-engine-windows`, and `engine-release` per target for the dry run. A release restores none.
+
+**Compiler caches (sccache, #841):** rust-cache drops the workspace's own crates before saving, so
+every job recompiled them from a fresh checkout (two to three minutes a job). The jobs that compile
+the most on every pull request also wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from
+taiki-e/install-action), whose directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path with `..`) actions/cache keeps
+under `sccache-<name>-<hash of the Rust sources>`: by content, so only what a change touches
+compiles again. Each name has one job that saves it (`actions/cache/save`, only when the key
+missed), as rust-cache's: `python-engine` (`test`'s 3.14 cell; the other Python jobs restore it), `engine-check` (`engine`),
+`engine-dev-<os>` (`engine-test-part`), `golden-compare` and `corpus`. Every Python job names the same
+interpreter for PyO3 (`PYO3_PYTHON: /usr/bin/python3`): the binding is abi3, and a different
+interpreter reruns PyO3's build script and rebuilds every crate above it.
+**Caches are saved from pushes only** (`save-if: ${{ github.event_name == 'push' ... }}` on
+every rust-cache, `github.event_name == 'push' && ...` on every sccache save, in every workflow a
+pull request runs): a pull request restores the caches of its base branch (and of `development`)
+and saves none. A pull request's own cache served that pull request alone, and its gigabytes
+evicted the base branches' caches within the half hour (#841). uv's cache (setup-uv) is keyed on
+`uv.lock` and written only when that file changes; the pinned setup-uv v5 has no restore-only mode.
+`tests/test_ci/test_rust_caches.py` holds all three.
 
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON`); the Code Quality upload is
 best-effort, the HTML report an artifact. **Vocabulary drift gate:** when vocab TOML, schema pins,
@@ -137,7 +155,9 @@ Analyze (actions)
 ```
 
 Branch protection on `integration/unified-core` requires every check above and the two of
-[`golden.yml`](workflows/golden.yml) below, which run on every pull request into it (#803).
+[`golden.yml`](workflows/golden.yml) below, which start on every pull request into it (#803);
+the check's job is skipped, which reports success, unless a golden input changed or the pull
+request has the `full-ci` label.
 `tests/test_ci/test_golden_workflow.py` fails when this list and golden.yml's jobs differ, or
 when golden.yml's `pull_request` trigger gets a path or branch filter back: a required check
 that never starts blocks the merge.
@@ -150,9 +170,10 @@ Golden check (python)
 
 `Golden determinism` (recording every case twice, about 26 minutes) is in the full set:
 nightly, on every push and Run workflow, and on a pull request only with the `full-ci` label; it
-is no longer required. `Golden check (python)` (about 8 minutes) runs on every pull request into
-`integration/unified-core`, and on other bases when a golden input changed; `Golden compare`
-(ci.yml) on every pull request.
+is no longer required. `Golden check (python)` (about 20 minutes) runs on a pull request only
+when a golden input changed or with the `full-ci` label: since UC-6.2 (#841) its oracle is a frozen
+PyPI release, so a pull request that touches none of its inputs cannot change its result.
+`Golden compare` (ci.yml) runs on every pull request.
 `Golden paths` is the filter, and is required so that it cannot fail unnoticed (its dependants
 also run when it fails).
 
@@ -212,9 +233,9 @@ removed from the rule too, or every pull request that does not run it waits for 
   `golden record --check-determinism` against the committed recordings of the frozen Python CLI
   (`tests/golden/README.md`) on every push to `development` and `integration/unified-core`,
   nightly and on demand. On a pull request its `Golden paths` job reads whether the pull request
-  touches `tests/golden/`, `tests/corpora/`, the tide corpus, `xtask/`, `.cargo/`, `Cargo.*`,
-  `rust-toolchain.toml`, `.gitattributes` or golden.yml: the check runs when it does, and on
-  every pull request into `integration/unified-core`. The determinism run is in the full set
+  touches `tests/golden/`, `tests/corpora/`, the tide corpus, the render tests' inputs,
+  `scripts/golden/`, xtask's golden, corpus, compare and parallel code, `crates/opentide-compare/`
+  or golden.yml: the check runs when it does, or with the `full-ci` label. The determinism run is in the full set
   (the `full-ci` label on a pull request). The trigger itself has no path filter, so
   `integration/unified-core` requires `Golden paths` and the check (Required checks, above).
 - [`docs.yml`](workflows/docs.yml) (`scripts/validate-docs.sh`) and

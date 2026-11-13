@@ -113,14 +113,11 @@ pub(crate) fn flat_rule(rule: &CJson) -> CJson {
     snake_keys(&CJson::Object(merged))
 }
 
-/// The bytes `json.dump(value, f, indent=4)` writes: four spaces a level,
-/// `,` at a line's end and `": "` after a key, every character outside ASCII
-/// escaped.
+/// JSON with four spaces a level, `,` at a line's end and `": "` after a
+/// key; strings as serde_json writes them (UTF-8, not escaped).
 pub(crate) fn json_indent4(value: &CJson) -> String {
     fn string(text: &str) -> String {
-        opentide_connectors::body::python_json(text)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-            .unwrap_or_default()
+        serde_json::to_string(text).unwrap_or_default()
     }
     fn write(value: &CJson, depth: usize, out: &mut String) {
         let pad = |depth: usize| "    ".repeat(depth);
@@ -829,7 +826,7 @@ mod tests {
         let value = json(r#"[{"a": [], "b": {}, "c": [1, true, null], "d": "é—\"", "e": 1.5}]"#);
         assert_eq!(
             json_indent4(&value),
-            "[\n    {\n        \"a\": [],\n        \"b\": {},\n        \"c\": [\n            1,\n            true,\n            null\n        ],\n        \"d\": \"\\u00e9\\u2014\\\"\",\n        \"e\": 1.5\n    }\n]"
+            "[\n    {\n        \"a\": [],\n        \"b\": {},\n        \"c\": [\n            1,\n            true,\n            null\n        ],\n        \"d\": \"é—\\\"\",\n        \"e\": 1.5\n    }\n]"
         );
         assert_eq!(json_indent4(&CJson::Array(Vec::new())), "[]");
     }
