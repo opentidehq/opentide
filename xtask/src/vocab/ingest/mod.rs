@@ -275,19 +275,19 @@ const CURL: [&str; 9] = [
     "--tlsv1.2",
 ];
 
-fn curl(url: &str, max_time: &str, headers: &[&str], output: Option<&Path>) -> Result<Vec<u8>> {
+/// Downloads `url` with curl ([`CURL`]'s options and `options`, such as
+/// `--max-time 120`), into `output` when given, else returning the bytes.
+/// `vocab ingest` and `vocab malapi` fetch through it.
+pub fn curl(url: &str, options: &[&str], output: Option<&Path>) -> Result<Vec<u8>> {
     let mut command = Command::new("curl");
-    command.args(CURL).args(["--max-time", max_time]);
-    for header in headers {
-        command.args(["--header", header]);
-    }
+    command.args(CURL).args(options);
     if let Some(path) = output {
         command.arg("--output").arg(path);
     }
     let result = command
         .arg(url)
         .output()
-        .context("run curl to download the ingest's sources")?;
+        .context("run curl to download the vocabularies' sources")?;
     ensure!(
         result.status.success(),
         "download {url} failed ({}): {}",
@@ -301,7 +301,7 @@ fn curl(url: &str, max_time: &str, headers: &[&str], output: Option<&Path>) -> R
 pub fn read_url(url: &str) -> Result<Vec<u8>> {
     match url.strip_prefix("file://") {
         Some(path) => fs::read(path).with_context(|| format!("read {path}")),
-        None => curl(url, "120", &[], None),
+        None => curl(url, &["--max-time", "120"], None),
     }
 }
 
@@ -383,15 +383,23 @@ pub fn manifest_text(manifest: &Table) -> Result<String> {
 pub fn fetch_stix(dir: &Path, now: &str) -> Result<Table> {
     let release = parse_json(&curl(
         GITHUB_API,
-        "120",
-        &["Accept: application/vnd.github+json"],
+        &[
+            "--max-time",
+            "120",
+            "--header",
+            "Accept: application/vnd.github+json",
+        ],
         None,
     )?)
     .context("parse the latest attack-stix-data release")?;
     let (tag, sources) = bundle_sources(&release)?;
     fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
     for source in &sources {
-        curl(&source.url, "300", &[], Some(&dir.join(source.file)))?;
+        curl(
+            &source.url,
+            &["--max-time", "300"],
+            Some(&dir.join(source.file)),
+        )?;
     }
     let manifest = manifest_of(&tag, &sources, now);
     let path = dir.join("manifest.json");
@@ -413,17 +421,23 @@ pub fn default_misp_url(repo: &Path) -> Result<Option<String>> {
         .map(str::to_owned))
 }
 
+/// The specifications checkout a run writes into: `given`, else
+/// `$OPENTIDE_SPECIFICATIONS_ROOT`, else `../specifications` beside `repo`;
+/// it must exist.
+pub fn specifications_root(repo: &Path, given: Option<&Path>) -> Result<PathBuf> {
+    let specifications = given
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::var_os(super::sync::SPECIFICATIONS_ENV).map(PathBuf::from))
+        .unwrap_or_else(|| repo.join("../specifications"));
+    dunce::canonicalize(&specifications)
+        .with_context(|| format!("the specifications checkout {}", specifications.display()))
+}
+
 /// Runs `cargo xtask vocab ingest` for the repository at `repo`. Whether it
 /// passed: with `--apply` always (once written); otherwise when nothing would
 /// change.
 pub fn run(repo: &Path, options: &Options) -> Result<bool> {
-    let specifications = options
-        .specifications
-        .clone()
-        .or_else(|| std::env::var_os(super::sync::SPECIFICATIONS_ENV).map(PathBuf::from))
-        .unwrap_or_else(|| repo.join("../specifications"));
-    let specifications = dunce::canonicalize(&specifications)
-        .with_context(|| format!("the specifications checkout {}", specifications.display()))?;
+    let specifications = specifications_root(repo, options.specifications.as_deref())?;
     let now = match &options.now {
         Some(now) => now.clone(),
         None => utc_now_iso()?,

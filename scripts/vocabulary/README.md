@@ -119,21 +119,58 @@ are unchanged now that the layout comes from the crate:
 | E | A's output | 20.1 | a second run: nothing to write |
 | F | `main`, three vocabularies emptied of keys | 20.1 | the first fill (`1.0`, no contract) |
 
+## MalAPI (by hand)
+
+`cargo xtask vocab malapi` ([`xtask/src/vocab/malapi/`](../../xtask/src/vocab/malapi/))
+regenerates `specifications/vocabularies/malapi.vocab.toml` from
+[malapi.io](https://malapi.io). It is the port of `generate_malapi.py` (last at
+`ca32f5558d95fd77d5550084ee0f9d0681397fdc`) and, like it, runs by hand, never
+in CI:
+
+```bash
+# Dry-run: exit 1 when the vocabulary would change (hours: every API page is read)
+cargo xtask vocab malapi --check
+
+# Scrape, merge, write and sync the bundle
+cargo xtask vocab malapi --apply
+
+# Saved pages instead of the site: DIR/index.html and DIR/winapi/<API>.html
+cargo xtask vocab malapi --check --html-dir DIR --now 2026-11-13T00:00:00.000Z
+```
+
+It reads the front page's `#main-table`: each `th` is an attack category (the
+vocabulary's `stages`: the cell's text and its icon's `title`), and every link
+to a `/winapi/<API>` page names an API. Then it reads each API's page: the
+`detail-container` blocks give `name`, `description` (with
+`` \nLibrary : `X` `` appended), `link` and `tide.vocab.stages` (a string for
+one category, a list for several). The pages are parsed with html5ever, the
+WHATWG parser browsers use, not lxml; because html5ever moves markup a table
+may not hold, the APIs are found by their links, not by their place in the
+table's rows. A front page without the table, a category or an API link is an
+error, never an empty scrape that would remove every key.
+
+The site answers 429 after a short burst and then serves about a page a
+minute, so pages are fetched with `curl` (HTTPS only, the ingest's helper)
+one at a time, `--delay SECS` apart (default 60), with curl's retries and
+backoff on 429 and server errors. A full run takes hours.
+
+The keys merge into the vocabulary with the per-key rules above (key
+`name`): a new API opens the next minor, a description or link edit keeps the
+`version`, an API no longer listed gets `removed` and keeps its `version`. The
+file is written by the `toml` crate, as the ingest's are, so the first
+`--apply` after the port reformats `malapi.vocab.toml` once without changing its
+keys. It also records `source = "malapi.io"` and `source_fetched_at` (the
+clock, or `--now`), the vocabulary format's provenance keys, which the Python
+script did not write.
+
+When a fetch fails part-way (curl gives up, or a saved page is missing), the
+run stops there. The existing keys of the APIs it did not reach are carried
+over unchanged, never marked removed. `--apply` writes that partial merge,
+does not sync the bundle and exits 1: rerun to finish. `--check` cannot decide
+and exits 2. A page that does not parse stops the run with nothing written.
+
 ## Not ported
 
-- **MalAPI** (`generate_malapi.py`): it scraped [malapi.io](https://malapi.io)'s
-  HTML, one page per API at about one page a minute, and merged the result into
-  `malapi.vocab.toml` with the rules above. It ran by hand, never in CI. A port
-  needs an HTML parser crate, which the workspace does not have; until then it
-  runs from `ca32f5558d95fd77d5550084ee0f9d0681397fdc`:
-
-  ```bash
-  git worktree add --detach ../malapi ca32f5558d95fd77d5550084ee0f9d0681397fdc
-  cd ../malapi && uv sync --group dev
-  uv run --with beautifulsoup4 --with lxml python scripts/vocabulary/generate_malapi.py
-  ```
-
-  Then sync the bundle from this checkout with `cargo xtask vocab sync`.
 - **`migrate_yaml_to_toml.py`**: the one-shot YAML to TOML migration, done;
   no YAML vocabulary is left.
 
