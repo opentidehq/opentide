@@ -2109,6 +2109,992 @@ ops = [
     { op = "copy_path", path = "configurations.sysdig.lists.0.items.0", from_path = "configurations.sysdig.lists.0.name" },
 ]
 
+[[kind]]
+id = "google-secops-rule-name"
+codes = ["google_secops_rule_name"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    name: not a name {n}!
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-severity"
+codes = ["google_secops_severity"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    severity: Extreme
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-run-frequency"
+codes = ["google_secops_run_frequency"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    run_frequency: HOURLY
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "Google's legacy HOURLY; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-schedule"
+codes = ["google_secops_schedule"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    run_frequency: DAILY
+    schedule:
+      late_arriving_data_adjustment: 30m
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "a schedule on a DAILY rule; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-meta-key"
+codes = ["google_secops_meta_key"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    meta:
+      bad key: x
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-name-duplicate"
+codes = ["google_secops_name_duplicate"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    name: duplicated_rule_name
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+counts = { google_secops_name_duplicate = 5 }
+isolated = true
+note = "five enabled blocks with one name: each names the four others; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-risk-score-missing"
+codes = ["google_secops_risk_score_missing"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $host = $e.principal.hostname
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-rule-id-literal"
+codes = ["google_secops_rule_id_literal"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+      $e.detection.detection.rule_id = "ru_0123abcd-0000-4000-8000-000000000000"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "google-secops-live-frequency-unavailable"
+codes = ["google_secops_live_frequency_unavailable"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    run_frequency: LIVE
+    match:
+      group_by: [$u]
+      window: 10m
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $f.metadata.event_type = "USER_LOGOUT"
+      $e.target.user.userid = $u
+      $f.target.user.userid = $u
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e and $f
+''' },
+]
+isolated = true
+note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-parse-error"
+codes = ["yaral_parse_error"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = 
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-section-header"
+codes = ["yaral_section_header"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+      condition:
+      $e
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-section-empty"
+codes = ["yaral_section_empty"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: ""
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-section-missing"
+codes = ["yaral_section_missing"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-section-alias"
+codes = ["yaral_section_alias"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    meta:
+      note: &c "$e"
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: *c
+''' },
+]
+isolated = true
+note = "condition aliases a meta value; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-section-order"
+codes = ["yaral_section_order"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Google SecOps hunt", system = "google_secops", query = '''
+metadata.event_type = "USER_LOGIN"
+$u = target.user.userid
+outcome:
+  $n = count(metadata.id)
+match:
+  $u
+''' } },
+]
+isolated = true
+note = "a hunt: a block's sections are assembled in order, so only a search can misorder them; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-section-unavailable"
+codes = ["yaral_section_unavailable"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Google SecOps hunt", system = "google_secops", query = '''
+metadata.event_type = "USER_LOGIN"
+options:
+  allow_zero_values = true
+''' } },
+]
+isolated = true
+note = "a hunt: options is a rule section; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-match-shape"
+codes = ["yaral_match_shape"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    match:
+      group_by: [$u]
+      window: 10m
+      type: rolling
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.target.user.userid = $u
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "a match type that is not hop, tumbling or sliding (a match without window is yaral_match_window); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-match-window"
+codes = ["yaral_match_window"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    match:
+      group_by: [$u]
+      window: 15d
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.target.user.userid = $u
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-option"
+codes = ["yaral_option"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    options:
+      allow_nulls: true
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-reserved-identifier"
+codes = ["yaral_reserved_identifier"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $window_start = $e.metadata.id
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-undefined-variable"
+codes = ["yaral_undefined_variable"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e and $nowhere
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-multi-event-match"
+codes = ["yaral_multi_event_match"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $f.metadata.event_type = "USER_LOGOUT"
+      $e.target.user.userid = $u
+      $f.target.user.userid = $u
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e and $f
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-match-variable"
+codes = ["yaral_match_variable"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    match:
+      group_by: [$nobody]
+      window: 10m
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.target.user.userid = $u
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-condition-shape"
+codes = ["yaral_condition_shape"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    match:
+      group_by: [$u]
+      window: 10m
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.target.user.userid = $u
+    outcome: |
+      $risk_score = max(60)
+    condition: |
+      not $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-nocase-on-enum"
+codes = ["yaral_nocase_on_enum"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN" nocase
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-outcome-limit"
+codes = ["yaral_outcome_limit"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+      $o0 = 0
+      $o1 = 1
+      $o2 = 2
+      $o3 = 3
+      $o4 = 4
+      $o5 = 5
+      $o6 = 6
+      $o7 = 7
+      $o8 = 8
+      $o9 = 9
+      $o10 = 10
+      $o11 = 11
+      $o12 = 12
+      $o13 = 13
+      $o14 = 14
+      $o15 = 15
+      $o16 = 16
+      $o17 = 17
+      $o18 = 18
+      $o19 = 19
+      $o20 = 20
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-outcome-aggregation"
+codes = ["yaral_outcome_aggregation"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    match:
+      group_by: [$u]
+      window: 10m
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.target.user.userid = $u
+    outcome: |
+      $risk_score = max(60)
+      $host = $e.principal.hostname
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-unknown-function"
+codes = ["yaral_unknown_function"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      strings.lowercase($e.principal.hostname) = "x"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-function-unavailable"
+codes = ["yaral_function_unavailable"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      math.round($e.network.sent_bytes, 2) > 1
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-unknown-udm-field"
+codes = ["yaral_unknown_udm_field"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.hostnam = "x"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-enum-value"
+codes = ["yaral_enum_value"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-type"
+codes = ["yaral_type"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.target.port = 22 nocase
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-regex"
+codes = ["yaral_regex"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.hostname = /web(/
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-reference-list-limit"
+codes = ["yaral_reference_list_limit"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.hostname in %t0.c
+      $e.principal.hostname in %t1.c
+      $e.principal.hostname in %t2.c
+      $e.principal.hostname in %t3.c
+      $e.principal.hostname in %t4.c
+      $e.principal.hostname in %t5.c
+      $e.principal.hostname in %t6.c
+      $e.principal.hostname in %t7.c
+      $e.principal.hostname in %t8.c
+      $e.principal.hostname in %t9.c
+      $e.principal.hostname in %t10.c
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "eleven data-table `in` statements (in cidr on reference lists also earns yaral_reference_list_deprecated); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-export-value"
+codes = ["yaral_export_value"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+    export: |
+      %t.write_row(host: $e.principal.hostname)
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-window-bound"
+codes = ["yaral_window_bound"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 60
+      $w = window_start
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "window_start in an outcome of a rule without a match window ($window_start is yaral_reserved_identifier); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-string-escape"
+codes = ["yaral_string_escape"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.hostname = "web\d"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-deprecated-field"
+codes = ["yaral_deprecated_field"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.resource.type = "x"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-unfiltered-event"
+codes = ["yaral_unfiltered_event"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.principal.hostname = "web01"
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-leading-wildcard-regex"
+codes = ["yaral_leading_wildcard_regex"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.hostname = /.*web/
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
+[[kind]]
+id = "yaral-reference-list-deprecated"
+codes = ["yaral_reference_list_deprecated"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
+    { op = "append_text", text = '''
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.principal.hostname in %hosts
+    outcome: |
+      $risk_score = 60
+    condition: |
+      $e
+''' },
+]
+isolated = true
+note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+
 # Codes in scope no fault kind can produce: no workspace mutation makes the
 # commands the runner uses offline (validate, lint, deploy migrate-state)
 # report them. Each has the evidence; invalid_cve needs the network.
@@ -2156,6 +3142,10 @@ reason = "emitted only by validation.configuration.configuration_file_issues, wh
 [[unreachable]]
 code = "recommended_field_missing"
 reason = "an engine warning lint's query filter drops; language server only (KG-05)"
+
+[[unreachable]]
+code = "yaral_meta_duplicate"
+reason = "deploy writes a Google SecOps rule's meta: a block's meta keys are YAML keys (a repeated one is yaml_parse), the keys deploy writes itself and values that are not strings are google_secops_meta_key, and the oracle reports nothing in the meta it generates (contributors repeat author there); a search's meta is not checked (yara-l engine: Google ignores it), so only a YARA-L rule the language server reads on its own reports it"
 
 # Codes in scope whose fault kind a unit of the 0.28 catch-up train still
 # owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them
@@ -2514,42 +3504,6 @@ code = "exabeam_wildcard_in_phrase"
 owner = "P-EX"
 
 [[pending]]
-code = "google_secops_live_frequency_unavailable"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_meta_key"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_name_duplicate"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_risk_score_missing"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_rule_id_literal"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_rule_name"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_run_frequency"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_schedule"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "google_secops_severity"
-owner = "P-GS/E2-L"
-
-[[pending]]
 code = "graylog_aggregation"
 owner = "P-GL"
 
@@ -2749,134 +3703,3 @@ owner = "E2-Y/H1"
 code = "yara_x_incompatible"
 owner = "E2-Y/H1"
 
-[[pending]]
-code = "yaral_condition_shape"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_deprecated_field"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_enum_value"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_export_value"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_function_unavailable"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_leading_wildcard_regex"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_match_shape"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_match_variable"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_match_window"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_meta_duplicate"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_multi_event_match"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_nocase_on_enum"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_option"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_outcome_aggregation"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_outcome_limit"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_parse_error"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_reference_list_deprecated"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_reference_list_limit"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_regex"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_reserved_identifier"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_section_alias"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_section_empty"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_section_header"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_section_missing"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_section_order"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_section_unavailable"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_string_escape"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_type"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_undefined_variable"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_unfiltered_event"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_unknown_function"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_unknown_udm_field"
-owner = "P-GS/E2-L"
-
-[[pending]]
-code = "yaral_window_bound"
-owner = "P-GS/E2-L"
