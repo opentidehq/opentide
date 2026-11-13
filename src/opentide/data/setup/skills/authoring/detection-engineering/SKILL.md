@@ -1,10 +1,10 @@
 ---
 name: detection-engineering
 description: >-
-  Detection engineering in an opentide repository: how threats, objectives and rules link,
-  the commands that create, check and preview them, and the loop of drafting, running
-  opentide validate and lint, applying each finding's fix and previewing the deployment.
-  Use when starting detection work or when unsure which object to write.
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
 ---
 
 # Detection engineering
@@ -29,3 +29,5 @@ opentide deploy --dry-run --strategy PREVIEW --all
 ```
 
 Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.

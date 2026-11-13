@@ -1,9 +1,9 @@
 ---
 name: opentide-threat-vector
 description: >-
-  Author an opentide threat (threat::1.0 YAML under objects/threats/): its required
-  metadata, narrative fields and chaining to other threats, and the validate and lint loop
-  that checks it. Use when creating or editing a threat vector.
+  Shape and checks for opentide threats (threat::1.0 YAML under objects/threats/).
+  Use when creating or editing a threat; pair with the opentide-threat skill for
+  modelling intelligence into threats.
 ---
 
 # Threats
@@ -24,3 +24,5 @@ opentide --json lint --strict
 ```
 
 Apply each finding's `fix.edits`, run `opentide explain <code>` for a finding without one, and repeat until the exit code is `0`.
+
+For turning intelligence into threats and chaining them, install the full authoring skill: `opentide setup skills --install opentide-threat`.

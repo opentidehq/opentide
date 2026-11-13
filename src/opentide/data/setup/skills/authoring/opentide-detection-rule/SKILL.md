@@ -1,10 +1,9 @@
 ---
 name: opentide-detection-rule
 description: >-
-  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
-  metadata, the objective it implements, platform query blocks, and the validate, lint,
-  live query validation and preview deployment loop that checks it. Use when creating or
-  editing a detection rule or its queries.
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
 ---
 
 # Detection rules
@@ -30,3 +29,5 @@ opentide deploy --dry-run --strategy PREVIEW --all
 With `--json`, stdout is one JSON document. Each finding has `code`, `path`, `line`, `column`, `help` and `fix`: apply `fix.edits` (replace the text from (`line`, `column`) up to (`end_line`, `end_column`) with `replacement`; check an edit that is not `safe` against `help`), run `opentide explain <code>` when there is none, and repeat until the exit code is `0`. On a non-zero exit, `failure.code` says why; follow `next_actions`.
 
 `validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.

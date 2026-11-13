@@ -1,9 +1,9 @@
 ---
 name: opentide-detection-objective
 description: >-
-  Author an opentide detection objective (objective::1.0 YAML under objects/objectives/):
-  its required metadata, linked threat UUIDs and signals, and the validate and lint loop
-  that checks it. Use when creating or editing a detection objective.
+  Shape and checks for opentide detection objectives (objective::1.0 YAML under
+  objects/objectives/). Use when creating or editing an objective; pair with the
+  opentide-objective skill for signal and methodology authoring.
 ---
 
 # Detection objectives
@@ -25,3 +25,5 @@ opentide --json lint --strict
 ```
 
 Apply each finding's `fix.edits`, run `opentide explain <code>` for a finding without one, and repeat until the exit code is `0`.
+
+For signals, methodology and data contracts, install the full authoring skill: `opentide setup skills --install opentide-objective`.
