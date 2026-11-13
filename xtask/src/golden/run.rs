@@ -101,11 +101,26 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
         let mismatches = proxy.verify();
         if !mismatches.is_empty() {
             let listed: Vec<String> = mismatches.iter().map(ToString::to_string).collect();
-            bail!(
-                "case {}: the requests are not cassette {name}'s (record it again, or fix the client):\n{}",
-                case.id,
-                listed.join("\n")
-            );
+            // On the catch-up train (`report_only`) a cassette recorded from
+            // the 0.23.0 oracle may not hold the requests a port sends now
+            // (0.28.1's `setup skills` downloads the catalogue's
+            // detection-engineering): the case is reported and compared,
+            // and O2 records the cassette again from the new oracle.
+            if super::report_only::enabled(&ctx.repo) {
+                eprintln!(
+                    "case {}: the requests are not cassette {name}'s; reported, not failed \
+                     ({} is present):\n{}",
+                    case.id,
+                    super::report_only::MARKER,
+                    listed.join("\n")
+                );
+            } else {
+                bail!(
+                    "case {}: the requests are not cassette {name}'s (record it again, or fix the client):\n{}",
+                    case.id,
+                    listed.join("\n")
+                );
+            }
         }
     }
     let finished = SystemTime::now();
