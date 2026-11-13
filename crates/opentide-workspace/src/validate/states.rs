@@ -465,6 +465,18 @@ mod tests {
                 .message
                 .contains("is int, not a string")
         );
+        let (fs, _) = shard(&format!(
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65F1"}}}}}}"#
+        ));
+        assert!(
+            scan(&fs, Path::new("/w"))[0]
+                .message
+                .ends_with("graylog external id '65F1' does not match '[0-9a-f]{24}'")
+        );
+        let (fs, _) = shard(&format!(
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65f1c0ffee0123456789abcd"}}}}}}"#
+        ));
+        assert!(scan(&fs, Path::new("/w")).is_empty());
     }
 
     /// Bitdefender stores GravityZone rule ids, 24 lowercase hex digits: its

@@ -92,6 +92,7 @@ fn empty_configurations() -> RuleConfigurations {
         sysdig: None,
         bitdefender: None,
         google_secops: None,
+        graylog: None,
     }
 }
 

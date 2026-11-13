@@ -78,7 +78,7 @@ fn a_workspace_lists_its_tenants_in_file_order() {
 #[test]
 fn the_platforms_and_what_each_can_do() {
     let platforms = connectors::platforms();
-    assert_eq!(platforms.len(), 11);
+    assert_eq!(platforms.len(), 12);
     for platform in &platforms {
         assert!(connectors::capabilities(platform).is_some(), "{platform}");
     }
@@ -88,6 +88,8 @@ fn the_platforms_and_what_each_can_do() {
     assert!(!elastic.deploy && elastic.query && elastic.live_validation);
     let google_secops = connectors::capabilities("google_secops").unwrap();
     assert!(google_secops.deploy && google_secops.query && google_secops.live_validation);
+    let graylog = connectors::capabilities("graylog").unwrap();
+    assert!(graylog.deploy && graylog.query && graylog.live_validation);
 }
 
 #[test]

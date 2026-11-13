@@ -165,6 +165,8 @@ pub enum Platform {
     Sysdig,
     #[value(name = "bitdefender")]
     Bitdefender,
+    #[value(name = "graylog")]
+    Graylog,
     #[value(name = "google_secops")]
     GoogleSecops,
 }
@@ -480,7 +482,7 @@ pub struct SetupArgs {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "ci",
@@ -1031,6 +1033,8 @@ pub struct SetupPlatformsArgs {
     pub sysdig: bool,
     #[arg(long = "bitdefender", help = "Enable Bitdefender GravityZone")]
     pub bitdefender: bool,
+    #[arg(long = "graylog", help = "Enable Graylog")]
+    pub graylog: bool,
     #[arg(
         long = "google-secops",
         help = "Enable Google Security Operations (YARA-L)"
@@ -1075,7 +1079,7 @@ pub struct SetupRepoArgs {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "plan",
@@ -1253,7 +1257,7 @@ pub struct SharePushArgs {
 pub struct DeployArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1317,7 +1321,7 @@ pub struct DeployArgs {
 pub struct DeployMetadataArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Platform,
@@ -1551,7 +1555,7 @@ pub struct NewArgs {
 pub struct NewRuleArgs {
     #[arg(long = "name", help = "Object name; the filename is its slug")]
     pub name: Option<String>,
-    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "objective",
@@ -1596,7 +1600,7 @@ pub struct NewThreatArgs {
 pub struct InfoArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
@@ -1660,7 +1664,7 @@ pub struct QueryArgs {
     pub query: Option<String>,
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, google_secops",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]

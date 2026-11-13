@@ -566,6 +566,49 @@ configurations:
       #signature: |
         #...
       #on_access: true
+  #graylog:
+    #enabled: false
+    #name: 
+    #schema: platform::graylog::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+
+    #query: |
+      #...
+    #priority: 
+    #alert: true
+    #tags:
+      #- 
+    #streams:
+      #- 
+    #stream_categories:
+      #- 
+    #schedule:
+      #every: 
+      #window: 
+      #cron: 
+      #timezone: 
+    #event_limit: 3
+    #aggregation:
+      #group_by:
+        #- 
+      #condition: 
+    #event_fields:
+      #key:
+        #template: 
+    #event_key:
+      #- 
+    #notifications:
+      #- 
+    #grace_period: 
+    #backlog: 3
+    #summary: 
+    #remediation: 
   #google_secops:
     #enabled: false
     #name: 
