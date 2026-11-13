@@ -1,0 +1,90 @@
+[1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW RELEASE[0m[1;2m · 1 platform, 1 tenant[0m
+[2mPlan: 0 to create, 0 to update, 3 to create or update, 0 to disable, 1 to delete[0m
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36melastic[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001
+[1;31merror: [0mGet elastic rule failed · rule_id: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001 · error: 
+HTTPSConnectionPool(host='kibana.elastic.invalid', port=443): Max retries exceeded with url: 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001 (Caused by 
+ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', 
+port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+
+[1mDeploying to [0m[1melastic / soc[0m[1;2m · 4 rules[0m
+  [2m[1/4][0m [1;31m✗ failed    [0m[1mElastic create rule  [0m  [31mHTTPSConnectionPool(host='kibana.elastic.invalid',[0m
+[31m                                           port=443): Max retries exceeded with url: /s/soc/api/dete[0m
+[31m                                           ction_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-[0m
+[31m                                           1e8a4b7c0001 (Caused by ProxyError('Unable to connect to…[0m
+[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002
+[1;31merror: [0mGet elastic rule failed · rule_id: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002 · error: 
+HTTPSConnectionPool(host='kibana.elastic.invalid', port=443): Max retries exceeded with url: 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002 (Caused by 
+ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', 
+port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+  [2m[2/4][0m [1;31m✗ failed    [0m[1mElastic update rule  [0m  [31mHTTPSConnectionPool(host='kibana.elastic.invalid',[0m
+[31m                                           port=443): Max retries exceeded with url: /s/soc/api/dete[0m
+[31m                                           ction_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-[0m
+[31m                                           1e8a4b7c0002 (Caused by ProxyError('Unable to connect to…[0m
+[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004
+[1;31merror: [0mGet elastic rule failed · rule_id: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004 · error: 
+HTTPSConnectionPool(host='kibana.elastic.invalid', port=443): Max retries exceeded with url: 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004 (Caused by 
+ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', 
+port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+  [2m[3/4][0m [1;31m✗ failed    [0m[1mElastic prebuilt rule[0m  [31mHTTPSConnectionPool(host='kibana.elastic.invalid',[0m
+[31m                                           port=443): Max retries exceeded with url: /s/soc/api/dete[0m
+[31m                                           ction_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-[0m
+[31m                                           1e8a4b7c0004 (Caused by ProxyError('Unable to connect to…[0m
+[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005
+[1;31merror: [0mDelete elastic rule failed · rule_id: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005 · error: 
+HTTPSConnectionPool(host='kibana.elastic.invalid', port=443): Max retries exceeded with url: 
+/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005 (Caused by 
+ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', 
+port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+  [2m[4/4][0m [1;31m✗ failed    [0m[1mElastic retire rule  [0m  [31mHTTPSConnectionPool(host='kibana.elastic.invalid',[0m
+[31m                                           port=443): Max retries exceeded with url: /s/soc/api/dete[0m
+[31m                                           ction_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-[0m
+[31m                                           1e8a4b7c0005 (Caused by ProxyError('Unable to connect to…[0m
+[?25h[1A[2K  [1;31m✗[0m  [1melastic[0m  [2m0 deployed, 4 failed, 0 not attempted[0m [2m<SECONDS>[0m
+[1;31m✗[0m Deployment failed · 4 failed, 0 not attempted · <SECONDS>

@@ -8,8 +8,8 @@
 
 use super::rng::Rng;
 use super::vocab::{
-    ADJECTIVES, ALERT_SEVERITY, CHAINING, COMPOSITION, CRITICALITY, DETECTION_TYPES, ENTITIES,
-    GROUPS, IMPACT, KILLCHAIN, LEVERAGE, METHODOLOGY, NOUNS, PLATFORMS, PRIORITY, PROCESSES,
+    self, ADJECTIVES, ALERT_SEVERITY, CHAINING, COMPOSITION, CRITICALITY, DETECTION_TYPES,
+    ENTITIES, GROUPS, IMPACT, KILLCHAIN, LEVERAGE, METHODOLOGY, NOUNS, PRIORITY, PROCESSES,
     RESPONDERS, SEVERITY, SHELLS, STATUSES, SURFACE, TECHNIQUES, TLP, VIABILITY,
 };
 use super::workspace::{Body, Family, File, Workspace};
@@ -602,16 +602,17 @@ fn objective(rng: &mut Rng, index: usize, layout: Layout, ids: &mut Ids) -> File
 /// second (and third) on some rules, so that every platform has many rules
 /// even in a small workspace.
 fn rule_platforms(rng: &mut Rng, index: usize) -> Vec<&'static str> {
-    let primary = PLATFORMS[index % PLATFORMS.len()];
+    let all = vocab::generated_platforms();
+    let primary = all[index % all.len()];
     let mut platforms = vec![primary];
     if index % 3 != 2 {
-        let second = PLATFORMS[(index * 4 + 3) % PLATFORMS.len()];
+        let second = all[(index * 4 + 3) % all.len()];
         if second != primary {
             platforms.push(second);
         }
     }
     if rng.chance(15) {
-        let third = PLATFORMS[rng.below(PLATFORMS.len())];
+        let third = all[rng.below(all.len())];
         if !platforms.contains(&third) {
             platforms.push(third);
         }
@@ -643,7 +644,7 @@ fn rule(rng: &mut Rng, index: usize, layout: Layout, ids: &Ids) -> File {
         }
     }
     let platforms = rule_platforms(rng, index);
-    let variant = index / PLATFORMS.len();
+    let variant = index / vocab::generated_platforms().len();
     let mut configurations = Vec::new();
     for (position, platform) in platforms.iter().enumerate() {
         let (block, block_tags) = platform_block(rng, platform, variant + position, &name);
@@ -1443,7 +1444,7 @@ system = \"elastic\"
 ";
 
 fn configuration_files(layout: Layout) -> Vec<File> {
-    let mut files: Vec<File> = PLATFORMS
+    let mut files: Vec<File> = vocab::generated_platforms()
         .iter()
         .map(|platform| {
             config_file(
@@ -1470,7 +1471,24 @@ fn configuration_files(layout: Layout) -> Vec<File> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::vocab;
     use super::{Counts, date, slugify};
+
+    #[test]
+    fn the_generated_corpus_leaves_out_platforms_the_oracle_lacks() {
+        let generated = vocab::generated_platforms();
+        for id in opentide_schema::platforms::SINCE_ORACLE {
+            assert!(
+                !generated.contains(id),
+                "the generated corpus must leave {id} out (SINCE_ORACLE): a registry row on the \
+                 train would otherwise reshuffle the seeded corpus"
+            );
+        }
+        // Without SINCE_ORACLE the list is the whole connector order.
+        if opentide_schema::platforms::SINCE_ORACLE.is_empty() {
+            assert_eq!(generated, vocab::PLATFORMS);
+        }
+    }
 
     #[test]
     fn dates_walk_the_calendar() {

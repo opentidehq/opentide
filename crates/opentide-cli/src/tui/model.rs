@@ -832,15 +832,13 @@ fn check_files(
     }
     let host = Arc::new(MemoryWorkspace { files });
     let objects = opentide_lsp::ObjectFindings::validate(root);
-    let engine_index = opentide_analysis::index_workspace(host.as_ref());
     let mut findings = HashMap::new();
     for (path, text) in &host.files[..objects_read] {
         let file = Path::new(path);
         let mut found: Vec<opentide_core::Diagnostic> = objects.for_file(file, text);
         found.extend(
-            opentide_analysis::analyze_with_index(
+            opentide_analysis::analyze(
                 host.as_ref(),
-                &engine_index,
                 opentide_analysis::AnalyzeRequest {
                     uri: path.clone(),
                     language: LanguageId::TideYaml,

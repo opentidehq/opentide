@@ -221,7 +221,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
-| [`recommended_field_missing`](#recommended_field_missing) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
+| [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; `opentide validate` accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
@@ -1150,7 +1150,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The index pattern is not one the workspace declares in visibility.toml.
 
-Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in: only a workspace whose `visibility.toml` has at least one `elastic` log source gets it, for an index pattern no log source names, whether or not the engine knows it otherwise. An Elastic log source's `name` is its index pattern or data stream; data views are not declared. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
+Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, with the query's findings; `opentide validate` does not fail on it. It is opt-in: only a workspace whose `visibility.toml` has at least one `elastic` log source gets it, for an index pattern no log source names, whether or not the engine knows it otherwise. An Elastic log source's `name` is its index pattern or data stream; data views are not declared. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
 
 ### Example
 
@@ -1698,7 +1698,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold.
 
-Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine on the Sysdig block's `exceptions`, with the condition's findings, since Falco appends them to the condition when it loads the rule: as an error, an exception Falco would reject, by `opentide validate` (its `queries` check); as a warning, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both. An exception whose shape the model refuses (fields, comps and values that do not align) is `sysdig_exception_shape` instead, which `validate` names in its `schema_validation` finding: Falco's checks leave that exception to it.
 
 ### Example
 
@@ -1986,7 +1986,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.
 
-Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine on the Sysdig block's `append_to_rule`, as a warning: `opentide lint` (its `queries` check) shows it. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -2002,7 +2002,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The event source is not one Falco or its published plugins define, so its fields are not checked.
 
-Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine on the Sysdig block's `source`, as a warning, with the condition's findings (its fields go unchecked): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it.
 
 ### Example
 
@@ -3011,7 +3011,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The Elastic rule's lookback exceeds an hour; it is added to the interval, not the whole window.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -3027,7 +3027,7 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 The Elastic rule's lookback is zero, so events that arrive late are missed.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -3285,7 +3285,7 @@ Run `opentide setup mcp` with your editor's flag.
 
 An object has no `metadata.author` or `metadata.organisation`.
 
-Severity: note. Reported by `opentide lint` (metadata check).
+Severity: note. Reported by `opentide lint` (metadata check). The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[metadata]` sets.
 
 ### Example
 
@@ -3297,7 +3297,7 @@ metadata:
 
 ### How to fix
 
-Add the missing keys under `metadata`. They are recommended, not required: lint fails only with `--strict`.
+Add the missing keys under `metadata`. They are optional, so the note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them, set `severity = "warning"` or `"error"` under `[metadata]` in `.opentide/configurations/lint.toml`; to stop asking for them, set `required = []`.
 
 ## missing_author
 
@@ -3764,21 +3764,24 @@ Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOU
 
 ## recommended_field_missing
 
-Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
+A field the templates ask for is missing; `opentide validate` accepts the object without it.
 
-Severity: warning, while it was reported. A field the templates ask for was missing; `opentide validate` accepted the object without it.
-
-Until opentide 0.24.0, the language server reported it as a warning. The editor now reports what `opentide validate` reports, and recommendations are `opentide lint`'s `metadata_recommended` (KG-05).
+Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[recommended]` sets.
 
 ### Example
 
-```text
-opentide lint --check metadata
+```yaml
+name: Suspicious sign-in
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000002
+  schema: rule::1.0
+# no configurations: nothing to deploy yet
+# no response: no alert guidance for the analyst
 ```
 
 ### How to fix
 
-Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
+Add the field when the rule is ready for it: `configurations` with a block per platform to deploy to, `response` with the alert guidance. The note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them in `opentide lint`, set `severity = "warning"` or `"error"` under `[recommended]` in `.opentide/configurations/lint.toml`; to stop reporting them, set `enabled = false`.
 
 ## reference_not_found
 
@@ -3843,7 +3846,7 @@ Pass `--yes` to delete the remote event.
 
 The risk score is outside the band of the rule's severity.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -4232,7 +4235,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A name is defined more than once across the block's macros and lists.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4248,7 +4251,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4264,7 +4267,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4280,7 +4283,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4296,7 +4299,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block list name appears in an exception value where Falco's expansion would not produce a value list.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4312,7 +4315,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block list names itself as one of its items, so its own name stays in the expanded condition.
 
-Severity: warning. Reported by the analysis engine on a Sysdig rule (`sysdig`): an item of one of the block's `lists` is that list's own name. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. Falco loads the rule: it flattens a list with the lists defined before it only, and its `resolve_list` pass never re-scans the items it has just inserted, so the name is left in the text as a literal value. On Sysdig Secure that literal then resolves against any tenant list of the same name, or matches the bare string. A list naming a later block list is not this advisory: the later list's own pass expands it, as Falco does.
+Severity: warning. Reported by the analysis engine on a Sysdig rule (`sysdig`): an item of one of the block's `lists` is that list's own name. `opentide lint` (its `queries` check) shows it; `opentide validate` does not fail on it, and since UC-2.6 an editor running `opentide lsp start` does not show it either: the editor publishes what `opentide validate` reports on the object, and the block's advisories are lint's. Falco loads the rule: it flattens a list with the lists defined before it only, and its `resolve_list` pass never re-scans the items it has just inserted, so the name is left in the text as a literal value. On Sysdig Secure that literal then resolves against any tenant list of the same name, or matches the bare string. A list naming a later block list is not this advisory: the later list's own pass expands it, as Falco does.
 
 ### Example
 
@@ -4341,7 +4344,7 @@ Remove the item, or name the other list you meant. To extend a list with another
 
 `priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4357,7 +4360,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4373,7 +4376,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 `source` is not an event source name (`[a-z][a-z0-9_]*`).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4389,7 +4392,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -4405,7 +4408,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 The ATT&CK technique is not in the Enterprise matrix that Elastic maps.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -4454,7 +4457,7 @@ Run `opentide generate templates`. When the warning names a `lint.toml` key, fix
 
 A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 

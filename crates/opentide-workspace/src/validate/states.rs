@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::IdShape;
 use opentide_schema::vocab::quote;
 use serde_json::Value as Json;
 
@@ -378,19 +379,18 @@ fn external_id_problem(platform: &str, value: &str) -> Option<String> {
     if value.trim().is_empty() {
         return Some(format!("{platform} external id is empty"));
     }
-    let canonical_decimal = value == "0"
-        || (value.starts_with(|c: char| ('1'..='9').contains(&c))
-            && value.chars().all(|c| c.is_ascii_digit()));
-    if opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal {
-        return Some(format!(
+    match opentide_schema::platforms::external_id_problem(platform, value)? {
+        IdShape::CanonicalDecimal => Some(format!(
             "{platform} external id {} is not a canonical decimal integer (no sign, no leading \
              zeroes)",
             quote(value)
-        ));
+        )),
+        IdShape::Pattern(pattern) => Some(format!(
+            "{platform} external id {} does not match {}",
+            quote(value),
+            quote(pattern)
+        )),
     }
-    let shape = opentide_schema::platforms::id_shape(platform)?;
-    (!opentide_schema::platforms::id_has_shape(platform, value))
-        .then(|| format!("{platform} external id {} is not {shape}", quote(value)))
 }
 
 #[cfg(test)]
@@ -471,7 +471,7 @@ mod tests {
         assert!(
             scan(&fs, Path::new("/w"))[0]
                 .message
-                .ends_with("graylog external id '65F1' is not 24 lower-case hex digits")
+                .ends_with("graylog external id '65F1' does not match '[0-9a-f]{24}'")
         );
         let (fs, _) = shard(&format!(
             r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65f1c0ffee0123456789abcd"}}}}}}"#

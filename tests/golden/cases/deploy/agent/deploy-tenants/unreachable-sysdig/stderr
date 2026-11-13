@@ -1,0 +1,14 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 1 to disable, 0 to delete
+warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")': /api/secure/rules
+warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")': /api/secure/rules
+warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")': /api/secure/rules
+error: Sysdig tenant deployment failed · tenant: lab · error: HTTPSConnectionPool(host='sysdig-tenant.invalid', port=443): Max retries exceeded with url: /api/secure/rules (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+
+Deploying to sysdig / lab · 3 rules
+  [1/3] ✗ failed    Sysdig create rule                      HTTPSConnectionPool(host='sysdig-tenant.invalid', port=443): Max retries exceeded with url: /api/secure/rules (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+  [2/3] · skipped   Sysdig rule the tenant lost             not attempted after a failure
+  [3/3] · skipped   Sysdig rule to disable the tenant lost  not attempted after a failure
+✗ sysdig · 0 deployed, 1 failed, 2 not attempted · <SECONDS>
+✗ Deployment failed · 1 failed, 2 not attempted · <SECONDS>
+tip: add --json for machine-readable output

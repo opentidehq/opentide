@@ -1,0 +1,18 @@
+[1mmisp-prod[0m
+  [1;31m✗ failed[0m   [1mShared Objective[0m       [2m…000000000002[0m  [2mvalidation error[0m
+  [2m○ skipped[0m  [1mRule still in staging[0m  [2m…000000000014[0m  [2mstatus not shared[0m
+  [2m○ skipped[0m  [1mRule marked red[0m        [2m…000000000015[0m  [2mTLP above max_tlp[0m
+  [1;31m✗ failed[0m   [1mShared Actor[0m           [2m…000000000001[0m  [2mconnectivity failed[0m
+  [1;31m✗ failed[0m   [1mShared rule to create[0m  [2m…000000000011[0m  [2mconnectivity failed[0m
+  [1;31m✗ failed[0m   [1mShared rule to update[0m  [2m…000000000012[0m  [2mconnectivity failed[0m
+  [1;31m✗ failed[0m   [1mShared rule unchanged[0m  [2m…000000000013[0m  [2mconnectivity failed[0m
+
+[1mmisp-locked[0m
+  [2m○ skipped[0m  [1mShared Actor[0m           [2m…000000000001[0m  [2mtype not shared[0m
+  [2m○ skipped[0m  [1mShared Objective[0m       [2m…000000000002[0m  [2mtype not shared[0m
+  [2m○ skipped[0m  [1mRule still in staging[0m  [2m…000000000014[0m  [2mstatus not shared[0m
+  [2m○ skipped[0m  [1mRule marked red[0m        [2m…000000000015[0m  [2mTLP above max_tlp[0m
+  [1;31m✗ failed[0m   [1mShared rule to create[0m  [2m…000000000011[0m  [2mconnectivity failed[0m
+  [1;31m✗ failed[0m   [1mShared rule to update[0m  [2m…000000000012[0m  [2mconnectivity failed[0m
+  [1;31m✗ failed[0m   [1mShared rule unchanged[0m  [2m…000000000013[0m  [2mconnectivity failed[0m
+

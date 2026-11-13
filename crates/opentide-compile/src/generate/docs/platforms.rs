@@ -130,10 +130,7 @@ const LABELS: [(&str, &str); 4] = [
 
 /// `sentinel` as `Microsoft Sentinel`; a platform no table names, title-cased.
 pub fn platform_label(platform: &str) -> String {
-    if let Some(found) = opentide_schema::platforms::PLATFORMS
-        .iter()
-        .find(|entry| entry.id == platform)
-    {
+    if let Some(found) = opentide_schema::platforms::get(platform) {
         return found.label.to_owned();
     }
     if let Some((_, label)) = LABELS.iter().find(|(key, _)| *key == platform) {
@@ -178,9 +175,7 @@ mod tests {
     fn every_platform_has_a_profile() {
         for platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
             assert!(
-                opentide_schema::platforms::PLATFORMS
-                    .iter()
-                    .any(|entry| entry.id == platform),
+                opentide_schema::platforms::get(platform).is_some(),
                 "{platform} has no label"
             );
             assert!(

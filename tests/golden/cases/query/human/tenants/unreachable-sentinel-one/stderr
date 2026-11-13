@@ -1,0 +1,5 @@
+[1;31merror:[0m 1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab'
+       at https://s1.invalid: HTTPSConnectionPool(host='s1.invalid', port=443): Max retries exceeded
+       with url: /web/api/v2.1/dv/events/pq (Caused by ProxyError('Unable to connect to proxy',
+       NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new
+       connection: [Errno 111] Connection refused")))

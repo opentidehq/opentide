@@ -329,7 +329,7 @@ impl Command {
                 bail!("golden record records the oracle: --engine rust is for check and diff")
             }
             "rust" => match self.runner {
-                Runner::Python => crate::compare::candidate(&layout.repo)?,
+                Runner::Python => crate::compare::candidate(&layout.repo, &layout.target)?,
                 Runner::Node => crate::compare::node_candidate(&layout.repo, &layout.target)?,
             },
             other => bail!("unknown engine `{other}`: python or rust"),
@@ -532,9 +532,20 @@ impl Command {
         } else {
             40
         };
+        // The catch-up train adds case definitions that O2 records from the
+        // new oracle (`report_only`): there a case with no recording is
+        // listed, not failed.
+        let report_only = report_only::enabled(&layout.repo);
         for actual in results.iter().flatten() {
             let dir = cases_dir.join(&actual.case.id);
             if !dir.join("case.toml").is_file() {
+                if report_only {
+                    println!(
+                        "{}: not recorded yet (a definition only; O2 records it)",
+                        actual.case.id
+                    );
+                    continue;
+                }
                 failed += 1;
                 eprintln!(
                     "{}: not recorded (run `cargo xtask golden record`)",

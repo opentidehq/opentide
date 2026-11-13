@@ -1,0 +1,26 @@
+[1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW RELEASE[0m[1;2m · 1 platform, 1 tenant[0m
+[2mPlan: 1 to create, 1 to update, 1 to disable, 0 to delete[0m
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36msysdig[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': /api/secure/rules
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': /api/secure/rules
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': /api/secure/rules
+[1;31merror: [0mSysdig tenant deployment failed · tenant: lab · error: 
+HTTPSConnectionPool(host='sysdig-tenant.invalid', port=443): Max retries exceeded with url: 
+/api/secure/rules (Caused by ProxyError('Unable to connect to proxy', 
+NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection:
+[Errno 111] Connection refused")))
+
+[1mDeploying to [0m[1msysdig / lab[0m[1;2m · 3 rules[0m
+  [2m[1/3][0m [1;31m✗ failed    [0m[1mSysdig create rule                    [0m  [31mHTTPSConnectionPool(host='sysdig-[0m
+[31m                                                            tenant.invalid', port=443): Max retries[0m
+[31m                                                            exceeded with url: /api/secure/rules[0m
+[31m                                                            (Caused by ProxyError('Unable to connect…[0m
+  [2m[2/3][0m [2m· skipped   [0mSysdig rule the tenant lost             [2mnot attempted after a failure[0m
+  [2m[3/3][0m [2m· skipped   [0mSysdig rule to disable the tenant lost  [2mnot attempted after a failure[0m
+[?25h[1A[2K  [1;31m✗[0m  [1msysdig[0m  [2m0 deployed, 1 failed, 2 not attempted[0m [2m<SECONDS>[0m
+[1;31m✗[0m Deployment failed · 1 failed, 2 not attempted · <SECONDS>

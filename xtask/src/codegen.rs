@@ -3,8 +3,12 @@
 //!
 //! - **Committed artifacts**: every platform block's template,
 //!   `src/opentide/schemas/data/platform_templates/<platform>.template.yaml`,
-//!   which the package ships and `generate snippets` falls back to. Without
-//!   `--check` they are written; with it, a difference fails.
+//!   which the package ships and `generate snippets` falls back to, and the
+//!   object templates the language server offers as snippets,
+//!   `data/catalogs/tide/templates/<family>.1.0.template.yaml`: what
+//!   `generate templates` writes for the bundled configuration (#814; a file
+//!   there no snippet reads is stale). Without `--check` they are written;
+//!   with it, a difference fails.
 //! - **Golden parity** (`--check` only): each recording in
 //!   `tests/golden/cases` of an `opentide generate` that exited 0 and ran
 //!   the `schemas`, `templates` and `snippets` phases (a bare `generate`,
@@ -67,6 +71,7 @@ use serde_json::Value;
 use crate::corpus::cli::{read_folder, repo_root};
 use crate::golden::case::Spec;
 use crate::golden::recording::{Recording, recorded_ids};
+use crate::golden::report_only;
 use crate::golden::snapshot::{ChangeKind, Kind};
 use crate::verdict::{self, Instances};
 
@@ -106,6 +111,19 @@ pub const COMMITTED_CATALOGS: &str = "data/catalogs/tide/generated";
 /// Where the committed platform templates live, relative to the repository.
 pub const PLATFORM_TEMPLATES: &str = "src/opentide/schemas/data/platform_templates";
 
+/// Where the object templates the language server offers as snippets live,
+/// relative to the repository (`opentide_tide::snippet`).
+pub const EDITOR_TEMPLATES: &str = "data/catalogs/tide/templates";
+
+/// The object templates the language server compiles in: what `opentide
+/// generate templates` writes for the bundled configuration, by file name
+/// (#814).
+pub const EDITOR_TEMPLATE_NAMES: [&str; 3] = [
+    "objective.1.0.template.yaml",
+    "rule.1.0.template.yaml",
+    "threat.1.0.template.yaml",
+];
+
 /// Runs `codegen`: `Ok(0)` passed, `Ok(1)` a difference.
 pub fn run(args: &[String]) -> Result<u8> {
     let mut check = false;
@@ -124,16 +142,25 @@ pub fn run(args: &[String]) -> Result<u8> {
     problems.extend(engine_catalog(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
+    let mut oracle = Vec::new();
     if check {
         let (count, golden) = golden_parity(&root)?;
         compared = count;
-        problems.extend(golden);
+        oracle.extend(golden);
         let (count, verdicts) = schema_verdicts(&root)?;
         judged = count;
-        problems.extend(verdicts);
-        let (count, catalogs) = catalog_parity(&root)?;
+        oracle.extend(verdicts);
+        let (count, drift, catalogs) = catalog_parity(&root)?;
         compared += count;
-        problems.extend(catalogs);
+        problems.extend(drift);
+        oracle.extend(catalogs);
+    }
+    let reported = gate(&mut problems, oracle, report_only::enabled(&root));
+    for problem in &reported {
+        println!("report: {problem}");
+    }
+    if !reported.is_empty() {
+        println!("{}", report_only::verdict(reported.len(), None));
     }
     for problem in &problems {
         eprintln!("error: {problem}");
@@ -157,6 +184,21 @@ pub fn run(args: &[String]) -> Result<u8> {
     }
 }
 
+/// Splits the differences from the oracle's recordings off the gating ones:
+/// while the catch-up train's report-only marker is committed
+/// ([`report_only::MARKER`]), they are returned to be printed as a report;
+/// otherwise they join `problems` and fail the run. The committed
+/// artifacts' drift from the generator is never in `oracle`, so it always
+/// gates.
+fn gate(problems: &mut Vec<String>, oracle: Vec<String>, report_only: bool) -> Vec<String> {
+    if report_only {
+        oracle
+    } else {
+        problems.extend(oracle);
+        Vec::new()
+    }
+}
+
 /// The committed artifacts, by path relative to the repository.
 pub fn committed_artifacts() -> Result<Vec<(String, String)>> {
     let mut out = Vec::new();
@@ -172,6 +214,16 @@ pub fn committed_artifacts() -> Result<Vec<(String, String)>> {
         ));
     }
     let sources = bundled_sources()?;
+    // The editor's snippets: the templates `generate templates` writes for
+    // the bundled configuration, one source with the command (#814).
+    let generated = templates(&sources.config).map_err(|error| anyhow::anyhow!("{error}"))?;
+    for name in EDITOR_TEMPLATE_NAMES {
+        let artifact = generated
+            .iter()
+            .find(|artifact| Path::new(&artifact.path).file_name() == Some(name.as_ref()))
+            .with_context(|| format!("`generate templates` writes no {name}"))?;
+        out.push((format!("{EDITOR_TEMPLATES}/{name}"), artifact.text.clone()));
+    }
     for id in identifiers_for_families(&CORE_OBJECT_TYPES) {
         let identifier = id.to_string();
         let schema = revision_schema(&identifier, &sources)
@@ -310,6 +362,12 @@ fn committed(root: &Path, check: bool) -> Result<Vec<String>> {
         names.push(entry?.file_name().to_string_lossy().into_owned());
     }
     problems.extend(stale_editor_schemas(&names, &artifacts));
+    let dir = root.join(EDITOR_TEMPLATES);
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
+        names.push(entry?.file_name().to_string_lossy().into_owned());
+    }
+    problems.extend(stale_editor_templates(&names));
     Ok(problems)
 }
 
@@ -535,6 +593,18 @@ fn stale_templates(names: &[String], artifacts: &[(String, String)]) -> Vec<Stri
     stale
 }
 
+/// Of the file names in the editor's templates folder, each the language
+/// server does not compile in (#814).
+fn stale_editor_templates(names: &[String]) -> Vec<String> {
+    let mut stale: Vec<String> = names
+        .iter()
+        .filter(|name| !EDITOR_TEMPLATE_NAMES.contains(&name.as_str()))
+        .map(|name| format!("{EDITOR_TEMPLATES}/{name}: no snippet reads it; remove it"))
+        .collect();
+    stale.sort();
+    stale
+}
+
 /// The phases of `opentide generate` that write the files this generator
 /// covers: `schemas` the router, `templates` the templates and `snippets`
 /// the snippets.
@@ -702,9 +772,11 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
 /// `generator` labels aside (`catalog_differences`); and each golden
 /// recording of an `opentide generate` that wrote them must hold, byte for
 /// byte, what the generator writes for the fixture with the oracle's version
-/// as the label. Returns the number of files compared and the differences.
-fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
+/// as the label. Returns the number of files compared, the committed copy's
+/// drift and the differences from the oracle's recordings.
+fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>, Vec<String>)> {
     use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    let mut drift = Vec::new();
     let mut problems = Vec::new();
     let mut compared = 0;
     let sources = bundled_sources()?;
@@ -714,8 +786,8 @@ fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
             Ok(current) if unlabelled(&path, &current)? == unlabelled(&path, &text)? => {
                 compared += 1;
             }
-            Ok(_) => problems.push(format!("{path}: differs from what the model generates")),
-            Err(_) => problems.push(format!("{path}: missing")),
+            Ok(_) => drift.push(format!("{path}: differs from what the model generates")),
+            Err(_) => drift.push(format!("{path}: missing")),
         }
     }
 
@@ -785,7 +857,7 @@ fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
     if generated.is_empty() {
         problems.push("no golden recording of `opentide generate` wrote the catalogs".to_owned());
     }
-    Ok((compared, problems))
+    Ok((compared, drift, problems))
 }
 
 /// The fixtures whose object and configuration files are validated against
@@ -994,19 +1066,43 @@ fn configuration_verdicts(
     problems: &mut Vec<String>,
 ) -> Result<verdict::Tally> {
     let mut sum = verdict::Tally::default();
+    // The recorded oracle (0.23.0) lacks the configuration documents of the
+    // platforms the train ports onto it (`SINCE_ORACLE`); leave those out. On
+    // this oracle none are generated, so this is a no-op until a row lands.
+    let after_oracle = |name: &str| -> bool {
+        opentide_schema::platforms::SINCE_ORACLE.iter().any(|id| {
+            opentide_schema::generate::configuration::configuration_schema_name(&format!(
+                "platforms/{id}.toml"
+            )) == name
+        })
+    };
     for name in oracle.keys() {
         if !rust.iter().any(|(known, _)| known == name) {
             problems.push(format!("the oracle generates {name}, Rust does not"));
         }
     }
     for (name, document) in rust {
+        if after_oracle(name) {
+            continue;
+        }
         let Some(expected) = oracle.get(name) else {
             problems.push(format!("Rust generates {name}, the oracle does not"));
             continue;
         };
         if name == ROUTER_NAME {
-            // The router names schemas; it validates no file.
-            if expected != document {
+            // The router names schemas; it validates no file. Its entries for
+            // the platforms the oracle lacks are left out, as their documents
+            // are above.
+            let mut document = document.clone();
+            if let Some(files) = document.get_mut("files").and_then(Value::as_object_mut) {
+                files.retain(|_, entry| {
+                    !entry
+                        .get("schema")
+                        .and_then(Value::as_str)
+                        .is_some_and(after_oracle)
+                });
+            }
+            if *expected != document {
                 problems.push(format!("{name}: differs from the oracle's"));
             }
             continue;
@@ -1069,6 +1165,23 @@ fn compare(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_oracles_differences_gate_unless_the_train_is_report_only() {
+        let oracle = vec!["generate/x: rule.1.0 differs from the oracle's".to_owned()];
+        let drift = "data/catalogs/tide/generated/fields.json: missing".to_owned();
+        // Gated: they fail the run with the committed drift.
+        let mut problems = vec![drift.clone()];
+        let reported = gate(&mut problems, oracle.clone(), false);
+        assert!(reported.is_empty());
+        assert_eq!(problems, vec![drift.clone(), oracle[0].clone()]);
+        // Report-only: they are reported, and the drift still fails.
+        let mut problems = vec![drift.clone()];
+        let reported = gate(&mut problems, oracle.clone(), true);
+        assert_eq!(reported, oracle);
+        assert_eq!(problems, vec![drift]);
+    }
+
     use super::*;
 
     #[test]
@@ -1192,6 +1305,7 @@ mod tests {
         let artifacts = committed_artifacts().unwrap();
         let mut names: Vec<String> = artifacts
             .iter()
+            .filter(|(path, _)| path.starts_with(PLATFORM_TEMPLATES))
             .map(|(path, _)| path.rsplit('/').next().unwrap().to_owned())
             .collect();
         assert!(stale_templates(&names, &artifacts).is_empty());
@@ -1201,6 +1315,27 @@ mod tests {
             stale_templates(&names, &artifacts),
             [format!(
                 "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
+            )]
+        );
+    }
+
+    /// #814: the editor's snippets are the three generated templates; any
+    /// other file in their folder is stale.
+    #[test]
+    fn the_editor_templates_are_generated_and_an_extra_one_is_stale() {
+        let artifacts = committed_artifacts().unwrap();
+        let mut names: Vec<String> = artifacts
+            .iter()
+            .filter_map(|(path, _)| path.strip_prefix(&format!("{EDITOR_TEMPLATES}/")))
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(names, EDITOR_TEMPLATE_NAMES);
+        assert!(stale_editor_templates(&names).is_empty());
+        names.push("rule.1.1.template.yaml".to_owned());
+        assert_eq!(
+            stale_editor_templates(&names),
+            [format!(
+                "{EDITOR_TEMPLATES}/rule.1.1.template.yaml: no snippet reads it; remove it"
             )]
         );
     }
@@ -1495,6 +1630,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         for dir in [
             PLATFORM_TEMPLATES,
+            EDITOR_TEMPLATES,
             EDITOR_SCHEMAS,
             COMMITTED_CATALOGS,
             "highlights/queries/tide",
