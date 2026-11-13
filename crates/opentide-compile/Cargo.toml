@@ -80,6 +80,8 @@ unicode-properties.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+# Exabeam's Search window (`startTime`, `endTime`), in UTC.
+jiff.workspace = true
 # Log events (a rule without a status), written by the host's layer.
 tracing = "0.1"
 # `setup ci`'s pipelines are templates too (UC-3.2c, #916; `custom_syntax`

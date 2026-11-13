@@ -609,6 +609,25 @@ pub mod codes {
     pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
     pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
 
+    // Exabeam block constraint codes (exabeam-1.0, Constraints), the workspace
+    // check and the advisories, as opentide names them.
+    pub const EXABEAM_SEQUENCES: &str = "exabeam_sequences";
+    pub const EXABEAM_CORRELATION: &str = "exabeam_correlation";
+    pub const EXABEAM_THRESHOLD_FUNCTION: &str = "exabeam_threshold_function";
+    pub const EXABEAM_THRESHOLD_OPERATOR: &str = "exabeam_threshold_operator";
+    pub const EXABEAM_THRESHOLD_VALUE: &str = "exabeam_threshold_value";
+    pub const EXABEAM_GROUP_BY: &str = "exabeam_group_by";
+    pub const EXABEAM_DURATION: &str = "exabeam_duration";
+    pub const EXABEAM_SEVERITY: &str = "exabeam_severity";
+    pub const EXABEAM_OUTCOME: &str = "exabeam_outcome";
+    pub const EXABEAM_EMAIL: &str = "exabeam_email";
+    pub const EXABEAM_SCHEDULE: &str = "exabeam_schedule";
+    pub const EXABEAM_NAME_LENGTH: &str = "exabeam_name_length";
+    pub const EXABEAM_CONTEXT_TABLE_TRIGGER: &str = "exabeam_context_table_trigger";
+    pub const EXABEAM_NAME_DUPLICATE: &str = "exabeam_name_duplicate";
+    pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
+    pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
+
     // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
     pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
     pub const CQL_UNKNOWN_FUNCTION: &str = "cql_unknown_function";
@@ -760,6 +779,22 @@ pub mod codes {
         SYSDIG_DEFINITION_ORDER,
         SYSDIG_LIST_IN_VALUE,
         SYSDIG_LIST_SELF_REFERENCE,
+        EXABEAM_SEQUENCES,
+        EXABEAM_CORRELATION,
+        EXABEAM_THRESHOLD_FUNCTION,
+        EXABEAM_THRESHOLD_OPERATOR,
+        EXABEAM_THRESHOLD_VALUE,
+        EXABEAM_GROUP_BY,
+        EXABEAM_DURATION,
+        EXABEAM_SEVERITY,
+        EXABEAM_OUTCOME,
+        EXABEAM_EMAIL,
+        EXABEAM_SCHEDULE,
+        EXABEAM_NAME_LENGTH,
+        EXABEAM_CONTEXT_TABLE_TRIGGER,
+        EXABEAM_NAME_DUPLICATE,
+        EXABEAM_OUTCOME_SILENT,
+        EXABEAM_CORRELATION_WINDOW,
         CQL_PARSE_ERROR,
         CQL_UNKNOWN_FUNCTION,
         CQL_REMOVED_FUNCTION,
@@ -1069,6 +1104,42 @@ pub mod codes {
             }
             SYSDIG_LIST_SELF_REFERENCE => {
                 "A block list names itself: Falco keeps the name as a literal item, which on Sysdig resolves against a tenant list of that name, not this one."
+            }
+            EXABEAM_SEQUENCES => "An Exabeam block has no sequences, or a sequence has no query.",
+            EXABEAM_CORRELATION => {
+                "An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one."
+            }
+            EXABEAM_THRESHOLD_FUNCTION => {
+                "A threshold's `function` is not an Exabeam function, or its `field` is missing or blank."
+            }
+            EXABEAM_THRESHOLD_OPERATOR => "A threshold's `operator` is not one its function takes.",
+            EXABEAM_THRESHOLD_VALUE => {
+                "A threshold's `value` does not have the shape its operator takes."
+            }
+            EXABEAM_GROUP_BY => "A `group_by` is not a list of one to three distinct field names.",
+            EXABEAM_DURATION => {
+                "A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes."
+            }
+            EXABEAM_SEVERITY => {
+                "The block `severity` is not `none`, `low`, `medium`, `high` or `critical`."
+            }
+            EXABEAM_OUTCOME => "The block `outcome` is not `alert`, `case` or `none`.",
+            EXABEAM_EMAIL => {
+                "The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject."
+            }
+            EXABEAM_SCHEDULE => "A `schedule` recurrence is not one Exabeam takes.",
+            EXABEAM_NAME_LENGTH => "The Exabeam rule name is longer than 128 characters.",
+            EXABEAM_CONTEXT_TABLE_TRIGGER => {
+                "A sequence whose query looks a value up in a context table has a threshold."
+            }
+            EXABEAM_NAME_DUPLICATE => {
+                "Two enabled Exabeam blocks resolve to the same Exabeam rule name."
+            }
+            EXABEAM_OUTCOME_SILENT => {
+                "An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers."
+            }
+            EXABEAM_CORRELATION_WINDOW => {
+                "`correlation.within` is not more than the time the ordered sequences need."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."

@@ -1,0 +1,27 @@
+# A context table lookup under a threshold; Exabeam requires trigger on first match.
+# Expected constraint code: exabeam_context_table_trigger.
+name: Exabeam context table with a threshold
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000075
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A context table lookup under a threshold; Exabeam requires trigger on first match.
+status: STAGING
+severity: Medium
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: activity_type:"app-login" AND user IN "Privileged Accounts"
+        threshold:
+          function: count
+          operator: more_than
+          value: 5
+          within: 1h

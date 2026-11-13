@@ -32,6 +32,7 @@ pub mod deprecation;
 /// language server's advisories share.
 pub use opentide_core::duration as durations;
 pub mod elastic;
+pub mod exabeam;
 pub mod falco_text;
 pub mod harfanglab;
 pub mod schema;

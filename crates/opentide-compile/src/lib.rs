@@ -30,6 +30,7 @@ pub mod deploy;
 pub mod dry_run;
 pub mod duration;
 pub mod elastic;
+pub mod exabeam;
 pub mod generate;
 pub mod git;
 pub mod harfanglab;

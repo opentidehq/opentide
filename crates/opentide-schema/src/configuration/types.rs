@@ -243,6 +243,11 @@ pattern!(
     non_empty = true
 );
 pattern!(
+    /// An `https://` base URL (`api_url`, exabeam-1.0).
+    HttpsUrlPattern,
+    r"^https://"
+);
+pattern!(
     /// The `8-4-4-4-12` hex form of a UUID.
     OrganisationUuidPattern,
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"

@@ -947,6 +947,7 @@ use crate::objects::platform::elastic::{
     ElasticThreatEntry, ElasticThreatGroup, ElasticThreatMatch, ElasticThreshold, ElasticTimeline,
 };
 use crate::objects::platform::elastic::{IntegrationChoice, JobId, RiskChoice, SeverityChoice};
+use crate::objects::platform::exabeam::{ExabeamDays, ExabeamValue};
 use crate::objects::platform::harfanglab::SelectionValue;
 use crate::objects::platform::harfanglab::{
     HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
@@ -983,7 +984,7 @@ use pyo3::type_hint_union;
 #[cfg(feature = "stubs")]
 mod hint {
     use pyo3::inspect::PyStaticExpr;
-    use pyo3::{type_hint_identifier, type_hint_subscript};
+    use pyo3::{type_hint_identifier, type_hint_subscript, type_hint_union};
 
     pub const STR: PyStaticExpr = type_hint_identifier!("builtins", "str");
     pub const INT: PyStaticExpr = type_hint_identifier!("builtins", "int");
@@ -991,6 +992,12 @@ mod hint {
     pub const FLOAT: PyStaticExpr = type_hint_identifier!("builtins", "float");
     pub const STRS: PyStaticExpr =
         type_hint_subscript!(type_hint_identifier!("builtins", "list"), STR);
+    pub const INTS: PyStaticExpr =
+        type_hint_subscript!(type_hint_identifier!("builtins", "list"), INT);
+    pub const SCALARS: PyStaticExpr = type_hint_subscript!(
+        type_hint_identifier!("builtins", "list"),
+        type_hint_union!(STR, INT, FLOAT)
+    );
 }
 
 py_value! {
@@ -1003,6 +1010,8 @@ py_value! {
     Suppression => type_hint_union!(hint::STR, hint::BOOL),
     SentinelTechnique => hint::STR,
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
+    ExabeamValue => type_hint_union!(hint::INT, hint::FLOAT, hint::SCALARS),
+    ExabeamDays => type_hint_union!(hint::STRS, hint::INTS),
 }
 
 /// A union with a model member: the member's class instance, as Pydantic

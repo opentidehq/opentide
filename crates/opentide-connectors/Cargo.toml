@@ -51,6 +51,7 @@ opentide-schema.workspace = true
 # wiremock (tests/harness.rs).
 opentide-cassette.workspace = true
 wiremock.workspace = true
-tokio = { workspace = true, features = ["net", "io-util"] }
+# Exabeam's pacer is tested on a paused clock (`tokio::time::pause`).
+tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 tokio-rustls.workspace = true
 tempfile = "3"

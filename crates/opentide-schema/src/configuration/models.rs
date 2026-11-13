@@ -15,9 +15,9 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::types::{
-    ElasticVersionPattern, EnvPlaceholder, HttpUrlPattern, Matching, MispNamePattern, NonEmptyList,
-    NonEmptyString, OrganisationUuidPattern, PositiveFloat, RunStrategyName, SslWordPattern,
-    StatusStrategyName,
+    ElasticVersionPattern, EnvPlaceholder, HttpUrlPattern, HttpsUrlPattern, Matching,
+    MispNamePattern, NonEmptyList, NonEmptyString, OrganisationUuidPattern, PositiveFloat,
+    RunStrategyName, SslWordPattern, StatusStrategyName,
 };
 use crate::FromNode;
 use crate::error::{ErrorKind, PathSegment};
@@ -1050,6 +1050,130 @@ tenant!(
 platform!(
     /// Merged `platforms/sysdig.toml`.
     SysdigConfiguration, "SysdigConfiguration", SysdigTenant
+);
+
+/// Exabeam's API regions (`ExabeamSetup.region`); each is served at
+/// `https://api.<region>.exabeam.cloud`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, FromNode, JsonSchema)]
+#[from_node(literal)]
+pub enum ExabeamRegion {
+    /// `us-west`.
+    #[serde(rename = "us-west")]
+    UsWest,
+    /// `us-east`.
+    #[serde(rename = "us-east")]
+    UsEast,
+    /// `ca`.
+    #[serde(rename = "ca")]
+    Ca,
+    /// `eu`.
+    #[serde(rename = "eu")]
+    Eu,
+    /// `sa`.
+    #[serde(rename = "sa")]
+    Sa,
+    /// `sg`.
+    #[serde(rename = "sg")]
+    Sg,
+    /// `ch`.
+    #[serde(rename = "ch")]
+    Ch,
+    /// `jp`.
+    #[serde(rename = "jp")]
+    Jp,
+    /// `au`.
+    #[serde(rename = "au")]
+    Au,
+    /// `uk`.
+    #[serde(rename = "uk")]
+    Uk,
+}
+
+/// `[tenants.setup]` for Exabeam New-Scale SIEM.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "ExabeamSetup")]
+pub struct ExabeamSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// Exabeam API region. Calls go to https://api.<region>.exabeam.cloud; it is not derived
+    /// from the console URL (use1 is us-east, euw6 is ch).
+    pub region: ExabeamRegion,
+    /// API key with Correlation Rules at Read Write Delete. Must be a $NAME placeholder.
+    pub client_id: EnvPlaceholder,
+    /// API key secret. Must be a $NAME placeholder.
+    #[serde(skip_serializing)]
+    pub client_secret: EnvPlaceholder,
+    /// An HTTPS base URL that replaces the region's.
+    #[serde(default)]
+    pub api_url: Option<Matching<HttpsUrlPattern>>,
+    /// Default test_mode for blocks that do not set it.
+    #[serde(default)]
+    pub test_mode: bool,
+}
+impl ExabeamRegion {
+    /// Every region, in the oracle's order (`EXABEAM_REGIONS`).
+    pub const ALL: [Self; 10] = [
+        Self::UsWest,
+        Self::UsEast,
+        Self::Ca,
+        Self::Eu,
+        Self::Sa,
+        Self::Sg,
+        Self::Ch,
+        Self::Jp,
+        Self::Au,
+        Self::Uk,
+    ];
+
+    /// The region as written (`us-east`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::UsWest => "us-west",
+            Self::UsEast => "us-east",
+            Self::Ca => "ca",
+            Self::Eu => "eu",
+            Self::Sa => "sa",
+            Self::Sg => "sg",
+            Self::Ch => "ch",
+            Self::Jp => "jp",
+            Self::Au => "au",
+            Self::Uk => "uk",
+        }
+    }
+
+    /// The region written `text`.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|region| region.as_str() == text)
+    }
+}
+
+/// The API base URL of an Exabeam tenant: `api_url` without a trailing
+/// slash, else `https://api.<region>.exabeam.cloud`.
+pub fn exabeam_base_url(region: &str, api_url: Option<&str>) -> String {
+    match api_url.filter(|url| !url.is_empty()) {
+        Some(url) => url.trim_end_matches('/').to_owned(),
+        None => format!("https://api.{region}.exabeam.cloud"),
+    }
+}
+
+impl ExabeamSetup {
+    /// The API base URL ([`exabeam_base_url`]).
+    pub fn url(&self) -> String {
+        exabeam_base_url(
+            self.region.as_str(),
+            self.api_url.as_ref().map(Matching::as_str),
+        )
+    }
+}
+tenant!(
+    /// `[[tenants]]` for Exabeam New-Scale SIEM.
+    ExabeamTenant, "ExabeamTenant", ExabeamSetup
+);
+platform!(
+    /// Merged `platforms/exabeam.toml`.
+    ExabeamConfiguration, "ExabeamConfiguration", ExabeamTenant
 );
 
 /// `[tenants.setup]` of a platform opentide has no model for: open.
