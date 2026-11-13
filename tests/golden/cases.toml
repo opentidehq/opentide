@@ -57,6 +57,12 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus with an `advanced` table on its Splunk rule: a custom alert action's parameters, which 0.21.0 to 0.23.0 refused as a splunk::2.x key and 0.24.0 validates and deploys again"
 edits = [{ path = "Objects/Detection Rules/rule-0003-splunk-spl.yaml", find = "\n    query: index=main | head 1\n", replace = "\n    query: index=main | head 1\n    advanced:\n      action.misp_alert_create_event.param.title: \"Canary token triggered\"\n      action.misp_alert_create_event.param.distribution: 0\n      action.misp_alert_create_event.param.publish_on_creation: false\n      action.misp_alert_create_event.param.tags:\n" }]
 
+[fixtures.tide-corpus-legacy-text-id]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a legacy `rule_id::<tenant>` key whose id is text on its Sysdig rule, a model that refuses unknown keys: 0.23.0's validate crashed reading the tenant as a schema version (#913)"
+edits = [{ path = "Objects/Detection Rules/rule-0013-sysdig-falco.yaml", find = "\n  sysdig:\n    enabled: true\n", replace = "\n  sysdig:\n    rule_id::prod: '12'\n    enabled: true\n" }]
+
 [fixtures.vscode-unscoped]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -2422,6 +2428,17 @@ variant = "splunk-advanced"
 args = ["deploy", "--platform", "splunk", "--dry-run", "--strategy", "PREVIEW", "--all"]
 modes = ["json"]
 fixtures = ["tide-corpus-splunk-advanced"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
+
+# #913: a legacy external-id key whose id is text is `external_id_in_rule`,
+# not a crash. The oracle crashes, recorded as the Splunk deploy above is: no
+# crash log written (XDG_STATE_HOME), json mode alone.
+[[case]]
+command = "validate"
+variant = "legacy-text-id"
+args = ["validate"]
+modes = ["json"]
+fixtures = ["tide-corpus-legacy-text-id"]
 env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
 # ---- more examples from docs/cli ----

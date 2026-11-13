@@ -83,6 +83,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-legacy-ids",
     "tide-corpus-legacy-id-error",
     "tide-corpus-splunk-advanced",
+    "tide-corpus-legacy-text-id",
     "vscode",
     "setup-merge",
     "skills-merge",
@@ -253,7 +254,8 @@ pub fn fixture(name: &str, ws: &Path) {
         "tide-corpus-cve"
         | "tide-corpus-legacy-ids"
         | "tide-corpus-legacy-id-error"
-        | "tide-corpus-splunk-advanced" => {
+        | "tide-corpus-splunk-advanced"
+        | "tide-corpus-legacy-text-id" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }

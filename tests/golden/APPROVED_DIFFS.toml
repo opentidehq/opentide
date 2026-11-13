@@ -13831,3 +13831,27 @@ candidate = "{\"382\": {\"schema\": \"rule::1.0\", \"path\": \"configurations.sp
 reason = "0.24.0 (#878): a Splunk block's advanced table is a field of the platform::splunk::1.0 layout again (rule::1.0 and rule::1.1), so the language server's field catalog lists it, hidden; the oracle (0.23.0) refused it as a splunk::2.x key and its catalog had no such field"
 issue = "https://github.com/opentidehq/opentide/issues/878"
 changelog = "**A Splunk block's `advanced` table validates and deploys again**"
+
+# #913: a text id under a legacy rule_id::<tenant> key is external_id_in_rule, where the oracle crashed (its crash log is not written: the case's XDG_STATE_HOME).
+
+[[diff]]
+command = "validate"
+case = "validate/json/tide-corpus-legacy-text-id/legacy-text-id"
+target = "stdout"
+rule = "json:"
+oracle = "{\"error\":\"ValueError: invalid literal for int() with base 10: 'prod'\",\"ok\":false,\"status\":\"failed\",\"message\":\"ValueError: invalid literal for int() with base 10: 'prod'\",\"schema_version\":1,\"command\":\"validate\",\"duration_ms\":0,\"exit_code\":1,\"summary\":{},\"next_actions\":[],\"failure\":{\"code\":\"internal\",\"message\":\"ValueError: invalid literal for int() with base 10: 'prod'\",\"argument\":null,\"suggestion\":null,\"crash_log\":null}}"
+candidate = "{\"checks\":{\"id-uniqueness\":{\"check\":\"id-uniqueness\",\"status\":\"passed\"},\"uuid-format\":{\"check\":\"uuid-format\",\"status\":\"passed\"},\"schema\":{\"check\":\"schema\",\"status\":\"failed\"},\"configuration\":{\"check\":\"configuration\",\"status\":\"passed\"},\"queries\":{\"check\":\"queries\",\"status\":\"passed\"}},\"report\":{\"ok\":false,\"issues\":[{\"code\":\"external_id_in_rule\",\"severity\":\"error\",\"object_uuid\":\"00000000-0000-4000-8003-0000005d1a90\",\"object_type\":\"rule\",\"file_path\":\"<WS>/Objects/Detection Rules/rule-0013-sysdig-falco.yaml\",\"yaml_line\":24,\"field_path\":[\"configurations\",\"sysdig\",\"rule_id::prod\"],\"message\":\"Vendor rule id key 'rule_id::prod' is not allowed on the sysdig block; external ids live in .opentide/states/deployment/<uuid>.json\",\"suggestion\":\"Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/\",\"context\":{},\"path\":\"Objects/Detection Rules/rule-0013-sysdig-falco.yaml\",\"line\":25,\"column\":21,\"end_line\":25,\"end_column\":23,\"help\":\"Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/\",\"fix\":null,\"explain\":\"opentide explain external_id_in_rule\"}],\"warnings\":[],\"stats\":{\"objects_checked\":12,\"parallel\":false,\"workers\":0,\"object_workers\":0,\"id_workers\":0,\"queries_checked\":8,\"wall_ms\":0.0}},\"workspace\":\"<WS>\",\"ok\":false,\"status\":\"failed\",\"message\":\"Validation failed\",\"error\":\"Validation failed\",\"schema_version\":1,\"command\":\"validate\",\"duration_ms\":0,\"exit_code\":1,\"summary\":{\"objects\":12,\"errors\":1,\"warnings\":0,\"files\":1,\"warning_files\":0,\"queries\":8,\"fixable\":0},\"next_actions\":[{\"command\":\"opentide --json explain external_id_in_rule\",\"reason\":\"how to fix it\"},{\"command\":\"opentide --json validate\",\"reason\":\"check again\"}],\"failure\":{\"code\":\"issues_found\",\"message\":\"Validation failed\",\"argument\":null,\"suggestion\":null,\"crash_log\":null}}"
+reason = "0.26.0 (#913): a legacy rule_id::<tenant> key whose id is text is external_id_in_rule on a block that refuses unknown keys (Sysdig); the oracle (0.23.0) read the key's tenant as a schema version looking for a vocabulary suggestion and crashed"
+issue = "https://github.com/opentidehq/opentide/issues/913"
+changelog = "**`validate` no longer crashes on a legacy external-id key with a text value**"
+
+[[diff]]
+command = "validate"
+case = "validate/json/tide-corpus-legacy-text-id/legacy-text-id"
+target = "stderr"
+rule = "lines"
+oracle = "error[internal]: ValueError: invalid literal for int() with base 10: 'prod'\n  note: no crash log written: NotADirectoryError: [Errno 20] Not a directory: '/dev/null/opentide-golden/opentide'\n  help: this is a bug in opentide; report it: https://github.com/opentidehq/opentide/issues/new?title=Crash+in+opentide+validate&body=%23%23%23+What+happened%0A%0A%3C%21--+What+you+ran+and+what+you+expected.+--%3E%0A%0A%23%23%23+Environment%0A%0A-+opentide%3A+0.23.0%0A-+Python%3A+3.13.14+%28CPython%29%0A-+OS%3A+Linux+<KERNEL>+%28x86_64%29%0A-+Command%3A+%60opentide+validate%60%0A%0A%23%23%23+Crash+log%0A%0A%3C%21--+Attach+the+crash+log+opentide+printed.+Credentials%2C+tokens+and+tenant+names+are+redacted%3B+read+it+before+you+attach+it.+--%3E\n  help: add --debug to see the traceback"
+candidate = "(absent)"
+reason = "0.26.0 (#913): a legacy rule_id::<tenant> key whose id is text is external_id_in_rule on a block that refuses unknown keys (Sysdig); the oracle (0.23.0) read the key's tenant as a schema version looking for a vocabulary suggestion and crashed"
+issue = "https://github.com/opentidehq/opentide/issues/913"
+changelog = "**`validate` no longer crashes on a legacy external-id key with a text value**"
