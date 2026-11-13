@@ -610,6 +610,9 @@ fn analyze_injections(
     injections: Vec<InjectedQuery>,
 ) -> Vec<QueryAnalysis> {
     let mut out = Vec::with_capacity(injections.len());
+    // Every token and finding of every query is placed in the file: one
+    // index of its lines, not a scan from the start for each (#817).
+    let lines = opentide_core::LineIndex::new(source);
     for inj in injections {
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
@@ -712,12 +715,12 @@ fn analyze_injections(
         // not a query to check: `opentide validate` skips it too.
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
         if !placeholder::is_placeholder_query(source, &inj) {
-            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(source, &inj, d)));
+            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(&lines, &inj, d)));
             diagnostics.extend(extra);
         }
         let tokens = query_tokens
             .iter()
-            .filter_map(|t| remap_token(source, &inj, t))
+            .filter_map(|t| remap_token(&lines, &inj, t))
             .collect();
         out.push(QueryAnalysis {
             query: inj,
@@ -728,11 +731,15 @@ fn analyze_injections(
     out
 }
 
-fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
+fn remap_diagnostic(
+    lines: &opentide_core::LineIndex<'_>,
+    inj: &InjectedQuery,
+    mut d: Diagnostic,
+) -> Diagnostic {
     let start = inner_offset(&inj.inner, d.range.start);
     let end = inner_offset(&inj.inner, d.range.end).max(start + 1);
     let span = remap_span(inj, ByteSpan::new(start, end));
-    d.range = span_to_range(source, span);
+    d.range = lines.range(span);
     if d.field_path.is_none() {
         d.field_path = Some(inj.field_path.clone());
     }
@@ -765,14 +772,14 @@ fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
 }
 
 fn remap_token(
-    source: &str,
+    lines: &opentide_core::LineIndex<'_>,
     inj: &InjectedQuery,
     token: &HighlightToken,
 ) -> Option<HighlightToken> {
     let mapped = remap_span(inj, token.span);
     Some(HighlightToken {
         span: mapped,
-        range: span_to_range(source, mapped),
+        range: lines.range(mapped),
         capture: token.capture.clone(),
         token_type: token.token_type,
     })
