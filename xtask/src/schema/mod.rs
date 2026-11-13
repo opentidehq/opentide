@@ -198,6 +198,31 @@ fn since_oracle_model_prefixes() -> Vec<String> {
         .collect()
 }
 
+/// `schema` without the `SINCE_ORACLE` platforms' blocks: a platform the train
+/// ports onto the recorded oracle (0.23.0) is a property of the rule's
+/// `configurations` (`RuleConfigurations`, and each `DetectionRule` revision
+/// inline), which the oracle's models lack. Their ids name no other property.
+fn without_since_oracle_properties(schema: &mut Value) {
+    match schema {
+        Value::Object(map) => {
+            if let Some(Value::Object(properties)) = map.get_mut("properties") {
+                properties.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
+            }
+            if let Some(Value::Array(required)) = map.get_mut("required") {
+                required.retain(|key| {
+                    !key.as_str()
+                        .is_some_and(opentide_schema::platforms::after_oracle)
+                });
+            }
+            for value in map.values_mut() {
+                without_since_oracle_properties(value);
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(without_since_oracle_properties),
+        _ => {}
+    }
+}
+
 /// Compares the oracle's schemas (`probe.py schemas`) with the models'. The
 /// differences by model; an empty list passes.
 pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
@@ -231,6 +256,8 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         let pydantic = oracle["schemas"]
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
+        let mut rust = rust;
+        without_since_oracle_properties(&mut rust);
         let a = normalise(pydantic, Side::Pydantic, &[]);
         let b = normalise(&rust, Side::Schemars, &[]);
         out.push((name.to_owned(), differences(&a, &b)));
@@ -464,6 +491,25 @@ mod tests {
         let options = parse(&args(&["--against", "python", "--only", "schemas"])).unwrap();
         assert_eq!(options.only, Some(Only::Schemas));
         assert!(parse(&args(&["--against", "python", "--only", "x"])).is_err());
+    }
+
+    #[test]
+    fn a_since_oracle_platform_block_is_left_out_of_the_rule_schemas() {
+        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
+        let mut schema = serde_json::json!({
+            "properties": {"configurations": {"properties": {
+                platform: {"type": "object"}, "sentinel": {"type": "object"}
+            }, "required": [platform, "sentinel"]}}
+        });
+        without_since_oracle_properties(&mut schema);
+        assert_eq!(
+            schema,
+            serde_json::json!({
+                "properties": {"configurations": {"properties": {
+                    "sentinel": {"type": "object"}
+                }, "required": ["sentinel"]}}
+            })
+        );
     }
 
     #[test]

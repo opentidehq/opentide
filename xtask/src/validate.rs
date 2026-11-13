@@ -477,6 +477,42 @@ fn online_cve(
 }
 
 /// Runs one case; its differences.
+/// The `deployment_state_platform` findings of `report` with the platforms
+/// the recorded oracle (0.23.0) lacks (`opentide_schema::platforms::SINCE_ORACLE`)
+/// left out of their "only <platforms> store external ids" list: a platform
+/// the train ports that stores external ids is named there, and the oracle
+/// cannot name it. O2's oracle does, and `SINCE_ORACLE` is empty then.
+fn without_since_oracle_state_platforms(report: &mut Json) {
+    const LEAD: &str = "; only ";
+    const TAIL: &str = " store external ids";
+    for key in ["issues", "warnings"] {
+        let Some(findings) = report.get_mut(key).and_then(Json::as_array_mut) else {
+            continue;
+        };
+        for finding in findings {
+            if finding.get("code").and_then(Json::as_str) != Some("deployment_state_platform") {
+                continue;
+            }
+            let Some(message) = finding.get("message").and_then(Json::as_str) else {
+                continue;
+            };
+            let (Some(start), Some(end)) = (message.find(LEAD), message.rfind(TAIL)) else {
+                continue;
+            };
+            let from = start + LEAD.len();
+            if from > end {
+                continue;
+            }
+            let kept: Vec<&str> = message[from..end]
+                .split(", ")
+                .filter(|id| !opentide_schema::platforms::after_oracle(id))
+                .collect();
+            let rewritten = format!("{}{}{}", &message[..from], kept.join(", "), &message[end..]);
+            finding["message"] = Json::String(rewritten);
+        }
+    }
+}
+
 fn run_case(
     case: &Case,
     ws: &Path,
@@ -550,7 +586,8 @@ fn run_case(
     };
     let root = ws.to_string_lossy().into_owned();
     let text = crate::payloads::placeholder(&serde_json::to_string(&validation.report)?, ws);
-    let rust: Json = serde_json::from_str(&text)?;
+    let mut rust: Json = serde_json::from_str(&text)?;
+    without_since_oracle_state_platforms(&mut rust);
     let list = |report: &Json, key: &str| -> Vec<Json> {
         report[key].as_array().cloned().unwrap_or_default()
     };
@@ -990,6 +1027,26 @@ mod tests {
             "object_uuid": value,
             "message": format!("UUID '{value}' is not a valid UUIDv4"),
         })
+    }
+
+    #[test]
+    fn a_state_platform_the_oracle_lacks_is_left_out_of_the_message() {
+        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
+        let message = |list: &str| {
+            format!("<WS>/s.json names platform 'splunk'; only {list} store external ids")
+        };
+        let mut report = json!({"issues": [
+            {"code": "deployment_state_platform",
+             "message": message(&format!("{platform}, crowdstrike, sysdig"))},
+            {"code": "other", "message": message(platform)},
+        ]});
+        without_since_oracle_state_platforms(&mut report);
+        assert_eq!(
+            report["issues"][0]["message"],
+            json!(message("crowdstrike, sysdig"))
+        );
+        // Another code's message is left as it is.
+        assert_eq!(report["issues"][1]["message"], json!(message(platform)));
     }
 
     #[test]

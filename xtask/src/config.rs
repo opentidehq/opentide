@@ -174,16 +174,17 @@ fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
     // the oracle lacks; leave each such platform out where the oracle has none
     // (`opentide_schema::platforms::SINCE_ORACLE`). O2's oracle has them. On
     // 0.23.0 output none is present, so this changes nothing until a row lands.
-    if let Some(platforms) = rust
-        .pointer_mut("/resolved/platforms")
-        .and_then(Json::as_object_mut)
-    {
-        platforms.retain(|id, _| {
-            !opentide_schema::platforms::after_oracle(id)
-                || oracle
-                    .pointer(&format!("/resolved/platforms/{id}"))
-                    .is_some()
-        });
+    // `systems` is the same tables under the configuration's older name.
+    for table in ["platforms", "systems"] {
+        if let Some(platforms) = rust
+            .pointer_mut(&format!("/resolved/{table}"))
+            .and_then(Json::as_object_mut)
+        {
+            platforms.retain(|id, _| {
+                !opentide_schema::platforms::after_oracle(id)
+                    || oracle.pointer(&format!("/resolved/{table}/{id}")).is_some()
+            });
+        }
     }
     (oracle.clone(), rust)
 }
@@ -433,6 +434,24 @@ mod tests {
             platform: {"enabled": false}, "sentinel": {"enabled": true}
         }}, "issues": []});
         let (compared_oracle, compared_rust) = comparable(&oracle_has, &rust);
+        assert_ne!(compared_oracle, compared_rust);
+    }
+
+    #[test]
+    fn a_platform_the_oracle_lacks_is_left_out_of_resolved_systems() {
+        // `systems` holds the same tables as `platforms` (its older name).
+        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
+        let rust = json!({"resolved": {"systems": {
+            platform: {"platform": {"enabled": false}}, "sentinel": {"enabled": true}
+        }}, "issues": []});
+        let oracle =
+            json!({"resolved": {"systems": {"sentinel": {"enabled": true}}}, "issues": []});
+        let (compared_oracle, compared_rust) = comparable(&oracle, &rust);
+        assert_eq!(compared_oracle, compared_rust);
+        // A difference in a platform the oracle knows still shows.
+        let other =
+            json!({"resolved": {"systems": {"sentinel": {"enabled": false}}}, "issues": []});
+        let (compared_oracle, compared_rust) = comparable(&other, &rust);
         assert_ne!(compared_oracle, compared_rust);
     }
 
