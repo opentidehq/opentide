@@ -221,7 +221,7 @@ Every rule query is checked offline with the analysis engine, as `opentide valid
       "file_path": "/work/detections/objects/rules/sentinel-kql-rule.yaml",
       "yaml_line": 7,
       "field_path": ["metadata", "tlp"],
-      "message": "Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry",
+      "message": "Value \"clearr\" is not a valid \"tlp::1.0\" vocabulary entry",
       "suggestion": "clear",
       "context": { "vocab": "tlp::1.0", "value": "clearr" },
       "path": "objects/rules/sentinel-kql-rule.yaml",
@@ -229,7 +229,7 @@ Every rule query is checked offline with the analysis engine, as `opentide valid
       "column": 8,
       "end_line": 8,
       "end_column": 14,
-      "help": "did you mean 'clear'?",
+      "help": "did you mean \"clear\"?",
       "fix": {
         "safe": false,
         "edits": [
@@ -280,7 +280,7 @@ Each entry of `issues` and `warnings` (and of `validate_rule`'s `issues`) carrie
 | `object_uuid` | Already on every issue: the object at fault, or `""` |
 | `column`, `end_column` | 1-based Unicode code points, best effort; `end_column` is one past the last character, on `end_line`. `null` when unknown. |
 | `end_line` | 1-based line of the last character: equal to `line` for a span on one line, later for a query finding over several lines. `null` when `line` is. |
-| `help` | A suggestion in prose (`did you mean 'clear'?`), or `null` |
+| `help` | A suggestion in prose (`did you mean "clear"?`), or `null` |
 | `fix` | `{safe, edits: [{line, column, end_line, end_column, replacement}]}` or `null`. Each edit replaces the text from (`line`, `column`) up to (`end_line`, `end_column`). `safe` is `true` only when the value and the replacement spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit: apply those as they are. Check any other edit against `help` first; `clearr` → `clear` is not safe, and an ATT&CK id or an `invalid_ref` fix never is. See [`validate`](../cli/validate.md). |
 | `explain` | `opentide explain <code>`; the `explain` tool returns the same page |
 

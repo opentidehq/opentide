@@ -81,7 +81,7 @@ fn exports_before_a_failure_are_written() {
     let stdout = String::from_utf8(out).unwrap();
     assert_eq!(exit_code, 1, "{stdout}");
     assert!(
-        stdout.contains("\"message\":\"exports: KeyError: 'version' while rendering 00000000-0000-4000-8001-000000000001\""),
+        stdout.contains(r#""message":"exports: KeyError: \"version\" while rendering 00000000-0000-4000-8001-000000000001""#),
         "{stdout}"
     );
     let exports = ws.join(".opentide/exports");
@@ -301,7 +301,7 @@ fn setup_ci_refuses_then_writes() {
         failure(&stdout)["message"]
             .as_str()
             .unwrap()
-            .starts_with("Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+            .starts_with("Invalid value for '--promotion-target': \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
         "{stdout}"
     );
     assert!(!ws.join(".github").exists());
@@ -389,7 +389,7 @@ fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
         document(&stdout)["failure"]["message"]
             .as_str()
             .unwrap()
-            .starts_with("Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+            .starts_with("Invalid value for '--promotion-target': \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
         "{stdout}"
     );
 }
@@ -1339,7 +1339,7 @@ fn the_full_pipeline_names_the_nested_files_it_skipped() {
             "warning: Nested object file · detail: 1 object file(s) in subfolders of an object \
              folder are not object instances and are skipped (opentide reads only files \
              directly in each object folder; see {issue}): {path} · count: 1 · files: \
-             ['{path}'] · issue: {issue}\n"
+             [\"{path}\"] · issue: {issue}\n"
         )),
         "{stderr}"
     );

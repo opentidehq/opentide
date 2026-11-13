@@ -46,8 +46,16 @@ fn check(fixture: &str, target: Target, case: &str) {
     if code != 0 {
         let stdout = std::fs::read_to_string(golden::case(case).join("stdout")).unwrap();
         let error = result.unwrap_err();
+        // The failure is the oracle's but for the quotes around the key it
+        // names (APPROVED_DIFFS.toml, **Messages quote values the same way
+        // everywhere**): Rust's where the oracle's were Python's repr.
+        let unquoted = |text: &str| -> String {
+            text.chars()
+                .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+                .collect()
+        };
         assert!(
-            stdout.contains(&format!("\"message\":\"exports: {error}\"")),
+            unquoted(&stdout).contains(&unquoted(&format!("\"message\":\"exports: {error}\""))),
             "{case}: {error} is not the oracle's failure: {stdout}"
         );
         return;

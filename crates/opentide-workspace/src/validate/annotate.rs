@@ -610,11 +610,11 @@ mod tests {
         );
         assert_eq!(
             value_message(&setting("responders"), "soc").as_deref(),
-            Some("'soc' is not a configured responder")
+            Some("\"soc\" is not a configured responder")
         );
         assert_eq!(
             value_message(&setting("tiers"), "t9").as_deref(),
-            Some("'t9' is not a configured tiers")
+            Some("\"t9\" is not a configured tiers")
         );
         assert_eq!(
             value_message(&Diagnostic::error("invalid_ref", "x"), "v"),

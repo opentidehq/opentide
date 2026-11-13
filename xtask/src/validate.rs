@@ -127,6 +127,14 @@ pub const APPROVED: &[Approved] = &[
                     query Next-Gen SIEM would refuse**",
         applies: crowdstrike_cql,
     },
+    Approved {
+        id: "messages-quote-values",
+        reason: "a message and its help quote a value in double quotes with Rust's escapes, \
+                 where the oracle used Python's repr ('x', None, True): the finding is the \
+                 same but for the quote characters around its values",
+        changelog: "**Messages quote values the same way everywhere**",
+        applies: crate::lint::quoting_only,
+    },
 ];
 
 /// The parts of a `--fix` case no approved finding explains.

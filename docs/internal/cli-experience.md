@@ -116,14 +116,14 @@ A **diagnostic** is the shape every finding takes: validation issues, lint findi
 Rendered in `human` and `plain`:
 
 ```
-error[vocab_unknown]: 'clearr' is not a TLP value
+error[vocab_unknown]: "clearr" is not a TLP value
   ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
 8 │   tlp: clearr
   │        ━━━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean 'clear'?
+  ╰─ help: did you mean "clear"?
 ```
 
 One finding per cause: an `invalid_ref` and a `vocab_unknown` on the same field and value merge into the `invalid_ref`. YAML parse errors name the file and position, never `<unicode string>`.
@@ -305,7 +305,7 @@ The whole CLI rework is merged: the output contract (#619), diagnostics and `exp
 | MCP | Built (#623). `validate_rule` (`issues`) and `validation_report` (`issues`, `warnings`) gain the diagnostic fields through `annotate_report()`, like `validate`. `next_actions` are `{tool, arguments, command, reason}`: the MCP call, plus the CLI's `{command, reason}`. They appear on `validate_rule`, `validation_report` and a refused `validate_query`; other payloads are unchanged. A result with errors points at `explain` for the first error code (each issue's `explain` field names its own), then at the same validation again: within the CLI's three next steps. Every `command` runs: the deploy step passes the `--strategy` values that deploy the rule's status on that platform and `--all` (none for `INERT`), the live query step's reason says it contacts the tenant and to ask first, and an unknown rule points at `search` with an empty query. `validate_query`'s description takes its platforms from `QUERY_VALIDATION_PLATFORMS`. `explain(code)` returns the CLI's `{code, meaning, markdown}` with `found`; an empty code lists every code. The server `instructions` (`INSTRUCTIONS` in `opentide.mcp_server.server`) carry the tagline and the agent workflow. |
 | Agent instruction files | Built (#623). `AGENTS.md.template`, `CLAUDE.md.template`, `copilot-instructions.md`, the `detection-workflow` pack (named `detection-ops` before #634, which still resolves through an alias) and the four authoring skills tell agents to run `opentide --json …`, branch on the exit code first and read `failure.code` for the detail, apply `fix`, follow `next_actions` and use `opentide explain`. The Quick start deploy line is `opentide deploy --dry-run --strategy PREVIEW --all`. `tests/test_cli/test_agent_instructions.py` parses every command they, the MCP `next_actions`, `INSTRUCTIONS` and the agent docs quote with Click's `make_context` (unknown options, bad choices, extra arguments and missing required options fail), and `tests/test_cli/e2e/test_agent_commands_e2e.py` runs the read-only ones on the tutorial workspace and asserts no exit 2. |
 | Suggestions | A value that spells an allowed one in another case or with other separators (`AMBER`, `localised_incident`) is suggested outright, with a safe fix; otherwise `difflib` compares the values without case (`opentide.validation.vocab_resolver.closest_value`). A platform block's `status` is checked against `[[statuses]]` (deploy matches it by exact name), so `design` is a `config_enum_unknown` error with a safe fix to `DESIGN`. App-level `did you mean` (`contract.did_you_mean`) is not changed here. |
-| Diagnostic messages | The printed message is the spec's wording (`'clearr' is not a TLP value`, `missing required field 'description'`, `'design' is not a configured status`); the JSON `message` of each issue keeps the engine's sentence. A missing top-level field is framed at the file's first key. |
+| Diagnostic messages | The printed message is the spec's wording (`"clearr" is not a TLP value`, `missing required field "description"`, `"design" is not a configured status`); the JSON `message` of each issue keeps the engine's sentence. A missing top-level field is framed at the file's first key. |
 | Files the user must fix | A TOML syntax error under `.opentide/configurations/` raises `ConfigFileError`, and an object file that `deploy` reads but is not one mapping raises `ObjectFileError` (both `opentide.core.errors.UserFileError`). `LazyTyperGroup.invoke` renders it as a frame (`config_parse`, `yaml_parse`) and exits 1 with that `failure.code`; the JSON document carries it under `diagnostics`. The outcome is `✗ 1 configuration file does not parse`. |
 | `next_actions` on a failed `validate` | `opentide explain <first code>` ("how to fix it"), then `opentide validate` (`opentide --json validate` in JSON), like MCP's `validation_report`. When a fix is safe, the MCP re-run step is `opentide --json validate --fix …` (#646); the CLI's own next steps keep `opentide validate`, and its outcome line says `N fixable with --fix`. |
 | `explain` pages | Failure codes have pages too (principle 4), so `opentide explain` lists both kinds and counts them as `diagnostic codes`. `config_parse` covers every configuration TOML, not only `sharing.toml`. |
