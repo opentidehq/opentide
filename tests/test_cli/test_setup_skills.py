@@ -667,15 +667,74 @@ def test_a_bundled_slug_the_catalogue_lists_installs_the_catalogue_copy(
     assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# catalogue copy\n"
 
 
-def test_a_catalogued_bundled_slug_falls_back_to_the_package_offline(
+def test_a_catalogued_bundled_slug_falls_back_to_the_package_and_says_so(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _catalogue_download(monkeypatch, reachable=False)
     dest = tmp_path / "detection-engineering"
+    warnings: list[str] = []
     skills_mod._download_skill(
-        "detection-engineering", dest, source="opentidehq/skills", ref="main", catalogued=True
+        "detection-engineering",
+        dest,
+        source="opentidehq/skills",
+        ref="main",
+        catalogued=True,
+        warnings=warnings,
     )
     assert "rule::1.1" in (dest / "SKILL.md").read_text(encoding="utf-8")
+    assert len(warnings) == 1 and "short packaged copy" in warnings[0]
+
+
+def test_a_failed_download_keeps_the_installed_catalogue_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A rate-limited rerun replaced the catalogue's 391-line skill with the primer."""
+    _catalogue_download(monkeypatch, reachable=False)
+    dest = tmp_path / "detection-engineering"
+    dest.mkdir()
+    (dest / "SKILL.md").write_text("# full catalogue skill\n", encoding="utf-8")
+    warnings: list[str] = []
+    written = skills_mod._download_skill(
+        "detection-engineering",
+        dest,
+        source="opentidehq/skills",
+        ref="main",
+        catalogued=True,
+        warnings=warnings,
+    )
+    assert written == []
+    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# full catalogue skill\n"
+    assert len(warnings) == 1 and warnings[0].startswith("Kept the installed")
+
+
+def test_a_packaged_slug_the_catalogue_lists_again_still_installs_the_package_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """#405: the catalogue listed opentide-detection-rule with mdr:: content."""
+    listed = _catalogue_download(monkeypatch, reachable=True)
+    dest = tmp_path / "opentide-detection-rule"
+    skills_mod._download_skill(
+        "opentide-detection-rule", dest, source="opentidehq/skills", ref="main", catalogued=True
+    )
+    assert listed == []
+    assert "rule::1.1" in (dest / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_setup_reports_a_package_fallback_in_its_warnings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _catalogue_download(monkeypatch, reachable=False)
+    result = run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            skill_slugs=["detection-engineering"],
+            yes=True,
+        )
+    )
+    warnings = result.get("warnings")
+    assert isinstance(warnings, list)
+    assert any("detection-engineering" in line for line in warnings)
 
 
 def test_a_bundled_slug_the_catalogue_omits_never_touches_the_network(

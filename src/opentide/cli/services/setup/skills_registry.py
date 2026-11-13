@@ -47,10 +47,8 @@ class SkillEntry:
 
 
 #: Authoring skills that ship inside the wheel, under
-#: ``data/setup/skills/authoring/<slug>/``. One the catalogue does not list installs
-#: from the package with no network access; one it does (``detection-engineering``)
-#: installs the catalogue's copy, which ``discover`` describes, and falls back to the
-#: package when the download fails. Either way they must stay nameable and
+#: ``data/setup/skills/authoring/<slug>/``. They install from the package with no
+#: download, except ``CATALOGUE_FIRST_SKILLS`` (below). Either way they must stay nameable and
 #: discoverable regardless of what the remote catalogue happens to list.
 #:
 #: They were previously known only through the remote manifest. When
@@ -83,6 +81,13 @@ BUNDLED_AUTHORING_ENTRIES: tuple[SkillEntry, ...] = (
 
 #: Slugs of the above, for the install path's package/remote branch.
 BUNDLED_AUTHORING_SKILLS = frozenset(entry.slug for entry in BUNDLED_AUTHORING_ENTRIES)
+
+#: Packaged skills that install the catalogue's copy when the catalogue lists the
+#: slug, keeping the package's as a fallback: the catalogue's is the one ``discover``
+#: and ``show`` describe. Named, not inferred from the catalogue, so a slug the
+#: catalogue starts listing again (``opentide-detection-rule`` once taught
+#: ``mdr::`` that way, #405) keeps installing the package's copy.
+CATALOGUE_FIRST_SKILLS = frozenset({"detection-engineering"})
 
 
 def _merge_bundled(entries: list[SkillEntry]) -> list[SkillEntry]:
