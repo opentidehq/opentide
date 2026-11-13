@@ -6,6 +6,10 @@
 //! sends `exit` or closes stdin. Nothing else may write to stdout meanwhile.
 //! [`MessageSession`] is the same server for a host with no stdio (the
 //! browser build, `opentide-wasm`): one JSON-RPC message in, its replies out.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
+//! `lsp` feature).
 
 mod checks;
 mod handlers;

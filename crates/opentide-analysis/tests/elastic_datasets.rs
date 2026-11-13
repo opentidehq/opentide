@@ -9,7 +9,7 @@
 
 use opentide_analysis::{
     AnalyzeRequest, Catalog, Diagnostic, LanguageId, MemoryWorkspace, QueryRequest, Severity,
-    analyze, analyze_queries, analyze_query, codes, install_catalog,
+    analyze, analyze_blocks, analyze_queries, analyze_query, codes, install_catalog,
 };
 
 const DATASETS: &str = r#"[[logsources]]
@@ -50,19 +50,26 @@ fn esql(text: &str) -> Vec<Diagnostic> {
     })
 }
 
+/// The rule's queries and its platform blocks: the declared datasets are
+/// the Elastic block's, which `lint` reports and the editor leaves to it
+/// (UC-2.6, #821).
 fn tide(block: &str) -> (String, Vec<Diagnostic>) {
     let source = format!(
         "name: Dataset rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  elastic:\n{block}"
     );
+    let host = MemoryWorkspace::default();
     let found = analyze(
-        &MemoryWorkspace::default(),
+        &host,
         AnalyzeRequest {
             uri: "objects/rules/dataset-rule.yaml".into(),
             language: LanguageId::TideYaml,
             text: source.clone(),
         },
     )
-    .diagnostics;
+    .diagnostics
+    .into_iter()
+    .chain(analyze_blocks(&host, &source))
+    .collect();
     (source, found)
 }
 

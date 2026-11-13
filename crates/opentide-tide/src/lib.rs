@@ -379,7 +379,6 @@ impl IndexedObject {
 pub struct AnalyzeInput<'a> {
     pub path: &'a str,
     pub source: &'a str,
-    pub workspace: &'a [IndexedObject],
     /// Tenants from `.opentide/configurations/platforms/elastic.toml`, for
     /// the stack version Elastic queries are checked against.
     pub elastic_tenants: &'a [ElasticTenant],
@@ -426,44 +425,26 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     };
 
     // The object's own checks (schema, vocabularies, UUIDs, references,
-    // chaining, deprecated fields) are `opentide-workspace`'s `validate`:
-    // the language server reports its findings (UC-2.6, #821). What stays
-    // here reads the platform blocks and the queries they carry.
+    // chaining, deprecated fields) and its platform blocks' are
+    // `opentide-workspace`'s `validate` and `lint`: the language server
+    // reports their findings and has no check of its own (UC-2.6, #821;
+    // the blocks are [`block_diagnostics`], which only `lint` reads). What
+    // stays here is the queries the blocks carry.
     let schema = object_schema_id(&object);
     let object_type = schema.split("::").next().unwrap_or("").to_string();
-
-    if object_type == "rule"
-        && object
-            .configurations
-            .as_ref()
-            .is_some_and(|c| c.get("elastic").is_some())
-    {
-        if let Some(rule) = &root {
-            diagnostics.extend(elastic::block_advisories(
-                input.source,
-                rule,
-                input.workspace,
-            ));
-        }
-    }
-
-    if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
-        diagnostics.extend(falco::source_diagnostics(input.source, block));
-        diagnostics.extend(falco::tuning_diagnostics(input.source, block));
-        diagnostics.extend(sysdig::constraint_diagnostics(input.source, block));
-        diagnostics.extend(falco::exception_diagnostics(input.source, block));
-    }
 
     // Injected query analysis
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
-    for query in analyze_injections(
+    let mut queries = analyze_injections(
         input.source,
         object.configurations.as_ref(),
         input.elastic_tenants,
         injections,
-    ) {
+    );
+    attach_to_queries(input.source, object.configurations.as_ref(), &mut queries);
+    for query in queries {
         diagnostics.extend(query.diagnostics);
         tokens.extend(query.tokens);
     }
@@ -475,6 +456,51 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         tokens,
         symbols,
     }
+}
+
+/// What a rule's platform blocks say that no query of theirs carries: the
+/// Elastic block's advisories, the Sysdig block's tuning and list
+/// advisories, and, when the block has no query to carry them (none, or a
+/// placeholder), its declared datasets, event source and exceptions.
+///
+/// `opentide lint` reports these (the advisory codes it owns); `validate`
+/// reports the block's constraints as the object's schema check, and the
+/// language server reports `validate`'s findings and the queries' analysis,
+/// so [`analyze`] leaves them out: the editor walking the blocks too showed
+/// one fault twice (UC-2.6, #821). Spans and ranges are in the text after a leading byte-order mark
+/// ([`opentide_core::strip_bom`]).
+pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
+    let source = opentide_core::strip_bom(source);
+    let mut out = Vec::new();
+    let Some(root) = yaml::parse(source) else {
+        return out;
+    };
+    let Some(object) = TideObject::from_node(source, &root) else {
+        return out;
+    };
+    let object_type = object_schema_id(&object);
+    let object_type = object_type.split("::").next().unwrap_or("");
+    let configurations = object.configurations.as_ref();
+    if let Some(block) = configurations.and_then(|c| c.get("elastic")) {
+        if !carried(source, ELASTIC_QUERY) {
+            out.extend(elastic::dataset_declarations(source, block));
+        }
+        if object_type == "rule" {
+            out.extend(elastic::block_advisories(source, &root, workspace));
+        }
+    }
+    if let Some(block) = configurations.and_then(|c| c.get("sysdig")) {
+        let carried = carried(source, SYSDIG_CONDITION);
+        if !carried {
+            out.extend(falco::source_diagnostics(source, block));
+        }
+        out.extend(falco::tuning_diagnostics(source, block));
+        out.extend(sysdig::list_self_references(source, block));
+        if !carried {
+            out.extend(falco::exception_diagnostics(source, block));
+        }
+    }
+    out
 }
 
 /// One query injected into a Tide object, analyzed in its language. Ranges and
@@ -501,33 +527,81 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
         elastic_tenants,
         extract_injections(source),
     );
-    // The datasets the Elastic block reads (`index`, `threat.index`,
-    // `data_view_id`) are its query's, so `opentide validate` reports them as
-    // the editor does, except on a placeholder query, which validate skips
-    // (the editor still reports them on the block).
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
-        if let Some(query) = out.iter_mut().find(|q| {
-            q.query.field_path == ["configurations", "elastic", "query"]
-                && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
+    attach_to_queries(source, configurations.as_ref(), &mut out);
+    out
+}
+
+/// The block findings a query carries: the datasets the Elastic block
+/// reads (`index`, `threat.index`, `data_view_id`) are its query's, and the
+/// Sysdig block's event source and exceptions its condition's (Falco
+/// appends the exceptions to the condition when it loads the rule). A
+/// placeholder query carries none: `opentide validate` skips it, and
+/// [`block_diagnostics`] reports them on the block instead.
+fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut [QueryAnalysis]) {
+    let carrier = |out: &mut [QueryAnalysis], path: [&str; 3]| -> Option<usize> {
+        out.iter().position(|q| {
+            q.query.field_path == path && !placeholder::is_placeholder_query(source, &q.query)
+        })
+    };
+    if let Some(block) = configurations.and_then(|c| c.get("elastic")) {
+        if let Some(at) = carrier(out, ELASTIC_QUERY) {
+            out[at]
                 .diagnostics
                 .extend(elastic::dataset_declarations(source, block));
         }
     }
-    // An unknown event source is the condition's: its fields go unchecked.
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig")) {
-        if let Some(query) = out.iter_mut().find(|q| {
-            q.query.field_path == ["configurations", "sysdig", "condition"]
-                && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
+    if let Some(block) = configurations.and_then(|c| c.get("sysdig")) {
+        if let Some(at) = carrier(out, SYSDIG_CONDITION) {
+            out[at]
                 .diagnostics
                 .extend(falco::source_diagnostics(source, block));
+            out[at]
+                .diagnostics
+                .extend(exceptions_beyond_the_model(source, block));
         }
     }
-    out
 }
+
+/// Falco's findings on the Sysdig block's exceptions, but on an exception
+/// whose shape the model refuses: `validate` reports that one as the block's
+/// `sysdig_exception_shape`, and Falco's own finding would show the fault
+/// twice (UC-2.6, #821).
+fn exceptions_beyond_the_model(source: &str, block: &Node) -> Vec<Diagnostic> {
+    use opentide_schema::objects::platform::sysdig::{block_codes, exception_shape_ok};
+    let refused: Vec<String> = if block_codes(block).contains("sysdig_exception_shape") {
+        block
+            .get("exceptions")
+            .and_then(|e| e.as_sequence())
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| !exception_shape_ok(entry))
+            .map(|(index, _)| index.to_string())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    falco::exception_diagnostics(source, block)
+        .into_iter()
+        .filter(|d| {
+            d.field_path
+                .as_deref()
+                .and_then(|path| path.get(3))
+                .is_none_or(|index| !refused.contains(index))
+        })
+        .collect()
+}
+
+/// Whether a query of `source` (not a placeholder) is at `path`, and so
+/// carries the block findings [`attach_to_queries`] gives it.
+fn carried(source: &str, path: [&str; 3]) -> bool {
+    extract_injections(source)
+        .iter()
+        .any(|q| q.field_path == path && !placeholder::is_placeholder_query(source, q))
+}
+
+const ELASTIC_QUERY: [&str; 3] = ["configurations", "elastic", "query"];
+const SYSDIG_CONDITION: [&str; 3] = ["configurations", "sysdig", "condition"];
 
 fn analyze_injections(
     source: &str,
@@ -1245,13 +1319,10 @@ detection_model: 00000000-0000-4000-8002-00000000ffff
 meta:
   tlp: clear
 "#;
-        let twin = index_object("objects/rules/twin.yaml", broken)
-            .map(|o| vec![o])
-            .unwrap_or_default();
+        assert!(index_object("objects/rules/twin.yaml", broken).is_some());
         let diagnostics = analyze(AnalyzeInput {
             path: "objects/rules/not-the-slug.yaml",
             source: broken,
-            workspace: &twin,
             elastic_tenants: &[],
         })
         .diagnostics;
@@ -1260,7 +1331,6 @@ meta:
         let unparsed = analyze(AnalyzeInput {
             path: "objects/rules/x.yaml",
             source: "name: [",
-            workspace: &[],
             elastic_tenants: &[],
         });
         assert!(unparsed.diagnostics.is_empty());
@@ -1295,7 +1365,6 @@ configurations:
         analyze(AnalyzeInput {
             path: "objects/rules/rule.yaml",
             source,
-            workspace: &[],
             elastic_tenants: &[],
         })
         .diagnostics
@@ -1372,44 +1441,6 @@ configurations:
         assert!(queries[0].inner.ends_with("xé"), "{:?}", queries[0].inner);
     }
 
-    const OBJECTIVE_SIGNALS: &str = r#"name: Obj
-metadata:
-  uuid: 00000000-0000-4000-8002-000000000001
-  schema: objective::1.0
-  version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
-  tlp: clear
-objective:
-  priority: High
-  type: Threat
-  description: d
-  composition:
-    strategy: Independent
-    description: c
-  signals:
-    - name: a
-      uuid: 00000000-0000-4000-8099-000000000001
-      description: s
-      severity: Medium
-      methodology: Artifacts
-      entities:
-        - Host::Account
-      data:
-        availability: Complete
-        requirements: r
-    - name: b
-      uuid: 00000000-0000-4000-8099-000000000002
-      description: s
-      severity: Bogus
-      methodology: Artifacts
-      entities:
-        - Host::Account
-      data:
-        availability: Complete
-        requirements: r
-"#;
-
     #[test]
     fn a_revision_the_catalog_does_not_know_reports_no_unknown_key() {
         let source = VALID_RULE.replace("rule::1.1", "rule::7.0").replace(
@@ -1442,7 +1473,6 @@ objective:
             let r = analyze(AnalyzeInput {
                 path: "objects/rules/rule.yaml",
                 source: &src,
-                workspace: &[],
                 elastic_tenants: &[],
             });
             let d = r
@@ -1499,7 +1529,6 @@ threat:
         analyze(AnalyzeInput {
             path: "objects/threats/t.yaml",
             source: &src,
-            workspace: &[],
             elastic_tenants: &[],
         })
     }
@@ -1589,7 +1618,6 @@ threat:
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: &src,
-            workspace: &[],
             elastic_tenants: &[],
         });
         assert!(
@@ -1606,11 +1634,10 @@ threat:
         RULE.replace("00000000-0000-4000-8002-000000000001", target)
     }
 
-    fn invalid_refs(source: &str, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
+    fn invalid_refs(source: &str) -> Vec<Diagnostic> {
         analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
             source,
-            workspace,
             elastic_tenants: &[],
         })
         .diagnostics
@@ -1619,16 +1646,9 @@ threat:
         .collect()
     }
 
-    fn signals_workspace() -> Vec<IndexedObject> {
-        vec![index_object("objects/objectives/obj.yaml", OBJECTIVE_SIGNALS).expect("indexed")]
-    }
-
     #[test]
     fn detection_model_naming_an_objective_is_valid() {
-        let found = invalid_refs(
-            &rule_naming("00000000-0000-4000-8002-000000000001"),
-            &signals_workspace(),
-        );
+        let found = invalid_refs(&rule_naming("00000000-0000-4000-8002-000000000001"));
         assert!(found.is_empty(), "{found:?}");
     }
 
@@ -1639,7 +1659,7 @@ threat:
             "00000000-0000-4000-8099-000000000001",
             "00000000-0000-4000-8099-000000000002",
         ] {
-            let found = invalid_refs(&rule_naming(signal), &signals_workspace());
+            let found = invalid_refs(&rule_naming(signal));
             assert!(found.is_empty(), "{signal}: {found:?}");
         }
     }
@@ -1649,7 +1669,6 @@ threat:
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,
-            workspace: &[],
             elastic_tenants: &[],
         });
         assert!(
@@ -1686,7 +1705,6 @@ threat:
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,
-            workspace: &[],
             elastic_tenants: &[],
         });
         let uuid_vals = token_text(RULE, &r.tokens, "tide.uuid");
@@ -1726,7 +1744,6 @@ configurations:
         let r = analyze(AnalyzeInput {
             path: "objects/rules/carbon-black-rule.yaml",
             source: src,
-            workspace: &[],
             elastic_tenants: &[],
         });
         let lucene: Vec<_> = r
@@ -1782,7 +1799,6 @@ configurations:
         let r = analyze(AnalyzeInput {
             path: "objects/rules/hunt.yaml",
             source: src,
-            workspace: &[],
             elastic_tenants: &[],
         });
         assert!(
@@ -1810,7 +1826,8 @@ configurations:
 
     #[test]
     fn snippet_matches_generate_templates() {
-        assert!(snippet("rule").unwrap().contains("metadata:"));
+        // `tests/snippets.rs` compares each with opentide-schema's generator.
+        assert!(snippet("rule").unwrap().contains("schema: rule::1.0"));
     }
 
     #[test]
@@ -1824,7 +1841,6 @@ configurations:
             analyze(AnalyzeInput {
                 path: "objects/rules/x.yaml",
                 source: src,
-                workspace: &[],
                 elastic_tenants: &[],
             })
             .diagnostics
@@ -1893,7 +1909,6 @@ configurations:
         let r = analyze(AnalyzeInput {
             path: "objects/rules/markdown-rule.yaml",
             source: src,
-            workspace: &[],
             elastic_tenants: &[],
         });
         let pairs: Vec<(&str, &str)> = r
@@ -1962,7 +1977,6 @@ configurations:
         analyze(AnalyzeInput {
             path: "objects/rules/r.yaml",
             source,
-            workspace: &[],
             elastic_tenants: &[],
         })
     }
