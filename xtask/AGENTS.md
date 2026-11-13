@@ -60,9 +60,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - `--engine python` runs the oracle, opentide 0.23.0 from its PyPI wheel, installed with uv into
   `<target>/xtask-bench/oracle` from [`tests/bench/oracle-requirements.txt`](../tests/bench/oracle-requirements.txt)
   (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
-  install. `--engine rust` builds `opentide-lsp --release` for the language server and
-  opentide-workspace's `load` example (`--release`) for `load`, and reports "no Rust yet" for every
-  other command. `load` is the workspace's load and index: the oracle runs `Opentide.initialise()`
+  install. `--engine rust` builds the `opentide` binary (`-p opentide --features cli
+  --release`, what `cargo install opentide --features cli` installs) for every command-line
+  scenario, `opentide-lsp --release` for the language server and opentide-workspace's `load`
+  example (`--release`) for `load`. `load` is the workspace's load and index: the oracle runs `Opentide.initialise()`
   with its interpreter (`ORACLE_LOAD`), the Rust engine the example, each timed spawn to exit.
 - `startup` (`opentide --version`, 20 ms) and, under `--engine rust`, `explain` (30 ms) run the
   console script, `opentide._cli:main` (UC-3.8b, #960; UC-6.2, #841): the
@@ -76,7 +77,9 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
   over the last `development` result (`--previous`) or over the oracle baseline in the budgets
   (`python`), and a rust result over the absolute plan section 11 target (or, where a
-  `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline);
+  `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline;
+  where the plan names no target, over the oracle's median on the same CPU, or on a CPU recorded
+  nowhere over the slowest recorded + 20%: never slower than the implementation it replaces);
   differences within the noise floor (20 ms, 2 MiB) never fail. With `--require-reference`
   (CI), a measured command that no baseline, target or comparable previous result applies to
   fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
@@ -103,8 +106,11 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   process of the test binary, alone (`bench::measured_alone`), under `cargo test` and nextest alike.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
-- CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on
-  its runner class, in a change of its own.
+- CI: [`bench.yml`](../.github/workflows/bench.yml). "The last development result" (`--previous`)
+  is the last result of the workflow's comparison base, `BASE_BRANCH`: `integration/unified-core`
+  (its pushes, nightly and manual runs) while development has no Rust command line, and
+  development again once the Unified Core merges there. Re-record the baseline only from a CI run
+  on its runner class, in a change of its own.
 
 ## Invariants
 

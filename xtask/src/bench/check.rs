@@ -14,7 +14,11 @@
 //!   waive a time target with the work item that will meet it
 //!   (`target_waiver`), more than `policy.regression` above the Rust
 //!   implementation's own CI baseline (`rust_baseline_s`), the summary still
-//!   showing the distance to the target.
+//!   showing the distance to the target. A rust command the plan names no
+//!   target for is held to the oracle's median on the report's CPU
+//!   (`baseline_s` or a `[[cpu_baseline]]` of the python engine; on a CPU
+//!   recorded nowhere, the slowest + `cross_cpu_regression`): the Rust
+//!   implementation is never slower than the one it replaces.
 //!
 //! A relative regression must also exceed the noise floor (`noise_floor_s`,
 //! `noise_floor_rss_mib`): a 20 ms difference on a 0.2 s command is the
@@ -599,6 +603,7 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
             Applies {
                 baseline: baseline_applies,
                 time: budgets.time_reference(&report.engine, &result.id, cpu),
+                oracle_time: budgets.time_reference(&budgets.baseline.engine, &result.id, cpu),
             },
             &mut failures,
         );
@@ -641,6 +646,9 @@ struct Applies {
     /// whether it was recorded on that CPU (`regression`) or is the slowest
     /// recorded one (`cross_cpu_regression`).
     time: Option<(f64, bool)>,
+    /// The oracle's time baseline of the command on the report's CPU, as
+    /// [`Applies::time`]: what a rust command without a plan target is held to.
+    oracle_time: Option<(f64, bool)>,
 }
 
 fn check_one(
@@ -655,6 +663,7 @@ fn check_one(
     let Applies {
         baseline: baseline_applies,
         time,
+        oracle_time,
     } = applies;
     let tolerance = |same_cpu: bool| {
         if same_cpu {
@@ -753,6 +762,33 @@ fn check_one(
                             );
                         }
                     }
+                }
+            } else if let Some((oracle, same_cpu)) = oracle_time {
+                // No plan target: never slower than the oracle on this CPU.
+                let ceiling = if same_cpu {
+                    oracle
+                } else {
+                    oracle * (1.0 + policy.cross_cpu_regression)
+                };
+                row.budget_s = Some(ceiling);
+                row.delta_reference = fraction(median, oracle);
+                row.reasons.push(if same_cpu {
+                    format!("no plan target: held to the oracle's median {oracle:.3} s")
+                } else {
+                    format!(
+                        "no plan target: held to the slowest recorded oracle median \
+                         {oracle:.3} s + {:.0}%",
+                        policy.cross_cpu_regression * 100.0
+                    )
+                });
+                if median > ceiling {
+                    fail(
+                        &mut row,
+                        format!(
+                            "median {median:.3} s is over the oracle's {ceiling:.3} s: \
+                             slower than the implementation it replaces"
+                        ),
+                    );
                 }
             }
             if let Some(target) = row.budget_rss_bytes
@@ -1521,6 +1557,42 @@ target_s = 0.03
             "{:?}",
             outcome.failures
         );
+    }
+
+    #[test]
+    fn rust_without_a_plan_target_is_held_to_the_oracle_median() {
+        let text = BUDGETS.replace("target_s = 0.03\n", "");
+        let budgets = Budgets::parse(&text).unwrap();
+        let rust = |explain_s: f64, cpu: &str| {
+            let mut r = report(
+                "rust",
+                vec![
+                    CommandResult::not_implemented("validate_clean", "v", "no Rust yet"),
+                    measured("explain", explain_s, 20.0),
+                ],
+            );
+            r.host.cpu_model = Some(cpu.into());
+            r
+        };
+        let same = "AMD EPYC 9V45 96-Core Processor";
+        // At the oracle's 0.2 s: passes, a reference applies (CI's gate).
+        let outcome = check_with(&budgets, &rust(0.2, same), None, true);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(outcome.rows[1].budget_s, Some(0.2));
+        // Slower than the oracle on its CPU: fails, whatever the noise floor.
+        let outcome = check_with(&budgets, &rust(0.205, same), None, true);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("slower than the implementation it replaces"),
+            "{:?}",
+            outcome.failures
+        );
+        // On a CPU recorded nowhere: the slowest recorded + cross_cpu_regression
+        // (50% in these budgets).
+        let outcome = check_with(&budgets, &rust(0.29, "Some Other CPU"), None, true);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        let outcome = check_with(&budgets, &rust(0.31, "Some Other CPU"), None, true);
+        assert!(!outcome.passed(), "{:?}", outcome.rows[1].reasons);
     }
 
     #[test]
