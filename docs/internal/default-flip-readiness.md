@@ -35,7 +35,7 @@ change, since `golden check` compared every path with no unexplained difference 
   clients, the Pydantic models behind `opentide.models` (`opentide._models`), the Python MCP server,
   the Textual UI, the serve bridge, and every module only they used. `src/opentide` keeps the
   console script, the SDK (`sdk.py`), the Rust models (`models/`), the plugin API (`plugins.py`),
-  `analysis.py` (`check_query`), the stubs of the binding, and the bundled data: 1,994 lines of
+  `analysis.py` (`check_query`), the stubs of the binding, and the bundled data: 1,987 lines of
   Python, from 93,630.
 - **The deprecated SDK entry points are removed** with no shims: `Opentide.initialise()` and its
   registry, `run_validation` and `ValidationScope`, the documentation writers. CHANGELOG lists them
