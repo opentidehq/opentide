@@ -1531,7 +1531,10 @@ fixtures = ["tide-corpus", "vscode"]
 
 # UC-4.4 (#834): a threat whose CVE details are fetched ([cve]
 # retrieve_details on, the default); the golden network refuses every
-# lookup, so each row says the details are unavailable.
+# lookup, so each row says the details are unavailable. Since 0.26.0 (D3)
+# the table has CVSS, EPSS, exploitation and weakness columns; the details
+# themselves, on 0.28.1's recorded records, are crates/opentide-cli's
+# `docs_with_cve_details_fetch_each_record`.
 [[case]]
 command = "generate docs threats"
 variant = "cve-details"

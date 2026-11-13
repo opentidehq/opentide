@@ -21,6 +21,9 @@ use std::sync::Arc;
 
 use opentide_compile::generate::Output;
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
+use opentide_compile::generate::docs::cve::{
+    CveDetail, CveRecord, CveSource, Cvss, Epss, EpssDetail, Weakness,
+};
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
 use opentide_compile::generate::docs::render::{Pages, Templates};
 use opentide_compile::generate::docs::vocab::Vocab;
@@ -80,9 +83,22 @@ fn render_with(
     flavor: Option<&str>,
     hints: &FlavorHints,
 ) -> Result<BTreeMap<String, String>, String> {
+    render_cves(workspace, flavor, hints, None)
+}
+
+/// [`render_with`], the CVE details asked of `source` when given.
+fn render_cves(
+    workspace: &Workspace,
+    flavor: Option<&str>,
+    hints: &FlavorHints,
+    source: Option<CveSource>,
+) -> Result<BTreeMap<String, String>, String> {
     let resolved = &workspace.configuration().resolved;
-    let settings = Settings::resolve(resolved, workspace.root(), None, flavor, hints)
+    let mut settings = Settings::resolve(resolved, workspace.root(), None, flavor, hints)
         .map_err(|error| error.detail)?;
+    if let Some(source) = source {
+        settings.cve_source = source;
+    }
     let catalog = Catalog::build(workspace.index(), Statuses::from_resolved(resolved))
         .map_err(|error| error.detail)?;
     let vocabularies = Vocabularies::bundled();
@@ -607,6 +623,111 @@ fn a_threats_cves_link_to_their_records() {
     let (_dir, workspace) = open("tide-corpus");
     assert!(
         !render(&workspace, None).unwrap()["docs/threats/simulated-actor.md"].contains("## CVE")
+    );
+}
+
+/// With `[cve] retrieve_details` on, each record's severity, EPSS score,
+/// exploitation and weakness, as opentide 0.28.1's `render_cves`,
+/// `cve_overview` and `exploited_banner` write them for the same records
+/// (GitHub flavour): an advisory alias beside its CVE, a severity without a
+/// CVSS score, a CWE without a number, a score that rounds half to even, an
+/// EPSS score that never reads as certain, a CVE exploited by SSVC alone,
+/// and an identifier the instance could not be asked for.
+#[test]
+fn a_threats_cve_details_show_severity_epss_exploitation_and_weakness() {
+    let (_dir, workspace) = open_edited("tide-corpus", |ws: &Path| {
+        append(
+            ws,
+            "Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+            "  cve:\n    - CVE-2023-0001\n    - CVE-2023-0002\n    - CVE-2023-0003\n",
+        );
+    });
+    let source = CveSource::new(|id: &str| match id {
+        "CVE-2023-0001" => CveDetail::Found(Box::new(CveRecord {
+            identifier: id.into(),
+            description: Some(format!("A description {}", "that goes on ".repeat(30))),
+            severity: Some("HIGH | x".into()),
+            aliases: vec!["CVE-2023-0001".into(), "GHSA-aaaa-bbbb-cccc".into()],
+            weaknesses: vec![
+                Weakness {
+                    identifier: "CWE-NOINFO".into(),
+                    name: String::new(),
+                },
+                Weakness {
+                    identifier: "CWE-79".into(),
+                    name: "Cross | Site".into(),
+                },
+            ],
+            exploitation: Some("poc".into()),
+            epss: EpssDetail::Unavailable,
+            ..CveRecord::default()
+        })),
+        "CVE-2023-0002" => CveDetail::Found(Box::new(CveRecord {
+            identifier: id.into(),
+            title: Some("Second.".into()),
+            published: Some("2023-02-02".into()),
+            page_url: "https://x.example/2".into(),
+            cvss: Some(Cvss {
+                version: "4.0".into(),
+                score: 7.25,
+                ..Cvss::default()
+            }),
+            exploitation: Some("Active".into()),
+            affected: (0..5).map(|n| format!("p{n}")).collect(),
+            epss: EpssDetail::Score(Epss {
+                probability: 0.99999,
+                percentile: 0.5,
+                date: String::new(),
+            }),
+            ..CveRecord::default()
+        })),
+        _ => CveDetail::Unavailable,
+    });
+    let page = &render_cves(
+        &workspace,
+        Some("github"),
+        &FlavorHints::default(),
+        Some(source),
+    )
+    .unwrap()["docs/threats/simulated-actor.md"];
+    assert!(
+        page.contains("\n| CVE | 3 CVEs (highest CVSS 7.2, 1 known exploited) |\n"),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "\n> [!WARNING]\n> `CVE-2023-0002` (CISA SSVC: active) is known to be exploited \
+             in the wild.\n"
+        ),
+        "{page}"
+    );
+    let section = &page[page.find("## CVE\n").unwrap()..];
+    let section = &section[..section.find("\n## Detection coverage").unwrap()];
+    const PAGES: &str = "https://vulnerability.circl.lu/vuln/";
+    let summary = format!("{} that", " that goes on".repeat(20));
+    assert_eq!(
+        section,
+        format!(
+            "## CVE\n\nIdentifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
+             which aggregates CVE, GHSA, CSAF, NVD, and related feeds.\n\n\
+             | Identifier | Severity | EPSS | Exploitation | Weakness | Published |\n\
+             | --- | --- | --- | --- | --- | --- |\n\
+             | [CVE-2023-0001]({PAGES}CVE-2023-0001)<br>[GHSA-aaaa-bbbb-cccc]({PAGES}GHSA-aaaa-bbbb-cccc) \
+             | HIGH \\| x | - | Proof of concept<br>CISA SSVC \
+             | CWE-NOINFO<br>[CWE-79](https://cwe.mitre.org/data/definitions/79.html) Cross \\| Site | - |\n\
+             | [CVE-2023-0002](https://x.example/2) | **7.2**<br>CVSS 4.0 | >99.9%<br>top 50.0% \
+             | **Active**<br>CISA SSVC | - | 2023-02-02 |\n\
+             | [CVE-2023-0003]({PAGES}CVE-2023-0003) | - | - | - | - | Details unavailable from \
+             Vulnerability-Lookup. |\n\n\
+             - **CVE-2023-0001**: A description{summary}….\n\
+             - **CVE-2023-0002**: Second. Affects p0, p1, p2, p3 and 1 more.\n\n\
+             Vulnerability-Lookup was unreachable for at least one identifier; links still point \
+             at the CIRCL record page.\n\n\
+             Vulnerability-Lookup returned no EPSS score for at least one identifier; those rows \
+             show none.\n\n\
+             *EPSS: FIRST's probability of exploitation in the next 30 days. Exploitation: CISA's \
+             Known Exploited Vulnerabilities catalog, else its SSVC assessment.*\n"
+        )
     );
 }
 

@@ -15,7 +15,7 @@
 //!   platform labels and the languages of their code settings.
 //! - [`flavor`]: what GitHub, GitLab, Azure DevOps and plain Markdown change.
 //! - [`mermaid`]: diagrams as nodes and edges; [`vocab`]: vocabulary labels;
-//!   [`cve`]: CVE links.
+//!   [`cve`]: CVE links and details (CVSS, EPSS, KEV, CWE).
 //! - [`inflight`]: the open pull requests' objects, overlaid on the index for
 //!   the run (the inflight preview).
 //! - [`changed`]: `--changed`, the objects git reports as changed against the

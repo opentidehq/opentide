@@ -132,7 +132,7 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 - **Objectives:**
   - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal rule coverage` (rule backlinks), `Coverage`, `Related objects`
 - **Threats:**
-  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `CVE` (Vulnerability-Lookup links; optional API enrichment), `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
+  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `CVE` (Vulnerability-Lookup links; with `retrieve_details`, CVSS, EPSS, exploitation and weakness per CVE), `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
 
 Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
 
@@ -184,8 +184,20 @@ CVE sections on threat pages are controlled by the same file:
 [cve]
 base_url = "https://vulnerability.circl.lu"
 default_db_link = "https://vulnerability.circl.lu/vuln/"
-retrieve_details = true  # fetch title, published date, severity, aliases
+retrieve_details = true  # fetch severity, EPSS, exploitation, weakness, affected products
 ```
+
+With `retrieve_details`, each CVE row gives, from Vulnerability-Lookup:
+
+| Column | From |
+|--------|------|
+| Severity | The newest CVSS base score and version a CNA or ADP container carries |
+| EPSS | FIRST's probability of exploitation in the next 30 days, and the share of CVEs scoring higher (`GET /api/epss/{cve}`, one call per CVE; a GHSA uses its CVE alias) |
+| Exploitation | `Known exploited` with the date CISA added it to its Known Exploited Vulnerabilities catalog, else CISA's SSVC decision (`Active`, `Proof of concept`, `None reported`) |
+| Weakness | Each CWE, linked to MITRE's definition |
+| Published | The record's publication date |
+
+A line per CVE adds its title, up to four affected products and the CVSS vector. The threat's overview counts its CVEs with the highest CVSS score and how many are known exploited, and a warning names each CVE exploited in the wild. A lookup that fails leaves the identifier linked and says so under the table; generation does not fail.
 
 Identifiers always link to Vulnerability-Lookup (`/vuln/{id}`). CVE, GHSA, and GCVE identifiers are accepted. GNA 0 GCVE ids map to the reserved CVE form (`GCVE-0-2024-3094` → `CVE-2024-3094`) for both API lookup and page links. Legacy NVD `default_db_link` values from older configs are remapped to CIRCL. Set `retrieve_details = false` to emit links only (no API calls).
 
