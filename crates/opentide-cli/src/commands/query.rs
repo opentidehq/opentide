@@ -1638,13 +1638,13 @@ mod tests {
         );
         assert_eq!(
             resolve_window(Some("soon"), None, None, now).unwrap_err().0,
-            "--since 'soon' is not a duration, such as 15m, 24h, 7d or PT1H"
+            "--since \"soon\" is not a duration, such as 15m, 24h, 7d or PT1H"
         );
         assert_eq!(
             resolve_window(None, Some("yesterday"), None, now)
                 .unwrap_err()
                 .0,
-            "--from 'yesterday' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+            "--from \"yesterday\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
         );
     }
 
@@ -1673,7 +1673,7 @@ mod tests {
         let unknown = select("elastic", &["qa".into()], &two, "x").unwrap_err();
         assert_eq!(
             unknown.0,
-            "elastic has no tenant named 'qa'; configured: prod, lab"
+            "elastic has no tenant named \"qa\"; configured: prod, lab"
         );
         assert_eq!(unknown.2, ["prod", "lab", "all"]);
         assert_eq!(
@@ -1683,7 +1683,7 @@ mod tests {
     }
 
     #[test]
-    fn rows_are_written_as_the_python_cli_writes_them() {
+    fn rows_are_written_as_text_and_json() {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
         let mut lab = failed("lab", "e", None);
         assert_eq!(
@@ -1700,7 +1700,7 @@ mod tests {
         assert_eq!(cell(row.get("c")), "");
         assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
         assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
-        assert_eq!(csv_value(Some(&Json::Bool(true))), "True");
+        assert_eq!(csv_value(Some(&Json::Bool(true))), "true");
         let table = |headers: &[&str], row: &[&str], width: usize| -> Vec<String> {
             let headers: Vec<String> = headers.iter().map(|h| (*h).to_owned()).collect();
             let row: Vec<String> = row.iter().map(|c| (*c).to_owned()).collect();
@@ -2358,7 +2358,7 @@ mod tests {
         assert_eq!(utc("2026-10-27T08:00:00"), "2026-10-27T08:00:00.000Z");
         assert_eq!(
             parse_instant("27/10/2026", "--to").unwrap_err(),
-            "--to '27/10/2026' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+            "--to \"27/10/2026\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
         );
         // strerror is the OS message without Rust's " (os error N)".
         let missing = std::io::Error::from_raw_os_error(2);

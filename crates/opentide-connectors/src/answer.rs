@@ -185,7 +185,7 @@ mod tests {
         let page = b"<html><head><title>502  Bad\nGateway</title></head></html>";
         let line = describe_answer(502, page, Some("text/html; charset=utf-8"), None);
         assert!(line.starts_with(
-            "HTTP 502 with an HTML page titled '502 Bad Gateway': HTTP 502 Bad Gateway is what"
+            "HTTP 502 with an HTML page titled \"502 Bad Gateway\": HTTP 502 Bad Gateway is what"
         ));
         assert_eq!(
             describe_answer(200, b"  ", None, None),

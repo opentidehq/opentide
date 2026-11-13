@@ -313,7 +313,7 @@ mod tests {
         let error = parse_strategies(&["STAGING"], &statuses(), "--strategy").unwrap_err();
         assert_eq!(
             error,
-            "--strategy 'STAGING' is not a deployable strategy. Use PREVIEW or RELEASE. STAGING \
+            "--strategy \"STAGING\" is not a deployable strategy. Use PREVIEW or RELEASE. STAGING \
              was a deployment plan, removed in 0.17.0: pass PREVIEW. STAGING is also a \
              configured status name; it maps to PREVIEW, which a PREVIEW run deploys"
         );
@@ -388,7 +388,7 @@ mod tests {
         assert!(hint("removed").ends_with("it maps to DELETION, which a RELEASE run deploys"));
         assert_eq!(
             hint("nothing"),
-            "--strategy 'nothing' is not a deployable strategy. Use PREVIEW or RELEASE"
+            "--strategy \"nothing\" is not a deployable strategy. Use PREVIEW or RELEASE"
         );
     }
 

@@ -279,7 +279,7 @@ fn harfanglab_searches_telemetry_as_the_python_runner_does() {
     );
     assert!(
         detail.unwrap().starts_with(
-            "HTTP 502 with an HTML page titled '502 Bad Gateway': HTTP 502 Bad Gateway is what a gateway"
+            "HTTP 502 with an HTML page titled \"502 Bad Gateway\": HTTP 502 Bad Gateway is what a gateway"
         )
     );
     let unknown = run(query(

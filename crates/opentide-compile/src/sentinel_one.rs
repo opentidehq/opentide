@@ -304,7 +304,7 @@ mod tests {
         assert_eq!(
             minutes("30s").unwrap_err().reason,
             "SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes \
-             (30m) or hours (2h), got '30s'"
+             (30m) or hours (2h), got \"30s\""
         );
         assert!(minutes("xm").is_err());
     }

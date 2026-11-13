@@ -707,7 +707,7 @@ mod tests {
         let nameless = node::load("a: 1\n").unwrap();
         assert_eq!(
             name_error(nameless.root().map(AsRef::as_ref)),
-            Err("'name'".into())
+            Err("\"name\"".into())
         );
         // A root that is no mapping: `data["name"]`'s TypeError, as Python
         // words it for the type YAML 1.2 reads.

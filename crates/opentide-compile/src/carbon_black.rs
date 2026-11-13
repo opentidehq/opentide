@@ -223,7 +223,7 @@ mod tests {
         assert_eq!(severity("Critical").unwrap(), 10);
         assert_eq!(
             severity("x").unwrap_err().reason,
-            "Carbon Black Cloud cannot compile this rule: 'x'"
+            "Carbon Black Cloud cannot compile this rule: \"x\""
         );
     }
 }

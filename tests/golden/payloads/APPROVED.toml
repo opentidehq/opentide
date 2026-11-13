@@ -30,8 +30,8 @@ uuid = "00000000-0000-4000-8005-000000000106"
 platform = "sysdig"
 what = "preview"
 oracle = '''{"uuid":"00000000-0000-4000-8005-000000000106","name":"Sysdig Unknown Status","status":"failed","code":"compile_failed","error":"Sentinel cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"","help":null,"file":"<WS>/objects/rules/sysdig-unknown-status.yaml","api_request":null}'''
-candidate = '''{"uuid":"00000000-0000-4000-8005-000000000106","name":"Sysdig Unknown Status","status":"failed","code":"compile_failed","error":"Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"","help":null,"file":"<WS>/objects/rules/sysdig-unknown-status.yaml","api_request":null}'''
-reason = "The oracle's dry run describes a Sysdig compile failure with compile_diagnostic's default platform, Sentinel (_sysdig_compile_preview calls _compile_failure, which does not pass the platform). opentide-compile names the platform that failed, as the oracle's compile_diagnostic does when it is given the platform."
+candidate = '''{"uuid":"00000000-0000-4000-8005-000000000106","name":"Sysdig Unknown Status","status":"failed","code":"compile_failed","error":"Sysdig cannot compile this rule: Status \"NOT_A_STATUS\" is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.","help":null,"file":"<WS>/objects/rules/sysdig-unknown-status.yaml","api_request":null}'''
+reason = "The oracle's dry run describes a Sysdig compile failure with compile_diagnostic's default platform, Sentinel (_sysdig_compile_preview calls _compile_failure, which does not pass the platform). opentide-compile names the platform that failed, as the oracle's compile_diagnostic does when it is given the platform. The status is also named in double quotes and the message is no longer wrapped in KeyError quotes (**Messages quote values the same way everywhere**)."
 issue = "https://github.com/opentidehq/opentide/issues/823"
 changelog = "**A Sysdig rule that cannot compile is reported as Sysdig's**"
 
@@ -792,3 +792,102 @@ error = "AttributeError: HarfangLab"
 reason = "The 0.23.0 HarfangLab client reads its identifier as Opentide.Configurations.Systems.HarfangLab; the registry snake-cases the name to harfang_lab, but the platform's key is harfanglab, so building the client raises AttributeError on every tenant and no HarfangLab deploy sends anything. opentide-compile builds the Sigma rule or YARA file the deployer means to send; the probe gives the oracle's client its identifier and compares those bodies."
 issue = "https://github.com/opentidehq/opentide/issues/895"
 changelog = "**A HarfangLab deploy sends its rules**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000403"
+platform = "sentinel_one"
+what = "tenant:site"
+oracle = '''error[compile_failed] SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes (30m) or hours (2h), got '30s''''
+candidate = '''error[compile_failed] SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes (30m) or hours (2h), got "30s"'''
+reason = "The compile messages quote a value with Rust's string formatting, in double quotes, where the oracle printed Python's repr in single quotes. The value and the rest of the message are the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000403"
+platform = "sentinel_one"
+what = "tenant:account"
+oracle = '''error[compile_failed] SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes (30m) or hours (2h), got '30s''''
+candidate = '''error[compile_failed] SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes (30m) or hours (2h), got "30s"'''
+reason = "The compile messages quote a value with Rust's string formatting, in double quotes, where the oracle printed Python's repr in single quotes. The value and the rest of the message are the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000008"
+platform = "sentinel"
+what = "compile"
+oracle = '''error[compile_invalid_rule] Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)'''
+candidate = '''error[compile_invalid_rule] Duration "soon" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)'''
+reason = "The compile messages quote a value with Rust's string formatting, in double quotes, where the oracle printed Python's repr in single quotes. The value and the rest of the message are the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000008"
+platform = "sentinel"
+what = "tenant:one"
+oracle = '''error[compile_invalid_rule] Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)'''
+candidate = '''error[compile_invalid_rule] Duration "soon" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)'''
+reason = "The compile messages quote a value with Rust's string formatting, in double quotes, where the oracle printed Python's repr in single quotes. The value and the rest of the message are the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000008"
+platform = "sentinel"
+what = "tenant:two"
+oracle = '''error[compile_invalid_rule] Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)'''
+candidate = '''error[compile_invalid_rule] Duration "soon" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)'''
+reason = "The compile messages quote a value with Rust's string formatting, in double quotes, where the oracle printed Python's repr in single quotes. The value and the rest of the message are the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000008"
+platform = "sentinel"
+what = "preview"
+oracle = '''{"uuid":"00000000-0000-4000-8005-000000000008","name":"Sentinel Bad Duration","status":"failed","code":"compile_invalid_rule","error":"Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)","help":null,"file":"<WS>/objects/rules/sentinel-bad-duration.yaml","api_request":null}'''
+candidate = '''{"uuid":"00000000-0000-4000-8005-000000000008","name":"Sentinel Bad Duration","status":"failed","code":"compile_invalid_rule","error":"Duration \"soon\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)","help":null,"file":"<WS>/objects/rules/sentinel-bad-duration.yaml","api_request":null}'''
+reason = "The compile messages quote a value with Rust's string formatting, in double quotes, where the oracle printed Python's repr in single quotes. The value and the rest of the message are the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000106"
+platform = "sysdig"
+what = "compile"
+oracle = '''error[compile_failed] Sysdig cannot compile this rule: "Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED."'''
+candidate = '''error[compile_failed] Sysdig cannot compile this rule: Status "NOT_A_STATUS" is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.'''
+reason = "A status that is not configured is named in double quotes, and the message is no longer wrapped in the quotes of Python's KeyError repr (the oracle quoted the whole message, so the status name inside it was in single quotes)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000106"
+platform = "sysdig"
+what = "tenant:tagged"
+oracle = '''error[compile_failed] Sysdig cannot compile this rule: "Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED."'''
+candidate = '''error[compile_failed] Sysdig cannot compile this rule: Status "NOT_A_STATUS" is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.'''
+reason = "A status that is not configured is named in double quotes, and the message is no longer wrapped in the quotes of Python's KeyError repr (the oracle quoted the whole message, so the status name inside it was in single quotes)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[diff]]
+corpus = "payloads"
+uuid = "00000000-0000-4000-8005-000000000106"
+platform = "sysdig"
+what = "tenant:plain"
+oracle = '''error[compile_failed] Sysdig cannot compile this rule: "Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED."'''
+candidate = '''error[compile_failed] Sysdig cannot compile this rule: Status "NOT_A_STATUS" is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.'''
+reason = "A status that is not configured is named in double quotes, and the message is no longer wrapped in the quotes of Python's KeyError repr (the oracle quoted the whole message, so the status name inside it was in single quotes)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"

@@ -563,7 +563,7 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(outcome, Err(Stop::Failed("'name'".into())));
+        assert_eq!(outcome, Err(Stop::Failed("\"name\"".into())));
         assert_eq!(after[0], RULE.as_bytes());
         let (outcome, _, _) = promote(
             &settings(true, "PRODUCTION"),
@@ -577,8 +577,8 @@ mod tests {
                 "'NoneType' object is not subscriptable".into()
             ))
         );
-        let result = stopped(&Stop::Failed("'name'".into()));
-        assert_eq!(result[1].1, Json::str("'name'"));
+        let result = stopped(&Stop::Failed("\"name\"".into()));
+        assert_eq!(result[1].1, Json::str("\"name\""));
     }
 
     /// A rule file that is not YAML, or whose root is no mapping, fails the
@@ -652,7 +652,7 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(outcome, Err(Stop::Failed("'1'".into())));
+        assert_eq!(outcome, Err(Stop::Failed("\"1\"".into())));
         assert_eq!(after, [RULE.as_bytes(), keyed.as_bytes()]);
     }
 

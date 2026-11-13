@@ -224,7 +224,7 @@ fn elastic_query_sends_what_the_python_runner_sent() {
         [
             "Elastic refused the ES|QL query on replayed (HTTP 400): Unknown index [nope]",
             "Elastic did not answer the Lucene query on replayed with JSON: HTTP 504 with an HTML \
-             page titled 'Gateway Timeout': HTTP 504 Gateway Timeout is what a gateway or proxy \
+             page titled \"Gateway Timeout\": HTTP 504 Gateway Timeout is what a gateway or proxy \
              in front of the tenant answers when the tenant does not answer it in time, so the \
              url and port are not at fault when other requests to the same address succeed",
             "Kibana refused the KQL query on replayed: Expected AND but found ':'",

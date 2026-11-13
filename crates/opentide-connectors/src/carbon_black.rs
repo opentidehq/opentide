@@ -889,14 +889,14 @@ mod tests {
         for truthful in ["true", "1", "-0.5", "\"no\"", "[0]", "{\"a\": null}"] {
             assert!(truthy(&value(truthful)), "{truthful}");
         }
-        // `str(value)`: a string as it is, anything else as its repr (the
-        // job status's `message`, a tag that is not a string).
+        // A string as it is, anything else as its JSON (the job status's
+        // `message`, a tag that is not a string).
         assert_eq!(
             value_str(&value("\"No data available\"")),
             "No data available"
         );
         assert_eq!(value_str(&value("7")), "7");
-        assert_eq!(value_str(&value("[true, null]")), "[True, None]");
-        assert_eq!(value_str(&value("{\"a\": \"b\"}")), "{'a': 'b'}");
+        assert_eq!(value_str(&value("[true, null]")), "[true,null]");
+        assert_eq!(value_str(&value("{\"a\": \"b\"}")), r#"{"a":"b"}"#);
     }
 }

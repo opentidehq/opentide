@@ -2063,11 +2063,11 @@ mod tests {
         assert_eq!(s1[1].label.as_deref(), Some("sub-query 2"));
         assert_eq!(
             rule_queries(&r, "sentinel").unwrap_err(),
-            "rule 'R' has an empty sentinel query"
+            "rule \"R\" has an empty sentinel query"
         );
         assert_eq!(
             rule_queries(&r, "splunk").unwrap_err(),
-            "rule 'R' has no splunk configuration"
+            "rule \"R\" has no splunk configuration"
         );
         let defender = rule_queries(&r, "defender_for_endpoint").unwrap();
         assert_eq!(defender[0].text_for("lab"), "T\n| where a");

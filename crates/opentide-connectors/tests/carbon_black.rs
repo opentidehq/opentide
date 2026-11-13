@@ -181,9 +181,10 @@ fn carbon_black_query_sends_what_the_python_runner_sent() {
     assert_eq!(
         refusals,
         [
-            "Carbon Black Cloud refused the query on replayed: Invalid query: {'time_range': \
-             {'start': '2026-10-26T08:00:00.000Z', 'end': '2026-10-27T08:00:00.000Z'}, 'query': \
-             'process_name:(cmd.exe', 'sort': None}: unbalanced parenthesis",
+            "Carbon Black Cloud refused the query on replayed: Invalid query: \
+             {\"query\":\"process_name:(cmd.exe\",\"sort\":null,\"time_range\":\
+             {\"end\":\"2026-10-27T08:00:00.000Z\",\"start\":\"2026-10-26T08:00:00.000Z\"}}: \
+             unbalanced parenthesis",
             "Carbon Black Cloud refused the query on replayed: Received error code 403 from API: \
              {\"error_code\": \"FORBIDDEN\", \"message\": \"Access denied to process search\"}",
         ]

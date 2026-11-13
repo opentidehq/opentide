@@ -375,11 +375,11 @@ mod tests {
         ));
         assert_eq!(
             rule_queries(&empty, "sentinel").unwrap_err(),
-            "rule 'R' has no sentinel configuration"
+            "rule \"R\" has no sentinel configuration"
         );
         assert_eq!(
             rule_queries(&empty, "crowdstrike").unwrap_err(),
-            "rule 'R' has an empty crowdstrike query"
+            "rule \"R\" has an empty crowdstrike query"
         );
         let harfanglab = rule(&format!(
             "{HEAD}configurations:\n  harfanglab:\n    maturity: x\n"
@@ -451,14 +451,14 @@ mod tests {
         ));
         assert_eq!(
             rule_queries(&none, "sentinel_one").unwrap_err(),
-            "rule 'R' has no SentinelOne sub-queries"
+            "rule \"R\" has no SentinelOne sub-queries"
         );
         let other = rule(&format!(
             "{HEAD}configurations:\n  sentinel_one:\n    condition:\n      type: Single Event\n"
         ));
         assert_eq!(
             rule_queries(&other, "sentinel_one").unwrap_err(),
-            "rule 'R' has no SentinelOne query"
+            "rule \"R\" has no SentinelOne query"
         );
     }
 

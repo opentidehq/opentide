@@ -1014,7 +1014,7 @@ mod tests {
                 elapsed: Duration::ZERO,
             },
         };
-        assert_eq!(reply(404, b"").http_error(), "HTTP 404 Not Found -- b''");
+        assert_eq!(reply(404, b"").http_error(), "HTTP 404 Not Found -- \"\"");
         assert_eq!(
             reply(
                 400,
@@ -1025,7 +1025,7 @@ mod tests {
         );
         assert_eq!(
             reply(400, b"{\"a\": 1}").http_error(),
-            "HTTP 400 Bad Request -- b'{\"a\": 1}'"
+            "HTTP 400 Bad Request -- \"{\\\"a\\\": 1}\""
         );
         assert_eq!(
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),

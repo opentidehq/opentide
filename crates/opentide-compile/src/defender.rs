@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(severity("Informational").unwrap(), "informational");
         assert_eq!(
             severity("Severe").unwrap_err().reason,
-            "Defender for Endpoint cannot compile this rule: 'Severe'"
+            "Defender for Endpoint cannot compile this rule: \"Severe\""
         );
     }
 }

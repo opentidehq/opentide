@@ -368,7 +368,7 @@ mod tests {
             result.conflicts,
             [format!(
                 "deployment_state_conflict {DEPLOYMENT_STATES}/{UUID}.json crowdstrike/lab: kept \
-                 '2', the default branch had '3'"
+                 \"2\", the default branch had \"3\""
             )]
         );
         // Now a run that removed the binding, from a tip that holds this run's id.

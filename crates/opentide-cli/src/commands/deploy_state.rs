@@ -695,7 +695,7 @@ mod tests {
         assert!(canonical("not-a-uuid").is_none());
         assert_eq!(
             canonical_uuid("nope").unwrap_err().message,
-            "'nope' is not a UUID, so it cannot name a deployment state shard"
+            "\"nope\" is not a UUID, so it cannot name a deployment state shard"
         );
     }
 
@@ -709,7 +709,7 @@ mod tests {
             normalise_external_id("sentinel_one", &ExternalId::Text("017".into()))
                 .unwrap_err()
                 .message,
-            "sentinel_one external id '017' is not a canonical decimal integer (no sign, no \
+            "sentinel_one external id \"017\" is not a canonical decimal integer (no sign, no \
              leading zeroes)"
         );
         assert_eq!(
@@ -818,12 +818,12 @@ mod tests {
         assert!(
             refused(&shard_text(r#"{"sysdig": {"t": "01"}}"#))
                 .message
-                .contains("platforms.sysdig.t: sysdig external id '01'")
+                .contains("platforms.sysdig.t: sysdig external id \"01\"")
         );
         assert!(
             refused(r#"{"schema": "other"}"#)
                 .message
-                .ends_with("has schema 'other', expected 'deployment.state::1.0'")
+                .ends_with("has schema \"other\", expected \"deployment.state::1.0\"")
         );
         // The rule's shard under another spelling of its name. Alone in the
         // folder, so a filesystem that folds case (macOS, Windows), where the
@@ -850,18 +850,18 @@ mod tests {
             record_created(dir.path(), UUID, "sysdig", "other", &ExternalId::Int(43)).unwrap_err();
         assert_eq!(error.code, "deployment_state_write_failed");
         assert!(error.message.starts_with(&format!(
-            "sysdig created rule 43 for {UUID} on tenant 'other', but the deployment state could \
-             not be written ("
+            "sysdig created rule 43 for {UUID} on tenant \"other\", but the deployment state \
+             could not be written ("
         )));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     }
 
     #[test]
-    fn an_os_error_reads_as_pythons() {
+    fn an_os_error_names_its_errno_and_path() {
         let error = std::io::Error::from_raw_os_error(13);
         let text = os_error_text(&error, Path::new("/x/y.json"));
         assert!(
-            text.starts_with('[') && text.ends_with(": '/x/y.json'"),
+            text.starts_with('[') && text.ends_with(": \"/x/y.json\""),
             "{text}"
         );
         assert_eq!(

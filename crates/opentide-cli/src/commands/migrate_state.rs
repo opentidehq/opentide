@@ -922,7 +922,7 @@ mod tests {
 
     #[test]
     fn a_bad_id_fails_the_rule_and_leaves_it_alone() {
-        let text = rule("  sentinel_one:\n    rule_id::lab: '007'\n    query: q\n");
+        let text = rule("  sentinel_one:\n    rule_id::lab: \"007\"\n    query: q\n");
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
         assert_eq!(report.outcome.exit_code, 1);
@@ -934,8 +934,8 @@ mod tests {
         assert_eq!(
             data(&report, "detail"),
             &Json::str(
-                "external_id_shape: objects/rules/r.yaml: sentinel_one tenant 'lab': sentinel_one \
-                 external id '007' is not a canonical decimal integer (no sign, no leading zeroes)"
+                "external_id_shape: objects/rules/r.yaml: sentinel_one tenant \"lab\": sentinel_one \
+                 external id \"007\" is not a canonical decimal integer (no sign, no leading zeroes)"
             )
         );
         assert_eq!(
@@ -965,7 +965,7 @@ mod tests {
             (
                 "  crowdstrike:\n    rule_id::: abc\n",
                 "external_id_shape",
-                "crowdstrike: tenant name '' is empty or not a string",
+                "crowdstrike: tenant name \"\" is empty or not a string",
             ),
             (
                 "  crowdstrike:\n    rule_id:\n      1: abc\n",
@@ -975,12 +975,12 @@ mod tests {
             (
                 "  crowdstrike:\n    rule_id::us: true\n",
                 "external_id_shape",
-                "crowdstrike tenant 'us': crowdstrike external id True is not a string or an integer",
+                "crowdstrike tenant \"us\": crowdstrike external id true is not a string or an integer",
             ),
             (
                 "  crowdstrike:\n    rule_id::us: a\n    rule_id:\n      us: b\n",
                 "external_id_conflict",
-                "crowdstrike tenant 'us' is mapped more than once on the rule",
+                "crowdstrike tenant \"us\" is mapped more than once on the rule",
             ),
             (
                 "  crowdstrike: {rule_id::us: a, query: q}\n",
@@ -1017,7 +1017,7 @@ mod tests {
                 .any(|(key, value)| key == "detail"
                     && value
                         == &Json::str(
-                            "invalid_uuid: objects/rules/r.yaml: metadata.uuid None is not a UUID"
+                            "invalid_uuid: objects/rules/r.yaml: metadata.uuid null is not a UUID"
                         ))
         );
         // Another platform's id needs no shard: it is dropped and reported.
@@ -1054,8 +1054,8 @@ mod tests {
         };
         assert!(
             detail.starts_with(
-                "external_id_conflict: objects/rules/r.yaml: crowdstrike tenant 'us' is 'new' on \
-                 the rule but 'old' in "
+                "external_id_conflict: objects/rules/r.yaml: crowdstrike tenant \"us\" is \"new\" \
+                 on the rule but \"old\" in "
             ),
             "{detail}"
         );

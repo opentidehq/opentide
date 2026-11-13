@@ -192,7 +192,7 @@ mod tests {
         }
         assert_eq!(
             sentinel("soon").unwrap_err(),
-            "Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
+            "Duration \"soon\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
              duration (30m, 1h, 1d, 1h10m)"
         );
     }

@@ -177,7 +177,7 @@ fn defender_query_sends_what_the_python_runner_sent() {
             "Graph refused the hunting query on replayed (HTTP 403): the app registration needs \
              ThreatHunting.Read.All: Insufficient privileges to complete the operation.",
             "Graph refused the hunting query on replayed (HTTP 502): HTTP 502 with an HTML page \
-             titled '502 Bad Gateway': HTTP 502 Bad Gateway is what a gateway or proxy in front \
+             titled \"502 Bad Gateway\": HTTP 502 Bad Gateway is what a gateway or proxy in front \
              of the tenant answers when the tenant does not answer it in time, so the url and \
              port are not at fault when other requests to the same address succeed",
         ]
