@@ -34,3 +34,5 @@ regex.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+# tests/snippets.rs: the snippets are what `opentide generate templates` writes.
+opentide-schema.workspace = true

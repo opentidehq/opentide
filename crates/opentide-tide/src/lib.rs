@@ -1772,7 +1772,8 @@ configurations:
 
     #[test]
     fn snippet_matches_generate_templates() {
-        assert!(snippet("rule").unwrap().contains("metadata:"));
+        // `tests/snippets.rs` compares each with opentide-schema's generator.
+        assert!(snippet("rule").unwrap().contains("schema: rule::1.0"));
     }
 
     #[test]
