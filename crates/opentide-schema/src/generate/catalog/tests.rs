@@ -277,3 +277,35 @@ fn a_scalar_enum_applies_only_to_strings() {
     let numbers = json!({"enum": ["a"], "anyOf": [{"type": "integer"}, {"type": "null"}]});
     assert!(!scalar_enum_applies(&root, numbers.as_object().unwrap()));
 }
+
+/// `recommended_fields` names the fields the bundled catalog marks
+/// `recommended`, schema by schema: what the engine reported as
+/// `recommended_field_missing`, and what `opentide lint` reports now.
+#[test]
+fn recommended_fields_are_the_catalogs() {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../data/catalogs/tide/generated/fields.json"
+    ))
+    .unwrap();
+    let catalog: Value = serde_json::from_str(&text).unwrap();
+    let schemas = catalog["schemas"].as_object().unwrap();
+    assert!(!schemas.is_empty());
+    for identifier in schemas.keys() {
+        let mut expected: Vec<String> = catalog["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row["schema"] == identifier.as_str() && row["recommended"] == true)
+            .map(|row| row["path"].as_str().unwrap().to_owned())
+            .collect();
+        expected.sort();
+        assert_eq!(recommended_fields(identifier), expected, "{identifier}");
+    }
+    assert_eq!(
+        recommended_fields("rule::1.1"),
+        ["configurations", "response"]
+    );
+    assert!(recommended_fields("threat::1.0").is_empty());
+    assert!(recommended_fields("nope::1.0").is_empty());
+}
