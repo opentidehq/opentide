@@ -622,7 +622,7 @@ fn analyze_injections(
     // assembles; its findings on the block's YAML go with its first section.
     let secops = injections
         .iter()
-        .any(|inj| is_secops_section(inj))
+        .any(is_secops_section)
         .then(|| google_secops::assembled(source, configurations))
         .flatten();
     let mut secops_block = secops.as_ref().map(|found| found.block().to_vec());
