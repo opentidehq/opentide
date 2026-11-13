@@ -39,9 +39,9 @@ triggers it; drop anything you cannot tie to a trigger.
       `TypeError`); chain with `raise ... from exc`.
 - [ ] **`--json` stdout carries only the JSON document.** Logs go to stderr (structlog/Rich);
       no `print()` (`T20` enforces it).
-- [ ] **Options are never silently dropped.** A Typer group callback that returns early when
-      a subcommand is named discards group-level options; refuse or hand them down
-      (see `_hand_down` in `cli/setup_app.py`).
+- [ ] **Options are never silently dropped.** A group that returns early when a subcommand
+      is named discards group-level options; refuse or hand them down (`setup`'s options
+      reach its subcommands in `crates/opentide-cli`).
 - [ ] **Environment flags are strings.** `os.environ.get("X") == True` is never true; parse
       leniently (`1/true/yes/on`) and never let a foreign convention (`DEBUG=*`) crash startup.
 

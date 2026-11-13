@@ -9,9 +9,8 @@
 //! ([`logging`]), the crash handler and its redaction ([`crash`],
 //! [`redact`]) and Ctrl-C ([`app::install_interrupt_handler`]); and the
 //! renderers of every result ([`render`], UC-3.4, #826): code frames, outcome
-//! lines, SARIF and Code Quality, CI sinks and progress. Commands are
-//! ported onto it one by one (UC-3.5, UC-3.6); until then a command with no
-//! Rust implementation is refused with `engine_not_ported`, exit 2.
+//! lines, SARIF and Code Quality, CI sinks and progress. Every command runs
+//! on it: it is opentide's one command line (UC-6.2, #841).
 
 pub mod app;
 pub mod catalog;
@@ -22,11 +21,13 @@ pub mod env;
 pub mod envelope;
 pub mod explain;
 pub mod git_baseline;
+pub mod help;
 pub mod hoist;
 pub mod json;
 pub mod logging;
 pub mod mcp;
 pub mod mode;
+pub mod plugins;
 pub mod queries;
 pub mod redact;
 pub mod render;

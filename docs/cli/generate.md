@@ -295,15 +295,13 @@ Exports the detection rules of one Kibana space and writes each one to `Imported
 - A look-back window that RFC 0007 cannot express is logged as `elastic_import_window_widened` or `elastic_import_schedule_defaulted`.
 - No deployment state is written: Elastic addresses rules by `metadata.uuid`.
 
+`generate extract defender` and `generate extract elastic` run through the command line's connectors ([the implementation](./json-output.md#the-implementation)): the same requests, deployment state, warnings and result, and the same files: Defender's byte for byte, Elastic's with the same data, written by the serde-saphyr YAML emitter (a string that must be quoted is double-quoted, non-ASCII text is written as UTF-8, and a long line is not folded, where 0.23.0's PyYAML single-quoted, escaped and folded them). `generate extract sentinel` runs through the Sentinel connector (the Entra ID sign-in, then every page of the workspace's analytics rules): `output-<tenant>.json` is written byte for byte, and each rule file from the same template as the Python importer's, the one-line values written by serde-saphyr (a value that must be quoted is double-quoted where 0.23.0 single-quoted it; the file loads to the same data). At a terminal the `import from …` row is printed when the import is done, and a log line is one unstyled line.
+
 ## When to run
 
 - After upgrading the `opentide` package version.
 - When `.opentide/schemas/` is missing or stale.
 - After vocabulary or model changes in the package (client repos inherit on upgrade).
-
-## Side effects
-
-Schema and template phases reload `IndexManager` and `Opentide` registry caches.
 
 ## Deprecated shims
 
@@ -317,4 +315,4 @@ The top-level commands of earlier releases are hidden: each prints a `DEPRECATED
 
 ## Source
 
-`src/opentide/cli/commands/generate.py`, `src/opentide/cli/commands/legacy.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`, `src/opentide/export/` (`explorer_export.py`, `revisions_export.py`)
+`crates/opentide-cli/src/commands/generate.rs`, `crates/opentide-cli/src/commands/extract/`, `crates/opentide-compile/src/generate/`, `crates/opentide-schema/src/generate/`

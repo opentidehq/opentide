@@ -1,0 +1,9 @@
+[1mskills[0m
+  merge   [1m.agents/skills/detection-engineering/SKILL.md[0m
+  create  [1m.agents/skills/opentide-detection-rule/SKILL.md[0m
+  merge   [1m.claude/skills/detection-engineering/SKILL.md[0m
+  create  [1m.claude/skills/opentide-detection-rule/SKILL.md[0m
+  delete  [1m.agents/skills/detection-engineering/references/old.md[0m
+  [2mskip[0m    [1mCLAUDE.md[0m
+
+[1mPlan:[0m 4 files to write (2 new, 2 changed), 1 to remove · nothing written

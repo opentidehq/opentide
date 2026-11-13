@@ -1,0 +1,4 @@
+warning: [[misp]] block 'misp-lab' api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED].
+error: Unknown sharing target 'misp-prd'. Configured targets: misp-prod, misp-locked, misp-lab.
+  help: did you mean 'misp-prod'?
+tip: add --json for machine-readable output

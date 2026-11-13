@@ -147,6 +147,54 @@ pub struct DeployOutcome {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Elastic;
 
+/// Why `find_rules` stopped (UC-4.4b).
+#[derive(Debug, thiserror::Error)]
+pub enum FindError {
+    /// An error status, as `requests.HTTPError` words it.
+    #[error("{0}")]
+    Status(String),
+    /// A body that is not JSON.
+    #[error("{0}")]
+    NotJson(String),
+    /// The tenant could not be reached.
+    #[error(transparent)]
+    Connector(#[from] ConnectorError),
+}
+
+impl Elastic {
+    /// One page of the space's rules (`ElasticClient.find_rules`):
+    /// `GET <kibana>[/s/<space>]/api/detection_engine/rules/_find`.
+    ///
+    /// # Errors
+    ///
+    /// An error status, a body that is not JSON, or no answer.
+    pub async fn find_rules(
+        &self,
+        cx: TenantContext<'_>,
+        page: i64,
+        per_page: i64,
+    ) -> Result<Json, FindError> {
+        let client = client(cx)?;
+        let url = format!(
+            "{}/api/detection_engine/rules/_find?{}",
+            client.kibana_base,
+            crate::encode::urlencode([
+                ("page", page.to_string().as_str()),
+                ("per_page", per_page.to_string().as_str()),
+            ])
+        );
+        let answer = client
+            .call(cx, reqwest::Method::GET, &url, None, false)
+            .await?;
+        if answer.status >= 400 {
+            return Err(FindError::Status(http_error_text(&answer, &url)));
+        }
+        answer
+            .json()
+            .ok_or_else(|| FindError::NotJson("Expecting value: line 1 column 1 (char 0)".into()))
+    }
+}
+
 /// The tenant's addresses and key (`ElasticClient.__init__`).
 struct Client {
     kibana_base: String,

@@ -2,24 +2,24 @@
 
 The PyO3 binding of the engine, compiled into the `opentide` Python package as `opentide._native`
 (package name `opentide-native`, library `_native`, `publish = false`). It binds
-`opentide-analysis` and `opentide-lsp` by path; `hatch_build.py` runs `cargo build -p
+`opentide-analysis` by path; `hatch_build.py` runs `cargo build -p
 opentide-native` whenever a wheel or an editable install of opentide is built. Python reaches it
 through `src/opentide/analysis.py`; the SDK (`src/opentide/sdk.py`, `opentide.Workspace`) loads it
 there, then imports its submodule `sdk`. [`README.md`](README.md) describes the build.
 
 | Path | What |
 | --- | --- |
-| `src/lib.rs` | The module `_native`: the engine's functions, the CLI's entry points, the submodules |
-| `src/sdk.rs` | `opentide._native.sdk` (UC-5.2, #837): the facade's `Workspace` and `run_json`, one to one, documents as JSON text; `SdkError(code, message)` |
-| `src/serve.rs` | `ServeHost`, `opentide serve`'s Rust host |
+| `src/lib.rs` | The module `_native`: the engine's functions behind `opentide.analysis` (`analyze_query`, `highlight`, `describe_code`, `language_for_path`), the command line's entry point (`cli_main`), the submodules |
+| `src/sdk.rs` | `opentide._native.sdk` (UC-5.2, #837): the facade's `Workspace` and `run_json`, one to one, documents as JSON text; `SdkError(code, message, detail)` |
+| `src/sdk/tenants.rs` | The facade's tenant operations (`connectors`, UC-5.2b): `TenantConfig`, `Connection` (`open`; `query`, `validate_query` and `deploy` as awaitables through pyo3-async-runtimes, on a tokio runtime started on the first operation, without the GIL), `Canceller`, `platforms`, `capabilities` |
+| `src/plugins.rs` | The platform plugin host (UC-4.5, #835), installed at module init: `opentide.plugins._discover()` and `_invoke()` behind the connectors' traits, JSON text across, the GIL taken on a blocking thread for the plugin call alone |
 
 ## Place
 
-bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-lsp and opentide-compare
-(`compare_runs`, for the CLI's `OPENTIDE_ENGINE=compare`), opentide-schema (`models`) and
-opentide-cli (`cli_main`; `opentide_cli::embed` for `run_cli`, `interrupt_cli`, the warm
-workspaces of `serve` and `validate_report`, UC-2.7), and the facade `opentide` (`sdk`, UC-5.2);
-nothing depends on it. The plan's `bindings/python` (§4): once the engine functions move behind the
+bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-schema
+(`models`) and opentide-cli (`cli_main`, which the console script runs), the facade `opentide` with `cli` and
+`connectors` (`sdk`, UC-5.2) and pyo3-async-runtimes (the tenant operations as awaitables), and
+opentide-connectors with opentide-compile and tokio (the plugin host, UC-4.5); nothing depends on it. The plan's `bindings/python` (§4): once the engine functions move behind the
 facade it depends on `opentide` alone (D-5). It inherits the workspace lints, `unsafe_code = "forbid"` included: PyO3's macros
 need no `unsafe` of its own.
 
@@ -31,9 +31,15 @@ need no `unsafe` of its own.
 - The stub `src/opentide/_native/__init__.pyi` matches the module: update it with every change to
   `src/lib.rs` (ty checks the Python side against it). The submodule `models`
   (`opentide-schema`'s classes, UC-1.9, ADR 0011) has a generated stub,
-  `src/opentide/_native/models.pyi`: `cargo xtask stubs` rewrites it, never by hand. The submodule
-  `sdk` has `src/opentide/_native/sdk.pyi`, which `tests/test_sdk/test_stubs.py` holds to the
-  module's names and parameters.
+  `src/opentide/_native/models.pyi`: `cargo xtask stubs` rewrites it, never by hand. So does the
+  submodule `sdk`'s, `src/opentide/_native/sdk.pyi` (UC-5.2b): run `cargo xtask stubs` after a
+  change to `src/sdk.rs` or `src/sdk/`; `tests/test_sdk/test_stubs.py` holds it to the module's
+  names and parameters, and CI's `schema` workflow runs `cargo xtask stubs --check`. A value the
+  introspection cannot type (an awaitable, an exception class) gets its type hint from a wrapper's
+  `OUTPUT_TYPE` (`Pending`, `SdkErrorClass`).
+- An async operation returns an awaitable (`pyo3_async_runtimes::tokio::future_into_py`) and
+  holds no GIL while it runs; the runtime starts on the first one, never at import
+  (`tests/test_sdk/test_import_time.py`, `test_tenants.py`).
 - Positions leave the binding as opentide's CLI counts them (1-based lines, code-point columns;
   `tests` in `src/lib.rs`): a change there is plan invariant 3.
 - A missing engine is `engine_unavailable` on the Python side, never a skipped check.
@@ -61,11 +67,15 @@ sources or compiled-in data change (`cache-keys` in `pyproject.toml`). `scripts/
 
 - UC-1.9 (#815): the Tide model's pyclasses and `.pyi` exposed through it.
 - UC-2.7 (#822): `validate`, `lint`, `info` and MCP read tools call Rust through it.
-- UC-3.8 (#830): the console script, `opentide = "opentide.cli.launch:main"` (UC-3.8b, #960), loads
-  this module and calls `main`, which hands its arguments to `opentide.cli.launch.run`; that reads
-  the command path with `command_words` and runs a Rust command through `cli_main`. When this
-  module does not load, the console script runs the Python CLI alone.
+- UC-3.8 (#830), UC-6.2 (#841): the console script, `opentide = "opentide._cli:main"`, loads this
+  module and runs every command through `cli_main`, in process. When this module does not load,
+  the console script says so and exits 1: there is no other implementation. `main`,
+  `command_words`, `run_cli`, `compare_runs`, `ServeHost`, `validate_report` and the catalog
+  functions, which the Python implementation called, went with it; so did the engine's own
+  `Workspace` (`analyze`, `analyze_queries`, `hover`), `QueryReport` and `install_visibility`,
+  and with them the dependency on opentide-lsp.
 - UC-5.2 (#837): the crate moved here from `analysis/`, and `sdk` binds the facade for
-  `opentide.Workspace`. UC-5.5 (#840): the wheels.
+  `opentide.Workspace`; UC-5.2b its tenant operations for `opentide.Connection`, and the generated
+  `sdk.pyi`. UC-5.5 (#840): the wheels.
 
 Lints, tests and the layer rule: [`crates/AGENTS.md`](../../crates/AGENTS.md).

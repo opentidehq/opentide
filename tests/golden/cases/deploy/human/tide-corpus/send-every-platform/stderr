@@ -1,0 +1,18 @@
+[1;31merror:[0m Cannot deploy: sentinel has no tenants configured in
+       .opentide/configurations/platforms/sentinel.toml; defender_for_endpoint has no tenants
+       configured in .opentide/configurations/platforms/defender_for_endpoint.toml; splunk has no
+       tenants configured in .opentide/configurations/platforms/splunk.toml; sentinel_one has no
+       tenants configured in .opentide/configurations/platforms/sentinel_one.toml;
+       carbon_black_cloud has no tenants configured in
+       .opentide/configurations/platforms/carbon_black_cloud.toml; crowdstrike has no tenants
+       configured in .opentide/configurations/platforms/crowdstrike.toml; harfanglab has no tenants
+       configured in .opentide/configurations/platforms/harfanglab.toml
+  [1;36mhelp:[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml;
+        add (or uncomment) a [[tenants]] entry in
+        .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or
+        uncomment) a [[tenants]] entry in
+        .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]]
+        entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml

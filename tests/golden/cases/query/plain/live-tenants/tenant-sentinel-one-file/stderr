@@ -1,0 +1,4 @@
+warning: one correlation sub-query: the correlation itself is not applied
+warning: Add a filter on event.type to speed up the query
+warning: one correlation sub-query: the correlation itself is not applied
+warning: Add a filter on event.type to speed up the query

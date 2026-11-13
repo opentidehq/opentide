@@ -22,15 +22,17 @@ Three gates here, in increasing cost:
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import subprocess
+import sys
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
-from click.testing import Result
 from tests.docs_commands import (
     DOCS,
     GUARDED_LANGUAGES,
@@ -52,12 +54,45 @@ from tests.docs_commands import (
     stated_exit_codes,
     unchecked_output_fences,
 )
-from tests.registry_support import reset_opentide_singletons
-from typer.testing import CliRunner
 
-from opentide.cli import app
-from opentide.cli.enums import DetectionPlatform
-from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
+
+@dataclass(frozen=True)
+class Result:
+    """One run of the console script: its exit code, stdout, and stdout and stderr interleaved."""
+
+    exit_code: int
+    stdout: str
+    output: str
+
+
+def invoke(argv: list[str], *, env: dict[str, str] | None = None) -> Result:
+    """Run ``python -m opentide`` with *argv* in the working directory; the Rust command line.
+
+    stdout is read on its own for the JSON document; the run is repeated with
+    stderr merged into stdout for the terminal view, as a reader sees it. The
+    network is a proxy that refuses every connection, so no sample reaches a
+    vendor API.
+    """
+    run_env = {name: value for name, value in os.environ.items() if name not in _LEAKY_ENV}
+    run_env.update(
+        {"HTTPS_PROXY": "http://127.0.0.1:9", "HTTP_PROXY": "http://127.0.0.1:9", "NO_PROXY": ""}
+    )
+    run_env.update(env or {})
+    command = [sys.executable, "-m", "opentide", *argv]
+    done = subprocess.run(
+        command, env=run_env, capture_output=True, text=True, encoding="utf-8", timeout=300
+    )
+    merged = subprocess.run(
+        command,
+        env=run_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        timeout=300,
+    )
+    return Result(done.returncode, done.stdout, merged.stdout)
+
 
 # Extraction and resolution are pure and cheap, so they run in the unit matrix
 # on every supported Python; only the tests that execute the CLI against a
@@ -93,7 +128,7 @@ EXECUTABLE_COMMANDS = [command for command in DOC_COMMANDS if _is_executable(com
 DOC_OUTPUTS = documented_outputs()
 #: An output sample may also pair with `deploy`: its tests stub the vendor
 #: boundary, so a sample cannot reach a platform API. And with `tui`, which
-#: refuses to start without a terminal, as it always is under CliRunner.
+#: refuses to start without a terminal, as it always is in a captured run.
 SAMPLE_ROOTS = EXECUTABLE_ROOTS | {"deploy", "tui"}
 
 _TUTORIAL_RULE = Path("objects", "rules", "sentinel-kql-rule.yaml")
@@ -531,7 +566,6 @@ def test_resolution_rejects_commands_the_cli_does_not_have(
     [
         ("--json", "validate", "--strict"),
         ("setup", "hooks", "--path", "."),
-        ("setup", "hooks", "."),
         ("--json", "info", "--technique", "T1059", "coverage"),
         ("--json", "info", "coverage", "--technique", "T1059"),
         ("validate", "query", "--platform", "sentinel"),
@@ -582,24 +616,25 @@ def _pristine_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     from tests.test_cli.e2e.helpers import write_tutorial_objects
 
     repo = tmp_path_factory.mktemp("documented") / "detections"
-    run_repo_setup(
-        RepoSetupOptions(
-            path=repo,
-            name="Tutorial Detections",
-            org="Example Corp",
-            platforms=[DetectionPlatform.sentinel],
-            yes=True,
-        )
+    setup = invoke(
+        [
+            "setup",
+            "repo",
+            "--yes",
+            "--name",
+            "Tutorial Detections",
+            "--org",
+            "Example Corp",
+            "--platform",
+            "sentinel",
+            "--path",
+            str(repo),
+        ]
     )
+    assert setup.exit_code == 0, setup.output
     write_tutorial_objects(repo)
-    result = CliRunner().invoke(
-        app, ["--repo", str(repo), "--json", "generate"], env=dict.fromkeys(_LEAKY_ENV)
-    )
-    assert result.exit_code == 0, result.stdout + result.stderr
-    # That run loaded this tree into the registry singletons. The autouse reset
-    # only runs at teardown, so without this the first sample would read the
-    # pristine tree instead of its own edited copy.
-    reset_opentide_singletons()
+    result = invoke(["--repo", str(repo), "--json", "generate"])
+    assert result.exit_code == 0, result.output
     return repo
 
 
@@ -660,10 +695,8 @@ def test_documented_commands_emit_one_json_document(
     if "--json" not in command.argv:
         argv.append("--json")
     argv.extend(command.argv)
-    result = CliRunner().invoke(app, argv)
-    assert result.exception is None or isinstance(result.exception, SystemExit), (
-        f"{command}\n{result.stdout}{result.stderr}"
-    )
+    result = invoke(argv)
+    assert result.stdout.strip(), f"{command}\n{result.output}"
     payload = json.loads(result.stdout)
     assert isinstance(payload, dict), command
     assert "ok" in payload, f"{command} produced no result envelope"
@@ -720,8 +753,8 @@ def test_info_json_carries_the_documented_envelope(documented_repo: Path) -> Non
         block for block in fenced_blocks(DOCS / "cli" / "info.md", "json") if "version" in block
     )
     documented = json.loads(sample)
-    result = CliRunner().invoke(app, ["--repo", str(documented_repo), "--json", "info"])
-    assert result.exit_code == 0, result.stdout + result.stderr
+    result = invoke(["--repo", str(documented_repo), "--json", "info"])
+    assert result.exit_code == 0, result.output
     live = json.loads(result.stdout)
     missing = set(documented) - set(live)
     undocumented = set(live) - set(documented)
@@ -771,29 +804,12 @@ def _json_mismatches(documented: Any, live: Any, path: str = "$") -> list[str]:
     return []
 
 
-@pytest.fixture
-def stub_deployers(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
-    """Stand in for the vendor boundary so a sample can never reach a platform API.
-
-    Only `EnabledPlatforms` is replaced: the plan, the payload preview, and what the
-    command prints are the real ones.
-    """
-    deployers: dict[str, MagicMock] = {}
-
-    class _StubDeployTide:
-        def mdr_for(self, platforms: Any) -> dict[str, MagicMock]:
-            return {name: deployers.setdefault(name, MagicMock()) for name in platforms}
-
-    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _StubDeployTide)
-    return deployers
-
-
 def _run_sample(output: DocOutput, repo: Path, *, colour: bool) -> Result:
     assert output.argv is not None, output
     if output.state is not None:
         REPO_STATES[output.state](repo)
     root = ["--repo", str(repo)] if colour else ["--repo", str(repo), "--no-color"]
-    return CliRunner().invoke(app, [*root, *output.argv])
+    return invoke([*root, *output.argv])
 
 
 def _sample_mismatches(output: DocOutput, result: Result, *, colour: bool) -> list[str]:
@@ -813,7 +829,7 @@ _OUTPUT_CASES = [
 @pytest.mark.cli_e2e
 @pytest.mark.parametrize(("output", "colour"), _OUTPUT_CASES)
 def test_documented_output_samples_match_the_live_command(
-    output: DocOutput, colour: bool, documented_repo: Path, stub_deployers: dict[str, MagicMock]
+    output: DocOutput, colour: bool, documented_repo: Path
 ) -> None:
     """Issue #299: deploy, troubleshooting and tutorial samples showed output 0.5.0 never printed.
 
@@ -822,9 +838,6 @@ def test_documented_output_samples_match_the_live_command(
     A JSON sample is a subset of the one document on stdout.
     """
     result = _run_sample(output, documented_repo, colour=colour)
-    assert result.exception is None or isinstance(result.exception, SystemExit), (
-        f"{output}\n{result.output}"
-    )
     assert result.exit_code == output.exit_code, (
         f"{output} documents exit {output.exit_code}, the command returned "
         f"{result.exit_code}\n{result.output}"
@@ -833,9 +846,6 @@ def test_documented_output_samples_match_the_live_command(
     assert not mismatches, (
         f"{output}\n  " + "\n  ".join(mismatches) + f"\n--- live ---\n{result.output}"
     )
-    if "--dry-run" in (output.argv or ()):
-        for deployer in stub_deployers.values():
-            deployer.deploy.assert_not_called()
 
 
 _PRE_0_5_0_DEPLOY_SAMPLE = "\n".join(
@@ -853,9 +863,7 @@ _PRE_0_5_0_DEPLOY_SAMPLE = "\n".join(
 
 
 @pytest.mark.cli_e2e
-def test_the_sample_issue_299_reported_fails_the_output_check(
-    documented_repo: Path, stub_deployers: dict[str, MagicMock]
-) -> None:
+def test_the_sample_issue_299_reported_fails_the_output_check(documented_repo: Path) -> None:
     """Negative control: docs/cli/deploy.md's 0.5.0 sample, paired with its command."""
     (stale,) = outputs_in(_PRE_0_5_0_DEPLOY_SAMPLE, "docs/cli/deploy.md")
     result = _run_sample(stale, documented_repo, colour=False)
@@ -874,8 +882,6 @@ def test_troubleshooting_states_the_exit_code_deploy_metadata_returns(
     """Issue #299: the page said `deploy metadata` "signals intent in logs"; it exits 2."""
     text = (DOCS / "usage" / "troubleshooting.md").read_text(encoding="utf-8")
     prose = section_prose(text, heading_line(text, "`deploy metadata`"))
-    result = CliRunner().invoke(
-        app, ["--repo", str(documented_repo), "deploy", "metadata", "--platform", "splunk"]
-    )
+    result = invoke(["--repo", str(documented_repo), "deploy", "metadata", "--platform", "splunk"])
     assert result.exit_code == 2, result.output
     assert stated_exit_codes(prose) == {result.exit_code}, prose

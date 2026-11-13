@@ -174,6 +174,7 @@ pub fn validate_json(request: &ValidateRequest, env: &Env, cwd: &Path) -> String
         queries,
         query_check: Some(&EngineQueries),
         cve_check: None,
+        platform_configurations: crate::plugins::configurations(),
     });
     // Each part serialised on its own: a struct keeps its fields' order (the
     // contract's), where a `serde_json::Value` map would sort them.

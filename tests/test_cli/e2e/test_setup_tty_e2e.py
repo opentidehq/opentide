@@ -186,7 +186,9 @@ def test_branded_wizard_validates_and_ends_with_next_steps(tmp_path: Path) -> No
     session.expect("Spec-driven development for agentic detection engineering")
 
     session.expect("Repository name")
-    session.send("\x15")  # clear the suggested name
+    # Clear the suggested name (the folder's) with Backspace: the prompt keeps
+    # emacs line-kill keys to itself.
+    session.send("\x7f" * len(repo.name))
     session.send(ENTER)
     session.expect("cannot be empty")
     session.send("Branded Detections" + ENTER)

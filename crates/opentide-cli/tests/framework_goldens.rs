@@ -10,8 +10,10 @@
 //! one value normalised, as the goldens normalise it.
 //!
 //! Intended differences are not here: `--help` and the help a bare `mcp`,
-//! `lsp` or `new` prints to a person (clap's help, see
-//! `tests/golden/APPROVED_DIFFS.toml` and the CHANGELOG), and the home screen.
+//! `lsp` or `new` prints to a person (clap's help, held to the oracle's by
+//! content under `tests/golden/APPROVED_DIFFS.toml`'s `help` entries). They,
+//! and the home screen on the `tide-corpus` fixture with its objects, are
+//! replayed by `tests/command_goldens.rs`.
 
 #![expect(
     clippy::unwrap_used,
@@ -69,9 +71,9 @@ const CASES: &[(&str, &[&str])] = &[
 /// Recordings of those variants left out, and why.
 const LEFT_OUT: &[(&str, &str)] = &[
     // A bare `opentide` prints the home screen (human) or the root's help:
-    // the help is clap's (an approved difference) and the home screen needs
-    // the workspace index (UC-3.5's `info`).
-    ("_root/human/none/bare", "home screen"),
+    // the help is clap's (an approved difference), and the home screen of
+    // the corpus counts its objects, which this test's fixture leaves out
+    // (`command_goldens.rs` replays both).
     ("_root/human/tide-corpus/bare", "home screen"),
     ("_root/plain/none/bare", "help"),
     ("_root/plain/tide-corpus/bare", "help"),
@@ -162,7 +164,7 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     let stdout = duration
         .replace_all(&String::from_utf8(out).unwrap(), r#""duration_ms":${1}0"#)
         .into_owned();
-    let stdout = without_engine_variable(&stdout);
+    let stdout = as_oracle(&stdout);
     let stderr = String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap();
     Outcome {
         exit_code,
@@ -171,28 +173,20 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     }
 }
 
-/// The catalogue without its last `environment` row, `OPENTIDE_ENGINE`: the
-/// variable UC-0.7 (#805) added after the oracle, at the end of the list so
-/// that the oracle's list is a prefix of today's. The Python CLI prints it
-/// too (`opentide.cli.services.introspect.environment`). The other changes
-/// made after the oracle are undone by [`since_oracle::to_oracle`].
-fn without_engine_variable(stdout: &str) -> String {
+/// The catalogue (`--json commands`) as the oracle printed it: the changes
+/// made after the oracle undone by [`since_oracle::to_oracle`]. Any other
+/// output is returned as it is.
+fn as_oracle(stdout: &str) -> String {
     let Ok(mut document) = Json::parse(stdout) else {
         return stdout.to_owned();
     };
-    let Json::Object(members) = &mut document else {
+    // Only the catalogue (`--json commands`) holds what changed since.
+    let Json::Object(members) = &document else {
         return stdout.to_owned();
     };
-    let Some((_, Json::Array(rows))) = members.iter_mut().find(|(key, _)| key == "environment")
-    else {
+    if !members.iter().any(|(key, _)| key == "environment") {
         return stdout.to_owned();
-    };
-    let last = rows.pop();
-    assert_eq!(
-        last.as_ref().and_then(|row| row.get("name")),
-        Some(&Json::str("OPENTIDE_ENGINE")),
-        "the catalogue's last variable is OPENTIDE_ENGINE"
-    );
+    }
     since_oracle::to_oracle(&mut document);
     document_text(&document, stdout.starts_with("{\n"))
 }

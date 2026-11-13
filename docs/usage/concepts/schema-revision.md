@@ -63,7 +63,7 @@ This means a schema upgrade never forces a big-bang migration — you move objec
 | Your editor stopped validating YAML | Regenerate: `opentide generate schemas` |
 
 <Callout type="info">
-Implementation detail: how the registry resolves identifiers to models and runs migrations is an internal concern documented in the [SDK registry](../../sdk/registry.md) and the opentide source. Authors only need the `metadata.schema` value.
+Implementation detail: how opentide resolves identifiers to models and runs migrations is internal to its Rust core (`crates/opentide-schema`). Authors only need the `metadata.schema` value.
 </Callout>
 
 ## Normative reference

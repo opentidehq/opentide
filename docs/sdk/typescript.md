@@ -1,6 +1,6 @@
 ---
 title: TypeScript SDK
-description: The @opentide/opentide npm package — the opentide SDK and command line for Node.js: open a Tide workspace, validate and lint it, read its catalogue and coverage, plan a deploy, and run the CLI with npx.
+description: The @opentide/opentide npm package — the opentide SDK and command line for Node.js: open a Tide workspace, validate and lint it, read its catalogue and coverage, plan a deploy, query, check and deploy on its tenants with promises, and run the CLI with npx.
 ---
 
 # TypeScript SDK
@@ -57,7 +57,7 @@ for (const finding of [...validation.report.issues, ...validation.report.warning
 }
 ```
 
-Opening reads every object file once into one index; each method then reads the index, so keep the `Workspace` and call as many methods on it as you need. Every method runs synchronously.
+Opening reads every object file once into one index; each method then reads the index, so keep the `Workspace` and call as many methods on it as you need. Every `Workspace` method runs synchronously. The operations on a tenant, which wait on the network, return promises: see [Tenant operations](#tenant-operations).
 
 ## Validate and lint
 
@@ -82,7 +82,7 @@ process.exitCode = validation.exitCode
 
 ## Read the catalogue and coverage
 
-`info`, `catalog` and `coverage` return the data of `opentide info`, `info catalog` and `info coverage`, with the command line's keys in its order.
+`info`, `catalog` and `coverage` return the data of `opentide info`, `info catalog` and `info coverage`, with the command line's keys in its order. `rules`, `objectives` and `threats` return each family's rows of the catalogue, in index order, as the Python SDK's methods of the same names do.
 
 ```js
 const { Workspace } = require('@opentide/opentide')
@@ -94,6 +94,8 @@ const catalogue = ws.catalog()
 console.log(catalogue.objects.length, 'objects,', catalogue.edges.length, 'edges')
 const coverage = ws.coverage('T1059')
 console.log(`${coverage.count} rules cover ${coverage.technique}`)
+for (const rule of ws.rules()) console.log(rule.uuid, rule.name)
+console.log(ws.objectives().length, 'objectives,', ws.threats().length, 'threats')
 ```
 
 ## Plan a deploy
@@ -107,6 +109,75 @@ const ws = Workspace.open('.')
 const plan = ws.deployPlan({ strategies: ['PREVIEW'] })
 console.log(plan.ok, plan.document.strategies, Object.keys(plan.document.plan))
 ```
+
+## Tenant operations
+
+A `Connection` is one tenant's client: it runs a query (`opentide query`), checks a query live (`opentide validate query --live`) and deploys one compiled rule, through the same platform connectors as the command line and the [Python SDK](./workspace.md#tenant-operations). `ws.tenants(platform)` returns the tenants the workspace configures, in file order, each a `TenantConfig`:
+
+```toml
+# .opentide/configurations/platforms/sentinel_one.toml
+[[tenants]]
+name = "soc"
+[tenants.setup]
+url = "$S1_URL"
+api_token = "$S1_API_TOKEN"
+account_id = 42
+```
+
+`Connection.open(tenant, options)` resolves the tenant's `$NAME` credentials (an unset one throws `credential_unset`, naming the variable) and builds its client from that tenant's own settings: TLS, CA bundle, proxy, timeout. It sends nothing. The options are `environment`, which replaces the process's environment for the credentials, CA bundles and proxies, `proxy`, used before the environment's, and `timeout`, how long in seconds the tenant may take to answer a read. `capabilities` says what the platform's connector can do. A tenant can also be configured in code: `new TenantConfig('sentinel_one', 'soc', { url, api_token: '$S1_API_TOKEN' })`; `setupKeys` names its keys, never their values.
+
+`query`, `validateQuery` and `deploy` return promises. Each operation runs on the Rust core's own threads (a tokio runtime the first operation starts) and settles back on Node's thread, so the event loop keeps running and one connection serves many operations at once:
+
+```js
+const { Connection, Workspace } = require('@opentide/opentide')
+
+const ws = Workspace.open('.')
+const tenant = ws.tenants('sentinel_one')[0]
+console.log(tenant.name) // soc
+const connection = Connection.open(tenant)
+console.log(connection.capabilities.liveValidation) // true
+
+async function hunt() {
+  const [check, found] = await Promise.all([
+    connection.validateQuery("EventType = 'Process Creation'"),
+    connection.query("EventType = 'Process Creation'", { limit: 10 }),
+  ])
+  console.log(check.errors, found.columns, found.truncated)
+  return found.rows
+}
+
+hunt().then((rows) => console.log(rows.length)) // 2
+```
+
+`query(text, options)` searches the 24 hours before now unless given `start` and `end` (RFC 3339 instants: `date.toISOString()`), resolves to at most `limit` rows (100 by default) as a `QueryResult` (`columns`, `rows`, `truncated`, `partial`, `warnings`, `vendorQueryId`, `sent`, `language`) and saves nothing on the tenant. Each row is an object of its columns in the order they came. `language` is the query's (`kql`, `esql`, `s1ql`; unset takes the platform's first), `index` the Elastic indices, the HarfangLab telemetry source or the CrowdStrike repository, `dataView` Elastic's, and `timeout` how long, in seconds, an asynchronous search may run. `validateQuery` takes the same options and searches for one row over the minute before now; it resolves to a `LiveCheck` (`result`, `errors`, `warnings`) for a query the tenant accepts, whose `errors` are why validation still fails it (Defender's required columns).
+
+`deploy(ruleId, operation, body)` creates, updates, disables or deletes one rule on the tenant, sending `body` (a `Buffer`, `Uint8Array` or string: the request `opentide deploy` compiles for this tenant) as its bytes, and resolves to a `DeployOutcome` with the platform's identifier of the rule (`remoteId`). `ruleId` is the rule's identifier on the platform, which a deploy keeps in its deployment state. A whole deploy run, with its plan, deployment state and retirements, is `runJson(['deploy', ...])`.
+
+```js
+const { Connection, Workspace } = require('@opentide/opentide')
+
+const connection = Connection.open(Workspace.open('.').tenants('sentinel_one')[0])
+const rule = { data: { name: 'Example', queryType: 'events' } }
+connection
+  .deploy('11111111-1111-4111-8111-111111111111', 'create', JSON.stringify(rule))
+  .then((outcome) => console.log(outcome.operation)) // create
+```
+
+`connection.canceller()` returns a `Canceller` that stops the connection's operations from elsewhere, a `SIGINT` handler or a timer: the running one, and every later one, rejects with `interrupted`, and a search it stops is stopped on the tenant where the API allows it (CrowdStrike).
+
+A platform that cannot do an operation rejects with `operation_unsupported`, never a faked result: CrowdStrike, HarfangLab and Sysdig cannot check a query live, Sysdig runs no queries, and Elastic deploys only through `opentide deploy`. A tenant that refuses a query rejects with `tenant_refused`, with the vendor's words in `detail`:
+
+```js
+const { Connection, Workspace } = require('@opentide/opentide')
+
+const connection = Connection.open(Workspace.open('.').tenants('sentinel_one')[0])
+connection.query("EventType = 'Process Creation' | syntax").catch((error) => {
+  console.log(error.code) // tenant_refused
+  console.log(error.detail)
+})
+```
+
+The other codes are `tenant_unreachable`, `tenant_timeout`, `query_timed_out`, `authentication_failed`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `connector_crashed`, `interrupted`, `runtime_unavailable` and `usage_invalid_value` (a window or a timeout that does not read). `platforms()` lists the platforms with a connector, and `capabilities(platform)` says what one can do.
 
 ## Run a command
 
@@ -123,7 +194,7 @@ console.log(tree.program, tree.version)
 
 ## Errors
 
-A call that cannot run throws an `Error` whose `code` is a stable code: `configuration_invalid` or the configuration check's own code (`config_parse`, ...), `io_error`, `usage_invalid_choice` for an option the command line would refuse, `no_json_document` when `runJson`'s command writes no document (`--version`). Match on the code, not the message. Findings about the workspace are not errors: they are in the report.
+A call that cannot run throws an `Error` whose `code` is a stable code: `configuration_invalid` or the configuration check's own code (`config_parse`, ...), `io_error`, `usage_invalid_choice` for an option the command line would refuse, `no_json_document` when `runJson`'s command writes no document (`--version`), and the [tenant operations](#tenant-operations)' codes, with which their promises reject. Match on the code, not the message; `detail` holds the vendor's own words when a tenant gave a reason, and is `null` otherwise. Findings about the workspace are not errors: they are in the report.
 
 ```js
 const { runJson } = require('@opentide/opentide')
@@ -137,7 +208,7 @@ try {
 
 ## Types
 
-The declarations (`index.d.ts`) are generated from the Rust binding by napi-rs and checked in; CI fails when a build changes them, and type-checks a sample consumer with `tsc --noEmit`. The options are typed, with the choices the command line accepts. The documents (`report`, `catalog()`, `document`) are typed `any` for now: their types, generated from the Rust structs, come with a later release.
+The declarations (`index.d.ts`) are generated from the Rust binding by napi-rs and checked in; CI fails when a build changes them, and type-checks a sample consumer with `tsc --noEmit`. The options are typed, with the choices the command line accepts. The tenant operations' results (`QueryResult`, `LiveCheck`, `DeployOutcome`, `Capabilities`) are typed. The documents (`report`, `catalog()`, `rules()`, `document`, a query's rows) are typed `any` for now: their types, generated from the Rust structs, come with a later release.
 
 ## Stability
 

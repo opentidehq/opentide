@@ -1,10 +1,9 @@
-"""``OPENTIDE_ENGINE=rust opentide mcp start`` over stdio (UC-3.7, #829).
+"""``opentide mcp start`` on the Rust server over stdio (UC-3.7, #829; UC-6.0c, #841).
 
-The Rust server (rmcp) runs in the package's Python process and hands the
-tools it has no implementation of to the Python handlers there. These run it
-as a client does and hold what the recorded sessions cannot: stdout carries
-JSON-RPC alone whatever else in the process writes to it, and the root
-options reach the Python half.
+The Rust server (rmcp) runs in the package's Python process and answers
+every tool and resource itself. These run it as a client does and hold what
+the recorded sessions cannot: stdout carries JSON-RPC alone whatever else in
+the process writes to it, and the root options reach every tool.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -22,24 +22,31 @@ from .test_mcp_stdio_e2e import StdioClient
 
 pytestmark = pytest.mark.cli_smoke
 
-#: The process ``mcp start`` runs under ``rust`` (``python -m opentide.cli.rust``),
-#: whose delegated handlers write to descriptor 1 three ways: the descriptor
-#: itself, ``print``, and a child process that inherits it.
+#: The process ``mcp start`` runs in (the console script, ``opentide._cli.main``),
+#: with a thread that writes to descriptor 1 three ways once the server has
+#: reserved it (descriptor 1 then points where descriptor 2 does): the
+#: descriptor itself, ``print``, and a child process that inherits it.
 NOISY_SERVER = """
-import os, subprocess, sys
-import opentide.mcp_server.bridge as bridge
+import os, subprocess, sys, threading, time
 
-original = bridge.call_tool
-
-def noisy(name, arguments):
+def noise():
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        one, two = os.fstat(1), os.fstat(2)
+        if (one.st_dev, one.st_ino) == (two.st_dev, two.st_ino):
+            break
+        time.sleep(0.01)
+    else:
+        return
     os.write(1, b"stray-descriptor\\n")
     print("stray-print", flush=True)
     subprocess.run([sys.executable, "-c", "print('stray-child')"], check=True)
-    return original(name, arguments)
+    sys.stderr.write("noise-done\\n")
+    sys.stderr.flush()
 
-bridge.call_tool = noisy
+threading.Thread(target=noise, daemon=True).start()
 sys.argv = ["opentide", *sys.argv[1:]]
-from opentide.cli.rust import main
+from opentide._cli import main
 raise SystemExit(main())
 """
 
@@ -73,15 +80,17 @@ def test_stray_output_in_the_process_never_reaches_the_frames(tmp_path: Path) ->
     client = _start(
         ["-c", NOISY_SERVER, "mcp", "start"],
         repo,
-        _environment(
-            OPENTIDE_ENGINE="rust", OPENTIDE_REPO_ROOT=str(repo), OPENTIDE_TIDE_WORKSPACE=str(repo)
-        ),
+        _environment(OPENTIDE_REPO_ROOT=str(repo), OPENTIDE_TIDE_WORKSPACE=str(repo)),
     )
     client.handshake()
     hits = client.call_tool("search", {"query": CORPUS_RULE_UUIDS["sentinel"]})
     assert [hit["uuid"] for hit in hits] == [CORPUS_RULE_UUIDS["sentinel"]]
     report = client.call_tool("validation_report", {})
     assert "next_actions" in report
+    deadline = time.monotonic() + 60
+    while "noise-done" not in client.stderr and time.monotonic() < deadline:
+        client.call_tool("explain", {"code": "vocab_unknown"})
+        time.sleep(0.05)
     lines = client.close_and_drain()
     for line in lines:
         if line.strip():
@@ -90,8 +99,7 @@ def test_stray_output_in_the_process_never_reaches_the_frames(tmp_path: Path) ->
         assert stray in client.stderr, client.stderr
 
 
-@pytest.mark.parametrize("engine", ["python", "rust"])
-def test_repo_names_the_workspace_from_outside_it(tmp_path: Path, engine: str) -> None:
+def test_repo_names_the_workspace_from_outside_it(tmp_path: Path) -> None:
     """``opentide --repo <ws> mcp start`` from another folder serves ``<ws>`` to every tool."""
     repo = materialise_corpus(tmp_path / "corpus")
     outside = tmp_path / "outside"
@@ -99,7 +107,7 @@ def test_repo_names_the_workspace_from_outside_it(tmp_path: Path, engine: str) -
     client = _start(
         ["-m", "opentide", "--repo", str(repo), "mcp", "start"],
         outside,
-        _environment(OPENTIDE_ENGINE=engine),
+        _environment(),
     )
     client.handshake()
     hits = client.call_tool("search", {"query": "Rule", "platform": "sentinel"})

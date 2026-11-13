@@ -54,6 +54,53 @@ impl clap::builder::TypedValueParser for CommandChecked {
     }
 }
 
+/// `--platform` of the commands that reach a platform's tenants (`query`,
+/// `validate query`, `deploy`): one of [`Platform`]'s values, or a platform
+/// plugin's identifier when the run loaded plugins (UC-4.5, #835). The
+/// catalogue lists the built-in platforms, and any other value fails as
+/// [`Platform`]'s parser fails it.
+#[derive(Clone, Debug)]
+pub struct PlatformName;
+
+/// What [`PlatformName`] parses: a platform's identifier. A type of its own,
+/// not `String`, so the catalogue reads the option as a choice.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlatformValue(pub String);
+
+impl clap::builder::TypedValueParser for PlatformName {
+    type Value = PlatformValue;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<PlatformValue, clap::Error> {
+        match clap::builder::EnumValueParser::<Platform>::new().parse_ref(cmd, arg, value) {
+            Ok(platform) => Ok(PlatformValue(
+                platform
+                    .to_possible_value()
+                    .map(|value| value.get_name().to_owned())
+                    .unwrap_or_default(),
+            )),
+            Err(error) => match value.to_str() {
+                Some(name) if crate::plugins::is_plugin(name) => Ok(PlatformValue(name.to_owned())),
+                _ => Err(error),
+            },
+        }
+    }
+
+    fn possible_values(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
+        Some(Box::new(
+            Platform::value_variants()
+                .iter()
+                .filter_map(ValueEnum::to_possible_value),
+        ))
+    }
+}
+
 /// The values of `Check`, as the command line spells them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum Check {
@@ -230,6 +277,16 @@ pub struct Cli {
         help = "Print the installed opentide version and exit"
     )]
     pub version: bool,
+    #[arg(
+        long = "install-completion",
+        help = "Install completion; name a shell after it to pick one"
+    )]
+    pub install_completion: bool,
+    #[arg(
+        long = "show-completion",
+        help = "Print the script instead; name a shell after it to pick one"
+    )]
+    pub show_completion: bool,
     #[command(subcommand)]
     pub command: Option<RootCommand>,
 }
@@ -1179,9 +1236,10 @@ pub struct DeployArgs {
     #[arg(
         long = "platform",
         help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig",
-        value_name = "PLATFORM"
+        value_name = "PLATFORM",
+        value_parser = PlatformName
     )]
-    pub platform: Option<Platform>,
+    pub platform: Option<PlatformValue>,
     #[arg(long = "strategy", help = "Status strategy this run deploys (repeatable). PREVIEW: rules whose status maps to PREVIEW or UNIVERSAL. RELEASE: rules whose status maps to RELEASE or UNIVERSAL, and disables or deletes those mapping to DISABLEMENT or DELETION. Each rule goes to the tenants whose 'strategies' accept the run's strategy. Status names such as STAGING or PRODUCTION are not strategies", action = clap::ArgAction::Append)]
     pub strategy: Vec<String>,
     #[arg(
@@ -1582,9 +1640,10 @@ pub struct QueryArgs {
     #[arg(
         long = "platform",
         help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig",
-        value_name = "PLATFORM"
+        value_name = "PLATFORM",
+        value_parser = PlatformName
     )]
-    pub platform: Platform,
+    pub platform: PlatformValue,
     #[arg(long = "tenant", help = "Run on this tenant (repeatable), or 'all'. Default: the only tenant configured", action = clap::ArgAction::Append)]
     pub tenant: Vec<String>,
     #[arg(
@@ -1696,9 +1755,10 @@ pub struct ValidateQueryArgs {
     #[arg(
         long = "platform",
         help = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
-        value_name = "PLATFORM"
+        value_name = "PLATFORM",
+        value_parser = PlatformName
     )]
-    pub platform: Option<Platform>,
+    pub platform: Option<PlatformValue>,
     #[arg(long = "strategy", help = "Check only rules a run with this strategy deploys (repeatable), on the tenants that accept it. Default: PREVIEW and RELEASE", action = clap::ArgAction::Append)]
     pub strategy: Vec<String>,
     #[arg(long = "plan", hide = true, help = "Removed in 0.17.0; use --strategy")]

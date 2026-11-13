@@ -64,6 +64,51 @@ fn skills_catalogue_cases_are_the_oracles() {
     check(&["setup.skills.discover", "setup.skills.show"], 20);
 }
 
+/// `setup skills` (the install), `setup --skills` and `--plugin` (UC-4.4d,
+/// #834): a fresh install, one over the repository's own agent files and
+/// settings, the plugin, a remote skill and a failed download, each tree
+/// served from its cassette (`tests/cassettes/skills/`), and the files
+/// written compared with the oracle's.
+#[test]
+fn skills_install_cases_are_the_oracles() {
+    check(&["setup.skills"], 40);
+}
+
+/// The root's own runs (UC-6.0b, #841): `--version`, a mistyped command or
+/// root option, a `--repo` that is not a folder, `--debug info`, the home
+/// screen of a bare `opentide` at a terminal and its help elsewhere; and the
+/// bare groups, which print their help to a person and a usage error to a
+/// program.
+#[test]
+fn root_and_group_cases_are_the_oracles() {
+    check(
+        &[
+            "_root",
+            "generate.extract",
+            "lsp",
+            "mcp",
+            "migrate",
+            "new",
+            "rules",
+        ],
+        60,
+    );
+}
+
+/// `--help` on every command path, in every mode (#841): clap's help, held
+/// to the oracle's by what it says (the ledger's `help` entries).
+#[test]
+fn help_cases_are_the_oracles() {
+    let (problems, ran) = replay::replay_variant("help");
+    assert!(ran >= 236, "only {ran} help cases found");
+    assert!(
+        problems.is_empty(),
+        "{} problem(s):\n\n{}",
+        problems.len(),
+        problems.join("\n\n")
+    );
+}
+
 #[test]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);
@@ -157,6 +202,95 @@ fn query_cases_are_the_oracles() {
 #[test]
 fn deploy_migrate_state_cases_are_the_oracles() {
     check(&["deploy.migrate-state"], 16);
+}
+
+/// `share` and its subcommands (UC-4.4b, #834): the MISP stand-in's
+/// cassettes for a push and a retract, and the runs that stop before any
+/// request; `share push --changed` on the git checkouts of a push (UC-4.4e).
+#[test]
+fn share_cases_are_the_oracles() {
+    check(
+        &[
+            "share",
+            "share.push",
+            "share.preview",
+            "share.status",
+            "share.retract",
+            "share.targets",
+        ],
+        120,
+    );
+}
+
+/// `generate extract defender` and `generate extract elastic` (UC-4.4b,
+/// #834): the stand-in tenants' cassettes, the files written under
+/// `Imported/` and Defender's deployment state; `generate extract sentinel`'s
+/// runs without a tenant (UC-4.4e; its tenant's run is
+/// `tests/extract_sentinel.rs`').
+#[test]
+fn generate_extract_cases_are_the_oracles() {
+    check(
+        &[
+            "generate.extract.defender",
+            "generate.extract.elastic",
+            "generate.extract.sentinel",
+        ],
+        30,
+    );
+}
+
+/// The rules `generate extract elastic` writes (#834) are serde-saphyr's
+/// YAML, formatted differently from PyYAML's (`APPROVED_DIFFS.toml`): each
+/// file a stand-in tenant's case writes loads to the oracle's data, every
+/// value and every key in the oracle's order.
+#[test]
+fn extracted_elastic_rules_load_as_the_oracles_data() {
+    use opentide_compare::FileState;
+    let as_data = |path: &str, bytes: &[u8]| {
+        let text = std::str::from_utf8(bytes).unwrap();
+        let loaded = opentide_schema::node::load(text)
+            .unwrap_or_else(|error| panic!("{path}: {error:?}\n{text}"));
+        opentide_compile::json::Json::from_node(loaded.root().unwrap()).to_compact()
+    };
+    let cases = replay::repo().join("tests/golden/cases/generate.extract.elastic");
+    let ledger = replay::ledger();
+    let mut usage = opentide_compare::ledger::Usage::default();
+    let mut compared = 0;
+    for mode in std::fs::read_dir(&cases).unwrap() {
+        let mode = mode.unwrap().path();
+        let Ok(variants) = std::fs::read_dir(mode.join("tenants")) else {
+            continue;
+        };
+        for dir in variants {
+            let dir = dir.unwrap().path();
+            let id = dir.strip_prefix(&cases).unwrap().display().to_string();
+            // The comparison under the ledger is `generate_extract_cases_are_the_oracles`'.
+            let _ = replay::replay(&id, &dir, &ledger, &mut usage);
+            let outcome: toml::Table = std::fs::read_to_string(dir.join("outcome.toml"))
+                .unwrap()
+                .parse()
+                .unwrap();
+            let candidate = replay::last_files();
+            for (path, state) in replay::recorded_files(&dir, &outcome) {
+                let FileState::Written { bytes, .. } = state else {
+                    continue;
+                };
+                if !path.starts_with("ws/Imported/") {
+                    continue;
+                }
+                let Some(FileState::Written { bytes: written, .. }) = candidate.get(&path) else {
+                    panic!("{id}: Rust did not write {path}");
+                };
+                assert_eq!(
+                    as_data(&path, written),
+                    as_data(&path, &bytes),
+                    "{id}: {path} loads to other data than the oracle's"
+                );
+                compared += 1;
+            }
+        }
+    }
+    assert!(compared >= 12, "only {compared} files compared");
 }
 
 #[test]
@@ -367,124 +501,12 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
     );
 }
 
-/// The replay reads `RUST_COMMANDS` as the dispatch does: every entry, with
-/// its `requires`, `refuses` and `platforms`, so it tolerates a refusal only
-/// of a run the table does not cover (a bare `generate`, `query` of a rule)
-/// and fails on any other.
-#[test]
-fn the_replay_tolerates_a_refusal_only_where_rust_commands_does_not_cover_the_run() {
-    let words =
-        |text: &str| -> Vec<String> { text.split_whitespace().map(str::to_owned).collect() };
-    let table = replay::rust_commands();
-    assert_eq!(table["validate"], replay::Coverage::default());
-    assert_eq!(table["deploy"].requires, Vec::<String>::new());
-    assert_eq!(table["deploy"].offline, ["--dry-run"]);
-    assert!(table["deploy"].platforms.contains(&"sysdig".to_owned()));
-    assert!(replay::covers("deploy", &words("deploy --dry-run --all")));
-    assert!(replay::covers(
-        "deploy",
-        &words("deploy --platform sysdig --all")
-    ));
-    assert!(!replay::covers(
-        "deploy",
-        &words("deploy --strategy PREVIEW --all")
-    ));
-    assert!(!replay::covers("deploy", &words("deploy -- --dry-run")));
-    assert_eq!(
-        table["generate"].requires,
-        ["schemas", "templates", "vocabs", "snippets"]
-    );
-    assert_eq!(table["generate docs rules"], replay::Coverage::default());
-    assert_eq!(table["setup"].refuses, ["--skills", "--plugin"]);
-    // A tuple named by its constant, and a scope of its own.
-    assert_eq!(table["query"].refuses, ["--rule", "--file"]);
-    assert!(table["query"].platforms.contains(&"elastic".to_owned()));
-    assert_eq!(table["validate query"].platform_scope, ["--live"]);
-    assert!(replay::covers(
-        "generate",
-        &words("--json generate schemas")
-    ));
-    assert!(!replay::covers("generate", &words("--json generate")));
-    assert!(!replay::covers("generate", &words("generate --help")));
-    assert!(!replay::covers("generate", &words("generate -- schemas")));
-    assert!(replay::covers("new threat", &words("new threat --name x")));
-    assert!(replay::covers("doctor", &words("doctor --offline")));
-    // doctor's network checks run on Rust too (UC-4.4, #834).
-    assert!(replay::covers("doctor", &words("doctor")));
-    assert!(replay::covers(
-        "deploy migrate-state",
-        &words("deploy migrate-state")
-    ));
-    assert!(replay::covers("setup", &words("setup --plan")));
-    assert!(!replay::covers("setup", &words("setup --skills")));
-    assert!(replay::covers("setup vscode", &words("setup vscode")));
-    assert!(!replay::covers(
-        "setup skills",
-        &words("setup skills --claude-code")
-    ));
-    assert!(replay::covers(
-        "query",
-        &words("query --platform elastic q")
-    ));
-    assert!(replay::covers(
-        "query",
-        &words("query --platform=crowdstrike q")
-    ));
-    // Every platform with a query runner, Splunk too since UC-4.3 (#833).
-    assert!(replay::covers("query", &words("query --platform splunk q")));
-    assert!(!replay::covers("query", &words("query q")));
-    assert!(!replay::covers(
-        "query",
-        &words("query --platform elastic --rule r")
-    ));
-    assert!(replay::covers(
-        "validate query",
-        &words("validate query --file q.kql")
-    ));
-    // Every platform's live validation is Rust's since UC-4.6 (#979); a
-    // `--live` run that names no platform stays Python's.
-    assert!(replay::covers(
-        "validate query",
-        &words("validate query --live --platform elastic")
-    ));
-    assert!(!replay::covers(
-        "validate query",
-        &words("validate query --live")
-    ));
-    assert!(replay::covers(
-        "validate query",
-        &words("validate query --live --platform sysdig")
-    ));
-    // A multi-line entry, a tuple named by a constant, and one the parser
-    // cannot read, which is no table.
-    let source = "x = 1\nPLATFORMS: tuple[str, ...] = (\n    \"p\",\n    \"q\",\n)\n\
-                  RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {\n    \
-                  (\"a\",): RustCommand(launch=RUST_CLI),\n    (\"b\", \"c\"): RustCommand(\n        \
-                  launch=RUST_CLI, requires=(\"--x\", \"y\"),\n        refuses=(\"--z\",),\n        \
-                  platforms=PLATFORMS,\n    ),\n}\n";
-    let parsed = replay::parse_rust_commands(source);
-    assert_eq!(parsed.len(), 2);
-    assert_eq!(parsed["a"], replay::Coverage::default());
-    assert_eq!(parsed["b c"].requires, ["--x", "y"]);
-    assert_eq!(parsed["b c"].refuses, ["--z"]);
-    assert_eq!(parsed["b c"].platforms, ["p", "q"]);
-    let unreadable = source.replace("(\"a\",)", "KEY");
-    assert!(std::panic::catch_unwind(|| replay::parse_rust_commands(&unreadable)).is_err());
-    let undefined = source.replace("platforms=PLATFORMS", "platforms=NOWHERE");
-    assert!(std::panic::catch_unwind(|| replay::parse_rust_commands(&undefined)).is_err());
-}
-
 /// `generate <phase>...` (UC-3.5d, #933): the `schemas`, `templates`,
-/// `vocabs` and `snippets` phases run in Rust; the full pipeline is refused
-/// with `engine_not_ported` (Python runs it alone under `compare`).
+/// `vocabs` and `snippets` phases; and a bare `generate`, the full pipeline
+/// (UC-6.0, #841).
 #[test]
 fn generate_phase_cases_are_the_oracles() {
-    let refused = replay::refused();
-    check(&["generate"], 4);
-    let refused = replay::refused() - refused;
-    if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
-        assert!(refused >= 8, "only {refused} refused");
-    }
+    check(&["generate"], 12);
 }
 
 /// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and

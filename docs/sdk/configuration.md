@@ -1,11 +1,11 @@
 ---
 title: Configuration models
-description: Pydantic models of each .opentide/configurations/ file, their JSON Schema export, and the per-file issue helper editors use.
+description: The model of each .opentide/configurations/ file, how its layers merge, its JSON Schema, and how a file is checked.
 ---
 
 # Configuration models
 
-Every file under `.opentide/configurations/` has one Pydantic model in `opentide.models.configuration`. The CLI validates the merged document (bundled file, then your workspace file, then the parent instance) against that model when it reads the file, and the JSON Schema of the file is `model_json_schema()` of the same model. There is no second, hand-written schema to drift from the CLI.
+Every file under `.opentide/configurations/` has one model in opentide's Rust core (`opentide-schema`'s `configuration` module). The command line validates the merged document (bundled file, then your workspace file, then the parent instance) against that model when it reads the file, and the JSON Schema of the file is generated from the same model. There is no second, hand-written schema to drift from the command line.
 
 | File | Model | Schema file |
 |------|-------|-------------|
@@ -23,54 +23,27 @@ Unknown keys are rejected everywhere except a top-level `sharing.toml` array tha
 
 A `$NAME` placeholder is a valid value for any tenant `setup` key; the models check the file as written, and the variable is read when the tenant loads. An error never repeats the offending value, since `setup` tables hold credentials.
 
-```python
-from opentide.models.configuration import configuration_model_for
-
-model = configuration_model_for(".opentide/configurations/platforms/sentinel.toml")
-model.model_validate({"platform": {"enabled": True}})
-```
-
 ## Declared datasets
 
-A `visibility.toml` log source (`VisibilityLogSource`) is one dataset, and its `name` is that dataset: the KQL table for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern for `elastic` (`opentide.models.visibility.DATASET_KINDS`). It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a mapping of column name to `VisibilityColumn` (`type` from `COLUMN_TYPES[system]`, optional `description`).
+A `visibility.toml` log source (`VisibilityLogSource`) is one dataset, and its `name` is that dataset: the KQL table for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern for `elastic` . It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a mapping of column name to a column (`type` from the system's column types, optional `description`).
 
-Each violation is an issue on the key at fault: an empty `name` or a name declared twice for one `system` (`schema_validation`, `("logsources", "1", "name")`), a column type outside the system's set (`("logsources", "0", "columns", "Actor_s", "type")`), `columns` on a system with no type set, and an unknown key (`unknown_key`). The 0.20.0 keys (`LEGACY_DATASET_KEYS`: `tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`) fail as `schema_validation` on that key, with the message `LEGACY_DATASET_KEYS` maps the key to: what to do instead.
+Each violation is an issue on the key at fault: an empty `name` or a name declared twice for one `system` (`schema_validation`, `("logsources", "1", "name")`), a column type outside the system's set (`("logsources", "0", "columns", "Actor_s", "type")`), `columns` on a system with no type set, and an unknown key (`unknown_key`). The 0.20.0 keys (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`) fail as `schema_validation` on that key, with a message that says what to do instead.
 
-The analysis engine reads the same keys from the file's text, so nothing is generated in between. `opentide.analysis.install_workspace_visibility(root)` hands it `root/.opentide/configurations/visibility.toml` for the query checks (`opentide validate`, `lint` and the TUI call it); `opentide._native.install_visibility(text)` takes the text directly, and `install_catalog(..., visibility=text)` installs it with the Tide catalogs. `*` in a name matches any run of characters.
+The analysis engine reads the same keys from the file's text, so nothing is generated in between: `opentide validate`, `lint`, the TUI and the language server read the workspace's `visibility.toml` for the query checks. `*` in a name matches any run of characters.
 
-## Exporting the JSON Schemas
+## The JSON Schemas
 
-```python
-from pathlib import Path
-
-from opentide.generation.configuration_schemas import (
-    export_configuration_schemas,
-    generate_configuration_schema,
-)
-
-schema = generate_configuration_schema("deployment.toml")
-export_configuration_schemas(Path("catalogs/configuration"))
-```
-
-The same export runs from the command line:
-
-```bash
-python -m opentide.generation.configuration_schemas catalogs/configuration
-```
-
-It writes one schema per file kind and `configurations.router.json`, which maps each file name (`deployment.toml`, `platforms/sentinel.toml`, `platforms/*.toml`, `sharing.toml`, …) to its schema and says how layers merge: `deep` (scalars replace, tables merge, arrays replace) or, for `sharing.toml`, `by-name`. Field descriptions are the hover text; enums (`strategy`, tenant `strategies`, documentation `flavor`, `max_tlp`, object families) are JSON Schema enums. These schemas are instance-independent; the enriched `visibility.1.0.schema.json` that `opentide generate schemas` writes into `.opentide/schemas/` is unchanged.
+The schemas are generated from the models: the language server offers them for hover and completion in `.opentide/configurations/*.toml` in every editor host. There is one per file kind and a router that maps each file name (`deployment.toml`, `platforms/sentinel.toml`, `platforms/*.toml`, `sharing.toml`, …) to its schema and says how layers merge: `deep` (scalars replace, tables merge, arrays replace) or, for `sharing.toml`, `by-name`. Field descriptions are the hover text; enums (`strategy`, tenant `strategies`, documentation `flavor`, `max_tlp`, object families) are JSON Schema enums. The enriched `visibility.1.0.schema.json` that `opentide generate schemas` writes into `.opentide/schemas/` is instance-specific.
 
 ## Checking one file
 
-`configuration_file_issues` returns `ValidationIssue` records (`code`, `field_path`, `severity`, `message`) for one file, the same shape `validate` reports for objects. A client file is a partial override, so it is merged onto the layers before it (the bundled file by default) and required keys apply to that merge, never to the file alone.
+`opentide validate --check configuration` (or `Workspace.validate(check="configuration")`) checks every file, and the language server checks the buffer you edit, with the same codes, field paths and severities that `validate` reports for objects. A client file is a partial override, so it is merged onto the layers before it (the bundled file by default) and required keys apply to that merge, never to the file alone.
 
 ```python
-from opentide.validation.configuration import configuration_file_issues, configuration_text_issues
+from opentide import Workspace
 
-issues = configuration_file_issues("deployment.toml", {"promotion": {"promotion_target": "LIVE"}})
-# [ValidationIssue(code="promotion_target_unknown", field_path=("promotion", "promotion_target"), ...)]
-
-issues = configuration_text_issues("sharing.toml", buffer_text, status_names={"PRODUCTION"})
+validation = Workspace.open(".").validate(check="configuration")
+codes = [issue["code"] for issue in validation.report["issues"]]
 ```
 
 | Code | Severity | Raised for |
@@ -87,14 +60,6 @@ A `[[responders]]` entry that does not match its model is a warning: the loader 
 
 `sharing.toml` field paths point into the checked file: `("misp", "<index>", "<key>")`, with the block name in `context.block`. A finding on a block the file does not hold (it comes from an earlier layer) has an empty path, and `context.layer` / `context.index` say where it is. `sharing.toml` returns the `sharing-config` codes of the [sharing spec](/docs/specifications/specs/sharing/): `missing_field`, `duplicate_name`, `name_invalid`, `unknown_key`, `max_tlp_unknown`, `organisation_uuid_invalid`, `object_type_unknown`, `sharing_directory`, `rule_status_unknown` (errors), and `api_key_literal`, `unknown_connector` (warnings). `api_key` must be `${NAME}` with an uppercase name; a literal key is a warning, and the warning names the block, never the key.
 
-| Argument | Default | Purpose |
-|----------|---------|---------|
-| `earlier_layers` | the bundled file | Layers the file overrides; pass the workspace file when checking a parent instance |
-| `later_layers` | none | Layers that override the file |
-| `status_names` | the workspace's statuses, read from an absolute path; else the bundled ones | Merged `deployment.toml` status names, for `sharing.toml` `rule_statuses` |
-| `sharing_directory` | `False` | Report `sharing_directory` when `configurations/sharing/` exists |
-| `partial` | `False` | Skip required-key checks, for a layer checked without the layers it overrides |
-
 ## Source
 
-`src/opentide/_models/configuration/`, `src/opentide/generation/configuration_schemas.py`, `src/opentide/validation/configuration.py`
+`crates/opentide-schema/src/configuration/`, `crates/opentide-schema/src/generate/configuration.rs`

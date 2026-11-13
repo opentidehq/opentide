@@ -2,7 +2,7 @@
 
 The query and Tide object analysis engine and the language server, compiled into the `opentide` package as `opentide._native`. `pip install opentide` installs it: there is no separate package and no extra.
 
-This crate binds [`opentide-analysis`](../../crates/opentide-analysis) and [`opentide-lsp`](../../crates/opentide-lsp), the engine crates of this repository's Cargo workspace (imported from opentidehq/language-server, [`docs/engine/IMPORT.md`](../../docs/engine/IMPORT.md)), by path with PyO3: KQL, SPL, ES|QL, EQL, Kibana KQL (kuery), Lucene and Tide YAML, analyzed without I/O. Python reaches it only through `src/opentide/analysis.py`.
+This crate binds [`opentide-analysis`](../../crates/opentide-analysis), the engine crate of this repository's Cargo workspace (imported from opentidehq/language-server, [`docs/engine/IMPORT.md`](../../docs/engine/IMPORT.md)), by path with PyO3: KQL, SPL, ES|QL, EQL, Kibana KQL (kuery), Lucene and Tide YAML, analyzed without I/O. Python reaches it only through `src/opentide/analysis.py`.
 
 | Command | What the engine does |
 | --- | --- |
@@ -20,6 +20,6 @@ This crate binds [`opentide-analysis`](../../crates/opentide-analysis) and [`ope
 - A wheel (`uv build`, the release workflow) uses the `release` profile. `OPENTIDE_ENGINE_PROFILE` overrides it.
 - The release workflow builds a wheel per platform with cibuildwheel: Linux (manylinux and musllinux, x86_64 and aarch64), macOS (x86_64, arm64) and Windows (x64). Elsewhere pip builds the sdist, which needs a Rust toolchain.
 
-After changing the bindings (`src/lib.rs`), update the stub `src/opentide/_native/__init__.pyi` (the models' stub, `_native/models.pyi`, is generated: `cargo xtask stubs`) and run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` from the repository root.
+After changing the bindings (`src/lib.rs`), update the stub `src/opentide/_native/__init__.pyi` (the stubs of the models and the SDK, `_native/models.pyi` and `_native/sdk.pyi`, are generated: `cargo xtask stubs`) and run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` from the repository root.
 
 Licence: EUPL-1.2.

@@ -5,9 +5,8 @@
 //!
 //! A cassette replays as many times as it is run through: after its last
 //! interaction the next request is compared with its first. Each pass must
-//! be whole. `OPENTIDE_ENGINE=compare` runs the Python and the Rust
-//! implementation one after the other, and each must send the scenario's
-//! requests.
+//! be whole: a test that runs a command twice must send the scenario's
+//! requests each time.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

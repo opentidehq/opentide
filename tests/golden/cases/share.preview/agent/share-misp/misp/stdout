@@ -1,0 +1,18 @@
+misp-prod
+  ○ skipped    Rule still in staging  …000000000014  status not shared
+  ○ skipped    Rule marked red        …000000000015  TLP above max_tlp
+  + created    Shared Actor           …000000000001
+  + created    Shared Objective       …000000000002
+  + created    Shared rule to create  …000000000011
+  ~ updated    Shared rule to update  …000000000012
+  ○ unchanged  Shared rule unchanged  …000000000013
+
+misp-locked
+  ○ skipped  Shared Actor           …000000000001  type not shared
+  ○ skipped  Shared Objective       …000000000002  type not shared
+  ○ skipped  Rule still in staging  …000000000014  status not shared
+  ○ skipped  Rule marked red        …000000000015  TLP above max_tlp
+  ✗ failed   Shared rule to create  …000000000011  organisation uuid missing
+  ✗ failed   Shared rule to update  …000000000012  organisation uuid missing
+  ✗ failed   Shared rule unchanged  …000000000013  organisation uuid missing
+

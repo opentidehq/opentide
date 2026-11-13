@@ -23,7 +23,6 @@ from typing import Any
 from unittest.mock import patch
 
 from opentide.models.system_config import ConfigurationModels as C
-
 from opentide.platforms.harfanglab import client
 from opentide.platforms.harfanglab.client import SigmaRule, YaraRule
 from opentide.query.models import QueryRefused, QueryRequest, TimeWindow

@@ -25,6 +25,13 @@ Scenarios:
   permission.
 - ``validate``: ``validate query --live``'s check (a search for one row) of two
   queries.
+- ``extract <dir>``: ``opentide --json generate extract sentinel``, the oracle's
+  command line run here, in a copy of ``<dir>/workspace`` (one tenant on the
+  stand-in's workspace ``extract``): sign in, list the analytics rules (two
+  pages). What it wrote (``Imported/``, ``output-soc.json``) and its JSON
+  document go to ``<dir>/oracle/``, which
+  ``crates/opentide-cli/tests/extract_sentinel.rs`` compares with what the Rust
+  command writes from this cassette.
 """
 
 from __future__ import annotations
@@ -52,9 +59,8 @@ def _next_id(*_: Any, **__: Any) -> uuid.UUID:
 uuid.uuid1 = _next_id  # type: ignore[assignment]
 uuid.uuid4 = _next_id  # type: ignore[assignment]
 
-from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
-
 from opentide.core.errors import Errors  # noqa: E402
+from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
 from opentide.platforms.sentinel import runner as sentinel_runner  # noqa: E402
 from opentide.platforms.sentinel.client import SentinelApiError, SentinelService  # noqa: E402
 from opentide.query.models import QueryRefused, QueryRequest, TimeWindow  # noqa: E402
@@ -180,6 +186,42 @@ def validate() -> None:
         _print({"rows": len(found.result.rows), "sent": found.result.sent})
 
 
+def extract(directory: str) -> None:
+    import contextlib
+    import io
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from opentide.cli import main as cli
+
+    here = Path(directory).resolve()
+    oracle = here / "oracle"
+    ws = Path(tempfile.mkdtemp()) / "ws"
+    shutil.copytree(here / "workspace", ws)
+    stdout = io.StringIO()
+    previous = os.getcwd()
+    os.chdir(ws)
+    sys.argv = ["opentide", "--json", "generate", "extract", "sentinel"]
+    try:
+        with contextlib.redirect_stdout(stdout):
+            cli()
+        code = 0
+    except SystemExit as exit:
+        code = exit.code
+    finally:
+        os.chdir(previous)
+    document = json.loads(stdout.getvalue())
+    document["duration_ms"] = 0
+    shutil.rmtree(oracle, ignore_errors=True)
+    shutil.copytree(ws / "Imported", oracle / "Imported")
+    shutil.copy(ws / "output-soc.json", oracle / "output-soc.json")
+    with open(oracle / "result.json", "w", encoding="utf-8", newline="\n") as out:
+        json.dump(document, out, indent=2, ensure_ascii=False)
+        out.write("\n")
+    _print({"exit": code, "message": document.get("message")})
+
+
 def fixture(path: str) -> None:
     document = {
         "deploy": {"rule_id": RULE_ID, "rule": RULE},
@@ -201,6 +243,8 @@ def main() -> int:
     scenario = sys.argv[1]
     if scenario == "fixture":
         fixture(sys.argv[2])
+    elif scenario == "extract":
+        extract(sys.argv[2])
     else:
         {"deploy": deploy, "query": query, "validate": validate}[scenario]()
     return 0

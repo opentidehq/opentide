@@ -7,9 +7,6 @@
 //! - #874 (UC-0.2): `validate query` checks CrowdStrike's CQL offline. The
 //!   `--platform` help names `crowdstrike`, `--file` reads `.cql`, and
 //!   `QueryChecked.language` gains `cql`.
-//!
-//! The `OPENTIDE_ENGINE` environment row (UC-0.7, #805) is handled by
-//! `framework_goldens.rs` itself.
 
 use opentide_cli::json::Json;
 

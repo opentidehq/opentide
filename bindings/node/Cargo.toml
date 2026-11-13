@@ -55,8 +55,9 @@ name = "opentide_node"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# The facade, and only the facade (ADR 0005): the SDK and the command line.
-opentide = { path = "../../crates/opentide", features = ["cli"] }
+# The facade, and only the facade (ADR 0005): the SDK and the command line;
+# `connectors`, the tenant operations (UC-5.3b), async on tokio.
+opentide = { path = "../../crates/opentide", features = ["cli", "connectors"] }
 # napi-rs 3 (MIT): N-API without a C++ toolchain; napi-derive writes the
 # TypeScript declarations (index.d.ts) from the `#[napi]` items.
 # `dyn-symbols`: the N-API functions are looked up when Node loads the addon,
@@ -65,6 +66,10 @@ napi = { version = "3", default-features = false, features = ["napi4", "dyn-symb
 napi-derive = { version = "3", default-features = false, features = ["type-def"] }
 # The facade's documents, handed to JavaScript in their field order.
 serde.workspace = true
+# The runtime the tenant operations run on: started by the first operation,
+# never when Node loads the addon, and settled back on Node's thread through
+# each promise's deferred (napi's own `async` would start one at load).
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [build-dependencies]
 # The link arguments an addon needs (macOS: `-undefined dynamic_lookup`).

@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import os
 import shutil
-from collections.abc import Iterable, Iterator
+import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from opentide._models.deployment_enums import StatusStrategy
-from opentide.core.io import load_toml
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 TIDE_CORPUS_ROOT = ROOT / "tests/fixtures/tide_corpus/current"
@@ -82,26 +85,6 @@ def migrate_tide_corpus_layout(dest: Path) -> None:
     opentide.joinpath("inflight").mkdir(exist_ok=True)
 
 
-def clear_runtime_caches() -> None:
-    from opentide.core.index_manager import IndexManager
-    from opentide.core.registry import Opentide
-    from opentide.core.root import get_data_root, get_repo_root
-    from opentide.generation import schema_pipeline
-
-    # The schema pipeline caches registry-backed globals; a stale binding points
-    # generation at the previous test's repo root.
-    schema_pipeline._runtime_ready = False
-    get_repo_root.cache_clear()
-    get_data_root.cache_clear()
-    IndexManager._cache = None
-    Opentide._initialised = False
-    Opentide._objects_loaded = False
-    Opentide._index = None
-    Opentide._rules = {}
-    Opentide._threats = {}
-    Opentide._objectives = {}
-
-
 def materialise_corpus(dest: Path) -> Path:
     """Copy tide_corpus into *dest* and migrate it to the current layout."""
     shutil.copytree(TIDE_CORPUS_ROOT, dest)
@@ -161,55 +144,6 @@ def add_unplanned_rules(rules: Path) -> None:
     write_rule_variant(rules, "rule-0103-design.yaml", INERT_RULE_UUID, status="DESIGN")
 
 
-def classify_deploy_scope(
-    repo: Path,
-    indexed: Iterable[str],
-    plan: dict[str, list[str]],
-    warnings: Iterable[str],
-    *,
-    excluded: frozenset[StatusStrategy],
-) -> dict[str, set[str]]:
-    """Sort indexed rule UUIDs by why a plan has or lacks them (#312 guard).
-
-    ``silent`` holds rules that are not planned, not excluded by a status
-    strategy in *excluded*, and whose file no warning names.
-    """
-    from opentide.core.io import load_yaml
-    from opentide.core.object_refs import object_uuid
-    from opentide.deployment.utils import check_status
-
-    planned = {uuid for uuids in plan.values() for uuid in uuids}
-    named = {
-        name
-        for message in warnings
-        if "): " in message
-        for name in message.split("): ", 1)[1].split(", ")
-    }
-    root = repo.resolve()
-    files: dict[str, tuple[str, dict[str, Any]]] = {}
-    for path in (repo / "objects" / "rules").rglob("*.yaml"):
-        data = load_yaml(path)
-        files[object_uuid(data)] = (path.resolve().relative_to(root).as_posix(), data)
-    scope: dict[str, set[str]] = {
-        "planned": set(),
-        "status": set(),
-        "warned": set(),
-        "silent": set(),
-    }
-    for uuid in indexed:
-        file, data = files[uuid]
-        strategies = {check_status(conf["status"]) for conf in data["configurations"].values()}
-        if uuid in planned:
-            scope["planned"].add(uuid)
-        elif strategies <= excluded:
-            scope["status"].add(uuid)
-        elif file in named:
-            scope["warned"].add(uuid)
-        else:
-            scope["silent"].add(uuid)
-    return scope
-
-
 def corpus_env(repo: Path) -> dict[str, str]:
     """Environment overrides that point opentide at a materialised corpus."""
     return {
@@ -233,9 +167,7 @@ def tide_corpus_repo(
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(dest))
     monkeypatch.delenv("DEPLOYMENT_PLAN", raising=False)
     monkeypatch.setenv("CI", "true")
-    clear_runtime_caches()
     yield dest
-    clear_runtime_caches()
 
 
 @pytest.fixture
@@ -244,7 +176,7 @@ def corpus_rule_uuids() -> dict[str, str]:
 
 
 def load_corpus_manifest() -> dict[str, Any]:
-    return load_toml(TIDE_CORPUS_MANIFEST)
+    return tomllib.loads(TIDE_CORPUS_MANIFEST.read_text(encoding="utf-8"))
 
 
 def manifest_slices(*, status: str | None = None) -> list[dict[str, Any]]:

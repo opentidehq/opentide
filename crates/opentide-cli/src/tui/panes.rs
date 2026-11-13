@@ -9,6 +9,9 @@ use opentide_workspace::views::chains::{
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use super::configuration::{
+    ConfigFile, ConfigFinding, ConfigurationView, HIDDEN, PlatformCard, Setting,
+};
 use super::model::{Catalogue, Kind, LogSource, TechniqueCoverage, Undeclared, Visibility};
 
 fn dim() -> Style {
@@ -332,28 +335,398 @@ pub fn visibility_detail(
 
 // -- Configuration ------------------------------------------------------------
 
-/// What the Configuration tab says: its service (`configuration_view.py`:
-/// each setting's effective value, whether the workspace sets it, its
-/// schema's description, the platform cards and the proven-redacted raw
-/// files) has no Rust implementation yet.
-pub fn configuration_refusal() -> Vec<Line<'static>> {
-    vec![
+/// The style of a finding's severity (`_SEVERITY_STYLE`).
+fn severity_style(severity: &str) -> Style {
+    match severity {
+        "error" => bold().fg(Color::Red),
+        "warning" => bold().fg(Color::Yellow),
+        _ => bold(),
+    }
+}
+
+/// The file list's row of `item`: its key (dim without a workspace file),
+/// how many settings the workspace sets, and its findings.
+pub fn configuration_cells(item: &ConfigFile) -> [Line<'static>; 3] {
+    let set_here = item
+        .settings
+        .iter()
+        .filter(|setting| setting.set_here)
+        .count();
+    let findings = item.findings.len();
+    [
         Line::styled(
-            "The Configuration tab has no Rust implementation yet.",
-            bold().fg(Color::Yellow),
+            item.key.clone(),
+            if item.path.is_some() { bold() } else { dim() },
         ),
-        Line::default(),
-        Line::raw(
-            "deployment.toml, lint.toml, documentation.toml, sharing.toml and each platforms/*.toml, \
-             read with their effective values, what sets them and the platform cards, are shown by \
-             the Python UI: run opentide tui without OPENTIDE_ENGINE, or with OPENTIDE_ENGINE=python.",
-        ),
-        Line::default(),
+        Line::raw(set_here.to_string()),
         Line::styled(
-            "opentide info platforms lists each platform's tenants; opentide doctor checks the credentials they name.",
-            dim(),
+            findings.to_string(),
+            if findings > 0 {
+                bold().fg(Color::Red)
+            } else {
+                dim()
+            },
         ),
     ]
+}
+
+/// A setting's value: a credential as its variable and whether it is set,
+/// or hidden (`_value`).
+fn setting_value(setting: &Setting) -> Vec<Span<'static>> {
+    if setting.secret {
+        let Some(variable) = &setting.variable else {
+            return vec![Span::styled(HIDDEN, dim())];
+        };
+        let set = setting.variable_set == Some(true);
+        return vec![
+            Span::styled(format!("${{{variable}}}"), bold()),
+            Span::styled(
+                format!("  {}", if set { "set" } else { "unset" }),
+                if set {
+                    Style::new().fg(Color::Green)
+                } else {
+                    bold().fg(Color::Yellow)
+                },
+            ),
+        ];
+    }
+    vec![Span::raw(if setting.shown.is_empty() {
+        "\"\"".to_owned()
+    } else {
+        setting.shown.clone()
+    })]
+}
+
+/// The names of `uuids`, six at most (`platform_card`'s `names`).
+fn rule_names(uuids: &[String], catalogue: Option<&Catalogue>) -> String {
+    if uuids.is_empty() {
+        return "none".to_owned();
+    }
+    let shown: Vec<String> = uuids
+        .iter()
+        .take(6)
+        .map(|uuid| {
+            catalogue
+                .and_then(|catalogue| catalogue.entries.get(uuid))
+                .map_or_else(|| uuid.clone(), |entry| entry.name.clone())
+        })
+        .collect();
+    let more = if uuids.len() > 6 {
+        format!(" and {} more", uuids.len() - 6)
+    } else {
+        String::new()
+    };
+    format!("{}{more}", shown.join(", "))
+}
+
+/// A platform as a card: enabled or not, its tenants, and what reaches each
+/// (`platform_card`).
+pub fn platform_card(card: &PlatformCard, catalogue: Option<&Catalogue>) -> Vec<Line<'static>> {
+    let border = if card.enabled {
+        Style::new().fg(Color::Green)
+    } else {
+        Style::new().fg(Color::DarkGray)
+    };
+    let mut lines = vec![Line::from(vec![
+        Span::styled("╭─ ", border),
+        Span::styled(card.platform.clone(), bold()),
+        Span::styled(" ─", border),
+    ])];
+    let rules = card.rules.len();
+    let mut body: Vec<Line<'static>> = vec![Line::from(vec![
+        Span::styled(
+            if card.enabled { "enabled" } else { "disabled" },
+            if card.enabled {
+                bold().fg(Color::Green)
+            } else {
+                dim()
+            },
+        ),
+        Span::styled(
+            format!(
+                "  ·  {rules} rule{} with a block",
+                if rules == 1 { "" } else { "s" }
+            ),
+            dim(),
+        ),
+    ])];
+    if card.tenants.is_empty() {
+        body.push(Line::styled("No tenant configured.", yellow()));
+    }
+    for tenant in &card.tenants {
+        let mut rows: Vec<(String, Vec<Span<'static>>)> = vec![(
+            "strategies".to_owned(),
+            vec![if tenant.strategies.is_empty() {
+                Span::styled("none", yellow())
+            } else {
+                Span::raw(tenant.strategies.join(", "))
+            }],
+        )];
+        if tenant.manual {
+            rows.push((
+                "manual".to_owned(),
+                vec![Span::raw("only the rules that list it reach it")],
+            ));
+        }
+        for credential in &tenant.credentials {
+            let shown = match (&credential.flag, &credential.variable) {
+                (Some(flag), _) => vec![Span::raw(if *flag { "true" } else { "false" })],
+                (None, None) => vec![Span::styled(
+                    format!("{HIDDEN}  (a literal in the file)"),
+                    dim(),
+                )],
+                (None, Some(variable)) => {
+                    let set = credential.is_set == Some(true);
+                    vec![
+                        Span::styled(format!("${{{variable}}}"), bold()),
+                        Span::styled(
+                            if set { "  set" } else { "  unset" },
+                            if set {
+                                Style::new().fg(Color::Green)
+                            } else {
+                                bold().fg(Color::Yellow)
+                            },
+                        ),
+                    ]
+                }
+            };
+            rows.push((credential.key.clone(), shown));
+        }
+        rows.push((
+            format!("rules ({})", tenant.rules.len()),
+            vec![Span::raw(rule_names(&tenant.rules, catalogue))],
+        ));
+        let width = rows
+            .iter()
+            .map(|(label, _)| label.chars().count())
+            .max()
+            .unwrap_or(0);
+        let grey = Style::new().fg(Color::DarkGray);
+        body.push(Line::from(vec![
+            Span::styled("╭─ ", grey),
+            Span::styled(tenant.name.clone(), bold()),
+            Span::styled(" ─", grey),
+        ]));
+        for (label, value) in rows {
+            let mut spans = vec![
+                Span::styled("│ ", grey),
+                Span::styled(format!("{label:<width$}  "), bold()),
+            ];
+            spans.extend(value);
+            body.push(Line::from(spans));
+        }
+        body.push(Line::styled("╰─", grey));
+    }
+    for line in body {
+        let mut spans = vec![Span::styled("│ ", border)];
+        spans.extend(line.spans);
+        lines.push(Line::from(spans));
+    }
+    lines.push(Line::styled("╰─", border));
+    lines
+}
+
+/// A section's rule: `── deployment ─────`.
+fn rule(title: &str) -> Line<'static> {
+    let grey = Style::new().fg(Color::DarkGray);
+    Line::from(vec![
+        Span::styled("── ", grey),
+        Span::styled(title.to_owned(), bold()),
+        Span::styled(" ──────────", grey),
+    ])
+}
+
+fn finding_spans(finding: &ConfigFinding) -> Vec<Span<'static>> {
+    vec![
+        Span::styled(
+            format!("{}[{}]", finding.severity, finding.code),
+            severity_style(&finding.severity),
+        ),
+        Span::raw(format!(": {}", finding.message)),
+    ]
+}
+
+/// The findings at `key`, taken out of `findings`.
+fn take_findings<'a>(
+    findings: &mut Vec<(String, Vec<&'a ConfigFinding>)>,
+    key: &str,
+) -> Vec<&'a ConfigFinding> {
+    findings
+        .iter()
+        .position(|(path, _)| path == key)
+        .map(|at| findings.remove(at).1)
+        .unwrap_or_default()
+}
+
+/// One configuration file, read: its card, its settings by section, what it
+/// leaves unset (`file_view`).
+pub fn file_view(
+    item: &ConfigFile,
+    card: Option<&PlatformCard>,
+    catalogue: Option<&Catalogue>,
+) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        Line::styled(item.key.clone(), bold()),
+        Line::styled(
+            item.path.as_ref().map_or_else(
+                || "not in this workspace: the bundled defaults apply".to_owned(),
+                |path| path.display().to_string(),
+            ),
+            dim(),
+        ),
+    ];
+    if let Some(card) = card {
+        lines.extend(platform_card(card, catalogue));
+    }
+    let mut findings: Vec<(String, Vec<&ConfigFinding>)> = Vec::new();
+    for finding in &item.findings {
+        let key = finding.field_path.join(".");
+        match findings.iter_mut().find(|(path, _)| *path == key) {
+            Some((_, found)) => found.push(finding),
+            None => findings.push((key, vec![finding])),
+        }
+    }
+    for finding in take_findings(&mut findings, "") {
+        lines.push(Line::from(finding_spans(finding)));
+    }
+    let mut sections: Vec<(String, Vec<&Setting>)> = Vec::new();
+    for setting in &item.settings {
+        let section = setting
+            .path
+            .split_once('.')
+            .map_or("", |(head, _)| head)
+            .to_owned();
+        match sections.iter_mut().find(|(name, _)| *name == section) {
+            Some((_, settings)) => settings.push(setting),
+            None => sections.push((section, vec![setting])),
+        }
+    }
+    for (section, settings) in sections {
+        lines.push(Line::default());
+        lines.push(rule(if section.is_empty() {
+            "top level"
+        } else {
+            &section
+        }));
+        let label = |setting: &Setting| {
+            setting
+                .path
+                .split_once('.')
+                .map_or(setting.path.clone(), |(_, rest)| rest.to_owned())
+        };
+        let width = settings
+            .iter()
+            .map(|setting| label(setting).chars().count().min(40))
+            .max()
+            .unwrap_or(0);
+        for setting in settings {
+            let mut spans = vec![Span::styled(
+                format!("{:<width$}  ", label(setting)),
+                bold(),
+            )];
+            spans.extend(setting_value(setting));
+            spans.push(Span::raw("  "));
+            spans.push(if setting.set_here {
+                Span::styled("set here", Style::new().fg(Color::Cyan))
+            } else {
+                Span::styled("default", dim())
+            });
+            if !setting.description.is_empty() {
+                spans.push(Span::styled(
+                    format!("  {}", setting.description),
+                    dim().add_modifier(Modifier::ITALIC),
+                ));
+            }
+            lines.push(Line::from(spans));
+            for finding in take_findings(&mut findings, &setting.path) {
+                let mut spans = vec![
+                    Span::raw(" ".repeat(width + 2)),
+                    Span::styled("╰─ ", Style::new().fg(Color::Blue)),
+                ];
+                spans.extend(finding_spans(finding));
+                lines.push(Line::from(spans));
+            }
+        }
+    }
+    for (path, found) in findings {
+        for finding in found {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{}[{}]", finding.severity, finding.code),
+                    severity_style(&finding.severity),
+                ),
+                Span::raw(format!(" at {path}: {}", finding.message)),
+            ]));
+        }
+    }
+    if !item.unset.is_empty() {
+        lines.push(Line::default());
+        lines.push(rule(&format!("Not set ({})", item.unset.len())));
+        let width = item
+            .unset
+            .iter()
+            .map(|(path, _)| path.chars().count())
+            .max()
+            .unwrap_or(0);
+        for (path, description) in &item.unset {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{path:<width$}  "), bold()),
+                Span::styled(description.clone(), dim()),
+            ]));
+        }
+    }
+    lines
+}
+
+/// The workspace's file `item`, redacted, its lines numbered; why it has
+/// none when it cannot be shown. Never the content of a file whose
+/// redaction is not proven.
+pub fn raw_view(item: &ConfigFile) -> Vec<Line<'static>> {
+    match (&item.raw, &item.raw_problem) {
+        (None, Some(problem)) => vec![Line::styled(format!("{}: {problem}", item.key), yellow())],
+        (None, None) => vec![Line::styled(
+            format!("The workspace has no {}.", item.key),
+            dim(),
+        )],
+        (Some(raw), _) => {
+            let lines: Vec<&str> = raw.lines().collect();
+            let width = lines.len().to_string().len();
+            lines
+                .iter()
+                .enumerate()
+                .map(|(index, line)| {
+                    Line::from(vec![
+                        Span::styled(format!("{:>width$} ", index + 1), dim()),
+                        Span::raw((*line).to_owned()),
+                    ])
+                })
+                .collect()
+        }
+    }
+}
+
+/// What the tab shows for the file `key`: read, or raw.
+pub fn configuration_detail(
+    view: &ConfigurationView,
+    key: Option<&str>,
+    raw: bool,
+    catalogue: Option<&Catalogue>,
+) -> Vec<Line<'static>> {
+    if let Some(problem) = &view.problem {
+        return vec![Line::styled(problem.clone(), Style::new().fg(Color::Red))];
+    }
+    let Some(item) = key.and_then(|key| view.file(key)) else {
+        return Vec::new();
+    };
+    if raw {
+        return raw_view(item);
+    }
+    let card = if item.key.starts_with("platforms/") {
+        view.card(&item.key)
+    } else {
+        None
+    };
+    file_view(item, card, catalogue)
 }
 
 // -- Chains -------------------------------------------------------------------

@@ -214,10 +214,9 @@ fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
                 "--file",
                 "r.yaml",
             ],
-            "engine_not_ported",
-            "OPENTIDE_ENGINE",
-            "opentide query --file has no Rust implementation yet: unset OPENTIDE_ENGINE, or \
-             set it to python or compare.",
+            "usage_invalid_value",
+            "--file",
+            "no rule file at r.yaml",
         ),
         (
             &[
@@ -502,6 +501,96 @@ fn every_tenant_runs_and_a_failed_one_fails_the_run() {
     assert_eq!(seen.len(), 1);
     assert!(seen[0].starts_with("POST /_query HTTP/1.1 "), "{}", seen[0]);
     assert!(seen[0].contains("2099-01-01T00:00:00.000Z"), "{}", seen[0]);
+}
+
+/// An Elastic ES|QL rule, its UUID in upper case.
+const ES_RULE: &str = "name: Hosts\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000EE\n  \
+     schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+     clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    \
+     type: esql\n    query: |\n      FROM logs-* | KEEP host.name\n";
+
+#[test]
+fn a_rules_query_runs_as_deploy_would_send_it() {
+    // UC-4.4c (#834): --rule finds the rule whatever the case of its UUID,
+    // --file reads it from the working directory, else the repository.
+    let (good, seen) = elasticsearch("200 OK", ANSWER);
+    let (_scratch, ws) = workspace(&tenant("good", &good));
+    std::fs::create_dir_all(ws.join("objects/rules")).unwrap();
+    std::fs::write(ws.join("objects/rules/hosts.yaml"), ES_RULE).unwrap();
+    let by_uuid = run_at(
+        &ws,
+        &elastic(&["--rule", " 00000000-0000-4000-8000-0000000000ee "]),
+        &[],
+    );
+    assert_eq!(by_uuid.code, 0, "{}", by_uuid.stdout);
+    let document = by_uuid.document();
+    assert_eq!(document["source"], "rule");
+    assert!(document.get("query").is_none());
+    assert_eq!(
+        document["rule"],
+        serde_json::json!({
+            "uuid": "00000000-0000-4000-8000-0000000000ee",
+            "name": "Hosts",
+            "queries": ["FROM logs-* | KEEP host.name"],
+        })
+    );
+    assert_eq!(document["results"][0]["language"], "esql");
+    assert_eq!(document["row_count"], 2);
+    let elsewhere = ws.with_file_name("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let by_file = run_at(
+        &elsewhere,
+        &{
+            let mut argv = vec!["--repo", ws.to_str().unwrap()];
+            argv.extend(elastic(&["--file", "objects/rules/hosts.yaml"]));
+            argv
+        },
+        &[],
+    );
+    assert_eq!(by_file.code, 0, "{}", by_file.stdout);
+    assert_eq!(by_file.document()["rule"], document["rule"]);
+    assert_eq!(seen.lock().unwrap().len(), 2);
+    // A file that is no valid rule is refused with the model's errors.
+    std::fs::write(
+        ws.join("objects/rules/bad.yaml"),
+        ES_RULE.replace("  tlp: clear\n", ""),
+    )
+    .unwrap();
+    let invalid = run_at(&ws, &elastic(&["--file", "objects/rules/bad.yaml"]), &[]);
+    assert_eq!(invalid.code, 2);
+    assert_eq!(
+        invalid.document()["message"],
+        "cannot read the rule in objects/rules/bad.yaml: 1 validation error for DetectionRule\n\
+         metadata.tlp\n  Field required [type=missing]"
+    );
+    assert_eq!(invalid.document()["failure"]["argument"], "--file");
+    // A UUID no rule has, with the closest; a rule without the platform.
+    let unknown = run_at(
+        &ws,
+        &elastic(&["--rule", "00000000-0000-4000-8000-0000000000ef"]),
+        &[],
+    );
+    assert_eq!(unknown.code, 2);
+    let failure = &unknown.document()["failure"];
+    assert_eq!(failure["code"], "usage_invalid_value");
+    assert_eq!(failure["argument"], "--rule");
+    assert_eq!(
+        failure["message"],
+        "no rule with UUID 00000000-0000-4000-8000-0000000000ef"
+    );
+    assert_eq!(
+        failure["suggestion"],
+        "00000000-0000-4000-8000-0000000000EE"
+    );
+    let mut argv = vec!["--json", "query", "--platform", "splunk"];
+    argv.extend(["--rule", "00000000-0000-4000-8000-0000000000ee"]);
+    let missing = run_at(&ws, &argv, &[]);
+    assert_eq!(missing.code, 2);
+    assert_eq!(
+        missing.document()["message"],
+        "rule 'Hosts' has no splunk configuration"
+    );
+    assert_eq!(missing.document()["failure"]["argument"], "--rule");
 }
 
 #[test]

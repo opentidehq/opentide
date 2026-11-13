@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "opentide": {
+      "source": {
+        "source": "github",
+        "repo": "opentidehq/skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "opentide@opentide": true
+  }
+}

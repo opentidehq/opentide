@@ -37,11 +37,11 @@ starts on every pull request and can be required.
 |-----|----------------|
 | `lint` | ruff, ty, `uv build` and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (after `uv sync`: one test runs the Pydantic models); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
+| `engine-test` | `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (after `uv sync`: one test compares with Python's difflib); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `test` | Python **3.10** and **3.14**, the coverage gate on 3.14 (`test-full` adds 3.11–3.13 in the full set) |
 | `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test` |
-| `golden-compare` | `cargo xtask golden check --engine compare` (UC-0.7): every golden case whose command has a Rust implementation, through this repository's CLI with `OPENTIDE_ENGINE=rust`, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; the `golden-compare` artifact holds the report |
+| `golden-compare` | `cargo xtask golden check --engine rust` (UC-0.7; every case since UC-6.2, #841): every golden case through this repository's CLI, the Rust core, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; then `cargo xtask mcp replay --engine rust` (the recorded Python MCP sessions against the Rust server) and the MCP stdio tests. The check keeps its name, `Golden compare`, a required check's; the `golden-compare` artifact holds the report |
 | `corpus` | The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
 | `changes` | `CI paths`: whether the pull request changes the release's inputs or the grammars (above) |
 
@@ -50,10 +50,12 @@ starts on every pull request and can be required.
 | Job | What it checks |
 |-----|----------------|
 | `test-full` | Python **3.11**, **3.12** and **3.13** (`Test (3.x)`), without coverage |
-| `cli-windows-smoke` | The console launcher and promotion's line endings on Windows |
+| `cli-windows-smoke` | The console launcher and Ctrl-C through it on Windows |
+| `cli-e2e-full` | The E2E tests marked `full_set`, too slow for every pull request: a platform plugin on opentide installed from its wheel (`test_wheel_plugin_platform.py`); `cli-e2e` leaves them out |
 | `facade` | The `opentide` facade crate with every feature: its tests and doctests (the binary's `--json commands` against the PyPI CLI's recording and the ledger, `cli::run_json`, the language server), rustdoc as docs.rs builds it, and `cargo semver-checks` (0.51.0) against the first parent; `engine-test` runs its default features on every pull request |
 | `node` | The Node package `@opentide/opentide` (`bindings/node`, UC-5.3): the napi-rs addon built for linux-x64-gnu, its generated `index.js` and `index.d.ts` against the committed ones, `npm test` (the SDK, the bin and Ctrl-C, the packages, the TypeScript page's snippets, a `tsc --noEmit` consumer), `npx . --json commands` byte for byte this repository's PyPI CLI's (`duration_ms` zeroed), and `cargo xtask golden check --runner node` (every ported golden case through the Node bin and the comparator, but `--help` and `doctor`, which the PyPI CLI still answers in Python); the `golden-node` artifact holds the report |
 | `npm-install` | The npm packages installed as a user installs them, as `publish.yml`'s `smoke-npm` does before a release: the tree's packages at the workspace version (`release.py npm-version`), the addon built for linux-x64-gnu (the other five native packages packed as stand-ins without an addon), published to a throwaway local registry (Verdaccio 6.11.1, no uplink), then `npm install @opentide/opentide` in a clean project: exactly the host's native package, `npx opentide --version`, the SDK from `require` and `import`, `runJson(['commands'])`, `tsc` against `index.d.ts`, and the same through the `opentide` alias (`scripts/engine/npm-local-registry/test.mjs`); it reads the `node` job's Rust cache |
+| `conformance` | The cross-SDK conformance suite (UC-5.4) on Linux, macOS and Windows: `uv sync`, the Node addon (develop profile, `OPENTIDE_VERSION` the workspace's), then `cargo xtask conformance --runners rust,python,node` (every operation of `tests/conformance/manifest.json` on the tide corpus, the heavy workspace, the fault workspace and each configuration fault, the three SDKs' documents byte for byte; [`tests/conformance/README.md`](../tests/conformance/README.md)) and `--diverge node` on the tide corpus, which passes only when the comparator catches the deliberate divergence; the `conformance-<os>` artifact holds `report.json` |
 | `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages (`check-npm-packs.mjs`) and the TypeScript client against the native, worker and WASI servers |
 | `engine-package` | Every crate the release train publishes, the facade and its crates included, packaged and built as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships; the opentide-cli crate, which carries opentide's package data, with `--product`) |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |
@@ -94,9 +96,8 @@ best-effort, the HTML report an artifact. **Vocabulary drift gate:** when vocab 
 
 **Bundled Tide catalog:** the engine compiles in a Tide catalog (`data/catalogs/tide/`, and the
 key lists of `highlights/queries/tide/highlights.scm`) for editors that run `opentide-lsp` on its
-own. `scripts/engine/sync_opentide_schemas.py` generates it from `src/opentide`, and
-`tests/test_generation/test_bundled_tide_catalog.py` (the `engine` job, `ci-local.sh`) fails
-when the committed one differs, until UC-1.8 generates it in Rust.
+own. `cargo xtask codegen` generates it from the Rust models, and `cargo xtask codegen --check`
+(the `engine` job, `ci-local.sh`) fails when the committed one differs.
 
 **Budget:** a pull request's CI (the core gates), first job start to last job end, stays under 15
 minutes on a warm cache (the second push of a branch). The long poles are the corpus job, the
@@ -187,14 +188,14 @@ removed from the rule too, or every pull request that does not run it waits for 
   request (`tests/test_ci/test_supply_chain.py`).
 - [`schema.yml`](workflows/schema.yml), on every push to `main`, `development` and
   `integration/unified-core`, nightly, on demand, and on a pull request that changes
-  `crates/opentide-schema*`, `crates/opentide-core`, `src/opentide/_native/`,
+  `crates/opentide-schema*`, `crates/opentide-core`, `src/opentide/_native/`, `bindings/python/`,
   `xtask/src/stubs.rs`, the Cargo manifests, lock or toolchain, `.cargo/` or schema.yml:
   `opentide-schema` (UC-1.1)
   built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
   (feature `wasm`), clippy on the last two (ci.yml's engine jobs build no features), and its tests
   with the Python class on CPython 3.10, the abi3 floor; clippy with feature `stubs`, and
   `cargo xtask stubs --check`, which fails when the generated `src/opentide/_native/models.pyi`
-  differs from the extension (UC-1.9). Written before ci.yml became one workflow; not a required
+  or `src/opentide/_native/sdk.pyi` differs from the extension (UC-1.9, UC-5.2b). Written before ci.yml became one workflow; not a required
   check.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`) on every push to
@@ -239,11 +240,7 @@ Where each of language-server's workflow jobs went (or why it was dropped):
   `xtask/mutants.toml` in eight shards, a report against `xtask/mutants-baseline.toml`, and on the
   schedule only a job with `issues: write` (no checkout, no repository code) that opens or updates
   one issue per crate above its threshold.
-- [`parity.yml`](workflows/parity.yml), on every push, the daily schedule, a manual run and a pull
-  request with the `full-ci` label: `cargo xtask parity dashboard` into the job summary and an artifact, read-only. Committing
-  `docs/internal/parity.md` is off unless the repository variable `PARITY_COMMIT` is `true`; then
-  only on the schedule or a manual run of `development` or `integration/unified-core`, a job with
-  `contents: write` (no repository code, one path, never forces) commits it when it changed.
+- The parity dashboard (`parity.yml`) was retired with the Python implementation (UC-6.2, #841): every command runs on Rust, and `Golden compare` holds each against the oracle.
 
 ## Releases
 

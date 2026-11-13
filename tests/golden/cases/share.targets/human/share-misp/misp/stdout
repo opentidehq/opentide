@@ -1,0 +1,4 @@
+[1mmisp-prod[0m    [2mmisp[0m  [2menabled[0m   [2mmax TLP amber[0m  [2mhttps://misp.invalid[0m
+[1mmisp-locked[0m  [2mmisp[0m  [2menabled[0m   [2mmax TLP green[0m  [2mhttps://misp.invalid/locked[0m
+[1mmisp-lab[0m     [2mmisp[0m  [2mdisabled[0m  [2mmax TLP clear[0m  [2mhttps://misp-lab.invalid[0m
+[1;32m✓[0m 3 sharing targets

@@ -9,7 +9,7 @@
 use opentide_compare::FileState;
 use std::collections::BTreeMap;
 use std::path::Path;
-use xtask::compare::{candidate, read_ledger, read_run, refused, run_of};
+use xtask::compare::{candidate, read_ledger, read_run, run_of};
 use xtask::golden::case::{Case, Mode, Stdin, StdinKind};
 use xtask::golden::recording::{FileRecord, Recording};
 use xtask::golden::snapshot::{ChangeKind, Kind};
@@ -111,10 +111,8 @@ fn the_candidate_needs_the_repository_cli() {
     write(&dir.path().join(".venv/bin/opentide"), "");
     let engine = candidate(dir.path()).unwrap();
     assert_eq!(engine.name, "rust");
-    assert_eq!(
-        engine.env.get("OPENTIDE_ENGINE").map(String::as_str),
-        Some("rust")
-    );
+    // The console script runs the Rust core: no variable chooses an engine.
+    assert!(engine.env.is_empty());
 }
 
 fn recording(exit_code: i32, stderr: &str, files: Vec<FileRecord>) -> Recording {
@@ -158,14 +156,6 @@ fn record(path: &str, change: ChangeKind, kind: Kind, mode: Option<&str>) -> Fil
 }
 
 #[test]
-fn a_refusal_is_exit_2_with_the_message() {
-    let message = format!("error: opentide info {}: unset it", xtask::compare::NO_RUST);
-    assert!(refused(&recording(2, &message, Vec::new())));
-    assert!(!refused(&recording(1, &message, Vec::new())));
-    assert!(!refused(&recording(2, "error: something else", Vec::new())));
-}
-
-#[test]
 fn recordings_become_comparator_runs() {
     let run = run_of(&recording(
         0,
@@ -199,45 +189,4 @@ fn recordings_become_comparator_runs() {
         }
     );
     assert_eq!(run.files["ws/x"], FileState::Deleted);
-}
-
-#[cfg(unix)]
-#[test]
-fn the_dispatch_table_is_read_from_the_repository_cli() {
-    use std::os::unix::fs::PermissionsExt;
-    let dir = tempfile::tempdir().unwrap();
-    let python = dir.path().join(".venv/bin/python");
-    assert!(
-        xtask::compare::rust_commands(dir.path()).is_err(),
-        "no .venv"
-    );
-
-    write(
-        &python,
-        "#!/bin/sh\necho '{\"validate\": {\"requires\": [], \"refuses\": []}, \"info rules\": {}, \
-         \"deploy\": {\"requires\": [\"--dry-run\"]}, \"validate query\": {\"refuses\": [\"--live\"]}}'\n",
-    );
-    std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let paths = xtask::compare::rust_commands(dir.path()).unwrap();
-    let coverage = |requires: &[&str], refuses: &[&str]| xtask::compare::Coverage {
-        requires: requires.iter().map(|flag| (*flag).to_owned()).collect(),
-        refuses: refuses.iter().map(|flag| (*flag).to_owned()).collect(),
-        ..xtask::compare::Coverage::default()
-    };
-    assert_eq!(
-        paths.into_iter().collect::<Vec<_>>(),
-        [
-            ("deploy".to_owned(), coverage(&["--dry-run"], &[])),
-            ("info rules".to_owned(), coverage(&[], &[])),
-            ("validate".to_owned(), coverage(&[], &[])),
-            ("validate query".to_owned(), coverage(&[], &["--live"])),
-        ]
-    );
-
-    write(&python, "#!/bin/sh\necho broken >&2\nexit 1\n");
-    let error = format!(
-        "{:#}",
-        xtask::compare::rust_commands(dir.path()).unwrap_err()
-    );
-    assert!(error.contains("broken"), "{error}");
 }

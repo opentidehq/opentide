@@ -276,4 +276,4 @@ A staged vocabulary whose field is not scoped takes the bare key name; only a sc
 
 ## Source
 
-`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`, `src/opentide/cli/services/catalog.py`
+`crates/opentide-cli/src/commands/info.rs`

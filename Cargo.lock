@@ -462,6 +462,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3109,6 +3118,7 @@ dependencies = [
  "ansi-to-tui",
  "anyhow",
  "clap",
+ "clap_complete",
  "comfy-table",
  "ctrlc",
  "form_urlencoded",
@@ -3139,7 +3149,9 @@ dependencies = [
  "rmcp",
  "rustix",
  "serde",
+ "serde-saphyr",
  "serde_json",
+ "sha1",
  "sha2 0.11.1",
  "shlex 2.0.1",
  "signal-hook",
@@ -3407,17 +3419,19 @@ dependencies = [
 name = "opentide-native"
 version = "0.0.0"
 dependencies = [
+ "jiff",
  "opentide",
  "opentide-analysis",
  "opentide-cli",
- "opentide-compare",
- "opentide-lsp",
+ "opentide-compile",
+ "opentide-connectors",
  "opentide-schema",
  "pyo3",
+ "pyo3-async-runtimes",
  "pyo3-build-config",
  "serde",
  "serde_json",
- "tracing",
+ "tokio",
 ]
 
 [[package]]
@@ -3431,6 +3445,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -3929,6 +3944,20 @@ dependencies = [
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
+]
+
+[[package]]
+name = "pyo3-async-runtimes"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b877331c7817ccb6379e9d19a06993160141f1d0a386e55276128717df85e3fc"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "once_cell",
+ "pin-project-lite",
+ "pyo3",
+ "tokio",
 ]
 
 [[package]]

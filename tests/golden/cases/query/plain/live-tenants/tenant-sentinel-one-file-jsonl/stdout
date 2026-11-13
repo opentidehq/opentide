@@ -1,0 +1,4 @@
+{"_tenant": "lab", "_label": "sub-query 1", "src.process.name": "cmd.exe", "endpoint.name": "ws-1"}
+{"_tenant": "lab", "_label": "sub-query 1", "src.process.name": "powershell.exe", "endpoint.name": "ws-2"}
+{"_tenant": "lab", "_label": "sub-query 2", "src.process.name": "cmd.exe", "endpoint.name": "ws-1"}
+{"_tenant": "lab", "_label": "sub-query 2", "src.process.name": "powershell.exe", "endpoint.name": "ws-2"}

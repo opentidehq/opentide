@@ -13,7 +13,14 @@ authors.workspace = true
 # The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
 # oracles: the explain pages it holds quote vendor SDK names the licence scan
 # keeps out of release artifacts (scripts/engine/license-scan.sh).
-exclude = ["tests/render/", "tests/render.rs"]
+# `generate extract sentinel`'s oracle files (tests/extract_sentinel.rs) are
+# CI-only too: the test replays a cassette of the repository's tests/.
+exclude = [
+    "tests/render/",
+    "tests/render.rs",
+    "tests/extract_sentinel/",
+    "tests/extract_sentinel.rs",
+]
 description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
 
 # The explain pages build.rs compiles in, which `scripts/engine/release.py
@@ -42,6 +49,9 @@ doc = false
 
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }
+# `--show-completion` and `--install-completion` (#841): each shell's script
+# from the command tree, as clap's own crate writes it.
+clap_complete = "4.6"
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
 comfy-table = { version = "7.2", default-features = false }
 ctrlc = "3.4"
@@ -102,6 +112,12 @@ unicode-width = "0.2"
 inquire = { version = "0.9", default-features = false, features = ["crossterm"] }
 # `new`'s fresh object identifiers.
 uuid = { workspace = true, features = ["v4"] }
+# `generate extract elastic --include-prebuilt` (UC-4.4b, #834): the UUID a
+# prebuilt rule's id derives (`uuid.uuid5`), from SHA-1 (RustCrypto).
+sha1 = "0.10"
+# `generate extract elastic` (UC-4.4b, #834): the extracted rule written as
+# YAML by serde-saphyr's emitter, as `opentide-compile` writes Sigma rules.
+serde-saphyr.workspace = true
 # `doctor`'s opentide_latest (UC-4.4, #834): PEP 440 versions ordered as
 # `packaging.version.Version` orders them.
 pep440_rs = { version = "0.7", default-features = false }

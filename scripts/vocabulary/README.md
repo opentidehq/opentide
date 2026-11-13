@@ -1,8 +1,23 @@
 # Vocabulary generation scripts
 
-Runnable scripts for fetching canonical sources and regenerating canonical
-`{field}.vocab.toml` files under `specifications/vocabularies/`, then syncing
-the bundled copy in `src/opentide/data/vocabulary/`.
+The scripts that fetched canonical sources and regenerated the canonical
+`{field}.vocab.toml` files under `specifications/vocabularies/` were the Python
+package's `opentide.vocabulary`, removed with the Python implementation
+(UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841)). Until they
+are ported to `cargo xtask vocab`, they run from the last commit that has them,
+`ca32f5558d95fd77d5550084ee0f9d0681397fdc` (`INGEST_REV` in
+`.github/workflows/vocab-upstream.yml`), in a worktree of their own:
+
+```bash
+git worktree add --detach ../ingest ca32f5558d95fd77d5550084ee0f9d0681397fdc
+cd ../ingest && uv sync --group dev
+uv run python scripts/vocabulary/sync_upstream.py --apply   # or generate_attack.py, ...
+```
+
+They write into specifications only. This checkout then syncs the bundled copy
+in `src/opentide/data/vocabulary/` with `uv run python scripts/build/sync_vocabularies.py`
+or `cargo xtask vocab sync`. The rest of this page describes them as they are
+at that commit.
 
 By default, scripts expect a sibling clone at `../specifications`. Override with:
 

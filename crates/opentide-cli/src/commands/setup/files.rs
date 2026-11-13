@@ -607,35 +607,29 @@ pub fn mcp_config_warning(relative: &str, problem: &str) -> String {
     format!("{relative} {problem}; left unchanged. Add the opentide server to it by hand.")
 }
 
-/// The variable the Python launcher (`opentide.cli.rust`) sets for a
-/// `setup` run: whether `opentide mcp start`, which every configuration
-/// launches, can start in its environment, as a JSON object
-/// `{"missing": [imports it cannot satisfy], "hint": "how to repair it"}`.
-/// The server is still Python's, so only that environment can say.
-pub const MCP_SERVER_ENV: &str = "OPENTIDE_MCP_SERVER";
-
-/// Why `opentide mcp start` cannot start here, as [`MCP_SERVER_ENV`] says.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+/// Why `opentide mcp start`, which every configuration launches, cannot
+/// start here: what [`McpServer::probe`] finds.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct McpServer {
-    /// The imports the server needs that the environment cannot satisfy.
-    #[serde(default)]
+    /// What the server needs that this installation cannot satisfy.
     pub missing: Vec<String>,
-    /// The command that repairs the environment.
-    #[serde(default)]
+    /// The command that repairs the installation.
     pub hint: String,
 }
 
 impl McpServer {
-    /// What the launcher reported; `None` when no launcher said (the server
-    /// is then taken to start, as when it is this program's).
-    pub fn from_env(env: &crate::env::Env) -> Option<McpServer> {
-        env.get(MCP_SERVER_ENV)
-            .and_then(|text| serde_json::from_str(text).ok())
+    /// The server `opentide mcp start` runs: this program's own
+    /// ([`crate::mcp`]), compiled in with everything it serves, so it starts
+    /// wherever this program does and needs nothing installed beside it
+    /// (UC-6.0d, #841). The oracle's server was a Python module whose
+    /// imports the environment could lack.
+    pub fn probe() -> McpServer {
+        McpServer::default()
     }
 }
 
-/// `setup mcp`: each host's configuration; `server` is what the launcher
-/// reported about `opentide mcp start` ([`McpServer::from_env`]).
+/// `setup mcp`: each host's configuration; `server` is what
+/// [`McpServer::probe`] found about `opentide mcp start`.
 pub fn mcp(
     stage: &mut Stage,
     target: &Path,
@@ -890,14 +884,7 @@ mod tests {
             assert_eq!(result.get("mcp_available"), Some(&Json::Bool(true)));
             assert_eq!(result.get("warnings"), None);
         }
-        let env = crate::env::Env::from_pairs([(
-            MCP_SERVER_ENV,
-            r#"{"missing": ["mcp.server.mcpserver"], "hint": "pip install 'mcp>=2.3,<3'"}"#,
-        )]);
-        assert_eq!(McpServer::from_env(&env), Some(broken));
-        assert_eq!(
-            McpServer::from_env(&crate::env::Env::from_pairs::<&str, &str>([])),
-            None
-        );
+        // The server is this program's: nothing is ever missing.
+        assert_eq!(McpServer::probe(), McpServer::default());
     }
 }

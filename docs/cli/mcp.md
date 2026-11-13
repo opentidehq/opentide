@@ -19,8 +19,7 @@ Serves MCP over stdio until the host closes stdin. It takes no options of its ow
 
 - **Stop and reload.** Stop is the host closing stdin; reload is the host spawning the command again. There is no `stop` or `reload` subcommand.
 - **Output.** Like [`opentide lsp start`](./lsp.md) and [`opentide serve`](./serve.md), it runs in the `mcp` [output mode](./json-output.md#output-modes): stdout carries JSON-RPC and nothing else, and logs go to stderr.
-- **The Rust server.** With `OPENTIDE_ENGINE=rust` in the host's configuration, the server is the Rust one, on rmcp, the official Rust MCP SDK: the same name, instructions, tools, schemas, resources and answers. `explain` and `validation_report` run in Rust; the other tools and every resource are answered, in the same process, by the Python server's handlers until their Rust implementation exists. Python stays the default, and `compare` runs the Python server, whose validation tools record any Rust difference ([Choosing the implementation](../mcp/tools.md#choosing-the-implementation)).
-- **A missing `mcp` package.** Before the handshake, the launcher checks that the `mcp` package (a base dependency, `mcp>=2.3,<3`) imports. When it does not, it prints what is wrong and the command that repairs it on stderr, and exits `1` without writing to stdout ([MCP installation](../mcp/installation.md#verify)).
+- **The Rust server.** The server is the Rust one, on rmcp, the official Rust MCP SDK, with the Python server's name, instructions, tools, schemas, resources and answers. Every tool and every resource runs in Rust: no Python handler answers any of them, and the standalone `opentide` binary (`cargo install opentide --features cli`, the npm package) serves the same tools. The tools that reach a tenant (`validate_query` and `run_query` with `live: true`, `deploy_rule` with `dry_run: false`) run the command line's own `validate query --live`, `query` and `deploy` in the same process.
 
 ## mcp
 
@@ -48,4 +47,4 @@ This is not captured by the docs harness, which does not run `mcp`; `opentide mc
 
 ## Source
 
-`src/opentide/cli/mcp_app.py`, `src/opentide/mcp_server/launcher.py`, `src/opentide/mcp_server/server.py`; the Rust server, `crates/opentide-cli/src/mcp/` and `src/opentide/mcp_server/bridge.py`.
+The server, `crates/opentide-cli/src/mcp/`; its manifest, `crates/opentide-cli/data/mcp/manifest.json`.

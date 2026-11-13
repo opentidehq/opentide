@@ -60,7 +60,7 @@ Every line holding a placeholder ends in `# opentide:placeholder`. The file vali
 
 ## Prompts
 
-At an interactive terminal in `human` mode, `new` asks for a missing `--name`, and for `new rule`, which enabled platforms to add blocks for. Everywhere else it never prompts: with `--json`, without a terminal, or under a coding agent, a missing `--name` exits `2` with `failure.code` `usage_needs_input` and `failure.argument` `--name`. `--platform`, `--objective` and `--threat` are optional and never block.
+At an interactive terminal in `human` mode, `new` asks for a missing `--name` (`Threat name`, `Objective name`, `Rule name`), and for `new rule`, which enabled platforms to add blocks for (`Platform blocks`; space selects, enter for none). An empty name exits `2` with `usage_needs_input`; Ctrl-C at a question stops the run (exit `130`). Everywhere else it never prompts: with `--json`, without a terminal, or under a coding agent, a missing `--name` exits `2` with `failure.code` `usage_needs_input` and `failure.argument` `--name`. `--platform`, `--objective` and `--threat` are optional and never block.
 
 ## Output
 
@@ -93,4 +93,4 @@ A rule block for a platform the workspace has not enabled is written anyway, wit
 
 ## Source
 
-`src/opentide/cli/commands/new.py`, `src/opentide/cli/services/new.py`
+`crates/opentide-cli/src/commands/new.rs`, `crates/opentide-cli/src/commands/new/`

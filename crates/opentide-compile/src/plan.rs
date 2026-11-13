@@ -159,6 +159,30 @@ pub fn enabled(config: &Json) -> Vec<String> {
         .collect()
 }
 
+/// The platforms the configuration enables: the built-in ones
+/// ([`enabled`]), then each of *plugins* (the platform plugins the run can
+/// reach, UC-4.5b) whose `[platform] enabled` is true, in *plugins*' order.
+pub fn enabled_with(config: &Json, plugins: &[String]) -> Vec<String> {
+    let mut platforms = enabled(config);
+    platforms.extend(
+        plugins
+            .iter()
+            .filter(|plugin| !PLATFORMS.contains(&plugin.as_str()))
+            .filter(|plugin| {
+                matches!(
+                    config
+                        .get("platforms")
+                        .and_then(|platforms| platforms.get(plugin))
+                        .and_then(|table| table.get("platform"))
+                        .and_then(|block| block.get("enabled")),
+                    Some(Json::Bool(true))
+                )
+            })
+            .cloned(),
+    );
+    platforms
+}
+
 /// A platform's configured tenants, as the file holds them.
 pub fn tenants<'c>(config: &'c Json, platform: &str) -> Vec<&'c Json> {
     match config
@@ -244,8 +268,9 @@ pub struct SelectOptions<'a> {
     pub folder: &'a str,
     /// Log what the plan leaves out as warnings, as `make_deploy_plan` does
     /// when its caller passes no list to report through (`validate query
-    /// --live`): `--wide`, the subfolder files, a block of a disabled
-    /// platform, a block no run strategy deploys, a rule with vendor ids.
+    /// --live`): `--wide`, the subfolder files, a block no run strategy
+    /// deploys, a rule with vendor ids. A block of a disabled platform is
+    /// logged for every caller, as `make_deploy_plan` logs it.
     pub log: bool,
 }
 
@@ -377,19 +402,19 @@ pub fn select(
                         )))
                     })?;
                 if !options.enabled.iter().any(|known| known == platform) {
-                    if options.log {
-                        tracing::warn!(
-                            system = platform.to_uppercase().as_str(),
-                            rule = name.as_str(),
-                            advice = format!(
-                                "enable it with 'opentide setup platforms --{}'",
-                                platform.replace('_', "-")
-                            )
-                            .as_str(),
-                            logger = "opentide.deployment.utils",
-                            "system_disabled_for_deploy"
-                        );
-                    }
+                    // Logged whatever `log` says: `make_deploy_plan` logs it
+                    // for every caller, a deploy too.
+                    tracing::warn!(
+                        system = platform.to_uppercase().as_str(),
+                        rule = name.as_str(),
+                        advice = format!(
+                            "enable it with 'opentide setup platforms --{}'",
+                            platform.replace('_', "-")
+                        )
+                        .as_str(),
+                        logger = "opentide.deployment.utils",
+                        "system_disabled_for_deploy"
+                    );
                     continue;
                 }
                 let strategy = statuses.strategy(&status).map_err(|error| {
@@ -665,7 +690,7 @@ pub fn state_id(
     }
     let platforms = payload.get("platforms")?.as_object()?;
     for (name, tenants) in platforms {
-        if !STATE_PLATFORMS.contains(&name.as_str()) {
+        if !opentide_workspace::state::stores_ids(name) {
             return None;
         }
         for (key, id) in tenants.as_object()? {
@@ -695,7 +720,9 @@ pub fn action(
         Ok(StatusStrategy::Disablement) => return "disable",
         _ => {}
     }
-    if !STATE_PLATFORMS.contains(&platform) {
+    // A platform plugin records the ids its platform gives, as the built-in
+    // platforms of `STATE_PLATFORMS` do (UC-4.5b).
+    if !opentide_workspace::state::stores_ids(platform) {
         return "upsert";
     }
     if !has_tenant {
@@ -955,6 +982,30 @@ mod tests {
         // Another spelling of the same rule's shard makes the state unusable.
         fs.write(format!("{dir}/{}.JSON", uuid.to_uppercase()), shard);
         assert_eq!(state_id(&fs, root, uuid, "crowdstrike", "t"), None);
+    }
+
+    #[test]
+    fn a_plugins_platform_is_planned_when_enabled_and_its_id_read_from_state() {
+        let config: Json = serde_json::from_str(
+            r#"{"platforms": {"acme": {"platform": {"enabled": true}}, "other": {"platform": {"enabled": false}}, "sentinel": {"platform": {"enabled": true}}}}"#,
+        )
+        .unwrap();
+        let plugins = ["other".to_owned(), "acme".to_owned(), "sentinel".to_owned()];
+        assert_eq!(enabled_with(&config, &plugins), ["sentinel", "acme"]);
+        assert_eq!(enabled(&config), ["sentinel"]);
+        let fs = opentide_workspace::MemoryFs::new();
+        let uuid = "0000000a-0000-4000-8000-00000000000b";
+        fs.write(
+            format!("/ws/.opentide/states/deployment/{uuid}.json"),
+            format!(
+                "{{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \"{uuid}\", \
+                 \"platforms\": {{\"acme\": {{\"lab\": \"acme-rule-17\"}}}}}}"
+            ),
+        );
+        assert_eq!(
+            state_id(&fs, Path::new("/ws"), uuid, "acme", "lab").as_deref(),
+            Some("acme-rule-17")
+        );
     }
 
     #[test]

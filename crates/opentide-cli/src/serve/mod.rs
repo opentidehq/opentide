@@ -9,11 +9,11 @@
 //! notifications carry a run's events; `$/cancelRequest` stops a run (it
 //! answers 130 and the `interrupted` document); `shutdown` and `exit` end
 //! the session. Requests are handled one at a time, in order
-//! ([`server::Server`]). A command with a Rust implementation runs in this
-//! process, its workspace kept warm between read-only runs; any other goes
-//! to the Python package's runner in this process ([`runner::HostRunner`],
-//! [`runner::Delegate`]). This is the host the Python package's
-//! `opentide.cli.services.serve` was until UC-3.8: the payloads are its.
+//! ([`server::Server`]). Every command runs on Rust in this process, its
+//! workspace kept warm between read-only runs ([`runner::HostRunner`]); no
+//! Python runs any request (UC-6.0d, #841). This is the host the Python
+//! package's `opentide.cli.services.serve` was until UC-3.8: the payloads
+//! are its.
 
 pub mod decode;
 pub mod runner;
@@ -21,31 +21,10 @@ pub mod server;
 
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
-pub use runner::{
-    Delegate, EventSink, HostRunner, Job, Plan, RunOutcome, RunRequest, Runner, RustRun,
-};
+pub use runner::{EventSink, HostRunner, Job, Plan, RunOutcome, RunRequest, Runner, RustRun};
 pub use server::{Server, Writer, commands_digest};
-
-/// What starts the Python package's side of a host: the server's starting
-/// environment and directory in, its [`Delegate`] out.
-pub trait DelegateFactory: Send + Sync {
-    /// The delegate for a server whose runs start from `base_env` and `cwd`.
-    ///
-    /// # Errors
-    ///
-    /// Why the Python side could not start.
-    fn start(&self, base_env: &[(String, String)], cwd: &str) -> Result<Arc<dyn Delegate>, String>;
-}
-
-static FACTORY: OnceLock<Box<dyn DelegateFactory>> = OnceLock::new();
-
-/// Installs the host's [`DelegateFactory`] (the Python package's
-/// `cli_main`); a second call keeps the first.
-pub fn set_delegate_factory(factory: Box<dyn DelegateFactory>) {
-    let _ignored = FACTORY.set(factory);
-}
 
 /// The root options `serve` was given.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -138,17 +117,7 @@ pub fn serve(
         .clone()
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_default();
-    let delegate = match FACTORY.get() {
-        Some(factory) => match factory.start(&base_env, &cwd.display().to_string()) {
-            Ok(delegate) => Some(delegate),
-            Err(problem) => {
-                tracing::error!(problem = %problem, "the serve host's Python side did not start");
-                return Ok(1);
-            }
-        },
-        None => None,
-    };
-    let runner = Arc::new(HostRunner::new(base_env, cwd, version, delegate));
+    let runner = Arc::new(HostRunner::new(base_env, cwd, version));
     std::io::stdout().flush()?;
     let rpc = crate::mcp::stdio::reserve_stdout()?;
     let requests = stdio::reserve_stdin()?;

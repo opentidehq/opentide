@@ -16,9 +16,10 @@ not approve. I/O-free: callers read runs and the ledger and write the report.
 ## Place
 
 foundation, tier 0 (`xtask/layers.toml`): it depends on no workspace crate. xtask (`cargo xtask
-compare`, `golden check --engine compare`) and opentide-native (`compare_runs`, which the CLI's
-`OPENTIDE_ENGINE=compare` calls) depend on it. `publish = false`: it serves the migration and
-goes when compare mode does (UC-6.2, #841).
+compare`, `golden check --engine rust`) and opentide-cli's golden replays (dev-dependency) depend
+on it. `publish = false`: it holds the Rust command line to the oracle's recordings, the goldens
+that stay its specification since UC-6.2 (#841) removed the Python implementation and compare
+mode.
 
 ## Invariants
 
@@ -41,6 +42,9 @@ goes when compare mode does (UC-6.2, #841).
   candidate's normalised bytes: it applies only where both files are exactly the pinned ones. It
   is for a generated file another check compares (an editor JSON Schema, by verdict in `cargo
   xtask codegen --check`), never for one whose text is the behaviour.
+- A mode rule approves one file's permission bits, four octal digits on each side (`0600`,
+  `0644`), where both sides wrote the file with exactly those bits; its bytes are still compared.
+  A file only one side wrote, or deleted, has no rule but `presence`.
 - A lines rule is a block of whole lines on each side, naming its one case; a case may have
   several, one per block, each placed by its oracle side (the same block twice is a duplicate).
   Its candidate may be

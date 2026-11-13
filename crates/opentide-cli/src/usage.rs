@@ -177,7 +177,30 @@ pub fn describe(root: &Command, args: &[String], error: &clap::Error) -> UsageEr
         .unwrap_or(args.len());
     let path = hoist::command_words(root, &args[..before]);
     let command = command_at(root, &path);
+    // An error the oracle's option parser raises before a command is chosen
+    // (a value missing, or given to a flag): no command, no usage notes.
+    let mut parser_error = false;
     let failure = match error.kind() {
+        ErrorKind::TooManyValues
+            if context_string(error, ContextKind::InvalidArg)
+                .as_deref()
+                .and_then(|shown| find_arg(root, &path, shown))
+                .is_some_and(|arg| !hoist::takes_value(arg)) =>
+        {
+            parser_error = true;
+            let label = context_string(error, ContextKind::InvalidArg)
+                .as_deref()
+                .and_then(|shown| find_arg(root, &path, shown))
+                .map(label)
+                .unwrap_or_default();
+            Failure {
+                argument: Some(label.clone()),
+                ..Failure::new(
+                    code::USAGE_ERROR,
+                    format!("Option '{label}' does not take a value."),
+                )
+            }
+        }
         ErrorKind::InvalidSubcommand => {
             let name = context_string(error, ContextKind::InvalidSubcommand).unwrap_or_default();
             // An option-shaped word where the group expects its command
@@ -210,7 +233,9 @@ pub fn describe(root: &Command, args: &[String], error: &clap::Error) -> UsageEr
             let label = arg.map_or_else(|| shown.clone(), label);
             let choices = arg.map(choice_names).unwrap_or_default();
             if value.is_empty() && error.kind() == ErrorKind::InvalidValue {
-                // `--file` with nothing after it.
+                // `--file` with nothing after it: the parser's error, which
+                // names no command and has no usage notes.
+                parser_error = true;
                 Failure {
                     argument: Some(label.clone()),
                     ..Failure::new(
@@ -310,6 +335,13 @@ pub fn describe(root: &Command, args: &[String], error: &clap::Error) -> UsageEr
         }
         _ => Failure::new(code::USAGE_ERROR, first_line(error)),
     };
+    if parser_error {
+        return UsageError {
+            command: String::new(),
+            failure,
+            notes: Vec::new(),
+        };
+    }
     let mut notes = Vec::new();
     if let Some(suggestion) = &failure.suggestion {
         notes.push(("help".to_owned(), format!("did you mean '{suggestion}'?")));
@@ -490,8 +522,9 @@ mod tests {
             platform
                 .subcommand_matches("query")
                 .unwrap()
-                .get_one::<crate::tree::Platform>("platform"),
-            Some(&crate::tree::Platform::Splunk)
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.as_str()),
+            Some("splunk")
         );
         // A repeatable option (`validate --file`) collects every value.
         let files = matches("validate --file a --file=b").unwrap();

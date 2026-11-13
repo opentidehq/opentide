@@ -1,0 +1,31 @@
+name: Shared Objective
+
+metadata:
+  uuid: 00000000-0000-4000-8048-000000000002
+  schema: objective::1.0
+  version: 3
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: green
+  pap: green
+
+objective:
+  priority: High
+  type: Threat
+  description: An objective shared to the MISP stand-in.
+  composition:
+    strategy: Combined
+    description: Compose signals for the shared actor.
+  threats:
+    - 00000000-0000-4000-8048-000000000001
+  signals:
+    - name: Suspicious logon signal
+      uuid: 00000000-0000-4000-8048-000000000099
+      description: Suspicious authentication activity
+      severity: Medium
+      methodology: Statistical
+      entities:
+        - Host::Hostname
+      data:
+        availability: Complete
+        requirements: Security event logs

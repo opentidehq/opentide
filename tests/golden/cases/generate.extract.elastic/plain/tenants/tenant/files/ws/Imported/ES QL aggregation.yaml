@@ -1,0 +1,23 @@
+name: ES|QL aggregation
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000105
+  schema: rule::1.0
+  version: 1
+  created: '2026-01-01'
+  modified: '2026-01-01'
+  tlp: amber
+  author: Elastic Security
+description: Counts per host.
+response:
+  alert_severity: Critical
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: esql
+    query: FROM logs-* | STATS count = COUNT(*) BY host.name | WHERE count > 100
+    scheduling:
+      interval: 5m
+      lookback: 1m
+    risk: 99

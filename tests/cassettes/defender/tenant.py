@@ -46,6 +46,87 @@ def _row(names: list[str], number: int) -> dict[str, Any]:
     return {name: values.get(name, f"{name.lower()}-{number}") for name in names}
 
 
+def _listed(number: int, detector: str, name: str, **changes: Any) -> dict[str, Any]:
+    rule: dict[str, Any] = {
+        "id": str(number),
+        "displayName": name,
+        "isEnabled": True,
+        "createdBy": "alice@contoso.example",
+        "createdDateTime": "2026-01-02T03:04:05.123Z",
+        "lastModifiedBy": "alice@contoso.example",
+        "lastModifiedDateTime": "2026-02-03T04:05:06Z",
+        "detectorId": detector,
+        "queryCondition": {
+            "queryText": 'DeviceProcessEvents\n  | where FileName == "powershell.exe"\n'
+        },
+        "schedule": {"period": "1H"},
+        "detectionAction": {
+            "alertTemplate": {
+                "title": name,
+                "description": (
+                    "PowerShell started by an Office application.\nInvestigate the parent."
+                ),
+                "severity": "high",
+                "category": "SuspiciousActivity",
+                "recommendedActions": None,
+                "mitreTechniques": [],
+                "impactedAssets": [
+                    {
+                        "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
+                        "identifier": "deviceId",
+                    }
+                ],
+            },
+            "responseActions": [],
+        },
+    }
+    rule.update(changes)
+    return rule
+
+
+LISTED: list[dict[str, Any]] = [
+    _listed(
+        201,
+        "8d7c6b5a-0000-4000-8000-000000000201",
+        'Suspicious PowerShell: "encoded" command',
+        lastModifiedBy="bob@contoso.example",
+        detectionAction={
+            "alertTemplate": {
+                "title": "Encoded PowerShell",
+                "description": "An encoded command line.",
+                "severity": "medium",
+                "category": "Execution",
+                "recommendedActions": "Isolate the device.\n  Collect the investigation package.",
+                "mitreTechniques": ["T1059.001", "T1027"],
+                "impactedAssets": [
+                    {
+                        "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
+                        "identifier": "deviceId",
+                    },
+                    {
+                        "@odata.type": "#microsoft.graph.security.impactedUserAsset",
+                        "identifier": "accountUpn",
+                    },
+                ],
+            },
+            "responseActions": [],
+        },
+    ),
+    _listed(
+        202,
+        "8d7c6b5a-0000-4000-8000-000000000202",
+        "Office spawns PowerShell",
+        isEnabled=False,
+        schedule={"period": "0"},
+    ),
+    _listed(
+        203,
+        "8d7c6b5a-0000-4000-8000-000000000203",
+        "office spawns powershell",
+    ),
+]
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "defender-tenant"
     sys_version = ""
@@ -79,6 +160,24 @@ class Handler(BaseHTTPRequestHandler):
             return True
         self._error(401, "InvalidAuthenticationToken", "Access token is empty.")
         return False
+
+    def do_GET(self) -> None:
+        # The custom detection rules `generate extract defender` lists (UC-4.4b):
+        # two pages, the second through `@odata.nextLink`.
+        if not self._authorised():
+            return
+        if self.path == RULES:
+            self._json(
+                200,
+                {
+                    "value": LISTED[:2],
+                    "@odata.nextLink": f"https://graph.microsoft.com{RULES}?$skiptoken=2",
+                },
+            )
+        elif self.path == RULES + "?$skiptoken=2":
+            self._json(200, {"value": LISTED[2:]})
+        else:
+            self._error(404, "ResourceNotFound", "no such resource")
 
     def do_POST(self) -> None:
         if self.path.endswith("/oauth2/v2.0/token"):

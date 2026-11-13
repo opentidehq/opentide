@@ -1292,3 +1292,65 @@ fn run_plain(ws: &Path, words: &[&str]) -> (i32, String) {
     let stderr = String::from_utf8(err.0.lock().unwrap().clone()).unwrap();
     (exit_code, stderr)
 }
+
+/// The full pipeline (UC-6.0, #841) names the object files in subfolders it
+/// skipped once, after the phases, in the oracle's `nested_object_file`
+/// warning (`report_nested_object_files`), its list as Python prints one;
+/// with `OPENTIDE_PROGRESS=json`, each phase's event comes before its row.
+#[test]
+fn the_full_pipeline_names_the_nested_files_it_skipped() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let nested = ws.join("Objects/Detection Objectives/old");
+    std::fs::create_dir_all(&nested).unwrap();
+    let objective = std::fs::read_dir(ws.join("Objects/Detection Objectives"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .unwrap();
+    std::fs::copy(&objective, nested.join("x.yaml")).unwrap();
+    let stderr = Buffer::default();
+    let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
+    let host = Host {
+        version: "0.23.0".into(),
+        stdout_tty: false,
+        stderr_tty: false,
+        log_sink: sink,
+        cwd: Some(ws.clone()),
+        width: None,
+        interrupt: opentide_cli::app::Interrupt::default(),
+    };
+    let home = ws.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let env = Env::from_pairs([
+        ("HOME".to_owned(), home.display().to_string()),
+        ("OPENTIDE_PROGRESS".to_owned(), "json".to_owned()),
+    ]);
+    let mut out = Vec::new();
+    let mut err = stderr.clone();
+    let exit_code = run(&["generate".to_owned()], &env, &host, &mut out, &mut err);
+    let stderr = String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap();
+    assert_eq!(exit_code, 0, "{stderr}");
+    let path = "Objects/Detection Objectives/old/x.yaml";
+    let issue = "https://github.com/opentidehq/opentide/issues/584";
+    assert!(
+        stderr.contains(&format!(
+            "warning: Nested object file · detail: 1 object file(s) in subfolders of an object \
+             folder are not object instances and are skipped (opentide reads only files \
+             directly in each object folder; see {issue}): {path} · count: 1 · files: \
+             ['{path}'] · issue: {issue}\n"
+        )),
+        "{stderr}"
+    );
+    let lines: Vec<&str> = stderr.lines().collect();
+    let docs = lines
+        .iter()
+        .position(|line| *line == r#"{"event":"progress","step":"docs","done":1,"total":6}"#)
+        .unwrap_or_else(|| panic!("{stderr}"));
+    assert!(lines[docs + 1].starts_with("✓ docs · "), "{stderr}");
+    assert!(
+        stderr.contains(r#"{"event":"progress","step":"snippets","done":6,"total":6}"#),
+        "{stderr}"
+    );
+}

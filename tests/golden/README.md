@@ -49,14 +49,25 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
    off, or one the output extends by a line, is not approved, and the lines after an approved
    block are compared at their new place; a case may take one lines entry per block, each placed
    by its oracle lines; a
-   JSON rule is one value at one pointer; a `json-extend:` rule names the elements a candidate
+   JSON rule is one value at one pointer; a `help` rule (`oracle = "typer"`, `candidate =
+   "clap"`, stdout only) approves the layout of a help screen, and only where both sides are
+   help of the entry's command that say the same thing, read by `opentide_compare::help`: the
+   usage path, the about text, every section's options, arguments and commands in order with
+   their descriptions, defaults and environment variables, and the examples; a `help-text`
+   rule approves one description, about text or epilog worded otherwise on such a screen; a `json-extend:` rule names the elements a candidate
    adds to the oracle's array at one pointer, each by its index in the candidate's array: the
    rest must be the oracle's elements, in order, compared as any value is, so it fixes the
    candidate's array as a whole-value entry would without quoting the oracle's elements, and a
-   JSON rule under it addresses the array by the oracle's indices; a `sha256` rule approves one
+   JSON rule under it addresses the array by the oracle's indices; a `json-drop:` rule is its
+   mirror, naming the oracle's elements the candidate drops from the array, each by its index in
+   the oracle's array, with the candidate's array length: the dropped elements are put back where
+   the oracle has them and the array is compared as any value is (a check a port no longer runs);
+   a `sha256` rule approves one
    whole file by the digests of both sides' normalised bytes, for a generated file compared by
    another check (each editor schema `generate schemas` writes, judged by verdict in `cargo
-   xtask codegen --check`); a presence rule (`oracle = "written"`, `candidate = "(absent)"`)
+   xtask codegen --check`); a mode rule (`oracle = "0600"`, `candidate = "0644"`) approves one
+   file's permission bits where both sides wrote it with exactly those bits, its bytes still
+   compared (a fix the frozen oracle cannot take, #987); a presence rule (`oracle = "written"`, `candidate = "(absent)"`)
    approves one file the oracle wrote and the candidate did not, named by its exact path, and only in the oracle's language-server catalog
    cache (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it
    it creates): a cache outside the workspace is not a file a user commits, and any other file
@@ -105,6 +116,8 @@ twice: once per implementation). Cassettes are recorded from the oracle with `ca
 record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
 case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
 
+A command no golden case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is compared by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`); its approved differences name the case `cassette:<scenario>`, and that test, not `golden check`, applies them and finds them stale.
+
 The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
 of `docs/internal/cli-experience.md` ("Errors people and agents make": a typo in a command, an
 option or a choice, a missing option, a prompt without a terminal, `--json` after the subcommand,
@@ -141,7 +154,11 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
 | `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |
+| `deploy-tenants-sysdig` | `deploy-tenants` with every platform but Sysdig disabled (`edits` in `cases.toml`): a deploy without `--platform` sends to the workspace's enabled platforms, so the `golden/deploy-sysdig` cassette serves it (UC-4.4c) |
 | `deploy-push`, `deploy-push-production`, `deploy-push-anchor` | `deploy-tenants` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one rule, in `STAGING`, already in `PRODUCTION`, or with its status written as an anchor: the status promotion of a `RELEASE` deploy on a push (UC-4.6c). The commits' author and time are fixed, so their ids are the same on every host |
+| `share-misp` | [`fixtures/share-misp/`](fixtures/share-misp/): three `[[misp]]` destinations (one served by the MISP stand-in of `tests/cassettes/misp/tenant.py`, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before, for `share` (UC-4.4b); a cassette's client copies it before a push or retract writes the ledger |
+| `share-misp-broken` | `share-misp` with one declared edit: a `max_tlp` that is no TLP name, the `sharing_config` preflight |
+| `share-misp-push`, `share-misp-push-config` | `share-misp` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one shared rule, or `sharing.toml` alone: `share push --changed` on a GitHub, GitLab or Azure push and with `--since` (UC-4.4e); the `golden/share-push-changed` cassette's client builds the same checkout |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 
@@ -181,12 +198,13 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
 
-When `golden check --engine compare` compares a run with its recording (not when a case is
+When `golden check --engine rust` compares a run with its recording (not when a case is
 recorded), one more rule applies to each side:
 
 | Rule | Becomes | Why |
 |------|---------|-----|
 | opentide's own version, the exact string each side reports (the oracle's: `version` in `ORACLE`; the candidate's: what `.venv/bin/opentide --version` prints), as a whole token | `<OPENTIDE_VERSION>` | the oracle is a release and the candidate a build of this checkout; the installed version is not behaviour. Another package's version, a rule's `version`, a longer version containing it (`10.23.0`, `0.23.0.dev1`) and any other version-shaped text stay (`normalise::opentide_version`) |
+| The spaces that pad a line holding that version to a width (the home screen's title row) | as many as keep the line as wide as it was printed | the padding follows the version's length, not behaviour; only a line's trailing spaces change, and only on a line that held the version (`normalise::opentide_version_padded`) |
 
 Known limits, each a one-in-a-million chance or a case no fixture has today: a timestamp whose
 microseconds are exactly 0 loses its fraction in Python's `isoformat()`, so it records shorter; two

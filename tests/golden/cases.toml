@@ -90,6 +90,11 @@ kind = "copy"
 source = "tests/golden/fixtures/setup-merge"
 about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, a .vscode/settings.json with a comment and the yaml.schemas mapping earlier `setup vscode` releases wrote, and a sentinel.toml with `enabled = false`"
 
+[fixtures.skills-merge]
+kind = "copy"
+source = "tests/golden/fixtures/skills-merge"
+about = "a repository with its own agent files, which `setup skills` installs over (UC-4.4d): a CLAUDE.md with a byte-order mark and CRLF line endings, an AGENTS.md and Copilot instructions of its own, a .claude/settings.json with a comment and another plugin, a harness copy holding the team's notes beside an older SKILL.md, and an .agents/skills tree holding a file an older version shipped"
+
 [fixtures.tenants]
 kind = "copy"
 source = "tests/golden/fixtures/tenants"
@@ -104,6 +109,12 @@ about = "the `tenants` workspace with a rule or more per platform whose tenants 
 kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
 about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that take PREVIEW and RELEASE runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed: the cases of a deploy that sends (UC-4.6)"
+
+[fixtures.deploy-tenants-sysdig]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "deploy-tenants with every platform but Sysdig disabled: a deploy without --platform sends to the workspace's enabled platforms, Sysdig's stand-in alone, so the `golden/deploy-sysdig` cassette serves it (UC-4.4c)"
+edits = [{ path = ".opentide/configurations/platforms/carbon_black_cloud.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/crowdstrike.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/defender_for_endpoint.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/elastic.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/harfanglab.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel_one.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/splunk.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }]
 
 [fixtures.deploy-push]
 kind = "copy"
@@ -122,6 +133,29 @@ kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
 about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING rule's status as an anchor: a status promotion leaves alone, with a warning (UC-4.6c)"
 pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "    status: STAGING\n", replace = "    status: &status STAGING\n" }]
+
+[fixtures.share-misp]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "a workspace with three MISP destinations (one enabled to the stand-in of tests/cassettes/misp/tenant.py, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before: `share`'s cases (UC-4.4b)"
+
+[fixtures.share-misp-broken]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "share-misp with a sharing.toml block whose max_tlp is not a TLP name: the `sharing_config` preflight (UC-4.4b)"
+edits = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"amber\"", replace = "max_tlp = \"purple\"" }]
+
+[fixtures.share-misp-push]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout whose last commit, a push, changed one shared rule: the object `share push --changed` shares (UC-4.4e)"
+pushed = [{ path = "objects/rules/rule-b-update.yaml", find = "  A rule the MISP stand-in receives.\n", replace = "  A rule the MISP stand-in receives, changed by a push.\n" }]
+
+[fixtures.share-misp-push-config]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout whose last commit, a push, changed sharing.toml and no object: nothing for `share push --changed` to share (UC-4.4e)"
+pushed = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"clear\"", replace = "max_tlp = \"green\"" }]
 
 [fixtures.empty]
 kind = "skeleton"
@@ -811,6 +845,14 @@ args = ["validate", "query", "--file", "{rule_file}", "--queries", "warn"]
 fixtures = ["tide-corpus", "vscode"]
 
 # Tenant-contacting: recorded as its failure without tenants.
+# UC-4.4c (#834): a live check reads one platform's tenants: without
+# --platform the run is refused.
+[[case]]
+command = "validate query"
+variant = "live-no-platform"
+args = ["validate", "query", "--live"]
+fixtures = ["tide-corpus"]
+
 [[case]]
 command = "validate query"
 variant = "live-no-tenant"
@@ -1125,6 +1167,57 @@ args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to
 fixtures = ["tenants"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/query-splunk"
+
+# UC-4.4c (#834): a rule's query on the stand-in tenants of the
+# `live-tenants` fixture: Splunk's saved search by --rule, and a SentinelOne
+# correlation's two sub-queries by --file, each labelled, in every format.
+[[case]]
+command = "query"
+variant = "tenant-splunk-rule"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-splunk-rule"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z"]
+fixtures = ["live-tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file-csv"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--format", "csv"]
+fixtures = ["live-tenants"]
+modes = ["plain"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file-jsonl"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--format", "jsonl"]
+fixtures = ["live-tenants"]
+modes = ["plain"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "rule-unknown"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-0000000000O1"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "query"
+variant = "rule-no-block"
+args = ["query", "--platform", "crowdstrike", "--rule", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+modes = ["plain", "json"]
 
 [[case]]
 command = "query"
@@ -1661,6 +1754,33 @@ modes = ["plain"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
 cassette = "golden/deploy-crowdstrike"
 
+# UC-4.4c (#834): a deploy without --platform sends to the workspace's
+# enabled platforms: refused where they have no tenants, a warning on the CI
+# run where no rule matched, and Sysdig's stand-in alone where it is the one
+# platform enabled.
+[[case]]
+command = "deploy"
+variant = "send-every-platform"
+args = ["deploy", "--strategy", "PREVIEW", "--all"]
+fixtures = ["tide-corpus", "empty"]
+
+[[case]]
+command = "deploy"
+variant = "send-every-platform-ci-github"
+args = ["deploy", "--strategy", "PREVIEW", "--all"]
+fixtures = ["empty"]
+modes = ["plain"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "deploy"
+variant = "send-enabled-platforms"
+args = ["deploy", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants-sysdig"]
+modes = ["plain", "json", "agent"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sysdig"
+
 [[case]]
 command = "deploy"
 variant = "send-sentinel-no-rule"
@@ -1973,6 +2093,105 @@ variant = "catalogue-unknown"
 args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["none"]
 cassette = "skills/manifest"
+
+# Installing skills (UC-4.4d, #834): the starter skills ship with opentide, so
+# a fresh install reads only the catalogue (skills/manifest); --install of a
+# remote skill reads the stand-in repository of tests/cassettes/skills/tenant.py
+# (skills/install, skills/broken); --plugin with Claude Code alone reads
+# nothing. A case without a cassette has the network refused.
+
+[[case]]
+command = "setup skills"
+variant = "fresh"
+args = ["setup", "skills", "--cursor", "--claude-code", "--github-copilot", "--name", "Detections", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "merge"
+args = ["setup", "skills", "--cursor", "--claude-code", "--generic", "--github-copilot", "--yes"]
+fixtures = ["skills-merge"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "merge-plan"
+args = ["setup", "skills", "--cursor", "--claude-code", "--plan"]
+fixtures = ["skills-merge"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "plugin"
+args = ["setup", "skills", "--plugin", "--claude-code", "--yes"]
+fixtures = ["none", "skills-merge"]
+
+[[case]]
+command = "setup skills"
+variant = "plugin-offline"
+args = ["setup", "skills", "--plugin", "--generic", "--yes"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills"
+variant = "remote"
+args = ["setup", "skills", "--generic", "--claude-code", "--install", "sample-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/install"
+
+[[case]]
+command = "setup skills"
+variant = "remote-plan"
+args = ["setup", "skills", "--generic", "--install", "sample-skill", "--plan"]
+fixtures = ["none"]
+cassette = "skills/install"
+
+[[case]]
+command = "setup skills"
+variant = "broken"
+args = ["setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/broken"
+
+[[case]]
+command = "setup skills"
+variant = "unknown"
+args = ["setup", "skills", "--generic", "--install", "no-such-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "no-target"
+args = ["setup", "skills", "--yes"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup"
+variant = "skills"
+args = ["setup", "--skills", "generic", "--skills", "cursor", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup"
+variant = "skills-plan"
+args = ["setup", "--skills", "claude-code", "--plan"]
+fixtures = ["skills-merge"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup"
+variant = "plugin"
+args = ["setup", "--skills", "claude-code", "--plugin", "--yes"]
+fixtures = ["skills-merge"]
+
+[[case]]
+command = "setup"
+variant = "skills-offline"
+args = ["setup", "--skills", "generic", "--plugin", "--yes"]
+fixtures = ["none"]
 
 # ---- doctor, migrate, tui, explain, commands ----
 
@@ -2311,3 +2530,252 @@ variant = "no-uuid"
 args = ["share", "retract"]
 modes = ["plain", "json", "agent"]
 fixtures = ["tide-corpus"]
+
+# ---- UC-4.4b (#834): share on the MISP stand-in ----
+# The `share-misp` fixture; the cases that reach the stand-in are served from
+# cassettes recorded from the oracle (tests/cassettes/golden/share-*.json). Not
+# in human mode: the catalogue's progress is drawn as often as it loads.
+
+[[case]]
+command = "share preview"
+variant = "misp"
+args = ["share", "preview"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share"
+variant = "misp-dry-run"
+args = ["share", "--dry-run", "--target", "misp-prod", "--no-publish"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp"
+args = ["share", "status"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp-type"
+args = ["share", "status", "--type", "rule", "--target", "misp-locked"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share targets"
+variant = "misp"
+args = ["share", "targets"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share targets"
+variant = "misp-broken"
+args = ["share", "targets"]
+fixtures = ["share-misp-broken"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-key-unset"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+
+[[case]]
+command = "share push"
+variant = "misp-disabled"
+args = ["share", "push", "--target", "misp-lab"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-typo"
+args = ["share", "push", "--target", "misp-prd"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+
+[[case]]
+command = "share push"
+variant = "misp-unknown-type"
+args = ["share", "push", "--type", "rules"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-workers"
+args = ["share", "push", "--workers", "0"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "misp-since-alone"
+args = ["share", "push", "--since", "HEAD~1"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share status"
+variant = "misp-group-option"
+args = ["share", "--dry-run", "status"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share retract"
+variant = "misp-unconfirmed"
+args = ["share", "retract", "--target", "misp-prod", "--delete"]
+fixtures = ["share-misp"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "misp"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/share-push"
+
+[[case]]
+command = "share retract"
+variant = "misp"
+args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012", "--uuid", "00000000-0000-4000-8048-000000000020"]
+fixtures = ["share-misp"]
+modes = ["plain", "json", "agent"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/share-retract"
+
+# ---- UC-4.4b (#834): generate extract on the stand-in tenants ----
+# The `tenants` fixture; each case is served from a cassette recorded from the
+# oracle (tests/cassettes/golden/extract-*.json) and writes `Imported/`.
+
+[[case]]
+command = "generate extract defender"
+variant = "tenant"
+args = ["generate", "extract", "defender"]
+fixtures = ["tenants"]
+modes = ["plain", "json", "agent"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/extract-defender"
+
+[[case]]
+command = "generate extract elastic"
+variant = "tenant"
+args = ["generate", "extract", "elastic", "--space", "soc"]
+fixtures = ["tenants"]
+modes = ["plain", "json", "agent"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/extract-elastic"
+
+[[case]]
+command = "generate extract elastic"
+variant = "no-space"
+args = ["generate", "extract", "elastic", "--space", "default"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+
+# ---- UC-4.4e (#834): share push --changed on a git diff ----
+# `share-misp-push` is a checkout whose last commit, a push, changed rule-b;
+# `share-misp-push-config` one whose push changed sharing.toml alone. The diff
+# reads from the push's base (the trigger's first parent, GitLab's before
+# SHA) or `--since` up to HEAD.
+
+[[case]]
+command = "share push"
+variant = "changed-github-push"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json", "agent"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+cassette = "golden/share-push-changed"
+
+[[case]]
+command = "share push"
+variant = "changed-key-unset"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-no-object"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push-config"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-other-type"
+args = ["share", "push", "--changed", "--type", "threat"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0000000000000000000000000000000000000000", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-no-trigger"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-unknown-before"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0123456789abcdef0123456789abcdef01234567", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-head"
+args = ["share", "push", "--changed", "--since", "HEAD"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-revision"
+args = ["share", "push", "--changed", "--since", "HEAD~1"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-branch"
+args = ["share", "push", "--changed", "--since", "main", "--dry-run"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+
+[[case]]
+command = "share push"
+variant = "changed-file-unchanged"
+args = ["share", "push", "--changed", "--file", "objects/rules/rule-a-create.yaml"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-file-key-unset"
+args = ["share", "push", "--changed", "--file", "objects/rules/rule-b-update.yaml"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-uuid"
+args = ["share", "push", "--changed", "--uuid", "00000000-0000-4000-8048-000000000011", "--uuid", "00000000-0000-4000-8048-000000000012"]
+fixtures = ["share-misp-push"]
+modes = ["plain", "json"]
+env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY = "<WS>" }

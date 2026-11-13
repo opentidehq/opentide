@@ -126,9 +126,9 @@ pub fn read_ledger(path: &Path, changelog: &str) -> Result<Ledger> {
     Ok(ledger)
 }
 
-/// The candidate of `golden check --engine compare`: this repository's CLI
-/// (`.venv`, from `uv sync --group dev`) with `OPENTIDE_ENGINE=rust`, which
-/// runs a command's Rust implementation or refuses with `engine_not_ported`.
+/// The candidate of `golden check --engine rust`: this repository's CLI
+/// (`.venv`, from `uv sync --group dev`), the console script that runs the
+/// Rust core in process.
 pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
     let install_dir = repo.join(".venv");
     let bin_dir = install_dir.join("bin");
@@ -142,7 +142,7 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
         name: "rust".into(),
         bin_dir,
         install_dir,
-        env: BTreeMap::from([("OPENTIDE_ENGINE".to_owned(), "rust".to_owned())]),
+        env: BTreeMap::new(),
         host_paths: Vec::new(),
         known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })
@@ -168,8 +168,7 @@ pub fn candidate_version(opentide: &Path) -> Result<String> {
 /// `main(argv)` as the console script in Node's process. It needs the addon
 /// `npm run build` writes beside it. The cases run it through a launcher in
 /// `target/golden-node/` that execs the `node` found on `PATH` now (a case's
-/// `PATH` is the harness's own); the commands it covers are those of
-/// [`candidate`], read from `.venv`'s dispatch table.
+/// `PATH` is the harness's own).
 #[cfg(unix)]
 pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
     use std::os::unix::fs::PermissionsExt;
@@ -222,45 +221,6 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
     })
 }
 
-/// The fixtures whose workspace enables a platform: `doctor` checks each
-/// enabled platform's Python modules there (`platform_sdk`). A fixture that
-/// enables one and is missing here is compared under the Node runner, and
-/// its `doctor` runs fail there: add it.
-pub const PLATFORM_FIXTURES: [&str; 3] = ["fault", "heavy-small", "tide-corpus"];
-
-/// Why the Node runner leaves `case` out, if it does: a run the PyPI CLI
-/// still answers in Python although its command has a Rust implementation,
-/// which the npm bin (the Rust command line alone, with no Python) answers
-/// differently. `golden check --runner node` counts these cases and says why;
-/// `--engine compare` compares them.
-///
-/// - `--help`: the PyPI launcher prints Typer's help (Rich panels), the npm
-///   bin the Rust command line's (clap) (#977).
-/// - `doctor` on a workspace that enables a platform: for each one,
-///   `platform_sdk` reports which Python modules the platform's live calls
-///   import, which the Python launcher reads and hands to the Rust command
-///   line (`OPENTIDE_PYTHON_MODULES`); the npm bin has no Python
-///   environment, and reports the check not run. `doctor` on a workspace
-///   without one checks nothing in Python beyond `python_version`, which the
-///   ledger approves for every candidate, and is compared.
-pub fn node_leaves_out(case: &crate::golden::case::Case) -> Option<&'static str> {
-    let mut options = case.argv.iter().skip(1).take_while(|arg| *arg != "--");
-    if options.any(|arg| arg == "--help" || arg == "-h") {
-        return Some(
-            "`--help`: the PyPI CLI prints Typer's help (Rich panels), the npm bin the Rust \
-             command line's (clap)",
-        );
-    }
-    if case.command == "doctor" && PLATFORM_FIXTURES.contains(&case.fixture.as_str()) {
-        return Some(
-            "`doctor` on a workspace that enables a platform: platform_sdk reports which Python \
-             modules each platform imports, read from the Python that started the PyPI CLI; \
-             the npm bin has no Python environment",
-        );
-    }
-    None
-}
-
 /// The Node runner launches through a shell script: Unix only, as the
 /// goldens are recorded.
 #[cfg(not(unix))]
@@ -284,122 +244,6 @@ fn package_uuids(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
         crate::golden::oracle::collect_uuids(&package, &mut out)?;
     }
     Ok(out)
-}
-
-/// Which runs of a command its Rust implementation covers
-/// (`RustCommand.requires`, `refuses`, `platforms`, `platform_scope` and
-/// `offline`).
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
-pub struct Coverage {
-    /// Flags of which a run must carry one (none: every run).
-    #[serde(default)]
-    pub requires: Vec<String>,
-    /// Flags a run must carry none of.
-    #[serde(default)]
-    pub refuses: Vec<String>,
-    /// The platforms with a Rust connector: a run is covered only when every
-    /// `--platform` it names is one, and one that names none is not (none:
-    /// every platform).
-    #[serde(default)]
-    pub platforms: Vec<String>,
-    /// The flags under which `platforms` applies (none: every run):
-    /// `validate query --live`.
-    #[serde(default)]
-    pub platform_scope: Vec<String>,
-    /// Flags under which a run reaches no tenant, so `platforms` does not
-    /// apply: `deploy --dry-run`.
-    #[serde(default)]
-    pub offline: Vec<String>,
-}
-
-impl Coverage {
-    /// Whether the run's `--platform` values all have a Rust connector, or
-    /// `platforms` does not apply to it.
-    fn platforms_covered(&self, options: &[String]) -> bool {
-        if self.platforms.is_empty()
-            || self.offline.iter().any(|flag| options.contains(flag))
-            || (!self.platform_scope.is_empty()
-                && !self
-                    .platform_scope
-                    .iter()
-                    .any(|flag| options.contains(flag)))
-        {
-            return true;
-        }
-        let mut named = Vec::new();
-        for (index, token) in options.iter().enumerate() {
-            if token == "--platform" {
-                if let Some(value) = options.get(index + 1) {
-                    named.push(value.as_str());
-                }
-            } else if let Some(value) = token.strip_prefix("--platform=") {
-                named.push(value);
-            }
-        }
-        !named.is_empty()
-            && named
-                .iter()
-                .all(|name| self.platforms.iter().any(|platform| platform == name))
-    }
-}
-
-/// The command paths with a Rust implementation: the CLI's dispatch table,
-/// `opentide.cli.engines.RUST_COMMANDS`, read through this repository's
-/// `.venv`, each with the runs it covers ([`Coverage`]).
-pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
-    let python = repo.join(".venv").join("bin").join("python");
-    let output = std::process::Command::new(&python)
-        .args([
-            "-I",
-            "-c",
-            "import json; from opentide.cli.engines import RUST_COMMANDS; \
-             print(json.dumps({' '.join(path): {'requires': list(command.requires), \
-             'refuses': list(getattr(command, 'refuses', ())), \
-             'platforms': list(getattr(command, 'platforms', ())), \
-             'platform_scope': list(getattr(command, 'platform_scope', ())), \
-             'offline': list(getattr(command, 'offline', ()))} \
-             for path, command in RUST_COMMANDS.items()}))",
-        ])
-        .output()
-        .with_context(|| format!("run {} (uv sync --group dev)", python.display()))?;
-    if !output.status.success() {
-        bail!(
-            "read the dispatch table: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    serde_json::from_slice(&output.stdout).context("parse the dispatch table")
-}
-
-/// Whether the Rust implementation covers a case of `command` run with
-/// `argv`: its command is in `table`, and the arguments before `--` carry
-/// one of the flags it requires, if it requires any, and none it refuses.
-pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]) -> bool {
-    let Some(coverage) = table.get(command) else {
-        return false;
-    };
-    let options = argv
-        .iter()
-        .position(|arg| arg == "--")
-        .map_or(argv, |end| &argv[..end]);
-    !coverage.refuses.iter().any(|flag| options.contains(flag))
-        && coverage.platforms_covered(options)
-        && (coverage.requires.is_empty()
-            || coverage.requires.iter().any(|flag| options.contains(flag)))
-}
-
-/// What the CLI prints when `OPENTIDE_ENGINE=rust` names a command with no
-/// Rust implementation (`opentide.cli.engines`), in every output mode.
-pub const NO_RUST: &str = "has no Rust implementation yet";
-
-/// Whether the candidate refused the case: its command has no Rust implementation.
-pub fn refused(run: &crate::golden::recording::Recording) -> bool {
-    let has = |bytes: &[u8]| {
-        bytes
-            .windows(NO_RUST.len())
-            .any(|w| w == NO_RUST.as_bytes())
-    };
-    run.exit_code == 2 && (has(&run.stdout) || has(&run.stderr))
 }
 
 /// A recording as the comparator's run: a link is its target with `S_IFLNK`
@@ -445,8 +289,8 @@ pub fn run_of(recording: &crate::golden::recording::Recording) -> Run {
     }
 }
 
-/// `golden check --engine compare`: every case the candidate ran (not
-/// refused) against its recording, through the comparator and the ledger;
+/// `golden check --engine rust`: every case the candidate ran against its
+/// recording, through the comparator and the ledger;
 /// a stale ledger entry fails the run. Whether it passed.
 #[expect(
     clippy::too_many_arguments,
@@ -457,7 +301,6 @@ pub fn golden(
     cases: &Path,
     blobs: &Path,
     results: &[Result<crate::golden::recording::Recording>],
-    python_only: usize,
     complete: bool,
     report_path: Option<&Path>,
     full: bool,
@@ -486,15 +329,6 @@ pub fn golden(
                 continue;
             }
         };
-        if refused(actual) {
-            // The dispatch table names the command, yet the CLI refused it.
-            failed += 1;
-            eprintln!(
-                "{}: the CLI has no Rust implementation of `{}`",
-                actual.case.id, actual.case.command
-            );
-            continue;
-        }
         let dir = cases.join(&actual.case.id);
         let recorded = crate::golden::recording::Recording::read(&dir, blobs)
             .with_context(|| format!("{}: not recorded", actual.case.id))?;
@@ -536,7 +370,7 @@ pub fn golden(
     // The recorded MCP sessions' entries are `cargo xtask mcp replay`'s to
     // apply, and to find stale.
     for (index, entry) in ledger.entries.iter().enumerate() {
-        if crate::mcp::owns(entry) {
+        if crate::mcp::owns(entry) || on_a_cassette(entry) {
             usage.mark(index);
         }
     }
@@ -559,7 +393,7 @@ pub fn golden(
     let different = report.cases.iter().filter(|case| !case.equal).count();
     let passed = report.equal && failed == 0;
     let line = format!(
-        "golden compare: {} case(s) compared, {python_only} Python only, {different} differ, \
+        "golden rust: {} case(s) compared, {different} differ, \
          {} stale ledger entr{}, {failed} failed to run",
         report.cases.len(),
         report.stale.len(),
@@ -573,217 +407,49 @@ pub fn golden(
     Ok(passed)
 }
 
+/// Whether a ledger entry is a cassette test's (case `cassette:<scenario>`):
+/// a command no golden case can replay, compared against its connector's
+/// cassette by an integration test of its own, which applies the entry and
+/// finds it stale (`generate extract sentinel`:
+/// `crates/opentide-cli/tests/extract_sentinel.rs`).
+pub fn on_a_cassette(entry: &opentide_compare::Entry) -> bool {
+    entry.case.starts_with("cassette:")
+}
+
 #[cfg(test)]
 mod tests {
     use super::version_of;
 
     #[test]
-    fn the_node_runner_leaves_out_what_the_pypi_cli_answers_in_python() {
-        use crate::golden::case::{Case, Mode, Stdin, StdinKind};
-        let on = |fixture: &str, command: &str, argv: &[&str]| Case {
-            id: format!("{command}/plain/{fixture}/x"),
-            command: command.into(),
-            variant: "x".into(),
-            mode: Mode::Plain,
-            fixture: fixture.into(),
-            argv: argv.iter().map(|arg| (*arg).to_owned()).collect(),
-            cwd: ".".into(),
-            env: std::collections::BTreeMap::new(),
-            stdin: Stdin {
-                kind: StdinKind::Null,
-                input: String::new(),
-            },
-            timeout_secs: 60,
-            normalise: Vec::new(),
-            cassette: None,
-        };
-        let left_out =
-            |command: &str, argv: &[&str]| super::node_leaves_out(&on("none", command, argv));
-        assert!(left_out("validate", &["opentide", "validate", "--help"]).is_some());
-        assert!(left_out("info", &["opentide", "-h", "info"]).is_some());
-        assert!(left_out("doctor", &["opentide", "doctor", "--help"]).is_some());
-        // doctor's platform_sdk checks read Python's modules only where a
-        // platform is enabled; elsewhere the npm bin's doctor is compared.
-        let doctor = ["opentide", "doctor", "--offline"];
-        for fixture in super::PLATFORM_FIXTURES {
-            assert!(
-                super::node_leaves_out(&on(fixture, "doctor", &doctor)).is_some(),
-                "{fixture}"
-            );
-        }
-        for fixture in ["none", "empty", "vscode"] {
-            assert_eq!(
-                super::node_leaves_out(&on(fixture, "doctor", &doctor)),
-                None,
-                "{fixture}"
-            );
-        }
-        assert_eq!(left_out("validate", &["opentide", "validate"]), None);
-        // After `--`, `--help` is an argument, not the option.
-        assert_eq!(
-            left_out("new rule", &["opentide", "new", "rule", "--", "--help"]),
-            None
-        );
-    }
+    fn a_cassette_tests_entries_are_its_own() {
+        let ledger = opentide_compare::ledger::Ledger::parse(
+            r#"
+[[diff]]
+command = "generate extract sentinel"
+case = "cassette:sentinel/extract"
+target = "stdout"
+rule = "text"
+oracle = "a"
+candidate = "b"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**c**"
 
-    /// `PLATFORM_FIXTURES` names exactly the fixtures on which the oracle's
-    /// `doctor` reports a `platform_sdk` check: the recordings say which.
-    #[test]
-    fn the_platform_fixtures_are_those_doctor_checks_platform_modules_on() {
-        let plain = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/golden/cases/doctor/plain");
-        let mut seen = 0;
-        for fixture in std::fs::read_dir(&plain).unwrap() {
-            let fixture = fixture.unwrap();
-            let name = fixture.file_name().to_string_lossy().into_owned();
-            for variant in std::fs::read_dir(fixture.path()).unwrap() {
-                let variant = variant.unwrap();
-                if variant.file_name() == "help" {
-                    continue;
-                }
-                let stdout = std::fs::read(variant.path().join("stdout")).unwrap();
-                let checks_modules = String::from_utf8_lossy(&stdout).contains("· platform_sdk");
-                assert_eq!(
-                    checks_modules,
-                    super::PLATFORM_FIXTURES.contains(&name.as_str()),
-                    "doctor on {name} ({:?})",
-                    variant.file_name()
-                );
-                seen += 1;
-            }
-        }
-        assert!(seen >= 6, "{seen} doctor recordings");
-    }
-
-    #[test]
-    fn a_command_covers_the_runs_with_a_flag_it_requires_and_none_it_refuses() {
-        use std::collections::BTreeMap;
-        let argv =
-            |args: &[&str]| -> Vec<String> { args.iter().map(|arg| (*arg).to_owned()).collect() };
-        let table = BTreeMap::from([
-            ("info".to_owned(), super::Coverage::default()),
-            (
-                "deploy".to_owned(),
-                super::Coverage {
-                    platforms: vec!["sysdig".to_owned()],
-                    offline: vec!["--dry-run".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-            (
-                "validate query".to_owned(),
-                super::Coverage {
-                    platforms: vec!["crowdstrike".to_owned(), "sysdig".to_owned()],
-                    platform_scope: vec!["--live".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-            (
-                "query".to_owned(),
-                super::Coverage {
-                    platforms: vec!["elastic".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-            (
-                "setup".to_owned(),
-                super::Coverage {
-                    refuses: vec!["--skills".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-        ]);
-        assert!(!super::covers(
-            &table,
-            "setup",
-            &argv(&["opentide", "setup", "--skills"])
-        ));
-        assert!(super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--platform", "elastic", "x"])
-        ));
-        assert!(super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--platform=elastic", "x"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--platform", "sentinel", "x"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "x"])
-        ));
-        assert!(super::covers(
-            &table,
-            "validate query",
-            &argv(&[
-                "opentide",
-                "validate",
-                "query",
-                "--live",
-                "--platform",
-                "sysdig"
-            ])
-        ));
-        assert!(super::covers(
-            &table,
-            "validate query",
-            &argv(&["opentide", "validate", "query", "--file", "x.kql"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "validate query",
-            &argv(&[
-                "opentide",
-                "validate",
-                "query",
-                "--live",
-                "--platform",
-                "elastic"
-            ])
-        ));
-        assert!(super::covers(
-            &table,
-            "validate query",
-            &argv(&["opentide", "validate", "query", "--", "--live"])
-        ));
-        assert!(super::covers(&table, "info", &argv(&["opentide", "info"])));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--dry-run", "--all"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--all"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--", "--dry-run"])
-        ));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--platform", "sysdig", "--all"])
-        ));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--platform", "elastic", "--dry-run"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--platform", "elastic", "--all"])
-        ));
-        assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
+[[diff]]
+command = "generate extract sentinel"
+case = "generate.extract.sentinel/plain/none/default"
+target = "stdout"
+rule = "text"
+oracle = "a"
+candidate = "b"
+reason = "r"
+issue = "https://github.com/opentidehq/opentide/issues/834"
+changelog = "**c**"
+"#,
+        )
+        .unwrap();
+        let owned: Vec<bool> = ledger.entries.iter().map(super::on_a_cassette).collect();
+        assert_eq!(owned, [true, false]);
     }
 
     #[test]

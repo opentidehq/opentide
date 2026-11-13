@@ -9,12 +9,12 @@ skipped by its ``if`` would pass without running.
 The full set adds everything else (Python 3.11-3.13, the engine release dry
 run, WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 Windows CLI smoke, the facade crate's every feature and semver checks, the
-Node package and its install from a local registry, LSP clients, benchmarks,
-Rust coverage, golden determinism, the parity dashboard, the docs check and the
-publish dry run). It runs nightly,
-on every push to development and integration/unified-core, on Run workflow,
-and on a pull request that carries the ``full-ci`` label: each such job's
-``if`` is exactly ``FULL_SET``. The engine release dry run (and crate
+Node package and its install from a local registry, the cross-SDK
+conformance suite, LSP clients, benchmarks, the E2E tests marked
+``full_set``, Rust coverage, golden determinism, the docs check and the
+publish dry run). It runs nightly, on every push to development and
+integration/unified-core, on Run workflow, and on a pull request that carries
+the ``full-ci`` label: each such job's ``if`` is exactly ``FULL_SET``. The engine release dry run (and crate
 packaging) also runs on a pull request that changes the release's inputs, and
 the grammar checks on one that changes the grammars, through ci.yml's
 ``changes`` job, which fails open.
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -78,9 +79,11 @@ CI_FULL = {
     "clients",
     "bench",
     "cli-windows-smoke",
+    "cli-e2e-full",
     "facade",
     "node",
     "npm-install",
+    "conformance",
 }
 # ci.yml's jobs in the full set and on a pull request that changes their inputs.
 CI_PATHS = {
@@ -96,14 +99,13 @@ CI_DEPENDENT = {"engine-release-consumers": "engine-release-dry-run"}
 OTHER_FULL = [
     ("coverage.yml", "rust"),
     ("golden.yml", "determinism"),
-    ("parity.yml", "dashboard"),
     ("docs.yml", "validate"),
     ("publish-dry-run.yml", "crate"),
     ("publish-dry-run.yml", "npm"),
     ("publish-dry-run.yml", "pypi"),
 ]
 # Every workflow with a job in the full set runs it nightly.
-NIGHTLY = ["ci.yml", "coverage.yml", "golden.yml", "parity.yml", "docs.yml", "publish-dry-run.yml"]
+NIGHTLY = ["ci.yml", "coverage.yml", "golden.yml", "docs.yml", "publish-dry-run.yml"]
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -235,7 +237,13 @@ def test_the_full_set_runs_nightly(name: str) -> None:
 def test_the_schema_workflow_is_path_filtered_on_pull_requests() -> None:
     triggers = _triggers(_load(WORKFLOWS / "schema.yml"))
     paths = triggers["pull_request"]["paths"]
-    for path in ("crates/opentide-schema/**", "src/opentide/_native/**", "xtask/src/stubs.rs"):
+    # bindings/python: the SDK's core, whose stub `cargo xtask stubs` generates (UC-5.2b).
+    for path in (
+        "crates/opentide-schema/**",
+        "src/opentide/_native/**",
+        "bindings/python/**",
+        "xtask/src/stubs.rs",
+    ):
         assert path in paths, path
     assert {"development", INTEGRATION} <= set(triggers["push"]["branches"])
     assert "schedule" in triggers and "workflow_dispatch" in triggers
@@ -417,3 +425,35 @@ def test_the_filter_fails_open(tmp_path: Path) -> None:
     # Not a merge commit (no pull request merge ref): everything runs.
     golden._git(repo, "reset", "-q", "--hard", "HEAD^1")
     assert _run_filter(repo, tmp_path) == everything
+
+
+def _pytest_markers(job_id: str) -> list[str]:
+    """The ``-m`` expression of each pytest step of ci.yml's *job_id*."""
+    markers = []
+    for step in _ci_jobs()[job_id]["steps"]:
+        run = str(step.get("run", ""))
+        if "pytest" in run:
+            words = shlex.split(run.replace("\\\n", " "))
+            markers.append(words[words.index("-m") + 1])
+    return markers
+
+
+def test_the_full_set_e2e_tests_run_in_the_full_set_only() -> None:
+    """A test marked ``full_set`` (a wheel built per test, UC-4.5c, #835)
+    runs in ``cli-e2e-full``, never on every pull request: ``cli-e2e`` leaves
+    it out, and the unit matrix leaves out ``cli_e2e``, which it carries."""
+    assert _pytest_markers("cli-e2e") == ["(cli_e2e or cli_smoke) and not full_set"]
+    assert _pytest_markers("cli-e2e-full") == ["full_set"]
+    for job_id in ("test", "test-full"):
+        markers = _pytest_markers(job_id)
+        assert markers, job_id
+        assert all("not cli_e2e" in marker for marker in markers), (job_id, markers)
+    here = Path(__file__).resolve()
+    marked = [
+        path
+        for path in sorted((ROOT / "tests").rglob("*.py"))
+        if path.resolve() != here and "mark.full_set" in path.read_text(encoding="utf-8")
+    ]
+    assert marked, "no test is marked full_set: drop the marker and cli-e2e-full"
+    for path in marked:
+        assert "mark.cli_e2e" in path.read_text(encoding="utf-8"), path

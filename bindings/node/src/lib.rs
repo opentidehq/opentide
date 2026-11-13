@@ -27,6 +27,13 @@ use serde::Serialize;
 use opentide::lint::{LintCheck, LintFinding, LintReport, LintStatus, LintSummary, NextAction};
 use opentide::validate::{Check, QueriesMode, Report, Summary};
 
+mod tenants;
+
+pub use tenants::{
+    Canceller, Capabilities, ConnectOptions, Connection, DeployOutcome, LiveCheck, QueryColumn,
+    QueryOptions, QueryResult, TenantConfig, capabilities, platforms,
+};
+
 /// The version the command line reports (`opentide --version`): the npm
 /// package's, which the build passes as `OPENTIDE_VERSION`.
 #[napi]
@@ -208,6 +215,25 @@ impl Workspace {
         env.to_js_value(&self.inner.catalog())
     }
 
+    /// The detection rules: their rows of the catalogue (`uuid`, `type`,
+    /// `schema`, `name`, `path`, `techniques`, ...), in index order.
+    #[napi(ts_return_type = "any[]")]
+    pub fn rules<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.rules())
+    }
+
+    /// The detection objectives: their rows of the catalogue.
+    #[napi(ts_return_type = "any[]")]
+    pub fn objectives<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.objectives())
+    }
+
+    /// The threat vectors: their rows of the catalogue.
+    #[napi(ts_return_type = "any[]")]
+    pub fn threats<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.threats())
+    }
+
     /// The rules that cover the ATT&CK `technique` (`opentide info coverage
     /// --technique`), their own techniques or inherited ones.
     #[napi(
@@ -235,6 +261,19 @@ impl Workspace {
         }
         object.set_named_property("ok", plan.ok)?;
         Ok(object.to_unknown())
+    }
+
+    /// The tenants the workspace configures for `platform` (the
+    /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
+    /// in file order; empty when it configures none. Open one with
+    /// `Connection.open`.
+    #[napi]
+    pub fn tenants(&self, platform: String) -> Vec<TenantConfig> {
+        self.inner
+            .tenants(&platform)
+            .into_iter()
+            .map(TenantConfig::from)
+            .collect()
     }
 }
 
@@ -392,33 +431,51 @@ fn parse<'env>(env: &'env Env, text: &str) -> napi::Result<Unknown<'env>> {
 }
 
 /// Why a call failed: a stable code (`configuration_invalid`, `io_error`,
-/// `no_json_document`, `usage_invalid_choice`, ...) and a message.
+/// `no_json_document`, `usage_invalid_choice`, `tenant_refused`, ...), a
+/// message, and the vendor's own words when a tenant gave a reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Failure {
     code: String,
     message: String,
+    detail: Option<String>,
 }
 
 impl Failure {
-    fn usage(message: String) -> Self {
+    fn new(code: &str, message: String) -> Self {
         Self {
-            code: "usage_invalid_choice".to_owned(),
+            code: code.to_owned(),
             message,
+            detail: None,
         }
+    }
+
+    /// A choice the command line would refuse: `usage_invalid_choice`.
+    fn usage(message: String) -> Self {
+        Self::new("usage_invalid_choice", message)
+    }
+
+    /// A value the command line would refuse: `usage_invalid_value`.
+    fn invalid(message: String) -> Self {
+        Self::new("usage_invalid_value", message)
     }
 }
 
 impl From<opentide::Error> for Failure {
     fn from(error: opentide::Error) -> Self {
+        let detail = match &error {
+            opentide::Error::Connector { detail, .. } => detail.clone(),
+            _ => None,
+        };
         Self {
             code: error.code().to_owned(),
             message: error.to_string(),
+            detail,
         }
     }
 }
 
-/// `failure` as the JavaScript `Error` the call throws: its `message`, and
-/// its `code` the failure's code.
+/// `failure` as the JavaScript `Error` the call throws: its `message`, its
+/// `code` the failure's code, and its `detail` the vendor's words or `null`.
 fn throw(env: Env, failure: Failure) -> napi::Error {
     let built = env
         .create_error(napi::Error::new(
@@ -427,6 +484,10 @@ fn throw(env: Env, failure: Failure) -> napi::Error {
         ))
         .and_then(|mut object| {
             object.set_named_property("code", failure.code.as_str())?;
+            match failure.detail.as_deref() {
+                Some(detail) => object.set_named_property("detail", detail)?,
+                None => object.set_named_property("detail", Null)?,
+            }
             Ok(napi::Error::from(object.to_unknown()))
         });
     built.unwrap_or_else(|error| error)
@@ -751,6 +812,49 @@ mod tests {
                 ..DeployPlanOptions::default()
             }))
             .map(drop));
+    }
+
+    /// `from` copied to `to`, folders and files.
+    fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).unwrap();
+            }
+        }
+    }
+
+    /// A run that plans carries the command line's counts (`summary`), which
+    /// the in-memory workspace above, with no platform, never reaches.
+    #[test]
+    fn a_plan_of_the_corpus_carries_its_summary() {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current");
+        let dir = tempfile::tempdir().unwrap();
+        copy_tree(
+            &source.join("Configurations"),
+            &dir.path().join(".opentide/configurations"),
+        );
+        for (family, legacy) in [
+            ("threats", "Objects/Threat Vectors"),
+            ("objectives", "Objects/Detection Objectives"),
+            ("rules", "Objects/Detection Rules"),
+        ] {
+            copy_tree(
+                &source.join(legacy),
+                &dir.path().join("objects").join(family),
+            );
+        }
+        let ws = open_workspace(dir.path().to_string_lossy().into_owned(), None).unwrap();
+        let plan = ws.plan(None).unwrap();
+        assert!(plan.ok, "{}", plan.document);
+        let summary: serde_json::Value =
+            serde_json::from_str(plan.summary.as_deref().unwrap()).unwrap();
+        assert!(summary.is_object(), "{summary}");
     }
 
     #[test]

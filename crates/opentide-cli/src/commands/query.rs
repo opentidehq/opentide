@@ -5,10 +5,9 @@
 //! The query runs on the platforms with a Rust connector and a query runner
 //! ([`PLATFORMS`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
 //! Elastic, HarfangLab, Sentinel, SentinelOne, Splunk; every platform with a
-//! runner since UC-4.3, #833). A run of a rule's query (`--rule`,
-//! `--file`) is the Python CLI's: refused with
-//! `engine_not_ported` ([`not_ported`]), which `OPENTIDE_ENGINE=compare`
-//! hands to Python.
+//! runner since UC-4.3, #833). A rule's query (`--rule`, `--file`) runs
+//! here too since UC-4.4c (#834): the queries a deploy of the rule sends,
+//! each tenant's exclusions compiled in ([`super::query_rule`]).
 //!
 //! Each selected tenant runs the query in turn, over the window, through the
 //! connector's [`opentide_connectors::connector::QueryRunner`]; a tenant that
@@ -24,6 +23,7 @@ use opentide_connectors::python::python_string_repr;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 
+use super::query_rule::RuleQuery;
 use super::{Block, Report, Terminal, open, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, Outcome, USAGE_EXIT_CODE, code};
@@ -195,16 +195,36 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// The refusal of a run this engine does not cover: Python's
-/// (`engine_not_ported`), named as `opentide.cli.engines` names it.
-pub fn not_ported(what: &str) -> Report {
-    let message = format!(
-        "opentide {what} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to \
-         python or compare."
-    );
-    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+/// A rule's query on a platform plugin (`--rule`, `--file`): a usage error.
+/// The rule's block under `configurations.<plugin>` is the plugin's to read,
+/// and no plugin method hands opentide its query; the query is given as
+/// `QUERY` or `--query-file` instead.
+pub fn plugin_rule(platform: &str, source: &str) -> Report {
+    usage(
+        platform,
+        &format!(
+            "{source} reads a rule's query from a built-in platform's block; {platform} is a \
+             platform plugin: give its query as QUERY or --query-file"
+        ),
+        source,
+        &[],
+    )
+}
+
+/// A platform with no query runner (Sysdig): a usage error on `--platform`,
+/// the platforms with one as its choices (`run_query`).
+pub fn no_runner(platform: &str) -> Report {
+    let choices: Vec<String> = QUERY_PLATFORMS
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    usage_with(
+        platform,
+        &format!("{platform} has no query runner"),
+        "--platform",
+        suggest(platform, &choices),
+        &choices,
+    )
 }
 
 /// A call that cannot run as given (`_usage`): exit 2, `usage_invalid_value`.
@@ -368,6 +388,10 @@ fn resolve_window(
 #[derive(Clone, Debug)]
 struct TenantResult {
     tenant: String,
+    /// Which of a rule's queries (a SentinelOne correlation's sub-query).
+    label: Option<String>,
+    /// What the rows are not, said before the tenant's own warnings.
+    warnings: Vec<String>,
     result: Option<QueryOutcome>,
     error: Option<String>,
     detail: Option<String>,
@@ -388,7 +412,10 @@ impl TenantResult {
                 Json::str(if self.ok() { "ok" } else { "failed" }),
             ),
         ];
-        let mut warnings: Vec<Json> = Vec::new();
+        if let Some(label) = &self.label {
+            members.push(("label".into(), Json::str(label)));
+        }
+        let mut warnings: Vec<Json> = self.warnings.iter().map(Json::str).collect();
         if let Some(result) = &self.result {
             warnings.extend(result.warnings.iter().map(Json::str));
             members.push((
@@ -658,6 +685,8 @@ fn run_on_tenant(
     let began = Instant::now();
     let mut outcome = TenantResult {
         tenant: configured.name.clone(),
+        label: None,
+        warnings: Vec::new(),
         result: None,
         error: None,
         detail: None,
@@ -677,12 +706,19 @@ fn run_on_tenant(
         .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
         .collect();
     let settings = http_settings(platform, request.timeout);
+    // A plugin reads its setup itself: an unset variable fails here, before
+    // the plugin is called, as no built-in pre-check names its keys.
+    let resolve = if crate::plugins::is_plugin(platform) {
+        Resolve::Required
+    } else {
+        Resolve::Counting
+    };
     let tenant = match Tenant::from_setup(
         platform,
         &configured.name,
         &setup,
         environment,
-        Resolve::Counting,
+        resolve,
         &settings,
     ) {
         Ok(tenant) => tenant,
@@ -698,7 +734,7 @@ fn run_on_tenant(
             return finish(outcome);
         }
     };
-    let registry = opentide_connectors::builtin();
+    let registry = crate::plugins::registry();
     let Some(runner) = registry
         .get(platform)
         .and_then(opentide_connectors::Platform::query_runner)
@@ -847,13 +883,39 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             &[],
         );
     }
-    if sources[0] != "QUERY" {
-        // A rule's query (its per-tenant exclusions, a correlation's
-        // sub-queries) is the Python CLI's.
-        return not_ported(&format!("query {}", sources[0]));
+    // A platform plugin (UC-4.5) runs through the same runner trait; a rule's
+    // query on one cannot be read (the rule's block is the plugin's).
+    let plugin = crate::plugins::is_plugin(platform);
+    if plugin && (sources[0] == "--rule" || sources[0] == "--file") {
+        return plugin_rule(platform, sources[0]);
     }
-    if !PLATFORMS.contains(&platform) {
-        return not_ported(&format!("query on {platform}"));
+    let rule = if sources[0] == "QUERY" {
+        None
+    } else {
+        let given = |value: &Option<String>| value.clone().filter(|value| !value.is_empty());
+        match super::query_rule::load(
+            given(&args.rule).as_deref(),
+            given(&args.file).as_deref(),
+            cx.repo,
+            cx.env,
+            cx.cwd,
+        ) {
+            Ok(rule) => Some(rule),
+            Err(refusal) => {
+                return usage_with(
+                    platform,
+                    &refusal.message,
+                    refusal.argument,
+                    refusal.suggestion,
+                    &[],
+                );
+            }
+        }
+    };
+    if !PLATFORMS.contains(&platform) && !plugin {
+        // Sysdig (`run_query`'s first check): no query runner, the platforms
+        // with one as the choices.
+        return no_runner(platform);
     }
     if !(1..=MAX_LIMIT).contains(&args.limit) {
         let mut report = usage(
@@ -872,6 +934,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     let languages = languages(platform);
     if let Some(language) = &args.language
+        && !plugin
         && !languages.contains(&language.as_str())
     {
         let choices: Vec<String> = languages.iter().map(|l| (*l).to_owned()).collect();
@@ -898,9 +961,26 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     let query = text.unwrap_or_default();
     let stripped = query.trim();
-    if stripped.is_empty() {
-        return usage(platform, "the query is empty", "QUERY", &[]);
-    }
+    let queries =
+        match &rule {
+            Some(rule) => match rule_queries(rule, platform, args) {
+                Ok(queries) => queries,
+                Err(message) => return usage(platform, &message, "--rule", &[]),
+            },
+            None => {
+                if stripped.is_empty() {
+                    return usage(platform, "the query is empty", "QUERY", &[]);
+                }
+                vec![RuleQuery {
+                    text: stripped.to_owned(),
+                    language: Some(args.language.clone().unwrap_or_else(|| {
+                        languages.first().copied().unwrap_or_default().to_owned()
+                    })),
+                    index: args.index.clone(),
+                    ..RuleQuery::default()
+                }]
+            }
+        };
     let (available, config_path) = configured(cx, platform);
     log_unset(&available, cx.env);
     let selected = match select(platform, &args.tenants, &available, &config_path) {
@@ -910,41 +990,105 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             return usage_with(platform, &message, "--tenant", suggestion, &choices);
         }
     };
-    let language = args
-        .language
-        .clone()
-        .unwrap_or_else(|| languages.first().copied().unwrap_or_default().to_owned());
-    let mut request = QueryRequest::new(stripped, language, window);
-    request.limit = usize::try_from(args.limit).unwrap_or(1);
-    request.index.clone_from(&args.index);
-    request.timeout = Duration::try_from_secs_f64(args.timeout).unwrap_or(Duration::MAX);
+    let default_language = languages.first().copied().unwrap_or_default();
     let environment = Environment::from_pairs(cx.env.iter());
     let progress = Progress::from_env(cx.env);
     let mut outcomes: Vec<TenantResult> = Vec::new();
-    for tenant in &selected {
-        if (cx.interrupted)() {
-            break;
+    'tenants: for tenant in &selected {
+        for item in &queries {
+            if (cx.interrupted)() {
+                break 'tenants;
+            }
+            let text = item.text_for(&tenant.name);
+            let language = item.language.as_deref().unwrap_or(default_language);
+            let mut request = QueryRequest::new(text.clone(), language, window);
+            request.limit = usize::try_from(args.limit).unwrap_or(1);
+            request.index.clone_from(&item.index);
+            request.data_view.clone_from(&item.data_view);
+            request.timeout = Duration::try_from_secs_f64(args.timeout).unwrap_or(Duration::MAX);
+            let mut outcome = run_on_tenant(platform, tenant, &request, cx, &environment);
+            outcome.label.clone_from(&item.label);
+            if let Some(result) = outcome.result.as_mut()
+                && result.sent.is_none()
+                && text != item.text
+            {
+                // The tenant's exclusions changed the query: show what was sent.
+                result.sent = Some(text);
+            }
+            if let Some(note) = &item.note {
+                outcome.warnings.insert(0, note.clone());
+            }
+            progress.tenant(&TenantEvent {
+                platform,
+                tenant: &outcome.tenant,
+                ok: outcome.ok(),
+                rows: outcome
+                    .result
+                    .as_ref()
+                    .map_or(0, |result| result.rows.len()),
+                elapsed_ms: u64::try_from(outcome.elapsed_ms).unwrap_or_default(),
+                label: outcome.label.as_deref(),
+            });
+            outcomes.push(outcome);
         }
-        let outcome = run_on_tenant(platform, tenant, &request, cx, &environment);
-        progress.tenant(&TenantEvent {
-            platform,
-            tenant: &outcome.tenant,
-            ok: outcome.ok(),
-            rows: outcome
-                .result
-                .as_ref()
-                .map_or(0, |result| result.rows.len()),
-            elapsed_ms: u64::try_from(outcome.elapsed_ms).unwrap_or_default(),
-            label: None,
-        });
-        outcomes.push(outcome);
     }
     let names: Vec<String> = selected.iter().map(|tenant| tenant.name.clone()).collect();
-    let mut report = payload(platform, &window, args.limit, &names, &outcomes, stripped);
+    let source = match &rule {
+        Some(rule) => Source::Rule {
+            uuid: &rule.uuid,
+            name: &rule.name,
+            queries: queries.iter().map(|item| item.text.as_str()).collect(),
+        },
+        None => Source::Query(stripped),
+    };
+    let mut report = payload(platform, &window, args.limit, &names, &outcomes, &source);
     if cx.terminal.text() {
         report.body = body(args, &outcomes, cx.terminal, &mut report);
     }
     report
+}
+
+/// What a run queried: a query, or a rule's queries.
+#[derive(Debug)]
+enum Source<'s> {
+    /// The query given.
+    Query(&'s str),
+    /// The rule, and the queries it sends (before any tenant's exclusions).
+    Rule {
+        uuid: &'s str,
+        name: &'s str,
+        queries: Vec<&'s str>,
+    },
+}
+
+/// The queries of `rule` for `platform`, with an explicit `--language` or
+/// `--index` winning over the rule's own (`_queries`).
+fn rule_queries(
+    rule: &opentide_compile::rule::Rule,
+    platform: &str,
+    args: &Args,
+) -> Result<Vec<RuleQuery>, String> {
+    let found = super::query_rule::rule_queries(rule, platform)?;
+    if args.language.is_none() && args.index.is_empty() {
+        return Ok(found);
+    }
+    Ok(found
+        .into_iter()
+        .map(|item| RuleQuery {
+            language: args.language.clone().or(item.language),
+            index: if args.index.is_empty() {
+                item.index
+            } else {
+                args.index.clone()
+            },
+            data_view: if args.index.is_empty() {
+                item.data_view
+            } else {
+                None
+            },
+            ..item
+        })
+        .collect())
 }
 
 /// The run's report (`run_payload`).
@@ -954,7 +1098,7 @@ fn payload(
     limit: i64,
     tenants: &[String],
     outcomes: &[TenantResult],
-    query: &str,
+    source: &Source<'_>,
 ) -> Report {
     let rows: usize = outcomes
         .iter()
@@ -969,7 +1113,13 @@ fn payload(
     );
     let mut data: Vec<(String, Json)> = vec![
         ("platform".into(), Json::str(platform)),
-        ("source".into(), Json::str("query")),
+        (
+            "source".into(),
+            Json::str(match source {
+                Source::Query(_) => "query",
+                Source::Rule { .. } => "rule",
+            }),
+        ),
         (
             "window".into(),
             Json::object([
@@ -987,7 +1137,24 @@ fn payload(
             Json::Array(outcomes.iter().map(TenantResult::to_json).collect()),
         ),
         ("row_count".into(), Json::from(rows)),
-        ("query".into(), Json::str(query)),
+        match source {
+            Source::Query(query) => ("query".into(), Json::str(*query)),
+            Source::Rule {
+                uuid,
+                name,
+                queries,
+            } => (
+                "rule".into(),
+                Json::object([
+                    ("uuid", Json::str(*uuid)),
+                    ("name", Json::str(*name)),
+                    (
+                        "queries",
+                        Json::Array(queries.iter().map(|text| Json::str(*text)).collect()),
+                    ),
+                ]),
+            ),
+        },
     ];
     let summary = vec![
         ("tenants".to_owned(), Json::from(count)),
@@ -1103,8 +1270,11 @@ fn spaced(value: &Json) -> String {
 }
 
 /// A row with the tenant (and label) in front (`_labelled`).
-fn labelled(tenant: &str, row: &Json) -> Vec<(String, Json)> {
-    let mut members = vec![("_tenant".to_owned(), Json::str(tenant))];
+fn labelled(outcome: &TenantResult, row: &Json) -> Vec<(String, Json)> {
+    let mut members = vec![("_tenant".to_owned(), Json::str(&outcome.tenant))];
+    if let Some(label) = outcome.label.as_ref().filter(|label| !label.is_empty()) {
+        members.push(("_label".to_owned(), Json::str(label)));
+    }
     if let Json::Object(fields) = row {
         for (key, value) in fields {
             match members.iter_mut().find(|(name, _)| name == key) {
@@ -1148,7 +1318,7 @@ fn body(
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for row in rows(result) {
-                        text.push_str(&spaced(&Json::Object(labelled(&outcome.tenant, &row))));
+                        text.push_str(&spaced(&Json::Object(labelled(outcome, &row))));
                         text.push('\n');
                     }
                 }
@@ -1161,6 +1331,14 @@ fn body(
         }
         RowFormat::Csv => {
             let mut header: Vec<String> = vec!["_tenant".into()];
+            if outcomes.iter().any(|outcome| {
+                outcome
+                    .label
+                    .as_ref()
+                    .is_some_and(|label| !label.is_empty())
+            }) {
+                header.push("_label".into());
+            }
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for column in &result.columns {
@@ -1179,7 +1357,7 @@ fn body(
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for row in rows(result) {
-                        let values = labelled(&outcome.tenant, &row);
+                        let values = labelled(outcome, &row);
                         let line: Vec<String> = header
                             .iter()
                             .map(|name| {
@@ -1224,7 +1402,10 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
     let dim = Style::new("dim");
     let mut blocks: Vec<Block> = Vec::new();
     for outcome in outcomes {
-        let title = outcome.tenant.clone();
+        let mut title = outcome.tenant.clone();
+        if let Some(label) = outcome.label.as_ref().filter(|label| !label.is_empty()) {
+            title.push_str(&format!(" · {label}"));
+        }
         let Some(result) = &outcome.result else {
             if outcomes.len() > 1 {
                 let mut line = Text::styled(&title, &bold);
@@ -1276,7 +1457,7 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
         blocks.push(Block::Raw(out));
         if !terminal.quiet {
             let mut warnings = String::new();
-            for warning in &result.warnings {
+            for warning in outcome.warnings.iter().chain(&result.warnings) {
                 let mut line = Text::styled("warning", &Style::new("yellow bold"));
                 line.push_str(&format!(": {warning}"));
                 warnings.push_str(&terminal.stderr.line(&line));
@@ -1514,9 +1695,15 @@ mod tests {
     #[test]
     fn rows_are_written_as_the_python_cli_writes_them() {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
+        let mut lab = failed("lab", "e", None);
         assert_eq!(
-            spaced(&Json::Object(labelled("lab", &row))),
+            spaced(&Json::Object(labelled(&lab, &row))),
             r#"{"_tenant": "lab", "a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#
+        );
+        lab.label = Some("sub-query 1".into());
+        assert_eq!(
+            spaced(&Json::Object(labelled(&lab, &row)))[..44],
+            *r#"{"_tenant": "lab", "_label": "sub-query 1", "#
         );
         assert_eq!(cell(row.get("a")), "x y");
         assert_eq!(cell(row.get("b")), r#"[1,"é"]"#);
@@ -1625,6 +1812,8 @@ mod tests {
     fn ok(tenant: &str, result: QueryOutcome) -> TenantResult {
         TenantResult {
             tenant: tenant.into(),
+            label: None,
+            warnings: Vec::new(),
             result: Some(result),
             error: None,
             detail: None,
@@ -1635,6 +1824,8 @@ mod tests {
     fn failed(tenant: &str, error: &str, detail: Option<&str>) -> TenantResult {
         TenantResult {
             tenant: tenant.into(),
+            label: None,
+            warnings: Vec::new(),
             result: None,
             error: Some(error.into()),
             detail: detail.map(str::to_owned),
@@ -1706,7 +1897,14 @@ mod tests {
             failed("qa", "unreachable", None),
         ];
         let names: Vec<String> = ["prod", "lab", "qa"].map(str::to_owned).to_vec();
-        let report = payload("elastic", &window(), 100, &names, &outcomes, "FROM x");
+        let report = payload(
+            "elastic",
+            &window(),
+            100,
+            &names,
+            &outcomes,
+            &Source::Query("FROM x"),
+        );
         let outcome = &report.outcome;
         assert_eq!(outcome.exit_code, 1);
         assert_eq!(outcome.status, "failed");
@@ -1746,7 +1944,14 @@ mod tests {
             .collect();
         assert_eq!(summary, ["tenants=3", "rows=1", "failed=2"]);
         // A failure without a detail adds none.
-        let report = payload("elastic", &window(), 100, &names[2..], &outcomes[2..], "q");
+        let report = payload(
+            "elastic",
+            &window(),
+            100,
+            &names[2..],
+            &outcomes[2..],
+            &Source::Query("q"),
+        );
         assert_eq!(
             report.outcome.message,
             "1 of 1 queries failed on 1 elastic tenant: qa: unreachable"
@@ -1759,7 +1964,14 @@ mod tests {
         use opentide_compile::Json as J;
         let one = answered(&["n"], vec![row(&[("n", J::Int(1))])]);
         let names = vec!["soc".to_owned()];
-        let report = payload("elastic", &window(), 5, &names, &[ok("soc", one)], "q");
+        let report = payload(
+            "elastic",
+            &window(),
+            5,
+            &names,
+            &[ok("soc", one)],
+            &Source::Query("q"),
+        );
         assert_eq!(report.outcome.exit_code, 0);
         assert_eq!(report.outcome.status, "completed");
         assert!(report.outcome.failure.is_none());
@@ -1776,7 +1988,7 @@ mod tests {
             2,
             &names,
             &[ok("a", two), ok("b", answered(&[], Vec::new()))],
-            "q",
+            &Source::Query("q"),
         );
         assert_eq!(
             report.outcome.message,
@@ -2018,14 +2230,26 @@ mod tests {
         assert_eq!(failure.suggestion.as_deref(), Some("eql"));
         assert_eq!(failure.argument.as_deref(), Some("--language"));
         assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
-        let refused = not_ported("query --rule");
-        let failure = refused.outcome.failure.unwrap();
-        assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
-        assert_eq!(failure.argument.as_deref(), Some("OPENTIDE_ENGINE"));
+        let refused = no_runner("sysdig");
         assert_eq!(
-            failure.message,
-            "opentide query --rule has no Rust implementation yet: unset OPENTIDE_ENGINE, \
-             or set it to python or compare."
+            compact_of(&Json::Object(refused.outcome.data.clone())),
+            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","harfanglab","sentinel","sentinel_one","splunk"]}"#
+        );
+        assert_eq!(refused.outcome.exit_code, 2);
+        let failure = refused.outcome.failure.unwrap();
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(failure.argument.as_deref(), Some("--platform"));
+        assert_eq!(failure.message, "sysdig has no query runner");
+        assert_eq!(failure.suggestion, None);
+        let refused = plugin_rule("acme", "--rule");
+        assert_eq!(refused.outcome.exit_code, 2);
+        let failure = refused.outcome.failure.unwrap();
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(failure.argument.as_deref(), Some("--rule"));
+        assert!(
+            failure.message.contains("acme is a platform plugin"),
+            "{}",
+            failure.message
         );
     }
 

@@ -85,7 +85,7 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 : `opentide generate docs` — render human wiki pages from loaded objects. See [`generate docs`](../../cli/generate.md).
 
 **Registry**
-: The in-memory index of loaded objects and generated artifacts that the SDK exposed before `Workspace` (`Opentide.Rules`, `Opentide.Objectives`, …), deprecated. See [SDK registry](../../sdk/registry.md).
+: The in-memory index of loaded objects that the Python SDK exposed before `Workspace` (`Opentide.Rules`, `Opentide.Objectives`, …), removed with the Python implementation. See [Migration](../../sdk/migration.md).
 
 **MCP (Model Context Protocol)**
 : The protocol opentide's agent server speaks, exposing tools and resources to AI editors. See [MCP](../../mcp/index.md).

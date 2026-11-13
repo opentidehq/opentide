@@ -84,13 +84,19 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-legacy-id-error",
     "vscode",
     "setup-merge",
+    "skills-merge",
     "vscode-docs-folder",
     "tenants",
     "live-tenants",
     "deploy-tenants",
+    "deploy-tenants-sysdig",
     "deploy-push",
     "deploy-push-production",
     "deploy-push-anchor",
+    "share-misp",
+    "share-misp-broken",
+    "share-misp-push",
+    "share-misp-push-config",
 ];
 
 pub fn repo() -> PathBuf {
@@ -163,10 +169,37 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         "setup-merge" => copy_tree(&repo().join("tests/golden/fixtures/setup-merge"), ws),
+        "skills-merge" => copy_tree(&repo().join("tests/golden/fixtures/skills-merge"), ws),
         // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
+        // Every platform but Sysdig disabled (UC-4.4c): a deploy without
+        // --platform sends to Sysdig's stand-in alone.
+        "deploy-tenants-sysdig" => {
+            fixture("deploy-tenants", ws);
+            for platform in [
+                "carbon_black_cloud",
+                "crowdstrike",
+                "defender_for_endpoint",
+                "elastic",
+                "harfanglab",
+                "sentinel",
+                "sentinel_one",
+                "splunk",
+            ] {
+                let path = ws.join(format!(
+                    ".opentide/configurations/platforms/{platform}.toml"
+                ));
+                let text = std::fs::read_to_string(&path).unwrap();
+                let (on, off) = (
+                    "[platform]\nenabled = true\n",
+                    "[platform]\nenabled = false\n",
+                );
+                assert_eq!(text.matches(on).count(), 1, "{platform}");
+                std::fs::write(&path, text.replace(on, off)).unwrap();
+            }
+        }
         // A push of one edit on `deploy-tenants` (UC-4.6c): two commits.
         "deploy-push" => pushed(
             ws,
@@ -186,6 +219,14 @@ pub fn fixture(name: &str, ws: &Path) {
             "    status: STAGING\n",
             "    status: &status STAGING\n",
         ),
+        // UC-4.4b (#834): the MISP destinations of `share`'s cases.
+        "share-misp" => copy_tree(&repo().join("tests/golden/fixtures/share-misp"), ws),
+        "share-misp-broken" => {
+            fixture("share-misp", ws);
+            apply_edits(name, ws);
+        }
+        // UC-4.4e (#834): `share-misp` as a checkout whose last commit is a push.
+        "share-misp-push" | "share-misp-push-config" => pushed_from_cases(name, ws),
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -231,6 +272,62 @@ fn apply_edits(name: &str, ws: &Path) {
 /// one edit (`pushed` in `cases.toml`, laid out by `xtask/src/golden/fixture.rs`).
 fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws);
+    fix_modes(ws);
+    commit_push(
+        ws,
+        &[(path.to_owned(), find.to_owned(), replace.to_owned())],
+    );
+}
+
+/// The copy fixture `name` of `tests/golden/cases.toml` as a git checkout of
+/// two commits: its `source`, then its `pushed` edits.
+fn pushed_from_cases(name: &str, ws: &Path) {
+    let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
+    let spec: toml::Table = toml::from_str(&text).unwrap();
+    let fixture = &spec["fixtures"][name];
+    copy_tree(&repo().join(fixture["source"].as_str().unwrap()), ws);
+    fix_modes(ws);
+    let edits: Vec<(String, String, String)> = fixture["pushed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edit| {
+            let field = |key: &str| edit[key].as_str().unwrap().to_owned();
+            (field("path"), field("find"), field("replace"))
+        })
+        .collect();
+    commit_push(ws, &edits);
+}
+
+/// Sets every folder to 0755 and every file to 0644, or 0755 when any
+/// execute bit is set, before the fixture is committed, as
+/// `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
+/// the umask of whoever cloned, and status promotion keeps a rule file's mode
+/// (#987), which the recordings name.
+fn fix_modes(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let meta = std::fs::symlink_metadata(&path).unwrap();
+        let mode = if meta.is_dir() {
+            fix_modes(&path);
+            0o755
+        } else if meta.is_file() {
+            if meta.permissions().mode() & 0o111 == 0 {
+                0o644
+            } else {
+                0o755
+            }
+        } else {
+            continue;
+        };
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
+}
+
+/// Commits `ws` as it is, then `edits` (path, find, replace) as a second
+/// commit, with the fixed author and time of `xtask/src/golden/fixture.rs`.
+fn commit_push(ws: &Path, edits: &[(String, String, String)]) {
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .args([
@@ -263,10 +360,12 @@ fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
     git(&["init", "-q"]);
     git(&["add", "-A"]);
     git(&["commit", "-q", "--no-verify", "-m", "The fixture"]);
-    let file = ws.join(path);
-    let text = std::fs::read_to_string(&file).unwrap();
-    assert_eq!(text.matches(find).count(), 1);
-    std::fs::write(&file, text.replacen(find, replace, 1)).unwrap();
+    for (path, find, replace) in edits {
+        let file = ws.join(path);
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(text.matches(find.as_str()).count(), 1);
+        std::fs::write(&file, text.replacen(find.as_str(), replace, 1)).unwrap();
+    }
     git(&["commit", "-q", "--no-verify", "-a", "-m", "A push"]);
 }
 
@@ -378,167 +477,6 @@ pub fn ledger() -> Ledger {
     .unwrap()
 }
 
-/// How many runs this thread replayed that the Rust CLI refused with
-/// `engine_not_ported` (Python runs those alone under `compare`).
-pub fn refused() -> usize {
-    REFUSED.with(std::cell::Cell::get)
-}
-
-thread_local! {
-    static REFUSED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// What a `RUST_COMMANDS` entry covers (`RustCommand`, `xtask::compare::Coverage`).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Coverage {
-    /// Words of which a run must carry one (none: every run).
-    pub requires: Vec<String>,
-    /// Flags a run must carry none of.
-    pub refuses: Vec<String>,
-    /// The platforms with a Rust connector: every `--platform` a run names
-    /// must be one, and a run that names none is not covered (none: every
-    /// platform).
-    pub platforms: Vec<String>,
-    /// The flags under which `platforms` applies (none: every run).
-    pub platform_scope: Vec<String>,
-    /// Flags under which a run reaches no tenant (`deploy --dry-run`):
-    /// `platforms` does not apply to it.
-    pub offline: Vec<String>,
-}
-
-/// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
-/// each command path (`"generate docs"`) with what its Rust implementation
-/// covers. Read from the source, as `scripts/parity_engines.py` reads it, so
-/// the replay needs no Python environment.
-pub fn rust_commands() -> &'static BTreeMap<String, Coverage> {
-    static CELL: std::sync::OnceLock<BTreeMap<String, Coverage>> = std::sync::OnceLock::new();
-    CELL.get_or_init(|| {
-        let source = std::fs::read_to_string(repo().join("src/opentide/cli/engines.py")).unwrap();
-        parse_rust_commands(&source)
-    })
-}
-
-/// [`rust_commands`] of `source`: the `RUST_COMMANDS: ... = {` literal, one
-/// entry per `(...): RustCommand(...)`, an entry running over lines until the
-/// next key. A tuple may be written in place or named by a module constant
-/// (`platforms=RUST_QUERY_PLATFORMS`). Panics on a table it cannot read,
-/// rather than covering nothing.
-pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
-    let start = source
-        .find("\nRUST_COMMANDS:")
-        .unwrap_or_else(|| panic!("engines.py: no RUST_COMMANDS"));
-    let body = &source[start..];
-    let body = &body[body
-        .find("{\n")
-        .unwrap_or_else(|| panic!("RUST_COMMANDS: no dict literal"))
-        + 2..];
-    let body = &body[..body
-        .find("\n}")
-        .unwrap_or_else(|| panic!("RUST_COMMANDS: unterminated"))];
-    let key = regex::Regex::new(r#"\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\("#).unwrap();
-    let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
-    let words = |text: &str| -> Vec<String> {
-        word.captures_iter(text)
-            .map(|word| word[1].to_owned())
-            .collect()
-    };
-    let tuple = |arguments: &str, name: &str| -> Vec<String> {
-        let field = regex::Regex::new(&format!(
-            r"\b{name}\s*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*))"
-        ))
-        .unwrap();
-        let Some(found) = field.captures(arguments) else {
-            return Vec::new();
-        };
-        if let Some(listed) = found.get(1) {
-            return words(listed.as_str());
-        }
-        // A constant may name another (`RUST_DEPLOY_PLATFORMS =
-        // RUST_LIVE_VALIDATION_PLATFORMS`): follow it to its tuple.
-        let mut constant = found[2].to_owned();
-        for _ in 0..8 {
-            let defined = regex::Regex::new(&format!(
-                r"(?s)\n{constant}\s*:[^=\n]*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*)\s*\n)"
-            ))
-            .unwrap();
-            let defined = defined
-                .captures(source)
-                .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
-            if let Some(listed) = defined.get(1) {
-                return words(listed.as_str());
-            }
-            constant = defined[2].to_owned();
-        }
-        panic!("engines.py: {constant}: aliases nest too deep")
-    };
-    let keys: Vec<_> = key.captures_iter(body).collect();
-    let mut table = BTreeMap::new();
-    for (index, found) in keys.iter().enumerate() {
-        let whole = found.get(0).unwrap();
-        let until = keys
-            .get(index + 1)
-            .map_or(body.len(), |next| next.get(0).unwrap().start());
-        let arguments = &body[whole.end()..until];
-        let path = words(&found[1]);
-        table.insert(
-            path.join(" "),
-            Coverage {
-                requires: tuple(arguments, "requires"),
-                refuses: tuple(arguments, "refuses"),
-                platforms: tuple(arguments, "platforms"),
-                platform_scope: tuple(arguments, "platform_scope"),
-                offline: tuple(arguments, "offline"),
-            },
-        );
-    }
-    let read = keys.len();
-    let entries = body.matches("RustCommand(").count();
-    assert_eq!(
-        read, entries,
-        "RUST_COMMANDS: read {read} of {entries} entries"
-    );
-    table
-}
-
-/// Whether `RUST_COMMANDS` covers a run of `command` with `argv`
-/// (`RustCommand.covers`, `xtask::compare::covers`): the command is in it,
-/// and the arguments before `--` carry one of the words it requires, if
-/// any, none it refuses, and only platforms it runs on, where that applies.
-pub fn covers(command: &str, argv: &[String]) -> bool {
-    let Some(coverage) = rust_commands().get(command) else {
-        return false;
-    };
-    let options = argv
-        .iter()
-        .position(|arg| arg == "--")
-        .map_or(argv, |end| &argv[..end]);
-    let platforms = coverage.platforms.is_empty()
-        || coverage.offline.iter().any(|flag| options.contains(flag))
-        || (!coverage.platform_scope.is_empty()
-            && !coverage
-                .platform_scope
-                .iter()
-                .any(|flag| options.contains(flag)))
-        || {
-            let mut named = Vec::new();
-            for (index, token) in options.iter().enumerate() {
-                if token == "--platform" {
-                    named.extend(options.get(index + 1).map(String::as_str));
-                } else if let Some(value) = token.strip_prefix("--platform=") {
-                    named.push(value);
-                }
-            }
-            !named.is_empty()
-                && named
-                    .iter()
-                    .all(|name| coverage.platforms.iter().any(|p| p == name))
-        };
-    !coverage.refuses.iter().any(|flag| options.contains(flag))
-        && platforms
-        && (coverage.requires.is_empty()
-            || coverage.requires.iter().any(|flag| options.contains(flag)))
-}
-
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
 /// `cargo xtask compare`'s `package_uuids`.
 fn package_uuids() -> &'static std::collections::BTreeSet<String> {
@@ -562,6 +500,18 @@ fn package_uuids() -> &'static std::collections::BTreeSet<String> {
         walk(&repo().join("src/opentide"), &mut out);
         out
     })
+}
+
+thread_local! {
+    static LAST_FILES: std::cell::RefCell<BTreeMap<String, FileState>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+/// The files the last case [`replay`]ed on this thread wrote, normalised, by
+/// their recorded paths (`ws/...`): for a test that checks them beyond the
+/// comparison, such as loading them as data.
+pub fn last_files() -> BTreeMap<String, FileState> {
+    LAST_FILES.with(|last| last.borrow().clone())
 }
 
 /// Replays the recording in `dir`; the differences found, if any.
@@ -602,10 +552,6 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         .iter()
         .map(|(_, root)| (files(root), dirs(root)))
         .collect();
-    // A refusal (`engine_not_ported`) is recorded where `compare` reads it:
-    // Python then runs alone, and there is nothing to compare.
-    let refusal_dir = tempfile::tempdir().unwrap();
-    let refusal = refusal_dir.path().join("refusal");
     // A cassette case (UC-4.1): the network is the replaying proxy, its CA
     // where the case's CA bundle variables point.
     let proxy = case
@@ -628,26 +574,16 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         || "http://127.0.0.1:9".to_owned(),
         opentide_cassette::Proxy::url,
     );
-    let env = Env::from_pairs(
-        case["env"]
-            .as_table()
+    let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
+        let value = value
+            .as_str()
             .unwrap()
-            .iter()
-            .map(|(key, value)| {
-                let value = value
-                    .as_str()
-                    .unwrap()
-                    .replace("<CASSETTE_PROXY>", &proxy_url)
-                    .replace("<HOME>", &home.display().to_string())
-                    .replace("<TMP>", &tmp.display().to_string())
-                    .replace("<WS>", &ws.display().to_string());
-                (key.clone(), value)
-            })
-            .chain(std::iter::once((
-                "OPENTIDE_ENGINE_REFUSAL".to_owned(),
-                refusal.display().to_string(),
-            ))),
-    );
+            .replace("<CASSETTE_PROXY>", &proxy_url)
+            .replace("<HOME>", &home.display().to_string())
+            .replace("<TMP>", &tmp.display().to_string())
+            .replace("<WS>", &ws.display().to_string());
+        (key.clone(), value)
+    }));
     let terminal = mode == "human";
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
@@ -667,20 +603,6 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let mut out = Vec::new();
     let mut err = stderr.clone();
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
-    if refusal.exists() {
-        // Python runs alone only where `RUST_COMMANDS` does not cover the run
-        // (a bare `generate`): a refusal of a run it covers is a failure, as
-        // `cargo xtask golden check --engine compare` counts it.
-        let command = case["command"].as_str().unwrap();
-        if covers(command, &argv) {
-            return vec![format!(
-                "{id}: the CLI refused (engine_not_ported) a run of `{command}` that \
-                 RUST_COMMANDS covers: exit {exit_code}"
-            )];
-        }
-        REFUSED.with(|count| count.set(count.get() + 1));
-        return Vec::new();
-    }
     let today = opentide_compare::normalise::utc_date(std::time::SystemTime::now());
     // The case's opt-in rules (`fresh-uuids` for a command that mints
     // identifiers), with the UUIDs that are not fresh as the golden check
@@ -774,7 +696,13 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
                 written.insert(format!("{prefix}/{path}"), FileState::Deleted);
             }
         }
-        for folder in dirs(root).difference(folders_before) {
+        let folders_after = dirs(root);
+        // A folder the run removed (a skill's tree replaced whole), as the
+        // recording lists it.
+        for folder in folders_before.difference(&folders_after) {
+            written.insert(format!("{prefix}/{folder}"), FileState::Deleted);
+        }
+        for folder in folders_after.difference(folders_before) {
             let mode = std::fs::metadata(root.join(folder))
                 .unwrap()
                 .permissions()
@@ -801,6 +729,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         stderr: stderr.into_bytes(),
         files: written,
     };
+    LAST_FILES.with(|last| *last.borrow_mut() = candidate.files.clone());
     let command = case["command"].as_str().unwrap();
     if let Ok(dump) = std::env::var("OPENTIDE_REPLAY_DUMP") {
         // The candidate's run, for `scripts/golden/ledger_entries.py`.
@@ -843,9 +772,9 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     problems
 }
 
-/// Replays every recorded case of `commands` on the fixtures this module lays
-/// out, but `--help` (the Python launcher's, until UC-3.8) and `validate query
-/// --live` (the tenants' check, Python's until UC-4.1); the problems, and
+/// Replays every recorded case of `commands` (`_root` for the root's) on the
+/// fixtures this module lays out, `--help` included (clap's help, held to
+/// the oracle's by content: the ledger's `help` entries); the problems, and
 /// how many cases ran. A ledger entry of these commands that applied to
 /// nothing is a problem when `complete`.
 pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize) {
@@ -874,8 +803,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                         "{command}/{mode}/{fixture}/{}",
                         dir.file_name().unwrap().to_string_lossy()
                     );
-                    let case = std::fs::read_to_string(dir.join("case.toml")).unwrap();
-                    if case.contains("\"--help\"") || !id.contains(&filter) {
+                    if !id.contains(&filter) {
                         continue;
                     }
                     problems.extend(replay(&id, &dir, &ledger, &mut usage));
@@ -886,15 +814,18 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     }
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
-            // `--help` cases are not replayed here (the Python launcher's help):
-            // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            }) || entry.case.ends_with("/help");
-            if commands.contains(&entry.command.replace(' ', ".").as_str())
-                && !elsewhere
-                && !usage.is_used(index)
-            {
+            })
+                // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
+                || entry.case.starts_with("cassette:");
+            // The root's cases are recorded under `_root`.
+            let dir = if entry.command.is_empty() {
+                "_root".to_owned()
+            } else {
+                entry.command.replace(' ', ".")
+            };
+            if commands.contains(&dir.as_str()) && !elsewhere && !usage.is_used(index) {
                 problems.push(format!(
                     "APPROVED_DIFFS.toml entry {} ({} {}) applied to no case: it is stale",
                     index + 1,
@@ -902,6 +833,50 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                     entry.case
                 ));
             }
+        }
+    }
+    (problems, ran)
+}
+
+/// Replays the `variant` case (`help`) of every command path in every mode
+/// and fixture; the problems, and how many cases ran. A ledger entry for
+/// those cases that applied to nothing is a problem.
+pub fn replay_variant(variant: &str) -> (Vec<String>, usize) {
+    let cases = repo().join("tests/golden/cases");
+    let ledger = ledger();
+    let mut usage = Usage::default();
+    let mut problems = Vec::new();
+    let mut ran = 0;
+    let mut commands: Vec<PathBuf> = std::fs::read_dir(&cases)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    commands.sort();
+    for command in commands {
+        for mode in ["human", "plain", "json", "agent"] {
+            for fixture in FIXTURES {
+                let dir = command.join(mode).join(fixture).join(variant);
+                if !dir.is_dir() {
+                    continue;
+                }
+                let id = format!(
+                    "{}/{mode}/{fixture}/{variant}",
+                    command.file_name().unwrap().to_string_lossy()
+                );
+                problems.extend(replay(&id, &dir, &ledger, &mut usage));
+                ran += 1;
+            }
+        }
+    }
+    let suffix = format!("/{variant}");
+    for (index, entry) in ledger.entries.iter().enumerate() {
+        if entry.case.ends_with(&suffix) && !usage.is_used(index) {
+            problems.push(format!(
+                "APPROVED_DIFFS.toml entry {} ({} {}) applied to no case: it is stale",
+                index + 1,
+                entry.command,
+                entry.case
+            ));
         }
     }
     (problems, ran)

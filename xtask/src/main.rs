@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use xtask::compare;
 use xtask::layers::{self, LayerTable, Metadata};
-use xtask::{coverage, mutants, parity, parity_inputs};
+use xtask::{coverage, mutants};
 
 const USAGE: &str = "\
 usage: cargo xtask <command> [options]
@@ -36,16 +36,6 @@ commands:
                  scores against the baseline; --issues writes DIR/<crate>.md for
                  each crate whose surviving mutants exceed its threshold;
                  --write-baseline records this run as the baseline
-  parity dashboard [--root DIR] [--out FILE] [--check] [--require-inputs]
-                   [--engines FILE] [--compare FILE]
-                 render the parity dashboard (each command x corpus x mode
-                 against the oracle, approved diffs, fault coverage) into FILE,
-                 by default docs/internal/parity.md; --check fails when FILE
-                 differs from the rendering instead of writing it;
-                 --require-inputs fails when the recordings, the ledger or the
-                 fault catalogue is missing. --engines
-                 reads the engine state (scripts/parity_engines.py), --compare
-                 the RunReport JSON of a compare run
   compare --oracle DIR --candidate DIR --command PATH [--case ID]
           [--ledger FILE] [--report FILE]
                  compare a candidate's run with the oracle's, applying the
@@ -55,6 +45,12 @@ commands:
   compare --check-ledger [--ledger FILE] [--changelog FILE]
                  check the ledger's schema, and that CHANGELOG.md holds each
                  entry's changelog reference
+  conformance [--runners rust,python,node] [--corpus NAME,...] [--out DIR]
+              [--diverge RUNNER] [--keep]
+                 run every operation of tests/conformance/manifest.json on every
+                 corpus through the Rust, Python and Node SDKs and require
+                 byte-identical documents; a difference is named by its JSON
+                 pointer. --diverge is the suite's own test (UC-5.4, #839)
   corpus <command>
                  generate the heavy workspace, run the fault catalogue
                  against the oracle, report coverage (UC-0.6, #804);
@@ -89,11 +85,11 @@ commands:
                  `opentide generate` writes with each golden recording of an
                  `opentide generate` that ran its schemas, templates and
                  snippets phases and exited 0 (UC-1.8, #814)
-  mcp record [--only NAME] [--python PATH]
-  mcp replay --engine python|rust|compare FILE...
+  mcp record --python PATH [--only NAME]
+  mcp replay --engine rust FILE...
                  record the MCP sessions of tests/golden/mcp/sessions.toml from
-                 the Python server, and replay them against the Python server,
-                 the Rust server or both (UC-3.7, #829)
+                 the Python server of an opentide release that has one, and
+                 replay them against the Rust server (UC-3.7, #829)
   cassettes <check|record|list>
                  the recorded-HTTP cassettes of tests/cassettes (UC-4.1,
                  #831): record a scenario from the oracle through the
@@ -116,9 +112,10 @@ commands:
                  and their verdict on every object file of every corpus
                  (UC-1.3, #809); `cargo xtask schema help` lists the options
   stubs [--check] [--library FILE]
-                 generate src/opentide/_native/models.pyi, the stubs of the
-                 Tide models' Python classes, from the extension's
-                 introspection data (UC-1.9, #815); --check fails on drift
+                 generate src/opentide/_native/models.pyi and sdk.pyi, the
+                 stubs of the Tide models' Python classes and of the SDK's
+                 core, from the extension's introspection data (UC-1.9,
+                 #815; UC-5.2b, #837); --check fails on drift
   help           print this message
 
 exit status: 0 passed, 1 check failed or not implemented yet,
@@ -155,19 +152,18 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "parity" => match parity_command(rest) {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
-            Err(error) => {
-                eprintln!("xtask parity: {error:#}");
-                ExitCode::from(2)
-            }
-        },
         "compare" => match run_compare(rest) {
             Ok(true) => ExitCode::SUCCESS,
             Ok(false) => ExitCode::FAILURE,
             Err(error) => {
                 eprintln!("xtask compare: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "conformance" => match xtask::conformance::cli::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask conformance: {error:#}");
                 ExitCode::from(2)
             }
         },
@@ -618,96 +614,6 @@ fn mutants_command(args: &[String]) -> Result<()> {
         }
         other => bail!("unknown subcommand `mutants {other}`\n\n{USAGE}"),
     }
-}
-
-/// `parity dashboard`: writes (or checks) the page; whether it passed.
-fn parity_command(args: &[String]) -> Result<bool> {
-    let Some(("dashboard", args)) = args.split_first().map(|(c, r)| (c.as_str(), r)) else {
-        bail!("expected `parity dashboard`\n\n{USAGE}");
-    };
-    let mut root: Option<PathBuf> = None;
-    let mut out: Option<PathBuf> = None;
-    let mut engines: Option<PathBuf> = None;
-    let mut compare_report: Option<PathBuf> = None;
-    let mut check = false;
-    let mut require_inputs = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let slot = match arg.as_str() {
-            "--check" => {
-                check = true;
-                continue;
-            }
-            "--require-inputs" => {
-                require_inputs = true;
-                continue;
-            }
-            "--root" => &mut root,
-            "--out" => &mut out,
-            "--engines" => &mut engines,
-            "--compare" => &mut compare_report,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        };
-        *slot = Some(
-            args.next()
-                .map(PathBuf::from)
-                .with_context(|| format!("{arg} needs a value"))?,
-        );
-    }
-    let root = match root {
-        Some(root) => root,
-        None => Metadata::parse(&cargo_metadata()?)
-            .context("parse the cargo metadata")?
-            .workspace_root
-            .context("the metadata names no workspace_root: pass --root DIR")?,
-    };
-    let out = out.unwrap_or_else(|| root.join("docs").join("internal").join("parity.md"));
-
-    let inputs = parity_inputs::read(&root, engines.as_deref(), compare_report.as_deref())?;
-    if require_inputs {
-        let missing = parity_inputs::missing_sources(&inputs);
-        if !missing.is_empty() {
-            for source in &missing {
-                eprintln!("error: missing {source}");
-            }
-            eprintln!(
-                "parity: --require-inputs and {} source(s) missing; nothing written",
-                missing.len()
-            );
-            return Ok(false);
-        }
-    }
-    let errors = parity::check(&inputs);
-    if !errors.is_empty() {
-        for error in &errors {
-            eprintln!("error: {error}");
-        }
-        eprintln!(
-            "parity: {} error(s) in the inputs; nothing written",
-            errors.len()
-        );
-        return Ok(false);
-    }
-    let page = parity::page(&inputs);
-    if check {
-        let current = std::fs::read_to_string(&out).unwrap_or_default();
-        if parity::same_page(&current, &page) {
-            println!("parity: {} is up to date", out.display());
-            return Ok(true);
-        }
-        eprintln!(
-            "parity: {} differs from the rendering: run `cargo xtask parity dashboard`",
-            out.display()
-        );
-        return Ok(false);
-    }
-    std::fs::write(&out, &page).with_context(|| format!("write {}", out.display()))?;
-    println!(
-        "parity: wrote {} ({} recordings)",
-        out.display(),
-        inputs.goldens.len()
-    );
-    Ok(true)
 }
 
 fn read(path: &std::path::Path) -> Result<String> {

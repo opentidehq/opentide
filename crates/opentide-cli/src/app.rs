@@ -26,41 +26,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-/// Command paths with a Rust implementation; every other one is refused with
-/// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-/// `deploy` runs here with `--dry-run` (UC-3.1c), and a deploy that sends
-/// when it names its `--platform` (UC-4.6); one that names none is refused as
-/// unported, as `validate query --live` without `--platform` is.
-pub const PORTED: &[&str] = &[
-    "commands",
-    "explain",
-    "info",
-    "lint",
-    "validate",
-    "validate query",
-    "rules unreviewed",
-    "generate exports",
-    "generate exports navigator",
-    "generate exports objects",
-    "generate exports revisions",
-    "generate docs",
-    "generate docs rules",
-    "generate docs objectives",
-    "generate docs threats",
-    "generate docs index",
-    "deploy",
-    "deploy migrate-state",
-    "serve",
-    "query",
-];
-
-/// The file in which a run refused with `engine_not_ported` records its
-/// message, when the variable names one. `OPENTIDE_ENGINE=compare`
-/// (`src/opentide/cli/engines.py`) sets it for the Rust side: a command this
-/// engine runs for some inputs only (`generate docs` without CVE details)
-/// refuses the others, and the Python side's run is then the result.
-pub const REFUSAL_ENV: &str = "OPENTIDE_ENGINE_REFUSAL";
-
 /// What the embedding process tells the run about itself.
 pub struct Host {
     /// opentide's version, as `--version` and the catalogue print it.
@@ -149,8 +114,12 @@ pub struct Globals {
     pub quiet: bool,
     /// `--version` or `-V`.
     pub version: bool,
-    /// `--help` or `-h` among the root's own options.
+    /// `--help` among the root's own options.
     pub help: bool,
+    /// `--install-completion`.
+    pub install_completion: bool,
+    /// `--show-completion`.
+    pub show_completion: bool,
     /// `--repo`, as typed on the command line (not from the environment).
     pub repo: Option<String>,
     /// `--proxy`, from the command line or `OPENTIDE_PROXY`.
@@ -178,13 +147,17 @@ pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
                 next
             })
         };
+        // A flag given a value (`--json=1`) is a usage error, not the flag.
+        let flag = inline.is_none();
         match name {
-            "--json" => globals.json = true,
-            "--no-color" => globals.no_color = true,
-            "--debug" => globals.debug = true,
-            "--quiet" => globals.quiet = true,
-            "--version" | "-V" => globals.version = true,
-            "--help" | "-h" => globals.help = true,
+            "--json" if flag => globals.json = true,
+            "--no-color" if flag => globals.no_color = true,
+            "--debug" if flag => globals.debug = true,
+            "--quiet" if flag => globals.quiet = true,
+            "--version" | "-V" if flag => globals.version = true,
+            "--help" if flag => globals.help = true,
+            "--install-completion" if flag => globals.install_completion = true,
+            "--show-completion" if flag => globals.show_completion = true,
             "--repo" => globals.repo = value(),
             "--proxy" => globals.proxy = value(),
             "--data" => globals.data = value(),
@@ -196,6 +169,9 @@ pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
     }
     globals
 }
+
+/// A usage error a command found itself, with the notes under it.
+type Refusal = (Outcome, Vec<(String, String)>);
 
 /// What a run resolved before it started the command.
 struct Run<'a> {
@@ -233,7 +209,6 @@ impl Run<'_> {
         if self.interrupted() {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
-        self.record_refusal(outcome)?;
         match self.mode {
             Mode::Json => {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
@@ -270,22 +245,6 @@ impl Run<'_> {
         Ok(outcome.exit_code)
     }
 
-    /// Writes an `engine_not_ported` refusal's message to the file
-    /// [`REFUSAL_ENV`] names, if it names one.
-    fn record_refusal(&self, outcome: &Outcome) -> std::io::Result<()> {
-        let Some(failure) = outcome
-            .failure
-            .as_ref()
-            .filter(|failure| failure.code == code::ENGINE_NOT_PORTED)
-        else {
-            return Ok(());
-        };
-        match self.env.get(REFUSAL_ENV).filter(|path| !path.is_empty()) {
-            Some(path) => std::fs::write(path, failure.message.as_bytes()),
-            None => Ok(()),
-        }
-    }
-
     /// The stream the lines go to: colour in `human` mode, bold and dim only
     /// in `plain` mode, on a terminal that is not `TERM=dumb`; wrapped at its
     /// width there, whole on a pipe.
@@ -310,22 +269,153 @@ impl Run<'_> {
 
     /// The help of the command at `path` on `out`; `code`.
     fn help(&self, path: &[String], code: i32, out: &mut dyn Write) -> std::io::Result<i32> {
-        let mut command = usage::command_at(&self.root, path).clone();
-        let mut bin = vec![catalog::PROGRAM.to_owned()];
-        bin.extend(path.iter().cloned());
-        command = command.bin_name(bin.join(" "));
-        let help = command.render_long_help();
-        let text = if self.mode == Mode::Human {
-            help.ansi().to_string()
-        } else {
-            help.to_string()
-        };
+        let text = crate::help::render(&self.root, path, self.mode == Mode::Human);
         out.write_all(text.as_bytes())?;
-        if !text.ends_with('\n') {
-            out.write_all(b"\n")?;
-        }
         out.flush()?;
         Ok(code)
+    }
+
+    /// The home screen of a bare `opentide` (`commands::home`), for this
+    /// run's terminal; `None` where it cannot be drawn and the help shows.
+    fn home(&self) -> Option<String> {
+        let cwd = self
+            .host
+            .cwd
+            .clone()
+            .or_else(|| std::env::current_dir().ok())?;
+        let home = self
+            .env
+            .get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        let facts = crate::commands::home::gather(
+            &self.host.version,
+            &cwd,
+            self.env.get("OPENTIDE_REPO_ROOT"),
+        );
+        let console = self.console(self.host.stdout_tty);
+        Some(crate::commands::home::render(
+            &facts,
+            &crate::commands::home::Screen {
+                colour: console.colour,
+                width: self.host.width.unwrap_or(80),
+                cwd: &cwd,
+                home: home.as_deref(),
+            },
+        ))
+    }
+
+    /// `--show-completion [SHELL]` (`install` false) or
+    /// `--install-completion [SHELL]`: the script on stdout, or installed.
+    fn completion(
+        &self,
+        install: bool,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        use crate::commands::completion;
+        let option = if install {
+            "--install-completion"
+        } else {
+            "--show-completion"
+        };
+        let start = hoist::root_options_end(&self.root, &self.args);
+        let words: Vec<String> = self.args[start..]
+            .iter()
+            .take_while(|word| !word.starts_with('-'))
+            .cloned()
+            .collect();
+        let refuse = |failure: Failure| {
+            let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            let notes = vec![
+                ("usage".to_owned(), usage::usage_line(&self.root, &[])),
+                (
+                    "help".to_owned(),
+                    format!("run '{} --help'", catalog::PROGRAM),
+                ),
+            ];
+            (outcome, notes)
+        };
+        let shell = match completion::named_shell(&words, option) {
+            Ok(Some(shell)) => shell,
+            Ok(None) => {
+                if let Some(shell) = completion::detect(self.env.get("SHELL")) {
+                    shell
+                } else {
+                    let message = format!(
+                        "Could not tell which shell this is. Name it: {}",
+                        completion::form(option)
+                    );
+                    let (outcome, notes) = refuse(Failure::new(code::USAGE_ERROR, message));
+                    return self.emit(&outcome, &notes, &[], out, err);
+                }
+            }
+            Err(message) => {
+                let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
+                failure.argument = Some(option.to_owned());
+                let (outcome, notes) = refuse(failure);
+                return self.emit(&outcome, &notes, &[], out, err);
+            }
+        };
+        let script = completion::script(&self.root, shell);
+        if !install {
+            out.write_all(script.as_bytes())?;
+            out.flush()?;
+            return Ok(0);
+        }
+        let home = self
+            .env
+            .get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        let profile = matches!(shell, "powershell" | "pwsh")
+            .then(|| completion::powershell_profile(shell))
+            .flatten();
+        let installed = home.as_deref().map_or_else(
+            || {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "no home folder (HOME is not set)",
+                ))
+            },
+            |home| completion::install(shell, &script, home, profile.as_deref()),
+        );
+        let outcome = match installed {
+            Ok(installed) => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let shown = completion::person_path(&installed.path, &cwd, home.as_deref());
+                let next = if installed.reload.is_empty() {
+                    NextAction::new(installed.reason, "")
+                } else {
+                    NextAction::new(installed.reload, installed.reason)
+                };
+                Outcome {
+                    command: String::new(),
+                    status: "completed".into(),
+                    message: format!("Installed {shell} completion in {shown}"),
+                    data: vec![
+                        ("shell".into(), crate::json::Json::Str(shell.to_owned())),
+                        (
+                            "path".into(),
+                            crate::json::Json::Str(installed.path.to_string_lossy().into_owned()),
+                        ),
+                    ],
+                    exit_code: 0,
+                    summary: Vec::new(),
+                    next_actions: vec![next],
+                    failure: None,
+                }
+            }
+            Err(error) => Outcome::failed(
+                "",
+                1,
+                Failure::new(
+                    "io_error",
+                    format!("Could not install {shell} completion: {error}"),
+                ),
+            ),
+        };
+        self.emit(&outcome, &[], &[], out, err)
     }
 
     fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
@@ -333,6 +423,17 @@ impl Run<'_> {
             writeln!(out, "{} {}", catalog::PROGRAM, self.host.version)?;
             out.flush()?;
             return Ok(0);
+        }
+        if self.globals.install_completion || self.globals.show_completion {
+            return self.completion(self.globals.install_completion, out, err);
+        }
+        if self.args.is_empty() && self.mode == Mode::Human {
+            // A person at a terminal: the home screen (D3), else the help.
+            if let Some(screen) = self.home() {
+                out.write_all(screen.as_bytes())?;
+                out.flush()?;
+                return Ok(0);
+            }
         }
         if self.args.is_empty() && !self.mode.is_machine() {
             return self.help(&[], 0, out);
@@ -641,6 +742,50 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "generate extract elastic" => {
+                let options = leaf(&matches);
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::extract::elastic(
+                    &crate::commands::extract::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                    },
+                    options
+                        .get_one::<String>("space")
+                        .map_or("default", String::as_str),
+                    options.get_flag("include_prebuilt"),
+                );
+                self.emit_report(&report, out, err)
+            }
+            "generate extract sentinel" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report =
+                    crate::commands::extract::sentinel(&crate::commands::extract::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                    });
+                self.emit_report(&report, out, err)
+            }
+            "generate extract defender" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report =
+                    crate::commands::extract::defender(&crate::commands::extract::Context {
+                        repo: self.globals.repo.as_deref(),
+                        env: self.env,
+                        cwd: &cwd,
+                        proxy: self.globals.proxy.as_deref(),
+                    });
+                self.emit_report(&report, out, err)
+            }
+            "share" | "share push" | "share preview" | "share status" | "share retract"
+            | "share targets" => match self.share(&matches, &path) {
+                Ok(report) => self.emit_report(&report, out, err),
+                Err(refused) => self.emit(&refused.0, &refused.1, &[], out, err),
+            },
             "doctor" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
@@ -655,6 +800,35 @@ impl Run<'_> {
                     },
                 );
                 self.emit_report(&report, out, err)
+            }
+            "deploy replay-state" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let commit = leaf(&matches)
+                    .get_one::<String>("state_commit")
+                    .cloned()
+                    .unwrap_or_default();
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                crate::commands::deploy_replay::run(&cwd, self.env, &commit, out, err)
+            }
+            "deploy metadata" => {
+                let platform = leaf(&matches)
+                    .get_one::<crate::tree::Platform>("platform")
+                    .and_then(clap::ValueEnum::to_possible_value)
+                    .map(|value| value.get_name().to_owned())
+                    .unwrap_or_default();
+                let failure = Failure::new(
+                    "not_implemented",
+                    format!("Metadata deployment is not implemented for {platform}"),
+                );
+                self.emit(
+                    &Outcome::failed(&path, USAGE_EXIT_CODE, failure),
+                    &[],
+                    &[],
+                    out,
+                    err,
+                )
             }
             "deploy migrate-state" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
@@ -758,6 +932,10 @@ impl Run<'_> {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)
             }
+            "setup skills" => {
+                let report = self.setup_skills(&matches);
+                self.emit_report(&report, out, err)
+            }
             "setup skills discover" | "setup skills show" => {
                 let report = self.setup_skills_catalogue(&matches, &path);
                 self.emit_report(&report, out, err)
@@ -796,28 +974,16 @@ impl Run<'_> {
                 if let Some(refused) = crate::commands::deploy::refusal(&parsed) {
                     return self.emit_deploy(&refused, out, err);
                 }
-                if parsed.platform.is_none() {
-                    // The workspace's platforms are Python's (`RustCommand.platforms`).
-                    let message = "opentide deploy without --platform has no Rust implementation \
-                         yet: unset OPENTIDE_ENGINE, or set it to python or compare."
-                        .to_owned();
-                    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                    failure.argument = Some("OPENTIDE_ENGINE".into());
-                    let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                    return self.emit(&outcome, &[], &[], out, err);
+                let every_platform = parsed.platform.is_none();
+                let mut report = self.deploy_send(&matches, parsed);
+                if every_platform {
+                    // A run over the workspace's platforms that matched no
+                    // rule says so to the CI run as a whole (`emit_warning`).
+                    self.no_rules_warning(&mut report);
                 }
-                let report = self.deploy_send(&matches, parsed);
                 self.emit_report(&report, out, err)
             }
-            _ => {
-                let message = format!(
-                    "opentide {path} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
-                );
-                let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-                failure.argument = Some("OPENTIDE_ENGINE".into());
-                let outcome = Outcome::failed(&path, USAGE_EXIT_CODE, failure);
-                self.emit(&outcome, &[], &[], out, err)
-            }
+            _ => self.emit(&unhandled(&path), &[], &[], out, err),
         }
     }
 
@@ -855,6 +1021,11 @@ impl Run<'_> {
             threats: many("threat"),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
+        let can_prompt = self.mode == Mode::Human && stdin_is_terminal();
+        // The questions are the setup wizards': drawn on stderr.
+        let prompter = std::cell::RefCell::new(crate::commands::setup::wizard::Inquire::new(
+            self.terminal().stderr.colour,
+        ));
         run(
             &parsed,
             &Context {
@@ -862,7 +1033,9 @@ impl Run<'_> {
                 env: self.env,
                 cwd: &cwd,
                 version: &self.host.version,
-                can_prompt: self.mode == Mode::Human && stdin_is_terminal(),
+                can_prompt,
+                prompter: Some(&prompter),
+                interrupt: Some(&self.host.interrupt),
             },
         )
     }
@@ -975,6 +1148,7 @@ impl Run<'_> {
             terminal: self.terminal(),
             interrupt: self.host.interrupt.clone(),
             stderr: self.host.log_sink.clone(),
+            proxy: self.globals.proxy.as_deref(),
         }
     }
 
@@ -1080,6 +1254,59 @@ impl Run<'_> {
             flag("plan") || group.get_flag("plan"),
             &self.setup_context(&cwd),
         )
+    }
+
+    /// `opentide setup skills` without a subcommand: the install.
+    fn setup_skills(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::run::{Paths, SkillsArgs, skills};
+        use crate::commands::setup::skills::{Options, Target};
+        let Some((_, group)) = matches.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let Some((_, args)) = group.subcommand() else {
+            return crate::commands::Report::error("setup", "no setup command");
+        };
+        let given = |matches: &clap::ArgMatches, id: &str| {
+            matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        let text = |id: &str| args.get_one::<String>(id).cloned();
+        let flag = |id: &str| args.get_flag(id);
+        let paths = Paths {
+            own: given(args, "path").then(|| text("path")).flatten(),
+            group: given(group, "path")
+                .then(|| group.get_one::<String>("path").cloned())
+                .flatten(),
+            both: false,
+            group_only: self.setup_group_only(group),
+        };
+        let targets = [
+            ("cursor", Target::Cursor),
+            ("claude_code", Target::ClaudeCode),
+            ("generic", Target::Generic),
+            ("github_copilot", Target::GithubCopilot),
+        ]
+        .into_iter()
+        .filter(|(id, _)| flag(id))
+        .map(|(_, target)| target)
+        .collect();
+        let parsed = SkillsArgs {
+            options: Options {
+                targets,
+                slugs: args
+                    .get_many::<String>("install")
+                    .map(|values| values.cloned().collect())
+                    .unwrap_or_default(),
+                all: flag("all_skills"),
+                name: text("name"),
+                org: text("org"),
+                description: text("description"),
+                plugin: flag("plugin"),
+            },
+            yes: flag("yes") || group.get_flag("yes"),
+            plan: flag("plan") || group.get_flag("plan"),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        skills(&parsed, &paths, &self.setup_context(&cwd))
     }
 
     /// `opentide setup` without a subcommand.
@@ -1258,8 +1485,7 @@ impl Run<'_> {
     /// `validate` it also takes, typed before `query`, are its own
     /// (`hand_down`); the others are refused, as is one typed on both.
     fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::validate_query::{Args, COMMAND, Context, run};
-        use clap::ValueEnum;
+        use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
         let args = leaf(matches);
         let group = matches.subcommand_matches("validate");
         let typed =
@@ -1339,9 +1565,8 @@ impl Run<'_> {
         };
         let parsed = Args {
             platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned()),
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.clone()),
             strategies: strings("strategy"),
             plan: args.get_one::<String>("plan").cloned(),
             wide: args.get_flag("wide"),
@@ -1360,19 +1585,29 @@ impl Run<'_> {
             check_timeout: args.get_one::<String>("check_timeout").cloned(),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        if parsed.live {
+        let plugin = parsed
+            .platform
+            .clone()
+            .filter(|platform| crate::plugins::is_plugin(platform));
+        if parsed.live && plugin.is_none() {
             return self.validate_query_live(&parsed, &cwd);
         }
         let terminal = self.terminal();
-        run(
-            &parsed,
-            &Context {
-                repo: self.globals.repo.as_deref(),
-                env: self.env,
-                cwd: &cwd,
-                terminal: &terminal,
-            },
-        )
+        let interrupt = &self.host.interrupt;
+        let interrupted = || interrupt.requested();
+        let cx = Context {
+            repo: self.globals.repo.as_deref(),
+            env: self.env,
+            cwd: &cwd,
+            terminal: &terminal,
+            proxy: self.globals.proxy.as_deref(),
+            interrupted: &interrupted,
+        };
+        match plugin {
+            // A platform plugin's live check (UC-4.5).
+            Some(platform) if parsed.live => plugin_live(&parsed, &platform, &cx),
+            _ => run(&parsed, &cx),
+        }
     }
 
     /// `opentide validate query --live`: the usage checks, then a platform
@@ -1395,8 +1630,12 @@ impl Run<'_> {
             return report;
         }
         if parsed.platform.is_none() {
-            // The workspace's platforms are Python's (`RustCommand.platforms`).
-            return validate_query::live_not_ported_without_platform();
+            // A live check reads one platform's tenants: refused, as the
+            // oracle refuses it (a usage failure writes no CI job summary).
+            return validate_live::report_of(
+                validate_query::COMMAND,
+                &validate_query::live_without_platform(),
+            );
         }
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
@@ -1471,7 +1710,6 @@ impl Run<'_> {
     /// `opentide query`, from its parsed arguments (UC-4.2c).
     fn query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::query::{Args, Context, RowFormat, run};
-        use clap::ValueEnum;
         let args = leaf(matches);
         let text = |id: &str| args.get_one::<String>(id).cloned();
         let strings = |id: &str| -> Vec<String> {
@@ -1482,9 +1720,8 @@ impl Run<'_> {
         let parsed = Args {
             query: text("query"),
             platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned())
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.clone())
                 .unwrap_or_default(),
             tenants: strings("tenant"),
             rule: text("rule"),
@@ -1567,7 +1804,8 @@ impl Run<'_> {
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
-        let registry = opentide_connectors::builtin();
+        // The built-in platforms, then the platform plugins (UC-4.5b).
+        let registry = crate::plugins::registry();
         let lines = Lines {
             sink: self.host.log_sink.clone(),
             console: self.console(self.host.stderr_tty),
@@ -1602,9 +1840,24 @@ impl Run<'_> {
         report
     }
 
+    /// The CI run's warning of a deploy over the workspace's platforms that
+    /// matched no rule (`emit_warning`), on stdout before the result; none
+    /// in the machine modes or outside CI.
+    fn no_rules_warning(&self, report: &mut crate::commands::Report) {
+        if report.outcome.message != opentide_compile::dry_run::NO_RULES_MATCHED {
+            return;
+        }
+        let provider = crate::render::ci::active_provider(self.mode, self.env);
+        if let Some(line) = crate::render::ci::warning_line(provider, &report.outcome.message, None)
+        {
+            report
+                .body
+                .insert(0, crate::commands::Block::Raw(format!("{line}\n")));
+        }
+    }
+
     /// `opentide deploy`'s parsed arguments.
     fn deploy_args(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::Args {
-        use clap::ValueEnum;
         let args = leaf(matches);
         let strings = |id: &str| -> Vec<String> {
             args.get_many::<String>(id)
@@ -1624,9 +1877,8 @@ impl Run<'_> {
             uuids: strings("uuids"),
             files: strings("files"),
             platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned()),
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.clone()),
             plan: args.get_one::<String>("plan").cloned(),
             wide: args.get_flag("wide"),
             keep_deprecated,
@@ -1766,7 +2018,6 @@ impl Run<'_> {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
         let outcome = &report.outcome;
-        self.record_refusal(outcome)?;
         if KEEPING_DOCUMENT.with(std::cell::Cell::get) {
             let document = outcome.document(self.duration_ms());
             KEPT_DOCUMENT.with(|kept| *kept.borrow_mut() = Some(document));
@@ -1776,11 +2027,57 @@ impl Run<'_> {
             err.flush()?;
             return Ok(outcome.exit_code);
         }
+        if report.usage_notes && self.mode != Mode::Json {
+            let words: Vec<String> = outcome
+                .command
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect();
+            let notes = vec![
+                ("usage".to_owned(), usage::usage_line(&self.root, &words)),
+                (
+                    "help".to_owned(),
+                    format!(
+                        "run '{} {} --help'",
+                        crate::catalog::PROGRAM,
+                        words.join(" ")
+                    ),
+                ),
+            ];
+            return self.emit(outcome, &notes, &[], out, err);
+        }
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;
             err.flush()?;
         }
+        // Each finished step's `OPENTIDE_PROGRESS=json` event, in every mode:
+        // before its row where the rows print one by one, else all at once.
+        let events = report
+            .step_events
+            .filter(|_| crate::render::progress::Progress::from_env(self.env).enabled());
+        let step_event = |done: usize, step: &crate::render::progress::Step, total: usize| {
+            crate::render::progress::event_line(&crate::render::progress::progress_event(
+                &step.name,
+                done,
+                Some(total),
+            ))
+        };
+        let rows_one_by_one = !report.steps.is_empty()
+            && !matches!(self.mode, Mode::Json | Mode::Mcp)
+            && !self.globals.quiet
+            && (self.mode != Mode::Human || !self.host.stderr_tty);
+        if let Some(total) = events
+            && !rows_one_by_one
+        {
+            for (index, step) in report.steps.iter().enumerate() {
+                err.write_all(step_event(index + 1, step, total).as_bytes())?;
+            }
+            err.flush()?;
+        }
         if self.mode == Mode::Json {
+            for line in &report.after_steps {
+                line.log();
+            }
             let mut document = outcome.document(self.duration_ms());
             if !report.warnings.is_empty()
                 && let crate::json::Json::Object(members) = &mut document
@@ -1803,9 +2100,16 @@ impl Run<'_> {
             out.flush()?;
             return Ok(outcome.exit_code);
         }
+        let mut logged = false;
         if !report.steps.is_empty() && self.mode != Mode::Mcp && !self.globals.quiet {
             let console = self.console(self.host.stderr_tty);
             if self.mode == Mode::Human && self.host.stderr_tty {
+                // The oracle's live display keeps its rows below the lines
+                // logged while it runs: they end up above the checklist.
+                for line in &report.after_steps {
+                    line.log();
+                }
+                logged = true;
                 err.write_all(
                     crate::render::progress::checklist(
                         &report.steps,
@@ -1815,13 +2119,23 @@ impl Run<'_> {
                     .as_bytes(),
                 )?;
             } else {
-                for step in &report.steps {
+                for (index, step) in report.steps.iter().enumerate() {
+                    if let Some(total) = events {
+                        err.write_all(step_event(index + 1, step, total).as_bytes())?;
+                    }
                     err.write_all(
                         console
                             .line(&crate::render::progress::step_line(step))
                             .as_bytes(),
                     )?;
                 }
+            }
+        }
+        if !logged && !report.after_steps.is_empty() {
+            // Log lines go to the log sink: the rows above reach it first.
+            err.flush()?;
+            for line in &report.after_steps {
+                line.log();
             }
         }
         if let Some(markdown) = &report.ci_summary
@@ -1937,6 +2251,160 @@ impl Run<'_> {
 }
 
 impl Run<'_> {
+    /// `share` and its subcommands (UC-4.4b, #834): the group's options
+    /// handed down to the subcommand that takes them too, or refused
+    /// (`hand_down`, `refuse_dropped`), then the run.
+    fn share(
+        &self,
+        matches: &clap::ArgMatches,
+        path: &str,
+    ) -> Result<crate::commands::Report, Box<Refusal>> {
+        use crate::commands::share::{Args, Context, Mode, run};
+        let Some(("share", group)) = matches.subcommand() else {
+            return Ok(crate::commands::Report::error(path, "share was not parsed"));
+        };
+        let typed = |matches: &clap::ArgMatches, id: &str| {
+            matches.try_contains_id(id).unwrap_or(false)
+                && matches.value_source(id) == Some(ValueSource::CommandLine)
+        };
+        // The group's options, in its order, with the flags the oracle names.
+        const GROUP: [(&str, &str); 10] = [
+            ("target", "--target"),
+            ("uuid", "--uuid"),
+            ("object_type", "--type"),
+            ("file", "--file"),
+            ("dry_run", "--dry-run"),
+            ("publish", "--publish/--no-publish"),
+            ("no_publish", "--publish/--no-publish"),
+            ("workers", "--workers"),
+            ("changed", "--changed"),
+            ("since", "--since"),
+        ];
+        let sub = group.subcommand();
+        let (mode, args) = match sub {
+            None => (Mode::Push, group),
+            Some((name, args)) => (
+                match name {
+                    "preview" => Mode::Preview,
+                    "status" => Mode::Status,
+                    "retract" => Mode::Retract,
+                    "targets" => Mode::Targets,
+                    _ => Mode::Push,
+                },
+                args,
+            ),
+        };
+        let accepts = |id: &str| match mode {
+            Mode::Push => true,
+            Mode::Preview => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
+            Mode::Status => matches!(id, "target" | "uuid" | "object_type" | "file"),
+            Mode::Retract => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
+            Mode::Targets => false,
+        };
+        if let Some((name, _)) = sub {
+            let mut refused: Vec<&str> = Vec::new();
+            let mut twice: Vec<&str> = Vec::new();
+            for (id, flag) in GROUP {
+                if !typed(group, id) {
+                    continue;
+                }
+                if !accepts(id) {
+                    if !refused.contains(&flag) {
+                        refused.push(flag);
+                    }
+                } else if typed(args, id) && !twice.contains(&flag) {
+                    twice.push(flag);
+                }
+            }
+            let problem = if !refused.is_empty() {
+                let verb = if refused.len() == 1 {
+                    "configures"
+                } else {
+                    "configure"
+                };
+                Some(format!(
+                    "{} {verb} `opentide share` itself and would be ignored by `opentide share \
+                     {name}`.",
+                    refused.join(", ")
+                ))
+            } else if !twice.is_empty() {
+                Some(format!(
+                    "Pass {} once, before or after `{name}`, not both: `opentide share {name}` \
+                     would use only the second.",
+                    twice.join(", ")
+                ))
+            } else {
+                None
+            };
+            if let Some(problem) = problem {
+                // A `BadParameter`: Click's usage line and help under it.
+                let failure = Failure::new(
+                    code::USAGE_INVALID_VALUE,
+                    format!("Invalid value: {problem}"),
+                );
+                let words: Vec<String> = path.split(' ').map(str::to_owned).collect();
+                let notes = vec![
+                    ("usage".to_owned(), usage::usage_line(&self.root, &words)),
+                    (
+                        "help".to_owned(),
+                        format!("run '{} {path} --help'", catalog::PROGRAM),
+                    ),
+                ];
+                return Err(Box::new((
+                    Outcome::failed(path, USAGE_EXIT_CODE, failure),
+                    notes,
+                )));
+            }
+        }
+        // An option typed on `share` alone is the subcommand's.
+        let pick = |id: &str| -> Option<&clap::ArgMatches> {
+            if typed(group, id) && sub.is_some() {
+                return Some(group);
+            }
+            args.try_contains_id(id).unwrap_or(false).then_some(args)
+        };
+        let strings = |id: &str| -> Vec<String> {
+            pick(id)
+                .and_then(|m| m.get_many::<String>(id))
+                .map(|values| values.cloned().collect())
+                .unwrap_or_default()
+        };
+        let flag = |id: &str| pick(id).is_some_and(|m| m.get_flag(id));
+        let publish = match (pick("publish"), pick("no_publish")) {
+            (Some(m), _) if m.get_flag("publish") => Some(true),
+            (_, Some(m)) if m.get_flag("no_publish") => Some(false),
+            _ => None,
+        };
+        let parsed = Args {
+            mode,
+            targets: strings("target"),
+            uuids: strings("uuid"),
+            types: strings("object_type"),
+            files: strings("file"),
+            dry_run: flag("dry_run"),
+            publish,
+            workers: pick("workers")
+                .and_then(|m| m.get_one::<i64>("workers").copied())
+                .unwrap_or(1),
+            delete: flag("delete"),
+            yes: flag("yes"),
+            changed: flag("changed"),
+            since: pick("since").and_then(|m| m.get_one::<String>("since").cloned()),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        Ok(run(
+            &parsed,
+            &Context {
+                command: path,
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                proxy: self.globals.proxy.as_deref(),
+                version: &self.host.version,
+            },
+        ))
+    }
+
     /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
     /// target the command and its groups name, then the catalogue.
     fn setup_skills_catalogue(
@@ -2455,6 +2923,13 @@ pub fn main(argv: &[String], version: &str) -> i32 {
     run(argv, &env, &host, &mut out, &mut err)
 }
 
+/// A command path of the tree that no handler answers: a bug in opentide
+/// (`internal`, exit 1). Every path the tree has is answered.
+fn unhandled(path: &str) -> Outcome {
+    let message = format!("opentide {path} has no implementation: this is a bug in opentide");
+    Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2967,47 +3442,12 @@ mod tests {
         assert_eq!((code, stderr.as_str()), (1, ""));
     }
 
-    /// A refusal is recorded in the file `OPENTIDE_ENGINE_REFUSAL` names, in
-    /// every mode, for `compare` to run Python alone; nothing else is.
-    #[test]
-    fn a_refusal_is_recorded_where_the_dispatcher_asks() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("refusal");
-        let path = file.to_string_lossy().into_owned();
-        for line in ["--json share push", "share push"] {
-            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
-            assert_eq!(refused.code, 2, "{line}");
-            let recorded = std::fs::read_to_string(&file).unwrap();
-            assert!(
-                recorded.starts_with("opentide share push has no Rust implementation yet"),
-                "{line}: {recorded}"
-            );
-            std::fs::remove_file(&file).unwrap();
-        }
-        // A deploy that sends runs here when it names its --platform: without
-        // one, compare runs Python alone on the refusal.
-        for line in [
-            "--json deploy --strategy PREVIEW",
-            "deploy --strategy PREVIEW",
-        ] {
-            let refused = dispatched(line, &[(REFUSAL_ENV, &path)], false);
-            assert_eq!(refused.code, 2, "{line}");
-            let recorded = std::fs::read_to_string(&file).unwrap();
-            assert!(
-                recorded.starts_with(
-                    "opentide deploy without --platform has no Rust implementation yet"
-                ),
-                "{line}: {recorded}"
-            );
-            std::fs::remove_file(&file).unwrap();
-        }
-        let ran = dispatched("--json commands", &[(REFUSAL_ENV, &path)], false);
-        assert_eq!(ran.code, 0);
-        assert!(!file.exists());
-        // Without the variable, nothing is written.
-        assert_eq!(dispatched("share push", &[], false).code, 2);
-        assert_eq!(dispatched("deploy --strategy PREVIEW", &[], false).code, 2);
-        assert!(!file.exists());
+    /// `line`, whose command no handler answers (a path taken out of the
+    /// dispatcher): an internal error.
+    fn unhandled_run(line: &str) -> Ran {
+        ran(line, &[], false, |run, out, err| {
+            Ok(run.emit(&unhandled("query"), &[], &[], out, err)?)
+        })
     }
 
     #[test]
@@ -3031,15 +3471,17 @@ mod tests {
             "{}",
             help.stdout
         );
-        let refused = dispatched("--json share push", &[], false);
-        assert_eq!(refused.code, 2);
-        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
-        assert!(refused.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = dispatched("share push", &[], false);
+        let json = unhandled_run("--json query --platform x q");
+        assert_eq!(json.code, 1);
+        assert!(json.stdout.contains("\"code\":\"internal\""));
+        let plain = unhandled_run("query --platform x q");
         assert_eq!(
             plain.stderr,
-            "error: opentide share push has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide query has no implementation: this is a bug in opentide\n"
         );
+        let sysdig = dispatched("query --platform sysdig q", &[], false);
+        assert_eq!(sysdig.code, 2);
+        assert_eq!(sysdig.stderr, "error: sysdig has no query runner\n");
         let file =
             std::env::temp_dir().join(format!("opentide-cli-not-a-dir-{}", std::process::id()));
         std::fs::write(&file, "x").unwrap();
@@ -3193,10 +3635,11 @@ mod tests {
         let plain = dispatched("--quiet commands --quiet", &[], false);
         assert_eq!(plain.code, 0);
         assert!(plain.stdout.contains("commands"), "{}", plain.stdout);
-        // Parsed, then refused as not ported: no usage error.
+        // A flag given twice is parsed: no usage error (a preview runs).
         let strict = dispatched("--json share push --dry-run --dry-run", &[], false);
+        assert_ne!(strict.code, USAGE_EXIT_CODE, "{}", strict.stdout);
         assert!(
-            strict.stdout.contains("\"code\":\"engine_not_ported\""),
+            !strict.stdout.contains("\"code\":\"usage_"),
             "{}",
             strict.stdout
         );
@@ -3261,14 +3704,20 @@ mod tests {
             "{}",
             nested.stdout
         );
-        // An unported subcommand after a separator is refused by its path.
-        let unported = dispatched("--json share -- status", &[], false);
+        // A subcommand after a separator runs by its path.
+        let separated = dispatched("--json generate extract -- sentinel", &[], false);
         assert!(
-            unported.stdout.contains("\"command\":\"share status\""),
+            separated
+                .stdout
+                .contains("\"command\":\"generate extract sentinel\""),
             "{}",
-            unported.stdout
+            separated.stdout
         );
-        assert!(unported.stdout.contains("engine_not_ported"));
+        assert!(
+            !separated.stdout.contains("\"code\":\"usage_"),
+            "{}",
+            separated.stdout
+        );
         // `validate -- --json`: an unknown option of validate, not a command.
         let option = dispatched("--json validate -- --json", &[], false);
         assert_eq!(option.code, 2);
@@ -3504,7 +3953,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = dispatched("--json deploy", &[], false);
+        let failed = unhandled_run("--json query --platform x q");
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",
@@ -3531,11 +3980,105 @@ mod tests {
         let bare = dispatched("--json", &[], false);
         assert_eq!(bare.code, 2);
         assert!(bare.stdout.contains("\"error\":\"Missing command.\""));
-        // `-Vh`: clap's `-h` shows the help (an intended difference: the
-        // Python CLI had no `-h` and exited 2).
-        let short = dispatched("-Vh", &[], false);
-        assert_eq!(short.code, 0);
-        assert!(short.stdout.contains("Usage: opentide"));
+        // `-h` is no option, as in the Python CLI (#841): `--help` is the
+        // one help option.
+        let short = dispatched("--json -h", &[], false);
+        assert_eq!(short.code, 2, "{}", short.stdout);
+        assert!(
+            short.stdout.contains("\"code\":\"usage_unknown_option\""),
+            "{}",
+            short.stdout
+        );
+        // A flag given a value is the parser's error, as the oracle's.
+        let valued = dispatched("--json=1 explain x", &[], false);
+        assert_eq!(valued.code, 2);
+        assert!(
+            valued
+                .stderr
+                .starts_with("error: Option '--json' does not take a value.\n"),
+            "{}",
+            valued.stderr
+        );
+        assert!(!valued.stderr.contains("usage:"), "{}", valued.stderr);
+        let missing = dispatched("--json info --platform", &[], false);
+        assert!(
+            missing.stdout.contains("\"command\":\"\",\"duration_ms\""),
+            "{}",
+            missing.stdout
+        );
+    }
+
+    /// `--show-completion` and `--install-completion` (#841, D2): clap's
+    /// script for the shell named after the option, or the shell the run is
+    /// in; a word that is no shell is a usage error naming the form.
+    #[test]
+    fn completion_scripts_are_shown_and_installed() {
+        let shown = dispatched("--show-completion zsh", &[], false);
+        assert_eq!(shown.code, 0, "{}", shown.stderr);
+        assert!(
+            shown.stdout.starts_with("#compdef opentide"),
+            "{}",
+            shown.stdout
+        );
+        let detected = dispatched("--show-completion", &[("SHELL", "/usr/bin/fish")], false);
+        assert_eq!(detected.code, 0, "{}", detected.stderr);
+        let bad = dispatched("--json --show-completion bash zsh", &[], false);
+        assert_eq!(bad.code, 2);
+        assert!(
+            bad.stdout.contains(
+                "Invalid value for '--show-completion': 'bash zsh' is not a supported shell. \
+                 Use: opentide --show-completion [bash|zsh|fish|powershell|pwsh]"
+            ),
+            "{}",
+            bad.stdout
+        );
+        assert!(bad.stdout.contains("\"code\":\"usage_invalid_value\""));
+        let home = tempfile::tempdir().unwrap();
+        let home_text = home.path().display().to_string();
+        // The home folder is USERPROFILE on Windows, as Python's Path.home().
+        let home_variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+        let installed = dispatched(
+            "--json --install-completion bash",
+            &[(home_variable, home_text.as_str())],
+            false,
+        );
+        assert_eq!(installed.code, 0, "{}", installed.stdout);
+        assert!(
+            installed
+                .stdout
+                .starts_with("{\"shell\":\"bash\",\"path\":"),
+            "{}",
+            installed.stdout
+        );
+        assert!(
+            installed.stdout.contains(
+                "{\"command\":\"source ~/.bashrc\",\"reason\":\"or restart your shell\"}"
+            ),
+            "{}",
+            installed.stdout
+        );
+        assert!(home.path().join(".bash_completions/opentide.sh").is_file());
+        let homeless = dispatched("--install-completion fish", &[(home_variable, "")], false);
+        assert_eq!(homeless.code, 1, "{}", homeless.stderr);
+        assert!(
+            homeless
+                .stderr
+                .contains("Could not install fish completion"),
+            "{}",
+            homeless.stderr
+        );
+    }
+
+    /// A bare `opentide` at a terminal is the home screen (D3); with no
+    /// terminal, the help.
+    #[test]
+    fn a_bare_run_at_a_terminal_is_the_home_screen() {
+        let home = dispatched("", &[("OPENTIDE_OUTPUT", "human")], true);
+        assert_eq!(home.code, 0);
+        assert!(home.stdout.contains("Suggested next"), "{}", home.stdout);
+        let help = dispatched("", &[], false);
+        assert_eq!(help.code, 0);
+        assert!(help.stdout.contains("Usage: opentide"), "{}", help.stdout);
     }
 
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {
@@ -3544,9 +4087,9 @@ mod tests {
     }
 
     /// `generate <phase>...`: the words after `generate` that are no
-    /// subcommand are its phases. An unknown phase is a usage error; the full
-    /// pipeline is refused for the Python engine; the subcommands still run
-    /// as subcommands.
+    /// subcommand are its phases. An unknown phase is a usage error; with no
+    /// phase it is the full pipeline; the subcommands still run as
+    /// subcommands.
     #[test]
     fn generate_takes_its_phases_as_words() {
         let unknown = dispatched("--json generate schemas explrer", &[], false);
@@ -3560,9 +4103,24 @@ mod tests {
         );
         assert!(unknown.stdout.contains("\"code\":\"usage_invalid_choice\""));
         assert!(unknown.stdout.contains("\"argument\":\"phase\""));
-        let refused = dispatched("--json generate", &[], false);
-        assert_eq!(refused.code, 2);
-        assert!(refused.stdout.contains("\"code\":\"engine_not_ported\""));
+        // The full pipeline runs here (UC-6.0): its six phases, in a folder
+        // of its own.
+        let folder = tempfile::tempdir().unwrap();
+        let line = format!("--json --repo {} generate", folder.path().display());
+        let pipeline = dispatched(&line, &[], false);
+        assert_eq!(pipeline.code, 0, "{}", pipeline.stdout);
+        assert!(
+            pipeline.stdout.starts_with(
+                "{\"phases\":[\"docs\",\"exports\",\"vocabs\",\"templates\",\"schemas\",\"snippets\"],"
+            ),
+            "{}",
+            pipeline.stdout
+        );
+        assert!(
+            pipeline.stdout.contains("· 6 phases"),
+            "{}",
+            pipeline.stdout
+        );
         // The phases end at the first `-` word: what follows is
         // `generate`'s own options (`GeneratePhaseGroup`).
         for (argv, option) in [

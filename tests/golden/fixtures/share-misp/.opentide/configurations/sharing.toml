@@ -1,0 +1,26 @@
+# The MISP destinations of the `share-misp` golden fixture (UC-4.4b, #834):
+# tests/cassettes/misp/tenant.py stands in for both instances; the second's
+# paths answer every request with 403.
+
+[[misp]]
+name = "misp-prod"
+enabled = true
+url = "https://misp.invalid"
+api_key = "${MISP_API_KEY}"
+max_tlp = "amber"
+organisation_uuid = "11111111-1111-4111-8111-111111111111"
+publish = true
+
+[[misp]]
+name = "misp-locked"
+enabled = true
+url = "https://misp.invalid/locked/"
+api_key = "${MISP_API_KEY}"
+max_tlp = "green"
+object_types = ["rule"]
+
+[[misp]]
+name = "misp-lab"
+url = "https://misp-lab.invalid"
+api_key = "not-a-reference"
+max_tlp = "clear"

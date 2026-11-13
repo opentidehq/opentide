@@ -6,7 +6,7 @@ icon: Terminal
 
 # CLI reference
 
-The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
+The `opentide` command is opentide's Rust core, compiled into the package and run in process by its console script:
 
 ```bash
 pip install 'opentide==0.23.0'
@@ -107,4 +107,4 @@ Completion also fills in object UUIDs, object files, ATT&CK techniques, platform
 
 ## Source
 
-Command definitions: `src/opentide/cli/commands/` (the root list is `src/opentide/cli/commands/__init__.py`; global options are in `src/opentide/cli/root.py`), `src/opentide/cli/setup_app.py`, `src/opentide/cli/share_app.py`.
+Command definitions: `crates/opentide-cli/src/tree.rs` (the command tree and the global options, in clap), `crates/opentide-cli/src/app.rs` (the dispatch) and `crates/opentide-cli/src/commands/`.

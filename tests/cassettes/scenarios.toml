@@ -31,6 +31,23 @@ client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
 cwd = "tmp"
 
 [[scenario]]
+name = "skills/install"
+description = "`setup skills --install` from a stand-in opentidehq/skills repository (UC-4.4d): the catalogue, the repository's file list from GitHub's trees API, then each file of a skill with a reference file."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--install", "sample-skill", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/broken"
+description = "`setup skills --install` of a skill one of whose files answers 404 (UC-4.4d): the failed download, which writes nothing."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+exit = 1
+
+[[scenario]]
 name = "crowdstrike/deploy"
 description = "CrowdStrike's deploy client: the OAuth2 token, then create, update, disable and delete a correlation rule, and a create, an update and a delete the tenant refuses."
 client = ["{python}", "tests/cassettes/crowdstrike/client.py", "deploy"]
@@ -283,6 +300,15 @@ secrets = ["AZURE_CLIENT_SECRET"]
 cwd = "repo"
 
 [[scenario]]
+name = "sentinel/extract"
+description = "Sentinel: opentide generate extract sentinel on the stand-in's workspace `extract` (UC-4.4e): sign in, then ARM's alertRules listed in two pages; the oracle's files and document go to crates/opentide-cli/tests/extract_sentinel/oracle/."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "extract", "crates/opentide-cli/tests/extract_sentinel"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
 name = "sentinel/query"
 description = "Sentinel: opentide query's Log Analytics queries: rows past the limit, a partial result, two tables, a syntax error, a missing permission."
 client = ["{python}", "tests/cassettes/sentinel/client.py", "query"]
@@ -312,6 +338,24 @@ client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--jso
 tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
 routes = ["splunk.invalid"]
 secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-splunk-rule"
+description = "opentide query --rule on Splunk's stand-in, the golden cases' cassette: the saved search a deploy of the rule creates, as a one-shot search (UC-4.4c)."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-sentinel-one-file"
+description = "opentide query --file on SentinelOne's stand-in, the golden cases' cassette: a correlation rule's two sub-queries, each a PowerQuery of its own (UC-4.4c)."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
 cwd = "repo"
 
 [[scenario]]
@@ -458,3 +502,59 @@ routes = ["cbc.invalid"]
 secrets = ["CBC_TOKEN"]
 cwd = "repo"
 exit = 1
+
+# ---- UC-4.4b (#834): the cassettes of `opentide share`'s golden cases ----
+# The client copies the `share-misp` fixture first: a push or a retract writes
+# the sharing ledger, and the repository's copy stays as committed.
+
+[[scenario]]
+name = "golden/share-push"
+description = "share push on the MISP stand-in, the golden cases' cassette: misp-prod probed (version, organisation, template), the threat and the objective created and published (the galaxy's ATT&CK and actor clusters read once), a rule updated over the instance's own object, one unchanged; misp-locked refused at its probe (403): a partial run."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share push"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+exit = 3
+
+[[scenario]]
+name = "golden/share-retract"
+description = "share retract on the MISP stand-in, the golden cases' cassette: a shared rule's event unpublished, and an object gone from the catalogue whose event the instance no longer holds forgotten."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share retract --target misp-prod --uuid 00000000-0000-4000-8048-000000000012 --uuid 00000000-0000-4000-8048-000000000020"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/share-push-changed"
+description = "share push --changed on the MISP stand-in, the golden cases' cassette (UC-4.4e): share-misp as a checkout whose last commit, a GitHub push, changed one rule; misp-prod probed and that rule's event updated over the instance's own object, nothing else shared; misp-locked refused at its probe (403): a partial run."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && cd \"$HOME/ws\" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME='opentide golden' GIT_AUTHOR_EMAIL=golden@opentide.invalid GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_NAME='opentide golden' GIT_COMMITTER_EMAIL=golden@opentide.invalid GIT_COMMITTER_DATE=2026-01-01T00:00:00Z && g() { git -c init.defaultBranch=main -c commit.gpgsign=false -c core.autocrlf=false -c maintenance.auto=false -c gc.auto=0 \"$@\"; } && g init -q && g add -A && g commit -q --no-verify -m 'The fixture' && sed -i 's/^  A rule the MISP stand-in receives\\.$/  A rule the MISP stand-in receives, changed by a push./' objects/rules/rule-b-update.yaml && g commit -q --no-verify -a -m 'A push' && GITHUB_ACTIONS=true GITHUB_EVENT_NAME=push GITHUB_SHA=HEAD GITHUB_WORKSPACE=\"$HOME/ws\" exec {oracle}/opentide --repo \"$HOME/ws\" --json share push --changed"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+exit = 3
+
+# ---- UC-4.4b (#834): the cassettes of `generate extract`'s golden cases ----
+# The client copies the `tenants` fixture and runs in the copy: the importers
+# write `Imported/` in the working directory, and Defender's ids go into
+# deployment state.
+
+[[scenario]]
+name = "golden/extract-defender"
+description = "generate extract defender on Defender for Endpoint's stand-in, the golden cases' cassette: sign in, then the custom detections listed over two pages (`@odata.nextLink`): one with techniques, recommended actions and a user asset, a disabled NRT one, and one whose name differs from it only in case."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract defender"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/extract-elastic"
+description = "generate extract elastic on Elastic's stand-in (space soc), the golden cases' cassette: one page of `_find` holding a query rule with most of RFC 0007's blocks, an EQL rule, a threshold rule whose name another rule has, a new terms rule with an interval Kibana would refuse, an ES|QL rule, a prebuilt rule left out and a rule whose id is not a UUID."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract elastic --space soc"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"

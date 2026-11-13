@@ -29,7 +29,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from opentide.models.system_config import ConfigurationModels as C
-
 from opentide.platforms.defender_for_endpoint import client as mde
 from opentide.platforms.defender_for_endpoint import runner as mde_runner
 from opentide.query.models import QueryRefused, QueryRequest, TimeWindow

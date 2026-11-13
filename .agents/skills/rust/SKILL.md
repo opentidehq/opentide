@@ -13,7 +13,7 @@ places:
 |----------|------|
 | The engine crates' rules: I/O-free engines, `thiserror` versus `anyhow`, the pinned dependencies, `OnceLock` catalogs, UTF-16 positions | [`rust-engine`](../rust-engine/SKILL.md) |
 | The layer table, the lint policy, the test commands and the invariant scripts | [`crates/AGENTS.md`](../../../crates/AGENTS.md), then the crate's own `AGENTS.md` |
-| Comparing a Rust port with the Python oracle: goldens, `OPENTIDE_ENGINE=compare`, the ledger | [`golden`](../golden/SKILL.md) |
+| Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the ledger | [`golden`](../golden/SKILL.md) |
 
 If this skill and `crates/AGENTS.md` disagree, `crates/AGENTS.md` is right: fix this skill.
 

@@ -253,19 +253,27 @@ pub fn unavailable() -> String {
     )
 }
 
-/// The bytes of `path` in the skills repository at `git_ref`, or `None`
-/// when they cannot be read: any transport failure or an answer that is not
-/// 2xx (`fetch_github_bytes`).
-pub fn fetch_file(path: &str, git_ref: &str, network: Network<'_>) -> Option<Vec<u8>> {
-    if !ref_is_contained(git_ref) || path.split('/').any(|part| matches!(part, "" | "." | "..")) {
-        tracing::warn!(
-            source = DEFAULT_SOURCE,
-            path,
-            "skills_download_url_rejected"
-        );
+/// Where the skills repository's file list is read (`_API_HOST`).
+pub const API_HOST: &str = "api.github.com";
+
+/// `path` when it is a plain relative path in the repository: no leading
+/// `/`, no backslash, no `?`, `#` or line break, no empty, `.` or `..`
+/// segment (`_repo_file_path`).
+pub fn repo_file_path(path: &str) -> Option<&str> {
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.contains(['\\', '?', '#', '\r', '\n'])
+        || path.split('/').any(|part| matches!(part, "" | "." | ".."))
+    {
         return None;
     }
-    let url = format!("https://{RAW_HOST}/{DEFAULT_SOURCE}/{git_ref}/{path}");
+    Some(path)
+}
+
+/// The body of a `GET` of `url`, or `None` when it cannot be read: any
+/// transport failure or an answer that is not 2xx. `accept` is the
+/// request's `Accept` header, when it sends one.
+fn get(url: &str, accept: Option<&str>, network: Network<'_>) -> Option<Vec<u8>> {
     let environment = Environment::from_pairs(network.env.iter());
     let settings = HttpSettings {
         timeout: TIMEOUT,
@@ -280,8 +288,11 @@ pub fn fetch_file(path: &str, git_ref: &str, network: Network<'_>) -> Option<Vec
                 opentide_connectors::runtime::block_on(async {
                     let cancel = CancellationToken::new();
                     let work = async {
-                        let request = client.request(reqwest::Method::GET, &url).build().ok()?;
-                        let answer = client.send(request, &cancel).await.ok()?;
+                        let mut request = client.request(reqwest::Method::GET, url);
+                        if let Some(accept) = accept {
+                            request = request.header(reqwest::header::ACCEPT, accept);
+                        }
+                        let answer = client.send(request.build().ok()?, &cancel).await.ok()?;
                         if !answer.status().is_success() {
                             return None;
                         }
@@ -306,6 +317,57 @@ pub fn fetch_file(path: &str, git_ref: &str, network: Network<'_>) -> Option<Vec
             .ok()
             .flatten()
     })
+}
+
+/// The bytes of `path` in the skills repository at `git_ref`, or `None`
+/// when they cannot be read: any transport failure or an answer that is not
+/// 2xx (`fetch_github_bytes`).
+pub fn fetch_file(path: &str, git_ref: &str, network: Network<'_>) -> Option<Vec<u8>> {
+    let Some(path) = repo_file_path(path).filter(|_| ref_is_contained(git_ref)) else {
+        tracing::warn!(
+            source = DEFAULT_SOURCE,
+            "ref" = git_ref,
+            path,
+            "skills_download_url_rejected"
+        );
+        return None;
+    };
+    get(
+        &format!("https://{RAW_HOST}/{DEFAULT_SOURCE}/{git_ref}/{path}"),
+        None,
+        network,
+    )
+}
+
+/// Every blob path of the skills repository at `git_ref`, from one call of
+/// GitHub's trees API (`_fetch_github_blobs`); `None` when it cannot be
+/// read, or GitHub cut it short (`truncated`): a skill is never installed
+/// with files missing.
+pub fn fetch_tree(git_ref: &str, network: Network<'_>) -> Option<Vec<String>> {
+    if !ref_is_contained(git_ref) {
+        tracing::warn!(
+            source = DEFAULT_SOURCE,
+            "ref" = git_ref,
+            "skills_tree_url_rejected"
+        );
+        return None;
+    }
+    let url = format!("https://{API_HOST}/repos/{DEFAULT_SOURCE}/git/trees/{git_ref}?recursive=1");
+    let body = get(&url, Some("application/vnd.github+json"), network)?;
+    let data: serde_json::Value = serde_json::from_slice(&body).ok()?;
+    let data = data.as_object()?;
+    if data.get("truncated") == Some(&serde_json::Value::Bool(true)) {
+        return None;
+    }
+    let tree = data.get("tree")?.as_array()?;
+    Some(
+        tree.iter()
+            .filter_map(serde_json::Value::as_object)
+            .filter(|item| item.get("type").and_then(serde_json::Value::as_str) == Some("blob"))
+            .filter_map(|item| item.get("path").and_then(serde_json::Value::as_str))
+            .map(str::to_owned)
+            .collect(),
+    )
 }
 
 /// The live catalogue (`load_manifest`); never a packaged copy.

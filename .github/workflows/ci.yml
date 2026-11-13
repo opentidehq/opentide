@@ -9,14 +9,15 @@ name: CI
 # - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
 #   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 #   Windows CLI smoke, the facade crate's every feature and semver checks, the
-#   Node package and its install from a local registry, LSP clients and
-#   benchmarks. It runs nightly, on every push
-#   to development and integration/unified-core, on Run workflow, and on
-#   a pull request that carries the `full-ci` label (read at each push: add
-#   the label, then push, or Run workflow on the branch). Each of these jobs
-#   has an `if` on that condition; the release dry run (and crate packaging)
-#   also runs on a pull request that changes the release's inputs, and the
-#   grammar checks on one that changes the grammars (the `changes` job).
+#   Node package and its install from a local registry, the cross-SDK
+#   conformance suite on three OSes, LSP clients and benchmarks. It runs
+#   nightly, on every push to development and integration/unified-core, on Run
+#   workflow, and on a pull request that carries the `full-ci` label (read at
+#   each push: add the label, then push, or Run workflow on the branch). Each
+#   of these jobs has an `if` on that condition; the release dry run (and crate
+#   packaging) also runs on a pull request that changes the release's inputs,
+#   and the grammar checks on one that changes the grammars (the `changes`
+#   job).
 
 on:
   push:
@@ -173,7 +174,6 @@ jobs:
 
           if [[ -z "$base_ref" || "$base_ref" == "0000000000000000000000000000000000000000" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "fields=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -185,18 +185,11 @@ jobs:
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
-          # Model field docstrings are the editor hovers; they are checked against
-          # the field tables in the specifications repository.
-          if grep -qE "^(src/opentide/_models/.*|tests/test_models/test_spec_field_descriptions\\.py|\\.github/workflows/ci\\.yml)$" <<<"$changed_files"; then
-            echo "fields=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "fields=false" >> "$GITHUB_OUTPUT"
-          fi
 
       # Without a specifications clone, --check only compares the lockfile with the
       # bundle, so pins edited by hand and relocked would pass.
       - name: Checkout specifications
-        if: steps.vocab_changes.outputs.changed == 'true' || steps.vocab_changes.outputs.fields == 'true'
+        if: steps.vocab_changes.outputs.changed == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opentidehq/specifications
@@ -213,15 +206,6 @@ jobs:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
           RUSTFLAGS: "-Dwarnings"
         run: cargo xtask vocab sync --check
-
-      # OPENTIDE_REQUIRE_SPECIFICATIONS turns the test's "no checkout" skip into a
-      # failure, so this guard cannot pass by not running.
-      - name: Check model field descriptions against the specifications
-        if: steps.vocab_changes.outputs.fields == 'true'
-        env:
-          OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
-          OPENTIDE_REQUIRE_SPECIFICATIONS: "1"
-        run: uv run pytest tests/test_models/test_spec_field_descriptions.py --no-cov -q
 
   # ---------------------------------------------------------------------------
   # The Cargo workspace: the engine crates (crates/, imported from
@@ -317,17 +301,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      # The Tide catalog the engine compiles in is what the models generate
-      # (scripts/engine/sync_opentide_schemas.py), until UC-1.8 generates it in Rust.
-      - name: The engine's bundled Tide catalog matches the models
-        run: uv run pytest tests/test_generation/test_bundled_tide_catalog.py --no-cov -q
-
       - name: The engine release script's tests
         run: uv run python -m unittest discover -s scripts/engine -p "test_*.py"
 
   # Every test of the workspace with nextest (.config/nextest.toml, profile
   # `ci`) on Linux, macOS and Windows; the doctests (which nextest does not
-  # run) on Linux. Tests that run src/opentide's models use the interpreter
+  # run) on Linux. Tests that compare with Python (difflib) use the interpreter
   # `uv sync` installs (.venv), so every OS syncs.
   engine-test:
     name: Engine tests (${{ matrix.os }})
@@ -641,6 +620,99 @@ jobs:
 
       - name: Pack, publish to a local registry, npm install, npx, SDK and types
         run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --pack "${RUNNER_TEMP}/npm"
+
+  # The cross-SDK conformance suite (UC-5.4, #839): every operation of
+  # tests/conformance/manifest.json on the tide corpus, the heavy workspace,
+  # the fault workspace and each configuration fault, through the Rust, Python
+  # and Node SDKs, byte for byte (`cargo xtask conformance`); then the suite's
+  # own test, a deliberate divergence of one runner that it must catch. On the
+  # three operating systems. It builds the facade three times (the Python and
+  # Node bindings, the Rust runner), so it is in the full set.
+  conformance:
+    name: SDK conformance (${{ matrix.os }})
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: conformance
+          key: ${{ matrix.os }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/node/package-lock.json
+
+      # The Python SDK: opentide._native, the develop profile.
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # The Node SDK, the develop profile as the Python binding's, reporting
+      # the workspace's version as the Rust and Python builds do (the npm
+      # package's own is 0.0.0 until the release sets it).
+      - name: Build the addon
+        working-directory: bindings/node
+        shell: bash
+        run: |
+          OPENTIDE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' ../../Cargo.toml | head -n 1)"
+          export OPENTIDE_VERSION
+          node build.mjs --profile develop
+
+      # rust-cache saves target/ and restores it on the next run without the
+      # marker of the runs' folder, target/conformance, which `conformance`
+      # then refuses to empty: a restored copy is no run of this job's.
+      - name: Drop a restored runs' folder
+        shell: bash
+        run: rm -rf target/conformance
+
+      - name: Every operation on every corpus, byte for byte
+        run: cargo xtask conformance --runners rust,python,node
+
+      - name: A divergence in one runner is caught
+        run: cargo xtask conformance --runners rust,python,node --corpus tide_corpus --diverge node
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: conformance-${{ matrix.os }}
+          path: target/conformance/report.json
+          if-no-files-found: ignore
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
@@ -1304,14 +1376,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      # Sharded with xdist, like the E2E job below. This was serial until #530:
-      # a few tests left a partial index in `IndexManager._cache` and a mocked
-      # registry in `opentide.deployment.utils`, and the suite passed only
-      # because the serial file order happened to put the victims first.
-      # Reordering it across workers surfaced 11 failures in test_export and
-      # test_documentation. Both leaks are fixed, and the suite now produces the
-      # same result serially and at -n 2/4/8. `-n 4` is pinned for the same
-      # reason as the E2E job -- see the note there.
+      # What the Python package holds since UC-6.2 (#841): the SDK, the
+      # models, the plugin API, the console script, the docs' snippets and
+      # CI's contracts. The command line itself is the Rust core's, held by
+      # the goldens (`golden-check`) and the crates' tests. `-n 4` is pinned
+      # for the same reason as the E2E job -- see the note there.
       - name: Pytest
         if: matrix.python-version != env.COVERAGE_PYTHON
         run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
@@ -1322,9 +1391,8 @@ jobs:
         # data for a fraction of the overhead; 3.12+ only, which this cell is.
         #
         # Coverage is combined across xdist workers by pytest-cov, and the
-        # totals are identical to a serial run (17959 statements, 1646 missed,
-        # 90.8%), so the threshold gate below reads the same number it always
-        # did -- verified, because sharding a coverage run silently losing
+        # totals are identical to a serial run, so the threshold gate below
+        # reads the same number -- sharding a coverage run that silently lost
         # worker data would quietly lower the gate instead of failing it.
         env:
           COVERAGE_CORE: sysmon
@@ -1429,7 +1497,7 @@ jobs:
         # Keep the length of this list equal to `--splits` below;
         # tests/test_ci/test_own_ci_workflow.py fails if they drift, because a
         # short matrix would silently skip the tests in the groups that no
-        # longer have a runner.
+        # longer have a runner. The check names are required checks: keep four.
         shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1460,14 +1528,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      # The longest step in the workflow by a wide margin: 722 tests, most of
-      # them a console-script subprocess or a scaffolded repo, so it is
-      # dominated by process startup rather than by any one slow test.
-      #
-      # Within a single runner the win is limited -- each worker re-pays import
-      # and scaffold cost -- so the suite is split across runners too. Measured
-      # locally: 561s serial for the whole suite, and 54/74/85/84s as 4 shards.
-      # Verified to produce an identical pass/fail set serially and sharded.
+      # Each test is a console-script subprocess or a scaffolded repo, so the
+      # step is dominated by process startup rather than by any one slow test,
+      # and the suite is split across runners too.
       #
       # `--splits` partitions the whole selection, so no test can fall outside
       # a shard. Balance comes from .test_durations_e2e; a test missing from it
@@ -1482,16 +1545,57 @@ jobs:
       # whatever the runner reports, so it would sit on that cliff silently if
       # the hosted spec changed; 4 matches today's ubuntu-latest (4 vCPU) and
       # stays put. Raise it only with a measurement from a real run.
+      # The tests marked `full_set` (a wheel built and installed per test)
+      # run in `cli-e2e-full` instead.
       - name: E2E pytest (CLI + MCP stdio)
         run: >-
-          uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov -n 4
+          uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -q --no-cov -n 4
           --splits 4
           --group ${{ matrix.shard }}
           --durations-path .test_durations_e2e
 
+  # The E2E tests too slow for every pull request, marked `full_set`: the
+  # platform plugin on opentide installed from its wheel (UC-4.5c, #835),
+  # whose `uv build` alone takes minutes. The full set (the workflow's header).
+  cli-e2e-full:
+    name: E2E (3.14, full set)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
+      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      # The `test` job's cache of the binding `uv sync` builds.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: python-engine
+          save-if: false
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: E2E pytest (full set)
+        run: uv run pytest tests/ -m full_set -q --no-cov
+
   # Was two trailing steps on cli-e2e, which made a ~20 s check wait out the
-  # longest job in the workflow. It renders the pipeline from
-  # opentide.ci.render and lints that, consuming nothing the E2E run produces.
+  # longest job in the workflow. It renders the pipeline with `opentide setup
+  # ci gitlab` and lints that, consuming nothing the E2E run produces.
   gitlab-ci-lint:
     name: GitLab CI lint
     runs-on: ubuntu-latest
@@ -1535,13 +1639,15 @@ jobs:
           OPENTIDE_GITLAB_CI_LINT: "1"
 
 
-  # UC-0.7 (#805): every golden case whose command has a Rust implementation
-  # (opentide.cli.engines.RUST_COMMANDS), run through this repository's CLI
-  # with OPENTIDE_ENGINE=rust and compared with the oracle's recording
-  # (crates/opentide-compare, tests/golden/APPROVED_DIFFS.toml); a stale ledger
-  # entry fails it. Here, not in golden.yml, so that it runs on every pull
-  # request: a change anywhere in crates/, bindings/python/ or src/ can change a port.
+  # Every golden case run through this repository's CLI, the Rust core, and
+  # compared with the oracle's recording (crates/opentide-compare,
+  # tests/golden/APPROVED_DIFFS.toml); a stale ledger entry fails it (UC-0.7,
+  # #805; every case since UC-6.2, #841). Here, not in golden.yml, so that it
+  # runs on every pull request: a change anywhere in crates/, bindings/python/
+  # or src/ can change what a command does.
   golden-compare:
+    # The name is a required check's: it stays, though the run is now
+    # `golden check --engine rust`.
     name: Golden compare
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -1578,18 +1684,15 @@ jobs:
       - name: Install this repository's CLI
         run: uv sync --group dev
 
-      - name: Compare every ported command with the recordings
-        run: cargo xtask golden check --engine compare --report golden-compare.json
+      - name: Compare every command with the recordings
+        run: cargo xtask golden check --engine rust --report golden-compare.json
 
       # The MCP server (UC-3.7, #829): the recorded sessions of the Python
-      # server replayed against it and against the Rust server, and the MCP
-      # suite, its stdio end-to-end tests included, against the Rust server.
-      - name: Replay the recorded MCP sessions against both servers
-        run: cargo xtask mcp replay --engine compare tests/golden/mcp/*.jsonl
+      # server replayed against the Rust server, and the MCP stdio tests.
+      - name: Replay the recorded MCP sessions
+        run: cargo xtask mcp replay --engine rust tests/golden/mcp/*.jsonl
 
-      - name: Run the MCP tests against the Rust server
-        env:
-          OPENTIDE_ENGINE: rust
+      - name: Run the MCP tests
         run: uv run --no-sync pytest tests/test_mcp -q --no-cov -n auto
 
       - name: Upload the report
@@ -1644,14 +1747,10 @@ jobs:
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
 
-      # Ctrl-C through the console script (opentide.cli.launch:main, UC-3.8b, #960): a
+      # Ctrl-C through the console script (opentide._cli:main, UC-3.8b, #960): a
       # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is POSIX's.
       - name: Ctrl-C through the console script
         run: >-
           uv run pytest tests/test_cli/e2e/test_launcher_signals_e2e.py
           -m cli_smoke -q --no-cov
 
-      # Promotion rewrites rule files in place: on Windows they are usually CRLF,
-      # and the replace of the temporary file must work on NTFS.
-      - name: Promotion keeps a rule file's line endings
-        run: uv run pytest tests/test_deployment/test_promotion_rewrite.py -q --no-cov

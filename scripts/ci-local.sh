@@ -174,7 +174,7 @@ if [[ "$mode" == "store-e2e-durations" ]]; then
   # Serial on purpose. Durations recorded under xdist absorb worker startup and
   # CPU contention, which skews the per-test weights the shard packer reads and
   # would unbalance CI rather than improve it.
-  uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov \
+  uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -q --no-cov \
     --store-durations --durations-path .test_durations_e2e
   echo "==> Wrote .test_durations_e2e — commit it to keep the CI shards balanced"
   exit 0
@@ -203,8 +203,8 @@ cargo run --quiet --locked -p opentide-lsp -- generate-highlights --check
 echo "==> Docs structure (validate-docs.sh, as docs.yml runs it)"
 bash scripts/validate-docs.sh
 
-echo "==> The engine's bundled Tide catalog matches the models"
-uv run pytest tests/test_generation/test_bundled_tide_catalog.py --no-cov -q
+echo "==> The engine's bundled Tide catalog and the generated artifacts match the models"
+cargo xtask codegen --check
 
 echo "==> uv build (sdist + wheel)"
 rm -rf dist
@@ -217,7 +217,7 @@ if [[ "$mode" == "quick" ]]; then
   exit 0
 fi
 
-# The engine's tests compare it with this checkout's models (.venv, synced above).
+# One engine test compares with Python's difflib (.venv, synced above).
 # As in CI: insta compares snapshots and never writes one.
 export INSTA_UPDATE=no
 if [[ "$mode" == "full" ]]; then
@@ -266,7 +266,7 @@ fi
 if [[ "$mode" == "full" ]]; then
   "${cov_env[@]}" uv run pytest tests/ -q "${parallel[@]}" -m "$unit_marker"
   uv run coverage report
-  echo "==> E2E pytest (CLI + MCP stdio)"
+  echo "==> E2E pytest (console script, MCP and LSP stdio; the full set's too)"
   uv run pytest tests/ -m "cli_e2e or cli_smoke" -q "${parallel[@]}" --no-cov
   echo "==> Generated GitLab CI lint (glint + gitlab-ci-verify)"
   linters="$ROOT/.cache/gitlab-ci-linters"

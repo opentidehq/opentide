@@ -166,6 +166,9 @@ impl Workspace {
             keep_deprecated: options.keep_deprecated,
             removed_plan: None,
             cwd: ws.cwd().to_path_buf(),
+            // The facade has no plugin host: plugins load only in the Python
+            // package (UC-4.5).
+            plugins: Vec::new(),
         };
         // A plan reads every rule file or a selection, never a git diff.
         let changed = |_: &Path, _: &str| -> Result<(Scope, Option<String>), String> {
