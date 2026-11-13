@@ -566,6 +566,18 @@ impl Tenant {
     }
 }
 
+/// Why a rule block does not select a tenant, or `None` when it does
+/// (`tenant_skip_reason`): a block that lists `tenants` selects only those;
+/// otherwise every tenant that is not `manual`. The planner and the
+/// documentation's Deployment section both read it here, so a page never
+/// says a rule reaches a tenant that deploy skips.
+pub fn tenant_skip_reason(name: &str, manual: bool, listed: &[String]) -> Option<&'static str> {
+    if !listed.is_empty() {
+        return (!listed.iter().any(|item| item == name)).then_some("not listed by the rule");
+    }
+    manual.then_some("manual tenant: only rules that list it under tenants reach it")
+}
+
 /// The tenants a rule's block reaches (`tenants_resolver`): those listed by
 /// the block when it lists any, else every tenant that is not `manual`, each
 /// when it accepts a run strategy that deploys the block's status.
@@ -585,13 +597,7 @@ pub fn rule_tenants<'t>(
     };
     tenants
         .iter()
-        .filter(|tenant| {
-            if listed.is_empty() {
-                !tenant.manual
-            } else {
-                listed.contains(&tenant.name)
-            }
-        })
+        .filter(|tenant| tenant_skip_reason(&tenant.name, tenant.manual, &listed).is_none())
         .filter(|tenant| {
             if wide {
                 runs.iter().any(|run| tenant.strategies.contains(run))
@@ -659,6 +665,23 @@ pub fn state_id(
     platform: &str,
     tenant: &str,
 ) -> Option<String> {
+    state_ids(fs, workspace, uuid)?
+        .get(platform)?
+        .get(tenant.trim())
+        .filter(|id| !id.is_empty())
+        .cloned()
+}
+
+/// Every external id the deployment state holds for a rule, by platform
+/// then tenant, in the shard's order: `None` when the shard is absent or
+/// cannot be used (another spelling of it exists, its schema or UUID is
+/// not the rule's, a platform stores no ids, an id is not text, a tenant
+/// key is blank or padded).
+pub fn state_ids(
+    fs: &dyn FileSystem,
+    workspace: &Path,
+    uuid: &str,
+) -> Option<IndexMap<String, IndexMap<String, String>>> {
     let canonical = canonical_uuid(uuid);
     let dir = workspace.join(".opentide/states/deployment");
     let names: Vec<String> = fs
@@ -682,29 +705,28 @@ pub fn state_id(
         return None;
     }
     let bytes = fs.read(&dir.join(&file)).ok()?;
-    let payload: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let payload: Json = serde_json::from_slice(&bytes).ok()?;
     if payload.get("schema")?.as_str()? != "deployment.state::1.0"
         || payload.get("object_uuid")?.as_str()? != canonical
     {
         return None;
     }
-    let platforms = payload.get("platforms")?.as_object()?;
-    for (name, tenants) in platforms {
+    let mut found = IndexMap::new();
+    for (name, tenants) in payload.get("platforms")?.as_object()? {
         if !opentide_workspace::state::stores_ids(name) {
             return None;
         }
+        let mut ids = IndexMap::new();
         for (key, id) in tenants.as_object()? {
-            if !id.is_string() || key.trim().is_empty() || key.trim() != key {
+            let id = id.as_str()?;
+            if key.trim().is_empty() || key.trim() != key {
                 return None;
             }
+            ids.insert(key.clone(), id.to_owned());
         }
+        found.insert(name.clone(), ids);
     }
-    platforms
-        .get(platform)?
-        .get(tenant.trim())?
-        .as_str()
-        .filter(|id| !id.is_empty())
-        .map(str::to_owned)
+    Some(found)
 }
 
 /// What a change does (`_action`).
@@ -872,6 +894,21 @@ mod tests {
 
     fn json(yaml: &str) -> Json {
         Json::from_node(opentide_schema::node::load(yaml).unwrap().root().unwrap())
+    }
+
+    #[test]
+    fn tenants_are_skipped_as_the_oracle_skips_them() {
+        let listed = ["a".to_owned()];
+        assert_eq!(tenant_skip_reason("a", true, &listed), None);
+        assert_eq!(
+            tenant_skip_reason("b", false, &listed),
+            Some("not listed by the rule")
+        );
+        assert_eq!(
+            tenant_skip_reason("m", true, &[]),
+            Some("manual tenant: only rules that list it under tenants reach it")
+        );
+        assert_eq!(tenant_skip_reason("m", false, &[]), None);
     }
 
     #[test]
