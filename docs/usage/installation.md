@@ -172,6 +172,7 @@ These `--platform` values are built into the package:
 | `crowdstrike` | CrowdStrike Falcon |
 | `harfanglab` | HarfangLab |
 | `sysdig` | Sysdig Secure (Falco) |
+| `exabeam` | Exabeam New-Scale SIEM |
 | `google_secops` | Google Security Operations (YARA-L 2.0) |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.

@@ -13,6 +13,7 @@
 
 use opentide_core::LanguageId;
 use opentide_core::node::{self, Node, Value};
+use opentide_schema::objects::platform::google_secops::yaral::section_header_line;
 use opentide_tide::{elastic_query_language, extract_injections, hunt_query_language};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -157,9 +158,21 @@ fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
         }
     }
     // A Google SecOps block's text sections, each its own injection (the
-    // analysis checks them together, as the rule deploy assembles).
-    if let Some(secops) = configurations.and_then(|c| c.get("google_secops")) {
-        for field in ["setup", "events", "outcome", "condition", "export"] {
+    // analysis checks them together, as the rule deploy assembles). A block
+    // with no `events` text, or a section text holding a label or a header,
+    // is not a rule: its sections are not queries.
+    let sections = ["setup", "events", "outcome", "condition", "export"];
+    let checked = |secops: &Arc<Node>| {
+        text(secops.get("events")).is_some_and(|events| !events.trim().is_empty())
+            && sections.iter().all(|field| {
+                text(secops.get(field)).is_none_or(|value| section_header_line(value).is_none())
+            })
+    };
+    if let Some(secops) = configurations
+        .and_then(|c| c.get("google_secops"))
+        .filter(|secops| checked(secops))
+    {
+        for field in sections {
             if let Some(value) = text(secops.get(field)) {
                 add(
                     format!("configurations.google_secops.{field}"),

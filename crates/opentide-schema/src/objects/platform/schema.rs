@@ -25,6 +25,7 @@ pub fn required(platform: &str) -> &'static [&'static str] {
         "sentinel_one" => &["status", "condition"],
         "crowdstrike" => &["status", "query", "details", "schedule"],
         "harfanglab" | "elastic" | "sysdig" => &["status"],
+        "exabeam" => &["status", "sequences"],
         // Carbon Black, and the oracle's default for a model it does not list.
         _ => &["status", "query"],
     }

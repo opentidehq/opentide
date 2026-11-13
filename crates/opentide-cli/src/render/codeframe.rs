@@ -934,6 +934,10 @@ mod tests {
             engine_reference("yara_slow_pattern").map(|(language, _)| language),
             Some("YARA rule")
         );
+        assert_eq!(
+            engine_reference("exabeam_unknown_value").map(|(language, _)| language),
+            Some("Exabeam Query Language")
+        );
         assert_eq!(position("ab\ncd", 4), (2, 2));
     }
 

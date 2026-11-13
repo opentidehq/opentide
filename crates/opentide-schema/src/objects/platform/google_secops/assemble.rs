@@ -324,6 +324,14 @@ pub fn assemble(facts: &RuleFacts, block: &Node) -> Result<AssembledRule, Assemb
             missing,
         });
     }
+    Ok(assemble_present(facts, block))
+}
+
+/// The rule [`assemble`] writes, from the sections `block` has, whichever
+/// are missing: what the YARA-L engine checks in an editor and `validate`,
+/// where a block without `condition` is still checked (the block's own
+/// checks report `yaral_section_missing`).
+pub fn assemble_present(facts: &RuleFacts, block: &Node) -> AssembledRule {
     let name = rule_name(&facts.title, block_str(block, "name"), &facts.uuid);
     let mut lines = vec![format!("rule {name} {{"), "  meta:".to_owned()];
     lines.extend(
@@ -354,11 +362,11 @@ pub fn assemble(facts: &RuleFacts, block: &Node) -> Result<AssembledRule, Assemb
         }));
     }
     lines.push("}".to_owned());
-    Ok(AssembledRule {
+    AssembledRule {
         name,
         text: lines.join("\n") + "\n",
         sections,
-    })
+    }
 }
 
 #[cfg(test)]

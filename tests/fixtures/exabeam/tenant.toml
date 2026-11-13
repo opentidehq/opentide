@@ -1,0 +1,20 @@
+# The tenant the fixtures/valid/rule-exabeam-*.yaml rules deploy to, and
+# whose request bodies are the *.api.json files beside this one.
+[platform]
+enabled = true
+identifier = "exabeam"
+name = "Exabeam New-Scale SIEM"
+subschema = "Exabeam New-Scale SIEM"
+description = "Correlation rules for Exabeam New-Scale Security Operations Platform."
+flags = []
+
+[[tenants]]
+name = "exabeam-eu"
+description = "Exabeam New-Scale, Europe (europe-west3)"
+strategies = ["RELEASE"]
+[tenants.setup]
+ssl = true
+region = "eu"
+client_id = "$EXABEAM_CLIENT_ID"
+client_secret = "$EXABEAM_CLIENT_SECRET"
+test_mode = false
