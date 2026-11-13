@@ -20,7 +20,7 @@ leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). 
 
 ### A preview of the next oracle
 
-`ORACLE.next` names the next oracle (opentide 0.28.0, while its features are ported; O1 of
+`ORACLE.next` names the next oracle (opentide 0.28.1, while its features are ported; O1 of
 `docs/internal/catchup-0.28-plan.md`), in `ORACLE`'s format, with its own requirements,
 `oracle-requirements.next.txt`. Nothing committed is recorded from it: a port compares its work
 with it in a directory of its own.

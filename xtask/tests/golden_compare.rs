@@ -178,7 +178,7 @@ fn comparator_golden_against_a_preview_reports_each_missing_case() {
         false,
         Some(&report),
         false,
-        ("0.28.0", "0.28.0"),
+        ("0.28.1", "0.28.1"),
     )
     .expect("a missing recording fails its case, not the run");
     assert!(!passed);
@@ -232,7 +232,7 @@ fn the_preview_oracle_and_its_requirements_agree() {
     let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/golden");
     let (oracle, dir) = xtask::golden::oracle::Oracle::read_file(&golden.join("ORACLE.next"))
         .expect("tests/golden/ORACLE.next");
-    assert_eq!(oracle.version, "0.28.0");
+    assert_eq!(oracle.version, "0.28.1");
     assert_eq!(oracle.requirements, "oracle-requirements.next.txt");
     // A Windows checkout may hold the file with CRLF line endings.
     let requirements = std::fs::read_to_string(dir.join(&oracle.requirements))

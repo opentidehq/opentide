@@ -1,6 +1,6 @@
 """golden-preview.yml: the preview of the next oracle (O1 of the 0.28 catch-up).
 
-While 0.28.0's features are ported on ``train/catchup-0.28``, the committed
+While 0.28.1's features are ported on ``train/catchup-0.28``, the committed
 recordings stay 0.23.0's. The preview job records every case from the release
 ``tests/golden/ORACLE.next`` names into a cache, outside ``tests/golden``, and
 uploads ``golden check --engine rust --recordings``'s report. It runs only on
@@ -67,7 +67,7 @@ def test_it_runs_on_the_train_only() -> None:
 
 
 def test_it_records_the_preview_oracle_outside_tests_golden() -> None:
-    run = _step("Record every case from opentide 0.28.0")["run"]
+    run = _step("Record every case from opentide 0.28.1")["run"]
     assert (
         'cargo xtask golden record --oracle tests/golden/ORACLE.next --out "${PREVIEW_DIR}"' in run
     )
@@ -115,7 +115,7 @@ def test_the_recordings_are_cached_by_their_inputs_and_saved_from_pushes() -> No
         assert f"'{path}'" in key, path
     assert str(save["if"]).startswith(PUSH_ONLY)
     assert "cache-hit != 'true'" in str(save["if"])
-    record = _step("Record every case from opentide 0.28.0")
+    record = _step("Record every case from opentide 0.28.1")
     assert record["if"] == "steps.recordings.outputs.cache-hit != 'true'"
     assert not _uses("actions/cache@")
     (rust_cache,) = _uses("Swatinem/rust-cache@")
@@ -154,7 +154,7 @@ def test_it_is_not_a_required_check() -> None:
 
 def test_the_preview_oracle_names_its_own_requirements() -> None:
     oracle = tomllib.loads((ROOT / "tests" / "golden" / "ORACLE.next").read_text("utf-8"))
-    assert oracle["version"] == "0.28.0"
+    assert oracle["version"] == "0.28.1"
     assert oracle["requirements"] == "oracle-requirements.next.txt"
     requirements = (ROOT / "tests" / "golden" / oracle["requirements"]).read_text("utf-8")
     assert f"opentide=={oracle['version']} \\\n    --hash=sha256:{oracle['wheel_sha256']}\n" in (

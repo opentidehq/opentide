@@ -1,16 +1,16 @@
 name: Golden preview
 
 # The preview of the next oracle (docs/internal/catchup-0.28-plan.md, O1):
-# while the 0.28.0 features are ported on train/catchup-0.28, the committed
+# while the 0.28.1 features are ported on train/catchup-0.28, the committed
 # recordings are still those of tests/golden/ORACLE (0.23.0). This job records
-# every case from the release tests/golden/ORACLE.next names (0.28.0) into a
+# every case from the release tests/golden/ORACLE.next names (0.28.1) into a
 # cache, never into tests/golden, and compares this checkout's CLI with those
 # recordings:
 #
 #   cargo xtask golden record --oracle tests/golden/ORACLE.next --out DIR
 #   cargo xtask golden check --engine rust --recordings DIR --report FILE
 #
-# It reports and never gates: a difference from 0.28.0 is expected until its
+# It reports and never gates: a difference from 0.28.1 is expected until its
 # port lands, so the check's exit status 1 passes, and the report
 # (`golden-preview` artifact, opentide-compare's RunReport) is what a port PR
 # reads for its area. A check that cannot run (exit status 2) fails the job.
@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   preview:
-    name: Golden preview (opentide 0.28.0, report only)
+    name: Golden preview (opentide 0.28.1, report only)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -82,16 +82,16 @@ jobs:
           path: ${{ env.PREVIEW_DIR }}
           key: golden-preview-${{ hashFiles('tests/golden/ORACLE.next', 'tests/golden/oracle-requirements.next.txt', 'tests/golden/cases.toml', 'tests/golden/fixtures/**', 'tests/fixtures/tide_corpus/**', 'tests/cassettes/**', 'tests/corpora/**', 'xtask/src/golden/**', 'xtask/src/corpus/**', 'crates/opentide-compare/src/normalise.rs') }}
 
-      # A case 0.28.0 cannot run (a cassette whose requests it no longer
+      # A case 0.28.1 cannot run (a cassette whose requests it no longer
       # makes) is reported and left out; the others are written.
-      - name: Record every case from opentide 0.28.0
+      - name: Record every case from opentide 0.28.1
         if: steps.recordings.outputs.cache-hit != 'true'
         run: |
           set -uo pipefail
           cargo xtask golden record --oracle tests/golden/ORACLE.next --out "${PREVIEW_DIR}"
           status=$?
           if [[ "${status}" -eq 1 ]]; then
-            echo "::warning::some cases did not record from opentide 0.28.0: they are reported as not recorded"
+            echo "::warning::some cases did not record from opentide 0.28.1: they are reported as not recorded"
           elif [[ "${status}" -ne 0 ]]; then
             exit "${status}"
           fi
@@ -116,7 +116,7 @@ jobs:
           status=$?
           tail -n 5 golden-preview.log
           {
-            echo "### Golden preview against opentide 0.28.0"
+            echo "### Golden preview against opentide 0.28.1"
             echo
             echo '```text'
             grep -E '^(golden rust:|xtask golden:)' golden-preview.log || echo "the check printed no summary (exit status ${status})"

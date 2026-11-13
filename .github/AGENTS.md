@@ -241,11 +241,11 @@ removed from the rule too, or every pull request that does not run it waits for 
 - [`golden-preview.yml`](workflows/golden-preview.yml), on every push to `train/catchup-0.28`,
   every pull request into it and on demand (no other branch): the preview of the next oracle
   (O1 of `docs/internal/catchup-0.28-plan.md`). It records every case from the release
-  `tests/golden/ORACLE.next` names (0.28.0) with `cargo xtask golden record --oracle
+  `tests/golden/ORACLE.next` names (0.28.1) with `cargo xtask golden record --oracle
   tests/golden/ORACLE.next --out DIR` into an actions cache keyed on the oracle, the cases and
   their inputs (saved from pushes only), then runs `cargo xtask golden check --engine rust
   --recordings DIR` and uploads its report (`golden-preview` artifact) with the summary line in
-  the job summary. Report only: a difference from 0.28.0 passes (exit status 1), a check that
+  the job summary. Report only: a difference from 0.28.1 passes (exit status 1), a check that
   cannot run fails (2). Not a required check (`tests/test_ci/test_golden_preview_workflow.py`).
 - [`docs.yml`](workflows/docs.yml) (`scripts/validate-docs.sh`) and
   [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (every publish rehearsed, nothing

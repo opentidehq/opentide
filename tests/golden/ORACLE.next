@@ -4,15 +4,15 @@
 # and `cargo xtask golden check --recordings DIR`. Nothing committed is
 # recorded from it. `cargo xtask golden lock --oracle tests/golden/ORACLE.next`
 # writes its requirements. The wheel's SHA-256 is PyPI's
-# (https://pypi.org/pypi/opentide/0.28.0/json); exclude_newer follows the
-# wheel's upload, 2026-11-12T17:43:13Z (0.28.0 adds google-auth).
-tag = "v0.28.0"
-commit = "3acbea603112e71cc31e3ee1c4285a2b06fa29d3"
+# (https://pypi.org/pypi/opentide/0.28.1/json); exclude_newer follows the
+# wheel's upload, 2026-11-13T11:29:31Z (0.28.0 added google-auth).
+tag = "v0.28.1"
+commit = "164450afcc1b81a9c3e39a0bc5f3ee0fb0d3b54b"
 package = "opentide"
-version = "0.28.0"
-wheel = "opentide-0.28.0-cp310-abi3-manylinux_2_28_x86_64.whl"
-wheel_sha256 = "1700f673d17265420df7486c9685420c5733e1dcab4c413da8b5683b68e9624b"
+version = "0.28.1"
+wheel = "opentide-0.28.1-cp310-abi3-manylinux_2_28_x86_64.whl"
+wheel_sha256 = "1f145603aae07b3b23727ed5ee9dc6069cbf35d9a5fd41a5857e70d562e8b3a9"
 python = "3.13.14"
 platform = "linux-x86_64"
-exclude_newer = "2026-11-13T00:00:00Z"
+exclude_newer = "2026-11-13T11:30:00Z"
 requirements = "oracle-requirements.next.txt"

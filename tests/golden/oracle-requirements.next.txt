@@ -558,8 +558,8 @@ opentelemetry-api==1.45.2 \
     --hash=sha256:2cbd737377e710ee740d261c94e93fa0f08e6d037c18f17513cc0a2d94479a34 \
     --hash=sha256:d7b0008e21e5fd61cbe7a7f34ca3b6905a78ab677d9bc395e299359c75cda6b4
     # via mcp
-opentide==0.28.0 \
-    --hash=sha256:1700f673d17265420df7486c9685420c5733e1dcab4c413da8b5683b68e9624b
+opentide==0.28.1 \
+    --hash=sha256:1f145603aae07b3b23727ed5ee9dc6069cbf35d9a5fd41a5857e70d562e8b3a9
     # via -r ORACLE
 orjson==3.13.0 \
     --hash=sha256:0526a3456db67b264c6d661b5f090077f326b6cd074d0ef53a72763595dec5d7 \
