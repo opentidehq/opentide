@@ -1,5 +1,5 @@
 {
-  "opentide": "0.28.0-661-gb10513733",
+  "opentide": "0.28.0-751-g230883eac",
   "generator": "opentide.generation.lsp_catalog",
   "ref_leaves": {
     "threats": "threat",

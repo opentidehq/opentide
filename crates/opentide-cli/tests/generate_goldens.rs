@@ -675,7 +675,7 @@ fn setup_ci_reads_enabled_platforms_and_one_path() {
         .collect();
     assert!(!platforms.contains(&"splunk"), "{platforms:?}");
     assert!(platforms.contains(&"sentinel"), "{platforms:?}");
-    assert_eq!(platforms.len(), 8, "{platforms:?}");
+    assert_eq!(platforms.len(), 9, "{platforms:?}");
 }
 
 /// Runs the CLI in-process at `ws`; the exit code and stdout.

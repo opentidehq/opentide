@@ -1090,8 +1090,20 @@ fn configuration_verdicts(
             continue;
         };
         if name == ROUTER_NAME {
-            // The router names schemas; it validates no file.
-            if expected != document {
+            // The router names schemas; it validates no file. It lists every
+            // platform's file: leave out the SINCE_ORACLE ones the oracle lacks.
+            let mut document = document.clone();
+            if let Some(files) = document.get_mut("files").and_then(Value::as_object_mut) {
+                files.retain(|key, _| {
+                    !opentide_schema::platforms::SINCE_ORACLE.iter().any(|id| {
+                        *key == format!("platforms/{id}.toml")
+                            && expected
+                                .pointer(&format!("/files/{}", key.replace('/', "~1")))
+                                .is_none()
+                    })
+                });
+            }
+            if *expected != document {
                 problems.push(format!("{name}: differs from the oracle's"));
             }
             continue;

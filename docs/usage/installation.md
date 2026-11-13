@@ -172,6 +172,7 @@ These `--platform` values are built into the package:
 | `crowdstrike` | CrowdStrike Falcon |
 | `harfanglab` | HarfangLab |
 | `sysdig` | Sysdig Secure (Falco) |
+| `exabeam` | Exabeam New-Scale SIEM |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
 

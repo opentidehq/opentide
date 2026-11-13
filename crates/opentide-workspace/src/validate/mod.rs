@@ -503,12 +503,11 @@ fn file_name(path: &Path) -> String {
 
 /// `exabeam_name_duplicate` and `exabeam_name_length`: the cross-rule check of
 /// Exabeam rule names (`exabeam::name_findings`), over every rule in the
-/// workspace, reported on the rules in scope. Two enabled Exabeam blocks that
+/// workspace, reported on the rules this run validates (`work`). Two enabled Exabeam blocks that
 /// resolve to one name (case-insensitively) are a duplicate; a block with no
 /// `name` whose rule name is over the limit is too long.
-fn exabeam_names(index: &Index, scope: &Scope, ws: &Workspace) -> Vec<Diagnostic> {
+fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     use opentide_schema::objects::platform::exabeam;
-    let fs = ws.fs().as_ref();
     let mut rules: Vec<(String, &Node, &Path)> = Vec::new();
     for source in &index.sources {
         if source.family != "rule" {
@@ -531,15 +530,11 @@ fn exabeam_names(index: &Index, scope: &Scope, ws: &Workspace) -> Vec<Diagnostic
         .iter()
         .map(|(uuid, root, _)| (uuid.as_str(), *root))
         .collect();
-    let in_scope: Vec<&str> = rules
+    // The rules this run validates: the subjects already in scope.
+    let in_scope: Vec<&str> = work
         .iter()
-        .filter(|(uuid, _, path)| {
-            scope.is_full()
-                || !scope.has_targets()
-                || scope.targets().iter().any(|target| target == uuid)
-                || scope.matches_file(fs, path)
-        })
-        .map(|(uuid, _, _)| uuid.as_str())
+        .filter(|subject| subject.family == "rule")
+        .map(|subject| subject.uuid)
         .collect();
     let mut out = Vec::new();
     for finding in exabeam::name_findings(&pairs, in_scope.iter().copied()) {
@@ -1095,7 +1090,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             plugin_blocks(plugins, &work, &mut issues, &mut warnings);
         }
         if checks.schema {
-            issues.extend(exabeam_names(index, &scope, ws));
+            issues.extend(exabeam_names(index, &work));
         }
         // Every file that writes an invalid UUID is reported, also one whose
         // object a later file with the same UUID displaced (KG-04).

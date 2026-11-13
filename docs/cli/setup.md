@@ -158,6 +158,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--harfanglab` | HarfangLab |
 | `--elastic` | Elastic Security |
 | `--sysdig` | Sysdig Secure (Falco) |
+| `--exabeam` | Exabeam New-Scale SIEM |
 
 ### setup ci
 

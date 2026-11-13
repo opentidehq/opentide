@@ -522,3 +522,53 @@ configurations:
     #policies:
       #- 
     #minimum_engine_version: 3
+  #exabeam:
+    #enabled: false
+    #name: 
+    #schema: platform::exabeam::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+    #sequences:
+      #- query: |
+          #...
+        #name: 
+        #threshold:
+          #function: count
+          #field: 
+          #operator: more_than
+          #value:
+            #- 
+          #within: 
+        #group_by:
+          #- 
+    #correlation:
+      #within: 
+      #group_by:
+        #- 
+    #severity: none
+    #outcome: alert
+    #email:
+      #recipients:
+        #- 
+      #subject: 
+      #attach_csv: false
+    #suppression:
+      #for: 
+      #group_by:
+        #- 
+    #delay: 
+    #schedule:
+      #- every: day
+        #from: 
+        #to: 
+        #days:
+          #- 
+        #last_day: false
+        #first: 
+        #last: 
+    #test_mode: false

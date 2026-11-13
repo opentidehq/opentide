@@ -63,6 +63,13 @@ pub const FILES: [(&str, &str); 17] = [
         )),
     ),
     (
+        "platforms/exabeam.toml",
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/exabeam.toml"
+        )),
+    ),
+    (
         "platforms/harfanglab.toml",
         include_str!(concat!(
             env!("OPENTIDE_ASSETS"),
@@ -88,13 +95,6 @@ pub const FILES: [(&str, &str); 17] = [
         include_str!(concat!(
             env!("OPENTIDE_ASSETS"),
             "/src/opentide/data/configurations/platforms/splunk.toml"
-        )),
-    ),
-    (
-        "platforms/exabeam.toml",
-        include_str!(concat!(
-            env!("OPENTIDE_ASSETS"),
-            "/src/opentide/data/configurations/platforms/exabeam.toml"
         )),
     ),
     (

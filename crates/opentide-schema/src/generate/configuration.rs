@@ -222,7 +222,7 @@ mod tests {
             .into_iter()
             .map(|(n, _)| n)
             .collect();
-        assert_eq!(names.len(), 16);
+        assert_eq!(names.len(), 17);
         assert_eq!(names.last().map(String::as_str), Some(ROUTER_NAME));
     }
 
