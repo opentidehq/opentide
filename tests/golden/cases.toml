@@ -2186,6 +2186,31 @@ args = ["setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
 fixtures = ["none"]
 cassette = "skills/broken"
 
+# opentide 0.28.1 (#1015): the catalogue lists detection-engineering, so the
+# starter skills install its copy; when a file of it cannot be downloaded,
+# the package's copy is written, or an installed copy (skills-merge) kept,
+# with a warning. Definitions only until O2 records them from 0.28.1.
+[[case]]
+command = "setup skills"
+variant = "catalogue-first"
+args = ["setup", "skills", "--generic", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup skills"
+variant = "catalogue-first-fallback"
+args = ["setup", "skills", "--generic", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first-missing"
+
+[[case]]
+command = "setup skills"
+variant = "catalogue-first-kept"
+args = ["setup", "skills", "--cursor", "--yes"]
+fixtures = ["skills-merge"]
+cassette = "skills/catalogue-first-missing"
+
 [[case]]
 command = "setup skills"
 variant = "unknown"
