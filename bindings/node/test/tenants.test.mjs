@@ -5,6 +5,7 @@
 // reaches a real host.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { getEventListeners } from 'node:events'
 import { createRequire } from 'node:module'
 import { after, before, test } from 'node:test'
 import { PACKAGE } from './corpus.mjs'
@@ -126,6 +127,25 @@ test('a query stops at its limit, over the window it is given', async () => {
   assert.equal(result.truncated, true)
 })
 
+test('a window takes Dates as well as RFC 3339 strings', async () => {
+  const connection = connect()
+  const end = new Date(Date.UTC(2026, 10, 12, 10))
+  const start = new Date(end.getTime() - 3_600_000)
+  for (const window of [{ start, end }, { start, end: end.toISOString() }, { start: start.toISOString(), end }]) {
+    const result = await connection.query('x', { ...window, limit: 1 })
+    assert.equal(result.rows.length, 1)
+    const check = await connection.validateQuery('x', window)
+    assert.deepEqual(check.errors, [])
+  }
+  // A Date is read as the instant it holds: a window it ends before it starts is refused.
+  const late = new Date(end.getTime() + 1)
+  await rejects(connection.query('x', { start: late, end }), 'usage_invalid_value')
+  for (const bad of [new Date('soon'), new Date(8.64e15)]) {
+    const error = await rejects(connection.query('x', { end: bad }), 'usage_invalid_value')
+    assert.match(error.message, /^end: /)
+  }
+})
+
 test('a refused query rejects with its code and the vendor\'s words', async () => {
   const error = await rejects(connect().query('x | syntax'), 'tenant_refused')
   assert.match(error.detail, /Syntax error at 3/)
@@ -207,6 +227,58 @@ test('a canceller interrupts the running operation and every later one', async (
   assert.ok(Date.now() - started < 1000, 'stopped before the search finished')
   assert.equal(canceller.isCancelled, true)
   await rejects(connection.query('x'), 'interrupted')
+})
+
+test('an AbortSignal aborts its operation and no other', async () => {
+  const connection = connect()
+  const controller = new AbortController()
+  const started = Date.now()
+  const aborted = connection.query('slow', { signal: controller.signal })
+  const other = connection.query('slow')
+  setTimeout(() => controller.abort(), 100)
+  const error = await rejects(aborted, 'interrupted')
+  assert.match(error.message, /AbortSignal/)
+  assert.ok(Date.now() - started < 1000, 'stopped before the search finished')
+  // The connection serves on: the other search and a later one finish.
+  assert.equal((await other).rows.length, 2)
+  assert.equal((await connection.query('fast')).rows.length, 2)
+  assert.equal(connection.canceller().isCancelled, false)
+})
+
+test('a signal already aborted rejects at once, on every operation', async () => {
+  const connection = connect()
+  const signal = AbortSignal.abort()
+  await rejects(connection.query('x', { signal }), 'interrupted')
+  await rejects(connection.validateQuery('x', { signal }), 'interrupted')
+  await rejects(connection.deploy('r', 'create', '{}', { signal }), 'interrupted')
+  // A signal that never aborts changes nothing; an operation that settles first keeps its result.
+  const never = new AbortController()
+  const created = await connection.deploy('44444444-4444-4444-8444-444444444444', 'create', '{"data": {"name": "x"}}', { signal: never.signal })
+  assert.equal(created.operation, 'create')
+  never.abort()
+  const timed = await connection.validateQuery('x', { signal: AbortSignal.timeout(30_000) })
+  assert.deepEqual(timed.errors, [])
+})
+
+test('an operation takes its listener off the signal when it settles', async () => {
+  const connection = connect()
+  const controller = new AbortController()
+  const { signal } = controller
+  const queries = Array.from({ length: 12 }, () => connection.query('fast', { signal }))
+  assert.equal(getEventListeners(signal, 'abort').length, 12)
+  await Promise.all(queries)
+  assert.equal(getEventListeners(signal, 'abort').length, 0)
+  // Also when the operation is refused before it runs, and when it fails.
+  await rejects(connection.query('x', { end: 'soon', signal }), 'usage_invalid_value')
+  await rejects(connection.query('x | syntax', { signal }), 'tenant_refused')
+  await connection.deploy('55555555-5555-4555-8555-555555555555', 'create', '{"data": {"name": "x"}}', { signal })
+  assert.equal(getEventListeners(signal, 'abort').length, 0)
+})
+
+test('a signal that is not one rejects the promise', async () => {
+  const connection = connect()
+  await rejects(connection.query('x', { signal: {} }), 'usage_invalid_value')
+  await rejects(connection.deploy('r', 'create', '{}', { signal: { aborted: false } }), 'usage_invalid_value')
 })
 
 test('the runtime starts on the first operation, not when the package loads', { skip: process.platform !== 'linux' }, () => {

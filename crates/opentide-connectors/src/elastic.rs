@@ -18,7 +18,6 @@
 use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{BoxFuture, LiveCheck, LiveValidator, Platform, QueryRunner, TenantContext};
 use crate::connector::{
     QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow, columns_of, flatten, utc_z,
@@ -252,11 +251,14 @@ impl Client {
             builder = builder.header("kbn-xsrf", "true");
         }
         if let Some(body) = body {
-            builder = builder.body(python_json(body).map_err(|error| ConnectorError::Setup {
-                platform: PLATFORM.into(),
-                tenant: cx.tenant.label.tenant.clone(),
-                message: format!("the request body cannot be written: {error}"),
-            })?);
+            builder =
+                builder.body(
+                    serde_json::to_vec(body).map_err(|error| ConnectorError::Setup {
+                        platform: PLATFORM.into(),
+                        tenant: cx.tenant.label.tenant.clone(),
+                        message: format!("the request body cannot be written: {error}"),
+                    })?,
+                );
         }
         crate::answer::exchange(cx, builder).await
     }

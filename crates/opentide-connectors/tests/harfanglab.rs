@@ -1,6 +1,6 @@
 //! HarfangLab against the cassettes the Python client recorded
 //! (`tests/cassettes/harfanglab/`): the deployer and the telemetry runner
-//! send the Python client's requests, byte for byte and in order, and read
+//! send the Python client's requests, in order (a JSON body as the same data), and read
 //! the answers as it does (the outcomes `client.py` printed when it
 //! recorded).
 
@@ -14,7 +14,6 @@ use cassette_support::{json, replay, rows, tenant, window};
 use opentide_compile::Json;
 use opentide_connectors::ConnectorError;
 use opentide_connectors::Registry;
-use opentide_connectors::body::python_json;
 use opentide_connectors::connector::{
     DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployRequest, Operation, QueryRequest, TenantContext,
 };
@@ -49,7 +48,7 @@ fn object(pairs: Vec<(&str, Json)>) -> Json {
 
 /// The Sigma rule `client.py` sends (`SigmaRule`, `overwrite` true).
 fn sigma(name: &str, enabled: bool) -> Vec<u8> {
-    python_json(&object(vec![
+    serde_json::to_vec(&object(vec![
         ("name", name.into()),
         ("content", SIGMA_CONTENT.into()),
         ("source_id", "src-0001".into()),
@@ -70,7 +69,7 @@ fn sigma(name: &str, enabled: bool) -> Vec<u8> {
 
 /// The YARA file `client.py` sends (`YaraRule`, `overwrite` true).
 fn yara(name: &str) -> Vec<u8> {
-    python_json(&object(vec![
+    serde_json::to_vec(&object(vec![
         ("name", name.into()),
         ("content", YARA_CONTENT.into()),
         ("source_id", "src-0001".into()),

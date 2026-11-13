@@ -2078,7 +2078,7 @@ impl Sender<'_, '_> {
                     body: if write.body.is_null() {
                         Vec::new()
                     } else {
-                        opentide_connectors::body::python_json(&write.body).unwrap_or_default()
+                        serde_json::to_vec(&write.body).unwrap_or_default()
                     },
                 };
                 let context = self.context(connection);
@@ -2706,14 +2706,12 @@ impl Sender<'_, '_> {
                             object.insert("id".into(), id.clone().into());
                         }
                         let bytes =
-                            opentide_connectors::body::python_json(&CJson::Array(vec![list]))
-                                .unwrap_or_default();
+                            serde_json::to_vec(&CJson::Array(vec![list])).unwrap_or_default();
                         self.block(session.update_detection_rule(id, &bytes))
                             .map_err(|error| refused(error, action))?;
                     }
                     Planned::Create => {
-                        let bytes =
-                            opentide_connectors::body::python_json(&body).unwrap_or_default();
+                        let bytes = serde_json::to_vec(&body).unwrap_or_default();
                         let id = self
                             .block(session.create_detection_rule(&bytes))
                             .map_err(|error| refused(error, action))?;
@@ -2991,7 +2989,7 @@ impl Sender<'_, '_> {
                         Planned::Update(id) => Action::Update(id.clone()),
                         Planned::Delete(id) => Action::Delete(id.clone()),
                     },
-                    body: opentide_connectors::body::python_json(&body).unwrap_or_default(),
+                    body: serde_json::to_vec(&body).unwrap_or_default(),
                     name,
                     tuning,
                     disable: strategy == StatusStrategy::Disablement,

@@ -7,15 +7,13 @@
 //!
 //! Every call carries `Authorization: ApiToken <api_token>` and `Content-Type:
 //! application/json`; the rule bodies are the compiled STAR rule
-//! (`opentide-compile` `sentinel_one::body`), written as `json.dumps` writes
-//! them.
+//! (`opentide-compile` `sentinel_one::body`), sent as compact JSON.
 
 use std::time::{Duration, Instant};
 
 use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, TimeWindow,
@@ -247,7 +245,7 @@ impl SentinelOne {
         body.insert("toDate".into(), Json::Str(utc_z(window.end)));
         body.insert("fromDate".into(), Json::Str(utc_z(window.start)));
         let bytes =
-            python_json_indented(&Json::Object(body)).map_err(|error| ConnectorError::Setup {
+            serde_json::to_vec(&Json::Object(body)).map_err(|error| ConnectorError::Setup {
                 platform: PLATFORM.into(),
                 tenant: cx.tenant.label.tenant.clone(),
                 message: format!("the query cannot be written: {error}"),
@@ -337,6 +335,7 @@ impl SentinelOne {
                 });
             }
             tokio::select! {
+                biased;
                 () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }
@@ -410,84 +409,13 @@ fn seconds_text(timeout: Duration) -> String {
     }
 }
 
-/// *value* as `json.dumps` writes it.
+/// *value* as a JSON request body.
 fn write(cx: TenantContext<'_>, value: &Json) -> Result<Vec<u8>, ConnectorError> {
-    python_json(value).map_err(|error| ConnectorError::Setup {
+    serde_json::to_vec(value).map_err(|error| ConnectorError::Setup {
         platform: PLATFORM.into(),
         tenant: cx.tenant.label.tenant.clone(),
         message: format!("the request body cannot be written: {error}"),
     })
-}
-
-/// *value* as `json.dumps(value, indent=4)` writes it.
-fn python_json_indented(value: &Json) -> serde_json::Result<Vec<u8>> {
-    use serde::Serialize as _;
-    let mut out = Vec::new();
-    let mut serializer = serde_json::Serializer::with_formatter(&mut out, Indented::default());
-    value.serialize(&mut serializer)?;
-    Ok(out)
-}
-
-/// `json.dumps(indent=4)`'s layout: serde_json's pretty printer, four
-/// spaces, every character outside ASCII escaped.
-struct Indented<'a>(serde_json::ser::PrettyFormatter<'a>);
-
-impl Default for Indented<'_> {
-    fn default() -> Self {
-        Self(serde_json::ser::PrettyFormatter::with_indent(b"    "))
-    }
-}
-
-impl serde_json::ser::Formatter for Indented<'_> {
-    fn begin_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.begin_array(w)
-    }
-    fn end_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.end_array(w)
-    }
-    fn begin_array_value<W: ?Sized + std::io::Write>(
-        &mut self,
-        w: &mut W,
-        first: bool,
-    ) -> std::io::Result<()> {
-        self.0.begin_array_value(w, first)
-    }
-    fn end_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.end_array_value(w)
-    }
-    fn begin_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.begin_object(w)
-    }
-    fn end_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.end_object(w)
-    }
-    fn begin_object_key<W: ?Sized + std::io::Write>(
-        &mut self,
-        w: &mut W,
-        first: bool,
-    ) -> std::io::Result<()> {
-        self.0.begin_object_key(w, first)
-    }
-    fn begin_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.begin_object_value(w)
-    }
-    fn end_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
-        self.0.end_object_value(w)
-    }
-    fn write_string_fragment<W: ?Sized + std::io::Write>(
-        &mut self,
-        w: &mut W,
-        fragment: &str,
-    ) -> std::io::Result<()> {
-        crate::body::PythonJson.write_string_fragment(w, fragment)
-    }
-    fn write_char_escape<W: ?Sized + std::io::Write>(
-        &mut self,
-        w: &mut W,
-        escape: serde_json::ser::CharEscape,
-    ) -> std::io::Result<()> {
-        crate::body::PythonJson.write_char_escape(w, escape)
-    }
 }
 
 /// The error of a STAR rule call that did not answer 200 (`_http_errors`).
@@ -731,10 +659,10 @@ mod tests {
         body.insert("accountIds".into(), Json::Str("42".into()));
         body.insert("q".into(), Json::Str("é".into()));
         body.insert("ids".into(), Json::Array(vec![]));
-        let text = python_json_indented(&Json::Object(body)).unwrap_or_default();
+        let text = serde_json::to_vec(&Json::Object(body)).unwrap_or_default();
         assert_eq!(
             String::from_utf8(text).unwrap_or_default(),
-            "{\n    \"accountIds\": \"42\",\n    \"q\": \"\\u00e9\",\n    \"ids\": []\n}"
+            r#"{"accountIds":"42","q":"é","ids":[]}"#
         );
         assert!(matches!(rule_id("x1"), Err(SentinelOneError::BadId(_))));
     }

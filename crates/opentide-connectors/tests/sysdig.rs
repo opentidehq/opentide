@@ -2,8 +2,8 @@
 //! (`tests/cassettes/sysdig/deploy.json`): the tide corpus's Falco rule,
 //! compiled here by `opentide-compile` as the oracle compiled it (its macros
 //! and lists expanded into the condition), goes through the same ten steps
-//! as `client.py`, and every request is the Python deployer's, byte for byte
-//! and in order; each step changes deployment state as the oracle's did
+//! as `client.py`, and every request is the Python deployer's, in order
+//! (a JSON body as the same data); each step changes deployment state as the oracle's did
 //! (the outcomes `client.py` printed when it recorded).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -16,7 +16,6 @@ use std::sync::Arc;
 use cassette_support::{replay, repo, tenant};
 use opentide_compile::strategy::StatusStrategy;
 use opentide_compile::{Owned, Rule, sysdig as compile};
-use opentide_connectors::body::python_json;
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::runtime::block_on;
 use opentide_connectors::sysdig::{
@@ -72,7 +71,7 @@ fn compiled(status: &str, name: Option<&str>) -> (compile::FalcoRule, Vec<u8>, S
     let rule = Rule::new(object.root().unwrap(), None);
     let strategy = compile::strategy(&cx, &rule).unwrap();
     let falco = compile::compile(&cx, &rule, strategy, &["team-blue".to_owned()]).unwrap();
-    let body = python_json(&compile::api_body(&falco).unwrap()).unwrap();
+    let body = serde_json::to_vec(&compile::api_body(&falco).unwrap()).unwrap();
     (falco, body, strategy)
 }
 
@@ -315,6 +314,6 @@ fn sysdig_the_generic_deployer_disables_with_the_held_version_and_no_policy() {
     assert_eq!(received.len(), 2, "a read and a write, no policy");
     // The body as compiled, with the tenant's id and version last.
     let mut expected = body[..body.len() - 1].to_vec();
-    expected.extend_from_slice(b", \"id\": 42, \"version\": 7}");
+    expected.extend_from_slice(b",\"id\":42,\"version\":7}");
     assert_eq!(received[1].body, expected);
 }

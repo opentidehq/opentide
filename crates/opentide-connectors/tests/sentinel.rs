@@ -2,7 +2,7 @@
 //! requests, azure-identity's `ClientSecretCredential` through MSAL, and
 //! azure-monitor-query; `tests/cassettes/sentinel/`, `cargo xtask cassettes
 //! record sentinel/<scenario>`): every request the connector sends must be
-//! the Python client's, byte for byte and in order (the request ids from the
+//! the Python client's, in order (a JSON body as the same data) (the request ids from the
 //! same sequence `client.py` gave the SDKs, `x-client-os` as recorded), and
 //! the answers must read as Python read them.
 

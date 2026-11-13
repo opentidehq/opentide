@@ -3,14 +3,17 @@
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::Instant;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
 use super::{
-    Known, Manifest, Mismatch, RUNNERS, documents, explained, first_difference, parse_known, passed,
+    Known, Manifest, Mismatch, RUNNERS, TENANT_CALLS, documents, explained, first_difference,
+    parse_known, passed,
 };
 use crate::corpus::cli::{corpora_dir, load_catalogue, materialise, repo_root, write_workspace};
 use crate::corpus::{configuration, faults, generate};
@@ -22,10 +25,13 @@ usage: cargo xtask conformance [--runners rust,python,node] [--corpus NAME,...]
 
 Lays out the corpora of tests/conformance/manifest.json under DIR (default
 <target>/conformance), runs every operation on each through every runner (the
-Rust SDK's `cargo test -p opentide --features cli --test conformance`, the
-Python SDK's pytest under `uv run`, the Node SDK's `node --test`), and requires
+Rust SDK's `cargo test -p opentide --features cli,connectors --test
+conformance`, the Python SDK's pytest under `uv run`, the Node SDK's
+`node --test`), and requires
 their documents byte-identical; a difference is reported by its JSON pointer.
-The first runner is the reference.
+The first runner is the reference. The stand-in tenants of the manifest
+(tests/cassettes/<name>/tenant.py, run with $PYTHON, else python3) start once,
+on loopback, and every runner talks to them; each is reset before each runner.
 
   --runners   the runners, at least two (default rust,python,node). The Python
               runner needs `uv sync`; the Node runner the addon `npm run build`
@@ -180,17 +186,50 @@ pub fn run(args: &[String]) -> Result<u8> {
         started.elapsed().as_millis()
     );
 
+    // The stand-in tenants, started once: every runner talks to the same ones.
+    let families: BTreeSet<&str> = laid_out
+        .iter()
+        .filter_map(|(name, _)| name.split('/').next())
+        .collect();
+    let on_tenants = manifest.operations.iter().any(|operation| {
+        TENANT_CALLS.contains(&operation.call.as_str())
+            && operation
+                .corpora
+                .as_ref()
+                .is_none_or(|only| only.iter().any(|c| families.contains(c.as_str())))
+    });
+    let stand_ins = if on_tenants {
+        start_stand_ins(&repo, &manifest)?
+    } else {
+        Vec::new()
+    };
+    let urls: serde_json::Map<String, serde_json::Value> = stand_ins
+        .iter()
+        .map(|running| (running.name.clone(), running.url.clone().into()))
+        .collect();
+
+    let raw: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&manifest_path)?)?;
     let plan = serde_json::json!({
         "corpora": laid_out
             .iter()
             .map(|(name, root)| serde_json::json!({"name": name, "root": root.to_string_lossy()}))
             .collect::<Vec<_>>(),
-        "operations": serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&manifest_path)?)?["operations"],
+        "operations": raw["operations"],
+        "tenants": raw.get("tenants").cloned().unwrap_or_else(|| serde_json::json!([])),
+        "urls": urls,
     });
     let plan_path = out.join("plan.json");
     std::fs::write(&plan_path, serde_json::to_string_pretty(&plan)?)?;
 
     for runner in &args.runners {
+        for running in &stand_ins {
+            reset(&running.url).with_context(|| {
+                format!(
+                    "cannot reset the {} stand-in before the {runner} runner",
+                    running.name
+                )
+            })?;
+        }
         let documents = out.join("documents").join(runner);
         std::fs::create_dir_all(&documents)?;
         let diverge = args.diverge.as_deref() == Some(runner.as_str());
@@ -295,6 +334,7 @@ pub fn run(args: &[String]) -> Result<u8> {
     );
     print_known(&known, &approved, &stale);
     write_report(&out.join("report.json"), &args, &expected, &mismatches, ok)?;
+    drop(stand_ins);
     if ok && !args.keep {
         remove(&out.join("corpora"))?;
         remove(&out.join("documents"))?;
@@ -326,7 +366,7 @@ fn runner_command(repo: &Path, runner: &str, out: &Path) -> Result<Command> {
                 "--package",
                 "opentide",
                 "--features",
-                "cli",
+                "cli,connectors",
                 // The profile the Python and Node bindings are built with.
                 "--profile",
                 "develop",
@@ -382,6 +422,91 @@ fn runner_command(repo: &Path, runner: &str, out: &Path) -> Result<Command> {
         }
         other => bail!("unknown runner `{other}`"),
     })
+}
+
+/// A stand-in tenant this run started; killed when dropped.
+struct Running {
+    name: String,
+    url: String,
+    child: Child,
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        self.child.kill().ok();
+        self.child.wait().ok();
+    }
+}
+
+/// The Python that runs the stand-ins (standard library only): `$PYTHON`,
+/// else `python3` (`python` on Windows), as the Python and Node suites run
+/// them.
+fn python() -> OsString {
+    std::env::var_os("PYTHON")
+        .unwrap_or_else(|| if cfg!(windows) { "python" } else { "python3" }.into())
+}
+
+/// Starts each stand-in of the manifest on loopback; its URL is
+/// `http://127.0.0.1:<the port it prints first>`.
+fn start_stand_ins(repo: &Path, manifest: &Manifest) -> Result<Vec<Running>> {
+    let mut running = Vec::new();
+    for stand_in in &manifest.stand_ins {
+        let script = repo
+            .join("tests/cassettes")
+            .join(&stand_in.name)
+            .join("tenant.py");
+        let mut command = Command::new(python());
+        command
+            .arg(&script)
+            .envs(&stand_in.environment)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("cannot start the stand-in {}", script.display()))?;
+        let stdout = child.stdout.take().context("the stand-in's stdout")?;
+        let mut line = String::new();
+        let read = BufReader::new(stdout).read_line(&mut line);
+        let mut started = Running {
+            name: stand_in.name.clone(),
+            url: String::new(),
+            child,
+        };
+        read.with_context(|| format!("reading the {} stand-in's port", stand_in.name))?;
+        let port: u16 = line
+            .trim()
+            .parse()
+            .with_context(|| format!("the {} stand-in printed no port", stand_in.name))?;
+        eprintln!(
+            "xtask conformance: stand-in {} on 127.0.0.1:{port}",
+            stand_in.name
+        );
+        started.url = format!("http://127.0.0.1:{port}");
+        running.push(started);
+    }
+    Ok(running)
+}
+
+/// Resets the stand-in at `url` (`POST /__stand-in/reset`): it forgets the rules and
+/// queries the last runner left, so that every runner sees the same ids.
+fn reset(url: &str) -> Result<()> {
+    let address = url
+        .strip_prefix("http://")
+        .context("a stand-in's URL is http://")?;
+    let mut stream = TcpStream::connect(address)?;
+    stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    write!(
+        stream,
+        "POST /__stand-in/reset HTTP/1.1\r\nHost: {address}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )?;
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer)?;
+    let status = answer.lines().next().unwrap_or_default();
+    if status.split_whitespace().nth(1) != Some("200") {
+        bail!("the stand-in answered `{status}`");
+    }
+    Ok(())
 }
 
 /// The Cargo target directory: `CARGO_TARGET_DIR`, else the repository's
@@ -664,6 +789,28 @@ mod tests {
                 "{text:?}: {error:#}"
             );
         }
+    }
+
+    #[test]
+    fn the_stand_ins_start_on_loopback_and_reset() {
+        let repo = repo_root();
+        let manifest = Manifest::parse(
+            &std::fs::read_to_string(repo.join("tests/conformance/manifest.json")).unwrap(),
+        )
+        .unwrap();
+        let running = start_stand_ins(&repo, &manifest).unwrap();
+        assert_eq!(running.len(), manifest.stand_ins.len());
+        for stand_in in &running {
+            assert!(
+                stand_in.url.starts_with("http://127.0.0.1:"),
+                "{}",
+                stand_in.url
+            );
+            reset(&stand_in.url).unwrap();
+            reset(&stand_in.url).unwrap();
+        }
+        assert!(reset("http://127.0.0.1:9").is_err());
+        assert!(reset("https://127.0.0.1:9").is_err());
     }
 
     #[test]
