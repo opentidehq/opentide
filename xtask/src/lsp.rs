@@ -463,4 +463,75 @@ mod tests {
         assert!(compared(lint).is_err());
         assert!(catalogue.kinds.iter().any(|kind| compared(kind).is_ok()));
     }
+
+    fn args(args: &[&str]) -> Vec<String> {
+        args.iter().map(|arg| (*arg).to_owned()).collect()
+    }
+
+    #[test]
+    fn the_editor_and_validate_agree_on_a_few_fault_kinds_and_the_rest_are_skipped() {
+        let scratch = tempfile::tempdir().unwrap();
+        let keep = scratch.path().join("kept");
+        let only = [
+            // An object's finding, a vocabulary's, a file that is not YAML
+            // and a configuration that does not resolve.
+            "uuid-invalid-rule",
+            "vocab-unknown-tlp",
+            "yaml-parse-rule",
+            "config-schema-validation-platform",
+            // Not `validate` alone: its own environment, another command.
+            "cve-lookup-unavailable",
+            "lint-placeholder",
+        ]
+        .join(",");
+        let status = run(&args(&[
+            "parity",
+            "--corpus",
+            "faults",
+            "--only",
+            &only,
+            "--keep",
+            keep.to_str().unwrap(),
+        ]))
+        .unwrap();
+        assert_eq!(status, 0);
+        // --keep keeps each compared kind's workspace, and only those.
+        assert!(keep.join("uuid-invalid-rule").is_dir());
+        assert!(keep.join("config-schema-validation-platform").is_dir());
+        assert!(!keep.join("lint-placeholder").exists());
+        // A kept folder is never written over.
+        let error = run(&args(&[
+            "parity",
+            "--corpus",
+            "faults",
+            "--only",
+            "uuid-invalid-rule",
+            "--keep",
+            keep.to_str().unwrap(),
+        ]))
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.ends_with("exists; remove it or name another --keep"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn the_command_line_is_parity_on_the_fault_corpus() {
+        assert_eq!(run(&args(&["--help"])).unwrap(), 0);
+        let error = |argv: &[&str]| run(&args(argv)).unwrap_err().to_string();
+        assert!(error(&[]).starts_with("missing command"));
+        assert!(error(&["diff"]).starts_with("unknown command `diff`"));
+        assert!(error(&["parity", "--fast"]).starts_with("unknown option `--fast`"));
+        assert_eq!(error(&["parity", "--only"]), "--only needs a value");
+        assert!(error(&["parity"]).starts_with("--corpus faults is the one corpus"));
+        assert!(
+            error(&["parity", "--corpus", "fixtures"]).starts_with("--corpus faults is the one")
+        );
+        assert_eq!(
+            error(&["parity", "--corpus", "faults", "--only", "no-such-kind"]),
+            "--only: no fault kind `no-such-kind`"
+        );
+    }
 }

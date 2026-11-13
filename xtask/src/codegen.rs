@@ -1374,4 +1374,261 @@ mod tests {
             SchemaKind::Object
         );
     }
+
+    #[test]
+    fn only_regex_metacharacters_are_escaped() {
+        assert_eq!(escape_regex("att&ck"), "att&ck");
+        assert_eq!(escape_regex("a.b"), "a\\.b");
+        assert_eq!(
+            escape_regex(".^$*+?()[]{}|\\"),
+            "\\.\\^\\$\\*\\+\\?\\(\\)\\[\\]\\{\\}\\|\\\\"
+        );
+    }
+
+    #[test]
+    fn the_version_label_is_left_out_of_a_comparison_and_nothing_else() {
+        let json = "{\n  \"description\": \"Generated from opentide 1.0.\",\n  \"a\": 1\n}";
+        let other = "{\n  \"description\": \"Generated from opentide 2.0.\",\n  \"a\": 1\n}";
+        assert_eq!(
+            without_label("x/opentide.schema.json", json),
+            without_label("x/opentide.schema.json", other)
+        );
+        assert_eq!(
+            without_label("x/OPENTIDE.SCHEMA.JSON", json),
+            "{\n  \"a\": 1\n}"
+        );
+        // A highlight query's label is its comment line; the JSON marker is
+        // only a label in JSON.
+        let scm = "; (opentide 1.0). Runtime\n(comment) @comment\nGenerated from opentide x";
+        assert_eq!(
+            without_label("highlights.scm", scm),
+            "(comment) @comment\nGenerated from opentide x"
+        );
+    }
+
+    #[test]
+    fn the_highlight_query_lists_each_capture_s_keys_once_and_sorted() {
+        let fields = serde_json::json!({"fields": [
+            {"name": "title", "capture": "tide.property"},
+            {"name": "a.b", "capture": "tide.property"},
+            {"name": "title", "capture": "tide.property"},
+            {"name": "when", "capture": "tide.keyword"},
+            {"name": "plain", "capture": "other"},
+            {"capture": "tide.property"},
+        ]});
+        let text = tide_highlights(&fields, "9.9.9");
+        assert!(text.contains("; (opentide 9.9.9). Runtime"), "{text}");
+        assert!(
+            text.contains(
+                "((block_mapping_pair\n  key: (_) @tide.property)\n \
+                 (#match? @tide.property \"^(a\\.b|title)$\"))\n"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("(#match? @tide.keyword \"^(when)$\"))\n"),
+            "{text}"
+        );
+        assert!(!text.contains("plain"), "{text}");
+        assert!(text.ends_with("\n(comment) @comment\n"), "{text}");
+
+        // No field catalog: no key list, the comment capture alone.
+        let empty = tide_highlights(&Value::Null, "9.9.9");
+        assert!(!empty.contains("block_mapping_pair"), "{empty}");
+        assert!(empty.ends_with("\n\n\n(comment) @comment\n"), "{empty:?}");
+    }
+
+    #[test]
+    fn the_router_picks_each_revision_by_its_metadata_schema() {
+        let identifiers = identifiers_for_families(&CORE_OBJECT_TYPES);
+        let router = serde_json::to_value(engine_router(&identifiers, "9.9.9")).unwrap();
+        assert_eq!(router["title"], "opentide Object Router");
+        assert_eq!(router["description"], "Generated from opentide 9.9.9.");
+        let branches = router["oneOf"].as_array().unwrap();
+        assert_eq!(branches.len(), identifiers.len());
+        let rule = branches
+            .iter()
+            .find(|branch| {
+                branch["if"]["properties"]["metadata"]["properties"]["schema"]["const"]
+                    == "rule::1.1"
+            })
+            .unwrap();
+        assert_eq!(rule["then"]["$ref"], "./rule.1.1.schema.json");
+        assert_eq!(
+            rule["if"]["required"],
+            serde_json::json!(["metadata"]),
+            "{rule}"
+        );
+        assert_eq!(
+            rule["if"]["properties"]["metadata"]["required"],
+            serde_json::json!(["schema"])
+        );
+    }
+
+    #[test]
+    fn the_engine_catalog_artifacts_carry_their_version_label() {
+        let artifacts = engine_catalog_artifacts("9.9.9").unwrap();
+        let paths: Vec<&str> = artifacts.iter().map(|(path, _)| path.as_str()).collect();
+        assert_eq!(
+            paths,
+            [
+                format!("{COMMITTED_CATALOGS}/fields.json").as_str(),
+                format!("{COMMITTED_CATALOGS}/deprecations.json").as_str(),
+                ENGINE_ROUTER,
+                TIDE_HIGHLIGHTS,
+            ]
+        );
+        let text = |path: &str| &artifacts.iter().find(|(p, _)| p == path).unwrap().1;
+        assert!(text(ENGINE_ROUTER).contains("Generated from opentide 9.9.9."));
+        assert!(text(TIDE_HIGHLIGHTS).contains("; (opentide 9.9.9)."));
+        // The key lists come from the field catalog: `metadata` is a key of
+        // every object.
+        assert!(
+            text(TIDE_HIGHLIGHTS).contains("|metadata|"),
+            "{}",
+            text(TIDE_HIGHLIGHTS)
+        );
+    }
+
+    /// An empty repository layout with the folders `codegen` writes into.
+    fn scratch_root() -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        for dir in [
+            PLATFORM_TEMPLATES,
+            EDITOR_SCHEMAS,
+            COMMITTED_CATALOGS,
+            "highlights/queries/tide",
+        ] {
+            std::fs::create_dir_all(root.path().join(dir)).unwrap();
+        }
+        root
+    }
+
+    #[test]
+    fn the_engine_catalog_is_written_then_checked_by_content_not_label() {
+        let root = scratch_root();
+        let root = root.path();
+        assert!(engine_catalog(root, false).unwrap().is_empty());
+        for (path, _) in engine_catalog_artifacts("0").unwrap() {
+            assert!(root.join(&path).is_file(), "{path}");
+        }
+        assert!(engine_catalog(root, true).unwrap().is_empty());
+
+        // Another version's label is no difference.
+        let router = root.join(ENGINE_ROUTER);
+        let text = std::fs::read_to_string(&router).unwrap();
+        let relabelled: String = text
+            .lines()
+            .map(|line| {
+                if line.contains("Generated from opentide ") {
+                    "  \"description\": \"Generated from opentide 0.0.1.\","
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_ne!(relabelled, text);
+        std::fs::write(&router, relabelled).unwrap();
+        assert!(engine_catalog(root, true).unwrap().is_empty());
+
+        // A changed key list is; a missing file is reported as missing. The
+        // language server's catalogs are catalog_parity's to compare.
+        std::fs::write(&router, text.replace("rule.1.1", "rule.9.9")).unwrap();
+        std::fs::remove_file(root.join(TIDE_HIGHLIGHTS)).unwrap();
+        std::fs::write(root.join(COMMITTED_CATALOGS).join("fields.json"), "{}").unwrap();
+        assert_eq!(
+            engine_catalog(root, true).unwrap(),
+            [
+                format!("{ENGINE_ROUTER}: differs from what the model generates"),
+                format!("{TIDE_HIGHLIGHTS}: missing"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_committed_artifacts_are_written_then_checked_byte_for_byte() {
+        let root = scratch_root();
+        let root = root.path();
+        assert!(committed(root, false).unwrap().is_empty());
+        assert!(committed(root, true).unwrap().is_empty());
+
+        let artifacts = committed_artifacts().unwrap();
+        let (template, _) = artifacts
+            .iter()
+            .find(|(path, _)| path.starts_with(PLATFORM_TEMPLATES))
+            .unwrap();
+        let (schema, _) = artifacts
+            .iter()
+            .find(|(path, _)| path.starts_with(EDITOR_SCHEMAS))
+            .unwrap();
+        std::fs::write(root.join(template), "changed\n").unwrap();
+        std::fs::remove_file(root.join(schema)).unwrap();
+        std::fs::write(
+            root.join(PLATFORM_TEMPLATES).join("retired.template.yaml"),
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            committed(root, true).unwrap(),
+            [
+                format!("{template}: differs from what the model generates"),
+                format!("{schema}: missing"),
+                format!(
+                    "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
+                ),
+            ]
+        );
+
+        // Without the folders there is nothing to check against.
+        let empty = tempfile::tempdir().unwrap();
+        assert!(committed(empty.path(), true).is_err());
+    }
+
+    /// `git` in `dir`, with a fixed identity and no maintenance.
+    fn git(dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .envs(crate::payloads::git::QUIET_GIT)
+            .env("GIT_AUTHOR_NAME", "golden")
+            .env("GIT_AUTHOR_EMAIL", "golden@example.invalid")
+            .env("GIT_COMMITTER_NAME", "golden")
+            .env("GIT_COMMITTER_EMAIL", "golden@example.invalid")
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    }
+
+    #[test]
+    fn the_label_is_the_checkout_s_release_else_the_workspace_s_version() {
+        let repo = tempfile::tempdir().unwrap();
+        let repo = repo.path();
+        git(repo, &["init", "--quiet"]);
+        git(repo, &["commit", "--quiet", "--allow-empty", "-m", "first"]);
+        // No release tag: git describe fails.
+        assert_eq!(label_version(repo), env!("CARGO_PKG_VERSION"));
+        git(repo, &["tag", "engine-v9.0.0"]);
+        assert_eq!(label_version(repo), env!("CARGO_PKG_VERSION"));
+        git(repo, &["tag", "v1.2.3"]);
+        assert_eq!(label_version(repo), "1.2.3");
+        git(
+            repo,
+            &["commit", "--quiet", "--allow-empty", "-m", "second"],
+        );
+        assert!(
+            label_version(repo).starts_with("1.2.3-1-g"),
+            "{}",
+            label_version(repo)
+        );
+    }
+
+    #[test]
+    fn codegen_refuses_an_unknown_option_and_prints_its_usage() {
+        assert_eq!(run(&["--help".to_owned()]).unwrap(), 0);
+        let error = run(&["--write".to_owned()]).unwrap_err().to_string();
+        assert!(error.starts_with("unknown option `--write`"), "{error}");
+    }
 }
