@@ -494,3 +494,177 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
     }
     found
 }
+
+/// `configurations.harfanglab.yara.signature`, from the rule's root.
+pub const SIGNATURE_PATH: [&str; 4] = ["configurations", "harfanglab", "yara", "signature"];
+
+/// Whether the rule `root` writes `configurations.harfanglab.yara.signature`
+/// as a YAML alias (`signature: *name`, `signature_is_aliased`): what the
+/// block deploys must be written in the block (`yara_signature_alias`). An
+/// alias shares its anchor's node, so its value starts where the anchor is,
+/// before the key that holds it.
+#[must_use]
+pub fn signature_is_aliased(root: &Node) -> bool {
+    aliased_signature(root).is_some()
+}
+
+/// The node a `signature` written as an alias names (its anchor's), when
+/// it is one ([`signature_is_aliased`]): the oracle places the finding there.
+#[must_use]
+pub fn aliased_signature(root: &Node) -> Option<&Node> {
+    let [configurations, harfanglab, yara, signature] = SIGNATURE_PATH;
+    let block = entry(root, configurations)
+        .and_then(|c| entry(c, harfanglab))
+        .and_then(|b| entry(b, yara))?;
+    let Value::Map(_) = &block.value else {
+        return None;
+    };
+    block
+        .entry(signature)
+        .filter(|entry| entry.value.start.index < entry.key.start.index)
+        .map(|entry| entry.value.as_ref())
+}
+
+/// The advisories `opentide lint` reports on a HarfangLab YARA rule
+/// (warnings, never a failure).
+pub const ADVISORY_CODES: [&str; 2] = ["harfanglab_yara_context", "yara_meta_missing"];
+
+/// `meta.context`, from the rule's root.
+pub const CONTEXT_PATH: [&str; 5] = ["configurations", "harfanglab", "yara", "meta", "context"];
+
+/// The contexts HarfangLab expects, as the advisories name them.
+fn contexts_text() -> String {
+    format!("a comma-joined list of {}", HARFANGLAB_CONTEXTS.join(", "))
+}
+
+fn meta_pattern() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    regex(&CELL, r"meta\s*:")
+}
+
+fn section_after_meta_pattern() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    regex(&CELL, r"(?:strings|condition)\s*:")
+}
+
+fn context_pattern() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    regex(&CELL, r"context\s*=\s*")
+}
+
+/// The first match of `pattern` in `code[from..to]` that starts a word.
+fn find_word(pattern: &Regex, code: &str, from: usize, to: usize) -> Option<(usize, usize)> {
+    pattern
+        .find_iter(&code[..to])
+        .filter(|m| m.start() >= from && starts_word(code, m.start()))
+        .map(|m| (m.start(), m.end()))
+        .next()
+}
+
+/// A HarfangLab profile warning on a signature, at a byte offset into it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YaraAdvisory {
+    /// `yara_meta_missing` or `harfanglab_yara_context`.
+    pub code: &'static str,
+    /// The message `opentide lint` prints.
+    pub message: String,
+    /// Where in the signature it is about.
+    pub offset: usize,
+    /// The YARA rule it is about.
+    pub rule: String,
+}
+
+/// `yara_meta_missing` and `harfanglab_yara_context` for each non-private
+/// rule of a signature (`advisories`).
+#[must_use]
+pub fn advisories(signature: &str) -> Vec<YaraAdvisory> {
+    let code = blank(signature);
+    let mut out = Vec::new();
+    for header in rule_headers(signature) {
+        if header.private {
+            continue;
+        }
+        let span = find_word(meta_pattern(), &code, header.start, header.end).map(|(_, end)| {
+            let after = find_word(section_after_meta_pattern(), &code, end, header.end);
+            (end, after.map_or(header.end, |(start, _)| start))
+        });
+        let found = span.and_then(|(from, to)| find_word(context_pattern(), &code, from, to));
+        let name = python_repr(&header.name);
+        let Some((key, start)) = found else {
+            out.push(YaraAdvisory {
+                code: "yara_meta_missing",
+                message: format!("YARA rule {name} has no meta context; HarfangLab expects one"),
+                offset: header.start,
+                rule: header.name.clone(),
+            });
+            continue;
+        };
+        let rest = &signature[start..];
+        let problem = if let Some(quoted) = rest.strip_prefix('"') {
+            let bytes = quoted.as_bytes();
+            let mut end = 0;
+            while end < bytes.len() && bytes[end] != b'"' && bytes[end] != b'\n' {
+                end += if bytes[end] == b'\\' { 2 } else { 1 };
+            }
+            let value = &quoted[..boundary(quoted, end.min(quoted.len()))];
+            (!context_accepted(value)).then(|| {
+                format!(
+                    "YARA rule {name} sets meta context {}; HarfangLab expects {}",
+                    python_repr(value),
+                    contexts_text()
+                )
+            })
+        } else {
+            let written = rest.split('\n').next().unwrap_or_default().trim();
+            Some(format!(
+                "YARA rule {name} sets meta context to {written}, not a string; HarfangLab \
+                 expects {}",
+                contexts_text()
+            ))
+        };
+        if let Some(message) = problem {
+            out.push(YaraAdvisory {
+                code: "harfanglab_yara_context",
+                message,
+                offset: key,
+                rule: header.name.clone(),
+            });
+        }
+    }
+    out
+}
+
+/// `(code, message)` for the `context` the decomposed form deploys
+/// (`decomposed_advisory`), or `None`. It applies on the value deploy writes
+/// (harfanglab-1.0 1.3); deploy writes no `context` for an empty list. A
+/// `context` that is not a list of strings is the schema check's finding.
+#[must_use]
+pub fn decomposed_advisory(contexts: &Node, os: Option<&str>) -> Option<(&'static str, String)> {
+    let Value::Seq(items) = &contexts.value else {
+        return None;
+    };
+    let contexts: Vec<String> = items
+        .iter()
+        .map(|item| item.value.as_str().map(str::to_owned))
+        .collect::<Option<_>>()?;
+    if contexts.is_empty() {
+        return Some((
+            "yara_meta_missing",
+            "meta.context is empty, so deploy writes the YARA rule with no meta context; \
+             HarfangLab expects one"
+                .to_owned(),
+        ));
+    }
+    let written = decomposed_context(&contexts, os.unwrap_or_default());
+    if context_accepted(&written) {
+        return None;
+    }
+    Some((
+        "harfanglab_yara_context",
+        format!(
+            "meta.context deploys as context {}; HarfangLab expects {}",
+            python_repr(&written),
+            contexts_text()
+        ),
+    ))
+}

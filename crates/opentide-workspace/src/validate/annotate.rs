@@ -335,7 +335,12 @@ fn annotate_one(
                 span = Some(place);
                 notes.extend(parse_notes);
             }
-        } else if !diagnostic.field_path.is_empty() {
+        } else if !diagnostic.field_path.is_empty()
+            // An aliased signature is placed where its text is written, the
+            // anchor's node (`yaml_line`, set by the check), as the oracle
+            // places it.
+            && diagnostic.code != "yara_signature_alias"
+        {
             let at_key = diagnostic.code == "schema_validation"
                 && diagnostic
                     .message
