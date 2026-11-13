@@ -108,6 +108,7 @@ jobs:
             [[ -n "${file}" ]] || continue
             while IFS= read -r pattern; do
               # Unquoted on the right: a pattern, not a string.
+              # shellcheck disable=SC2053
               if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
                 echo "Golden input changed: ${file}"
                 golden=true

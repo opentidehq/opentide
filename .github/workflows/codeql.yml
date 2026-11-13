@@ -37,25 +37,74 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The merge commit and its first parent, the base branch's tip.
+          fetch-depth: 2
           persist-credentials: false
 
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      # On a pull request, a language is analysed only when its files change:
+      # Python (*.py, pyproject.toml, uv.lock) or the workflows and actions.
+      # The job still starts, so its required check reports either way. Every
+      # push, the weekly run and a pull request labelled `full-ci` analyse both;
+      # so does a checkout that is not a pull request's merge commit (it fails
+      # open). Bash patterns, one a line; `*` matches `/` too.
+      - name: Whether this language's files changed
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          LANGUAGE: ${{ matrix.language }}
+          PYTHON_PATHS: |
+            *.py
+            pyproject.toml
+            uv.lock
+          ACTIONS_PATHS: |
+            .github/workflows/*
+            .github/actions/*
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" != "pull_request" || "${FULL_CI}" == true ]] \
+            || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            echo "analyse=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          patterns_var="${LANGUAGE^^}_PATHS"
+          patterns="${!patterns_var}"
+          value=false
+          while IFS= read -r file; do
+            [[ -n "${file}" ]] || continue
+            while IFS= read -r pattern; do
+              # Unquoted on the right: a pattern, not a string.
+              # shellcheck disable=SC2053
+              if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
+                echo "${LANGUAGE} input changed: ${file}"
+                value=true
+              fi
+            done <<<"${patterns}"
+          done <<<"$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          if [[ "${value}" != true ]]; then
+            echo "No ${LANGUAGE} file changed: the analysis runs on merge and weekly."
+          fi
+          echo "analyse=${value}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.scope.outputs.analyse == 'true'
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        if: matrix.language == 'python'
+        if: steps.scope.outputs.analyse == 'true' && matrix.language == 'python'
         with:
           enable-cache: true
 
       - name: Install Python dependencies
-        if: matrix.language == 'python'
+        if: steps.scope.outputs.analyse == 'true' && matrix.language == 'python'
         # The dependencies CodeQL models, not opentide itself: building the
         # project compiled the Rust engine for minutes, and CodeQL reads the
         # Python sources, never the extension (#841).
         run: uv sync --group dev --no-install-project
 
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - if: steps.scope.outputs.analyse == 'true'
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:${{ matrix.language }}

@@ -123,6 +123,8 @@ jobs:
           npm install --global npm@11.21.1
           version="$(npm --version)"
           echo "npm ${version}"
+          # JavaScript in single quotes: the shell expands nothing in it.
+          # shellcheck disable=SC2016
           node -e '
             const [major, minor, patch] = process.argv[1].split(".").map(Number);
             const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
@@ -141,6 +143,8 @@ jobs:
             echo "::group::${name}@${version}"
             # What npm would upload: the manifest, the README and the licence.
             (cd "${dir}" && npm pack --dry-run --json) > "${RUNNER_TEMP}/pack.json"
+            # JavaScript in single quotes: the shell expands nothing in it.
+            # shellcheck disable=SC2016
             node -e '
               const files = require(process.argv[1])[0].files.map((file) => file.path).sort();
               const expected = ["LICENSE", "README.md", "package.json"];
