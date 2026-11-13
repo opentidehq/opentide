@@ -68,6 +68,8 @@ LINT_CODES = {
     "filename": "filename_mismatch",
     "filename_pattern": "filename_pattern",
     "metadata": "metadata_recommended",
+    # The engine's code: the editor reports the same finding, and dedupes on it.
+    "recommended": "recommended_field_missing",
     "placeholder": "placeholder",
 }
 

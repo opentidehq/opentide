@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Upgrade
+
+- If your CI runs `opentide lint --strict` to require `author` or `organisation`, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. Notes no longer fail `--strict`.
+
+### Added
+
+- **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` now hide notes by default, count them on the outcome line, and suggest the same command with `--verbose`. `validate --watch` still shows every finding. `--json` and reports always include them. `--verbose` and `--quiet` cannot be combined ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check reports the fields the templates ask for and `validate` does not require, as the editor already did. It needs no analysis engine. Turn it off or raise it with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+
+### Changed
+
+- **`lint --strict` fails only on errors and warnings.** A missing `author` or `organisation` is a note, and no longer fails a CI gate. Raise a check's `severity` in `lint.toml` to gate on it ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+
 ## [0.28.0] — 2026-11-12
 
 Google Security Operations support: deploy YARA-L rules to Google SecOps, with their sections checked as you type.

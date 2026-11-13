@@ -36,8 +36,13 @@ from opentide.cli.output import (
     emit_success,
     emit_usage_error,
     text_mode,
+    with_hidden_notes_step,
 )
-from opentide.cli.ui.codeframe import render_diagnostics, render_diff, render_fixed
+from opentide.cli.ui.codeframe import (
+    render_diagnostics,
+    render_diff,
+    render_fixed,
+)
 from opentide.cli.ui.contract import (
     USAGE_ERROR,
     USAGE_EXIT_CODE,
@@ -201,7 +206,7 @@ def validate_group(
     if fixed and not cli.quiet:
         render_fixed(stdout, fixed.changes)
     render_warnings(get_console(), [f"Could not write the fix to {line}" for line in unwritten])
-    render_diagnostics(stdout, shown, mode=mode, quiet=cli.quiet)
+    hidden = render_diagnostics(stdout, shown, mode=mode, quiet=cli.quiet, notes=cli.verbose)
     line = outcome.message
     if not line.startswith("Validation passed, but"):
         done = plan if dry_run else fixed
@@ -214,6 +219,7 @@ def validate_group(
             outcome.summary, failed=not outcome.ok, seconds=elapsed_ms() / 1000, fix=phrase
         )
     publish_findings(cli, diagnostics, outcome, command="validate", outcome=line)
+    outcome = with_hidden_notes_step(outcome, hidden)
     # The code frames above show every warning; a warning line would repeat it.
     emit_result(cli, replace(outcome, outcome=line, warnings=()))
 
@@ -475,7 +481,13 @@ def _emit_offline_query_result(cli: CliContext, result: dict[str, Any]) -> None:
     diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
     outcome = CommandResult.from_payload(result, default_message="Queries valid")
     if not cli.json_output:
-        render_diagnostics(get_stdout_console(), diagnostics, mode=text_mode(cli), quiet=cli.quiet)
+        hidden = render_diagnostics(
+            get_stdout_console(),
+            diagnostics,
+            mode=text_mode(cli),
+            quiet=cli.quiet,
+            notes=cli.verbose,
+        )
         publish_findings(
             cli,
             diagnostics,
@@ -483,4 +495,5 @@ def _emit_offline_query_result(cli: CliContext, result: dict[str, Any]) -> None:
             command="validate query",
             outcome=outcome.outcome or outcome.message,
         )
+        outcome = with_hidden_notes_step(outcome, hidden)
     emit_result(cli, outcome)

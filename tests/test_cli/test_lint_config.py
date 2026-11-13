@@ -53,7 +53,13 @@ def test_check_names_match_the_cli_enum() -> None:
 def test_bundled_defaults_reproduce_unconfigured_lint(tmp_path: Path) -> None:
     config = load_lint_config(tmp_path)
     assert config.required_metadata == DEFAULT_REQUIRED_METADATA == ("author", "organisation")
-    assert config.enabled_checks() == ["filenames", "metadata", "placeholders", "queries"]
+    assert config.enabled_checks() == [
+        "filenames",
+        "metadata",
+        "recommended",
+        "placeholders",
+        "queries",
+    ]
     assert all(config.check(name).severity is None for name in CHECK_NAMES)
 
 
@@ -73,7 +79,7 @@ def test_empty_required_silences_the_metadata_check(tmp_path: Path) -> None:
     _write_lint_toml(tmp_path, "[metadata]\nrequired = []\n")
     result = run_lint(tmp_path)
     assert result["count"] == 0
-    assert result["checks"] == ["filenames", "metadata", "placeholders", "queries"]
+    assert result["checks"] == ["filenames", "metadata", "recommended", "placeholders", "queries"]
 
 
 def test_required_counts_empty_lists_and_strings_as_missing(tmp_path: Path) -> None:
@@ -88,7 +94,7 @@ def test_disabled_check_does_not_run(tmp_path: Path) -> None:
     _write_object(tmp_path, "Simulated Actor.yaml")
     _write_lint_toml(tmp_path, "[metadata]\nenabled = false\n")
     result = run_lint(tmp_path)
-    assert result["checks"] == ["filenames", "placeholders", "queries"]
+    assert result["checks"] == ["filenames", "recommended", "placeholders", "queries"]
     assert [item["check"] for item in result["findings"]] == ["filenames"]
 
 
@@ -105,7 +111,8 @@ def test_every_check_disabled_passes(tmp_path: Path) -> None:
     _write_lint_toml(
         tmp_path,
         "[metadata]\nenabled = false\n[filenames]\nenabled = false\n"
-        "[placeholders]\nenabled = false\n[queries]\nenabled = false\n",
+        "[placeholders]\nenabled = false\n[queries]\nenabled = false\n"
+        "[recommended]\nenabled = false\n",
     )
     result = run_lint(tmp_path, strict=True)
     assert result["checks"] == []
@@ -160,6 +167,8 @@ def test_metadata_keys_cover_every_schema() -> None:
         ),
         ({"metadata": {"style": "name"}}, r"\[metadata\]: unknown key\(s\) 'style'"),
         ({"queries": {"pattern": "x"}}, r"\[queries\]: unknown key\(s\) 'pattern'"),
+        ({"recommended": {"required": []}}, r"\[recommended\]: unknown key\(s\) 'required'"),
+        ({"recommended": {"severity": "loud"}}, r"\[recommended\]\.severity must be one of"),
         ({"filenames": True}, r"\[filenames\] must be a table"),
         (["metadata"], r"must hold tables"),
     ],
@@ -199,7 +208,7 @@ def test_required_skips_keys_the_object_schema_cannot_hold(tmp_path: Path) -> No
         encoding="utf-8",
     )
     _write_lint_toml(tmp_path, '[metadata]\nrequired = ["author", "reviewed"]\n')
-    findings = run_lint(tmp_path)["findings"]
+    findings = run_lint(tmp_path, checks=[LintCheck.metadata])["findings"]
     assert [(item["path"], item["message"]) for item in findings] == [
         ("objects/rules/simulated-rule.yaml", "Recommended metadata missing: reviewed")
     ]
@@ -452,7 +461,12 @@ def test_bad_style_or_pattern_fails_the_command_naming_the_key(tmp_path: Path) -
 def test_check_filenames_runs_a_disabled_check_with_its_style(tmp_path: Path) -> None:
     _write_object(tmp_path, "some-rule.yaml", _BRACKETED)
     _filenames_toml(tmp_path, 'enabled = false\nstyle = "name"')
-    assert run_lint(tmp_path)["checks"] == ["metadata", "placeholders", "queries"]
+    assert run_lint(tmp_path)["checks"] == [
+        "metadata",
+        "recommended",
+        "placeholders",
+        "queries",
+    ]
     (finding,) = run_lint(tmp_path, checks=[LintCheck.filenames])["findings"]
     assert finding["expected"] == f"objects/threats/{_BRACKETED_STEM}.yaml"
 
@@ -606,3 +620,10 @@ def test_an_unknown_kind_table_fails_the_command(tmp_path: Path) -> None:
     assert result.exit_code == 2, result.output
     message = json.loads(result.stdout)["message"]
     assert "lint.toml [filenames.hunts]: unknown object kind(s) 'hunts'" in message
+
+
+def test_recommended_is_a_check_lint_toml_configures() -> None:
+    config = parse_lint_config({"recommended": {"enabled": False}})
+    assert "recommended" not in config.enabled_checks()
+    config = parse_lint_config({"recommended": {"severity": "warning"}})
+    assert config.check("recommended").severity == "warning"
