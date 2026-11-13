@@ -525,22 +525,34 @@ pub const MCP_HOSTS: [(&str, &str, &str); 4] = [
     (
         "vscode",
         ".vscode/mcp.json",
-        include_str!("../../../../../src/opentide/data/setup/mcp/vscode.json"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/setup/mcp/vscode.json"
+        )),
     ),
     (
         "cursor",
         ".cursor/mcp.json",
-        include_str!("../../../../../src/opentide/data/setup/mcp/cursor.json"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/setup/mcp/cursor.json"
+        )),
     ),
     (
         "claude-code",
         ".mcp.json",
-        include_str!("../../../../../src/opentide/data/setup/mcp/claude-code.json"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/setup/mcp/claude-code.json"
+        )),
     ),
     (
         "generic",
         "opentide.mcp.json",
-        include_str!("../../../../../src/opentide/data/setup/mcp/generic.json"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/setup/mcp/generic.json"
+        )),
     ),
 ];
 

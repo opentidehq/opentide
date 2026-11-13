@@ -32,4 +32,17 @@ $ xtask vocab sentinel-attack --stix-dir
 ? 2
 error: --stix-dir needs a directory
 
+$ xtask vocab ingest --check --apply
+? 2
+error: use either --check or --apply, not both
+
+$ xtask vocab ingest --misp-url
+? 2
+error: --misp-url needs a value
+
+$ xtask vocab ingest --bogus
+? 2
+error: unknown option `--bogus`
+...
+
 ```

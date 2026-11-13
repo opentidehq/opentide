@@ -19,7 +19,8 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REPOSITORY = "opentidehq/opentide";
-const TAG = /^engine-v(\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?)$/;
+// The release train's tags (vX.Y.Z, vX.Y.Z-rc.N); the engine's own engine-v* series ended there.
+const TAG = /^v(\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?)$/;
 
 function fail(message) {
   console.error(`check-vscode-extension: ${message}`);
@@ -45,7 +46,7 @@ function sums(dir) {
 /** The pins.json sections for `tag`'s release of this repository. */
 export function pinsFor(tag, digests) {
   const match = TAG.exec(tag);
-  if (!match) fail(`${tag} is not an engine tag (engine-vX.Y.Z or engine-vX.Y.Z-rc.N)`);
+  if (!match) fail(`${tag} is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)`);
   const version = match[1];
   const base = `https://github.com/${REPOSITORY}/releases/download/${tag}`;
   const pin = (name) => {

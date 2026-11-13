@@ -7,7 +7,7 @@
 //! look-around or back-reference: such a pattern is refused with the crate's
 //! own reason. That is an intended difference, recorded as
 //! `lint-pattern-regex` in `tests/oracle/config_cases.toml` and in the
-//! CHANGELOG entry "Configuration files are read by the Rust engine"
+//! CHANGELOG entry "Configuration files are read as TOML 1.0"
 //! (`tests/golden/APPROVED_DIFFS.toml` takes it when a command that reads
 //! `lint.toml` runs in Rust).
 

@@ -100,7 +100,7 @@ fn no_trigger_shows_its_secret_read() {
         {
             acme.value = std::sync::Arc::new(document);
         }
-        let view = load(Some(dir.path()), &merged, &[], &env(&[]));
+        let view = load(Some(dir.path()), &merged, &[], &[], &env(&[]));
         let item = view.file("platforms/acme.toml").unwrap();
         assert!(item.raw.is_some() && item.raw_problem.is_none(), "{name}");
         assert!(!format!("{view:?}").contains(SECRET), "{name}");

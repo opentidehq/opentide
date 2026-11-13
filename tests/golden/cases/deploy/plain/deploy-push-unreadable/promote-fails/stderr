@@ -1,0 +1,9 @@
+✗ status promotion · 1 rule · <SECONDS>
+error: <WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses: while parsing a block mapping
+  in "<unicode string>", line 13, column 3:
+      sentinel: {status: LIVE}}
+      ^
+expected <block end>, but found '}'
+  in "<unicode string>", line 13, column 27:
+      sentinel: {status: LIVE}}
+                              ^

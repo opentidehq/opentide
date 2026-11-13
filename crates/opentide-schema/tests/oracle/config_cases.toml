@@ -27,25 +27,25 @@
 id = "toml-parse-message"
 reason = "A configuration file that is not TOML is refused by the toml_edit crate, which says what is wrong (`expected `=``, `invalid table header`) where the oracle said `TOMLDecodeError` or tomllib's own words; the position is the crate's."
 fields = ["message"]
-changelog = "**Configuration files are read by the Rust engine**"
+changelog = "**Configuration files are read as TOML 1.0**"
 
 [[difference]]
 id = "lint-pattern-regex"
 reason = "A `[filenames]` `pattern` is compiled by the Rust `regex` crate, which has no look-around or back-reference: such a pattern is refused with the crate's reason, where Python's `re` compiled it; an invalid pattern's reason is the crate's. A refused pattern's outcome is an error where the oracle's was the settings."
 fields = ["error", "checks", "filenames", "required_metadata"]
-changelog = "**Configuration files are read by the Rust engine**"
+changelog = "**Configuration files are read as TOML 1.0**"
 
 [[difference]]
 id = "toml-integer-range"
 reason = "TOML 1.0 integers are 64-bit: toml_edit refuses an integer outside the i64 range (`number too large to fit in target type`), so the file is a `config_parse` error and resolution stops, where tomllib read it as a Python int."
 fields = ["resolved", "issues", "error"]
-changelog = "**Configuration files are read by the Rust engine**"
+changelog = "**Configuration files are read as TOML 1.0**"
 
 [[difference]]
 id = "toml-datetime-text"
 reason = "A TOML date-time is kept as toml_datetime writes it, losslessly: fractional seconds as written (`.5`, nanoseconds), a `-00:00` offset as `+00:00`. The oracle rounded to microseconds, padded the fraction to six digits and wrote UTC as `Z`; a message quotes the value as a string (`'1979-05-27T07:32:00Z'`) where the oracle wrote `datetime.datetime(...)`."
 fields = ["dt_fraction", "dt_offset", "time_nanos", "error", "message"]
-changelog = "**Configuration files are read by the Rust engine**"
+changelog = "**Configuration files are read as TOML 1.0**"
 
 # --- routing ---------------------------------------------------------------------------
 

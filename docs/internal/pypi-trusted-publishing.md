@@ -1,119 +1,67 @@
 ---
 title: PyPI trusted publishing
-description: First publish of opentide 0.1.0 via OIDC — no API tokens.
+description: How the release train publishes opentide to PyPI with OIDC, with no API token, a release candidate as a pre-release, and what to do when a publish fails.
 ---
 
 # PyPI trusted publishing
 
-[`.github/workflows/publish-pypi.yml`](../../.github/workflows/publish-pypi.yml) releases from **Run workflow** on `development`, and publishes on a **GitHub Release** (`release: published`), using [OIDC trusted publishing](https://docs.pypi.org/trusted-publishers/). There is no PyPI token in GitHub secrets.
+[`.github/workflows/publish.yml`](../../.github/workflows/publish.yml), the release train (UC-5.5, [#840](https://github.com/opentidehq/opentide/issues/840)), publishes opentide's wheels and sdist to PyPI with [OIDC trusted publishing](https://docs.pypi.org/trusted-publishers/), with the crates, the npm packages and the GitHub Release of the same version. There is no PyPI token in GitHub secrets. It runs from **Run workflow** on `development` (a release candidate also from `integration/unified-core`): a pushed `v*` tag or a GitHub Release made by hand publishes nothing. [Publishing names and trusted publishers](./publishing.md) covers every registry; this page is PyPI's part.
 
-Version comes from hatch-vcs. Tag **`v0.1.0`** (or a later `v*`) on the commit you release. A Release without a matching tag publishes a `0.1.dev…` version.
+The Python version comes from hatch-vcs (the `vX.Y.Z` tag). Before the tag exists, the workflow builds with `SETUPTOOLS_SCM_PRETEND_VERSION` set to the version the release guard approved, the newest dated `CHANGELOG.md` heading (`scripts/build/release.py version`), so a wheel never carries a `0.1.dev…` version.
 
-Before tagging, `uv build` must produce both an sdist and a wheel. Overlapping `force-include` paths with `packages` will fail the wheel after hatchling 1.30 (duplicate archive members).
+`uv build` must produce both an sdist and a wheel. Overlapping `force-include` paths with `packages` fail the wheel after hatchling 1.30 (duplicate archive members).
 
-A **pending publisher does not reserve the name** until the first successful upload. Configure it and cut the Release the same day.
+## The publishers
 
-## Pending publisher (first upload only)
+| Index | Project | Publisher | Environment | Used by |
+|-------|---------|-----------|-------------|---------|
+| pypi.org | `opentide` (exists) | `opentidehq` / `opentide` / `publish.yml` | `pypi` | a release, and a release candidate (`release_candidate: N`) as a pre-release |
 
-The project does not exist on PyPI yet. Do not register it by uploading a wheel by hand.
+There is no TestPyPI publisher. Until UC-5.5, `publish-pypi.yml` published with environment `pypi`; its publisher is removed after the first release from `publish.yml`. The step that adds the new one is [step 10 of the maintainer steps](./publishing.md#10-at-uc-55-publishyml). The GitHub environment `pypi` must allow the branches the workflow runs from (**Settings**, **Environments**): `development`, and `integration/unified-core` while release candidates run from there.
 
-1. Log in at [pypi.org](https://pypi.org) with **2FA**.
-2. Open [Account → Publishing](https://pypi.org/manage/account/publishing/).
-3. Add a **pending GitHub publisher** with these exact fields:
+GitHub sends `repository_owner: opentidehq` (lowercase) and the job's environment in the OIDC claims; PyPI compares them, and the workflow file name, exactly.
 
-   - PyPI project name: `opentide`
-   - Owner: `opentidehq` (GitHub **login**, lowercase — not the display name `opentidehq`)
-   - Repository name: `opentide`
-   - Workflow name: `publish-pypi.yml` (filename only, no `.github/workflows/`)
-   - Environment name: `pypi`
+## A release
 
-4. The GitHub Environment `pypi` must exist on `opentidehq/opentide` (Settings → Environments). Optional: required reviewers; optional URL `https://pypi.org/p/opentide`.
-5. Make `opentidehq/opentide` **public** before the Release so PyPI source links resolve.
-6. Cut the Release (creates tag `v0.1.0` at `--target`). The tag **must** sit on the commit that contains `CHANGELOG.md` and `docs/usage/releases.md`, or the wheel’s long description and docs will lag the GitHub notes:
+Once the notes PR has merged and the crates are at the version (`scripts/engine/release.py lockstep X.Y.Z`), run **Publish** on `development` with no inputs: Actions → Publish → Run workflow, or `workflow_dispatch` through the API (an agent's GitHub tools run it with workflow `publish.yml`, ref `development`, no inputs). The steps are in [release-management](../../.agents/skills/release-management/SKILL.md); for PyPI:
 
-```bash
-gh release create v0.1.0 \
-  --repo opentidehq/opentide \
-  --target development \
-  --title "0.1.0" \
-  --notes-file .github/release-notes/v0.1.0.md
-```
+1. The guard reads the version and runs `scripts/build/release.py check vX.Y.Z`: the changelog section and links, `.github/release-notes/vX.Y.Z.md`, the top of `docs/usage/releases.md` and the README pin. It refuses a version that is already tagged or released, and a run from another branch.
+2. The wheels (cibuildwheel, one `cp310-abi3` wheel per platform) and the sdist build from the run's commit; each wheel is installed and run, and a smoke job installs one with `pip` on Linux, macOS and Windows and builds the sdist from source.
+3. The **GitHub Release** job creates the tag `vX.Y.Z` on that commit, with the notes file as its body, marked Latest.
+4. **Publish to PyPI** uploads with `skip-existing`, after refusing files of any other version than the guard approved or a missing platform, then waits until PyPI lists every file. A release notifies the website.
 
-7. Watch [Publish to PyPI](https://github.com/opentidehq/opentide/actions/workflows/publish-pypi.yml). Approve the environment if reviewers are required.
-8. Confirm:
+A **release candidate** (`release_candidate: N`, for the Rust-core transition; [Release candidates](./publishing.md#release-candidates-the-rust-core-transition)) does the same for `vX.Y.Z-rc.N`, from `integration/unified-core` or `development`, with the same environment `pypi`: the files, versioned `X.Y.ZrcN`, go to pypi.org as a pre-release, which pip and uv install only when asked (`pip install --pre opentide`, `uv pip install --prerelease=allow opentide`) or pinned exactly, and the last job installs `opentide==X.Y.ZrcN` from there. It does not notify the website.
 
-```bash
-pip index versions opentide
-pip install opentide==0.1.0
-python -c "import opentide; print(opentide.__version__)"
-```
+**CDN delay:** for about 10–15 minutes after a successful upload, PyPI's CDN can serve stale data. `/pypi/opentide/json` is cached for 900 s and `/simple/opentide/` for 600 s. During that window `pip install opentide==X.Y.Z` can report "No matching distribution", or `https://pypi.org/pypi/opentide/X.Y.Z/json` can list only some of the files. Wait, and install with `uv pip install --no-cache --index-url https://pypi.org/simple`. Do not retag or re-publish.
 
-Expect `0.1.0`. Then add the other maintainer under PyPI Project → Settings → Collaborators.
-
-The PyPI account that saved the pending publisher **owns** the project.
-
-## Later releases
-
-After the first upload, the pending publisher becomes a normal publisher. Do not add a PyPI API token.
-
-### Run workflow on `development` (the default, and the cloud path)
-
-Once the notes PR has merged, run **Publish to PyPI** on `development` with `checkout_ref` empty: Actions → Publish to PyPI → Run workflow, or `workflow_dispatch` through the API (an agent's GitHub tools run it with workflow `publish-pypi.yml`, ref `development`, no inputs). It is language-server's Release button:
-
-1. The guard reads the version from the newest dated `CHANGELOG.md` heading and runs `scripts/build/release.py check vX.Y.Z`: the changelog section and links, `.github/release-notes/vX.Y.Z.md`, the top of `docs/usage/releases.md` and the README pin. It refuses a version that is already tagged or released, and a run from another branch.
-2. The wheels and sdist build from the run's commit with the version from the changelog (`SETUPTOOLS_SCM_PRETEND_VERSION`).
-3. The **GitHub Release** job creates tag `vX.Y.Z` on that commit, with the notes file as its body, marked Latest.
-4. **Publish to PyPI** uploads, and refuses files of any other version than the guard approved.
-
-The Release is created with `GITHUB_TOKEN`, which starts no `release: published` run, so the version is published once. The trusted publisher does not change: same workflow file, same `pypi` environment. If the publish fails after the Release exists, retry with `checkout_ref=vX.Y.Z` (Run workflow again, now naming the tag); do not delete the tag.
-
-### A GitHub Release published by hand
-
-Publishing a Release still publishes its tag, as before (example: **0.1.8**):
-
-```bash
-gh release create v0.1.8 \
-  --repo opentidehq/opentide \
-  --target development \
-  --title "0.1.8" \
-  --notes-file .github/release-notes/v0.1.8.md
-```
-
-The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.8.md`. Do not tag a feature branch.
-
-Do not pass `--latest=false` for the newest version; the default marks it Latest (check with `gh release list --repo opentidehq/opentide --limit 3`).
-
-**CDN delay:** for about 10–15 minutes after a successful upload, PyPI's CDN can serve stale data. `/pypi/opentide/json` is cached for 900 s and `/simple/opentide/` for 600 s. During that window `pip install opentide==0.1.8` can report "No matching distribution", or `https://pypi.org/pypi/opentide/0.1.8/json` can list only one of the two files. Wait, and install with `uv pip install --no-cache --index-url https://pypi.org/simple`. Do not retag or re-publish.
-
-After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`opentidehq/website`](https://github.com/opentidehq/website) so docs, changelog pages, and specs rebuild immediately:
+After a successful upload, the PyPI job dispatches `opentide-released` to [`opentidehq/website`](https://github.com/opentidehq/website) so docs, changelog pages, and specs rebuild immediately:
 
 ```bash
 gh api repos/opentidehq/website/dispatches -f event_type=opentide-released
 ```
 
-That call mints a token from `GH_APP_ID` / `GH_APP_KEY`, the secret names vocab-upstream also reads (set them on the `pypi` environment to use a separate App for publishing). The App must be installed on `opentidehq/website` with **contents: write**, which `repository_dispatch` requires: an App with only `contents: read` mints a token and the dispatch then returns 403. If the secrets are missing, token minting fails, or the dispatch fails, publish still succeeds and the run ends with a **Website not notified** warning that names the cause. The website's hourly cron picks the docs change up; run the command above to rebuild sooner. The landing-page version number is fetched live from PyPI and does not wait on a rebuild.
-
-Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https://test.pypi.org/manage/account/publishing/) with the same GitHub fields (and a `testpypi` environment if you add one). Production `publish-pypi.yml` targets pypi.org only.
+That call mints a token from `GH_APP_ID` / `GH_APP_KEY`, the secret names vocab-upstream also reads (set them on the `pypi` environment to use a separate App for publishing). The App must be installed on `opentidehq/website` with **contents: write**, which `repository_dispatch` requires: an App with only `contents: read` mints a token and the dispatch then returns 403. If the secrets are missing, token minting fails, or the dispatch fails, publish still succeeds and the job ends with a **Website not notified** warning that names the cause. The website's hourly cron picks the docs change up; run the command above to rebuild sooner.
 
 ## If publish fails
 
-- Workflow filename on PyPI must be `publish-pypi.yml`; environment must be `pypi` (lowercase).
-- Job needs `id-token: write` and `contents: read`.
-- `0.1.dev…` means the tag was not on the checked-out commit (`fetch-depth: 0` and Release target).
-- 403 / `invalid-publisher`: pending publisher missing, or fields do not match the OIDC claims. GitHub sends `repository_owner: opentidehq` (lowercase) and `environment: pypi`. Copy those from the failed Publish to PyPI log, save the pending publisher again, then re-run the workflow (do not retag).
-- `'2.5' is not a valid metadata version`: hatchling defaulted to Core Metadata 2.5. This repo pins `core-metadata-version = "2.4"` on sdist/wheel. Confirm `uvx twine check dist/*` is clean before tagging.
-- `ModuleNotFoundError: No module named 'hatch'` during **Build package**: `hatch build` isolated envs (hatch 1.18.1 / hatchling 1.32.1) import `hatch` from `BinaryBuilder`. Publish uses `uv build` like CI. A `v*` tag cut before that change still runs the old workflow on `release: published` (converting the Release to draft and back does not pick up `development`). From `development`, re-run without moving the tag:
-  ```bash
-  gh api repos/opentidehq/opentide/dispatches \
-    -f event_type=publish-pypi \
-    -f client_payload[checkout_ref]=v0.x.y
-  ```
-  The Actions UI `workflow_dispatch` input `checkout_ref` is the same path, and the one an agent without `gh` uses (workflow `publish-pypi.yml`, ref `development`, input `checkout_ref=v0.x.y`). Do not retag.
-- PyPI 5xx (`502 Bad Gateway`) or a partial upload, where PyPI kept the wheel but not the sdist (0.4.0): re-run with the same `repository_dispatch` command. The publish step sets `skip-existing: true`, so the retry uploads only the files PyPI is missing instead of failing with `400 File already exists`. The **Verify PyPI lists every built file** step then fails the job unless `https://pypi.org/pypi/opentide/<version>/json` lists both the wheel and the sdist, and its log prints the retry command. `gh run rerun` does not work with the GitHub App token (403, no `actions:write`).
-- Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.
+Never retag, and never delete a published GitHub Release. Resume the release: run **Publish** on `development` with `checkout_ref=vX.Y.Z` (Actions UI, or `workflow_dispatch` through the API), or, with a GitHub App token that lacks `actions: write`, dispatch:
+
+```bash
+gh api repos/opentidehq/opentide/dispatches \
+  -f event_type=publish \
+  -f client_payload[checkout_ref]=v0.x.y
+```
+
+It builds from the tag, uploads nothing to the existing GitHub Release, verifies its assets, and publishes only what each registry lacks: `skip-existing` uploads only the files PyPI is missing.
+
+- 403 / `invalid-publisher`: the publisher is missing, or its fields do not match the OIDC claims (workflow `publish.yml`, environment `pypi`, owner `opentidehq`). Copy the claims from the failed job's log, fix the publisher, then resume.
+- `'2.5' is not a valid metadata version`: hatchling defaulted to Core Metadata 2.5. This repo pins `core-metadata-version = "2.4"` on sdist/wheel. Confirm `uvx twine check dist/*` is clean.
+- `ModuleNotFoundError: No module named 'hatch'`: `hatch build` isolated envs (hatch 1.18.1 / hatchling 1.32.1) import `hatch` from `BinaryBuilder`. The workflow builds with cibuildwheel and `uv build`, like CI.
+- PyPI 5xx (`502 Bad Gateway`) or a partial upload, where PyPI kept the wheel but not the sdist (0.4.0): resume as above. The **Verify PyPI lists every built file** step fails the job unless the index lists every wheel and the sdist, and its log prints the resume command.
+- A smoke test failed: nothing was tagged or published. Fix it on `development` and run again.
 
 ## The analysis engine
 
-There is one project on PyPI, `opentide`, and one trusted publisher. The engine (`bindings/python/` and the engine crates in `crates/`, one Cargo workspace, Rust) is compiled into the package (`hatch_build.py`), so the workflow publishes one `cp310-abi3` wheel per platform, built with cibuildwheel (Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64), and an sdist that carries the workspace's manifests, sources and embedded data. It refuses to publish when a platform's wheel is missing or a wheel is not `cp310-abi3`.
+There is one project on PyPI, `opentide`. The engine (`bindings/python/` and the engine crates in `crates/`, one Cargo workspace, Rust) is compiled into the package (`hatch_build.py`), so the workflow publishes one `cp310-abi3` wheel per platform, built with cibuildwheel (Linux manylinux_2_28 on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64), and an sdist that carries the workspace's manifests, sources and embedded data. It refuses to publish when a platform's wheel is missing, a wheel is not `cp310-abi3`, or a musllinux wheel is there. musl (Alpine) and free-threaded CPython (3.14t) have no wheel: they build from the sdist, which needs a Rust toolchain ([The release train](./publishing.md#the-release-train)).
 
-The engine builds from this repository by path, so a release needs no engine published first.
+The engine builds from this repository by path, so a release needs no engine published first; its crates go to crates.io in the same run, at the same version.

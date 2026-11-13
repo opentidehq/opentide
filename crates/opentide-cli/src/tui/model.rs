@@ -681,6 +681,7 @@ pub fn load(launch: &Launch) -> Result<Catalogue, String> {
     let configuration = super::configuration::load(
         Some(&root),
         &workspace.configuration().resolved.tree,
+        &workspace.configuration().folders,
         &rules,
         &launch.env,
     );

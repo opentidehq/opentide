@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """CycloneDX SBOMs for what opentide distributes (#843).
 
-    sbom.py generate OUT_DIR [--wheel-version V]   write every SBOM into OUT_DIR
+    sbom.py generate OUT_DIR [--wheel-version V] [--npm-version V]
+                                    write every SBOM into OUT_DIR
     sbom.py validate FILE...        each FILE is a valid CycloneDX 1.5 SBOM
 
 `generate` writes one SBOM per artifact, CycloneDX 1.5 JSON:
@@ -13,6 +14,11 @@
   (the crate, every target).
 - `opentide-wasm.cdx.json`: the browser build (the `opentide-wasm-web` zip):
   the crate for wasm32-unknown-unknown, and the wasi-libc it links.
+- `opentide.cdx.json`: the `opentide` binaries and crate, as `cargo install
+  opentide --features cli` builds them (the facade with its `cli` feature,
+  every target).
+- `opentide-node.cdx.json`: the npm package `@opentide/opentide` (`npm sbom`),
+  with the Rust crates its native packages compile in (the facade with `cli`).
 - `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json`: the npm
   packages (`npm sbom`, without dev dependencies).
 
@@ -57,7 +63,14 @@ RUST_SBOMS = (
     ("crates/opentide-wasm", "wasm32-unknown-unknown", "opentide-wasm.cdx.json"),
 )
 NATIVE = "bindings__python"
+# The facade as its binaries and npm packages build it: with `cli`, which a run
+# over the whole workspace (default features) leaves out.
+FACADE = "crates/opentide"
+FACADE_FEATURES = "cli"
 NPM_PACKAGES = ("lsp-client", "lsp-worker")
+# @opentide/opentide (bindings/node): its own lock, and the crates its native
+# packages compile in.
+NODE_PACKAGE = "bindings/node"
 
 Bom = dict[str, Any]
 
@@ -161,6 +174,26 @@ def merge_wheel(python: Bom, native: Bom, version: str | None = None) -> Bom:
     return merged
 
 
+def add_native(package: Bom, native: Bom) -> Bom:
+    """An npm package's SBOM (``npm sbom``) with the Rust crates its native
+    packages compile in (``native``, from cargo-cyclonedx) as a dependency of
+    the package, as the wheel lists those of ``opentide._native``."""
+    merged = json.loads(json.dumps(package))
+    native_root = dict(native["metadata"]["component"])
+    native_root["type"] = "library"
+    merged.setdefault("components", []).append(native_root)
+    merged["components"].extend(native.get("components", []))
+    root = merged["metadata"]["component"]["bom-ref"]
+    dependencies = merged.setdefault("dependencies", [])
+    entry = next((d for d in dependencies if d.get("ref") == root), None)
+    if entry is None:
+        entry = {"ref": root, "dependsOn": []}
+        dependencies.append(entry)
+    entry.setdefault("dependsOn", []).append(native_root["bom-ref"])
+    dependencies.extend(native.get("dependencies", []))
+    return merged
+
+
 def reproducible(bom: Bom, epoch: str | None) -> Bom:
     """``bom`` with no random serial number and, when ``epoch`` (the value of
     ``SOURCE_DATE_EPOCH``) is set, its timestamp at that time: cargo-cyclonedx
@@ -209,31 +242,40 @@ def depends_on_something(bom: Bom) -> bool:
     return bool(bom.get("components")) and entry is not None and bool(entry.get("dependsOn"))
 
 
-def _cargo_sboms(target: str, scratch: Path) -> Path:
-    """Run cargo-cyclonedx for every workspace crate for ``target``; the
-    directory its files were moved into, one per crate (``<dir>.json``)."""
-    name = f"opentide-sbom-{target}"
-    _run(
-        [
-            "cargo",
-            "cyclonedx",
-            "--manifest-path",
-            str(ROOT / "Cargo.toml"),
-            "--format",
-            "json",
-            "--spec-version",
-            SPEC_VERSION,
-            "--target",
-            target,
-            "--no-build-deps",
-            "--override-filename",
-            name,
-            "-q",
-        ]
-    )
-    out = scratch / target
+def _cargo_sboms(
+    target: str, scratch: Path, manifest: str = "Cargo.toml", features: str | None = None
+) -> Path:
+    """Run cargo-cyclonedx for every workspace crate for ``target`` (with
+    ``features`` of the package at ``manifest``); the directory its files were
+    moved into, one per crate (``<dir>.json``)."""
+    label = f"{target}-{features}" if features else target
+    name = f"opentide-sbom-{label}"
+    command = [
+        "cargo",
+        "cyclonedx",
+        "--manifest-path",
+        str(ROOT / manifest),
+        "--format",
+        "json",
+        "--spec-version",
+        SPEC_VERSION,
+        "--target",
+        target,
+        "--no-build-deps",
+        "--override-filename",
+        name,
+        "-q",
+    ]
+    if features:
+        command[2:2] = ["--features", features]
+    _run(command)
+    out = scratch / label
     out.mkdir(parents=True)
-    members = [ROOT / "bindings" / "python", ROOT / "xtask", *sorted(ROOT.glob("crates/*"))]
+    members = [
+        ROOT / "xtask",
+        *sorted(ROOT.glob("crates/*")),
+        *sorted(ROOT.glob("bindings/*")),
+    ]
     for path in (member / f"{name}.json" for member in members):
         if not path.is_file():
             continue
@@ -256,8 +298,9 @@ def _write(path: Path, bom: Bom) -> None:
     path.write_text(json.dumps(bom, indent=2) + "\n", encoding="utf-8")
 
 
-def generate(out: Path, version: str | None = None) -> list[Path]:
-    """Write every SBOM into ``out``; their paths."""
+def generate(out: Path, version: str | None = None, npm_version: str | None = None) -> list[Path]:
+    """Write every SBOM into ``out``; their paths. ``version`` is the wheel's,
+    ``npm_version`` @opentide/opentide's (the tree holds a placeholder)."""
     out.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -273,6 +316,11 @@ def generate(out: Path, version: str | None = None) -> list[Path]:
             _check_dependencies(name, bom)
             _write(out / name, bom)
             written.append(out / name)
+        cli = _cargo_sboms("all", scratch, f"{FACADE}/Cargo.toml", FACADE_FEATURES)
+        facade = _read(cli / f"{FACADE.replace('/', '__')}.json")
+        _check_dependencies("opentide.cdx.json", facade)
+        _write(out / "opentide.cdx.json", facade)
+        written.append(out / "opentide.cdx.json")
         python = json.loads(
             _run(
                 [
@@ -314,6 +362,30 @@ def generate(out: Path, version: str | None = None) -> list[Path]:
         path = out / f"opentide-{package}.cdx.json"
         _write(path, json.loads(text))
         written.append(path)
+    node = json.loads(
+        _run(
+            [
+                "npm",
+                "sbom",
+                "--sbom-format",
+                "cyclonedx",
+                "--omit",
+                "dev",
+                "--package-lock-only",
+            ],
+            cwd=ROOT / NODE_PACKAGE,
+        )
+    )
+    # `npm sbom` names the subject after its folder (`node`).
+    subject = node["metadata"]["component"]
+    subject["group"], subject["name"] = "@opentide", "opentide"
+    if npm_version:
+        subject["version"] = npm_version
+        subject["purl"] = f"pkg:npm/%40opentide/opentide@{npm_version}"
+    node = add_native(node, facade)
+    _check_dependencies("opentide-node.cdx.json", node)
+    _write(out / "opentide-node.cdx.json", node)
+    written.append(out / "opentide-node.cdx.json")
     return written
 
 
@@ -364,11 +436,14 @@ def main(argv: list[str] | None = None) -> int:
     gen.add_argument(
         "--wheel-version", help="the wheel's version (default: src/opentide/_version.py)"
     )
+    gen.add_argument(
+        "--npm-version", help="@opentide/opentide's version (default: its package.json's)"
+    )
     val = sub.add_parser("validate", help="check SBOMs against CycloneDX 1.5")
     val.add_argument("files", type=Path, nargs="+")
     args = parser.parse_args(argv)
     if args.command == "generate":
-        for path in generate(args.out, args.wheel_version):
+        for path in generate(args.out, args.wheel_version, args.npm_version):
             print(path)
         return 0
     return validate(args.files)

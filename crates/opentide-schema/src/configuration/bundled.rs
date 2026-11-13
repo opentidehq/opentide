@@ -8,77 +8,123 @@
 pub const FILES: [(&str, &str); 16] = [
     (
         "deployment.toml",
-        include_str!("../../../../src/opentide/data/configurations/deployment.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/deployment.toml"
+        )),
     ),
     (
         "documentation.toml",
-        include_str!("../../../../src/opentide/data/configurations/documentation.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/documentation.toml"
+        )),
     ),
     (
         "lint.toml",
-        include_str!("../../../../src/opentide/data/configurations/lint.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/lint.toml"
+        )),
     ),
     (
         "paths.toml",
-        include_str!("../../../../src/opentide/data/configurations/paths.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/paths.toml"
+        )),
     ),
     (
         "platforms/carbon_black_cloud.toml",
-        include_str!(
-            "../../../../src/opentide/data/configurations/platforms/carbon_black_cloud.toml"
-        ),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/carbon_black_cloud.toml"
+        )),
     ),
     (
         "platforms/crowdstrike.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/crowdstrike.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/crowdstrike.toml"
+        )),
     ),
     (
         "platforms/defender_for_endpoint.toml",
-        include_str!(
-            "../../../../src/opentide/data/configurations/platforms/defender_for_endpoint.toml"
-        ),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/defender_for_endpoint.toml"
+        )),
     ),
     (
         "platforms/elastic.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/elastic.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/elastic.toml"
+        )),
     ),
     (
         "platforms/harfanglab.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/harfanglab.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/harfanglab.toml"
+        )),
     ),
     (
         "platforms/sentinel.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/sentinel.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/sentinel.toml"
+        )),
     ),
     (
         "platforms/sentinel_one.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/sentinel_one.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/sentinel_one.toml"
+        )),
     ),
     (
         "platforms/splunk.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/splunk.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/splunk.toml"
+        )),
     ),
     (
         "platforms/sysdig.toml",
-        include_str!("../../../../src/opentide/data/configurations/platforms/sysdig.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/sysdig.toml"
+        )),
     ),
     (
         "resources.toml",
-        include_str!("../../../../src/opentide/data/configurations/resources.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/resources.toml"
+        )),
     ),
     (
         "sharing.toml",
-        include_str!("../../../../src/opentide/data/configurations/sharing.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/sharing.toml"
+        )),
     ),
     (
         "visibility.toml",
-        include_str!("../../../../src/opentide/data/configurations/visibility.toml"),
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/visibility.toml"
+        )),
     ),
 ];
 
 /// The bundled `tlp` vocabulary, whose names `max_tlp` must be.
-pub const TLP_VOCABULARY: &str =
-    include_str!("../../../../src/opentide/data/vocabulary/tlp.vocab.toml");
+pub const TLP_VOCABULARY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/src/opentide/data/vocabulary/tlp.vocab.toml"
+));
 
 /// The text of the bundled file at `relative` (`deployment.toml`,
 /// `platforms/splunk.toml`), if one ships.

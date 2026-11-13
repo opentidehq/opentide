@@ -234,15 +234,15 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 
 `status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`). `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
 
-### On the Rust engine
+### Connectors and status promotion
 
-A deploy that sends runs on the Rust connectors ([the implementation](./json-output.md#the-implementation)), for every platform: to the platform its `--platform` names or, without one, to every platform the workspace enables, in the plan's order, with the same plan, rule lines, checklist rows, `progress` events, CI job summary (and, on a run that matched no rule, the same warning on the CI run), document, deployment-state shards and exit codes as above. Where it differs from opentide 0.23.0's Python deploy, it is on purpose:
+A deploy that sends goes through each platform's connector, compiled into opentide ([the implementation](./json-output.md#the-implementation)): to the platform its `--platform` names or, without one, to every platform the workspace enables, in the plan's order. On a run that matched no rule, it warns the CI run.
 
-- a log line names no tenant (`tenant: ***`): the Rust CLI redacts tenant names and hosts from every line it logs; the document still names them;
-- a credential whose `$NAME` is unset is refused before any request, where the Python CLI sent the literal `$NAME` to the platform;
-- a status promotion that cannot rewrite the push (no promotion target, a platform key that is not a string, promoted text that does not read back) fails the run before anything is written (exit `1`); `--skip-promotion` deploys without it.
+- A log line names no tenant (`tenant: ***`): opentide redacts tenant names and hosts from every line it logs; the document still names them.
+- A credential whose `$NAME` is unset is refused before any request.
+- A status promotion that cannot rewrite the push (no promotion target, a platform key that is not a string, a rule file that is not YAML or not a mapping, promoted text that does not read back) fails the run before anything is written (exit `1`); `--skip-promotion` deploys without it.
 
-A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is as 0.23.0's: the same `status promotion` step, the same rule files rewritten byte for byte (each block `status` replaced in place, a byte-order mark and line endings kept, the file written atomically), the same `rule_not_promoted` warning for a status written as an anchor, an alias or under a merge key, and the same exit codes.
+A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is the `status promotion` step: each block `status` is replaced in place, a byte-order mark, line endings and the file's permissions are kept, and the file is written atomically. A status written as an anchor, an alias or under a merge key is left as it is, with the `rule_not_promoted` warning.
 
 ## Subcommands
 

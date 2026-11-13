@@ -1,8 +1,9 @@
 """opentide's version comes from its own `vX.Y.Z` tags, never the engine's.
 
 hatch-vcs (setuptools-scm) derives the version from `git describe`. The engine
-releases from this repository with `engine-vX.Y.Z` tags (engine-release.yml),
-and setuptools-scm's defaults (`git describe --tags --match *[0-9]*`, a tag
+released from this repository with `engine-vX.Y.Z` tags (engine-release.yml)
+until the release train (publish.yml) gave everything one `vX.Y.Z`; those tags
+remain, and setuptools-scm's defaults (`git describe --tags --match *[0-9]*`, a tag
 regex that drops any `word-` prefix) read the nearest of those as opentide's
 version: a clone whose nearest tag is `engine-v9.9.9` built opentide 9.9.9.
 pyproject.toml's `[tool.hatch.version.raw-options]` describes and parses `v`
