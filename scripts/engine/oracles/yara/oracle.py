@@ -50,7 +50,7 @@ CORPORA = [
 ]
 PINS = {"yara": "4.5.4", "yara_x": "1.23.0"}  # yara-python, yara-x
 
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "engine"))
 from sync_yara_conformance import verdicts  # noqa: E402
 
 

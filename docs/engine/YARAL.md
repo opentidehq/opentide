@@ -1,3 +1,8 @@
+---
+title: "YARA-L conformance"
+description: "How the engine checks YARA-L 2.0 for Google Security Operations (`crates/opentide-yaral`): the UDM and function catalogues, the section and outcome checks, and the sources they come from."
+---
+
 # YARA-L
 
 The YARA-L engine (`crates/opentide-yaral`) checks YARA-L 2.0, the detection and search language of Google Security Operations, as [yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md) 1.1 defines it, for the Google SecOps platform ([google-secops-1.0](https://github.com/opentidehq/specifications/blob/main/specs/platforms/google-secops-1.0.md)). Design: [RFC 0019 §7](https://github.com/opentidehq/specifications/blob/main/rfcs/0019-google-secops-yara-l.md#7-analysis-engine-language-server).

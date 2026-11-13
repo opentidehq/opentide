@@ -1,3 +1,8 @@
+---
+title: "YARA conformance"
+description: "How the engine checks YARA signatures (`crates/opentide-yara`): the libyara 4.5 dialect, YARA-X as a second opinion, the module catalogue, and the HarfangLab and Bitdefender profiles, with their sources."
+---
+
 # YARA
 
 The YARA engine (`crates/opentide-yara`) checks YARA signatures as [yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md) 1.1 defines them: the language libyara 4.5 compiles, with YARA-X 1.x as a second opinion whose refusals are warnings. Design and work packages: [RFC 0015 §6](https://github.com/opentidehq/specifications/blob/main/rfcs/0015-yara-language.md#6-analysis-engine-language-server). Tracking: [#165](https://github.com/opentidehq/language-server/issues/165).

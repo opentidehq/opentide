@@ -1,3 +1,8 @@
+---
+title: "Exabeam Query Language"
+description: "How the engine checks the Exabeam Query Language (`crates/opentide-exabeam`): the reference-checker port, the Common Information Model catalogue, and the conformance results."
+---
+
 # Exabeam Query Language
 
 The Exabeam engine (`crates/opentide-exabeam`) checks the search language of Exabeam's New-Scale Security Operations Platform (the New-Scale SIEM): the sequence queries of an Exabeam correlation rule (`configurations.exabeam.sequences[].query`, platform `exabeam-1.0`), Exabeam threat hunts (`response.procedure.searches[]` with `system: exabeam`), and raw `.exabeam` files. Exabeam's guides call the language "EQL". opentide never does, because `eql` is Elastic's Event Query Language: the language id is `exabeam`.
