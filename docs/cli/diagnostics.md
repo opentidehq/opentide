@@ -180,6 +180,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`exabeam_time_exact`](#exabeam_time_exact) | An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only. |
 | [`exabeam_unknown_field`](#exabeam_unknown_field) | The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it. |
 | [`exabeam_unknown_function`](#exabeam_unknown_function) | The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT. |
+| [`exabeam_unknown_value`](#exabeam_unknown_value) | An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists. |
 | [`exabeam_unquoted_value`](#exabeam_unquoted_value) | An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes. |
 | [`exabeam_wildcard_in_phrase`](#exabeam_wildcard_in_phrase) | A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
@@ -3380,6 +3381,26 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_unknown_value
+
+An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists.
+
+Severity: warning. Reported by the analysis engine in an Exabeam Query Language query (`exabeam`, language-exabeam 1.1), at the value: `opentide lint` (its `queries` check), `opentide validate query` and an editor running `opentide lsp start` show it, and `opentide validate` does not fail on it. A tenant's parsers may emit values the CIM lacks, so it is never an error, but a value no event carries makes the filter match nothing. Values compare without regard to case. Wildcards, `WLD`/`RGX` calls, values between slashes, `null`, an empty value, an unquoted number or IP address, a `@field` and an `AS` name defined earlier are not checked. Engines before language-server 0.16.1 do not report it.
+
+### Example
+
+```text illustrative
+activity_type:"network-connection" AND process_name:"powershell.exe"
+```
+
+### How to fix
+
+Use the CIM's value, which the message suggests when one is close (`process_create` → `process-create`) and the editor completes: here `network-session` or `network-traffic`. An `activity_type` is `<subject>-<activity>`. If the tenant really emits the value, confirm it with `opentide query --platform exabeam` and keep it. Then run `opentide lint --check queries` again.
+
+```text illustrative
+activity_type:"network-session" AND process_name:"powershell.exe"
+```
 
 ## exabeam_unquoted_value
 
