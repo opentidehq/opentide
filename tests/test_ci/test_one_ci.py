@@ -278,7 +278,7 @@ def _runs_command(line: str, command: str) -> bool:
     [
         ("engine", "cargo fmt --all --check"),
         ("engine", "cargo clippy --workspace --all-targets --locked -- -D warnings"),
-        ("engine", "cargo xtask check-layers"),
+        ("engine", "target/debug/xtask check-layers"),
         ("engine", "cargo doc --no-deps --workspace --locked"),
         ("engine-test-part", NEXTEST),
         ("engine-test-part", "cargo test --workspace --locked --doc"),
@@ -537,12 +537,17 @@ def test_only_report_uploads_may_fail_without_failing_their_job() -> None:
 
     When GitHub's artifact service is down, ``actions/upload-artifact`` fails
     after its retries, and that must not fail a job whose checks passed. No
-    other step in ci.yml may set continue-on-error.
+    other step in ci.yml may set continue-on-error. The one upload a gate
+    reads, golden compare's unused ledger entries (the gather finds the stale
+    ones in them), fails its part instead.
     """
+    gate_inputs = {("golden-compare-part", "Upload the unused ledger entries")}
     uploads = 0
     for job_id, spec in _ci_jobs().items():
         for step in spec.get("steps") or []:
-            if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+            if (job_id, step.get("name")) in gate_inputs:
+                assert "continue-on-error" not in step, (job_id, step.get("name"))
+            elif str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                 uploads += 1
                 assert step.get("continue-on-error") is True, (job_id, step.get("name"))
             else:

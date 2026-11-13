@@ -25,6 +25,7 @@ which fails open.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shlex
@@ -70,14 +71,18 @@ CI_CORE = {
     "test",
     "cli-e2e",
     "gitlab-ci-lint",
-    "golden-compare",
+    "golden-compare-part",
 }
 # Jobs that gather the parts of a core gate under the required check's name
 # (#841): `if` is exactly GATHER, so a failed part fails it instead of
 # skipping it (a skipped required check passes), and it fails unless the job
 # it needs succeeded.
 GATHER = "${{ !cancelled() }}"
-CI_GATHER = {"corpus": "corpus-part", "engine-test": "engine-test-part"}
+CI_GATHER = {
+    "corpus": "corpus-part",
+    "engine-test": "engine-test-part",
+    "golden-compare": "golden-compare-part",
+}
 # A gathering job whose parts a pull request may skip (they are path-scoped):
 # it also needs `changes`, to know whether they had to run.
 CI_GATHER_SCOPED = {"corpus"}
@@ -187,9 +192,13 @@ def test_a_gathering_job_fails_unless_every_part_passed(job_id: str, parts: str)
     else:
         assert _needs(job) == [parts], job_id
         assert parts in CI_CORE, f"{parts} runs on every pull request"
-    (step,) = job["steps"]
+    # The last step judges the parts (golden compare downloads their unused
+    # ledger entries first, and only when they passed).
+    *before, step = job["steps"]
     assert step["env"]["RESULT"] == f"${{{{ needs.{parts}.result }}}}"
     assert 'test "${RESULT}" = success' in step["run"]
+    for earlier in before:
+        assert earlier.get("if") == f"needs.{parts}.result == 'success'", (job_id, earlier)
 
 
 @pytest.mark.parametrize("needed", ["true", "false"])
@@ -207,6 +216,77 @@ def test_the_gathering_check_passes_only_on_success(result: str, needed: str) ->
     )
     passes = result == ("success" if needed == "true" else "skipped")
     assert (done.returncode == 0) is passes, (result, needed)
+
+
+# Golden compare (#841): three parts by a hash of the case id, and a gather
+# that keeps the required check's name and finds the stale ledger entries.
+GOLDEN_PARTS = 3
+
+
+def _golden_check_step() -> dict[str, Any]:
+    *_, step = _ci_jobs()["golden-compare"]["steps"]
+    return step
+
+
+def test_golden_compare_runs_every_part_of_the_cases() -> None:
+    job = _ci_jobs()["golden-compare-part"]
+    assert job["strategy"]["matrix"]["part"] == list(range(1, GOLDEN_PARTS + 1))
+    assert job["strategy"]["fail-fast"] is False
+    assert _golden_check_step()["env"]["PARTS"] == str(GOLDEN_PARTS)
+    (compare,) = [s for s in job["steps"] if "golden check" in str(s.get("run", ""))]
+    assert compare["env"]["PART"] == "${{ matrix.part }}"
+    words = shlex.split(compare["run"])
+    assert words[:6] == ["cargo", "xtask", "golden", "check", "--engine", "rust"]
+    # Part K of the same N in every cell: together, every case exactly once
+    # (xtask's the_partitions_run_every_case_exactly_once).
+    assert words[words.index("--partition") + 1] == f"${{PART}}/{GOLDEN_PARTS}"
+    unused = words[words.index("--unused") + 1]
+    assert unused == "golden-unused-${PART}.json"
+    assert "--filter" not in words, "a part of every case, not a filtered run"
+    (upload,) = [s for s in job["steps"] if s.get("name") == "Upload the unused ledger entries"]
+    assert upload["with"]["path"] == "golden-unused-${{ matrix.part }}.json"
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert "continue-on-error" not in upload and "if" not in upload
+    (download,) = _ci_jobs()["golden-compare"]["steps"][:-1]
+    assert download["with"] == {"pattern": "golden-unused-*", "merge-multiple": True}
+
+
+def _gather_golden(tmp_path: Path, result: str, parts: dict[int, list[int]]) -> bool:
+    """The gather's own shell, over the unused entries each part wrote."""
+    for part, entries in parts.items():
+        listed = [
+            {"entry": e, "command": "info", "case": "info/*", "target": "stdout", "rule": "r"}
+            for e in entries
+        ]
+        (tmp_path / f"golden-unused-{part}.json").write_text(json.dumps(listed), encoding="utf-8")
+    step = _golden_check_step()
+    done = subprocess.run(
+        ["bash", "-ec", step["run"]],
+        cwd=tmp_path,
+        env={**os.environ, "RESULT": result, "PARTS": step["env"]["PARTS"]},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.returncode == 0
+
+
+@pytest.mark.parametrize("result", ["failure", "cancelled", "skipped"])
+def test_the_golden_gather_fails_when_a_part_fails(tmp_path: Path, result: str) -> None:
+    every: dict[int, list[int]] = {part: [] for part in range(1, GOLDEN_PARTS + 1)}
+    assert not _gather_golden(tmp_path, result, every)
+    assert _gather_golden(tmp_path, "success", every)
+
+
+def test_the_golden_gather_fails_without_every_parts_entries(tmp_path: Path) -> None:
+    assert not _gather_golden(tmp_path, "success", {1: [], 2: []})
+
+
+def test_the_golden_gather_fails_on_an_entry_no_part_applied(tmp_path: Path) -> None:
+    # Entry 4 applied in part 2 only, entry 7 in none: 7 is stale.
+    assert not _gather_golden(tmp_path, "success", {1: [4, 7], 2: [7], 3: [4, 7]})
+    # Each entry applied in a part at least: none is stale.
+    assert _gather_golden(tmp_path, "success", {1: [4, 7], 2: [7], 3: [4]})
 
 
 @pytest.mark.parametrize(
@@ -277,7 +357,7 @@ def test_python_runs_oldest_and_newest_on_a_pull_request_and_every_version_in_th
 # matrix part that runs the step or None, the command). The fast ones are core
 # gates; the query fault kinds (about eight minutes) run in the full set.
 COMPARISONS = [
-    ("engine", None, "cargo xtask cassettes check"),
+    ("engine", None, "target/debug/xtask cassettes check"),
     ("corpus-part", "faults", "cargo xtask corpus faults --check --engine rust --only platforms"),
     (
         "corpus-part",
@@ -855,3 +935,34 @@ def test_the_pinned_elastic_references_are_cached_and_checked() -> None:
     oracle = (ROOT / "scripts" / "engine" / "oracles" / "oracle.py").read_text(encoding="utf-8")
     # The pins and the check the cache relies on.
     assert '"lucene-core.jar": (' in oracle and "sha256(path.read_bytes())" in oracle
+
+
+def test_a_pull_request_builds_the_sdist_and_the_full_set_the_wheel_from_it() -> None:
+    """The wheel from the sdist took 4 to 6 minutes of Lint in a temporary
+    directory sccache cannot reuse; the full set still builds it (and
+    `packages` every installable wheel). A pull request checks the sdist."""
+    steps = {step.get("name"): step for step in _ci_jobs()["lint"]["steps"]}
+    assert steps["Build the sdist"]["run"] == "uv build --sdist"
+    assert steps["Twine check"]["run"] == "uvx twine check dist/*"
+    for name in ("Build the sdist", "Twine check"):
+        assert "if" not in steps[name], name
+    assert steps["Build the wheel from the sdist"]["if"] == FULL_SET
+
+
+def test_engine_lint_builds_xtask_once() -> None:
+    """One cargo build of xtask and the language server, whose binaries the
+    later steps run: no `cargo xtask` or `cargo run` builds them again."""
+    steps = _ci_jobs()["engine"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps]
+    build = "cargo build --locked --package xtask --package opentide-lsp"
+    assert runs.count(build) == 1
+    built = runs.index(build)
+    for n, run in enumerate(runs):
+        for line in run.splitlines():
+            assert not re.search(r"\bcargo (xtask|run)\b", line), line
+            if "target/debug/" in line:
+                assert n > built, line
+    used = "\n".join(runs)
+    for command in ("check-layers", "cassettes check", "codegen --check"):
+        assert f"target/debug/xtask {command}" in used, command
+    assert "target/debug/opentide-lsp generate-highlights --check" in used
