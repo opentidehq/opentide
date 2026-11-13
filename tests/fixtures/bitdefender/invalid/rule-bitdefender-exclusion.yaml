@@ -1,0 +1,25 @@
+# An exclusion rule: opentide deploys GravityZone detection rules only.
+# Expected constraint code: bitdefender_rule_kind (exclusion is an unknown key).
+name: Bitdefender exclusion rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000055
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  An exclusion suppresses detections; it is not an opentide rule.
+status: STAGING
+severity: Medium
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    exclusion:
+      target: process
+      criteria:
+        - field: Process.FullPathName
+          is: C:\Program Files\Backup\agent.exe

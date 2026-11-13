@@ -243,6 +243,16 @@ pattern!(
     non_empty = true
 );
 pattern!(
+    /// A GravityZone id: 24 lower-case hex digits (`GravityZoneId`).
+    GravityZoneIdPattern,
+    r"^[0-9a-f]{24}$"
+);
+pattern!(
+    /// An alias in a Bitdefender `targets` list: not blank (`TargetAlias`).
+    TargetAliasPattern,
+    r"\S"
+);
+pattern!(
     /// The `8-4-4-4-12` hex form of a UUID.
     OrganisationUuidPattern,
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"

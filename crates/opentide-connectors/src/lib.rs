@@ -28,6 +28,7 @@
 //! `connectors` feature, and `plugins` for the plugin host).
 
 pub mod answer;
+pub mod bitdefender;
 pub mod carbon_black;
 pub mod connector;
 pub mod credentials;
@@ -75,6 +76,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
+        "bitdefender" => bitdefender::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
@@ -89,7 +91,8 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// The built-in platforms with a connector, in the order Python lists them
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
-/// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3).
+/// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
+/// and Bitdefender GravityZone (the catch-up to 0.28.0).
 pub fn builtin() -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
@@ -101,6 +104,7 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        Box::new(bitdefender::Bitdefender),
         // Application Default Credentials are the process's own ambient
         // credentials (google-auth's `default()` reads the process
         // environment): a caller with an environment of its own (the CLI)
@@ -192,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn the_builtin_registry_holds_the_ten_platforms_and_what_each_can_do() {
+    fn the_builtin_registry_holds_the_platforms_and_what_each_can_do() {
         let registry = super::builtin();
         assert_eq!(registry.ids(), super::plugin::BUILTIN);
         assert_eq!(
@@ -207,6 +211,7 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "bitdefender",
                 "google_secops"
             ]
         );
@@ -227,6 +232,7 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        assert_eq!(can("bitdefender"), (true, false, false));
         assert_eq!(can("google_secops"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {

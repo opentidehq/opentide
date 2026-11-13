@@ -78,7 +78,7 @@ fn a_workspace_lists_its_tenants_in_file_order() {
 #[test]
 fn the_platforms_and_what_each_can_do() {
     let platforms = connectors::platforms();
-    assert_eq!(platforms.len(), 10);
+    assert_eq!(platforms.len(), 11);
     for platform in &platforms {
         assert!(connectors::capabilities(platform).is_some(), "{platform}");
     }
