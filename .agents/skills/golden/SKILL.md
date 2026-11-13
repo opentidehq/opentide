@@ -54,8 +54,16 @@ usage).
 | `cargo xtask golden coverage` | Rewrites `COVERAGE.md` |
 
 `record`, `check` and `diff` take `--filter GLOB` (over case ids,
-`<command>/<mode>/<fixture>/<variant>`) and `--jobs N`; `check` and `diff` take
+`<command>/<mode>/<fixture>/<variant>`, or their leading parts: `explain/*` is every `explain`
+case) and `--jobs N`; `check` and `diff` take
 `--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
+
+**Preview of the next oracle** (`tests/golden/ORACLE.next`, 0.28.0 during the catch-up): judge a
+port against it without committing recordings, `cargo xtask golden record --oracle
+tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
+check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in
+the PR. `golden lock --oracle FILE` writes that file's requirements beside it; `cassettes record`
+and `mcp record` take `--oracle FILE` too. The README has the rules.
 
 What is recorded (the README has the detail):
 

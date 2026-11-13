@@ -14,8 +14,33 @@ cargo xtask golden diff --filter 'validate/*'   # check, printing every differen
 cargo xtask golden lock                         # rewrite oracle-requirements.txt from ORACLE
 ```
 
-`--filter` takes a glob over case ids, `<command>/<mode>/<fixture>/<variant>`. The code is
+`--filter` takes a glob over case ids, `<command>/<mode>/<fixture>/<variant>`, or over their
+leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). The code is
 `xtask/src/golden/`, a library the comparator (UC-0.7) reuses.
+
+### A preview of the next oracle
+
+`ORACLE.next` names the next oracle (opentide 0.28.0, while its features are ported; O1 of
+`docs/internal/catchup-0.28-plan.md`), in `ORACLE`'s format, with its own requirements,
+`oracle-requirements.next.txt`. Nothing committed is recorded from it: a port compares its work
+with it in a directory of its own.
+
+```bash
+cargo xtask golden lock --oracle tests/golden/ORACLE.next          # its requirements, beside it
+cargo xtask golden record --oracle tests/golden/ORACLE.next --out target/golden-next --filter 'validate*/**'
+cargo xtask golden check --engine rust --recordings target/golden-next --filter 'validate*/**'
+```
+
+`record --out DIR` writes `DIR/cases` and `DIR/blobs` (the same content-addressed format) and
+copies the oracle file into `DIR/ORACLE` with its requirements; a case the oracle cannot run is
+reported and the others are still written; no `COVERAGE.md`. `--out` inside `tests/golden` is
+refused, and so is `record --oracle` without `--out`. `check --recordings DIR` and `diff
+--recordings DIR` compare with those recordings and DIR's oracle, without the `COVERAGE.md`
+check, and with `--engine rust` without the stale-ledger check (the ledger approves differences
+from the committed oracle). `cargo xtask cassettes record --oracle FILE` and `cargo xtask mcp
+record --oracle FILE` take the same file. CI's `Golden preview` job
+(`.github/workflows/golden-preview.yml`) runs the record and the check on `train/catchup-0.28`,
+report only.
 
 ## Review rules
 

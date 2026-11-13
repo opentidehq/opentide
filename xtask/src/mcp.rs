@@ -59,7 +59,7 @@ pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(300);
 
 const USAGE: &str = "\
-usage: cargo xtask mcp record --python PATH [--only NAME]
+usage: cargo xtask mcp record --python PATH|--oracle FILE [--only NAME]
        cargo xtask mcp replay --engine rust [--python PATH] [--show-approved] FILE...
 
 record   sends each session of tests/golden/mcp/sessions.toml to the Python
@@ -71,6 +71,9 @@ replay   sends each recording's messages to this repository's server and
 
 --python names the interpreter of the package (replay's default: the
 repository's .venv, or OPENTIDE_PYTHON).
+--oracle names an oracle file (tests/golden/ORACLE, or a preview such as
+tests/golden/ORACLE.next): record installs that release, as `golden record`
+does, and runs its interpreter.
 ";
 
 /// `tests/golden/mcp/sessions.toml`.
@@ -250,6 +253,7 @@ pub fn run(args: &[String]) -> Result<u8> {
     };
     let repo = crate::corpus::cli::repo_root();
     let mut python: Option<PathBuf> = None;
+    let mut oracle_file: Option<PathBuf> = None;
     let mut only: Option<String> = None;
     let mut engine: Option<String> = None;
     let mut show_approved = false;
@@ -258,6 +262,9 @@ pub fn run(args: &[String]) -> Result<u8> {
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--python" => python = Some(PathBuf::from(iter.next().context("--python PATH")?)),
+            "--oracle" => {
+                oracle_file = Some(PathBuf::from(iter.next().context("--oracle FILE")?));
+            }
             "--only" => only = Some(iter.next().context("--only NAME")?.clone()),
             "--engine" => engine = Some(iter.next().context("--engine NAME")?.clone()),
             "--show-approved" => show_approved = true,
@@ -274,9 +281,17 @@ pub fn run(args: &[String]) -> Result<u8> {
         "record" => {
             // This repository has no Python server any more: the recordings
             // come from a release that has one.
-            let python = python.context(
-                "record needs --python PATH: an opentide release with the Python server",
-            )?;
+            let python = match (python, oracle_file) {
+                (Some(_), Some(_)) => {
+                    bail!("record takes --python PATH or --oracle FILE, not both")
+                }
+                (Some(python), None) => python,
+                (None, Some(file)) => oracle_python(&file)?,
+                (None, None) => bail!(
+                    "record needs --python PATH or --oracle FILE: an opentide release with the \
+                     Python server"
+                ),
+            };
             record(&repo, &python, &sessions, only.as_deref())?;
             Ok(0)
         }
@@ -298,6 +313,16 @@ pub fn run(args: &[String]) -> Result<u8> {
         }
         other => bail!("unknown command `{other}`\n{USAGE}"),
     }
+}
+
+/// The interpreter of the oracle `file` names, installed as `golden record`
+/// installs it (in the golden cache of the target directory).
+fn oracle_python(file: &Path) -> Result<PathBuf> {
+    use crate::golden::oracle::{Oracle, cache_dir};
+    let (oracle, dir) = Oracle::read_file(file)?;
+    let target = crate::golden::Layout::find()?.target;
+    let engine = oracle.provision(&dir, &cache_dir(&target))?;
+    Ok(engine.bin_dir.join("python"))
 }
 
 /// The interpreter of the package under test: `OPENTIDE_PYTHON`, else the

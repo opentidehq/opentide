@@ -1,0 +1,140 @@
+name: Golden preview
+
+# The preview of the next oracle (docs/internal/catchup-0.28-plan.md, O1):
+# while the 0.28.0 features are ported on train/catchup-0.28, the committed
+# recordings are still those of tests/golden/ORACLE (0.23.0). This job records
+# every case from the release tests/golden/ORACLE.next names (0.28.0) into a
+# cache, never into tests/golden, and compares this checkout's CLI with those
+# recordings:
+#
+#   cargo xtask golden record --oracle tests/golden/ORACLE.next --out DIR
+#   cargo xtask golden check --engine rust --recordings DIR --report FILE
+#
+# It reports and never gates: a difference from 0.28.0 is expected until its
+# port lands, so the check's exit status 1 passes, and the report
+# (`golden-preview` artifact, opentide-compare's RunReport) is what a port PR
+# reads for its area. A check that cannot run (exit status 2) fails the job.
+# It is not a required check (.github/AGENTS.md, "Required checks").
+#
+# The recordings depend on the oracle, the cases and their fixtures, and the
+# code that records and normalises them: the cache key hashes those, and a run
+# that finds the key records nothing. Caches are saved from pushes only
+# (tests/test_ci/test_rust_caches.py): a pull request into the train reads the
+# train's, and records afresh when the key missed.
+#
+# Nothing here publishes or writes to the repository.
+
+on:
+  push:
+    branches: [train/catchup-0.28]
+  pull_request:
+    branches: [train/catchup-0.28]
+  workflow_dispatch:
+
+concurrency:
+  group: golden-preview-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Golden preview (opentide 0.28.0, report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      RUSTFLAGS: -Dwarnings
+      PYO3_PYTHON: /usr/bin/python3
+      # The recordings, outside tests/golden and outside target/ (rust-cache's).
+      PREVIEW_DIR: .golden-preview
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          # The uv that wrote oracle-requirements.next.txt (as golden.yml's).
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      # rustup installs the toolchain rust-toolchain.toml pins.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
+          shared-key: golden-preview
+
+      - name: Restore the preview recordings
+        id: recordings
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.PREVIEW_DIR }}
+          key: golden-preview-${{ hashFiles('tests/golden/ORACLE.next', 'tests/golden/oracle-requirements.next.txt', 'tests/golden/cases.toml', 'tests/golden/fixtures/**', 'tests/fixtures/tide_corpus/**', 'tests/cassettes/**', 'tests/corpora/**', 'xtask/src/golden/**', 'xtask/src/corpus/**', 'crates/opentide-compare/src/normalise.rs') }}
+
+      # A case 0.28.0 cannot run (a cassette whose requests it no longer
+      # makes) is reported and left out; the others are written.
+      - name: Record every case from opentide 0.28.0
+        if: steps.recordings.outputs.cache-hit != 'true'
+        run: |
+          set -uo pipefail
+          cargo xtask golden record --oracle tests/golden/ORACLE.next --out "${PREVIEW_DIR}"
+          status=$?
+          if [[ "${status}" -eq 1 ]]; then
+            echo "::warning::some cases did not record from opentide 0.28.0: they are reported as not recorded"
+          elif [[ "${status}" -ne 0 ]]; then
+            exit "${status}"
+          fi
+
+      - name: Save the preview recordings
+        if: github.event_name == 'push' && steps.recordings.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.PREVIEW_DIR }}
+          key: golden-preview-${{ hashFiles('tests/golden/ORACLE.next', 'tests/golden/oracle-requirements.next.txt', 'tests/golden/cases.toml', 'tests/golden/fixtures/**', 'tests/fixtures/tide_corpus/**', 'tests/cassettes/**', 'tests/corpora/**', 'xtask/src/golden/**', 'xtask/src/corpus/**', 'crates/opentide-compare/src/normalise.rs') }}
+
+      # The candidate is this repository's CLI, with the engine compiled in.
+      - name: Install this repository's CLI
+        run: uv sync --group dev
+
+      # Report only: differences (exit status 1) are expected until each port
+      # lands; a check that could not run (2) fails.
+      - name: Compare every command with the preview
+        run: |
+          set -uo pipefail
+          cargo xtask golden check --engine rust --recordings "${PREVIEW_DIR}" --report golden-preview.json > golden-preview.log 2>&1
+          status=$?
+          tail -n 5 golden-preview.log
+          {
+            echo "### Golden preview against opentide 0.28.0"
+            echo
+            echo '```text'
+            grep -E '^(golden rust:|xtask golden:)' golden-preview.log || echo "the check printed no summary (exit status ${status})"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${status}" -gt 1 ]]; then
+            exit "${status}"
+          fi
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate: an outage of GitHub's artifact
+        # service must not fail a job whose checks passed.
+        continue-on-error: true
+        with:
+          name: golden-preview
+          path: |
+            golden-preview.json
+            golden-preview.log
+          if-no-files-found: ignore

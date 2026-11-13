@@ -7,20 +7,24 @@ $ xtask golden help
 usage: cargo xtask golden <command> [options]
 
 commands:
-  record [--check-determinism] [--filter GLOB] [--jobs N]
+  record [--check-determinism] [--filter GLOB] [--jobs N] [--oracle FILE --out DIR]
              run every case through the oracle and write tests/golden/cases/
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
   check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
+        [--recordings DIR]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
-  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N]
+  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--recordings DIR]
              check, printing every difference in full
-  lock       rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip compile)
+  lock [--oracle FILE]
+             rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
+             compile); with --oracle, the requirements file FILE names, beside it
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
---filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
+--filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>), or a
+               leading part of it, matches: `explain/*` is every explain case
 --engine       python (the oracle, the default); rust: this repository's CLI against
                the recordings, every case, through the comparator and
                tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core is the
@@ -31,6 +35,17 @@ commands:
                `node` on PATH, which runs the same command line in-process
                (UC-5.3). `--runner node` alone implies --engine rust
 --report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
+--oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
+               of the next oracle: tests/golden/ORACLE.next); `record` with it
+               needs --out, so that the committed recordings stay the ORACLE's
+--out DIR      record into DIR/cases and DIR/blobs instead of tests/golden, and copy
+               the oracle file (as DIR/ORACLE) and its requirements there; a case
+               that fails is reported and the others are still written; no
+               COVERAGE.md. DIR must be outside tests/golden
+--recordings DIR
+               check against the recordings of `record --out DIR`, with the
+               oracle of DIR/ORACLE; no COVERAGE.md check, and with --engine rust
+               no stale-ledger check (the ledger is the committed oracle's)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 
