@@ -121,6 +121,25 @@ def platform_tag() -> str:
     return sysconfig.get_platform().replace("-", "_").replace(".", "_")
 
 
+def pyo3_python() -> str:
+    """The interpreter PyO3 reads its configuration from: ``PYO3_PYTHON``, else
+    the base interpreter of the one running this build.
+
+    Every build (``uv sync``, ``uv build``, pip) runs in an isolated environment
+    of its own, at a new path each time. PyO3's build script reruns whenever
+    ``PYO3_PYTHON`` changes, and cargo then rebuilds pyo3 and every engine crate
+    above it, minutes of work for the same configuration: the environment's base
+    interpreter answers PyO3 alike and stays put from one build to the next.
+    """
+    explicit = os.environ.get("PYO3_PYTHON")
+    if explicit:
+        return explicit
+    base = getattr(sys, "_base_executable", None)
+    if base and Path(base).is_file():
+        return str(base)
+    return sys.executable
+
+
 def build_engine(profile: str) -> Path:
     """Compile the extension; return the library cargo wrote."""
     cargo = shutil.which("cargo")
@@ -135,7 +154,7 @@ def build_engine(profile: str) -> Path:
         # No libpython link: the interpreter that imports the module provides it.
         "PYO3_BUILD_EXTENSION_MODULE": "1",
         # The interpreter running this build, for PyO3's configuration.
-        "PYO3_PYTHON": os.environ.get("PYO3_PYTHON", sys.executable),
+        "PYO3_PYTHON": pyo3_python(),
     }
     if builds_for_musl(rust_host(shutil.which("rustc"))):
         # musl links its C runtime statically by default, which rules out a cdylib.
