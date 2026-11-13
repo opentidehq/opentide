@@ -758,14 +758,41 @@ impl<'i> Catalog<'i> {
                 if let Some(model) = rule_detection_model(&record.model)
                     && !model.is_empty()
                 {
-                    self.add_objective(&mut graph, model);
-                    if self.signal(model).is_some() {
-                        graph.add_edge(model, uuid, Some("implements"), false);
-                    }
+                    self.add_rule_lineage(&mut graph, uuid, model);
                 }
             }
         }
         graph
+    }
+
+    /// A rule page's own path (`_add_rule_lineage`): the threats, its
+    /// objective, its signal, the rule. Sibling rules of the objective are
+    /// left out: they belong on the objective's page, and on a rule page
+    /// they buried the rule itself.
+    fn add_rule_lineage(&self, graph: &mut Graph, rule: &str, model: &str) {
+        let signal = self.signal(model);
+        let objective = signal.map_or(model, |signal| signal.owner.as_str());
+        let Some(record) = self.record(objective) else {
+            return;
+        };
+        let Model::Objective(body) = &record.model else {
+            return;
+        };
+        graph.add_node(objective, &record.name, "objective");
+        for threat in body.objective.threats.iter().flatten() {
+            let Some(threat_record) = self.record(threat) else {
+                continue;
+            };
+            graph.add_node(threat, &threat_record.name, "threat");
+            graph.add_edge(threat, objective, Some("covers"), false);
+        }
+        if let Some(signal) = signal {
+            graph.add_node(&signal.uuid, &signal.name, "signal");
+            graph.add_edge(objective, &signal.uuid, None, false);
+            graph.add_edge(&signal.uuid, rule, Some("implements"), false);
+        } else {
+            graph.add_edge(objective, rule, Some("implements"), false);
+        }
     }
 
     fn add_objective(&self, graph: &mut Graph, uuid: &str) {

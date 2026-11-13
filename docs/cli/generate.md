@@ -120,47 +120,84 @@ Without a git worktree or without a first commit, `generate docs --changed` fail
 
 Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--output` and `--flavor` flags.
 
-### Rendered sections by object type
+### Page layout
 
-`generate docs` now renders shared metadata and references sections for all object families, plus richer object-specific sections:
+Every object page has the same layout:
 
-- **Shared (rules, objectives, threats):**
-  - `Metadata` (UUID, schema, version, created/modified, TLP, optional author/contributors/organisation)
-  - `References` (`Public`, `Internal`, `Reports` buckets when present)
-- **Rules:**
-  - `Status`, `ATT&CK Techniques`, `Detection model` (relative backlink), `Response`, `Platform configurations`, `Coverage`, `Related objects`
-- **Objectives:**
-  - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal rule coverage` (rule backlinks), `Coverage`, `Related objects`
-- **Threats:**
-  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `CVE` (Vulnerability-Lookup links; optional API enrichment), `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
+1. a **breadcrumb** back to the catalogue and the folder index (`Catalogue / Detection rules`), then the title (front matter with `[gitlab] uuid_permalinks`). Azure DevOps pages have no breadcrumb: its wiki addresses pages by name, and every index is named `README`;
+2. a **subtitle**: what the object is, its schema, version, modification date and TLP marking;
+3. a **TLP banner** when the marking is anything but `TLP:CLEAR`, quoting what the marking allows;
+4. the object's **description**, as written;
+5. an **overview** table with the facts a reader needs first, and any warning about the object (a threat no objective addresses, a signal no rule implements);
+6. **On this page**: one line of links to the sections. GitLab and Azure DevOps render their own contents instead (`[[_TOC_]]`);
+7. the sections below, each left out when it has nothing to say;
+8. **Metadata** last: UUID, schema, version, created and modified dates, TLP, and author, contributors and organisation when set. An HTML comment at the end of the file, invisible when rendered, says the page is generated.
 
-Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
+| Object | Overview | Sections, in order |
+|--------|----------|--------------------|
+| Rule | Severity (the one deploy sends), detection model, ATT&CK techniques, each platform with its status and the runs that deploy it, playbook, responders | Deployment (with its deployment map and Tenant targeting), Platform configuration (one subsection per platform), Response, ATT&CK techniques, Detection coverage (with Related objects), References, Metadata |
+| Objective | Priority (the author's text, not looked up in `criticality::1.0`), type, composition, investment, threats addressed, signal and rule counts, platforms, ATT&CK | Composition, Threats addressed, Signals (a summary table, then one subsection per signal), ATT&CK techniques, Detection coverage, References, Metadata |
+| Threat | Criticality, severity, kill chain, surface, actors, ATT&CK techniques, detection coverage | Assessment (criticality, terrain, kill-chain position, assessment table), Surface, Actors, ATT&CK techniques, CVE, Chaining (with Chaining relations), Detection coverage, References, Metadata |
 
-Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading; on the `github` flavor the link uses GitHub's own heading anchor.
+A threat no detection objective addresses opens with a warning, and so does an objective with a signal no rule implements. A threat's kill-chain position shows its phase and stage among its neighbours (`Kill chain (phase 13 of 18, stage Network Propagation): … Execution → **Credential Access** → Lateral Movement …`), then a kill-chain map: the Unified Kill Chain's three stages (Initial Foothold, Network Propagation, Action on Objectives), each phase in order, the threat's own phase highlighted and the phases of the threats chained to it captioned with their names. ATT&CK tables follow the matrix's tactic order; on threat and objective pages a Detected by column names the catalogue's rules that detect each technique (a rule on a sub-technique detects its parent) and flags a technique no rule detects. An ATT&CK group's aliases are listed under its name in the Actors table. An objective's signal summary gives each signal's severity, methodology, effort, implementing rules and their platforms, and links to the signal's subsection. ATT&CK tables give each technique's tactics and the first sentence of its description, without citation markers. Signals are not separate pages: rule pages link to the signal's heading on its objective, which on the `github` flavor uses GitHub's own heading anchor.
+
+#### Deployment
+
+For each platform block a rule page states what `opentide deploy` would do with it:
+
+| Column | Meaning |
+|--------|---------|
+| Status | The block's `status`, never the rule-level `status`, which no command reads |
+| Deployed by | The runs that act on the block: `PREVIEW`, `RELEASE`, or both; a `DISABLEMENT` or `DELETION` status says the `RELEASE` run disables or deletes it; `INERT` is never deployed |
+| Tenants | The tenants those runs reach: the block's `tenants` list when it has one, otherwise every tenant that is not `manual`, and only tenants whose `strategies` accept one of the runs |
+| Block enabled | The block's `enabled` |
+
+Under the table, each status used is listed with the strategy `deployment.toml` maps it to and its description, then a **deployment map** draws the rule, its platforms at their status, and their tenants: a solid line labelled with the runs (`PREVIEW`, `RELEASE`) where a run deploys, a dotted one where none does, and each tenant's remote id under its name. Each platform's configuration subsection repeats the block's status, runs, tenants and schema on one line.
+
+Tenant targeting lists every candidate tenant, with the runs that reach it or why none does (`no run: the tenant takes RELEASE runs only`), and the remote rule id held in `.opentide/states/deployment/`, including ids of tenants the block no longer targets. Warnings name a platform the workspace does not enable, a status `deployment.toml` does not define, a listed tenant the platform does not configure, and a platform with no tenant. Tenants are read from the platform files as written: generating docs never resolves a `$VARIABLE` and needs no credential.
+
+#### Platform configuration
+
+Each platform block is documented in full, walked from its model: every value it holds, by YAML path (`scheduling.frequency`, `entities[0].entity`), with the field's description (plain-language values such as a rule name read as text; identifiers, numbers, cron expressions and templates as code), and model defaults the author did not write marked *(default)*. Code is fenced in its own language: KQL (Sentinel, Defender), SPL (Splunk), S1QL (SentinelOne), CQL (CrowdStrike), Lucene (Carbon Black), Kibana KQL, Lucene, EQL or ES|QL by the Elastic rule's `type` and `language`, YARA (HarfangLab, Bitdefender), Falco conditions (Sysdig) and Markdown (Elastic investigation guides). A list of small objects (exclusions without a query, criteria, entity mappings, Sysdig lists) is a table of its own.
+
+Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes).
 
 A page is named after its object's slugified name. When two objects in one folder slugify alike, the one with the lowest UUID keeps the plain name and the others get a `-<uuid[:8]>` suffix, so existing page names change only on a collision.
 
 Every run (full, scoped and `--changed`) removes generated pages that no object writes any more, such as the old page of a renamed object, and lists them under `removed` in the result. Only files directly inside an object folder that carry the generator's metadata table are removed; `README.md` and hand-written pages are never touched.
 
-### Mermaid behavior and relations direction
+### Diagrams
 
-Threat chaining and coverage are rendered with Mermaid across flavors:
+Diagrams are Mermaid flowcharts drawn left to right:
 
-- **Coverage diagram:** 2-hop threat → objective → signal → rule flowchart with typed node shapes (hexagon / stadium / circle / rectangle) and family subgraphs. The section is titled `Coverage` only when this graph is present; a generic relations flowchart uses a `Relations` heading instead.
-- **Chaining diagram:** inbound + outbound threat-to-threat flow, with kill-chain subgraphs when present and bidirectional arrows for synergistic links.
-- **Related objects table:** clickable backlinks (GitHub does not honor Mermaid `click`). `relations_direction` still controls which rows appear (`upstream`, `downstream`, or `both`).
+- **Detection coverage** (every page): threat vectors, detection objectives, signals and detection rules, each kind in its own lane. A rule page draws its own lineage: its threats, objective and signal, not the objective's other rules.
+- **Deployment map** (rule pages): see [Deployment](#deployment).
+- **Kill-chain coverage** (the root index): the same three-stage map, each phase coloured by how many of its threat vectors a detection objective addresses (green all, amber some, red none, grey no threat vector) and captioned `2 of 3 covered`.
+- **Threat landscape** (the root index): every threat vector of the catalogue in its kill-chain lane, linked by chaining relations, with the threats no detection objective addresses drawn dashed and captioned `not covered`. Left out above 60 threat vectors, where it is too dense to read. When an object has no coverage path, a **Relations** diagram of its direct neighbours takes its place, under that heading.
+- **Threat chaining** (threat pages): the threats chained to this one, inbound and outbound, in one lane per kill-chain phase, in kill-chain order. Each relation pair of `chaining_relations` is drawn one way, from its `from` side, so `B succeeds A` and `A preceeds B` are one arrow labelled `preceeds`. Sequence relations are solid lines, composition (`implements`, `implemented`) thick, support (`enabled`, `enabling`, `synergize`) dotted; `synergize` points both ways. The Chaining relations table lists the threat's own declarations with what each relation means.
+- **Related objects** (under each diagram): a table of linked objects, since GitHub does not honor Mermaid `click`. `relations_direction` controls which rows appear (`upstream`, `downstream`, or `both`).
+
+Shapes tell the kind: hexagon for a threat vector, stadium for an objective, circle for a signal, rectangle for a rule, cylinder for a platform deployment. A line under each diagram names the shapes and line styles it uses. Names keep their punctuation (quotes, brackets, `#`), escaped as Mermaid entity codes.
 
 ```toml
 [diagrams]
 relations_direction = "both" # upstream | downstream | both
 ```
 
+What each flavor renders follows the Mermaid its wiki ships:
+
+| Flavor | Keyword | Lanes | Colours and page outline | Screen-reader title |
+|--------|---------|-------|--------------------------|---------------------|
+| `github` | `flowchart` | Yes | Yes | Yes |
+| `gitlab` | `flowchart` | Yes | Yes | Yes |
+| `generic` | `flowchart` | Yes | Yes | No: the renderer's Mermaid version is unknown |
+| `azure_devops` | `graph` | No: the kill-chain phase is shown under each threat instead | No | No |
+
 Flavor notes:
 
 - `github` / `generic` write lowercase `docs/{rules,objectives,threats}/<slug>.md`. `[gitlab] uuid_permalinks` does not apply.
 - `gitlab` keeps UUID filenames when `[gitlab] uuid_permalinks = true`.
-- `github` / `gitlab` / `generic` render flowchart-style relations and chaining.
-- `azure-devops` downgrades to `graph` syntax and disables subgraphs for compatibility.
+- Callouts are GitHub alerts (`> [!WARNING]`) on `github`, and labelled blockquotes elsewhere.
 
 ### Index enrichment options
 
@@ -174,9 +211,9 @@ relation_counts = true
 icons = false
 ```
 
-- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file.
+- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file. Folder indexes show a rule's severity, platforms with their status and techniques; an objective's priority, signal and threat counts; a threat's criticality, kill chain and techniques. The rules index opens with rules per platform and status; the threat vectors index groups its threats by kill-chain phase, in kill-chain order. The root index (`Detection catalogue`) adds the threat landscape diagram, a pie chart of platform blocks by status, each slice coloured by its strategy (grey `INERT`, amber `PREVIEW`, blue `UNIVERSAL`, green `RELEASE`, red `DISABLEMENT` and `DELETION`), the same counts per platform, coverage (threat vectors addressed by an objective, objectives and signals implemented by a rule, ATT&CK techniques detected by rules) coverage per kill-chain phase (with its stage), and ATT&CK coverage per tactic: the techniques threat vectors use, how many a rule detects, and those none does. The threat vectors index is grouped by kill-chain stage, then phase.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
-- `index.icons`: prefix section/object labels with emoji markers.
+- `index.icons`: prefix section/object labels with emoji shortcodes. Off by default; pages carry no emoji otherwise.
 
 CVE sections on threat pages are controlled by the same file:
 

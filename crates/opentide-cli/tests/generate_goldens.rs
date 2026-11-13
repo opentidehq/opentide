@@ -1071,13 +1071,17 @@ fn docs_preview_shards_refresh_signals_and_references() {
     }
     assert!(!page.contains("Suspicious logon signal"), "{page}");
     let threat = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
-    assert!(
-        threat.contains(
-            "00000000_0000_4000_8001_00000000cccc -->|preceeds| \
-             00000000_0000_4000_8001_000000000001\n"
-        ),
-        "{threat}"
-    );
+    // The pull request's threat chains into this one: the page's own threat
+    // first (thr1, outlined), the shard's second, linked the `preceeds` way.
+    let section = &threat[threat.find("## Chaining").unwrap()..];
+    for line in [
+        "    thr1{{\"Simulated Actor\"}}\n",
+        "    thr2{{\"Chained Actor\"}}\n",
+        "    thr2 -->|\"preceeds\"| thr1\n",
+        "    class thr1 focus\n",
+    ] {
+        assert!(section.contains(line), "{line}: {threat}");
+    }
 }
 
 /// A stand-in Vulnerability-Lookup on the loopback: each request's line is

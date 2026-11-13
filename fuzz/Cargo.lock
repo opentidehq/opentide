@@ -2664,7 +2664,6 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "shlex",
- "textwrap",
  "thiserror 2.0.21",
  "toml",
  "tracing",
