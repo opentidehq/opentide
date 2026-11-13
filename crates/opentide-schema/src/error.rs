@@ -73,6 +73,12 @@ pub enum ErrorKind {
     /// rejects, with Pydantic's exact type: `value_error`, `literal_error`,
     /// `greater_than_equal`, …
     InvalidValue(&'static str),
+    /// A platform block's constraint, typed by its code
+    /// (`graylog_schedule`): one finding of a block's named check
+    /// ([`crate::objects::platform::NamedCheck`]), at the path its
+    /// specification fixes. The oracle raises it as a `PydanticCustomError`
+    /// whose type is the code, and `validate` reports it under that code.
+    Constraint(&'static str),
     /// The conversion stopped: the document produced more work than
     /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to
     /// billions of nodes). Not a Pydantic error; the oracle would keep going.
@@ -89,7 +95,9 @@ impl ErrorKind {
             Self::Syntax | Self::Limit => None,
             Self::Missing => Some("missing"),
             Self::UnknownKey => Some("extra_forbidden"),
-            Self::InvalidType(pydantic) | Self::InvalidValue(pydantic) => Some(pydantic),
+            Self::InvalidType(pydantic)
+            | Self::InvalidValue(pydantic)
+            | Self::Constraint(pydantic) => Some(pydantic),
         }
     }
 }
@@ -154,13 +162,15 @@ impl SchemaError {
     /// The diagnostic code the CLI prints for this error on `surface`: one of
     /// `yaml_parse`, `config_parse`, `schema_validation`, `missing_field` and
     /// `unknown_key`, as `loading/`, `validation/errors.py` and
-    /// `validation/configuration.py` choose them.
+    /// `validation/configuration.py` choose them, or a platform constraint's
+    /// own code ([`ErrorKind::Constraint`]).
     pub const fn code(&self, surface: Surface) -> &'static str {
         match (self.kind, surface) {
             (ErrorKind::Syntax, Surface::Object) => codes::YAML_PARSE,
             (ErrorKind::Syntax, Surface::Configuration) => codes::CONFIG_PARSE,
             (ErrorKind::Missing, Surface::Configuration) => codes::MISSING_FIELD,
             (ErrorKind::UnknownKey, Surface::Configuration) => codes::UNKNOWN_KEY,
+            (ErrorKind::Constraint(code), _) => code,
             _ => codes::SCHEMA_VALIDATION,
         }
     }
@@ -204,6 +214,17 @@ mod tests {
         ] {
             assert_eq!(at(kind).code(Surface::Object), "schema_validation");
         }
+    }
+
+    #[test]
+    fn a_constraint_is_reported_under_its_code() {
+        let error = at(ErrorKind::Constraint("graylog_schedule"));
+        assert_eq!(error.code(Surface::Object), "graylog_schedule");
+        assert_eq!(error.code(Surface::Configuration), "graylog_schedule");
+        assert_eq!(
+            ErrorKind::Constraint("graylog_schedule").pydantic_type(),
+            Some("graylog_schedule")
+        );
     }
 
     #[test]

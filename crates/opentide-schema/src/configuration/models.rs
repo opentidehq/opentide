@@ -15,9 +15,9 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::types::{
-    ElasticVersionPattern, EnvPlaceholder, HttpUrlPattern, Matching, MispNamePattern, NonEmptyList,
-    NonEmptyString, OrganisationUuidPattern, PositiveFloat, RunStrategyName, SslWordPattern,
-    StatusStrategyName,
+    ElasticVersionPattern, EnvPlaceholder, GraylogIdPattern, GraylogNamePattern, HttpUrlPattern,
+    Matching, MispNamePattern, NonEmptyList, NonEmptyString, OrganisationUuidPattern,
+    PositiveFloat, RunStrategyName, SslWordPattern, StatusStrategyName,
 };
 use crate::FromNode;
 use crate::error::{ErrorKind, PathSegment};
@@ -1050,6 +1050,72 @@ tenant!(
 platform!(
     /// Merged `platforms/sysdig.toml`.
     SysdigConfiguration, "SysdigConfiguration", SysdigTenant
+);
+
+/// A Graylog alias or tag: one, or a list (`GraylogName | list[GraylogName]`).
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum GraylogNames {
+    /// One.
+    #[from_node(tag = "str")]
+    One(Matching<GraylogNamePattern>),
+    /// Several.
+    #[from_node(tag = "list[str]")]
+    Many(Vec<Matching<GraylogNamePattern>>),
+}
+
+impl Default for GraylogNames {
+    fn default() -> Self {
+        Self::Many(Vec::new())
+    }
+}
+
+impl GraylogNames {
+    /// The names: one is a one-item list.
+    pub fn items(&self) -> Vec<&str> {
+        match self {
+            Self::One(one) => vec![one.as_str()],
+            Self::Many(many) => many.iter().map(Matching::as_str).collect(),
+        }
+    }
+}
+
+/// `[tenants.setup]` for Graylog.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "GraylogSetup")]
+pub struct GraylogSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// The Graylog web interface's base URL. Calls go to <url>/api/....
+    pub url: String,
+    /// A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME placeholder.
+    pub token: EnvPlaceholder,
+    /// Mirrors the server's allow_leading_wildcard_searches.
+    #[serde(default)]
+    pub allow_leading_wildcard: bool,
+    /// Default stream aliases for blocks that set no streams.
+    #[serde(default)]
+    pub streams: GraylogNames,
+    /// Alias to stream id, 24 hex.
+    #[serde(default)]
+    pub stream_ids: indexmap::IndexMap<String, Matching<GraylogIdPattern>>,
+    /// Alias to notification id, 24 hex.
+    #[serde(default)]
+    pub notification_ids: indexmap::IndexMap<String, Matching<GraylogIdPattern>>,
+    /// Tags added to every definition on this tenant (7.2+).
+    #[serde(default)]
+    pub tags: GraylogNames,
+}
+tenant!(
+    /// `[[tenants]]` for Graylog.
+    GraylogTenant, "GraylogTenant", GraylogSetup
+);
+platform!(
+    /// Merged `platforms/graylog.toml`.
+    GraylogConfiguration, "GraylogConfiguration", GraylogTenant
 );
 
 /// `[tenants.setup]` of a platform opentide has no model for: open.

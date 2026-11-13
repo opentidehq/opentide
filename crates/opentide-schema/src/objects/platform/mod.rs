@@ -13,6 +13,7 @@
 //! | `QueryText` (`_query_not_blank`, after) | [`check_query_text`], [`query_text`] |
 //! | `ElasticConfig._validate_raw_elastic_block` (before) | [`elastic::block_codes`], the named check `elastic_rule_shape` |
 //! | `SysdigConfig._validate_raw_sysdig_block` (before) | [`sysdig::block_codes`], the named check `sysdig_rule_shape` |
+//! | `GraylogConfig._validate_raw_graylog_block` (before) | [`graylog::findings`], the named check `graylog_constraints`: one [`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint) per finding |
 //! | `SentinelTechnique` (`check_sentinel_technique`, after) | [`sentinel::check_technique`], [`sentinel::check_duration`] |
 //! | `minimum_engine_version` (`ge=0`, strict) | [`sysdig::minimum_engine_version`] |
 //! | `__legacy_keys__` | [`LEGACY_KEYS`] (none in the oracle: Elastic's and Sysdig's are declared empty) |
@@ -33,6 +34,7 @@ pub mod deprecation;
 pub use opentide_core::duration as durations;
 pub mod elastic;
 pub mod falco_text;
+pub mod graylog;
 pub mod harfanglab;
 pub mod schema;
 pub mod sentinel;
@@ -57,6 +59,7 @@ pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
+pub use graylog::GraylogConfig;
 pub use harfanglab::HarfangLabConfig;
 pub use sentinel::SentinelConfig;
 pub use sentinel_one::SentinelOneConfig;
@@ -357,6 +360,18 @@ pub fn is_superseded(field_path: &[String]) -> bool {
         && is_legacy_external_id_key(&field_path[2])
 }
 
+/// One finding of a named check that places each code: the code, its path
+/// relative to the block, and what is wrong.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    /// The constraint code (`graylog_schedule`).
+    pub code: &'static str,
+    /// The keys from the block to the value the finding is about.
+    pub path: Vec<String>,
+    /// The message.
+    pub message: String,
+}
+
 /// A named check: a Rust function registered by name, run on a block's raw
 /// node before its fields, giving the oracle's constraint codes.
 #[derive(Debug, Clone, Copy)]
@@ -367,22 +382,35 @@ pub struct NamedCheck {
     pub model: &'static str,
     /// The codes it finds on a block (sorted), empty when it passes.
     pub run: fn(&Node) -> BTreeSet<&'static str>,
+    /// For a check that places each code (graylog-1.0 and the platforms after
+    /// it): its findings, each reported as its own error typed by its code at
+    /// its path. `None` reports the codes as one `value_error` on the block.
+    pub findings: Option<fn(&Node) -> Vec<Finding>>,
 }
 
 /// The named checks, by name: `elastic_rule_shape` (rule types, removed flat
-/// keys, and every other constraint of `ElasticConfig`'s before-validator)
-/// and `sysdig_rule_shape` (a condition or `append_to_rule`, and every other
-/// constraint of `SysdigConfig`'s).
-pub const NAMED_CHECKS: [NamedCheck; 2] = [
+/// keys, and every other constraint of `ElasticConfig`'s before-validator),
+/// `sysdig_rule_shape` (a condition or `append_to_rule`, and every other
+/// constraint of `SysdigConfig`'s) and `graylog_constraints` (every
+/// `graylog_*` constraint code, each at its key).
+pub const NAMED_CHECKS: [NamedCheck; 3] = [
     NamedCheck {
         name: "elastic_rule_shape",
         model: "ElasticConfig",
         run: elastic::block_codes,
+        findings: None,
     },
     NamedCheck {
         name: "sysdig_rule_shape",
         model: "SysdigConfig",
         run: sysdig::block_codes,
+        findings: None,
+    },
+    NamedCheck {
+        name: "graylog_constraints",
+        model: "GraylogConfig",
+        run: graylog::block_codes,
+        findings: Some(graylog::findings),
     },
 ];
 
@@ -409,12 +437,35 @@ pub(crate) fn before(model: &'static str, node: &Node, cx: &mut Context) -> bool
     let Some(check) = NAMED_CHECKS.iter().find(|check| check.model == model) else {
         return true;
     };
+    if let Some(findings) = check.findings {
+        let findings = findings(node);
+        for finding in &findings {
+            report_finding(finding, node, cx);
+        }
+        return findings.is_empty();
+    }
     let codes = (check.run)(node);
     if codes.is_empty() {
         return true;
     }
     Violation::value_error(codes_message(model, &codes)).report(node, cx);
     false
+}
+
+/// One finding as an error typed by its code, at its path under the block.
+/// Its input is the block, as the oracle's `InitErrorDetails` gives it.
+fn report_finding(finding: &Finding, block: &Node, cx: &mut Context) {
+    fn at(path: &[String], finding: &Finding, block: &Node, cx: &mut Context) {
+        match path.split_first() {
+            None => cx.error(
+                crate::error::ErrorKind::Constraint(finding.code),
+                finding.message.clone(),
+                block,
+            ),
+            Some((key, rest)) => cx.at_key(key, |cx| at(rest, finding, block, cx)),
+        }
+    }
+    at(&finding.path, finding, block, cx);
 }
 
 /// garde: a named check on a block built in memory, through its serialised
@@ -425,7 +476,20 @@ pub(crate) fn garde_named<T: serde::Serialize>(model: &'static str, block: &T) -
     };
     let value = serde_json::to_value(block)
         .map_err(|error| garde::Error::new(format!("{model} does not serialise: {error}")))?;
-    let codes = (check.run)(&json_node(&value));
+    let node = json_node(&value);
+    if let Some(findings) = check.findings {
+        let findings = findings(&node);
+        return match findings.first() {
+            None => Ok(()),
+            Some(first) => Err(garde::Error::new(format!(
+                "{}: {}: {}",
+                first.code,
+                first.path.join("."),
+                first.message
+            ))),
+        };
+    }
+    let codes = (check.run)(&node);
     if codes.is_empty() {
         Ok(())
     } else {

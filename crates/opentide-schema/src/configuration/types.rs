@@ -248,6 +248,17 @@ pattern!(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 );
 
+pattern!(
+    /// A Graylog object id: 24 lower-case hex digits (`GraylogId`).
+    GraylogIdPattern,
+    r"^[0-9a-f]{24}$"
+);
+pattern!(
+    /// A non-blank Graylog alias or tag (`GraylogName`).
+    GraylogNamePattern,
+    r"\S"
+);
+
 /// `$NAME`, resolved when the tenant loads (never here).
 pub type EnvPlaceholder = Matching<EnvPattern>;
 
