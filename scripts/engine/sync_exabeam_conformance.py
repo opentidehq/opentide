@@ -7,7 +7,7 @@ no grammar and no parser, so that checker is the reference the engine
 (`crates/opentide-exabeam`) is held to. This script runs it over
 
 - `testdata/conformance/exabeam/{valid,invalid,highlight}/*.exabeam` (the
-  spec's fixtures; SOURCES.md names the one value changed),
+  spec's fixtures, copied unchanged),
 - `testdata/conformance/external/exabeam/*.exabeam` (queries written for
   opentide, and their `.broken.` twins),
 - `testdata/conformance/exabeam/probes.tsv` (more queries written for
