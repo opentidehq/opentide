@@ -10,6 +10,10 @@
 //! tenants, a MISP instance or CVE lookups, a command that sends requests,
 //! or a recording in which the oracle's own request was refused
 //! ([`needs_network`]). The tests hold the committed list to that.
+//!
+//! The one other reason a case may be left out is a capability WASI preview 1
+//! does not have at all ([`LIMITS`]): an entry that says so (`limit`) names
+//! it, and no other limit is accepted.
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -41,6 +45,11 @@ pub const NETWORK_COMMANDS: &[&str] = &[
 /// recording that holds one of these shows its case sent a request.
 pub const REFUSED_REQUEST: &[&str] = &["ProxyError", "HTTPSConnectionPool"];
 
+/// The capabilities WASI preview 1 does not have that a case may need, as an
+/// entry's `limit` names them: running another program (`git --version`),
+/// and file permissions (a hook's executable bit).
+pub const LIMITS: &[&str] = &["process", "permissions"];
+
 /// `tests/golden/WASI_EXCLUDED.toml`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,8 +66,12 @@ pub struct Entry {
     /// A glob over case ids (`<command>/<mode>/<fixture>/<variant>`), as
     /// `--filter` reads one.
     pub id: String,
-    /// Why the case needs the network.
+    /// Why the case needs the network, or the capability it needs.
     pub reason: String,
+    /// The capability of [`LIMITS`] the cases need, which WASI preview 1
+    /// does not have; absent for network cases.
+    #[serde(default)]
+    pub limit: Option<String>,
 }
 
 impl Exclusions {
@@ -73,6 +86,15 @@ impl Exclusions {
             glob::Pattern::new(&entry.id).with_context(|| format!("entry `{}`", entry.id))?;
             if entry.reason.trim().is_empty() {
                 bail!("entry `{}` gives no reason", entry.id);
+            }
+            if let Some(limit) = &entry.limit
+                && !LIMITS.contains(&limit.as_str())
+            {
+                bail!(
+                    "entry `{}`: `{limit}` is not a capability WASI preview 1 lacks ({})",
+                    entry.id,
+                    LIMITS.join(", ")
+                );
             }
         }
         Ok(exclusions)
@@ -105,6 +127,9 @@ impl Exclusions {
                 problems.push(format!("`{}` names no case", entry.id));
             }
             for case in named {
+                if entry.limit.is_some() {
+                    continue;
+                }
                 if case.cassette.is_none() && !needs_network(case, recordings) {
                     problems.push(format!(
                         "`{}` leaves out {}, which shows no need of the network: \
@@ -230,6 +255,25 @@ mod tests {
             case("validate/json/tide-corpus/default"),
             &recordings
         ));
+    }
+
+    #[test]
+    fn only_the_capabilities_wasi_lacks_are_limits() {
+        let ok = Exclusions::parse(
+            "[[case]]\nid = \"setup.hooks/*\"\nreason = \"chmod\"\nlimit = \"permissions\"\n",
+        )
+        .unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        assert_eq!(
+            ok.problems(&repository_cases(), &root.join("tests/golden/cases")),
+            Vec::<String>::new()
+        );
+        assert!(
+            Exclusions::parse(
+                "[[case]]\nid = \"validate/*\"\nreason = \"slow\"\nlimit = \"speed\"\n"
+            )
+            .is_err()
+        );
     }
 
     #[test]

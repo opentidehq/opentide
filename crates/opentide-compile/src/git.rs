@@ -907,6 +907,33 @@ fn config(git_dir: &Path) -> Option<gix_config::File> {
     gix_config::File::from_path_no_includes(common.join("config"), gix_config::Source::Local).ok()
 }
 
+/// What `opentide doctor` reports of a checkout, read with gix rather than
+/// the `git` program (the WASI build, which cannot run one).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Checkout {
+    /// Its work tree.
+    pub top: PathBuf,
+    /// The branch `origin/HEAD` names, when it is set.
+    pub default_branch: Option<String>,
+    /// Whether it has an `origin` remote.
+    pub has_origin: bool,
+    /// The branch HEAD is on; `None` when HEAD is detached.
+    pub current_branch: Option<String>,
+}
+
+/// The checkout at or above `start`, or `None` when there is none (or it
+/// cannot be opened).
+pub fn checkout(start: &Path) -> Option<Checkout> {
+    let (top, _) = discover(start)?;
+    let repo = open(start).ok()?;
+    Some(Checkout {
+        top,
+        default_branch: remote_default_branch(&repo),
+        has_origin: origin_url(start).is_some(),
+        current_branch: current_branch(&repo),
+    })
+}
+
 /// The URL of the `origin` remote of the checkout at or above `start`.
 pub fn origin_url(start: &Path) -> Option<String> {
     let (_, git_dir) = discover(start)?;

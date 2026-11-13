@@ -362,6 +362,12 @@ impl Doctor<'_> {
                 .fix("install git"),
             ];
         };
+        // WASI runs no program: git's version stays unknown, and the
+        // repository is read with gix (`git_checkout`).
+        if cfg!(target_os = "wasi") {
+            let _ = git;
+            return self.git_checkout();
+        }
         let version = self
             .git_output(&git, &["--version"])
             .unwrap_or_else(|| "git".to_owned());
@@ -422,6 +428,51 @@ impl Doctor<'_> {
                 format!("Repository {top} has no origin remote; on {current}"),
             ));
         }
+        checks
+    }
+
+    /// `git` and `git_repository` without running git (the WASI build, which
+    /// has no subprocesses): git was found on PATH, and the repository is
+    /// read with gix, saying what `git` itself would.
+    fn git_checkout(&self) -> Vec<Check> {
+        let mut checks = vec![Check::new("git", "pass", GIT_VERSION_NOT_CHECKED)];
+        let Some(checkout) = opentide_compile::git::checkout(&self.workspace) else {
+            let workspace = self.shown(&self.workspace, None);
+            checks.push(
+                Check::new(
+                    "git_repository",
+                    "warn",
+                    format!("{workspace} is not in a git repository"),
+                )
+                .fix(format!("git init {workspace}")),
+            );
+            return checks;
+        };
+        let top = self.shown(&checkout.top, None);
+        checks.push(match (checkout.default_branch, checkout.has_origin) {
+            (Some(branch), _) => Check::new(
+                "git_repository",
+                "pass",
+                format!("Repository {top}, default branch {branch}"),
+            ),
+            (None, true) => Check::new(
+                "git_repository",
+                "warn",
+                format!("Repository {top}: default branch unknown, origin/HEAD is not set"),
+            )
+            .fix("git remote set-head origin --auto"),
+            (None, false) => Check::new(
+                "git_repository",
+                "pass",
+                format!(
+                    "Repository {top} has no origin remote; on {}",
+                    checkout
+                        .current_branch
+                        .as_deref()
+                        .unwrap_or("detached HEAD")
+                ),
+            ),
+        });
         checks
     }
 
@@ -1387,6 +1438,10 @@ fn lines(check: &Check) -> Vec<(Text, usize)> {
     }
     out
 }
+
+/// The `git` check's message where git cannot be run (WASI).
+pub const GIT_VERSION_NOT_CHECKED: &str =
+    "git found; version not checked (no subprocesses under WASI)";
 
 /// The program `name` resolves to on `path` (a `PATH` value), relative to
 /// `cwd`, as a shell finds it.
