@@ -13,7 +13,7 @@
 //! [`plain_text`] runs on every vocabulary description: on `fancy-regex`'s
 //! backtracking VM they were most of `generate schemas` (#806). Those match
 //! with the `regex` crate and test their look-arounds by hand
-//! ([`replace_emphasis`], [`replace_italic`], [`break_blocks`]); the tests
+//! (`replace_emphasis`, `replace_italic`, `break_blocks`); the tests
 //! hold each to its pattern on every bundled description.
 
 use std::borrow::Cow;
