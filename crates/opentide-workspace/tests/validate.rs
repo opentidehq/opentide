@@ -372,6 +372,53 @@ mod validate {
     }
 
     #[test]
+    fn bitdefender_yara_signatures_and_advisories() {
+        let fs = workspace();
+        let block = |signature: &str| {
+            format!(
+                "response:\n  alert_severity: Critical\nconfigurations:\n  bitdefender:\n    \
+                 enabled: true\n    schema: platform::bitdefender::1.0\n    status: STAGING\n    \
+                 yara:\n      signature: {signature}\n"
+            )
+        };
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("{}{}", rule(U1, "A"), block("\"  \"")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            format!(
+                "{}description: &sig |\n  rule A {{ condition: true }}\n{}",
+                rule(U2, "B"),
+                block("*sig")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let empty = with_code(&validation, "yara_empty_signature");
+        assert_eq!(empty.len(), 1, "{empty:?}");
+        assert_eq!(empty[0].object_uuid, U1);
+        assert_eq!(
+            empty[0].field_path,
+            ["configurations", "bitdefender", "yara", "signature"]
+        );
+        let aliased = with_code(&validation, "yara_signature_alias");
+        assert_eq!(aliased.len(), 1, "{aliased:?}");
+        assert_eq!(aliased[0].object_uuid, U2);
+        assert_eq!(aliased[0].severity, Severity::Error);
+        assert_eq!(
+            aliased[0].message,
+            "configurations.bitdefender.yara.signature is a YAML alias; write the YARA \
+             signature out in the block"
+        );
+        // On the anchor's line, as the oracle's reader places an alias.
+        let anchor = rule(U2, "B").lines().count();
+        assert_eq!(aliased[0].yaml_line, Some(anchor));
+        let collapsed = with_code(&validation, "bitdefender_severity_collapsed");
+        assert_eq!(collapsed.len(), 2, "{collapsed:?}");
+        assert!(collapsed.iter().all(|d| d.severity == Severity::Warning));
+    }
+
+    #[test]
     fn a_misspelled_enabled_key_is_named() {
         let fs = workspace();
         fs.write(

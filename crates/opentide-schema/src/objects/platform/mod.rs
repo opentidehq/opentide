@@ -439,10 +439,20 @@ pub const NAMED_CHECKS: [NamedCheck; 4] = [
 
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
-/// and `lint`'s `queries` check report at its field path. Google SecOps'
+/// and `lint`'s `queries` check report at its field path. Bitdefender's
+/// ([`bitdefender::advisories::advisories`]), then Google SecOps'
 /// ([`google_secops::advisories::advisories`]).
 pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
-    google_secops::advisories::advisories(rule)
+    let bitdefender = bitdefender::advisories::advisories(rule)
+        .into_iter()
+        .map(|advisory| Advisory {
+            code: advisory.code,
+            field_path: advisory.field_path,
+            message: advisory.message,
+        });
+    bitdefender
+        .chain(google_secops::advisories::advisories(rule))
+        .collect()
 }
 
 /// The named check called `name`.

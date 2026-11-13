@@ -864,3 +864,66 @@ fn the_schema_is_pydantics() {
     assert!(criterion["properties"]["is"].is_object());
     assert!(criterion["properties"]["any"].is_object());
 }
+
+#[test]
+fn a_signature_with_no_text_is_an_empty_signature() {
+    for signature in ["", "   ", "\n\t \n"] {
+        let block = block(&json!({"yara": {"signature": signature}}));
+        assert_eq!(
+            errors(&block),
+            [(
+                "yara_empty_signature".to_owned(),
+                path(&["yara", "signature"])
+            )],
+            "{signature:?}"
+        );
+    }
+    // A signature with text is the YARA engine's to read, whatever it holds.
+    assert_eq!(
+        codes(&block(
+            &json!({"yara": {"signature": "private rule A { condition: true }"}})
+        )),
+        BTreeSet::new()
+    );
+    assert_eq!(
+        checks::message(checks::EMPTY_SIGNATURE),
+        "the YARA signature has no rule that is neither private nor global"
+    );
+}
+
+#[test]
+fn a_signature_that_is_a_yaml_alias_is_found_with_its_anchor() {
+    let rule = |text: &str| crate::node::load(text).unwrap().root().unwrap().clone();
+    let aliased = rule(
+        "description: &sig |\n  rule A { condition: true }\nconfigurations:\n  bitdefender:\n    \
+         yara:\n      signature: *sig\n",
+    );
+    assert_eq!(
+        checks::signature_aliases(&aliased),
+        [("bitdefender".to_owned(), vec!["description".to_owned()])]
+    );
+    // The anchor on the signature itself, aliased after it, is the block's own text.
+    let anchored = rule(
+        "configurations:\n  bitdefender:\n    yara:\n      signature: &sig |\n        rule A { \
+         condition: true }\nnote: *sig\n",
+    );
+    assert!(checks::signature_aliases(&anchored).is_empty());
+    // A whole `yara` block aliased from elsewhere: its signature is an alias too.
+    let block = rule(
+        "x: &y\n  signature: 'rule A { condition: true }'\nconfigurations:\n  bitdefender:\n    \
+         yara: *y\n",
+    );
+    assert_eq!(
+        checks::signature_aliases(&block),
+        [(
+            "bitdefender".to_owned(),
+            vec!["x".to_owned(), "signature".to_owned()]
+        )]
+    );
+    // HarfangLab's block has its own check.
+    let harfanglab = rule(
+        "description: &sig 'rule A { condition: true }'\nconfigurations:\n  harfanglab:\n    \
+         yara:\n      signature: *sig\n",
+    );
+    assert!(checks::signature_aliases(&harfanglab).is_empty());
+}
