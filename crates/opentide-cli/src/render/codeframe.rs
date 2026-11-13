@@ -54,7 +54,7 @@ pub struct Frames {
 pub const LINK_SCHEMES: [&str; 4] = ["file", "vscode", "cursor", "none"];
 
 /// The query languages' reference pages, by the code prefix of their findings.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -95,6 +95,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
         "cql_",
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
+    ),
+    (
+        "yara_",
+        "YARA rule",
+        "https://yara.readthedocs.io/en/v4.5.2/writingrules.html",
     ),
 ];
 
@@ -965,6 +970,12 @@ mod tests {
             ))
         );
         assert_eq!(engine_reference("vocab_unknown"), None);
+        assert_eq!(
+            engine_reference("yara_slow_pattern").map(|(language, _)| language),
+            Some("YARA rule")
+        );
+        // The validate and lint copy names the same references.
+        assert_eq!(ENGINE_REFERENCES, crate::queries::ENGINE_REFERENCES);
         assert_eq!(position("ab\ncd", 4), (2, 2));
     }
 

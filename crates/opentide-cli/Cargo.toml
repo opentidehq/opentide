@@ -73,6 +73,8 @@ opentide-core.workspace = true
 opentide-compile.workspace = true
 opentide-schema.workspace = true
 opentide-workspace.workspace = true
+# `explain` (#1015): the YARA codes the engine only ever reports as warnings.
+opentide-yara.workspace = true
 # `lsp start` (UC-3.6b, #947): the language server the command line hosts,
 # the tier below this crate in xtask/layers.toml.
 opentide-lsp.workspace = true
