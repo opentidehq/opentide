@@ -1,79 +1,56 @@
 # src/opentide — Agent Guide: the Python package
 
-The `opentide` package on PyPI: the CLI (Typer), the MCP server, the SDK, the platform clients
-and the bundled data. The root [`AGENTS.md`](../AGENTS.md) is the map and holds the ground rules
-and the definition of done; this guide covers what is particular to the package. (It sits in
-`src/`, not `src/opentide/`, so that it never ships in the wheel.)
+The `opentide` package on PyPI: the console script, the Python SDK, the Tide models, the platform
+plugin API and the bundled data, around the Rust core compiled into it as `opentide._native`. The
+root [`AGENTS.md`](../AGENTS.md) is the map and holds the ground rules and the definition of done;
+this guide covers what is particular to the package. (It sits in `src/`, not `src/opentide/`, so
+that it never ships in the wheel.)
 
-The unified-core plan ([#790](https://github.com/opentidehq/opentide/issues/790)) moves this
-package's logic into the Rust workspace one command at a time. Until a command's default flips,
-the Python implementation here is the oracle the Rust one is compared with: change its
-behaviour only on purpose, with a test and a changelog entry.
+The command line, the MCP server, the language server, `serve`, the TUI and the platform
+connectors are the Rust workspace's ([`crates/AGENTS.md`](../crates/AGENTS.md)): the Python
+implementation they replaced was removed by UC-6.2 ([#841](https://github.com/opentidehq/opentide/issues/841)).
+Nothing here implements a command.
 
 ## Layout
 
 | Path | What |
 |------|------|
-| `cli/` | The command tree (Typer), output modes, renderers; docs in `docs/cli/` |
-| `mcp_server/` | `opentide mcp start`; skill [mcp-server](../.agents/skills/mcp-server/SKILL.md), docs in `docs/mcp/` |
-| `models/` | The public Tide models: the Rust classes (`opentide._native.models`) under their Pydantic names, the deprecation shims, `models/delegation.py` (ADR 0011). Nothing in the CLI imports it |
-| `_models/`, `vocabulary/`, `data/pins/` | The Tide model the CLI still runs on (Pydantic, private until UC-2 and UC-3 retire it), vocabularies and schema pins. `opentide.models.<name>` of a module `models/` does not define is the `_models` module |
-| `validation/`, `loading/`, `indexing/`, `registry/`, `core/` | Loading, the index, validation and lint |
-| `platforms/` | A module and a package per platform (`client`, `deployer`, `runner`, `validator`, `compile` where it has one); `transport.py` holds `TenantSession`, which the clients build their HTTP session from |
-| `deployment/`, `states/`, `sharing/`, `extraction/`, `query/` | Deploy plans and state, MISP sharing, extraction, `opentide query` |
-| `generation/`, `documentation/`, `export/`, `ci/` | Generated schemas, docs, exports, CI templates |
-| `analysis.py`, `_native/` | The one door to the Rust engine (`opentide._native`, built from `bindings/python/`); `_native/__init__.pyi` is its stub, `_native/models.pyi` the generated stub of the Rust models (`opentide._native.models`, ADR 0011), `_native/sdk.pyi` the generated stub of the SDK's core (`cargo xtask stubs`) |
-| `sdk.py`, `_deprecation.py` | The SDK (UC-5.2): `opentide.Workspace` and `run_json` over `opentide._native.sdk`, loaded through `analysis.engine()`; docs in `docs/sdk/`. `_deprecation.warn_external` warns code outside opentide that calls a deprecated entry point (`Opentide.initialise()`, `run_validation`, the documentation writers); opentide's own callers never warn |
-| `data/` | Bundled data: vocabularies, pins, configuration and log-source defaults, the `opentide explain` pages (`diagnostics/`), setup templates and skills |
+| `_cli.py`, `__main__.py` | The `opentide` console script and `python -m opentide`: `opentide._native.cli_main` with the package's version, in process; an engine that does not load is an error on stderr, exit 1 |
+| `sdk.py` | The SDK (UC-5.2): `opentide.Workspace`, `Connection`, `TenantConfig`, `run_json` and `OpentideError`, over `opentide._native.sdk`; docs in `docs/sdk/` |
+| `models/` | The public Tide models: the Rust classes (`opentide._native.models`) under their Pydantic names (ADR 0011) |
+| `plugins.py` | The platform plugin API (`PlatformPlugin`, the `opentide.platforms` entry points) and the binding's side of the plugin boundary (`bindings/python/src/plugins.rs`) |
+| `analysis.py` | `check_query` and the engine's door (`engine()`, `EngineUnavailableError`) |
+| `_native/` | The stubs of the compiled module: `__init__.pyi` by hand, `models.pyi` and `sdk.pyi` generated (`cargo xtask stubs`) |
+| `data/` | Bundled data the Rust core compiles in or reads: vocabularies, pins, configuration and log-source defaults, the `opentide explain` pages (`diagnostics/`), setup templates and skills |
+| `schemas/data/` | The platform templates `cargo xtask codegen` writes |
 
 ## Rules of the package
 
-- **Logging:** `opentide.core.logging` (structlog + Rich) — no operational `print()` (ruff's
-  `T20`). `--json` stdout carries only the JSON document; logs go to stderr.
-- **The engine:** Python reaches it only through `src/opentide/analysis.py`. A missing engine is
-  `engine_unavailable`, never a skipped check. After a change to the binding, update
-  `_native/__init__.pyi`; after a change to a Rust model or to the SDK's binding, `cargo xtask
-  stubs` regenerates `_native/models.pyi` and `_native/sdk.pyi`
+- **No command logic in Python.** A behaviour of the command line is a change to the Rust
+  workspace, held by the goldens ([golden](../.agents/skills/golden/SKILL.md)).
+- **`import opentide` stays light**: it loads neither the SDK nor the engine
+  (`tests/test_sdk/test_import_time.py`, 30 ms at most). The console script imports nothing
+  heavy before handing over.
+- **The engine:** a missing engine is `engine_unavailable` (`analysis.EngineUnavailableError`) or,
+  for the console script, an error on stderr, never a skipped check. After a change to the
+  binding, update `_native/__init__.pyi`; after a change to a Rust model or to the SDK's binding,
+  `cargo xtask stubs` regenerates `_native/models.pyi` and `_native/sdk.pyi`
   ([`bindings/python/AGENTS.md`](../bindings/python/AGENTS.md)).
+- **Dependencies:** `pydantic` alone, for the plugin API's `configuration_model`. Anything else a
+  change needs is Rust.
 - **Object models, vocabulary or pins:** regenerate the engine's bundled Tide catalog in the same
-  change, `uv run python scripts/engine/sync_opentide_schemas.py`;
-  `tests/test_generation/test_bundled_tide_catalog.py` fails otherwise. Model field docstrings
-  are the editor hovers and are checked against the specifications' field tables.
-- **Client repos** are set up with `opentide setup` or `opentide setup ci`.
+  change, `cargo xtask codegen` (`--check` in CI).
 - **Docs follow the code** in the same PR: the table in
   [docs-maintenance](../.agents/skills/docs-maintenance/SKILL.md) maps each module to its page.
-
-## Platform capability matrix
-
-| Platform | Deploy | Query validate (`--live`) | Offline (engine) | `opentide query` |
-|----------|:------:|:--------------:|:----------------:|:----------------:|
-| Sentinel | ✅ | ✅ KQL | ✅ KQL | ✅ KQL |
-| Defender | ✅ | ✅ KQL | ✅ KQL | ✅ KQL |
-| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL | ✅ Kuery, Lucene, EQL, ES\|QL | ✅ ES\|QL, EQL, Lucene; Kuery via rule preview |
-| Splunk | ✅ | ✅ SPL | ✅ SPL | ✅ SPL |
-| SentinelOne | ✅ | ✅ S1QL | ❌ | ✅ PowerQuery |
-| Carbon Black | ✅ | ✅ Lucene | ✅ Lucene | ✅ Lucene |
-| CrowdStrike | ✅ | ❌ | ✅ CQL | ✅ CQL (Next-Gen SIEM) |
-| HarfangLab | ✅ | ❌ | ❌ | ✅ telemetry filters (no `--rule`) |
-| Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
-
-CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — no tenant check, so `--live` (and HarfangLab
-offline) returns `supported: False`, never fake validation. CrowdStrike's CQL and Sysdig's Falco are checked
-offline by the engine only.
-Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
-id in deployment state; block macros and lists are expanded into the condition.
-`opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
-search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
-`kuery` is the one write: its rule preview's alerts, in the preview index.
 
 ## Test
 
 ```bash
 uv run pytest tests/<area> -q --no-cov          # while editing
-scripts/ci-local.sh --full                       # before a push: unit + coverage gate + E2E
+scripts/ci-local.sh --full                       # before a push
 ```
 
-The network, files-the-user-owns and serialisation rules every change here is checked against
-are in [review-checklist](../.agents/skills/review-checklist/SKILL.md); test design in
-[python-testing-patterns](../.agents/skills/python-testing-patterns/SKILL.md) and
-[cli-e2e-testing](../.agents/skills/cli-e2e-testing/SKILL.md).
+The Python suite tests what is here: the SDK (`tests/test_sdk/`), the plugin API
+(`tests/test_platforms/`), the console script (`tests/test_cli/`), the MCP and LSP stdio tests,
+the package (`tests/test_package/`), the docs' snippets (`tests/test_docs/`) and CI's contracts
+(`tests/test_ci/`). Test design: [python-testing-patterns](../.agents/skills/python-testing-patterns/SKILL.md).

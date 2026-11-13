@@ -1,23 +1,20 @@
 ---
 name: cli-e2e-testing
 description: >-
-  Write and debug opentide CLI end-to-end tests: Typer CliRunner tests, console-script
-  subprocess smoke tests, the tide_corpus fixture workspace, deploy dry-run payloads, E2E
-  shards and .test_durations_e2e. Use when adding or changing a CLI command, flag or JSON
-  output, or when an E2E shard fails.
+  Write and debug opentide's console-script end-to-end tests: subprocess smoke tests of the
+  installed `opentide`, the MCP and LSP stdio tests, the wheel install tests, the tide_corpus
+  fixture workspace, E2E shards, the full_set marker and .test_durations_e2e. Use when adding
+  or changing a test that runs the console script, or when an E2E shard fails.
 ---
 
 # CLI E2E Testing
 
-Typer-native end-to-end tests for the `opentide` CLI using `CliRunner` (in-process) plus a small subprocess smoke layer.
-
-## When to use
-
-- Adding or changing CLI commands, flags, or JSON output shape
-- Extending the simulated Tide workspace (`tide_corpus`)
-- Deploy dry-run payload verification (unit + E2E)
-- Schema forward-evolution scaffolds (`future/rule_1_1`)
-- First-user workflow regressions: sequential `opentide` commands that must each exit 0 (`setup` → `generate` empty → author → `generate` → `validate --strict` → `lint --strict` → dangling-ref fail/restore → `info` → coverage → query/deploy dry-run). In-process: `test_workflow_e2e.py`. Console-script subprocess: `test_workflow_subprocess_e2e.py`.
+The command line is the Rust core's (UC-6.2, #841): what a command prints and writes is held by
+the goldens (`cargo xtask golden check --engine rust`, [golden](../golden/SKILL.md)) and by
+`crates/opentide-cli`'s tests (`tests/cmd/*.trycmd`, `command_goldens.rs`). The Python E2E tests
+cover what only the installed package can show: the console script and `python -m opentide`,
+signals through them, the MCP and LSP servers over stdio, a wheel installed in a fresh
+environment, and platform plugins loaded from their entry points.
 
 ## Terminology
 
@@ -29,8 +26,6 @@ Use **threat**, **objective**, and **rule** in fixture names and test labels. Do
 | objective| `objective::1.0` | `objective-{id}-{slug}.yaml`        |
 | rule     | `rule::1.0`      | `rule-{id}-{platform}-{slug}.yaml`  |
 
-Baseline is current `*::1.0` only — no tide_1 legacy slices.
-
 ## Layout
 
 ```
@@ -39,80 +34,54 @@ tests/
   fixtures/tide_corpus/
     manifest.toml          # slice lifecycle (current active, future reserved)
     current/               # canonical E2E workspace
-    future/rule_1_1/       # reserved until rule::1.1 lands
+  fixtures/plugin_platform/  # the sample platform plugin (acme)
   test_cli/
-    conftest.py            # cli_runner, invoke_cli, parse_cli_json
-    e2e/                   # @pytest.mark.cli_e2e (and cli_smoke for subprocess)
-                           # test_workflow_e2e.py = published first-user path (CliRunner)
-                           # test_workflow_subprocess_e2e.py = same happy path via `opentide` binary
-  test_mcp/
-    e2e/                   # @pytest.mark.cli_smoke — `opentide mcp start` NDJSON JSON-RPC
-  test_deployment/
-    test_deploy_payloads.py  # per-platform API payload golden tests
+    test_launch.py         # opentide._cli.main, in process
+    e2e/                   # @pytest.mark.cli_e2e / cli_smoke: the console script as a subprocess
+  test_mcp/e2e/            # `opentide mcp start` NDJSON JSON-RPC
+  test_lsp/e2e/            # `opentide lsp start` over stdio
+  test_platforms/          # the plugin API, the plugin through `python -m opentide`
 ```
 
 `tide_corpus_repo` and friends live in `tests/corpus_support.py`, registered from the
-root `conftest.py` via `pytest_plugins`. Any suite can request them — MCP and packaging
-tests use the same corpus, so registry contracts cannot be mocked into passing.
+root `conftest.py` via `pytest_plugins`: `materialise_corpus(dest)` and `corpus_env(repo)` build
+a corpus plus its environment for subprocess tests.
 
 ## Running tests
 
 ```bash
 # E2E only (development) — selected by marker, not by path
-uv run pytest tests/ -m "cli_e2e or cli_smoke" --no-cov
+uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" --no-cov
 
 # Unit tests (excludes E2E markers — matches CI matrix)
 uv run pytest tests/ -m "not cli_e2e and not cli_smoke"
 
-# Local CI parity (unit then E2E)
-scripts/ci-local.sh --full
-
-# Update syrupy snapshots
-uv run pytest tests/test_cli/e2e/ --snapshot-update
-uv run pytest tests/test_deployment/test_deploy_payloads.py --snapshot-update
+# The full set's E2E: a wheel built and installed per test
+uv run pytest tests/ -m full_set --no-cov
 ```
 
 ## CI
 
 - **Unit matrix** (Python 3.10 and 3.14 on every pull request, 3.11–3.13 in the full set): `-m "not cli_e2e and not cli_smoke"`
-- **`cli-e2e` job** (Python 3.14 only, 4 shards, not gated on `test`): `tests/ -m "cli_e2e or cli_smoke"` — whole
+- **`cli-e2e` job** (Python 3.14 only, 4 shards, not gated on `test`): `tests/ -m "(cli_e2e or cli_smoke) and not full_set"` — whole
   tree, so a new E2E directory is picked up by its marker alone
-- **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script; also `tests/test_deployment/test_promotion_rewrite.py`, the only run of promotion on NTFS and CRLF files
+- **`cli-e2e-full` job** (the full set: nightly, pushes, Run workflow, the `full-ci` label): `tests/ -m full_set` —
+  E2E tests too slow for every pull request, such as a wheel built and installed per test
+  (`test_wheel_plugin_platform.py`). A `full_set` test also carries `cli_e2e`, so the unit matrix leaves it out
+- **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script
 
 E2E does not contribute to coverage metrics.
 
 ### `cli_smoke` must stay out-of-process
 
-`cli_e2e` uses `CliRunner`, which calls `app` inside the pytest process and never runs
-the installed console script. `cli_smoke` covers that gap and therefore carries
+`cli_smoke` tests run the installed console script and carry
 `@pytest.mark.script_launch_mode("subprocess")` — `pytest-console-scripts` defaults to
 `inprocess`, which only loads the entry point as a function and cannot catch import-time
-failures (for example multiprocessing `spawn` re-importing the entry point).
+failures.
 
 `test_console_script_smoke.py` takes `tide_corpus_repo` so the console script indexes a
 real corpus. Running those smokes against the default empty workspace makes them pass
 vacuously, because object parsing never engages.
-
-`test_workflow_subprocess_e2e.py` does **not** use the corpus: it scaffolds a fresh
-tutorial repo, then runs `generate` / `validate --strict` / `lint --strict` / `info`
-as child processes. That is the check for "several `opentide` commands in sequence
-exit 0". Query and deploy stay in the CliRunner workflow test (HTTP mocked).
-
-## Shared fixtures
-
-| Fixture              | Purpose                                              |
-|----------------------|------------------------------------------------------|
-| `cli_runner`         | `typer.testing.CliRunner()`                          |
-| `tide_corpus_repo`   | Copy of `current/` slice into `tmp_path` with env    |
-| `invoke_cli`         | Helper: `--repo`, `--json` defaults                  |
-| `parse_cli_json`     | Extract top-level JSON from stdout (after indexer)   |
-| `corpus_rule_uuids`  | Deterministic rule UUIDs per platform              |
-| `mock_query_validators` | No-op validators for validate query E2E          |
-
-Non-fixture helpers in `tests/corpus_support.py`: `materialise_corpus(dest)` and
-`corpus_env(repo)` build a corpus plus its env for subprocess tests, and
-`clear_runtime_caches()` resets the registry singletons *and* the schema-pipeline
-globals (a stale binding points generation at the previous test's repo root).
 
 ## tide_corpus extension
 
@@ -121,47 +90,16 @@ globals (a stale binding points generation at the previous test's repo root).
 3. Include platform `configurations.*` blocks for deploy payload tests
 4. Register new forward slices in `manifest.toml` (`status = "reserved"` → `"active"`)
 
+A change to the corpus changes the golden recordings that use it: re-record them from the oracle
+(`cargo xtask golden record`) in the same pull request.
+
 ### Author-shaped YAML (do not sanitize timestamps)
 
-`metadata.created` / `modified` in **tutorial fences**, **tide_corpus objects**, and **documentation fixtures** must be unquoted `YYYY-MM-DD` (the format templates emit and authors write).
-
-Quoted dates (`created: "2026-01-01"`) stay strings under PyYAML. Unquoted dates become `datetime.date` and crash `json.dumps` in generate/export unless the loader stringifies them. Issue #178 shipped because every first-user simulation quoted dates.
+`metadata.created` / `modified` in **tutorial fences**, **tide_corpus objects**, and **documentation fixtures** must be unquoted `YYYY-MM-DD` (the format templates emit and authors write). Issue #178 shipped because every first-user simulation quoted dates.
 
 Guard: `tests/test_cli/test_simulation_yaml_shape.py` (unit matrix). Do not re-quote dates to make a test pass.
 
-## Deploy payload testing
-
-**Unit** (`test_deploy_payloads.py`): load corpus rule → `preview_rule_deployment()` → syrupy snapshot of `api_request`.
-
-**E2E** (`test_deploy_e2e.py`):
-
-```
-opentide --json --repo <corpus> deploy --dry-run --platform <platform> --plan FULL --wide --skip-promotion
-```
-
-Assert `ok`, `dry_run`, `plan[platform]`, and `payloads[platform][]` with `uuid` + `api_request`.
-
-Mock only the network boundary (`DeployTide.mdr` deployer); do not mock payload compilation.
-
 ## Mocking policy
 
-| Mock                         | Do not mock                    |
-|------------------------------|--------------------------------|
-| HTTP / cloud SDK clients     | Index loading, deploy plan     |
-| Query validators (E2E only)  | JSON emission, exit codes      |
-| `modified_mdr_files` (mutate)| Payload preview compile path   |
-| Prompt `.ask()` only         | `questionary.*` constructors   |
-
-Interactive setup: construct the real Questionary prompt (kwargs are validated there) and stub `.ask()`. Replacing `questionary.checkbox` with a lambda hid `ValueError: validate must be callable` (issue #177). Orchestrator tests may stub `ask_checkbox`; `test_setup_interactive.py` must still construct the real prompt.
-
-## Schema bump checklist
-
-1. Bump Pydantic models / `SchemaVersionChain`
-2. Add objects under `future/<slice>/`
-3. Flip `manifest.toml` slice `status` to `active`
-4. Regenerate syrupy snapshots
-5. Remove `xfail` from `test_schema_compat_e2e.py` when slice is live
-
-## JSON parsing note
-
-The indexer prints progress to stdout before JSON. Use `parse_cli_json()` (first top-level `{` + `JSONDecoder.raw_decode`) — do not assume stdout is JSON-only.
+Mock only the network boundary: a stand-in tenant on loopback (`tests/stand_in_support.py`,
+the plugin tests' `StandIn`), never the command line's own parsing, planning or output.

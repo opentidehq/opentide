@@ -16,15 +16,15 @@ dependencies = ["opentide==0.23.0"]
 pip install 'opentide==0.23.0'
 ```
 
-Includes the CLI, all platform adapters with every vendor SDK they call, the MCP server, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`, `mcp`). There are no extras. Start the server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
+Includes the CLI, the nine platform connectors, the MCP server and the SDK, all compiled into one Rust core inside the wheel; its one Python dependency is `pydantic`, for the [plugin API](./platforms.md#platform-plugins). There are no extras. Start the MCP server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
 
-## Vendor SDKs
+## Platforms
 
-Programmatic live deploy and query validation work for every platform on the base install. The SDKs each platform calls are listed in [Usage: Installation](../usage/installation.md#vendor-sdks).
+Live deploy, queries and query checks work for every platform on the base install: each platform's connector speaks its vendor's REST API itself, with no vendor SDK.
 
 ## Environment
 
-`Workspace.open` takes the workspace's folder. `run_json` and the deprecated registry read the same environment variables as the CLI:
+`Workspace.open` takes the workspace's folder. `run_json` reads the same environment variables as the CLI:
 
 ```python
 import os
@@ -40,7 +40,7 @@ The wheel includes `opentide/py.typed` and the stubs of the compiled core (`open
 
 ```python
 from opentide.models.rule import DetectionRule
-from opentide.models.results import ValidationResult, DeploymentResult
+from opentide.models import ValidationError
 ```
 
 ## Editable install (development)

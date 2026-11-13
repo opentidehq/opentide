@@ -1,171 +1,45 @@
 ---
-title: Validation API
-description: Programmatic validation with ValidationScope, ValidateCheck, and ValidationReport.
+title: Query checks
+description: Check one query offline with opentide.analysis.check_query, or on a tenant with Connection.validate_query; validate a whole workspace with Workspace.validate.
 ---
 
-# Validation API
+# Query checks
 
-<Callout type="warn">
-`run_validation` and `ValidationScope` are deprecated: they warn when your code calls them, and 0.25 removes them. Use [`Workspace.validate`](./workspace.md#validate), which takes the same checks and narrowing (`files`, `uuids`, `types`); see [Migration](./migration.md#validate).
-</Callout>
+A workspace's checks, its queries' included, are [`Workspace.validate`](./workspace.md#validate) and [`Workspace.lint`](./workspace.md#lint): the command line's `validate` and `lint`, with their codes and documents. Two calls check one query on its own.
 
-Headless validation for scripts, services, and MCP tools.
+## Offline, with the analysis engine
 
-## Full registry validation
+`opentide.analysis.check_query` checks a query in-process, with the engine `pip install opentide` installs (no tenant, no vendor SDK). It covers Sentinel and Defender KQL, Splunk SPL, Elastic (ES|QL, EQL, Kibana KQL, Lucene), Carbon Black Lucene, CrowdStrike CQL and Sysdig's Falco conditions:
 
 ```python
-from opentide.validation.session import run_validation
-from opentide.validation.scope import ValidationScope
-
-report = run_validation(scope=ValidationScope.full())
-print(report.ok)
-for issue in report.errors:
-    print(issue.to_legacy_string())
-```
-
-## Narrow scope
-
-```python
-scope = ValidationScope.narrow(
-    files=frozenset({"objects/rules/example.yaml"}),
-    uuids=frozenset({"<uuid>"}),
-    types=frozenset({"rule"}),
-)
-report = run_validation(scope=scope)
-```
-
-`files` follows the [`validate --file`](../cli/validate.md#selecting-a-file) rules: a path matches only the file it names, a bare file name matches that name in every object folder. Files in subfolders are not objects and match nothing; the report carries a `nested_object_file` warning for each one in scope. Relative paths resolve against the working directory and the workspace root; `roots=` replaces the workspace root with the directories you pass.
-
-## Check selection
-
-```python
-from opentide.validation.checks.kinds import ValidateCheck
-
-report = run_validation(
-    scope=ValidationScope.full(),
-    checks=frozenset({ValidateCheck.schema, ValidateCheck.cve}),
-)
-```
-
-Available checks: `id-uniqueness`, `uuid-format`, `schema`, `configuration`, `cve`, `sharing-config`.
-
-The `cve` check looks up `threat.cve` identifiers on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) (`GET /api/vulnerability/{id}`). An empty JSON object means the identifier is unknown. The check does not scrape NVD through `mitrecve`. CVE, GHSA, and GCVE identifiers are accepted; GNA 0 GCVE ids (`GCVE-0-YEAR-N`) are stored under the corresponding `CVE-YEAR-N` key.
-
-Default pipeline checks: id uniqueness, UUID format, schema, configuration. CVE lookup is opt-in via `ValidateCheck.cve`, and the `sharing.toml` check via `ValidateCheck.sharing_config`. The configuration check is workspace-wide, so a narrowed scope skips it unless it is the only check requested; see [Configuration models](./configuration.md).
-
-## Choosing the implementation
-
-`run_validation` runs on the implementation `OPENTIDE_ENGINE` selects for `validate` ([Choosing the implementation](../cli/json-output.md#choosing-the-implementation)), read at each call:
-
-| Value | Runs |
-|-------|------|
-| empty or unset | `validate`'s default: Python today |
-| `python` | The Python implementation |
-| `rust` | The Rust workspace (`opentide._native`); its report comes back as the same `ValidationReport` |
-| `compare` | Both; returns the Python report, and logs a warning (`engine_mismatch`) with a diff report in `$XDG_STATE_HOME/opentide/compare/` when they differ, or when the Rust run fails (no engine, a configuration it does not resolve) |
-
-Any other value raises `opentide.validation.engine.EngineSelectionError`. A call no `validate` command line can make runs Python whatever the variable says: one with `index=`, or with a set of `checks` that is neither the defaults, the defaults without `queries`, nor one check. `workers=` is a Python setting: the Rust workspace picks its own threads. Under `rust`, a workspace whose configuration does not resolve raises `opentide.validation.engine.RustValidationError` (its `code` is `command_failed`).
-
-## ValidationReport
-
-Structured report with:
-
-- `ok` — overall pass/fail
-- `errors`, `warnings` — `ValidationIssue` lists
-- `model_dump_json_ready()` — JSON-safe dict for APIs
-
-MCP `validation_report` tool returns this shape, with the [diagnostic fields](../mcp/tools.md#diagnostic-fields) added to each issue and a `next_actions` list.
-
-## Single rule via registry
-
-```python
-from opentide import Opentide
-
-Opentide.initialise()
-rule = Opentide.Rules[uuid]
-result = Opentide.validate_rule(rule)
-```
-
-`validate_rule` checks the rule against the revision its `metadata.schema` names, so a `rule::1.1` rule may carry `metadata.reviewed` and a `rule::1.0` rule may not. Through 0.15.0 `validate_rule` checked every rule against `rule::1.0`, so a valid `rule::1.1` rule that carried `metadata.reviewed` failed.
-
-A loaded rule always declares a registered identifier: `Opentide.Rules` and `load_rule_from_dict` raise `SchemaMissingError` or `SchemaIdentifierError` instead (see [Loading without the registry](./models.md#loading-without-the-registry)). To check a raw YAML body, use `validate_raw_payload`:
-
-```python
-from opentide.validation import validate_raw_payload
-
-result = validate_raw_payload(body, "rule")
-```
-
-It checks the body against the revision its `metadata.schema` names. A body without `metadata.schema` fails with `schema_missing: missing metadata.schema on object`. An unknown identifier, or one of another object type, fails on `('metadata', 'schema')`. Neither is checked against the newest revision. [`opentide validate`](../cli/validate.md#schema-identifier) reports the same cases as issues.
-
-## Query validation
-
-Query validation is a **platform plugin** concern, separate from object validation above. Two Python paths exist:
-
-```python
-from opentide import Opentide
-Opentide.initialise()
-
-rule = Opentide.Rules[uuid]
-result = rule.validate_query("sentinel")   # ValidationResult
-print(result.ok, result.errors)
-```
-
-`rule.validate_query(platform)` delegates to the platform's registered **live** validator, which needs the vendor SDK and tenant credentials. It works for the six platforms that ship validators — `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `elastic` — and reports **unsupported** (not a fake pass) for `crowdstrike` and `harfanglab`. Check capability first:
-
-```python
-if Opentide.Platforms["sentinel"].can_validate:
-    result = rule.validate_query("sentinel")
-```
-
-The call checks the rule on every tenant a `PREVIEW` or `RELEASE` deploy sends it to, through the platform's [query runner](../cli/query.md). It writes nothing into the process environment, and reads only `OPENTIDE_QUERY_CHECK_TIMEOUT`, the seconds each query may take (default 120; a value that is not a positive number raises `ValueError`). For each query's verdict on each tenant, call the validator itself: `validate` returns a `LiveCheckReport` whose `checks` are `RuleCheck`s (`rule`, `tenant`, `errors`, `warnings`, and `code` `query_check_timeout` for a query that got no answer in time; `report.timed_out()` lists those). `validate(..., timeout=SECONDS)` sets the timeout for that call. A query with no answer fails only its own check; three in a row on one tenant raise `TenantUnreachableError`, as a connection, DNS or TLS failure does at once. See [Slow queries and timeouts](../cli/validate.md#slow-queries-and-timeouts).
-
-```python
-from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
-
-report = Opentide.Platforms["sentinel"].validator.validate([rule], DEPLOYABLE_STRATEGIES)
-for check in report.rejected():
-    print(check.tenant, check.errors)
-```
-
-### Offline, with the analysis engine
-
-`opentide.analysis` checks queries in-process, with the engine `pip install opentide` installs (no tenant, no SDK). It covers Sentinel and Defender KQL, Splunk SPL, Elastic (ES|QL, EQL, Kibana KQL, Lucene) and Carbon Black Lucene:
-
-```python
-from pathlib import Path
-from opentide.analysis import check_query, check_queries
+from opentide.analysis import check_query
 
 findings = check_query("SecurityEvent | wher EventID == 4688", language="kql", platform="sentinel")
 for finding in findings:
     print(finding.code, finding.severity, finding.line, finding.column, finding.message)
-
-run = check_queries([Path("objects/rules/rule.yaml")], root=Path("."), platforms=None)
-for check in run.checks:
-    print(check.file_path, check.platform, check.language, check.errors, check.warnings)
 ```
 
-Positions are 1-based lines and columns, in Unicode code points, `end_column` exclusive. A missing engine raises `EngineUnavailableError`, never a silent pass.
+Positions are 1-based lines and columns, in Unicode code points, `end_column` exclusive. A missing engine raises `opentide.analysis.EngineUnavailableError`, never a silent pass.
 
-### The tenant check
+## On a tenant
 
-`rule.validate_query(platform)` and `opentide validate query --live` call the tenant. SentinelOne's S1QL is checked there only. A missing SDK or a missing plan fails that check.
+`Connection.validate_query` runs the query on one tenant, as `opentide validate query --live` does for a rule's queries: see [tenant operations](./workspace.md#tenant-operations). SentinelOne's S1QL is checked there only; CrowdStrike, HarfangLab and Sysdig have no tenant check and say so (`operation_unsupported`), never a fake pass.
 
 <Callout type="info">
 Four entry points — pick deliberately:
 
 | Entry point | Behaviour |
 |---|---|
-| `opentide.analysis.check_query` / `check_queries` | Offline, in-process, with the analysis engine |
-| `rule.validate_query(platform)` | Live vendor call. Needs a configured tenant |
+| `opentide.analysis.check_query` | Offline, in-process, with the analysis engine |
+| `Connection.validate_query` | Live vendor call. Needs a configured tenant |
 | `opentide validate query` | Offline by default; `--live` calls the tenant |
 | MCP `validate_query` | Offline by default; `live: true` calls the tenant |
 
 See [`opentide validate query`](../cli/validate.md) and [MCP tools](../mcp/tools.md).
 </Callout>
 
-A failed query validation may raise `Errors.TideQueryValidationError` for exceptional cases; expected pass/fail is returned in the `ValidationResult`. See [Models → errors](./models.md#errors).
+`run_validation`, `ValidationScope` and the registry's `rule.validate_query(platform)`, which this page documented before, are removed: see [Migration](./migration.md).
 
 ## Source
 
-`src/opentide/validation/session.py`, `src/opentide/validation/scope.py`, `src/opentide/validation/issues.py`, `src/opentide/analysis.py`
+`src/opentide/analysis.py` (`check_query`), `src/opentide/sdk.py` (`Connection`), `crates/opentide-analysis/` (the engine).

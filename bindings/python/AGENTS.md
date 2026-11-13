@@ -9,18 +9,15 @@ there, then imports its submodule `sdk`. [`README.md`](README.md) describes the 
 
 | Path | What |
 | --- | --- |
-| `src/lib.rs` | The module `_native`: the engine's functions, the CLI's entry points, the submodules |
+| `src/lib.rs` | The module `_native`: the engine's functions, the command line's entry point (`cli_main`), the submodules |
 | `src/sdk.rs` | `opentide._native.sdk` (UC-5.2, #837): the facade's `Workspace` and `run_json`, one to one, documents as JSON text; `SdkError(code, message, detail)` |
 | `src/sdk/tenants.rs` | The facade's tenant operations (`connectors`, UC-5.2b): `TenantConfig`, `Connection` (`open`; `query`, `validate_query` and `deploy` as awaitables through pyo3-async-runtimes, on a tokio runtime started on the first operation, without the GIL), `Canceller`, `platforms`, `capabilities` |
-| `src/serve.rs` | `ServeHost`, `opentide serve`'s Rust host |
 | `src/plugins.rs` | The platform plugin host (UC-4.5, #835), installed at module init: `opentide.plugins._discover()` and `_invoke()` behind the connectors' traits, JSON text across, the GIL taken on a blocking thread for the plugin call alone |
 
 ## Place
 
-bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-lsp and opentide-compare
-(`compare_runs`, for the CLI's `OPENTIDE_ENGINE=compare`), opentide-schema (`models`) and
-opentide-cli (`cli_main`; `opentide_cli::embed` for `run_cli`, `interrupt_cli`, the warm
-workspaces of `serve` and `validate_report`, UC-2.7), the facade `opentide` with `cli` and
+bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-lsp, opentide-schema
+(`models`) and opentide-cli (`cli_main`, which the console script runs), the facade `opentide` with `cli` and
 `connectors` (`sdk`, UC-5.2) and pyo3-async-runtimes (the tenant operations as awaitables), and
 opentide-connectors with opentide-compile and tokio (the plugin host, UC-4.5); nothing depends on it. The plan's `bindings/python` (§4): once the engine functions move behind the
 facade it depends on `opentide` alone (D-5). It inherits the workspace lints, `unsafe_code = "forbid"` included: PyO3's macros
@@ -70,10 +67,11 @@ sources or compiled-in data change (`cache-keys` in `pyproject.toml`). `scripts/
 
 - UC-1.9 (#815): the Tide model's pyclasses and `.pyi` exposed through it.
 - UC-2.7 (#822): `validate`, `lint`, `info` and MCP read tools call Rust through it.
-- UC-3.8 (#830): the console script, `opentide = "opentide.cli.launch:main"` (UC-3.8b, #960), loads
-  this module and calls `main`, which hands its arguments to `opentide.cli.launch.run`; that reads
-  the command path with `command_words` and runs a Rust command through `cli_main`. When this
-  module does not load, the console script runs the Python CLI alone.
+- UC-3.8 (#830), UC-6.2 (#841): the console script, `opentide = "opentide._cli:main"`, loads this
+  module and runs every command through `cli_main`, in process. When this module does not load,
+  the console script says so and exits 1: there is no other implementation. `main`,
+  `command_words`, `run_cli`, `compare_runs`, `ServeHost`, `validate_report` and the catalog
+  functions, which the Python implementation called, went with it.
 - UC-5.2 (#837): the crate moved here from `analysis/`, and `sdk` binds the facade for
   `opentide.Workspace`; UC-5.2b its tenant operations for `opentide.Connection`, and the generated
   `sdk.pyi`. UC-5.5 (#840): the wheels.

@@ -277,4 +277,4 @@ A warning is `warning`, a note `info`; `[queries] severity` replaces both. A pla
 
 ## Source
 
-`src/opentide/cli/services/lint.py`
+`crates/opentide-cli/src/commands/lint.rs`, `crates/opentide-workspace/` (the checks)

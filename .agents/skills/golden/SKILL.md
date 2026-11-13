@@ -1,6 +1,6 @@
 ---
 name: golden
-description: Prove a Rust port against the Python oracle - golden capture of the frozen Python CLI (cargo xtask golden record, check and diff, from UC-0.5), OPENTIDE_ENGINE=python|rust|compare and the comparator (UC-0.7), and the tests/golden/APPROVED_DIFFS.toml ledger, where every intended difference needs a reason, an issue and a changelog entry. Use when porting a command or a check to Rust, when a golden or a compare run fails, when recording or reviewing goldens, or when a change means to alter what a command prints or writes.
+description: Hold the Rust command line to the Python oracle - golden capture of the frozen Python CLI (cargo xtask golden record, check and diff, from UC-0.5), golden check --engine rust and the comparator (UC-0.7, UC-6.2), and the tests/golden/APPROVED_DIFFS.toml ledger, where every intended difference needs a reason, an issue and a changelog entry. Use when porting a command or a check to Rust, when a golden or a compare run fails, when recording or reviewing goldens, or when a change means to alter what a command prints or writes.
 ---
 
 # Goldens, compare and the approved-diffs ledger
@@ -17,7 +17,7 @@ and the issues of the two items that build the tools.
 | Tool | Work item | State |
 |------|-----------|-------|
 | `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1160 cases recorded from opentide 0.23.0; `.github/workflows/golden.yml` runs `check` and `record --check-determinism` |
-| `OPENTIDE_ENGINE`, the comparator, `tests/golden/APPROVED_DIFFS.toml` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805) | Not present |
+| The comparator, `tests/golden/APPROVED_DIFFS.toml`, `golden check --engine rust` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805); UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841) | Present: every case runs on the Rust core, the only implementation; `OPENTIDE_ENGINE` and compare mode were removed with the Python implementation |
 
 **`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
 the fixtures and the normalisation rules. Where this skill and the README disagree, the README is
@@ -55,7 +55,7 @@ usage).
 
 `record`, `check` and `diff` take `--filter GLOB` (over case ids,
 `<command>/<mode>/<fixture>/<variant>`) and `--jobs N`; `check` and `diff` take
-`--engine python|rust|compare`, where `rust` and `compare` cannot start until UC-3 and UC-0.7.
+`--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
 
 What is recorded (the README has the detail):
 
@@ -71,22 +71,19 @@ What is recorded (the README has the detail):
 - **Tenants:** paths that contact a tenant are recorded only as their failure without tenants.
   Their success paths are UC-4.1's recorded HTTP cassettes.
 
-## Shadow mode and the comparator (UC-0.7)
+## The comparator (UC-0.7, UC-6.2)
 
-`OPENTIDE_ENGINE=python|rust|compare` selects the implementation of a command (plan §5.2, #805):
+`cargo xtask golden check --engine rust` runs every case through this repository's CLI (the
+console script of `.venv`, which runs the Rust core in process) and compares each run with the
+oracle's recording through `opentide-compare`: stdout, stderr, the exit code, the files and the
+JSON document (structurally, then byte for byte), with the goldens' normalisation. JSON key order
+counts: the oracle's order is the contract. `--runner node` launches the npm package's bin
+instead. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
+report.
 
-| Value | Effect |
-|-------|--------|
-| `python` | The Python implementation, the default until the command's default flips |
-| `rust` | The Rust implementation. A command without one is a usage error, exit 2, with a new failure code whose name is to be confirmed on #805 (not `engine_unavailable`, which already exists with another meaning) |
-| `compare` | Runs both on the same input, each on its own copy of the workspace when the command writes files, and compares them |
-
-`compare` compares stdout, stderr, the exit code, the files and the JSON document (structurally,
-then byte for byte), with the goldens' normalisation. JSON key order counts: the oracle's order is
-the contract. On any difference it exits 70 with `failure.code: engine_mismatch`, writes a
-structured diff report under `$XDG_STATE_HOME/opentide/compare/`, and gives the report's path in
-`failure.message`. CI runs every golden in `compare` for each command that has a Rust
-implementation.
+Until UC-6.2 (#841), `OPENTIDE_ENGINE=python|rust|compare` chose a command's implementation at run
+time and `--engine compare` ran only the cases the Python dispatch table covered; both went with
+the Python implementation. The oracle stays the frozen PyPI release (`tests/golden/ORACLE`).
 
 ## The approved-diffs ledger
 

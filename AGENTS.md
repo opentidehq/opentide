@@ -10,8 +10,8 @@
 
 | Path | What it is | Read first |
 |------|------------|------------|
-| `src/opentide/` | The PyPI package: models, CLI, MCP, platforms, bundled data (`src/opentide/data/`) | [`src/AGENTS.md`](src/AGENTS.md) |
-| `tests/` | The Python suite: unit, CLI E2E (sharded), MCP, docs and CI contracts | the testing skills below |
+| `src/opentide/` | The PyPI package: the console script, the SDK, the models, the plugin API, bundled data (`src/opentide/data/`) around the Rust core | [`src/AGENTS.md`](src/AGENTS.md) |
+| `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E (sharded), MCP and LSP stdio, docs and CI contracts | the testing skills below |
 | `tests/golden/` | The goldens of the frozen Python CLI (the oracle): `cargo xtask golden record\|check` | [`tests/golden/README.md`](tests/golden/README.md) |
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide/` | The `opentide` crate: the Rust SDK (the facade), the only crate with a stability promise | [`crates/opentide/AGENTS.md`](crates/opentide/AGENTS.md) |
@@ -45,7 +45,7 @@
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
 | PyPI release, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 | Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
-| Porting to Rust against the Python oracle: goldens, `OPENTIDE_ENGINE=compare`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
+| Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
 | Grammars, `crates/opentide-syntax`, highlight queries | [`.agents/skills/tree-sitter/SKILL.md`](.agents/skills/tree-sitter/SKILL.md) |
 | The language server host (`crates/opentide-lsp`), `editors/` | [`.agents/skills/lsp-host/SKILL.md`](.agents/skills/lsp-host/SKILL.md) |

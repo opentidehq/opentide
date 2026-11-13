@@ -100,4 +100,4 @@ query            Run a read-only query on platform tenants and show rows
 
 ## Source
 
-`src/opentide/cli/commands/introspect.py`.
+`crates/opentide-cli/src/catalog.rs`.

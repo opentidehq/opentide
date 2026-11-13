@@ -1,63 +1,13 @@
 ---
 title: Platforms API
-description: Platform registry, deployers and query validators, and platform plugins (opentide.plugins) that add a detection platform through the opentide.platforms entry point.
+description: The built-in platforms, and platform plugins (opentide.plugins) that add a detection platform through the opentide.platforms entry point.
 ---
 
 # Platforms API
 
-Platforms register through setuptools entry points in `pyproject.toml`:
+The nine built-in platforms are the Rust core's connectors: the command line, the [Workspace](./workspace.md) and its [tenant operations](./workspace.md#tenant-operations) reach them, and `opentide.Connection.capabilities` says what each can do ([capability matrix](#capability-matrix)). Python adds a platform through a **plugin**.
 
-```toml
-[project.entry-points."opentide.platforms"]
-sentinel = "opentide.platforms.sentinel:declare"
-splunk = "opentide.platforms.splunk:declare"
-# …
-```
-
-## PlatformsRegistry
-
-```python
-from opentide import Opentide
-
-Opentide.initialise()
-for name, platform in Opentide.Platforms.items():
-    print(name, platform.enabled, platform.can_deploy, platform.can_validate)
-```
-
-## Platform
-
-`config`, `deployer` and `validator` are built the first time they are read. Listing platforms (`opentide info`, the MCP platforms resource) therefore never builds a client or reads the tenant configuration of a platform you do not use.
-
-| Field | Description |
-|-------|-------------|
-| `name` | Registry key (e.g. `defender_for_endpoint`) |
-| `enabled` | Whether platform is active in client config |
-| `config` | Loaded platform configuration, built on first access |
-| `deployer` | Rule deployer instance or None, built on first access |
-| `validator` | Query validator instance or None, built on first access |
-| `can_deploy` | Property — the platform declares a deployer (does not build it) |
-| `can_validate` | Property — the platform declares a validator (does not build it) |
-
-## Query validators
-
-Six platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide.cli.enums`):
-
-- `sentinel` → KQL
-- `defender_for_endpoint` → KQL
-- `splunk` → SPL
-- `sentinel_one` → S1QL
-- `carbon_black_cloud` → Lucene
-- `elastic` → Kuery, Lucene, EQL, ES|QL (live tenant check only)
-
-CrowdStrike, HarfangLab and Sysdig have deployers only.
-
-## Rule deployment
-
-```python
-rule = Opentide.Rules[uuid]
-result = rule.deploy("sentinel", dry_run=True)
-print(result.dry_run, result.message)
-```
+The Python platform registry (`Opentide.Platforms`, `opentide.platforms`, the `declare()` entry points of the built-in platforms) is gone with the Python implementation ([#841](https://github.com/opentidehq/opentide/issues/841)).
 
 ## Platform plugins
 
@@ -159,7 +109,7 @@ Rules give the platform a block under `configurations.acme`. `opentide validate`
 
 ### Run it
 
-Plugin platforms run on the Rust core. `query`, `validate query` and `deploy` with a `--platform` that names an installed plugin go to it under the default engine, with nothing to set; the Python command line never reads a plugin's name. `<plugin>` is the entry point's name (`acme` in the sample):
+Plugin platforms run on the Rust core, with nothing to set: `validate` checks each rule's block for an enabled plugin's platform, and `query`, `validate query` and `deploy` take its name as `--platform`. `<plugin>` is the entry point's name (`acme` in the sample):
 
 ```bash
 opentide validate
@@ -168,7 +118,7 @@ opentide validate query --live --platform <plugin>
 opentide query --platform <plugin> --since 1h 'process | head'
 ```
 
-`OPENTIDE_ENGINE=rust` runs every command on the Rust core, plugin runs included. `OPENTIDE_ENGINE=python` keeps the Python command line, which knows the built-in platforms only, and `OPENTIDE_ENGINE=compare` refuses a plugin run, since both runs would reach the tenant. `opentide validate` itself checks a plugin's blocks under the Rust core (`OPENTIDE_ENGINE=rust`) and in the SDK (`opentide.Workspace.validate`); the Python command line reports each one as an extra key.
+`opentide validate` and the SDK's `opentide.Workspace.validate` check each plugin block with the plugin's model. `query --rule` and `--file` read a built-in platform's block: on a plugin's platform, give the query as `QUERY` or `--query-file` (`usage_invalid_value` otherwise).
 
 </Step>
 
@@ -209,14 +159,14 @@ A plugin platform deploys as the built-in platforms that keep the vendor's id of
 Plugins load only when opentide runs from its Python package. The native binary (`opentide-cli`) and the npm package `@opentide/opentide` cannot import Python: there, `opentide validate` warns about each enabled platform that is not built in, with the way out, and `--platform` takes the built-in platforms only. The warning reads:
 
 ```text
-acme is not a built-in platform: if it is a platform plugin (an opentide.platforms entry point), it loads only when opentide runs from its Python package (pip install opentide, then OPENTIDE_ENGINE=rust opentide ...); this command line cannot check its configuration or reach its tenants
+acme is not a built-in platform: if it is a platform plugin (an opentide.platforms entry point), it loads only when opentide runs from its Python package (pip install opentide, then opentide ...); this command line cannot check its configuration or reach its tenants
 ```
 
 Inside the package, `validate` warns instead about an enabled platform no installed plugin provides, and about a plugin that failed to load.
 
 ### Before 0.24: `declare()`
 
-Earlier releases documented a plugin as a `declare()` function returning deployer and validator factories. The Python registry still lists such entry points (`Opentide.Platforms`), but nothing deploys through them: write a `PlatformPlugin`.
+Earlier releases documented a plugin as a `declare()` function returning deployer and validator factories. The Python registry that listed them is gone: write a `PlatformPlugin`.
 
 ## Capability matrix
 
@@ -224,4 +174,4 @@ Human-readable table and the fields each block must contain: [Usage: Platforms](
 
 ## Source
 
-`src/opentide/plugins.py` (the plugin API), `crates/opentide-connectors/src/plugin.rs` and `bindings/python/src/plugins.rs` (the hook), `src/opentide/platforms/registry.py`, `src/opentide/platforms/plugins.py`
+`src/opentide/plugins.py` (the plugin API), `crates/opentide-connectors/src/plugin.rs` and `bindings/python/src/plugins.rs` (the hook), `crates/opentide-connectors/` (the built-in platforms)

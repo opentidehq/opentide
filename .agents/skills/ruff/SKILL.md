@@ -29,19 +29,14 @@ The pre-commit hooks run the same ruff (`uv run ruff`, pinned by `uv.lock`) on s
 | `PLE`, `PLW1510` | pylint errors; `subprocess.run` without `check=` |
 | `DTZ` | naive datetimes |
 | `PGH` | blanket `# noqa` / `# type: ignore` |
-| `T20` | `print()` — output goes through `opentide.core.logging` (stderr) or `opentide.cli.output` |
-| `TID251` | banned APIs: a plain `requests.Session` in `platforms/` instead of `TenantSession` |
+| `T20` | `print()` — the package writes nothing itself (the command line is Rust's); `scripts/` may print |
 | `C4`, `FURB`, `ERA`, `G`, `LOG` | comprehensions, modern idioms, commented-out code, logging calls |
 
-`per-file-ignores` (each commented in `pyproject.toml`): `T201` for the few entry points
-whose job is to print and for `scripts/`; `TID251` outside `src/opentide/platforms/`;
+`per-file-ignores` (each commented in `pyproject.toml`): `T201` for `scripts/`;
 `PLW1510`/`RUF012` in tests.
 
 Next candidates, not yet on: `ANN` for `src/` (about 140 unannotated functions) and `PT`
 for tests. Turn one on only together with its fixes.
-
-`typer.Option`/`typer.Argument` are configured as immutable calls, so Typer's call defaults
-don't trip `B008`.
 
 ## Fixing findings
 
