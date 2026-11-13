@@ -28,12 +28,18 @@ pending run per group and cancels the older one when a newer one queues.
 
 ### What runs where
 
-A pull request runs the **core gates**; everything else is the **full set**
-(`tests/test_ci/test_ci_scope.py` holds both):
+A pull request runs a **lean set** on Linux: the core gates, plus the path-scoped jobs whose
+inputs it changes. Everything else is the **full set**, which runs on every push to a base branch,
+where platform regressions are caught (`tests/test_ci/test_ci_scope.py` holds the scopes). A push's
+run is named after its commit's first line, `CI on <branch>: Merge pull request #N ...`, so a
+failure in the full set names the pull request that brought it.
 
 | Trigger | What runs |
 |---------|-----------|
-| Every pull request | The core gates (below) and CodeQL: the required checks |
+| Every pull request | The core gates (below) and CodeQL: the required checks. Required checks whose job runs only in the full set still report: `Engine tests (macos-latest)` and `(windows-latest)` gather the Linux shards on a pull request; `Test (3.10)`'s cell starts and skips its steps; `Corpus (...)` passes when its parts were not needed; CodeQL's analysis of a language is skipped when none of its files changed |
+| A pull request that changes the corpora's inputs (`xtask/`, `crates/opentide-core`, `-schema`, `-schema-derive`, `-workspace`, `-compile`, `-lsp`, `tests/corpora/`, `tests/golden/cases*`, `tests/golden/vocab/`, `src/opentide/data/`, `Cargo.lock`, `rust-toolchain.toml`, `ci.yml`) | Also the five corpus parts (a change to a query engine alone is held by the Rust tests and golden compare, and by the corpora on merge) |
+| A pull request that changes `bindings/node/`, `crates/opentide/`, `scripts/engine/npm-local-registry/` (or `Cargo.lock`, `ci.yml`) | Also the Node package and its install from a local registry; `crates/opentide/` also the facade crate's every-feature tests and semver checks |
+| A pull request that changes Python files (`*.py`, `pyproject.toml`, `uv.lock`) or the workflows | CodeQL's analysis of that language |
 | A pull request with the `full-ci` label | Everything: the core gates and the full set (the label is read at each push, so add it, then push; or Run workflow on the branch) |
 | A pull request that changes the engine release's inputs (`engine-release*.yml`, `scripts/engine/release*`; not `Cargo.toml` or `Cargo.lock`, which most pull requests touch) | Also the engine release dry run, its vscode-extension check and the crates' package and licence scan |
 | A pull request that changes `grammars/`, `highlights/` or `check-grammars.sh` | Also the grammar regeneration and TextMate checks |
@@ -45,19 +51,29 @@ the path-based ones read ci.yml's `changes` job (`CI paths`, a `git diff` of the
 which fails open: when it does not succeed, they run). A core gate has no `if`, so its check
 starts on every pull request and can be required.
 
+**Before and after the lean set** (a typical pull request: Rust and Python changes, none to the
+corpora's, the Node package's or the facade's inputs). Before (#1047's run 43410079432): 25 of
+ci.yml's jobs ran, 20 of them building or testing (engine tests on Linux, macOS and Windows,
+Python 3.10 and 3.14, 4 E2E shards, 5 corpus parts, lint, engine lint, deny, GitLab CI lint,
+golden compare), plus CodeQL's 2, for 11.5 minutes first job to last; Windows's engine tests
+(11.4 minutes) were the long pole, then golden compare (8.6) and the vocabulary corpus part
+(8.4). After: Linux only, 12 building or testing (lint, engine lint, 2 engine test shards, deny,
+Python 3.14, 4 E2E shards, GitLab CI lint, golden compare); the gathering checks, the 3.10 cell
+and CodeQL report in seconds. The long poles are golden compare and engine lint.
+
 **Core gates** (every pull request):
 
 | Job | What it checks |
 |-----|----------------|
-| `lint` | ruff, ty (the dependencies installed without the project), `uv build` (the wheel from the sdist, the `develop` profile, into the cached target directory) and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
+| `lint` | ruff, ty (the dependencies installed without the project), actionlint 1.7.7 over the workflows with shellcheck over their scripts (`.github/actionlint.yaml`), `uv build` (the wheel from the sdist, the `develop` profile, into the cached target directory) and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo xtask cassettes check` (#831: one deploy cassette per scenario of `tests/cassettes/scenarios.toml`, recorded and redacted, none edited by hand), `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | (`engine-test-part`: Linux in two shards, `nextest --partition hash:N/2`, macOS and Windows whole; `engine-test` gathers them under each OS's required check, as `corpus` does, #841) `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
+| `engine-test` | (`engine-test-part`: Linux in two shards, `nextest --partition hash:N/2`, on every pull request; macOS and Windows whole in the full set, through a matrix that depends on the scope, `include: ${{ fromJSON(<full set> && '[...]' || '[...]') }}`; `engine-test` gathers them under each OS's required check, as `corpus` does, #841, and on a pull request reports macOS's and Windows's as the Linux shards') `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
-| `test` | Python **3.10** and **3.14**, the coverage gate on 3.14 (`test-full` adds 3.11–3.13 in the full set) |
-| `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test` |
+| `test` | Python **3.14** with the coverage gate; the **3.10** cell runs in the full set (on a pull request it starts and skips its steps, `env.RUNS`, so its required check reports); `test-full` adds 3.11–3.13 in the full set |
+| `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test`. The E2E tests that only repeat a golden case through the same console script run in the full set (`full_set`): `test_opentide_console_script_help`, `test_opentide_console_script_json_is_single_document`, `test_opentide_console_script_validates_corpus` and `test_workflow_subprocess_e2e.py` |
 | `golden-compare` | `cargo xtask golden check --engine rust` (UC-0.7; every case since UC-6.2, #841): every golden case through this repository's CLI, the Rust core, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; then `cargo xtask mcp replay --engine rust` (the recorded Python MCP sessions against the Rust server) and the MCP stdio tests. The check keeps its name, `Golden compare`, a required check's; the `golden-compare` artifact holds the report |
-| `corpus` | (`corpus-part` in five parts on five runners: `Corpus (generator)`, `(faults)`, `(diffs)`, `(editor)`, `(vocabulary)`; `corpus` gathers them under the required check's name, with `if: ${{ !cancelled() }}` so that a failed part fails it, #841) The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); the platform-block and configuration fault kinds through the Rust engine, finding for finding (`corpus faults --check --engine rust --only platforms` and `--only configuration`, UC-1.4 #810 and UC-1.5 #811, the `faults` part, about a minute); every workspace's resolved configuration and its configuration findings against the oracle's (`cargo xtask config diff --against python`, UC-1.5 #811, the `diffs` part, seconds); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
-| `changes` | `CI paths`: whether the pull request changes the release's inputs or the grammars (above) |
+| `corpus` | On a pull request that changes the corpora's inputs (above), and in the full set. (`corpus-part` in five parts on five runners: `Corpus (generator)`, `(faults)`, `(diffs)`, `(editor)`, `(vocabulary)`; `corpus` gathers them under the required check's name, with `if: ${{ !cancelled() }}` so that a failed part fails it, #841) The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); the platform-block and configuration fault kinds through the Rust engine, finding for finding (`corpus faults --check --engine rust --only platforms` and `--only configuration`, UC-1.4 #810 and UC-1.5 #811, the `faults` part, about a minute); every workspace's resolved configuration and its configuration findings against the oracle's (`cargo xtask config diff --against python`, UC-1.5 #811, the `diffs` part, seconds); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
+| `changes` | `CI paths`: whether the pull request changes the release's inputs, the grammars, the corpora's inputs, the Node package's or the facade's (above) |
 
 **Full set** (nightly, pushes, Run workflow, the `full-ci` label; some also by path, above):
 
@@ -143,10 +159,9 @@ key lists of `highlights/queries/tide/highlights.scm`) for editors that run `ope
 own. `cargo xtask codegen` generates it from the Rust models, and `cargo xtask codegen --check`
 (the `engine` job, `ci-local.sh`) fails when the committed one differs.
 
-**Budget:** a pull request's CI (the core gates), first job start to last job end, stays under 15
-minutes on a warm cache (the second push of a branch). The long poles are the corpus job, the
-Python 3.10 cell, golden compare and nextest on Windows; split what grows past it, or move it to
-the full set.
+**Budget:** a pull request's CI (the lean set), first job start to last job end, stays under 10
+minutes on a warm cache (the second push of a branch). The long poles are golden compare and the
+Linux engine test shards; split what grows past it, or move it to the full set.
 
 ## Required checks
 
@@ -257,7 +272,13 @@ removed from the rule too, or every pull request that does not run it waits for 
   `-highlight`, `-ecs`, `-lsp`), any crate's `Cargo.toml`, `packages/*/package.json`,
   `grammars/`, `Cargo.lock`, the query catalogs or the oracles, weekly (with the Carbon Black
   Cloud tenant) and on demand. Its own triggers and network-heavy references keep it out of
-  ci.yml.
+  ci.yml. On a pull request each reference runs only when its own language's inputs change (its
+  `changes` job, `Oracle paths`: the language's crate, grammar, catalog, testdata and oracle
+  script; what every language builds on runs them all; the `full-ci` label, a push and a filter
+  that fails run everything), so a KQL change pulls no Splunk, Falco or Elasticsearch image and no
+  Lucene jar. The pinned Elastic references (Lucene's jars from Maven Central, the EQL and kuery
+  grammars) are cached under `oracle.py`'s pins and saved from pushes; `oracle.py` checks each
+  file's SHA-256, a restored one too (`tests/test_ci/test_ci_scope.py`).
 - [`golden.yml`](workflows/golden.yml) runs `cargo xtask golden check --engine python` and
   `golden record --check-determinism` against the committed recordings of the frozen Python CLI
   (`tests/golden/README.md`) on every push to `development` and `integration/unified-core`,

@@ -24,6 +24,7 @@ from typing import Any
 
 import pytest
 import yaml
+from tests.test_ci import ci_matrix
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -396,14 +397,24 @@ def test_nextest_runs_on_three_operating_systems() -> None:
         "macos-latest",
         "windows-latest",
     ]
-    shards: dict[str, list[tuple[int, int]]] = {}
-    for cell in jobs["engine-test-part"]["strategy"]["matrix"]["include"]:
-        shards.setdefault(cell["os"], []).append((int(cell["shard"]), int(cell["shards"])))
-    assert list(shards) == ["ubuntu-latest", "macos-latest", "windows-latest"]
-    for os_name, cells in shards.items():
-        # Every partition of each OS runs, once: a missing shard would skip its tests.
-        count = cells[0][1]
-        assert sorted(cells) == [(n, count) for n in range(1, count + 1)], os_name
+    for scope, systems in (
+        # The full set: three operating systems.
+        ("full", ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        # A pull request: Linux, in the same shards (the gathering job reports
+        # macOS's and Windows's required checks).
+        ("pull", ["ubuntu-latest"]),
+    ):
+        shards: dict[str, list[tuple[int, int]]] = {}
+        for cell in ci_matrix.cells(jobs["engine-test-part"], scope):
+            shards.setdefault(cell["os"], []).append((int(cell["shard"]), int(cell["shards"])))
+        assert list(shards) == systems, scope
+        for os_name, cells in shards.items():
+            # Every partition of each OS runs, once: a missing shard would skip its tests.
+            count = cells[0][1]
+            assert sorted(cells) == [(n, count) for n in range(1, count + 1)], os_name
+    full = ci_matrix.cells(jobs["engine-test-part"], "full")
+    pull = ci_matrix.cells(jobs["engine-test-part"], "pull")
+    assert [c for c in full if c["os"] == "ubuntu-latest"] == pull
     step = next(s for s in jobs["engine-test-part"]["steps"] if NEXTEST in str(s.get("run", "")))
     assert "--partition hash:${{ matrix.shard }}/${{ matrix.shards }}" in str(step["run"])
 
@@ -446,15 +457,12 @@ def _check_names_of(workflow: dict[str, Any]) -> list[tuple[str, bool]]:
 
 
 def _expand(name: str, job: dict[str, Any]) -> list[str]:
-    matrix = (job.get("strategy") or {}).get("matrix") or {}
-    axes = {k: v for k, v in matrix.items() if k not in ("include", "exclude")}
-    cells: list[dict[str, str]] = [{}]
-    for axis, values in axes.items():
-        cells = [{**cell, axis: str(value)} for cell in cells for value in values]
-    if not axes and matrix.get("include"):
-        cells = [{str(k): str(v) for k, v in entry.items()} for entry in matrix["include"]]
+    """The check names of a job's cells (the full set's: a superset)."""
     pattern = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
-    return [pattern.sub(lambda m, cell=cell: cell[m.group(1)], name) for cell in cells]
+    return [
+        pattern.sub(lambda m, cell=cell: cell[m.group(1)], name)
+        for cell in ci_matrix.cells(job, "full")
+    ]
 
 
 def _documented_checks() -> list[str]:
@@ -471,8 +479,9 @@ def _every_pull_request(jobs: dict[str, Any], job_id: str) -> bool:
     needs = job.get("needs") or []
     needs = [needs] if isinstance(needs, str) else needs
     if job.get("if") == _scope().GATHER:
-        # It runs whatever its parts did (test_ci_scope.py, CI_GATHER).
-        return all(_every_pull_request(jobs, need) for need in needs)
+        # It runs whatever its parts did, skipped ones included, and decides
+        # (test_ci_scope.py, CI_GATHER): its check starts on every pull request.
+        return True
     return "if" not in job and all(_every_pull_request(jobs, need) for need in needs)
 
 
@@ -484,7 +493,8 @@ def _gathered(jobs: dict[str, Any]) -> set[str]:
         if job.get("if") == gather:
             needs = job.get("needs") or []
             found |= {needs} if isinstance(needs, str) else set(needs)
-    return found
+    # A path-scoped gathering job also needs `changes`, which is no part of it.
+    return found - {"changes"}
 
 
 def _required_names(path: Path) -> list[str]:
