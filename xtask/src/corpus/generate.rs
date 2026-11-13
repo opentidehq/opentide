@@ -816,6 +816,7 @@ fn platform_block(
         "harfanglab" => pairs.extend(harfanglab(rng, variant, process, name, &mut tags)),
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
+        "graylog" => pairs.extend(graylog(rng, variant, process, &mut tags)),
         _ => {}
     }
     (Yaml::Map(pairs), tags)
@@ -1249,6 +1250,44 @@ fn sysdig(rng: &mut Rng, variant: usize, tags: &mut Vec<String>) -> Vec<(String,
                 ("name", Yaml::s(format!("{list}_macro"))),
                 ("condition", Yaml::s("container.id != host\n")),
             ])]),
+        ));
+    }
+    pairs
+}
+
+/// A Graylog event definition: a Lucene query over one stream, by id (no
+/// tenant alias to resolve), scheduled by interval; every other variant
+/// aggregates instead of filtering.
+fn graylog(
+    rng: &mut Rng,
+    variant: usize,
+    process: &str,
+    tags: &mut Vec<String>,
+) -> Vec<(String, Yaml)> {
+    let stream = format!("65f0c0ffee0123456789{:04x}", rng.below(0x1_0000));
+    let every = rng.pick(&["5m", "10m", "15m"]);
+    let mut pairs = kv(vec![
+        (
+            "query",
+            Yaml::s(format!(
+                "EventID:1 AND image_lc:/.*\\\\{}/",
+                process.to_ascii_lowercase().replace('.', "\\.")
+            )),
+        ),
+        ("streams", Yaml::s(stream)),
+        (
+            "schedule",
+            Yaml::map(vec![("every", Yaml::s(every)), ("window", Yaml::s("15m"))]),
+        ),
+    ]);
+    if variant % 2 == 1 {
+        tags.push("graylog:aggregation".to_string());
+        pairs.push((
+            "aggregation".to_string(),
+            Yaml::map(vec![
+                ("group_by", Yaml::s("source")),
+                ("condition", Yaml::s("count() >= 3")),
+            ]),
         ));
     }
     pairs

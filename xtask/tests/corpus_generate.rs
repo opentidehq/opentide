@@ -23,16 +23,16 @@ fn small(seed: u64, layout: Layout) -> Options {
 #[test]
 fn recorded_digests() {
     let cases = [
-        (small(1, Layout::Explicit), "20456a95c4e6a368"),
-        (small(1, Layout::Standard), "5341b30d4f6f1886"),
-        (Options::new(20_261_107), "5978a2ab7c093587"),
+        (small(1, Layout::Explicit), "163e7e290365df1f"),
+        (small(1, Layout::Standard), "890eca66a1a872fb"),
+        (Options::new(20_261_107), "875940d0dfbb0b5e"),
         (
             Options {
                 counts: Counts::scaled(0.1).unwrap(),
                 layout: Layout::Custom,
                 ..Options::new(20_261_107)
             },
-            "da09872fae5d96f4",
+            "82d374fe4b35373b",
         ),
     ];
     for (options, digest) in cases {
