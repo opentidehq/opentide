@@ -7,6 +7,11 @@
 //! - #874 (UC-0.2): `validate query` checks CrowdStrike's CQL offline. The
 //!   `--platform` help names `crowdstrike`, `--file` reads `.cql`, and
 //!   `QueryChecked.language` gains `cql`.
+//! - #899 (0.25.0, H1): HarfangLab's YARA offline. The `--platform` help
+//!   names `harfanglab`, `--file` reads `.yar` and `.yara` (and Google
+//!   SecOps' `.yaral`), and `QueryChecked.language` is 0.28.1's (`yara`,
+//!   `exabeam`, `yaral`), with `cql`. Both help texts are derived from the
+//!   platform table (`opentide_cli::tree`).
 
 use opentide_cli::json::Json;
 
@@ -14,16 +19,17 @@ use opentide_cli::json::Json;
 const HELP: &[(&str, &str)] = &[
     (
         "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
-        "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
     ),
     (
         "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)",
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .cql) offline (repeatable)",
     ),
 ];
 
-/// The query language #874 appended to `$defs.QueryChecked.language`.
-const ADDED_LANGUAGE: &str = "cql";
+/// The query languages appended to `$defs.QueryChecked.language`: 0.28.1's
+/// (#899, the Exabeam and Google SecOps rows), then #874's `cql`.
+const ADDED_LANGUAGES: [&str; 4] = ["yara", "exabeam", "yaral", "cql"];
 
 /// Replaces every string equal to `from` with `to`, and counts them.
 fn replace_strings(value: &mut Json, from: &str, to: &str) -> usize {
@@ -108,6 +114,16 @@ fn drop_since_oracle(value: &mut Json) -> usize {
 /// Today's catalogue (or schemas) as the oracle printed it. Panics if a
 /// listed change is not in `document`.
 pub fn to_oracle(document: &mut Json) {
+    // First: `exabeam` is a language and a platform the oracle lacks, which
+    // `drop_since_oracle` drops from every list.
+    let languages = query_languages(document);
+    for added in ADDED_LANGUAGES.iter().rev() {
+        assert_eq!(
+            languages.pop(),
+            Some(Json::str(*added)),
+            "QueryChecked.language ends with {ADDED_LANGUAGES:?}"
+        );
+    }
     drop_since_oracle(document);
     for (oracle, today) in HELP {
         assert!(
@@ -115,15 +131,9 @@ pub fn to_oracle(document: &mut Json) {
             "today's help is missing: {today}"
         );
     }
-    let languages = query_languages(document);
-    assert_eq!(
-        languages.pop(),
-        Some(Json::str(ADDED_LANGUAGE)),
-        "QueryChecked.language ends with {ADDED_LANGUAGE}"
-    );
 }
 
 /// The oracle's schemas as today's CLI prints them.
 pub fn to_today(document: &mut Json) {
-    query_languages(document).push(Json::str(ADDED_LANGUAGE));
+    query_languages(document).extend(ADDED_LANGUAGES.iter().map(|language| Json::str(*language)));
 }

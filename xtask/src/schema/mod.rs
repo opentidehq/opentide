@@ -234,6 +234,69 @@ pub const APPROVED_PROPERTIES: &[ApprovedProperty] = &[ApprovedProperty {
     changelog: "**A Splunk block's `advanced` table validates and deploys again**",
 }];
 
+/// A model revision development made after the oracle's release (0.23.0),
+/// ported on purpose: every difference under one of `paths` in one of
+/// `models` (descriptions, nullability, required keys, new properties).
+#[derive(Debug, Clone, Copy)]
+pub struct ApprovedRevision {
+    /// The models that hold it, by Pydantic class name.
+    pub models: &'static [&'static str],
+    /// The paths it changes in each of them, from the root of the normalised
+    /// schema: a difference at a path or below it is the revision's.
+    pub paths: &'static [&'static str],
+    /// Why the models differ.
+    pub reason: &'static str,
+    /// The bold lead of the `CHANGELOG.md` entry that announces it.
+    pub changelog: &'static str,
+}
+
+/// The paths harfanglab-1.0 1.2 changes, under the block's root.
+const HARFANGLAB_1_2: [&str; 3] = [
+    "/properties/sigma/description",
+    "/properties/tags/description",
+    "/properties/yara",
+];
+
+/// The approved revisions. Like [`APPROVED_PROPERTIES`], an entry that
+/// approves nothing in a run is stale and fails it.
+pub const APPROVED_REVISIONS: &[ApprovedRevision] = &[ApprovedRevision {
+    models: &[
+        "HarfangLabConfig",
+        "RuleConfigurations",
+        "DetectionRule",
+        "DetectionRule_v1_1",
+    ],
+    paths: &[
+        HARFANGLAB_1_2[0],
+        HARFANGLAB_1_2[1],
+        HARFANGLAB_1_2[2],
+        "/properties/harfanglab/properties/sigma/description",
+        "/properties/harfanglab/properties/tags/description",
+        "/properties/harfanglab/properties/yara",
+        "/properties/configurations/properties/harfanglab/properties/sigma/description",
+        "/properties/configurations/properties/harfanglab/properties/tags/description",
+        "/properties/configurations/properties/harfanglab/properties/yara",
+    ],
+    reason: "harfanglab-1.0 1.2 (#899, 0.25.0): a block is one kind, `sigma` or `yara`, and \
+             a `yara` object is a whole `signature` or the decomposed `meta`, `strings`, \
+             `condition` and `imports`, so `signature` is new and the decomposed keys are \
+             no longer required on their own; the descriptions are 0.28.1's",
+    changelog: "**A HarfangLab block is a Sigma rule or a YARA rule, not both**",
+}];
+
+/// Whether `difference` is under a path of an [`APPROVED_REVISIONS`] entry
+/// of `model`: the entry's index, if so.
+fn approved_revision(model: &str, difference: &str) -> Option<usize> {
+    APPROVED_REVISIONS.iter().position(|entry| {
+        entry.models.contains(&model)
+            && entry.paths.iter().any(|path| {
+                difference
+                    .strip_prefix(path)
+                    .is_some_and(|rest| rest.starts_with('/') || rest.starts_with(": "))
+            })
+    })
+}
+
 /// Whether `difference` (a line of [`normalise::differences`]) is a
 /// property of `model` that [`APPROVED_PROPERTIES`] approves: the entry's
 /// index, if so.
@@ -255,6 +318,7 @@ fn approved_property(model: &str, difference: &str) -> Option<usize> {
 pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
     let mut out = Vec::new();
     let mut used = vec![false; APPROVED_PROPERTIES.len()];
+    let mut revised = vec![false; APPROVED_REVISIONS.len()];
     let registered: Vec<&str> = oracle["registered"]
         .as_array()
         .context("the probe wrote no registered identifiers")?
@@ -289,12 +353,16 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         drop_since_oracle_properties(&mut rust);
         let b = normalise(&rust, Side::Schemars, &[]);
         let mut found = differences(&a, &b);
-        found.retain(|difference| match approved_property(name, difference) {
-            Some(index) => {
+        found.retain(|difference| {
+            if let Some(index) = approved_property(name, difference) {
                 used[index] = true;
-                false
+                return false;
             }
-            None => true,
+            if let Some(index) = approved_revision(name, difference) {
+                revised[index] = true;
+                return false;
+            }
+            true
         });
         out.push((name.to_owned(), found));
     }
@@ -308,6 +376,18 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
                 entry.paths, entry.changelog
             )
         })
+        .chain(
+            APPROVED_REVISIONS
+                .iter()
+                .zip(&revised)
+                .filter(|(_, used)| !**used)
+                .map(|(entry, _)| {
+                    format!(
+                        "stale: no model differs from the oracle under {:?} ({})",
+                        entry.paths, entry.changelog
+                    )
+                }),
+        )
         .collect();
     out.push(("(approvals)".to_owned(), stale));
     Ok(out)
@@ -628,9 +708,14 @@ mod tests {
                 .all(|difference| !difference.contains("advanced")),
             "{compared:#?}"
         );
-        assert_eq!(
-            compared.last(),
-            Some(&("(approvals)".to_owned(), Vec::new()))
+        // Every property approval applied; a revision of the models' own
+        // schemas, which this oracle also has, is stale.
+        let (name, stale) = compared.last().unwrap();
+        assert_eq!(name, "(approvals)");
+        assert_eq!(stale.len(), APPROVED_REVISIONS.len(), "{stale:?}");
+        assert!(
+            stale.iter().all(|line| line.contains(" under ")),
+            "{stale:?}"
         );
         // The oracle with the property too: the approval is stale.
         let mut full = serde_json::Map::new();
@@ -640,8 +725,46 @@ mod tests {
         let oracle = json!({"registered": objects::checks::REGISTERED, "schemas": full});
         let compared = compare_schemas(&oracle).unwrap();
         let (_, stale) = compared.last().unwrap();
-        assert_eq!(stale.len(), 1, "{stale:?}");
-        assert!(stale[0].starts_with("stale: "), "{stale:?}");
+        assert_eq!(stale.len(), 1 + APPROVED_REVISIONS.len(), "{stale:?}");
+        assert!(
+            stale.iter().all(|line| line.starts_with("stale: ")),
+            "{stale:?}"
+        );
+    }
+
+    #[test]
+    fn an_approved_revision_takes_what_is_under_its_paths() {
+        let model = "HarfangLabConfig";
+        for difference in [
+            "/properties/yara/required: pydantic [\"meta\"], rust (absent)",
+            "/properties/yara/properties/signature: pydantic (absent), rust {}",
+            "/properties/sigma/description: pydantic \"a\", rust \"b\"",
+        ] {
+            assert_eq!(
+                approved_revision(model, difference),
+                Some(0),
+                "{difference}"
+            );
+        }
+        // Another key of the block, a prefix that is no path, another model.
+        assert_eq!(
+            approved_revision(
+                model,
+                "/properties/sigma/required: pydantic [], rust (absent)"
+            ),
+            None
+        );
+        assert_eq!(
+            approved_revision(model, "/properties/yarax: pydantic (absent), rust {}"),
+            None
+        );
+        assert_eq!(
+            approved_revision(
+                "SentinelConfig",
+                "/properties/yara/required: pydantic [], rust (absent)"
+            ),
+            None
+        );
     }
 
     /// Removes every property named `name` from `schema`, its definitions

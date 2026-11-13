@@ -671,8 +671,6 @@ pub fn decomposed_advisory(contexts: &Node, os: Option<&str>) -> Option<(&'stati
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
-
     use super::*;
 
     fn block(yaml: &str) -> BTreeSet<&'static str> {
