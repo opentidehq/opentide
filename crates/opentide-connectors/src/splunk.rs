@@ -25,7 +25,7 @@ use crate::connector::{
 };
 use crate::encode::{quote, quote_plus, urlencode};
 use crate::error::ConnectorError;
-use crate::python::python_str;
+use crate::text::json_text;
 use crate::{HttpSettings, TenantLabel};
 
 /// The platform's identifier.
@@ -301,10 +301,10 @@ fn messages(body: &Object, kinds: &[&str]) -> String {
         .iter()
         .filter_map(Json::as_object)
         .filter(|message| {
-            let kind = message.get("type").map(python_str).unwrap_or_default();
+            let kind = message.get("type").map(json_text).unwrap_or_default();
             kinds.contains(&kind.to_uppercase().as_str())
         })
-        .map(|message| message.get("text").map(python_str).unwrap_or_default())
+        .map(|message| message.get("text").map(json_text).unwrap_or_default())
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("; ")
@@ -312,7 +312,7 @@ fn messages(body: &Object, kinds: &[&str]) -> String {
 
 /// A form value as `urlencode` writes Python's value: `str(value)`.
 fn form_value(value: &Json) -> String {
-    python_str(value)
+    json_text(value)
 }
 
 /// `_encode`: the pairs, a list as one pair per item.
@@ -602,7 +602,7 @@ impl Splunk {
                 second.insert(key.into(), value);
             }
         }
-        let query = settings.get("search").map(python_str).unwrap_or_default();
+        let query = settings.get("search").map(json_text).unwrap_or_default();
         let saved = match self.saved_search(cx, name).await? {
             Some(saved) => saved,
             None if deletion => return Ok(None),
@@ -791,7 +791,7 @@ fn all_messages(body: &Object) -> String {
     items
         .iter()
         .filter_map(Json::as_object)
-        .map(|message| message.get("text").map(python_str).unwrap_or_default())
+        .map(|message| message.get("text").map(json_text).unwrap_or_default())
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("; ")

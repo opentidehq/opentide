@@ -103,7 +103,7 @@ mod lint {
         assert_eq!(
             json(&report.findings[0]),
             format!(
-                r#"{{"check":"filenames","severity":"warning","path":"objects/rules/rule-0001.yaml","yaml_line":null,"uuid":"{U1}","expected":"objects/rules/sentinel-kql-rule.yaml","message":"Filename 'rule-0001.yaml' does not match slugify(name)='sentinel-kql-rule'","code":"filename_mismatch","field_path":[],"line":null,"column":null,"end_line":null,"end_column":null,"help":"rename it to objects/rules/sentinel-kql-rule.yaml","fix":null,"explain":"opentide explain filename_mismatch"}}"#
+                r#"{{"check":"filenames","severity":"warning","path":"objects/rules/rule-0001.yaml","yaml_line":null,"uuid":"{U1}","expected":"objects/rules/sentinel-kql-rule.yaml","message":"Filename \"rule-0001.yaml\" does not match slugify(name)=\"sentinel-kql-rule\"","code":"filename_mismatch","field_path":[],"line":null,"column":null,"end_line":null,"end_column":null,"help":"rename it to objects/rules/sentinel-kql-rule.yaml","fix":null,"explain":"opentide explain filename_mismatch"}}"#
             )
         );
         assert_eq!(report.status, LintStatus::Issues);

@@ -84,14 +84,10 @@ fn infer_type(body: &Json) -> Option<String> {
     }
 }
 
-/// `str(value)` of a JSON value, as Python prints the value it was loaded as.
+/// A JSON value as text: a string as it is, anything else as its JSON.
 fn text(value: &Json) -> String {
     match value {
         Json::Str(text) => text.clone(),
-        Json::Null => "None".into(),
-        Json::Bool(flag) => if *flag { "True" } else { "False" }.into(),
-        Json::Int(integer) => integer.to_string(),
-        Json::Float(float) => opentide_schema::configuration::repr::float_text(*float),
         other => line(other),
     }
 }
@@ -646,7 +642,7 @@ mod tests {
         )]);
         assert_eq!(
             bundle(&index, "now").unwrap_err().detail,
-            "KeyError: 'objective' while rendering o1"
+            "KeyError: \"objective\" while rendering o1"
         );
     }
 

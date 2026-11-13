@@ -82,6 +82,11 @@ pub struct Node {
     /// Where it ends: just after a scalar; at the token after a block
     /// collection.
     pub end: Mark,
+    /// A plain scalar that YAML resolves to null, a boolean or a number, as
+    /// written (`1.50`, `True`, `~`, `0x1f`): what a consumer that reads
+    /// scalars as text, such as Falco, receives. `None` for a string, a
+    /// collection, and a node no YAML text wrote.
+    pub text: Option<Arc<str>>,
 }
 
 /// A key and its value in a mapping.
@@ -185,6 +190,7 @@ impl Node {
             value: Value::Null,
             start: mark,
             end: mark,
+            text: None,
         }
     }
 }
@@ -695,6 +701,7 @@ impl Builder {
                     }
                 }
                 Event::Scalar(text, style, anchor, tag) => {
+                    let written: Arc<str> = Arc::from(text.as_ref());
                     let mut value =
                         scalar_value(text, style, tag.as_deref()).map_err(|problem| {
                             let kind = if problem == OUT_OF_RANGE {
@@ -712,7 +719,21 @@ impl Builder {
                     {
                         text.pop();
                     }
-                    self.finish(Node { value, start, end }, anchor)?;
+                    let text = (style == ScalarStyle::Plain
+                        && matches!(
+                            value,
+                            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_)
+                        ))
+                    .then_some(written);
+                    self.finish(
+                        Node {
+                            value,
+                            start,
+                            end,
+                            text,
+                        },
+                        anchor,
+                    )?;
                 }
                 Event::Alias(id) => {
                     let Some(node) = self.anchors.get(&id).cloned() else {
@@ -761,6 +782,7 @@ impl Builder {
                                 value: Value::Seq(items),
                                 start,
                                 end,
+                                text: None,
                             },
                             anchor,
                         ),
@@ -774,6 +796,7 @@ impl Builder {
                                 value: Value::Map(entries),
                                 start,
                                 end,
+                                text: None,
                             },
                             anchor,
                         ),

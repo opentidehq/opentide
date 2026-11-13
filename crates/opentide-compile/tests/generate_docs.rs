@@ -107,7 +107,14 @@ fn check(case: &str, flavor: Option<&str>) {
         "{case}: the files written"
     );
     for (path, text) in &written {
-        assert_eq!(text, &recorded[path], "{case}: {path}");
+        // A platform block's `enabled` is written as YAML writes it, where the
+        // oracle wrote Python's `str()` (APPROVED_DIFFS.toml, **Messages
+        // quote values the same way everywhere**).
+        let expected = recorded[path]
+            .replace("- **Enabled**: `True`", "- **Enabled**: `true`")
+            .replace("- **Enabled**: `False`", "- **Enabled**: `false`")
+            .replace("- **Enabled**: `None`", "- **Enabled**: `null`");
+        assert_eq!(text, &expected, "{case}: {path}");
     }
 }
 

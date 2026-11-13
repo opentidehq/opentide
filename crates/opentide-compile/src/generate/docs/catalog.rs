@@ -499,7 +499,7 @@ impl<'i> Catalog<'i> {
                             ));
                         }
                     };
-                    let status = crate::generate::relations::py_str(status);
+                    let status = crate::generate::relations::node_text(status);
                     let strategy =
                         self.statuses
                             .strategy(&status)
@@ -1139,7 +1139,7 @@ mod tests {
         let error = typed::<RuleV1_1>(&document).unwrap_err().detail;
         assert_eq!(
             error,
-            "'R' does not validate: description: field required; opentide validate shows each finding"
+            "\"R\" does not validate: description: field required; opentide validate shows each finding"
         );
     }
 
@@ -1178,7 +1178,9 @@ mod tests {
         let root = opentide_schema::node::load("name: Threat\n").unwrap();
         let line = describe_constraints(&report, root.root().map(AsRef::as_ref));
         assert!(
-            line.starts_with("'Threat' does not validate: threat.impact[0]: 'a; b' packs several"),
+            line.starts_with(
+                "\"Threat\" does not validate: threat.impact[0]: \"a; b\" packs several"
+            ),
             "{line}"
         );
         assert!(

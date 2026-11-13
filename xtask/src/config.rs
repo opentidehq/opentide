@@ -147,6 +147,9 @@ pub fn run(args: &[String]) -> Result<u8> {
 
 /// `config_parse`'s message is the TOML crate's (an approved difference,
 /// `config_cases.toml` `toml-parse-message`): only its code is compared.
+/// A finding's message that differs from the oracle's only in the quote
+/// characters around its values (`messages-quote-values`) compares as the
+/// oracle's.
 fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
     let parse = |value: &Json| value.pointer("/error/code") == Some(&json!("config_parse"));
     if parse(oracle) && parse(rust) {
@@ -155,7 +158,21 @@ fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
             json!({"error": {"code": "config_parse"}}),
         );
     }
-    (oracle.clone(), rust.clone())
+    let mut rust = rust.clone();
+    if let (Some(theirs), Some(ours)) = (
+        oracle.get("issues").and_then(Json::as_array),
+        rust.get_mut("issues").and_then(Json::as_array_mut),
+    ) {
+        for (theirs, ours) in theirs.iter().zip(ours.iter_mut()) {
+            let (Some(want), Some(got)) = (theirs.get("message"), ours.get_mut("message")) else {
+                continue;
+            };
+            if crate::lint::quoting_only(Some(want), Some(got), &[]) {
+                *got = want.clone();
+            }
+        }
+    }
+    (oracle.clone(), rust)
 }
 
 fn rust_result(workspace: &Path) -> Result<Json> {
@@ -362,6 +379,22 @@ mod tests {
             &json!({"error": {"code": "retired_configuration_file", "message": "b"}}),
         );
         assert_ne!(oracle, rust);
+    }
+
+    #[test]
+    fn a_message_compares_as_the_oracles_when_only_its_quotes_differ() {
+        let finding = |message: &str| json!({"issues": [{"code": "asset_unknown", "message": message}], "resolved": {}});
+        let oracle = finding("logsource 'Ghost1' names asset 'ghost-1'");
+        let (want, got) = comparable(
+            &oracle,
+            &finding(r#"logsource "Ghost1" names asset "ghost-1""#),
+        );
+        assert_eq!(want, got);
+        let (want, got) = comparable(
+            &oracle,
+            &finding(r#"logsource "Ghost2" names asset "ghost-1""#),
+        );
+        assert_ne!(want, got);
     }
 
     #[test]

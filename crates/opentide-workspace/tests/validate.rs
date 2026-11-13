@@ -92,7 +92,7 @@ mod validate {
         let duplicate = duplicates[0];
         assert_eq!(
             duplicate.message,
-            format!("Duplicated ID {U1} on 'B' @ b.yaml; already used by 'A' @ a.yaml")
+            format!("Duplicated ID {U1} on \"B\" @ b.yaml; already used by \"A\" @ a.yaml")
         );
         assert_eq!(
             duplicate.file_path.as_deref(),
@@ -174,7 +174,7 @@ mod validate {
         assert!(
             invalid
                 .iter()
-                .all(|d| d.message == "UUID 'bad-1' is not a valid UUIDv4")
+                .all(|d| d.message == "UUID \"bad-1\" is not a valid UUIDv4")
         );
         assert!(invalid.iter().all(|d| {
             d.help
@@ -249,7 +249,7 @@ mod validate {
         assert_eq!(found.len(), 1);
         assert_eq!(
             found[0].message,
-            "--file 'nope.yaml' matched no object, so it was not validated"
+            "--file \"nope.yaml\" matched no object, so it was not validated"
         );
         assert_eq!(validation.report.stats.objects_checked, 1);
         assert_eq!(status(&validation, Check::Schema), "failed");
@@ -355,7 +355,7 @@ mod validate {
         assert_eq!(
             warning.message,
             "this block will not deploy: .opentide/configurations/platforms/splunk.toml sets \
-             'enabeld' in [platform], not 'enabled', so splunk is disabled; rename the key to \
+             \"enabeld\" in [platform], not 'enabled', so splunk is disabled; rename the key to \
              'enabled'"
         );
         assert_eq!(warning.help.as_deref(), Some("rename the key to 'enabled'"));
@@ -514,7 +514,7 @@ mod validate {
         let validation = run(&fs, &Options::default());
         let refs = with_code(&validation, "invalid_ref");
         assert_eq!(refs.len(), 1, "{refs:?}");
-        assert_eq!(refs[0].message, format!("Unknown threat reference '{U2}'"));
+        assert_eq!(refs[0].message, format!("Unknown threat reference {U2:?}"));
         assert_eq!(
             refs[0].help.as_deref(),
             Some("opentide info threats lists the ones that exist")

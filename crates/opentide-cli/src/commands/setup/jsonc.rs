@@ -367,7 +367,7 @@ mod tests {
         ));
         assert_eq!(
             MergeError::MemberNotAnObject("servers".into()).to_string(),
-            "has a 'servers' that is not a JSON object"
+            "has a \"servers\" that is not a JSON object"
         );
     }
 

@@ -16,7 +16,7 @@ use indexmap::IndexMap;
 use opentide_schema::node::{Document, Node, Value};
 use opentide_workspace::Index;
 
-use super::relations::py_str;
+use super::relations::node_text;
 use crate::json::Json;
 
 /// The envelope's schema.
@@ -95,7 +95,7 @@ pub fn object_uuid(body: &Node) -> Option<String> {
                 .and_then(|metadata| metadata.get("uuid"))
                 .filter(truthy)
         })
-        .map(|uuid| py_str(uuid))
+        .map(|uuid| node_text(uuid))
 }
 
 /// The family an object says it is (`_object_family`): its schema's prefix,

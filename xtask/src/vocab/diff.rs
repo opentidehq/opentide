@@ -31,7 +31,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use opentide_schema::vocab::{
-    Entry, KeyKind, Metadata, Selector, Unknown, Version, VocabRef, Vocabularies, Vocabulary,
+    Entry, KeyKind, Metadata, Selector, Version, VocabRef, Vocabularies, Vocabulary,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -452,31 +452,49 @@ fn compare_findings(
             ));
             continue;
         };
+        // The message names the same value and vocabulary in the same words;
+        // its quotes are Rust's where the oracle's were Python's repr
+        // (**Messages quote values the same way everywhere**).
         let message = unknown.message();
-        if message != finding.message {
+        if unquoted(&message) != unquoted(&finding.message) {
             outcome.finding_mismatches.push(format!(
                 "{} {:?}: message {:?}, the oracle's {:?}",
                 finding.vocab, finding.value, message, finding.message
             ));
             continue;
         }
-        let help = unknown.help();
-        if help == finding.help {
+        let suggestion = unknown.suggestion.clone().unwrap_or_default();
+        let oracle = finding.help.as_deref().map(suggested).unwrap_or_default();
+        if suggestion == oracle {
             outcome.identical_findings += 1;
         } else {
             outcome.finding_helps.push((
                 finding.vocab.clone(),
                 finding.value.clone(),
-                finding.help.clone().unwrap_or_default(),
-                help.unwrap_or_default(),
+                oracle,
+                suggestion,
             ));
         }
     }
     Ok(())
 }
 
-/// Whether `entry` approves a finding's `help` difference: the helps are the
-/// ones its two suggestions give.
+/// `text` without its quote characters.
+fn unquoted(text: &str) -> String {
+    text.chars().filter(|c| !matches!(c, '\'' | '"')).collect()
+}
+
+/// The suggestion a help line names (`did you mean 'clear'?`), whatever
+/// quotes it.
+fn suggested(help: &str) -> String {
+    help.strip_prefix("did you mean ")
+        .and_then(|rest| rest.strip_suffix('?'))
+        .map_or(help, |quoted| quoted.trim_matches(['\'', '"']))
+        .to_owned()
+}
+
+/// Whether `entry` approves a finding's `help` difference: the two helps
+/// suggest its two suggestions.
 fn approves_help(
     entry: &Approved,
     vocab: &str,
@@ -484,19 +502,10 @@ fn approves_help(
     oracle: &str,
     candidate: &str,
 ) -> bool {
-    let help = |suggestion: &str| {
-        Unknown {
-            vocab: vocab.to_owned(),
-            value: value.to_owned(),
-            suggestion: (!suggestion.is_empty()).then(|| suggestion.to_owned()),
-        }
-        .help()
-        .unwrap_or_default()
-    };
     entry.vocab == vocab
         && entry.value == value
-        && help(&entry.oracle) == oracle
-        && help(&entry.candidate) == candidate
+        && entry.oracle == oracle
+        && entry.candidate == candidate
 }
 
 /// The repository root and the target directory, from `cargo metadata`.
@@ -631,8 +640,8 @@ pub fn run(options: &Options) -> Result<bool> {
             {
                 passed = false;
                 eprintln!(
-                    "error: {}: the vocab_unknown help of {vocab} {value:?} is {candidate:?}, the \
-                     oracle's {oracle:?}, and {APPROVED} does not approve the suggestion",
+                    "error: {}: the vocab_unknown help of {vocab} {value:?} suggests {candidate:?}, \
+                     the oracle's {oracle:?}, and {APPROVED} does not approve the suggestion",
                     outcome.fixture
                 );
             }
@@ -841,7 +850,7 @@ mod tests {
                 Finding {
                     vocab: "tlp::1.0".into(),
                     value: "ambr".into(),
-                    message: "Value \"ambr\" is not a valid 'tlp::1.0' vocabulary entry".into(),
+                    message: "Value 'ambr' is not a valid 'tlp::0.9' vocabulary entry".into(),
                     help: None,
                 },
                 Finding {
@@ -861,7 +870,7 @@ mod tests {
             [(
                 "tlp::1.0".into(),
                 "whitish".into(),
-                "did you mean 'clear'?".into(),
+                "clear".into(),
                 String::new()
             )]
         );
@@ -895,21 +904,13 @@ mod tests {
         let approves = |vocab: &str, value: &str, oracle: &str, candidate: &str| {
             approves_help(&entry, vocab, value, oracle, candidate)
         };
-        assert!(approves("tlp::1.0", "whitish", "did you mean 'clear'?", ""));
-        assert!(!approves("tlp::1.0", "whitish", "did you mean 'red'?", ""));
-        assert!(!approves(
-            "tlp::1.0",
-            "whitish",
-            "did you mean 'clear'?",
-            "did you mean 'red'?"
-        ));
-        assert!(!approves("tlp::1.0", "whitis", "did you mean 'clear'?", ""));
-        assert!(!approves(
-            "severity::1.0",
-            "whitish",
-            "did you mean 'clear'?",
-            ""
-        ));
+        assert!(approves("tlp::1.0", "whitish", "clear", ""));
+        assert!(!approves("tlp::1.0", "whitish", "red", ""));
+        assert!(!approves("tlp::1.0", "whitish", "clear", "red"));
+        assert!(!approves("tlp::1.0", "whitis", "clear", ""));
+        assert!(!approves("severity::1.0", "whitish", "clear", ""));
+        assert_eq!(suggested("did you mean 'clear'?"), "clear");
+        assert_eq!(suggested("did you mean \"clear\"?"), "clear");
     }
 
     #[test]

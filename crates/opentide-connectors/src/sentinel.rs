@@ -27,8 +27,8 @@ use crate::connector::{
 };
 use crate::encode::{segment, urlencode};
 use crate::error::ConnectorError;
-use crate::python::python_str;
 use crate::retry::RetryPolicy;
+use crate::text::json_text;
 use crate::{HttpSettings, Secret, TenantLabel};
 
 /// The platform's identifier.
@@ -254,7 +254,7 @@ impl Sentinel {
                     .get("error_description")
                     .filter(|value| value.truthy())
                     .or_else(|| body.get("error"))
-                    .map_or_else(|| format!("HTTP {}", answer.status), python_str);
+                    .map_or_else(|| format!("HTTP {}", answer.status), json_text);
                 Err(failed(format!("Authentication failed: {reason}")))
             }
         }
@@ -455,7 +455,7 @@ impl Sentinel {
             let message = body
                 .get("error")
                 .and_then(|error| error.get("message"))
-                .map_or_else(|| "None".to_owned(), python_str);
+                .map_or_else(|| "null".to_owned(), json_text);
             warnings.push(format!("partial result: {message}"));
         }
         let tables: &[Json] = match body.get("tables") {
@@ -507,12 +507,12 @@ fn arm_error(answer: &Answer) -> (String, String) {
             let code = error
                 .and_then(|error| error.get("code"))
                 .filter(|code| code.truthy())
-                .map(python_str)
+                .map(json_text)
                 .unwrap_or_default();
             let message = error
                 .and_then(|error| error.get("message"))
                 .filter(|message| message.truthy())
-                .map_or_else(head, python_str);
+                .map_or_else(head, json_text);
             (code, message)
         }
         None => (String::new(), head()),
@@ -536,23 +536,23 @@ fn inner_message(answer: &Answer) -> String {
             .and_then(|nested| nested.get("message"))
             .filter(|message| message.truthy())
         {
-            return python_str(message);
+            return json_text(message);
         }
         if let Some(message) = inner.get("message").filter(|message| message.truthy()) {
-            return python_str(message);
+            return json_text(message);
         }
     }
     match error {
         Some(error) => {
             let code = error
                 .get("code")
-                .map_or_else(|| "None".to_owned(), python_str);
+                .map_or_else(|| "null".to_owned(), json_text);
             let message = error
                 .get("message")
-                .map_or_else(|| "None".to_owned(), python_str);
+                .map_or_else(|| "null".to_owned(), json_text);
             let mut text = format!("({code}) {message}\nCode: {code}\nMessage: {message}");
             if let Some(target) = error.get("target").filter(|target| target.truthy()) {
-                text.push_str(&format!("\nTarget: {}", python_str(target)));
+                text.push_str(&format!("\nTarget: {}", json_text(target)));
             }
             text
         }
@@ -575,8 +575,8 @@ fn table(table: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
             .iter()
             .map(|column| {
                 (
-                    column.get("name").map(python_str).unwrap_or_default(),
-                    column.get("type").map(python_str),
+                    column.get("name").map(json_text).unwrap_or_default(),
+                    column.get("type").map(json_text),
                 )
             })
             .collect(),
@@ -613,7 +613,7 @@ fn native(kind: Option<&str>, value: &Json) -> Json {
             datetime(text).map_or_else(|| value.clone(), Json::Str)
         }
         (Some("timespan" | "guid"), other) if !matches!(other, Json::Str(_)) => {
-            Json::Str(python_str(other))
+            Json::Str(json_text(other))
         }
         _ => value.clone(),
     }

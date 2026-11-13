@@ -78,7 +78,45 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_1_2_dates,
     },
+    Approved {
+        id: "messages-quote-values",
+        reason: "a message and its help quote a value in double quotes with Rust's escapes, \
+                 where the oracle used Python's repr ('x', None, True): the finding is the \
+                 same but for the quote characters around its values",
+        changelog: "**Messages quote values the same way everywhere**",
+        applies: quoting_only,
+    },
 ];
+
+/// `text` without quote characters and backslashes.
+fn unquoted(text: &str) -> String {
+    text.chars()
+        .filter(|c| !matches!(c, '\'' | '"' | '\\'))
+        .collect()
+}
+
+/// A JSON value with every string [`unquoted`].
+pub(crate) fn unquoted_json(value: &Json) -> Json {
+    match value {
+        Json::String(text) => Json::String(unquoted(text)),
+        Json::Array(items) => Json::Array(items.iter().map(unquoted_json).collect()),
+        Json::Object(map) => Json::Object(
+            map.iter()
+                .map(|(key, value)| (key.clone(), unquoted_json(value)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+/// `messages-quote-values`: the two findings differ only in the quote
+/// characters of their strings.
+pub fn quoting_only(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    oracle != rust && unquoted_json(oracle) == unquoted_json(rust)
+}
 
 fn code(finding: &Json) -> &str {
     finding["code"].as_str().unwrap_or("")
@@ -931,10 +969,13 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        // The moved finding is one difference: the oracle's and the Rust run's.
+        // The moved finding is one difference: the oracle's and the Rust run's
+        // (the others are the approved quoting of a message).
         let moved: Vec<_> = differences
             .iter()
-            .filter(|d| d.what == "findings")
+            .filter(|d| {
+                d.what == "findings" && !quoting_only(d.oracle.as_ref(), d.rust.as_ref(), &[])
+            })
             .collect();
         assert_eq!(moved.len(), 1, "{moved:?}");
         assert_eq!(moved[0].oracle.as_ref().unwrap()["yaml_line"], json!(30));

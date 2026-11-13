@@ -11,6 +11,9 @@ use crate::json::Json;
 pub struct Rule {
     /// The document.
     pub data: Json,
+    /// The document as read, for a compiler that needs a scalar as written
+    /// (Falco reads list items and exception values as text).
+    pub node: std::sync::Arc<opentide_schema::node::Node>,
     /// `metadata.uuid`, written as the oracle's `UUID` writes it.
     pub uuid: String,
     /// `name`.
@@ -38,6 +41,7 @@ impl Rule {
             .to_owned();
         Self {
             data,
+            node: std::sync::Arc::new(root.clone()),
             uuid,
             name,
             file,

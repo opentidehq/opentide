@@ -427,7 +427,7 @@ mod tests {
             (
                 r#"{"schema":"x"}"#,
                 "deployment_state_shape",
-                "has schema 'x', expected 'deployment.state::1.0'",
+                "has schema \"x\", expected \"deployment.state::1.0\"",
             ),
             (
                 r#"{"schema":"deployment.state::1.0","object_uuid":"0b9b4c4c-7c1a-4b0e-9a5e-6b1e1d5c2a12","platforms":{}}"#,
@@ -483,7 +483,7 @@ mod tests {
         assert_eq!(errors[0].code, "deployment_state_shape");
         assert!(
             errors[0].message.ends_with(
-                "platforms.patterned_test.lab: patterned_test external id '12' is not 24 \
+                "platforms.patterned_test.lab: patterned_test external id \"12\" is not 24 \
                  lower-case hex digits"
             ),
             "{}",
