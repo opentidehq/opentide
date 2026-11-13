@@ -21,9 +21,15 @@ name: Golden
 # required on integration/unified-core; the `changes` job filters by path
 # instead, and a job skipped by its `if` reports success to branch protection:
 #
-# - check (about 8 minutes) runs on every pull request into
-#   integration/unified-core, and on other bases when GOLDEN_PATHS changed;
-#   it runs when `changes` did not succeed: the filter fails open.
+# - check (about 20 minutes) runs on a pull request with the `full-ci` label
+#   or one that changes GOLDEN_PATHS, and when `changes` did not succeed: the
+#   filter fails open. It ran on every pull request into
+#   integration/unified-core (#803) while the Python implementation in this
+#   repository could change the oracle; since UC-6.2 (#841) the oracle is a
+#   frozen PyPI release, so a pull request that touches none of its inputs
+#   cannot change its result. It still runs on every push, schedule and Run
+#   workflow, and a skipped run reports success, so integration/unified-core
+#   still requires it by name (the maintainer's decision, 2026-11-13).
 # - determinism (recording twice, about 26 minutes) is in the full set
 #   (ci.yml's header): nightly, every push to integration/unified-core and
 #   development, Run workflow, and a pull request with the `full-ci` label.
@@ -82,12 +88,11 @@ jobs:
             scripts/golden/*
             crates/opentide-cli/tests/render/*
             tests/corpora/*
-            xtask/*
-            .cargo/*
-            .gitattributes
-            Cargo.toml
-            Cargo.lock
-            rust-toolchain.toml
+            xtask/src/golden/*
+            xtask/src/corpus/*
+            xtask/src/compare.rs
+            xtask/src/parallel.rs
+            crates/opentide-compare/*
             .github/workflows/golden.yml
         run: |
           set -euo pipefail
@@ -112,11 +117,11 @@ jobs:
   check:
     name: Golden check (python)
     needs: changes
-    # Every pull request into integration/unified-core, so it can be required there.
+    # The full set, or a pull request that changes a golden input.
     if: >-
       !cancelled() && (
         github.event_name != 'pull_request'
-        || github.base_ref == 'integration/unified-core'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
         || needs.changes.result != 'success'
         || needs.changes.outputs.golden == 'true'
       )
@@ -139,6 +144,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           workspaces: . -> target
 
       - name: Check the goldens against the oracle
@@ -182,6 +189,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           workspaces: . -> target
 
       - name: The oracle's lock file is the one golden lock writes
