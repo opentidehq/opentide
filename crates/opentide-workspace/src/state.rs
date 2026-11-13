@@ -57,12 +57,6 @@ pub fn is_canonical_uuid(text: &str) -> bool {
         })
 }
 
-fn canonical_decimal(text: &str) -> bool {
-    text == "0"
-        || (text.starts_with(|ch: char| ('1'..='9').contains(&ch))
-            && text.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
 /// The bindings of one shard's text, or `None` when the oracle would refuse
 /// it (`DeploymentState.from_file`).
 fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
@@ -96,8 +90,7 @@ fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
             if tenant.trim().is_empty()
                 || tenant != tenant.trim()
                 || id.trim().is_empty()
-                || (opentide_schema::platforms::has_integer_id(&platform)
-                    && !canonical_decimal(&id))
+                || opentide_schema::platforms::external_id_problem(&platform, &id).is_some()
             {
                 return None;
             }
