@@ -58,7 +58,7 @@ pub fn failures(
     enabled: &BTreeSet<String>,
 ) -> Vec<CompileFailure> {
     let compiled = Rule::new(rule.root, Some(rule.path.to_string_lossy().into_owned()));
-    let mut platforms: Vec<&str> = preview::OFFLINE
+    let mut platforms: Vec<&str> = preview::offline()
         .into_iter()
         .filter(|platform| enabled.contains(*platform))
         .collect();
