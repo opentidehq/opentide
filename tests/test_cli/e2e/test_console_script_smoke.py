@@ -29,6 +29,9 @@ def _assert_populated_workspace(counts: dict[str, int]) -> None:
     assert sum(counts.values()) > 4, f"smoke workspace is too small to be meaningful: {counts}"
 
 
+# The full set only: golden compare runs `--help` (case `_root`) through the same console
+# script on every pull request, its output byte for byte.
+@pytest.mark.full_set
 def test_opentide_console_script_help(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--help"])
     assert result.returncode == 0, result.stderr
@@ -45,6 +48,10 @@ def test_opentide_console_script_version(script_runner) -> None:
     assert result.stderr == ""
 
 
+# The full set only: golden compare runs `info` in agent mode (`--json`)
+# through the same console script on every pull request, its output byte for
+# byte.
+@pytest.mark.full_set
 def test_opentide_console_script_json_is_single_document(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--json", "info"])
     assert result.returncode == 0, result.stderr
@@ -156,6 +163,10 @@ def test_ci_help_has_no_colour_unless_forced(script_runner, tide_corpus_repo) ->
     assert "\x1b[" not in result.stdout
 
 
+# The full set only: golden compare runs `validate` in agent mode on its
+# fixtures through the same console script on every pull request, its output
+# byte for byte.
+@pytest.mark.full_set
 def test_opentide_console_script_validates_corpus(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--json", "validate", "--strict"])
     assert result.returncode == 0, result.stderr
