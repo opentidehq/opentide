@@ -454,8 +454,11 @@ def test_lint_compiles_the_engine_once(workflow: dict[str, Any]) -> None:
     sdist = runs.index("uv build --sdist")
     # ty resolves opentide._version, which building the sdist writes.
     assert sdist < next(n for n, run in enumerate(runs) if "ty check" in run)
-    (build,) = [s for s in steps if str(s.get("run", "")).startswith("uv build --wheel")]
-    assert str(build["run"]).strip() == "uv build --wheel dist/*.tar.gz", "from the sdist"
+    (build,) = [s for s in steps if "uv build --wheel" in str(s.get("run", ""))]
+    run = str(build["run"])
+    # From the sdist alone, unpacked where the last run unpacked it.
+    assert 'tar -xzf dist/*.tar.gz -C "${RUNNER_TEMP}/sdist" --strip-components=1' in run
+    assert 'uv build --wheel --out-dir dist "${RUNNER_TEMP}/sdist"' in run
     env = build.get("env") or {}
     assert env.get("OPENTIDE_ENGINE_PROFILE") == "develop"
     assert env.get("CARGO_TARGET_DIR") == "${{ github.workspace }}/target"

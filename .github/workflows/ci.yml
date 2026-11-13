@@ -155,8 +155,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
-          restore-keys: sccache-python-engine-
+          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          restore-keys: sccache-lint-
 
       # The tools and the dependencies, not opentide itself: ruff and ty read
       # the sources, so the engine is compiled once, by `uv build` below.
@@ -179,6 +179,8 @@ jobs:
 
       # The wheel is built from the sdist in a directory of its own, so this
       # also proves the sdist carries everything the engine's build reads.
+      # That directory is always the same one (uv's own is new each time), so
+      # that sccache finds the crates it compiled there before (#841).
       # The develop profile and the checkout's target directory, where the
       # cache put the dependencies: the release profile's link-time
       # optimisation is the release's to prove (publish-dry-run.yml, the
@@ -187,10 +189,25 @@ jobs:
         env:
           OPENTIDE_ENGINE_PROFILE: develop
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
-        run: uv build --wheel dist/*.tar.gz
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/sdist"
+          tar -xzf dist/*.tar.gz -C "${RUNNER_TEMP}/sdist" --strip-components=1
+          uv build --wheel --out-dir dist "${RUNNER_TEMP}/sdist"
 
       - name: Twine check
         run: uvx twine check dist/*
+
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
+
+      - name: Save the compiler cache
+        if: steps.sccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
 
       - name: Detect vocabulary bundle, pin, lockfile or model changes
         id: vocab_changes
