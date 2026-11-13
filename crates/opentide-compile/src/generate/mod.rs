@@ -10,8 +10,8 @@
 //!   `--include-visibility` adds (`cli/services/visibility.py`).
 //! - [`inflight`]: the inflight preview shards and their overlay
 //!   (`indexing/inflight.py`).
-//! - [`json_text`]: JSON written as `json.dumps(..., indent=n)` lays it out
-//!   (serde_json's pretty printer, non-ASCII escaped).
+//! - [`json_text`]: JSON files as serde_json lays them out (pretty at an
+//!   indent, or one line), UTF-8.
 //! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Snapshot`],
 //!   the files a phase wrote found by modification time and size.
 //!

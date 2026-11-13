@@ -98,6 +98,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
   - **`duration_ms` is `0`** in the documents the host writes itself (a cancelled or refused run, a run in a missing directory, help text).
 - **`opentide tui` is a new terminal UI, with the same tabs, keys and object page** ([#951](https://github.com/opentidehq/opentide/issues/951), [#841](https://github.com/opentidehq/opentide/issues/841)). It has the Catalogue, Coverage, Results, Visibility, Configuration and Chains tabs, the keys (`v`, `g`, `d`, `r`, `y`, `f`, `n`, `p`, `1`–`6`, `q`, `ctrl+p`) and what the language server and the last validate run report in place; it shows no credential value, and deploys from it are dry runs ([opentide tui](docs/cli/tui.md)). Where it differs from the Textual UI:
   - **The keyboard does what the mouse did**: `n` and `p` write a finding's message and hover on the status line, `f` follows a reference, `u` opens the page's *Not set* list, `/` types into the Visibility filter, and `Enter` folds a branch of the tree (`▼`, `▶`).
+  - **The Configuration tab shows a float as Rust prints it**: `2` and `inf`, where it showed Python's `2.0`.
   - **No toasts**: what a run returned, and the wait for a running command, are said on the status line.
   - **The Results tab shows what the command prints at a terminal**, wrapped to the tab.
   - **`opentide tui` refuses where the UI cannot open**: `usage_tui_needs_tty`, exit `2`, in `json`, `agent` and `plain` mode or without a terminal, naming the setting that made the run plain, with `help: set OPENTIDE_OUTPUT=human to open it anyway`.
@@ -174,6 +175,12 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
   - `generate extract elastic` and `sentinel` double-quote a value that needs quoting (`"2026-01-01"`, `"1"`, `""`), where they single-quoted it;
   - `generate extract elastic` writes non-ASCII text as UTF-8 (`résumé`), where it escaped it, and keeps a long one-line string on one line, where it folded it at 80 columns;
   - `opentide new` quotes a name by YAML 1.2's rule: `1e3` and `0o17` are quoted, `1_000` is not.
+- **JSON files are written as serde_json writes them, in UTF-8, with the same data** ([#790](https://github.com/opentidehq/opentide/issues/790)). The JSON Schemas of `generate schemas`, the files of `generate exports` and `generate explorer`, and the `mcp.json` and `settings.json` files `setup` creates parse into the documents they held; a diff shows these lines as changed:
+  - a character past ASCII is written as itself (`é`), where it was escaped (`\u00e9`);
+  - `generate explorer`'s files are one compact line (`{"a":1}`), where a space followed each `,` and `:`;
+  - `generate extract sentinel`'s listing dump (`output-<tenant>.json`) ends in a newline, and a float in it is written as JSON writes the number;
+  - a Tide mapping key that is a float is written as JSON writes the number (`0.00001`), where it was Python's text (`1e-05`).
+  - The YAML opentide quotes keeps its characters too: a platform status a deploy promotes a rule to, and a value of a `generate templates` template, are double-quoted as YAML where they need quoting (`"a: é"`), where they were quoted as JSON with non-ASCII escaped (`"a: \u00e9"`).
 - **`setup ci` writes its pipeline with LF line endings on every OS** ([#916](https://github.com/opentidehq/opentide/issues/916)), Windows included, where it wrote CRLF there.
 
 ### Fixed
