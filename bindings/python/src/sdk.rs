@@ -156,7 +156,7 @@ impl Workspace {
         }
         // The platform plugins' own checks of their blocks, as the command
         // line's validate runs them (UC-4.5b).
-        let validation = py.detach(|| match opentide_cli::plugins::configurations() {
+        let validation = py.detach(|| match opentide::plugins::configurations() {
             Some(platforms) => self.inner.validate_with_platforms(&options, platforms),
             None => self.inner.validate(&options),
         });

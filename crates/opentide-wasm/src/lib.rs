@@ -12,7 +12,7 @@
 )]
 mod libc_syscalls;
 
-use opentide_core::LanguageId;
+use opentide::analysis::{self, LanguageId};
 use wasm_bindgen::prelude::*;
 
 /// The semantic token legend: the HighlightSpec capture names, in the order
@@ -28,14 +28,8 @@ pub fn legend() -> js_sys::Array {
 
 /// [`legend`]'s names, without the JavaScript array: js-sys runs only on
 /// wasm32, so the logic stays here, where native tests reach it.
-#[expect(
-    clippy::expect_used,
-    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
-)]
 fn legend_names() -> Vec<String> {
-    opentide_highlight::HighlightSpec::load()
-        .expect("spec")
-        .legend
+    analysis::legend()
 }
 
 /// Highlight `language_id` source bytes. Usable without a full language client.
@@ -51,14 +45,14 @@ fn highlight_json(language_id: &str, bytes: &[u8]) -> Result<String, String> {
     let language =
         LanguageId::parse(language_id).ok_or_else(|| format!("unknown language {language_id}"))?;
     let text = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-    let result = opentide_analysis::highlight(language, text);
+    let result = analysis::highlight(language, text);
     serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 /// The engine's version: the crate version every `opentide-*` crate shares.
 #[wasm_bindgen]
 pub fn version() -> String {
-    opentide_lsp::VERSION.to_string()
+    opentide::lsp::VERSION.to_string()
 }
 
 /// The opentide language server (`opentide-lsp`), one JSON-RPC message at a
@@ -66,10 +60,10 @@ pub fn version() -> String {
 /// posts and posts back what it returns (`serveLanguageServer` in
 /// `@opentide/lsp-worker`). It is the server `--stdio` runs, with no stdio
 /// and no filesystem: the client supplies the workspace on `initialize`
-/// (`initializationOptions.workspace`, see `opentide_lsp::MessageSession`).
+/// (`initializationOptions.workspace`, see `opentide::lsp::MessageSession`).
 #[wasm_bindgen]
 pub struct LanguageServer {
-    session: opentide_lsp::MessageSession,
+    session: opentide::lsp::MessageSession,
 }
 
 #[wasm_bindgen]
@@ -82,7 +76,7 @@ impl LanguageServer {
     )]
     pub fn new() -> LanguageServer {
         LanguageServer {
-            session: opentide_lsp::MessageSession::new(),
+            session: opentide::lsp::MessageSession::new(),
         }
     }
 
@@ -103,18 +97,14 @@ impl LanguageServer {
 #[cfg(test)]
 mod tests {
     use super::LanguageServer;
-    use opentide_analysis::highlight;
-    use opentide_core::LanguageId;
+    use opentide::analysis::{LanguageId, highlight};
     use serde_json::{Value, json};
 
     #[test]
     fn the_legend_is_the_highlight_spec_legend() {
         let names = super::legend_names();
         assert!(names.iter().any(|name| name == "keyword"), "{names:?}");
-        assert_eq!(
-            names,
-            opentide_highlight::HighlightSpec::load().unwrap().legend
-        );
+        assert_eq!(names, highlight(LanguageId::Kql, "").legend);
     }
 
     #[test]

@@ -382,7 +382,8 @@ fn inherited_techniques(detection_model: &str, workspace: &[IndexedObject]) -> V
         .collect()
 }
 
-/// [elastic-1.0] Advisories that read the block, not its query: `lookback`
+/// [elastic-1.0] Advisories that read the block, not its query (the
+/// declared datasets are the query's: [`dataset_declarations`]): `lookback`
 /// zero or over an hour, a threshold rule whose `lookback` exceeds its
 /// `interval`, an explicit risk score outside its severity's band, and
 /// techniques that deploy skips because they are not Enterprise ATT&CK.
@@ -406,7 +407,7 @@ pub(crate) fn block_advisories(
         let (range, path) = at(rest);
         Diagnostic::warning(code, message, range).with_field_path(path)
     };
-    let mut out = dataset_declarations(source, block);
+    let mut out = Vec::new();
 
     let scheduling = block.get("scheduling");
     let read = |key: &str| scheduling.and_then(|s| s.get(key)).and_then(|v| v.as_str());

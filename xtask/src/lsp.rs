@@ -18,11 +18,12 @@
 //! file: KG-03 and KG-05, #926). Per file, the multiset of `(code,
 //! severity, range)` must be equal: the range is the 1-based line and
 //! code-point columns (end exclusive) converted here to LSP's 0-based lines
-//! and UTF-16 columns. What the editor
-//! adds of its own (the query and platform-block analysis of
-//! `opentide-analysis`, which `validate`'s queries check covers in UC-2.5)
-//! is the engine's standalone analysis of the same text, taken out first.
-//! Any other difference fails the run.
+//! and UTF-16 columns. What the editor adds of its own is the query
+//! analysis of `opentide-analysis` (which `validate`'s queries check covers
+//! in UC-2.5): the engine's standalone analysis of the same text, taken out
+//! first. The platform blocks are not taken out of either side (UC-2.6,
+//! #821): the editor has no check of its own on them, so a server that
+//! published them fails the run, as does any other difference.
 
 use crate::corpus::cli::{Scratch, corpora_dir, load_catalogue, write_workspace};
 use crate::corpus::faults::{self, Kind};
@@ -296,8 +297,11 @@ fn key_of(diagnostic: &Value) -> Key {
     )
 }
 
-/// What the engine reports on `text` by itself (queries, platform blocks),
-/// which the server adds to `validate`'s findings.
+/// The queries of `text`, analysed by the engine on their own, which the
+/// server adds to `validate`'s findings (`validate`'s own queries check
+/// covers them in UC-2.5). The object's platform blocks are not among them:
+/// the editor has no check of its own on those (UC-2.6, #821), and
+/// [`block_own`] holds the server to it.
 fn engine_own(path: &Path, text: &str) -> Vec<Key> {
     let host = opentide_analysis::MemoryWorkspace {
         files: vec![(path.display().to_string(), text.to_owned())],
@@ -332,6 +336,30 @@ fn lsp_shape(d: &opentide_core::Diagnostic) -> Value {
             "end": { "line": d.range.end.line, "character": d.range.end.character },
         },
     })
+}
+
+/// What the engine reports on the platform blocks of `text`
+/// (`opentide lint`'s advisories and the Sysdig block's own): nothing the
+/// server may publish, since `validate` reports a block's constraints as the
+/// object's schema check and the editor would then show one fault twice
+/// (UC-2.6, #821). It is subtracted from neither side.
+fn block_own(path: &Path, text: &str) -> Vec<Key> {
+    let host = opentide_analysis::MemoryWorkspace {
+        files: vec![(path.display().to_string(), text.to_owned())],
+    };
+    opentide_analysis::analyze_blocks(&host, text)
+        .iter()
+        .map(|d| key_of(&serde_json::to_value(lsp_shape(d)).unwrap_or(Value::Null)))
+        .collect()
+}
+
+/// Which of [`block_own`]'s findings the server published for the file
+/// (`published`): none, for a server that publishes `validate`'s findings.
+fn published_blocks(path: &Path, text: &str, published: &[Key]) -> Vec<Key> {
+    block_own(path, text)
+        .into_iter()
+        .filter(|key| published.contains(key))
+        .collect()
 }
 
 /// One kind's workspace: how many findings were compared, and every
@@ -417,11 +445,22 @@ fn compare_kind(dir: &Path, targets: &[String]) -> Result<(usize, Vec<String>)> 
                 got.remove(at);
             }
         }
+        // The platform blocks are not taken out: a server that published
+        // them shows them here, and as findings validate does not have.
+        let blocks = published_blocks(file, text, &got);
         want.sort();
         got.sort();
         count += want.len();
+        let shown = || file.strip_prefix(dir).unwrap_or(file).display().to_string();
+        if !blocks.is_empty() {
+            problems.push(format!(
+                "{}: the server published the engine's own platform-block analysis {blocks:?} \
+                 (UC-2.6, #821: the editor publishes validate's findings)",
+                shown()
+            ));
+        }
         if want != got {
-            let shown = file.strip_prefix(dir).unwrap_or(file).display().to_string();
+            let shown = shown();
             let missing: Vec<&Key> = want.iter().filter(|k| !got.contains(k)).collect();
             let extra: Vec<&Key> = got.iter().filter(|k| !want.contains(k)).collect();
             problems.push(format!(
@@ -450,6 +489,21 @@ mod tests {
         let mut placeless = opentide_workspace::Diagnostic::warning("nested_object_file", "x");
         placeless.line = None;
         assert_eq!(expected("a\n", &placeless).2, (0, 0));
+    }
+
+    /// A server that published the engine's platform-block analysis is
+    /// reported, whatever `validate` says (UC-2.6, #821).
+    #[test]
+    fn the_servers_own_platform_block_analysis_is_reported() {
+        let rule = "name: Tuning\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  \
+                    schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n    \
+                    append_to_rule: No Such Falco Rule\n    condition: proc.name = bash\n";
+        let file = Path::new("objects/rules/tuning.yaml");
+        let own = block_own(file, rule);
+        let codes: Vec<&str> = own.iter().map(|(code, _, _, _)| code.as_str()).collect();
+        assert_eq!(codes, ["falco_unknown_rule"], "{own:?}");
+        assert_eq!(published_blocks(file, rule, &own), own);
+        assert!(published_blocks(file, rule, &[]).is_empty());
     }
 
     #[test]

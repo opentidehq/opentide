@@ -10,8 +10,7 @@ use crate::uri::uri_to_path;
 use lsp_server::{Message, Notification, ReqQueue, Response};
 use opentide_analysis::{
     AnalyzeRequest, AnalyzeResponse, IndexedObject, VISIBILITY_CONFIGURATION, WorkspaceHost,
-    analyze, analyze_with_index, install_visibility, is_configuration_path,
-    place_configuration_issues,
+    analyze, install_visibility, is_configuration_path, place_configuration_issues,
 };
 use opentide_core::LanguageId;
 use rayon::prelude::*;
@@ -265,14 +264,6 @@ pub(crate) fn root_key(path: &str) -> String {
     trimmed.to_string()
 }
 
-/// Whether analysing the Tide object `text` may read the other objects. Of
-/// its analysis only an Elastic block's advisories do (the techniques a rule
-/// inherits through `detection_model`), and a document has such a block
-/// only if it names `elastic`, or spells it with an escape.
-pub(crate) fn may_read_index(text: &str) -> bool {
-    text.contains("elastic") || text.contains('\\')
-}
-
 /// An object file on disk: its path and text, indexed on first use (the
 /// first request that reads the editor's index: a hover, a completion, the
 /// catalog, an Elastic rule's advisories), not when it is read.
@@ -359,16 +350,15 @@ impl DiskObjects {
         changed
     }
 
-    /// Index the files `keep` accepts that are not indexed yet, in
-    /// parallel, from the workspace's parse of each (`parses`, by
-    /// [`path_key`], read only when a file needs it): on the first request
-    /// that reads the editor's index, every object file of the root.
-    fn index_matching(
+    /// Index the files that are not indexed yet, in parallel, from the
+    /// workspace's parse of each (`parses`, by [`path_key`], read only when
+    /// a file needs it): every object file of the root, on the first
+    /// request that reads the editor's index.
+    fn index_pending(
         &self,
-        keep: &(dyn Fn(&str) -> bool + Sync),
         parses: &dyn Fn() -> HashMap<String, Arc<opentide_schema::node::Document>>,
     ) -> &BTreeMap<String, DiskFile> {
-        let pending = |file: &DiskFile| file.indexed.get().is_none() && keep(&file.text);
+        let pending = |file: &DiskFile| file.indexed.get().is_none();
         if !self.files.values().any(pending) {
             return &self.files;
         }
@@ -671,7 +661,7 @@ impl WorkspaceHost for SessionHost<'_> {
         if let Some(index) = slot.borrow().as_ref() {
             return Some(Arc::clone(index));
         }
-        let index: Arc<[IndexedObject]> = self.collect_index(&|_| true).into();
+        let index: Arc<[IndexedObject]> = self.collect_index().into();
         *slot.borrow_mut() = Some(Arc::clone(&index));
         Some(index)
     }
@@ -686,11 +676,11 @@ impl SessionHost<'_> {
         }
     }
 
-    /// The index entries of the root's objects whose text `keep` accepts, in
-    /// the order of the full index: the files on disk (but the open ones),
-    /// the open documents, then what the host supplied that no file holds.
-    /// A file on disk is indexed once, whichever call indexes it first.
-    fn collect_index(&self, keep: &(dyn Fn(&str) -> bool + Sync)) -> Vec<IndexedObject> {
+    /// The index entries of the root's objects: the files on disk (but the
+    /// open ones), the open documents, then what the host supplied that no
+    /// file holds. A file on disk is indexed once, whichever call indexes
+    /// it first.
+    fn collect_index(&self) -> Vec<IndexedObject> {
         let session = self.session;
         let open: BTreeMap<String, (String, &String)> = session
             .docs
@@ -712,10 +702,9 @@ impl SessionHost<'_> {
                 };
                 root.disk
                     .borrow()
-                    .index_matching(keep, &parses)
+                    .index_pending(&parses)
                     .iter()
                     .filter(|(path, _)| !open.contains_key(*path))
-                    .filter(|(_, file)| keep(&file.text))
                     .filter_map(|(_, file)| file.entry().cloned())
                     .collect()
             }
@@ -723,7 +712,6 @@ impl SessionHost<'_> {
         };
         index.extend(
             open.values()
-                .filter(|(_, text)| keep(text))
                 .filter_map(|(path, text)| crate::index::index_text(path, text)),
         );
         // What the host supplied stands in for objects the session has no
@@ -743,61 +731,14 @@ impl SessionHost<'_> {
                 .files
                 .iter()
                 .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
-                .filter(|(_, (path, text, _))| {
+                .filter(|(_, (path, _, _))| {
                     let owner = session.owning_root(path);
-                    (owner.is_none() || owner == self.root) && keep(text)
+                    owner.is_none() || owner == self.root
                 })
                 .filter_map(|(_, (_, _, indexed))| indexed.clone())
                 .filter(|o| !known.contains(&o.uuid)),
         );
         index
-    }
-
-    /// The part of the editor's index the analysis of the Tide document
-    /// `text` reads: the objects an Elastic block's advisories look up (the
-    /// objective its `detection_model` names, and that objective's threats),
-    /// with every object that might be one of them, in the full index's
-    /// order. The full index once some request built it; until then only
-    /// the files that name one of those UUIDs, or could spell one with an
-    /// escape, are indexed, so the first diagnostics do not wait for every
-    /// object of the workspace to be parsed (#821).
-    pub(crate) fn analysis_index(&self, text: &str) -> Arc<[IndexedObject]> {
-        if let Some(index) = self.slot().borrow().as_ref() {
-            return Arc::clone(index);
-        }
-        let Ok(rule) = opentide_schema::node::load(text) else {
-            return Arc::default();
-        };
-        let Some(model) = rule
-            .root()
-            .and_then(|root| root.get("detection_model"))
-            .and_then(|m| m.value.as_str())
-        else {
-            return Arc::default();
-        };
-        let names = |text: &str, uuids: &[&str]| {
-            text.contains('\\') || uuids.iter().any(|uuid| text.contains(uuid))
-        };
-        let objectives = self.collect_index(&|text| names(text, &[model]));
-        let threats: Vec<String> = objectives
-            .iter()
-            .find(|o| o.object_type == "objective" && o.uuid == model)
-            .and_then(|o| o.body.get("objective"))
-            .and_then(|b| b.get("threats"))
-            .map(|t| match &t.value {
-                opentide_schema::node::Value::Seq(items) => items
-                    .iter()
-                    .filter_map(|t| t.value.as_str().map(str::to_owned))
-                    .collect(),
-                _ => Vec::new(),
-            })
-            .unwrap_or_default();
-        if threats.is_empty() {
-            return objectives.into();
-        }
-        let mut uuids: Vec<&str> = threats.iter().map(String::as_str).collect();
-        uuids.push(model);
-        self.collect_index(&|text| names(text, &uuids)).into()
     }
 }
 
@@ -1009,19 +950,12 @@ impl Session {
             language: doc.language,
             text: doc.text.clone(),
         };
-        // A Tide object that cannot read the other objects is analysed
-        // without the editor's index, which is then built on the first
-        // request that reads it, not before the first diagnostics.
-        let mut response = match doc.language {
-            LanguageId::TideYaml if !may_read_index(&doc.text) => {
-                analyze_with_index(&host, &[], request)
-            }
-            LanguageId::TideYaml => {
-                let index = host.analysis_index(&doc.text);
-                analyze_with_index(&host, &index, request)
-            }
-            _ => analyze(&host, request),
-        };
+        // The analysis of a Tide object reads no other object: its own
+        // checks are `validate`'s (UC-2.6, #821), and what stays here is
+        // the queries it carries. The editor's index is built on the first
+        // request that reads it (a hover, a completion, the catalog), not
+        // before the first diagnostics (#926).
+        let mut response = analyze(&host, request);
         match doc.language {
             LanguageId::TideYaml => {
                 let found = self.object_findings(uri, doc);
@@ -1472,7 +1406,7 @@ impl Session {
         };
         r.disk
             .borrow()
-            .index_matching(&|_| true, &parses)
+            .index_pending(&parses)
             .values()
             .filter_map(|file| Some((file.entry()?.path.clone(), file.text.clone())))
             .collect()
@@ -1844,28 +1778,7 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use super::{Arc, DiskObjects, HashMap, Ordering, may_read_index, path_key, root_key};
-
-    /// #914: only a document that can hold an Elastic block reads the
-    /// editor's index; an escape can spell `elastic` too.
-    #[test]
-    fn only_a_document_that_can_hold_an_elastic_block_reads_the_index() {
-        assert!(!may_read_index(
-            "name: r\nconfigurations:\n  sentinel:\n    query: x\n"
-        ));
-        assert!(may_read_index(
-            "name: r\nconfigurations:\n  elastic:\n    query: x\n"
-        ));
-        let escaped = "name: r\nconfigurations:\n  \"\\x65lastic\":\n    query: x\n";
-        assert!(!escaped.contains("elastic"));
-        let document = opentide_schema::node::load(escaped).unwrap();
-        let root = document.root().unwrap();
-        assert!(
-            root.get("configurations").unwrap().get("elastic").is_some(),
-            "{root:?}"
-        );
-        assert!(may_read_index(escaped));
-    }
+    use super::{Arc, DiskObjects, HashMap, Ordering, path_key, root_key};
 
     /// #914: reading a root's object files indexes none of them; the first
     /// request for the index indexes each, as `index_object` does, from the
@@ -1895,7 +1808,7 @@ mod tests {
             )])
         };
         let indexed: Vec<_> = disk
-            .index_matching(&|_| true, &parses)
+            .index_pending(&parses)
             .values()
             .map(|file| file.entry().cloned())
             .collect();
