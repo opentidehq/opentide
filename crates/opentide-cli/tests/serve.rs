@@ -576,8 +576,8 @@ fn a_run_in_a_missing_directory_fails() {
     assert_eq!(
         result.get("document").unwrap().get("message"),
         Some(&Json::str(format!(
-            "[Errno 2] No such file or directory: '{}'",
-            missing.display()
+            "[Errno 2] No such file or directory: {:?}",
+            missing.display().to_string()
         )))
     );
     assert!(client.stop());
