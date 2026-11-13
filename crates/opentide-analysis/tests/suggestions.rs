@@ -10,7 +10,9 @@
 //! `INSTA_UPDATE=always cargo test -p opentide-analysis --test suggestions`
 //! writes the new snapshot; read its diff before committing.
 
-use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, QueryRequest, analyze, analyze_query};
+use opentide_analysis::{
+    AnalyzeRequest, MemoryWorkspace, QueryRequest, analyze, analyze_blocks, analyze_query,
+};
 use opentide_core::{Diagnostic, LanguageId};
 use std::fmt::Write as _;
 
@@ -65,7 +67,9 @@ fn queries(language: LanguageId, platform: Option<&str>, codes: &[&str], cases: 
     out
 }
 
-/// A rule whose `configurations` block is `block`, analysed as a Tide file.
+/// A rule whose `configurations` block is `block`, analysed as a Tide file:
+/// its queries and its platform blocks ([`analyze_blocks`], which `lint`
+/// reports and the editor does not, UC-2.6 #821).
 fn tide(block: &str, codes: &[&str]) -> String {
     let text = format!(
         "name: Suggestions\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005a9\n  schema: rule::1.0\nconfigurations:\n{block}"
@@ -82,7 +86,10 @@ fn tide(block: &str, codes: &[&str]) -> String {
             text: text.clone(),
         },
     )
-    .diagnostics;
+    .diagnostics
+    .into_iter()
+    .chain(analyze_blocks(&host, &text))
+    .collect::<Vec<_>>();
     format!("{}\n{}", block.trim_end(), render(&text, &found, codes))
 }
 
