@@ -377,8 +377,9 @@ pub fn promote_block_statuses(
     Ok((promoted != source).then_some(promoted))
 }
 
-/// The text a status becomes: `target` as it is when YAML reads it back as
-/// that string, else as JSON quotes it (`json.dumps`).
+/// The text a status becomes: `target` as it is when YAML (1.2, and the
+/// YAML 1.1 resolvers older readers apply) reads it back as that string,
+/// else as a YAML double-quoted scalar.
 ///
 /// # Errors
 ///
@@ -394,7 +395,7 @@ pub fn replacement(target: &str) -> Result<String, Error> {
     Ok(if plain {
         target.to_owned()
     } else {
-        json_string(target)
+        node::double_quoted(target)
     })
 }
 
@@ -430,32 +431,6 @@ fn yaml11_non_string(text: &str) -> bool {
         .collect()
     });
     patterns.iter().any(|pattern| pattern.is_match(text))
-}
-
-/// `text` as `json.dumps` writes a string: ASCII only, `\uXXXX` for the rest.
-fn json_string(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for ch in text.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            ' '..='~' => out.push(ch),
-            _ => {
-                let mut units = [0_u16; 2];
-                for unit in ch.encode_utf16(&mut units) {
-                    out.push_str(&format!("\\u{unit:04x}"));
-                }
-            }
-        }
-    }
-    out.push('"');
-    out
 }
 
 #[cfg(test)]
@@ -680,10 +655,11 @@ mod tests {
         }
         // Text YAML reads back as itself stays as it is, non-ASCII included.
         assert_eq!(replacement("Prod\u{e9}").unwrap(), "Prod\u{e9}");
-        assert_eq!(replacement("a: \u{e9}").unwrap(), "\"a: \\u00e9\"");
+        // Quoted text keeps its characters: only YAML's escapes are escaped.
+        assert_eq!(replacement("a: \u{e9}").unwrap(), "\"a: \u{e9}\"");
         assert_eq!(
-            json_string("a\"\\\n\u{1f980}"),
-            "\"a\\\"\\\\\\n\\ud83e\\udd80\""
+            replacement("a\"\\\n\u{1f980}").unwrap(),
+            "\"a\\\"\\\\\\n\u{1f980}\""
         );
         assert!(matches!(replacement("@x"), Err(Error::Unreadable(_))));
     }

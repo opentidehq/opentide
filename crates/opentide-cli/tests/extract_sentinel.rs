@@ -5,7 +5,7 @@
 //! the oracle's files and document in `tests/extract_sentinel/oracle/`. Here the
 //! Rust command runs in a copy of the same workspace, its ids fixed the same
 //! way, against that cassette: it must send exactly the oracle's requests,
-//! write `output-soc.json` byte for byte, and write each rule file as the
+//! write `output-soc.json` with the oracle's data, and write each rule file as the
 //! oracle did, but for the differences `tests/golden/APPROVED_DIFFS.toml`
 //! approves (case `cassette:sentinel/extract`), and load to the oracle's data.
 

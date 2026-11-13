@@ -219,21 +219,6 @@ fn reference(value: &Node) -> Option<String> {
     }
 }
 
-/// A float as Python's `str` writes it.
-fn python_float(value: f64) -> String {
-    if value.is_nan() {
-        return "nan".to_owned();
-    }
-    if value.is_infinite() {
-        return if value > 0.0 { "inf" } else { "-inf" }.to_owned();
-    }
-    if value.fract() == 0.0 && value.abs() < 1e16 {
-        format!("{value:.1}")
-    } else {
-        format!("{value}")
-    }
-}
-
 /// A scalar as Python's `str` writes it.
 fn scalar_text(value: &Value) -> String {
     match value {
@@ -241,7 +226,7 @@ fn scalar_text(value: &Value) -> String {
         Value::Bool(true) => "True".to_owned(),
         Value::Bool(false) => "False".to_owned(),
         Value::Int(number) => number.to_string(),
-        Value::Float(number) => python_float(*number),
+        Value::Float(number) => number.to_string(),
         Value::Str(text) | Value::Datetime(text) => text.clone(),
         Value::Seq(_) | Value::Map(_) => String::new(),
     }
