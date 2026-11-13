@@ -143,6 +143,33 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**`validate` no longer crashes on a legacy external-id key with a text value**",
         applies: legacy_text_id_crash,
     },
+    Approved {
+        id: "sentinel-durations",
+        reason: "KG-01 (#810): a Sentinel duration deploy cannot read (`frequency: hourly`) is \
+                 the model's `schema_validation` on the field, from every run, where the oracle \
+                 reported it only from the compile check, as `compile_invalid_rule` on the \
+                 platform's block, in the same words",
+        changelog: "**Sentinel durations are checked when the rule is validated**",
+        applies: sentinel_durations,
+    },
+    Approved {
+        id: "elastic-severity-mapping",
+        reason: "KG-09 (#817): the Elastic compiler reads a `severity` block without `mapping` \
+                 as no mapping, as the documented shape allows, so the compile check passes the \
+                 rule, where the oracle's compiler failed on the missing key (`compile_failed`, \
+                 `'mapping'`)",
+        changelog: "**An Elastic rule whose `severity` has no `mapping` validates and deploys**",
+        applies: elastic_severity_mapping,
+    },
+    Approved {
+        id: "compile-empty-key-frame",
+        reason: "a compile finding on a key left empty (`response:`) is framed at that key, \
+                 where the oracle's ruamel placed the empty value on the next key's line; the \
+                 finding, its `field_path` and its `yaml_line` (the key's line) are the same \
+                 (#817)",
+        changelog: "**`opentide validate` fails a rule a deploy cannot compile, as 0.23.0 did**",
+        applies: compile_empty_key_frame,
+    },
 ];
 
 /// The oracle's `schema_validation` of a Splunk block's `advanced` table,
@@ -336,6 +363,67 @@ fn invalid_uuid_every_file(
                 && reported["message"] == rust["message"]
                 && reported["field_path"] == rust["field_path"]
                 && reported["file_path"] != rust["file_path"]
+        })
+}
+
+/// KG-01: the oracle's `compile_invalid_rule` on a Sentinel block for a
+/// duration it cannot read, and the Rust model's `schema_validation` on the
+/// duration's own field, in the same words.
+fn sentinel_durations(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    const DURATION: &str = "is not an ISO 8601 duration";
+    match (oracle, rust) {
+        (Some(oracle), None) => {
+            code(oracle) == "compile_invalid_rule"
+                && oracle["field_path"] == json!(["configurations", "sentinel"])
+                && oracle["message"]
+                    .as_str()
+                    .is_some_and(|m| m.starts_with("Duration ") && m.contains(DURATION))
+        }
+        (None, Some(rust)) => {
+            code(rust) == "schema_validation"
+                && rust["field_path"].as_array().is_some_and(|path| {
+                    path.len() > 2 && path[..2] == [json!("configurations"), json!("sentinel")]
+                })
+                && rust["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains(DURATION))
+        }
+        _ => false,
+    }
+}
+
+/// KG-09: the oracle's `compile_failed` on an Elastic block whose `severity`
+/// has no `mapping`, which the Rust compiler compiles.
+fn elastic_severity_mapping(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), None) = (oracle, rust) else {
+        return false;
+    };
+    code(oracle) == "compile_failed"
+        && oracle["context"]["platform"] == "elastic"
+        && oracle["message"] == "Elastic cannot compile this rule: 'mapping'"
+}
+
+/// The same compile finding, framed at the empty key the oracle framed on
+/// the next key's line: everything but the frame is the oracle's.
+fn compile_empty_key_frame(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    let frame = ["line", "column", "end_line", "end_column"];
+    let unframed = |finding: &Json| {
+        finding.as_object().map(|object| {
+            object
+                .iter()
+                .filter(|(key, _)| !frame.contains(&key.as_str()))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect::<BTreeMap<_, _>>()
+        })
+    };
+    code(oracle).starts_with("compile_")
+        && unframed(oracle) == unframed(rust)
+        && rust["line"].as_u64().is_some_and(|line| {
+            rust["yaml_line"].as_u64() == Some(line - 1)
+                && oracle["line"].as_u64().is_some_and(|theirs| theirs > line)
         })
 }
 
@@ -567,6 +655,7 @@ fn run_case(
             .as_ref()
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
         platform_configurations: None,
+        compile_check: Some(&opentide_compile::validate::Compilers),
     };
     let validation = match args.fix {
         None => workspace.validate(&options),
