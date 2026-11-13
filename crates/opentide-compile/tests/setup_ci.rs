@@ -62,6 +62,30 @@ fn options(inputs: &toml::Table) -> Options {
     }
 }
 
+/// `text` without the lines that name a variable of a platform the recorded
+/// oracle lacks (`opentide_schema::platforms::SINCE_ORACLE`): their bundled
+/// files name them (`GRAYLOG_TOKEN`), so the pipeline's header lists them
+/// where the oracle's has none. A line names one by its `ID_` prefix: its
+/// line in the header (`#   NAME`) and in a job's environment
+/// (`NAME: ${{ secrets.NAME }}`).
+fn without_since_oracle(text: &str) -> String {
+    let prefixes: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
+        .iter()
+        .map(|id| format!("{}_", id.to_ascii_uppercase()))
+        .collect();
+    text.split_inclusive('\n')
+        .filter(|line| {
+            !line
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .any(|word| {
+                    prefixes
+                        .iter()
+                        .any(|prefix| word.starts_with(prefix.as_str()))
+                })
+        })
+        .collect()
+}
+
 /// The first line the two texts differ on.
 fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
     let (a, b): (Vec<&str>, Vec<&str>) = (oracle.lines().collect(), rendered.lines().collect());
@@ -113,7 +137,7 @@ fn pipelines_are_the_oracles() {
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
         let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
-            Ok(rendered) => rendered,
+            Ok(rendered) => without_since_oracle(&rendered),
             Err(error) => {
                 problems.push(format!("{name}: {error}"));
                 continue;
