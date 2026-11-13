@@ -98,7 +98,13 @@ missed), as rust-cache's: `python-engine` (`test`'s 3.14 cell; the other Python 
 `engine-dev-<os>` (`engine-test-part`), `golden-compare` and `corpus`. Every Python job names the same
 interpreter for PyO3 (`PYO3_PYTHON: /usr/bin/python3`): the binding is abi3, and a different
 interpreter reruns PyO3's build script and rebuilds every crate above it.
-`tests/test_ci/test_rust_caches.py` holds both.
+**Caches are saved from pushes only** (`save-if: ${{ github.event_name == 'push' ... }}` on
+every rust-cache, `github.event_name == 'push' && ...` on every sccache save, in every workflow a
+pull request runs): a pull request restores the caches of its base branch (and of `development`)
+and saves none. A pull request's own cache served that pull request alone, and its gigabytes
+evicted the base branches' caches within the half hour (#841). uv's cache (setup-uv) is keyed on
+`uv.lock` and written only when that file changes; the pinned setup-uv v5 has no restore-only mode.
+`tests/test_ci/test_rust_caches.py` holds all three.
 
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON`); the Code Quality upload is
 best-effort, the HTML report an artifact. **Vocabulary drift gate:** when vocab TOML, schema pins,

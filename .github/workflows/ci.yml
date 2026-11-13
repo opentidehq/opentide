@@ -203,7 +203,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -316,6 +316,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-check
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
@@ -374,7 +376,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -439,7 +441,7 @@ jobs:
         with:
           shared-key: engine-dev
           key: ${{ matrix.os }}
-          save-if: ${{ matrix.shard == env.ENGINE_CACHE_SHARD }}
+          save-if: ${{ github.event_name == 'push' && matrix.shard == env.ENGINE_CACHE_SHARD }}
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
@@ -489,7 +491,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: matrix.shard == 1 && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.shard == 1 && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -557,6 +559,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-facade
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -633,6 +637,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: node
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -735,6 +741,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: conformance
           key: ${{ matrix.os }}
 
@@ -816,6 +824,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-wasm
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -885,6 +895,8 @@ jobs:
         run: rustup toolchain install --profile minimal --no-self-update
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-package
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -1097,6 +1109,8 @@ jobs:
       # builds here: `key` names the nightly, so a new one saves a new tree.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: fuzz
           key: ${{ steps.nightly.outputs.version }}
           workspaces: fuzz -> target
@@ -1257,6 +1271,8 @@ jobs:
         run: rustup toolchain install --profile minimal --no-self-update
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-bench
       - name: cargo bench (opentide-analysis)
         run: |
@@ -1306,7 +1322,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: corpus
-          save-if: ${{ matrix.part == env.CORPUS_CACHE_PART }}
+          save-if: ${{ github.event_name == 'push' && matrix.part == env.CORPUS_CACHE_PART }}
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -1480,7 +1496,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: matrix.part == env.CORPUS_CACHE_PART && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.part == env.CORPUS_CACHE_PART && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -1565,7 +1581,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: python-engine
-          save-if: ${{ matrix.python-version == env.COVERAGE_PYTHON }}
+          save-if: ${{ github.event_name == 'push' && matrix.python-version == env.COVERAGE_PYTHON }}
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
@@ -1588,7 +1604,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: matrix.python-version == env.COVERAGE_PYTHON && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && matrix.python-version == env.COVERAGE_PYTHON && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -1988,6 +2004,8 @@ jobs:
       # cannot read `test`'s `python-engine` (built without it).
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: golden-compare
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
@@ -2024,7 +2042,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -2072,6 +2090,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: python-engine-windows
 
       - name: Install dependencies

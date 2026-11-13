@@ -34,8 +34,16 @@ RUST_CACHE = "Swatinem/rust-cache@"
 KEY_ENV_PREFIXES = ("CARGO", "CC", "CFLAGS", "CXX", "CMAKE", "RUST")
 DEFAULT_WORKSPACES = ". -> target"
 MATRIX = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
-# `save-if: ${{ matrix.<axis> == env.<NAME> }}`: one cell of the matrix saves.
-SAVE_IF_CELL = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*==\s*env\.([A-Za-z0-9_]+)\s*\}\}")
+# `save-if: ${{ matrix.<axis> == env.<NAME> }}`: one cell of the matrix saves
+# (on the events the condition's other terms allow).
+SAVE_IF_CELL = re.compile(
+    r"\$\{\{\s*(?:github\.event_name == 'push' && )?"
+    r"matrix\.([A-Za-z0-9_-]+)\s*==\s*env\.([A-Za-z0-9_]+)\s*\}\}"
+)
+# Caches are saved from pushes to the base branches only (#841): a pull
+# request's cache serves that pull request alone, and its gigabytes evicted
+# the base branches' caches every other pull request reads.
+PUSH_ONLY = "github.event_name == 'push'"
 
 # The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
 # that build a subset of it read it.
@@ -342,3 +350,40 @@ def test_the_python_jobs_share_one_pyo3_configuration() -> None:
     python_jobs += ["cli-e2e-full", "golden-compare"]
     seen = {(jobs[job].get("env") or {}).get("PYO3_PYTHON") for job in python_jobs}
     assert seen == {"/usr/bin/python3"}, seen
+
+
+def _pull_request_workflows() -> list[Path]:
+    found = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        triggers = workflow.get("on", workflow.get(True)) or {}
+        if "pull_request" in triggers or "workflow_call" in triggers:
+            found.append(path)
+    return found
+
+
+def test_no_cache_is_saved_from_a_pull_request() -> None:
+    """Every rust-cache and sccache save in a workflow a pull request runs
+    (or calls) saves on a push only: pull requests restore."""
+    checked = 0
+    for path in _pull_request_workflows():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in (workflow.get("jobs") or {}).items():
+            for step in job.get("steps") or []:
+                uses = str(step.get("uses", ""))
+                where = f"{path.name} {job_id}"
+                if uses.startswith(RUST_CACHE):
+                    save_if = (step.get("with") or {}).get("save-if", True)
+                    if save_if is False:
+                        continue
+                    save_if = str(save_if)
+                    assert save_if.startswith("${{ " + PUSH_ONLY) or save_if.startswith(
+                        "${{ github.event_name != 'pull_request'"
+                    ), f"{where}: rust-cache saves on a pull request ({save_if})"
+                    checked += 1
+                elif uses.startswith(SCCACHE_SAVE):
+                    assert str(step.get("if", "")).startswith(PUSH_ONLY), where
+                    checked += 1
+                elif uses.startswith("actions/cache@"):
+                    raise AssertionError(f"{where}: actions/cache saves on every event")
+    assert checked >= 20

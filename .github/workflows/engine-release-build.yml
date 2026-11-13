@@ -115,6 +115,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: inputs.dry-run
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-release
           key: ${{ matrix.target }}
       - name: musl linker
@@ -171,6 +173,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: inputs.dry-run
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-release
           key: wasm
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -215,6 +219,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: inputs.dry-run
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-release
           key: highlights
       - run: cargo run --locked -p opentide-lsp -- generate-highlights
@@ -250,6 +256,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: inputs.dry-run
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-release
           key: licences
       - name: licences and notices
@@ -296,6 +304,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: inputs.dry-run
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-release
           key: sbom
       # setup-uv caches by default on GitHub's runners ("auto"); a release
