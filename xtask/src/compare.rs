@@ -404,7 +404,14 @@ pub fn golden(
         std::fs::write(path, text + "\n").with_context(|| format!("write {}", path.display()))?;
     }
     let different = report.cases.iter().filter(|case| !case.equal).count();
-    let passed = report.equal && failed == 0;
+    // The catch-up train reports its differences instead of failing on them
+    // (`golden::report_only`); a case that could not run still fails.
+    let report_only = crate::golden::report_only::enabled(repo);
+    let passed = if report_only {
+        failed == 0
+    } else {
+        report.equal && failed == 0
+    };
     let line = format!(
         "golden rust: {} case(s) compared, {different} differ, \
          {} stale ledger entr{}, {failed} failed to run",
@@ -416,6 +423,12 @@ pub fn golden(
         println!("{line}");
     } else {
         eprintln!("{line}");
+    }
+    if report_only && (different > 0 || !report.stale.is_empty()) {
+        println!(
+            "{}",
+            crate::golden::report_only::verdict(different + report.stale.len(), report_path)
+        );
     }
     Ok(passed)
 }
