@@ -416,3 +416,48 @@ def test_vocab_diff_runs_against_the_installed_oracle(workflow: dict[str, Any]) 
     assert steps.index(oracle) < steps.index(diff), "the oracle is installed before the diff"
     # The filter diffs against the base commit, so the checkout keeps history.
     assert steps[0]["with"].get("fetch-depth") == 0
+
+
+def _runs(job: dict[str, Any]) -> str:
+    return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
+
+
+@pytest.mark.parametrize("job", ["engine", "engine-test"])
+def test_the_engine_jobs_compile_no_python_binding(workflow: dict[str, Any], job: str) -> None:
+    """`uv sync` compiled the binding for minutes before the engine's own work
+    (#841): the engine jobs run Python from setup-python, with nothing synced."""
+    assert "uv sync" not in _runs(workflow["jobs"][job]), job
+    assert "uv run" not in _runs(workflow["jobs"][job]), job
+
+
+def test_the_difflib_comparison_reads_setup_pythons_interpreter(workflow: dict[str, Any]) -> None:
+    """crates/opentide-workspace/tests/external_difflib.rs needs a Python: with
+    no .venv, OPENTIDE_PYTHON names it, or the test fails."""
+    steps = workflow["jobs"]["engine-test"]["steps"]
+    (nextest,) = [s for s in steps if "cargo nextest run" in str(s.get("run", ""))]
+    assert (nextest.get("env") or {}).get("OPENTIDE_PYTHON") == "python"
+    assert any(str(s.get("uses", "")).startswith("actions/setup-python@") for s in steps)
+
+
+def test_lint_compiles_the_engine_once(workflow: dict[str, Any]) -> None:
+    """ruff and ty read the sources: the dependencies are installed without the
+    project, and nothing syncs it back before `uv build`, which compiles the
+    engine from the sdist into the cached target directory (#841)."""
+    steps = workflow["jobs"]["lint"]["steps"]
+    runs = [str(s.get("run", "")) for s in steps]
+    assert "uv sync --group dev --no-install-project" in runs
+    for run in runs:
+        if run.startswith("uv run"):
+            assert run.startswith("uv run --no-sync"), run
+    (build,) = [s for s in steps if str(s.get("run", "")).strip() == "uv build"]
+    env = build.get("env") or {}
+    assert env.get("OPENTIDE_ENGINE_PROFILE") == "develop"
+    assert env.get("CARGO_TARGET_DIR") == "${{ github.workspace }}/target"
+
+
+def test_codeql_installs_the_dependencies_not_the_engine() -> None:
+    codeql = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    )
+    runs = _runs(codeql["jobs"]["analyze"])
+    assert "uv sync --group dev --no-install-project" in runs

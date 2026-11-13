@@ -232,3 +232,108 @@ def test_a_release_restores_no_other_cache() -> None:
                 if uses.startswith("actions/setup-node@"):
                     # It may enable npm's cache by itself (a `packageManager` field).
                     assert inputs.get("package-manager-cache") is False, (name, job_id)
+
+
+# sccache (#841): the workspace's own crates, which rust-cache drops before
+# saving, cached by content. Each cache name has one job that saves it.
+SCCACHE_RESTORE = "actions/cache/restore@"
+SCCACHE_SAVE = "actions/cache/save@"
+SCCACHE_KEY = re.compile(r"^sccache-(?P<name>.+)-\$\{\{ hashFiles\(.*\) \}\}$")
+
+
+class CompilerCache(NamedTuple):
+    job: str
+    runs_on: str
+    restores: str | None
+    saves: str | None
+    save_condition: str | None
+
+
+def _ci() -> dict[str, Any]:
+    return yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
+
+
+def _compiler_caches() -> list[CompilerCache]:
+    caches: list[CompilerCache] = []
+    for job_id, job in _ci()["jobs"].items():
+        steps = job.get("steps") or []
+        restores = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
+        saves = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_SAVE)]
+        assert len(restores) <= 1 and len(saves) <= 1, job_id
+        for cell in _cells(job):
+            restore = _resolve((restores[0]["with"] if restores else {}).get("key"), cell)
+            save = _resolve((saves[0]["with"] if saves else {}).get("key"), cell)
+            caches.append(
+                CompilerCache(
+                    job=job_id,
+                    runs_on=str(_resolve(job.get("runs-on"), cell)),
+                    restores=restore,
+                    saves=save,
+                    save_condition=saves[0].get("if") if saves else None,
+                )
+            )
+    return caches
+
+
+def _wraps_with_sccache(job: dict[str, Any]) -> bool:
+    return (job.get("env") or {}).get("RUSTC_WRAPPER") == "sccache"
+
+
+def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
+    """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
+    jobs = _ci()["jobs"]
+    wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
+    assert {"engine-test", "test", "cli-e2e", "golden-compare", "corpus"} <= set(wrapped)
+    for job_id in wrapped:
+        steps = jobs[job_id]["steps"]
+        installs = [
+            n
+            for n, s in enumerate(steps)
+            if (s.get("with") or {}).get("tool", "").startswith("sccache@")
+        ]
+        assert len(installs) == 1, job_id
+        cargo = [
+            n
+            for n, s in enumerate(steps)
+            if re.search(r"\b(cargo|uv sync|uv build|uv run)\b", str(s.get("run", "")))
+        ]
+        assert cargo and installs[0] < min(cargo), f"{job_id}: install sccache before cargo"
+        restores = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
+        assert len(restores) == 1, f"{job_id}: restore a compiler cache"
+        assert (jobs[job_id].get("env") or {}).get("SCCACHE_DIR"), job_id
+
+
+def test_every_compiler_cache_has_one_saver_and_its_readers_restore_its_name() -> None:
+    caches = _compiler_caches()
+    for cache in caches:
+        for key in (cache.restores, cache.saves):
+            if key is not None:
+                assert SCCACHE_KEY.match(key), (cache.job, key)
+        if cache.saves is not None:
+            assert cache.saves == cache.restores, f"{cache.job}: save the key it restores"
+            # An exact hit has nothing new to save.
+            assert "steps.sccache.outputs.cache-hit != 'true'" in str(cache.save_condition)
+    # One job per name (test's cells save under a matrix condition: its 3.14 cell).
+    savers: dict[str, set[str]] = defaultdict(set)
+    for cache in caches:
+        if cache.saves is not None:
+            savers[cache.saves].add(cache.job)
+    for key, producers in savers.items():
+        assert len(producers) == 1, f"{key} is saved by {sorted(producers)}"
+    saved = set(savers)
+    for cache in caches:
+        if cache.restores is not None:
+            assert cache.restores in saved, (
+                f"{cache.job} restores {cache.restores}: no job saves it"
+            )
+
+
+def test_the_python_jobs_share_one_pyo3_configuration() -> None:
+    """PyO3's build script reruns when PYO3_PYTHON changes, and cargo rebuilds
+    every engine crate above it: each Python job names the same interpreter, so
+    the binding in the cache is the one it builds (#841)."""
+    jobs = _ci()["jobs"]
+    python_jobs = [job for workflow, job in (PYTHON_PRODUCER, *PYTHON_READERS)]
+    python_jobs += ["cli-e2e-full", "golden-compare"]
+    seen = {(jobs[job].get("env") or {}).get("PYO3_PYTHON") for job in python_jobs}
+    assert seen == {"/usr/bin/python3"}, seen
