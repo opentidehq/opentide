@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 
 use super::{
     Known, Manifest, Mismatch, RUNNERS, TENANT_CALLS, documents, explained, first_difference,
@@ -596,6 +596,27 @@ fn lay_out(repo: &Path, corpus: &super::Corpus, root: &Path) -> Result<Vec<(Stri
                 write_workspace(&workspace, &path)?;
                 out.push((format!("{}/{id}", corpus.name), path));
             }
+            Ok(out)
+        }
+        "compile_faults" => {
+            // The compile check's kinds (UC-2.2, #817): isolated, since the
+            // check runs only when the run has no other error (KG-10).
+            let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
+            let base = generate::generate(&catalogue.base.options()?);
+            let mut out = Vec::new();
+            for kind in catalogue
+                .kinds
+                .iter()
+                .filter(|kind| kind.id.starts_with("compile-"))
+            {
+                let mut workspace = base.clone();
+                let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+                faults::apply(&mut workspace, kind, &targets)?;
+                let path = dir.join(&kind.id);
+                write_workspace(&workspace, &path)?;
+                out.push((format!("{}/{}", corpus.name, kind.id), path));
+            }
+            ensure!(!out.is_empty(), "faults.toml has no compile-* kind");
             Ok(out)
         }
         other => bail!("unknown corpus kind `{other}`"),
