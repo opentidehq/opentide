@@ -34,6 +34,7 @@ required = ["author", "organisation"]
 [recommended]
 # Fields the templates ask for and opentide validate does not require: today a
 # rule's `configurations` and `response`. A missing one is a note, as above.
+# The check needs no analysis engine.
 enabled = true
 # severity = "warning"
 

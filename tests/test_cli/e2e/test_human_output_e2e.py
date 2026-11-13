@@ -350,7 +350,7 @@ def _load_bearing(payload: dict[str, Any], *, verbose: bool = False) -> list[Exp
         if verbose or finding["severity"] != "info"
     )
     if not verbose and any(finding["severity"] == "info" for finding in findings):
-        expected.append((f"opentide {payload['command']} --verbose",))
+        expected.append(("→ opentide", f"{payload['command']} ", "--verbose"))
     if engine:
         for finding in payload["diagnostics"]:
             expected.append((f"{finding['severity']}[{finding['code']}]: {finding['message']}",))

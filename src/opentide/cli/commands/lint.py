@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -17,7 +16,7 @@ from opentide.cli.findings import (
     publish_findings,
     write_report_file,
 )
-from opentide.cli.output import CommandResult, emit_result, text_mode
+from opentide.cli.output import CommandResult, emit_result, text_mode, with_hidden_notes_step
 from opentide.cli.ui.reports import ReportFormat
 
 
@@ -84,7 +83,7 @@ def lint_cmd(
     ]
     write_report_file(report_format, output, diagnostics, command="lint")
     if not cli.json_output:
-        from opentide.cli.ui.codeframe import hidden_notes_step, render_diagnostics
+        from opentide.cli.ui.codeframe import render_diagnostics
         from opentide.core.logging.config import get_stdout_console
 
         if report_format is not ReportFormat.text and output is None:
@@ -95,12 +94,10 @@ def lint_cmd(
             sources=sources,
             mode=text_mode(cli),
             quiet=cli.quiet,
-            verbose=cli.verbose,
+            notes=cli.verbose,
         )
         publish_findings(
             cli, diagnostics, outcome, command="lint", outcome=outcome.outcome or outcome.message
         )
-        step = hidden_notes_step(hidden, "opentide lint")
-        if step is not None:
-            outcome = replace(outcome, next_actions=(*outcome.next_actions, step))
+        outcome = with_hidden_notes_step(outcome, hidden)
     emit_result(cli, outcome)

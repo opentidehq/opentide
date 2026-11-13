@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
@@ -48,12 +48,6 @@ logger = structlog.get_logger("opentide.cli.services.lint")
 
 _OBJECT_FAMILIES = ("threats", "objectives", "rules")
 
-#: The engine's code for a field the templates ask for and validation does not require.
-RECOMMENDED_FIELD_CODE = "recommended_field_missing"
-
-#: The checks whose findings come from the analysis engine, in one pass per file.
-_ENGINE_CHECKS = frozenset({LintCheck.recommended, LintCheck.queries})
-
 
 @dataclass
 class _ObjectRecord:
@@ -74,6 +68,8 @@ class _ObjectRecord:
     placeholder_lines: list[_Marked] = field(default_factory=list)
     #: The file's text, for the queries check; ``None`` when it was not read.
     text: str | None = None
+    #: The parsed mapping, for the recommended check; ``None`` when it did not parse.
+    body: dict[str, Any] | None = None
 
 
 def _object_files(root: Path) -> tuple[list[Path], list[Path]]:
@@ -243,6 +239,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         # file, found an empty file".
         record.parse_error = problem
         return record
+    record.body = data
     record.name = _as_str(data.get("name"))
     metadata = data.get("metadata")
     if isinstance(metadata, dict):
@@ -576,21 +573,12 @@ def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object
     ]
 
 
-def _engine_findings(
-    root: Path, records: list[_ObjectRecord], checks: Collection[LintCheck]
-) -> list[dict[str, object]]:
-    """What the engine reports for the ``queries`` and ``recommended`` *checks*, one pass per file.
+def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The engine's style findings on each object: query warnings and notes, platform advisories.
 
-    ``queries``: the engine's style findings, query warnings and notes and
-    platform advisories. A query the engine rejects (an error) is ``opentide
-    validate``'s finding, and the engine's other object checks are validate's
-    and lint's other checks'. A placeholder query is the ``placeholders`` check's.
-
-    ``recommended``: a field the templates ask for and validation does not
-    require (``recommended_field_missing``), a note as the editor shows it.
-    This process installs no ``lint.toml`` into the engine, so the engine
-    reports every such field and lint's own configuration decides.
-
+    A query the engine rejects (an error) is ``opentide validate``'s finding,
+    and the engine's object checks are validate's and lint's other checks'.
+    A placeholder query is the ``placeholders`` check's.
     Raises :class:`~opentide.analysis.EngineUnavailableError`.
     """
     from opentide.analysis import (
@@ -616,12 +604,6 @@ def _engine_findings(
         lines = record.text.splitlines()
         marked = {marked.line + 1 for marked in record.placeholder_lines}
         for finding in check_file(space, record.path, record.text):
-            if finding.code == RECOMMENDED_FIELD_CODE:
-                if LintCheck.recommended in checks:
-                    findings.append(_recommended_finding(root, record, finding))
-                continue
-            if LintCheck.queries not in checks:
-                continue
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
             if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
@@ -654,22 +636,53 @@ def _engine_findings(
     return findings
 
 
-def _recommended_finding(root: Path, record: _ObjectRecord, finding: Finding) -> dict[str, object]:
-    """A ``recommended`` note for the engine's ``recommended_field_missing`` *finding*."""
-    from opentide.cli.ui.diagnostics import diagnostic_from_engine
+def _recommended_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """One note per field the templates ask for and validation does not require.
 
-    dotted = ".".join(finding.field_path)
-    return {
-        "check": LintCheck.recommended.value,
-        "severity": "info",
-        "path": record.relative,
-        "yaml_line": finding.line - 1,
-        "uuid": record.uuid,
-        "message": f"Recommended field missing: {dotted}",
-        "_code": finding.code,
-        "_field_path": list(finding.field_path),
-        "_diagnostic": diagnostic_from_engine(finding, file_path=record.path, workspace=root),
-    }
+    The fields come from the catalog the engine reads (``recommended_fields``),
+    so lint reports what the editor reports as ``recommended_field_missing``,
+    without the engine. A field counts as missing only inside a mapping the
+    object has, as the engine checks it; an unknown schema is validate's.
+    """
+    from opentide.generation.lsp_catalog import recommended_fields
+
+    findings: list[dict[str, object]] = []
+    for record in records:
+        schema_id = _as_str(record.metadata.get("schema"))
+        if record.parse_error or record.body is None or schema_id is None:
+            continue
+        try:
+            fields = recommended_fields(schema_id)
+        except LookupError:
+            continue
+        for item in fields:
+            parent_path, _, key = item.path.rpartition(".")
+            parent = _mapping_at(record.body, parent_path)
+            if parent is None or key in parent or any(old in parent for old in item.filled_by):
+                continue
+            top = item.path.split(".", 1)[0]
+            line = 0 if not parent_path else _key_line(record, top)
+            finding = _finding(
+                LintCheck.recommended,
+                "info",
+                record,
+                f"Recommended field missing: {item.path}",
+                code=LINT_CODES["recommended"],
+                yaml_line=line,
+            )
+            finding["_field_path"] = item.path.split(".")
+            if line is not None:
+                finding["_position"] = (line + 1, 1)
+            findings.append(finding)
+    return findings
+
+
+def _mapping_at(body: dict[str, Any], dotted: str) -> dict[str, Any] | None:
+    """The mapping at *dotted* in *body* (``""`` is *body*), or ``None`` when there is none."""
+    current: object = body
+    for part in dotted.split(".") if dotted else ():
+        current = current.get(part) if isinstance(current, dict) else None
+    return current if isinstance(current, dict) else None
 
 
 def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
@@ -1021,26 +1034,23 @@ def run_lint(
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
         findings.extend(_metadata_findings(shown, config.required_metadata))
+    if LintCheck.recommended in selected:
+        findings.extend(_recommended_findings(shown))
     if LintCheck.placeholders in selected:
         findings.extend(_placeholder_findings(shown))
-    engine_checks = [item for item in selected if item in _ENGINE_CHECKS]
-    if engine_checks:
+    if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
         # The HarfangLab YARA, Bitdefender, Graylog, Exabeam and Google SecOps advisories
         # need no engine: reported whether it loads or not.
-        advisories: list[dict[str, object]] = []
-        if LintCheck.queries in selected:
-            advisories = [
-                finding for record in shown for finding in _harfanglab_yara_findings(record)
-            ]
-            advisories.extend(_bitdefender_findings(shown))
-            advisories.extend(_graylog_findings(shown))
-            advisories.extend(_exabeam_findings(shown))
-            advisories.extend(_google_secops_findings(shown))
+        advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
+        advisories.extend(_bitdefender_findings(shown))
+        advisories.extend(_graylog_findings(shown))
+        advisories.extend(_exabeam_findings(shown))
+        advisories.extend(_google_secops_findings(shown))
         findings.extend(advisories)
         try:
-            findings.extend(_engine_findings(target, shown, engine_checks))
+            findings.extend(_query_findings(target, shown))
         except EngineUnavailableError as exc:
             from opentide.cli.services.engine import engine_unavailable_result
 

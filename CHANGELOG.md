@@ -12,8 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
-- **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` now hide notes by default, count them on the outcome line, and point at `--verbose` to show them. `--json` and reports always include them. `--verbose` and `--quiet` cannot be combined ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
-- **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check reports the fields the templates ask for and `validate` does not require, as the editor already did. Turn it off or raise it with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` now hide notes by default, count them on the outcome line, and suggest the same command with `--verbose`. `validate --watch` still shows every finding. `--json` and reports always include them. `--verbose` and `--quiet` cannot be combined ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check reports the fields the templates ask for and `validate` does not require, as the editor already did. It needs no analysis engine. Turn it off or raise it with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
 
 ### Changed
 

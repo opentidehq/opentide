@@ -46,7 +46,7 @@ opentide validate --check queries
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
 error[vocab_unknown]: 'clearr' is not a TLP value

@@ -23,7 +23,7 @@ A flag that is the value of the option before it stays that option's value: in `
 | `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
 | `--debug` | `OPENTIDE_DEBUG`, or `DEBUG` when it is a boolean | off | Enable debug logging, with timestamps |
 | `--quiet` | — | off | Print only the outcome line and errors |
-| `--verbose` | — | off | Also print notes: findings worth knowing that are not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide them by default and say how many. Cannot be combined with `--quiet` (exit `2`). `--json` and reports always include notes |
+| `--verbose` | — | off | Also print notes: findings worth knowing that are not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide them by default, say how many, and suggest the same command with `--verbose`; `validate --watch` shows every finding. Cannot be combined with `--quiet` (exit `2`). `--json` and reports always include notes |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable colour |
 | `--json` | `OPENTIDE_OUTPUT=json` | off | Print one JSON document on stdout; see [JSON output](./json-output.md) |
 | `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |

@@ -870,7 +870,7 @@ def test_notes_print_only_with_verbose(tmp_path: Path) -> None:
     quiet = runner.invoke(app, base)
     assert quiet.exit_code == 0, quiet.output
     assert "metadata_recommended" not in quiet.output
-    assert "opentide lint --verbose" in quiet.output
+    assert f"opentide --repo {tmp_path} lint --verbose" in quiet.output
     assert "show 1 note" in quiet.output
     verbose = runner.invoke(app, [*base, "--verbose"])
     assert verbose.exit_code == 0, verbose.output
@@ -893,3 +893,50 @@ def test_quiet_and_verbose_are_a_usage_error(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--repo", str(tmp_path), "lint", "--quiet", "--verbose"])
     assert result.exit_code == 2
     assert "--quiet and --verbose cannot be used together" in result.output
+
+
+def test_the_verbose_step_keeps_what_narrowed_the_run(tmp_path: Path) -> None:
+    """``opentide lint --changed`` must not suggest linting the whole catalogue."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    args = ["--repo", str(tmp_path), "lint", "--check", "metadata"]
+    result = runner.invoke(app, ["--no-color", *args, "--file", "simulated-actor.yaml"])
+    assert result.exit_code == 0, result.output
+    assert (
+        f"opentide --repo {tmp_path} lint --check metadata --file simulated-actor.yaml --verbose"
+        in result.output
+    )
+
+
+def test_the_recommended_check_needs_no_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A workspace with [queries] off linted without the engine; the new check must too."""
+    from opentide import analysis
+
+    def unavailable() -> None:
+        raise analysis.EngineUnavailableError("no engine in this image")
+
+    monkeypatch.setattr(analysis, "engine", unavailable)
+    _write_object(tmp_path, "rules", "simulated-rule.yaml", _RULE_WITHOUT_OPTIONAL_BLOCKS)
+    _lint_toml(tmp_path, "[queries]\nenabled = false\n")
+    result = run_lint(tmp_path, strict=True)
+    assert result["_exit_code"] == 0, result
+    assert [item["check"] for item in result["findings"]] == ["recommended", "recommended"]
+
+
+def test_lint_reports_the_fields_the_editor_reports(tmp_path: Path) -> None:
+    """Lint's recommended check and the engine's recommended_field_missing agree."""
+    from opentide.analysis import check_file, workspace
+
+    path = _write_object(tmp_path, "rules", "simulated-rule.yaml", _RULE_WITHOUT_OPTIONAL_BLOCKS)
+    engine = [
+        (finding.field_path, finding.line, finding.column)
+        for finding in check_file(workspace(tmp_path), path, _RULE_WITHOUT_OPTIONAL_BLOCKS)
+        if finding.code == "recommended_field_missing"
+    ]
+    lint = [
+        (tuple(item["field_path"]), item["line"], item["column"])
+        for item in run_lint(tmp_path, checks=[LintCheck.recommended])["findings"]
+    ]
+    assert engine
+    assert lint == engine

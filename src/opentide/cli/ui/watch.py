@@ -30,12 +30,7 @@ from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
 
-from opentide.cli.ui.codeframe import (
-    diagnostic_lines,
-    render_diagnostics,
-    shows,
-    sort_diagnostics,
-)
+from opentide.cli.ui.codeframe import diagnostic_lines, render_diagnostics, sort_diagnostics
 from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles
 from opentide.cli.ui.fixes import plan_fixes
 from opentide.cli.ui.glyphs import glyph
@@ -310,18 +305,10 @@ class PlainView:
     describe: Callable[[WatchRun], str]
     mode: OutputMode = OutputMode.PLAIN
     quiet: bool = False
-    verbose: bool = False
     cwd: Path | None = None
 
     def __call__(self, run: WatchRun) -> None:
-        render_diagnostics(
-            self.console,
-            run.found,
-            mode=self.mode,
-            quiet=self.quiet,
-            verbose=self.verbose,
-            cwd=self.cwd,
-        )
+        render_diagnostics(self.console, run.found, mode=self.mode, quiet=self.quiet, cwd=self.cwd)
         encoding = self.console.encoding or "utf-8"
         self.console.print(
             outcome_text(outcome_kind_of(run), self.describe(run), encoding=encoding),
@@ -337,7 +324,6 @@ class LiveView:
     describe: Callable[[WatchRun], str]
     footer: str = ""
     quiet: bool = False
-    verbose: bool = False
     cwd: Path | None = None
     _live: Live | None = field(default=None, init=False)
 
@@ -373,11 +359,7 @@ class LiveView:
         room = self.console.size.height - self._height(outcome, width) - self._height(footer, width)
         sources = SourceFiles()
         frames: list[Text] = []
-        shown = [
-            item
-            for item in run.diagnostics
-            if shows(item.severity, quiet=self.quiet, verbose=self.verbose)
-        ]
+        shown = [item for item in run.diagnostics if not self.quiet or item.severity == "error"]
         for diagnostic in shown:
             # columns: the frame's own wrapping, as validate prints it, with the
             # continuation indent; the terminal broke the header without it.

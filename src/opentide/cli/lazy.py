@@ -29,6 +29,26 @@ COMMAND_WORDS_KEY = "opentide.command_words"
 #: ``ctx.meta`` key for the root's arguments, after hoisting.
 ROOT_ARGS_KEY = "opentide.root_args"
 
+#: Root flags a suggested re-run leaves out: they change how output looks, not what runs.
+_PRESENTATION_FLAGS = frozenset({"--json", "--no-color", "--debug", "--quiet", "--verbose"})
+
+
+def rerun_command(*added: str) -> str:
+    """This invocation as one shell command with *added* at the end, for a next step.
+
+    The arguments as typed (``--file``, ``--changed``, ``--check``, ``--repo``
+    kept, root flags first as hoisted), less the flags that only change how
+    output looks. ``opentide`` plus *added* outside a command line.
+    """
+    import shlex
+
+    from typer._click.globals import get_current_context
+
+    ctx = get_current_context(silent=True)
+    args = () if ctx is None else ctx.find_root().meta.get(ROOT_ARGS_KEY, ())
+    kept = [arg for arg in args if arg not in _PRESENTATION_FLAGS]
+    return shlex.join(["opentide", *kept, *added])
+
 
 class _Commands(MutableMapping[str, Any]):
     """``TyperGroup.commands`` whose indexed values load on first access.

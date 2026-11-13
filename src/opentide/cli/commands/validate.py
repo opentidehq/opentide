@@ -36,9 +36,9 @@ from opentide.cli.output import (
     emit_success,
     emit_usage_error,
     text_mode,
+    with_hidden_notes_step,
 )
 from opentide.cli.ui.codeframe import (
-    hidden_notes_step,
     render_diagnostics,
     render_diff,
     render_fixed,
@@ -206,7 +206,7 @@ def validate_group(
     if fixed and not cli.quiet:
         render_fixed(stdout, fixed.changes)
     render_warnings(get_console(), [f"Could not write the fix to {line}" for line in unwritten])
-    hidden = render_diagnostics(stdout, shown, mode=mode, quiet=cli.quiet, verbose=cli.verbose)
+    hidden = render_diagnostics(stdout, shown, mode=mode, quiet=cli.quiet, notes=cli.verbose)
     line = outcome.message
     if not line.startswith("Validation passed, but"):
         done = plan if dry_run else fixed
@@ -219,10 +219,9 @@ def validate_group(
             outcome.summary, failed=not outcome.ok, seconds=elapsed_ms() / 1000, fix=phrase
         )
     publish_findings(cli, diagnostics, outcome, command="validate", outcome=line)
-    step = hidden_notes_step(hidden, "opentide validate")
-    steps = outcome.next_actions if step is None else (*outcome.next_actions, step)
+    outcome = with_hidden_notes_step(outcome, hidden)
     # The code frames above show every warning; a warning line would repeat it.
-    emit_result(cli, replace(outcome, outcome=line, warnings=(), next_actions=steps))
+    emit_result(cli, replace(outcome, outcome=line, warnings=()))
 
 
 def refuse_queries_mode(
@@ -305,16 +304,10 @@ def _watch(
     try:
         if mode is OutputMode.HUMAN:
             footer = f"watching {_shown(roots)}"
-            with LiveView(
-                stdout, describe, footer=footer, quiet=cli.quiet, verbose=cli.verbose
-            ) as view:
+            with LiveView(stdout, describe, footer=footer, quiet=cli.quiet) as view:
                 watcher.run(view)
         else:
-            watcher.run(
-                PlainView(
-                    stdout, describe, mode=text_mode(cli), quiet=cli.quiet, verbose=cli.verbose
-                )
-            )
+            watcher.run(PlainView(stdout, describe, mode=text_mode(cli), quiet=cli.quiet))
     except KeyboardInterrupt:
         return
 
@@ -493,7 +486,7 @@ def _emit_offline_query_result(cli: CliContext, result: dict[str, Any]) -> None:
             diagnostics,
             mode=text_mode(cli),
             quiet=cli.quiet,
-            verbose=cli.verbose,
+            notes=cli.verbose,
         )
         publish_findings(
             cli,
@@ -502,7 +495,5 @@ def _emit_offline_query_result(cli: CliContext, result: dict[str, Any]) -> None:
             command="validate query",
             outcome=outcome.outcome or outcome.message,
         )
-        step = hidden_notes_step(hidden, "opentide validate query")
-        if step is not None:
-            outcome = replace(outcome, next_actions=(*outcome.next_actions, step))
+        outcome = with_hidden_notes_step(outcome, hidden)
     emit_result(cli, outcome)
