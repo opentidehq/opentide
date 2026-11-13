@@ -42,155 +42,635 @@ warning[asset_unknown]: A `visibility.toml` log source or detector names an asse
   │
   ╰─ help: opentide explain asset_unknown
 
-== cbc_unknown_field
-warning[cbc_unknown_field]: A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field.
+== bitdefender_action_scope
+error[bitdefender_action_scope]: An automatic action is not allowed for the rule's kind or target.
   ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
 5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_action_scope
+
+== bitdefender_actions_unsupported
+warning[bitdefender_actions_unsupported]: The block sets `actions`, and the tenant's subscription has no automatic actions.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_actions_unsupported
+
+== bitdefender_contains_no_wildcard
+warning[bitdefender_contains_no_wildcard]: A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_contains_no_wildcard
+
+== bitdefender_create_no_id
+error[bitdefender_create_no_id]: A GravityZone create answered something other than a 24-hex rule id.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_create_no_id
+
+== bitdefender_create_unconfirmed
+error[bitdefender_create_unconfirmed]: A GravityZone create got no answer, and its retry found the name already taken.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_create_unconfirmed
+
+== bitdefender_criteria_combination
+error[bitdefender_criteria_combination]: The criteria combine fields or values GravityZone does not allow together.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_criteria_combination
+
+== bitdefender_criterion_field
+error[bitdefender_criterion_field]: A criterion's `field` does not belong to the block's `target`.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_criterion_field
+
+== bitdefender_criterion_relation
+error[bitdefender_criterion_relation]: A criterion uses a relation its field does not take.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_criterion_relation
+
+== bitdefender_criterion_shape
+error[bitdefender_criterion_shape]: A criterion does not have `field` and exactly one of `is`, `contains` and `any`.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_criterion_shape
+
+== bitdefender_criterion_value
+error[bitdefender_criterion_value]: A criterion's value is not one its field accepts.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_criterion_value
+
+== bitdefender_incidents_api_unavailable
+error[bitdefender_incidents_api_unavailable]: The tenant has no Incidents API, so it cannot take custom rules.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_incidents_api_unavailable
+
+== bitdefender_kind_changed
+error[bitdefender_kind_changed]: An update was refused because the block's kind differs from the GravityZone rule's.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_kind_changed
+
+== bitdefender_name_conflict
+error[bitdefender_name_conflict]: GravityZone refused a create because a rule with the same name exists in the company.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_name_conflict
+
+== bitdefender_name_duplicate
+error[bitdefender_name_duplicate]: Two enabled Bitdefender blocks resolve to the same GravityZone rule name.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_name_duplicate
+
+== bitdefender_registry_full_hive
+warning[bitdefender_registry_full_hive]: A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_registry_full_hive
+
+== bitdefender_request_failed
+error[bitdefender_request_failed]: GravityZone refused a call for this rule with a JSON-RPC error.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_request_failed
+
+== bitdefender_rule_kind
+error[bitdefender_rule_kind]: A Bitdefender block sets both `detection` and `yara`, or neither.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_rule_kind
+
+== bitdefender_rule_missing
+warning[bitdefender_rule_missing]: A rule to disable is gone from GravityZone, so its recorded id was removed.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_rule_missing
+
+== bitdefender_rule_recreated
+warning[bitdefender_rule_recreated]: The recorded GravityZone rule was gone, so deploy created it again.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_rule_recreated
+
+== bitdefender_severity
+error[bitdefender_severity]: The block `severity` is not `Low`, `Medium` or `High`.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_severity
+
+== bitdefender_severity_collapsed
+warning[bitdefender_severity_collapsed]: `response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_severity_collapsed
+
+== bitdefender_target
+error[bitdefender_target]: The `detection.target` is not a GravityZone detection target.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_target
+
+== bitdefender_target_unknown
+error[bitdefender_target_unknown]: A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_target_unknown
+
+== bitdefender_targets_shape
+error[bitdefender_targets_shape]: `targets` sets both `endpoint_tags` and `companies`, or an empty list.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_targets_shape
+
+== bitdefender_tenant_unauthorized
+error[bitdefender_tenant_unauthorized]: GravityZone refused the tenant's API key, so no rule deploys to it.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_tenant_unauthorized
+
+== bitdefender_tenant_unreachable
+error[bitdefender_tenant_unreachable]: A call to the GravityZone tenant got no answer, so no further rule deploys to it.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_tenant_unreachable
+
+== bitdefender_yara_ascii
+error[bitdefender_yara_ascii]: A Bitdefender YARA signature holds a character that is not ASCII.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_yara_ascii
+
+== bitdefender_yara_size
+error[bitdefender_yara_size]: A Bitdefender YARA signature is longer than 30,000 characters.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain bitdefender_yara_size
+
+== cbc_unknown_field
+warning[cbc_unknown_field]: A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain cbc_unknown_field
 
 == chaining_relation_unknown
 error[chaining_relation_unknown]: A threat's chaining relation is not a known relation.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
-6 │   modified: 2026-01-02
-7 │ detection:
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain chaining_relation_unknown
 
 == changed_diff
 error[changed_diff]: `share push --changed` could not calculate which objects changed.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain changed_diff
 
 == changed_on_pull_request
 error[changed_on_pull_request]: `share push --changed` does not run on a pull request.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain changed_on_pull_request
 
 == changed_outside_ci
 error[changed_outside_ci]: `share push --changed` runs only in CI, where the diff it shares is known.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
-3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
+1 │ name: Frame shapes
+2 │ metadata:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain changed_outside_ci
 
 == command_failed
 error[command_failed]: The command failed for a reason no more specific code covers.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
-  │
-4 │   schema: rule::2.0
-5 │   created: 2026-01-01
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain command_failed
-
-== compile_empty_block
-error[compile_empty_block]: A block the rule needs is present but empty, so the platform cannot read a value from it.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
-  │
-5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain compile_empty_block
-
-== compile_failed
-error[compile_failed]: The platform's compiler rejected the rule for a reason opentide cannot name more precisely.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
-  │
-6 │   modified: 2026-01-02
-7 │ detection:
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain compile_failed
-
-== compile_invalid_rule
-error[compile_invalid_rule]: The rule does not load as a detection rule the platform can compile.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
-  │
-1 │ name: Frame shapes
-2 │ metadata:
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain compile_invalid_rule
-
-== compile_invalid_value
-error[compile_invalid_value]: A setting in the rule's platform block holds a value the platform cannot use.
   ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
 2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain compile_invalid_value
+  ╰─ help: opentide explain command_failed
 
-== compile_missing_field
-error[compile_missing_field]: A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule.
+== compile_empty_block
+error[compile_empty_block]: A block the rule needs is present but empty, so the platform cannot read a value from it.
   ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
 3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain compile_missing_field
+  ╰─ help: opentide explain compile_empty_block
 
-== config_check_failed
-warning[config_check_failed]: opentide could not check this configuration file in the editor; the message says why. Its other findings are missing.
+== compile_failed
+error[compile_failed]: The platform's compiler rejected the rule for a reason opentide cannot name more precisely.
   ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
 4 │   schema: rule::2.0
 5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain config_check_failed
+  ╰─ help: opentide explain compile_failed
 
-== config_enum_unknown
-error[config_enum_unknown]: A value is not one of those your deployment configuration declares.
+== compile_invalid_rule
+error[compile_invalid_rule]: The rule does not load as a detection rule the platform can compile.
   ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
 5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain config_enum_unknown
+  ╰─ help: opentide explain compile_invalid_rule
 
-== config_parse
-error[config_parse]: A configuration file could not be read as TOML.
+== compile_invalid_value
+error[compile_invalid_value]: A setting in the rule's platform block holds a value the platform cannot use.
   ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
 6 │   modified: 2026-01-02
 7 │ detection:
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain config_parse
+  ╰─ help: opentide explain compile_invalid_value
 
-== configuration
-error[configuration]: The workspace configuration files under `.opentide/configurations/` load.
+== compile_missing_field
+error[compile_missing_field]: A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule.
   ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
 1 │ name: Frame shapes
 2 │ metadata:
   │   ━━━━━━ this value
   │
+  ╰─ help: opentide explain compile_missing_field
+
+== config_check_failed
+warning[config_check_failed]: opentide could not check this configuration file in the editor; the message says why. Its other findings are missing.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain config_check_failed
+
+== config_enum_unknown
+error[config_enum_unknown]: A value is not one of those your deployment configuration declares.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain config_enum_unknown
+
+== config_parse
+error[config_parse]: A configuration file could not be read as TOML.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain config_parse
+
+== configuration
+error[configuration]: The workspace configuration files under `.opentide/configurations/` load.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
   ╰─ help: opentide explain configuration
+
+== cql_assignment_as
+error[cql_assignment_as]: A CQL assignment names the output field and the function's as= parameter names it again.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_assignment_as
+
+== cql_correlate_aggregate
+error[cql_correlate_aggregate]: A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_correlate_aggregate
+
+== cql_correlate_placement
+error[cql_correlate_placement]: CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_correlate_placement
+
+== cql_deprecated_function
+error[cql_deprecated_function]: CrowdStrike's reference marks the CQL function deprecated.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_deprecated_function
+
+== cql_duplicate_parameter
+error[cql_duplicate_parameter]: A CQL function parameter is given more than once.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_duplicate_parameter
+
+== cql_event_function_after_aggregate
+error[cql_event_function_after_aggregate]: A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_event_function_after_aggregate
+
+== cql_free_text_after_aggregate
+error[cql_free_text_after_aggregate]: A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_free_text_after_aggregate
+
+== cql_link_outside_correlate
+error[cql_link_outside_correlate]: The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_link_outside_correlate
+
+== cql_match_guard
+error[cql_match_guard]: A CQL match guard is an aggregate function; a guard must be a filter.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_match_guard
+
+== cql_missing_parameter
+error[cql_missing_parameter]: A CQL function call leaves out a required parameter.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_missing_parameter
+
+== cql_parameter_value
+error[cql_parameter_value]: A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_parameter_value
+
+== cql_parse_error
+error[cql_parse_error]: The CrowdStrike Query Language (CQL) query does not parse.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_parse_error
+
+== cql_regex_flag
+error[cql_regex_flag]: A CQL regex literal has a flag other than d, g, i, m or F.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_regex_flag
+
+== cql_regex_group_under_or
+error[cql_regex_group_under_or]: A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_regex_group_under_or
+
+== cql_removed_function
+error[cql_removed_function]: The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_removed_function
+
+== cql_string_escape
+error[cql_string_escape]: A CQL string has an escape LogScale does not translate; it keeps the backslash and the character.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_string_escape
+
+== cql_unknown_event
+error[cql_unknown_event]: The #event_simpleName value is not a Falcon sensor event the engine knows.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_unknown_event
+
+== cql_unknown_function
+error[cql_unknown_function]: No CQL function has this name; function names are matched without regard to case.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_unknown_function
+
+== cql_unknown_parameter
+error[cql_unknown_parameter]: The CQL function has no parameter with this name.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_unknown_parameter
+
+== cql_unnamed_argument
+error[cql_unnamed_argument]: A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain cql_unnamed_argument
 
 == credentials
 error[credentials]: Per configured tenant, whether every `$VARIABLE` its setup names is set.
@@ -202,725 +682,2045 @@ error[credentials]: Per configured tenant, whether every `$VARIABLE` its setup n
   │
   ╰─ help: opentide explain credentials
 
-== crowdstrike_unsupported
-error[crowdstrike_unsupported]: CrowdStrike queries are not validated; the engine never fakes it.
+== cve_lookup_unavailable
+warning[cve_lookup_unavailable]: A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them.
   ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
 3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain crowdstrike_unsupported
-
-== cve_lookup_unavailable
-warning[cve_lookup_unavailable]: A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
-  │
-4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain cve_lookup_unavailable
 
 == defender_output_columns
 error[defender_output_columns]: A Defender custom detection must return the columns Defender requires.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain defender_output_columns
 
 == deployment_state_platform
 error[deployment_state_platform]: A deployment state shard names a platform that stores no external ids.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain deployment_state_platform
 
 == deployment_state_shape
 error[deployment_state_shape]: A deployment state shard is not the JSON shape opentide writes.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain deployment_state_shape
 
 == deployment_state_uuid_mismatch
 error[deployment_state_uuid_mismatch]: A deployment state shard's file name and contents name different rules.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
+1 │ name: Frame shapes
 2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain deployment_state_uuid_mismatch
 
 == deprecated_field
 warning[deprecated_field]: An object uses a field its schema marks as deprecated.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
+2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain deprecated_field
 
 == doctor_checks_failed
 error[doctor_checks_failed]: At least one `opentide doctor` check failed.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain doctor_checks_failed
 
 == duplicate_id
 error[duplicate_id]: Two object files carry the same UUID.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain duplicate_id
 
 == duplicate_name
 error[duplicate_name]: Two `sharing.toml` blocks share a name.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain duplicate_name
 
 == ecs_type_mismatch
 error[ecs_type_mismatch]: The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain ecs_type_mismatch
 
 == ecs_unknown_field
 error[ecs_unknown_field]: The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
+1 │ name: Frame shapes
 2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain ecs_unknown_field
 
 == elastic_dataset_not_declared
 warning[elastic_dataset_not_declared]: The index pattern is not one the workspace declares in visibility.toml.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
+2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain elastic_dataset_not_declared
 
 == engine_unavailable
 error[engine_unavailable]: The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain engine_unavailable
 
 == eql_argument_type
 error[eql_argument_type]: A literal has a type the EQL verifier rejects in this position.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_argument_type
 
 == eql_case_sensitive
 error[eql_case_sensitive]: The comparison is case-sensitive; the case-insensitive form may be meant.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_case_sensitive
 
 == eql_expression_depth
 error[eql_expression_depth]: The expression nests deeper than Elasticsearch accepts.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_expression_depth
 
 == eql_field_comparison
 error[eql_field_comparison]: Both sides of a comparison read fields, which EQL does not support.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
+1 │ name: Frame shapes
 2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_field_comparison
 
 == eql_function_arity
 error[eql_function_arity]: An EQL function is called with the wrong number of arguments.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
+2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_function_arity
 
 == eql_literal_wildcard
 error[eql_literal_wildcard]: A wildcard character is compared literally; use : or like for a pattern.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_literal_wildcard
 
 == eql_maxspan_lookback
 error[eql_maxspan_lookback]: A sequence maxspan is longer than the rule's lookback.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_maxspan_lookback
 
 == eql_maxspan_missing
 error[eql_maxspan_missing]: A sequence has no maxspan, so partial sequences are held until they expire.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_maxspan_missing
 
 == eql_maxspan_unit
 error[eql_maxspan_unit]: A sequence maxspan uses a unit Elasticsearch does not accept.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_maxspan_unit
 
 == eql_maxspan_window
 error[eql_maxspan_window]: A sequence maxspan is longer than the rule's interval plus lookback, so the rule cannot see whole sequences.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
+1 │ name: Frame shapes
 2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_maxspan_window
 
 == eql_nested_comment
 error[eql_nested_comment]: Elasticsearch nests /* */ comments; the comment ends later than it looks.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
+2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_nested_comment
 
 == eql_not_boolean
 error[eql_not_boolean]: A string or number literal is used as a condition.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_not_boolean
 
 == eql_parse_error
 error[eql_parse_error]: The EQL query does not parse.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_parse_error
 
 == eql_regex
 error[eql_regex]: The regular expression trips a Lucene RegExp pitfall.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_regex
 
 == eql_runs_ignored
 error[eql_runs_ignored]: A decimal runs count is truncated by Elasticsearch.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_runs_ignored
 
 == eql_unknown_function
 error[eql_unknown_function]: The EQL function is not in the Elasticsearch function catalog.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
+1 │ name: Frame shapes
 2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_unknown_function
 
 == eql_unsupported
 error[eql_unsupported]: Elasticsearch EQL does not support this construct (pipes, relationships, ...).
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
+2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_unsupported
 
 == eql_until_term
 error[eql_until_term]: runs or a missing-event term ![ ] is not allowed on until.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain eql_until_term
 
 == esql_expression_depth
 error[esql_expression_depth]: The expression nests deeper than Elasticsearch accepts.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_expression_depth
 
 == esql_group_by_column
 error[esql_group_by_column]: A suppression group_by field is not a column the ES|QL query returns.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_group_by_column
 
 == esql_metadata_id
 error[esql_metadata_id]: A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_metadata_id
 
 == esql_parse_error
 error[esql_parse_error]: The ES|QL query does not parse.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
+1 │ name: Frame shapes
 2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_parse_error
 
 == esql_pattern
 error[esql_pattern]: A LIKE or RLIKE pattern escapes or matches differently than it reads.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
+2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_pattern
 
 == esql_unavailable
 error[esql_unavailable]: The command, function or form is missing or in preview on a targeted stack version.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
-5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_unavailable
 
 == esql_unknown_command
 error[esql_unknown_command]: The ES|QL command is not one Elasticsearch knows.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
+4 │   schema: rule::2.0
 5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_unknown_command
 
 == esql_unknown_function
 error[esql_unknown_function]: The ES|QL function is not in the Elasticsearch function catalog.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
+5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
-7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain esql_unknown_function
 
 == esql_unknown_type
 error[esql_unknown_type]: The ::type cast names a type no Elasticsearch release can cast to.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain esql_unknown_type
+
+== exabeam_advanced_in_rule
+error[exabeam_advanced_in_rule]: A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only.
   ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
 1 │ name: Frame shapes
 2 │ metadata:
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain esql_unknown_type
+  ╰─ help: opentide explain exabeam_advanced_in_rule
 
-== external_id_in_rule
-error[external_id_in_rule]: A rule still carries a vendor rule id key, which belongs in deployment state.
+== exabeam_bare_wildcard
+error[exabeam_bare_wildcard]: A * alone is not an Exabeam query term.
   ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
 2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_bare_wildcard
+
+== exabeam_clause_order
+error[exabeam_clause_order]: Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_clause_order
+
+== exabeam_context_table_limit
+error[exabeam_context_table_limit]: An Exabeam query has more than two context table lookups.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_context_table_limit
+
+== exabeam_context_table_or
+error[exabeam_context_table_or]: An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_context_table_or
+
+== exabeam_context_table_trigger
+error[exabeam_context_table_trigger]: A sequence whose query looks a value up in a context table has a threshold.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_context_table_trigger
+
+== exabeam_correlation
+error[exabeam_correlation]: An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_correlation
+
+== exabeam_correlation_window
+warning[exabeam_correlation_window]: `correlation.within` is not more than the time the ordered sequences need.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_correlation_window
+
+== exabeam_create_no_id
+error[exabeam_create_no_id]: Exabeam answered a create without a rule UUID.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_create_no_id
+
+== exabeam_create_unconfirmed
+error[exabeam_create_unconfirmed]: An Exabeam create got no answer, or a server error, so it may or may not have happened.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_create_unconfirmed
+
+== exabeam_duration
+error[exabeam_duration]: A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_duration
+
+== exabeam_email
+error[exabeam_email]: The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_email
+
+== exabeam_feature_unavailable
+error[exabeam_feature_unavailable]: The Exabeam tenant's subscription does not include the feature, so no rule deploys to it.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_feature_unavailable
+
+== exabeam_foreach_clause
+error[exabeam_foreach_clause]: An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_foreach_clause
+
+== exabeam_foreach_position
+error[exabeam_foreach_position]: An Exabeam FOREACH is the first statement; it runs on the result of a preceding query.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_foreach_position
+
+== exabeam_foreach_reference
+error[exabeam_foreach_reference]: An Exabeam @field reference is outside a FOREACH sub-query.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_foreach_reference
+
+== exabeam_free_text_special
+error[exabeam_free_text_special]: Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_free_text_special
+
+== exabeam_function_arity
+error[exabeam_function_arity]: An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_function_arity
+
+== exabeam_group_by
+error[exabeam_group_by]: A `group_by` is not a list of one to three distinct field names.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_group_by
+
+== exabeam_group_by_column
+error[exabeam_group_by_column]: An Exabeam selected column is neither in GROUP-BY nor aggregated.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_group_by_column
+
+== exabeam_group_by_select_star
+error[exabeam_group_by_select_star]: An Exabeam GROUP-BY is combined with SELECT *.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_group_by_select_star
+
+== exabeam_implicit_and
+error[exabeam_implicit_and]: Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_implicit_and
+
+== exabeam_implicit_operator
+error[exabeam_implicit_operator]: An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_implicit_operator
+
+== exabeam_ipv6_range
+error[exabeam_ipv6_range]: An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_ipv6_range
+
+== exabeam_keyword_case
+error[exabeam_keyword_case]: An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_keyword_case
+
+== exabeam_leading_slash
+error[exabeam_leading_slash]: An Exabeam query cannot start with /.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_leading_slash
+
+== exabeam_legacy_regex
+error[exabeam_legacy_regex]: An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_legacy_regex
+
+== exabeam_mixed_boolean
+error[exabeam_mixed_boolean]: Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_mixed_boolean
+
+== exabeam_name_conflict
+error[exabeam_name_conflict]: An Exabeam rule with the block's name already exists, so deploy did not create a second one.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_name_conflict
+
+== exabeam_name_duplicate
+error[exabeam_name_duplicate]: Two enabled Exabeam blocks resolve to the same Exabeam rule name.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_name_duplicate
+
+== exabeam_name_length
+error[exabeam_name_length]: The Exabeam rule name is longer than 128 characters.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_name_length
+
+== exabeam_not_equal
+error[exabeam_not_equal]: Exabeam filters have no != operator; write NOT field:value.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_not_equal
+
+== exabeam_outcome
+error[exabeam_outcome]: The block `outcome` is not `alert`, `case` or `none`.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_outcome
+
+== exabeam_outcome_silent
+warning[exabeam_outcome_silent]: An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_outcome_silent
+
+== exabeam_parse_error
+error[exabeam_parse_error]: The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_parse_error
+
+== exabeam_pipe_limit
+error[exabeam_pipe_limit]: An Exabeam query has more than five pipes.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_pipe_limit
+
+== exabeam_pipe_misuse
+error[exabeam_pipe_misuse]: An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_pipe_misuse
+
+== exabeam_range
+error[exabeam_range]: The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_range
+
+== exabeam_regex
+error[exabeam_regex]: The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_regex
+
+== exabeam_request_failed
+error[exabeam_request_failed]: An Exabeam call for one rule failed.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_request_failed
+
+== exabeam_request_rejected
+error[exabeam_request_rejected]: Exabeam refused the rule with HTTP 400.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_request_rejected
+
+== exabeam_reserved_alias
+error[exabeam_reserved_alias]: An Exabeam AS name is one of the Search guide's reserved words.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_reserved_alias
+
+== exabeam_rgx_extract_limit
+error[exabeam_rgx_extract_limit]: An Exabeam query has more than three RGX_EXTRACT calls.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_rgx_extract_limit
+
+== exabeam_rule_auto_disabled
+warning[exabeam_rule_auto_disabled]: Exabeam has stopped the rule on its own.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_rule_auto_disabled
+
+== exabeam_rule_missing
+warning[exabeam_rule_missing]: A rule to disable was already gone from Exabeam, so its id was removed.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_rule_missing
+
+== exabeam_rule_recreated
+warning[exabeam_rule_recreated]: The recorded Exabeam rule was gone, so deploy created it again.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_rule_recreated
+
+== exabeam_schedule
+error[exabeam_schedule]: A `schedule` recurrence is not one Exabeam takes.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_schedule
+
+== exabeam_schedule_retained
+warning[exabeam_schedule_retained]: The Exabeam rule keeps a schedule the block no longer sets.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_schedule_retained
+
+== exabeam_sequences
+error[exabeam_sequences]: An Exabeam block has no sequences, or a sequence has no query.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_sequences
+
+== exabeam_severity
+error[exabeam_severity]: The block `severity` is not `none`, `low`, `medium`, `high` or `critical`.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_severity
+
+== exabeam_single_group
+error[exabeam_single_group]: Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_single_group
+
+== exabeam_string_field_number
+error[exabeam_string_field_number]: An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_string_field_number
+
+== exabeam_tenant_unauthorized
+error[exabeam_tenant_unauthorized]: Exabeam refused the tenant's API key, so nothing more is sent to it.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_tenant_unauthorized
+
+== exabeam_tenant_unreachable
+error[exabeam_tenant_unreachable]: An Exabeam tenant did not answer, so no rule deploys to it.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_tenant_unreachable
+
+== exabeam_threshold_function
+error[exabeam_threshold_function]: A threshold's `function` is not an Exabeam function, or its `field` is missing or blank.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_threshold_function
+
+== exabeam_threshold_operator
+error[exabeam_threshold_operator]: A threshold's `operator` is not one its function takes.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_threshold_operator
+
+== exabeam_threshold_value
+error[exabeam_threshold_value]: A threshold's `value` does not have the shape its operator takes.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_threshold_value
+
+== exabeam_time_exact
+error[exabeam_time_exact]: An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_time_exact
+
+== exabeam_unknown_field
+error[exabeam_unknown_field]: The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_unknown_field
+
+== exabeam_unknown_function
+error[exabeam_unknown_function]: The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_unknown_function
+
+== exabeam_unknown_value
+warning[exabeam_unknown_value]: An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_unknown_value
+
+== exabeam_unquoted_value
+error[exabeam_unquoted_value]: An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_unquoted_value
+
+== exabeam_wildcard_in_phrase
+error[exabeam_wildcard_in_phrase]: A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain exabeam_wildcard_in_phrase
+
+== external_id_in_rule
+error[external_id_in_rule]: A rule still carries a vendor rule id key, which belongs in deployment state.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain external_id_in_rule
 
 == external_id_shape
 error[external_id_shape]: A vendor rule id in deployment state has the wrong form.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
-3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain external_id_shape
 
 == falco_append_condition
 error[falco_append_condition]: A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-4 │   schema: rule::2.0
-5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_append_condition
 
 == falco_deprecated_field
 error[falco_deprecated_field]: A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer carries the value it used to.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
-5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
+1 │ name: Frame shapes
+2 │ metadata:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_deprecated_field
 
 == falco_exception
 error[falco_exception]: A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
-6 │   modified: 2026-01-02
-7 │ detection:
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_exception
 
 == falco_field_argument
 error[falco_field_argument]: A known Falco field is used with an argument it refuses, or without one it requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event argument).
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_field_argument
 
 == falco_field_as_value
 error[falco_field_as_value]: A constant value that is a field name: compare with `val(field)` to read the field.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
-2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_field_as_value
 
 == falco_invalid_regex
 error[falco_invalid_regex]: The `regex` pattern does not compile.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
-3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_invalid_regex
 
 == falco_misplaced_list
 error[falco_misplaced_list]: A list is used where its expansion breaks the condition: as a macro, or as a single value; a list belongs inside a value list, `in (name)`.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-4 │   schema: rule::2.0
-5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_misplaced_list
 
 == falco_newer_syntax
 error[falco_newer_syntax]: Syntax that only recent libsinsp releases parse (operator modifiers, `join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the rule.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
-5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
+1 │ name: Frame shapes
+2 │ metadata:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_newer_syntax
 
 == falco_no_evttype
 error[falco_no_evttype]: The rule cannot be narrowed to a few event types (`evt.type`), so it runs on every event; Falco and Sysdig warn about the performance penalty.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
-6 │   modified: 2026-01-02
-7 │ detection:
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_no_evttype
 
 == falco_operator_type
 error[falco_operator_type]: The operator does not apply to the field's type (libsinsp `flt_is_comparable`); Falco refuses to load the rule.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_operator_type
 
 == falco_output_syntax
 error[falco_output_syntax]: The output template does not format: a `%` at the end, a length with no field, or a token that is no field or transformer.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
-2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_output_syntax
 
 == falco_parse_error
 error[falco_parse_error]: The Falco condition does not parse.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
-3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_parse_error
 
 == falco_regex_simple
 error[falco_regex_simple]: A `regex` check a plain operator (`=`, `contains`, `startswith`, `endswith`) could make, which libsinsp warns about: regex is the slowest check.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-4 │   schema: rule::2.0
-5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_regex_simple
 
 == falco_rhs_field
 error[falco_rhs_field]: A field cannot be compared with another field here (`val(...)` or a transformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that refuse it, and only between fields of the same type.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
-5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
+1 │ name: Frame shapes
+2 │ metadata:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_rhs_field
 
 == falco_transformer
 error[falco_transformer]: A field transformer cannot apply here: the field's type, a field that refuses transformers, or the arguments of `join`, `concat`, or `getopt`.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
-6 │   modified: 2026-01-02
-7 │ detection:
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_transformer
 
 == falco_transformer_as_value
 error[falco_transformer_as_value]: A constant value that looks like a transformer call, compared as text.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
-1 │ name: Frame shapes
-2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_transformer_as_value
 
 == falco_unknown_event
 error[falco_unknown_event]: The event type is not in the driver's event table nor a syscall name; libsinsp refuses it.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
-2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_unknown_event
 
 == falco_unknown_field
 error[falco_unknown_field]: The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it.
-  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
-3 │   uuid: 00000000-0000-4000-8003-000000000001
-4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_unknown_field
 
 == falco_unknown_list
 error[falco_unknown_list]: The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value.
-  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
-4 │   schema: rule::2.0
-5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+7 │ detection:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_unknown_list
 
 == falco_unknown_macro
 error[falco_unknown_macro]: The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros.
-  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
-5 │   created: 2026-01-01
-6 │   modified: 2026-01-02
+1 │ name: Frame shapes
+2 │ metadata:
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_unknown_macro
 
 == falco_unknown_rule
 error[falco_unknown_rule]: A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.
-  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
-6 │   modified: 2026-01-02
-7 │ detection:
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain falco_unknown_rule
 
 == falco_unknown_source
 error[falco_unknown_source]: The event source is not one Falco or its published plugins define, so its fields are not checked.
-  ╭─▶ objects/rules/frame-shapes.yaml:2:3
-  │
-1 │ name: Frame shapes
-2 │ metadata:
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain falco_unknown_source
-
-== falco_unsafe_na_check
-error[falco_unsafe_na_check]: A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text.
-  ╭─▶ objects/rules/frame-shapes.yaml:3:3
-  │
-2 │ metadata:
-3 │   uuid: 00000000-0000-4000-8003-000000000001
-  │   ━━━━━━ this value
-  │
-  ╰─ help: opentide explain falco_unsafe_na_check
-
-== falco_value_type
-error[falco_value_type]: The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule.
   ╭─▶ objects/rules/frame-shapes.yaml:4:3
   │
 3 │   uuid: 00000000-0000-4000-8003-000000000001
 4 │   schema: rule::2.0
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain falco_value_type
+  ╰─ help: opentide explain falco_unknown_source
 
-== filename_mismatch
-warning[filename_mismatch]: An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
+== falco_unsafe_na_check
+error[falco_unsafe_na_check]: A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text.
   ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
 4 │   schema: rule::2.0
 5 │   created: 2026-01-01
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain filename_mismatch
+  ╰─ help: opentide explain falco_unsafe_na_check
 
-== filename_pattern
-warning[filename_pattern]: An object file's name does not match the regular expression `lint.toml` sets for it.
+== falco_value_type
+error[falco_value_type]: The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule.
   ╭─▶ objects/rules/frame-shapes.yaml:6:3
   │
 5 │   created: 2026-01-01
 6 │   modified: 2026-01-02
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain filename_pattern
+  ╰─ help: opentide explain falco_value_type
 
-== filename_slug
-error[filename_slug]: The file name is not the one lint.toml's [filenames] style derives from the object's name.
+== filename_mismatch
+warning[filename_mismatch]: An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
   ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
 6 │   modified: 2026-01-02
 7 │ detection:
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain filename_slug
+  ╰─ help: opentide explain filename_mismatch
 
-== git
-error[git]: git is on `PATH`.
+== filename_pattern
+warning[filename_pattern]: An object file's name does not match the regular expression `lint.toml` sets for it.
   ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
 1 │ name: Frame shapes
 2 │ metadata:
   │   ━━━━━━ this value
   │
-  ╰─ help: opentide explain git
+  ╰─ help: opentide explain filename_pattern
 
-== git_repository
-error[git_repository]: The workspace is in a git repository, and its default branch (`origin/HEAD`).
+== filename_slug
+error[filename_slug]: The file name is not the one lint.toml's [filenames] style derives from the object's name.
   ╭─▶ objects/rules/frame-shapes.yaml:3:3
   │
 2 │ metadata:
 3 │   uuid: 00000000-0000-4000-8003-000000000001
   │   ━━━━━━ this value
   │
+  ╰─ help: opentide explain filename_slug
+
+== git
+error[git]: git is on `PATH`.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain git
+
+== git_repository
+error[git_repository]: The workspace is in a git repository, and its default branch (`origin/HEAD`).
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
   ╰─ help: opentide explain git_repository
+
+== google_secops_compile_error
+error[google_secops_compile_error]: Google SecOps's compiler refuses a rule in a live query check.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_compile_error
+
+== google_secops_compile_warning
+warning[google_secops_compile_warning]: Google SecOps's compiler accepts a rule with a warning in a live query check.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_compile_warning
+
+== google_secops_create_no_id
+error[google_secops_create_no_id]: A Google SecOps create answered without a rule id.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_create_no_id
+
+== google_secops_create_unconfirmed
+error[google_secops_create_unconfirmed]: A Google SecOps create got no answer or a server error, so the rule may exist without a binding.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_create_unconfirmed
+
+== google_secops_credentials_missing
+error[google_secops_credentials_missing]: opentide has no usable Google credentials for a Google SecOps tenant.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_credentials_missing
+
+== google_secops_delete_refused
+warning[google_secops_delete_refused]: Google SecOps refused to delete a rule, so deploy archived it.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_delete_refused
+
+== google_secops_deployment_failed
+error[google_secops_deployment_failed]: A Google SecOps rule exists, but its run state could not be set.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_deployment_failed
+
+== google_secops_live_frequency_unavailable
+warning[google_secops_live_frequency_unavailable]: A Google SecOps rule with two or more event variables asks for `run_frequency: LIVE`.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_live_frequency_unavailable
+
+== google_secops_meta_key
+error[google_secops_meta_key]: A Google SecOps block's `meta` holds a key deploy cannot write.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_meta_key
+
+== google_secops_name_duplicate
+error[google_secops_name_duplicate]: Two enabled Google SecOps blocks resolve to one YARA-L rule name.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_name_duplicate
+
+== google_secops_request_failed
+error[google_secops_request_failed]: A Chronicle API request for one Google SecOps rule failed.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_request_failed
+
+== google_secops_risk_score_missing
+warning[google_secops_risk_score_missing]: A Google SecOps rule's `outcome` assigns no `$risk_score`.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_risk_score_missing
+
+== google_secops_rule_compilation_failed
+warning[google_secops_rule_compilation_failed]: Google reports that a deployed Google SecOps rule no longer compiles.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_compilation_failed
+
+== google_secops_rule_conflict
+error[google_secops_rule_conflict]: A Google SecOps rule changed between deploy's read and its update.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_conflict
+
+== google_secops_rule_execution_limited
+warning[google_secops_rule_execution_limited]: Google reports that it limits or pauses a Google SecOps rule's runs.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_execution_limited
+
+== google_secops_rule_id_literal
+warning[google_secops_rule_id_literal]: A Google SecOps rule matches a producer rule by a literal `ru_…` id.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_id_literal
+
+== google_secops_rule_missing
+warning[google_secops_rule_missing]: The Google SecOps rule a binding names no longer exists, and the rule is being retired.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_missing
+
+== google_secops_rule_name
+error[google_secops_rule_name]: A Google SecOps block's `name` is not a YARA-L rule name.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_name
+
+== google_secops_rule_recreated
+warning[google_secops_rule_recreated]: The Google SecOps rule a binding names no longer exists, so deploy created it again.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_rule_recreated
+
+== google_secops_run_frequency
+error[google_secops_run_frequency]: A Google SecOps block's `run_frequency` is not one opentide deploys.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_run_frequency
+
+== google_secops_run_frequency_not_allowed
+error[google_secops_run_frequency_not_allowed]: A Google SecOps block's `run_frequency` is not one Google allows for the rule.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_run_frequency_not_allowed
+
+== google_secops_schedule
+error[google_secops_schedule]: A Google SecOps block's `schedule` cannot be sent with its run frequency, or holds a duration that is not one.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_schedule
+
+== google_secops_severity
+error[google_secops_severity]: A Google SecOps block's `severity` or `priority` is not one of Google's values.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_severity
+
+== google_secops_tenant_unauthorized
+error[google_secops_tenant_unauthorized]: A Google SecOps instance refused opentide's credentials.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_tenant_unauthorized
+
+== google_secops_tenant_unreachable
+error[google_secops_tenant_unreachable]: A Google SecOps instance did not answer, so no rule was deployed to it.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_tenant_unreachable
+
+== google_secops_verify_failed
+error[google_secops_verify_failed]: Google SecOps does not compile a rule, so deploy neither creates nor updates it.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain google_secops_verify_failed
+
+== graylog_aggregation
+error[graylog_aggregation]: A Graylog aggregation condition does not parse, or a call has the wrong arguments.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_aggregation
+
+== graylog_alias_unknown
+error[graylog_alias_unknown]: A Graylog block names a stream or notification alias the tenant does not define.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_alias_unknown
+
+== graylog_all_streams
+warning[graylog_all_streams]: A Graylog definition names no stream, so it searches every stream.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_all_streams
+
+== graylog_analyzed_field
+warning[graylog_analyzed_field]: A regex, wildcard or range applies to Graylog's analysed message field.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_analyzed_field
+
+== graylog_create_unconfirmed
+error[graylog_create_unconfirmed]: A Graylog create got no answer, so the definition may exist without a binding.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_create_unconfirmed
+
+== graylog_definition_immutable
+error[graylog_definition_immutable]: Graylog refuses to change or delete an event definition outside the default scope.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_definition_immutable
+
+== graylog_definition_in_use
+error[graylog_definition_in_use]: Graylog refuses to delete an event definition another one depends on.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_definition_in_use
+
+== graylog_definition_invalid
+error[graylog_definition_invalid]: Graylog refused an event definition, naming the fields at fault.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_definition_invalid
+
+== graylog_definition_missing
+warning[graylog_definition_missing]: The recorded Graylog event definition was gone when deploy came to disable it.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_definition_missing
+
+== graylog_definition_recreated
+warning[graylog_definition_recreated]: The recorded Graylog event definition was gone, so deploy created it again.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_definition_recreated
+
+== graylog_double_backslash
+warning[graylog_double_backslash]: A Graylog query holds four backslashes in a row.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_double_backslash
+
+== graylog_event_field
+error[graylog_event_field]: A Graylog event field has an invalid name or value.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_event_field
+
+== graylog_event_key
+error[graylog_event_key]: A Graylog event_key item is not an event field of the block.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_event_key
+
+== graylog_event_limit
+error[graylog_event_limit]: A Graylog block's event_limit is out of range, or set on an aggregation.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_event_limit
+
+== graylog_field_name
+error[graylog_field_name]: A Graylog aggregation groups by a name that is not a field name.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_field_name
+
+== graylog_field_unsupported_version
+warning[graylog_field_unsupported_version]: A Graylog block sets a field the tenant's version cannot take.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_field_unsupported_version
+
+== graylog_forbidden
+error[graylog_forbidden]: Graylog refused a request for want of a permission.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_forbidden
+
+== graylog_leading_wildcard
+error[graylog_leading_wildcard]: A Graylog query term starts with `*` or `?`.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_leading_wildcard
+
+== graylog_list_shape
+error[graylog_list_shape]: A Graylog list field is not a string or a list of distinct, non-blank strings.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_list_shape
+
+== graylog_open_range
+error[graylog_open_range]: A Graylog range has an open end, which Graylog's validator refuses.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_open_range
+
+== graylog_overlapping_window
+warning[graylog_overlapping_window]: A Graylog filter searches a window longer than its interval.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_overlapping_window
+
+== graylog_priority
+error[graylog_priority]: A Graylog block's priority is not one of Graylog's priorities.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_priority
+
+== graylog_priority_collapsed
+warning[graylog_priority_collapsed]: Graylog before 7.1 has no Informational priority: the definition is sent as Low.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_priority_collapsed
+
+== graylog_query_blank
+error[graylog_query_blank]: A Graylog block has no query, or an empty one.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_query_blank
+
+== graylog_query_invalid
+error[graylog_query_invalid]: Graylog refused a query, so deploy saved nothing.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_query_invalid
+
+== graylog_query_warning
+warning[graylog_query_warning]: Graylog has a reservation about a query.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_query_warning
+
+== graylog_regex_operator
+warning[graylog_regex_operator]: A Graylog regex holds a character Lucene reads as a regex operator.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_regex_operator
+
+== graylog_regex_quote
+warning[graylog_regex_quote]: A Graylog regex holds an unescaped double quote.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_regex_quote
+
+== graylog_regex_unsupported
+error[graylog_regex_unsupported]: A Graylog regex uses syntax Lucene's regex engine does not have.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_regex_unsupported
+
+== graylog_request_failed
+error[graylog_request_failed]: A Graylog request failed for a reason the failure table does not name.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_request_failed
+
+== graylog_schedule
+error[graylog_schedule]: A Graylog block's schedule is invalid.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_schedule
+
+== graylog_tenant_unauthorized
+error[graylog_tenant_unauthorized]: A Graylog tenant refused the access token.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_tenant_unauthorized
+
+== graylog_tenant_unreachable
+error[graylog_tenant_unreachable]: A Graylog tenant did not answer.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_tenant_unreachable
+
+== graylog_title_duplicate
+warning[graylog_title_duplicate]: Two enabled Graylog blocks resolve to one event definition title.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_title_duplicate
+
+== graylog_unknown_field
+warning[graylog_unknown_field]: Graylog does not know a field the query names, on the streams it searches.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_unknown_field
+
+== graylog_value_type
+warning[graylog_value_type]: A query compares a Graylog field with a value of the wrong type.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_value_type
+
+== graylog_version_unsupported
+error[graylog_version_unsupported]: A Graylog tenant runs a version opentide does not deploy to.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_version_unsupported
+
+== graylog_version_vulnerable
+warning[graylog_version_vulnerable]: A Graylog tenant runs a version affected by the access-token revocation flaw.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain graylog_version_vulnerable
+
+== harfanglab_rule_kind
+error[harfanglab_rule_kind]: A HarfangLab block sets both sigma and yara; a block is one kind.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain harfanglab_rule_kind
+
+== harfanglab_yara_context
+warning[harfanglab_yara_context]: A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain harfanglab_yara_context
+
+== harfanglab_yara_form
+error[harfanglab_yara_form]: A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports).
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain harfanglab_yara_form
+
+== harfanglab_yara_import
+error[harfanglab_yara_import]: A decomposed HarfangLab YARA imports entry is not a module the YARA language knows.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain harfanglab_yara_import
+
+== harfanglab_yara_rule_name
+error[harfanglab_yara_rule_name]: The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain harfanglab_yara_rule_name
+
+== harfanglab_yara_section_header
+error[harfanglab_yara_section_header]: A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain harfanglab_yara_section_header
 
 == internal
 error[internal]: opentide stopped on an exception it did not handle: a bug in opentide, not in your input.
@@ -1413,7 +3213,7 @@ note[metadata_recommended]: An object has no `metadata.author` or `metadata.orga
   ╰─ help: opentide explain metadata_recommended
 
 == missing_author
-error[missing_author]: The recommended metadata.author field is missing.
+error[missing_author]: The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it.
   ╭─▶ objects/rules/frame-shapes.yaml:5:3
   │
 4 │   schema: rule::2.0
@@ -1433,7 +3233,7 @@ error[missing_field]: A configuration file is missing a required key, once it is
   ╰─ help: opentide explain missing_field
 
 == missing_organisation
-error[missing_organisation]: The recommended metadata.organisation field is missing.
+error[missing_organisation]: The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it.
   ╭─▶ objects/rules/frame-shapes.yaml:7:3
   │
 6 │   modified: 2026-01-02
@@ -1683,7 +3483,7 @@ error[query_check_timeout]: `validate query --live` failed because a tenant did 
   ╰─ help: opentide explain query_check_timeout
 
 == recommended_field_missing
-error[recommended_field_missing]: A field the templates ask for is missing; opentide validate accepts the object without it.
+note[recommended_field_missing]: A field the templates ask for is missing; `opentide validate` accepts the object without it.
   ╭─▶ objects/rules/frame-shapes.yaml:2:3
   │
 1 │ name: Frame shapes
@@ -2271,6 +4071,586 @@ error[yaml_parse]: An object file is not valid YAML, or not one mapping, so it c
   │   ━━━━━━ this value
   │
   ╰─ help: opentide explain yaml_parse
+
+== yara_duplicate_rule
+error[yara_duplicate_rule]: Two YARA rules in one signature have the same name.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_duplicate_rule
+
+== yara_duplicate_string
+error[yara_duplicate_string]: Two strings of one YARA rule have the same identifier.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_duplicate_string
+
+== yara_duplicate_tag
+error[yara_duplicate_tag]: A YARA rule repeats a tag.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_duplicate_tag
+
+== yara_empty_signature
+error[yara_empty_signature]: The YARA signature has no rule, or only private or global rules.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_empty_signature
+
+== yara_entrypoint_deprecated
+error[yara_entrypoint_deprecated]: entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_entrypoint_deprecated
+
+== yara_hex_string
+error[yara_hex_string]: A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_hex_string
+
+== yara_include
+error[yara_include]: A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_include
+
+== yara_meta_missing
+warning[yara_meta_missing]: A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_meta_missing
+
+== yara_module_not_imported
+error[yara_module_not_imported]: A YARA module field or function is used without importing its module.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_module_not_imported
+
+== yara_module_unconfirmed
+error[yara_module_unconfirmed]: The YARA module is known but not confirmed on the platform's agents.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_module_unconfirmed
+
+== yara_number_out_of_range
+error[yara_number_out_of_range]: A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_number_out_of_range
+
+== yara_parse_error
+error[yara_parse_error]: The YARA signature does not parse as libyara 4.5 reads it.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_parse_error
+
+== yara_regexp
+error[yara_regexp]: A YARA regular expression is invalid.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_regexp
+
+== yara_rule_identifier_conflict
+error[yara_rule_identifier_conflict]: A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_rule_identifier_conflict
+
+== yara_signature_alias
+error[yara_signature_alias]: A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_signature_alias
+
+== yara_slow_pattern
+error[yara_slow_pattern]: libyara warns that this YARA string or loop may slow scanning down.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_slow_pattern
+
+== yara_string_modifier
+error[yara_string_modifier]: libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_string_modifier
+
+== yara_suspicious_expression
+error[yara_suspicious_expression]: A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_suspicious_expression
+
+== yara_type
+error[yara_type]: A YARA operator or function is applied to a value of the wrong type.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_type
+
+== yara_undefined_identifier
+error[yara_undefined_identifier]: A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_undefined_identifier
+
+== yara_undefined_string
+error[yara_undefined_string]: A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_undefined_string
+
+== yara_unknown_module
+error[yara_unknown_module]: A YARA import names a module libyara does not ship.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_unknown_module
+
+== yara_unknown_module_member
+error[yara_unknown_module_member]: The YARA module has no such field or function, or the function takes other arguments.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_unknown_module_member
+
+== yara_unreferenced_string
+error[yara_unreferenced_string]: A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_unreferenced_string
+
+== yara_x_incompatible
+error[yara_x_incompatible]: libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yara_x_incompatible
+
+== yaral_condition_shape
+error[yaral_condition_shape]: The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_condition_shape
+
+== yaral_deprecated_field
+error[yaral_deprecated_field]: The UDM field is deprecated.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_deprecated_field
+
+== yaral_enum_value
+error[yaral_enum_value]: The value is not one of the enumerated UDM field's values.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_enum_value
+
+== yaral_export_value
+error[yaral_export_value]: An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_export_value
+
+== yaral_function_unavailable
+error[yaral_function_unavailable]: The function exists, but not in this profile (rules or search).
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_function_unavailable
+
+== yaral_leading_wildcard_regex
+error[yaral_leading_wildcard_regex]: The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_leading_wildcard_regex
+
+== yaral_match_shape
+error[yaral_match_shape]: A YARA-L `match` is not a `YaraLMatch` object.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_match_shape
+
+== yaral_match_variable
+error[yaral_match_variable]: A `match` name is not a placeholder bound in `events`.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_match_variable
+
+== yaral_match_window
+error[yaral_match_window]: A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_match_window
+
+== yaral_meta_duplicate
+error[yaral_meta_duplicate]: A meta key appears twice, or a meta value is not a double-quoted string.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_meta_duplicate
+
+== yaral_multi_event_match
+error[yaral_multi_event_match]: A rule with two or more event variables has no `match` section.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_multi_event_match
+
+== yaral_nocase_on_enum
+error[yaral_nocase_on_enum]: `nocase` is applied to a comparison with an enumerated UDM field.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_nocase_on_enum
+
+== yaral_option
+error[yaral_option]: A YARA-L `options` key is unknown, or its value is of the wrong kind.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_option
+
+== yaral_outcome_aggregation
+error[yaral_outcome_aggregation]: With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_outcome_aggregation
+
+== yaral_outcome_limit
+error[yaral_outcome_limit]: A rule or search assigns more than 20 outcome variables.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_outcome_limit
+
+== yaral_parse_error
+error[yaral_parse_error]: The YARA-L text does not parse, or a text holds a second rule.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_parse_error
+
+== yaral_reference_list_deprecated
+error[yaral_reference_list_deprecated]: Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`).
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_reference_list_deprecated
+
+== yaral_reference_list_limit
+error[yaral_reference_list_limit]: More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2).
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_reference_list_limit
+
+== yaral_regex
+error[yaral_regex]: The regular expression is not valid RE2.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_regex
+
+== yaral_reserved_identifier
+error[yaral_reserved_identifier]: A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_reserved_identifier
+
+== yaral_section_alias
+error[yaral_section_alias]: A YARA-L section key is a YAML alias instead of its own text.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_section_alias
+
+== yaral_section_empty
+error[yaral_section_empty]: A YARA-L section key is present with no text.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_section_empty
+
+== yaral_section_header
+error[yaral_section_header]: A YARA-L section text holds a section label, a `rule` header or a rule's braces.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_section_header
+
+== yaral_section_missing
+error[yaral_section_missing]: A YARA-L rule has no `events` or no `condition` section.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_section_missing
+
+== yaral_section_order
+error[yaral_section_order]: A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export).
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_section_order
+
+== yaral_section_unavailable
+error[yaral_section_unavailable]: The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_section_unavailable
+
+== yaral_string_escape
+error[yaral_string_escape]: A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_string_escape
+
+== yaral_type
+error[yaral_type]: An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
+  ╭─▶ objects/rules/frame-shapes.yaml:5:3
+  │
+4 │   schema: rule::2.0
+5 │   created: 2026-01-01
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_type
+
+== yaral_undefined_variable
+error[yaral_undefined_variable]: A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`.
+  ╭─▶ objects/rules/frame-shapes.yaml:6:3
+  │
+5 │   created: 2026-01-01
+6 │   modified: 2026-01-02
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_undefined_variable
+
+== yaral_unfiltered_event
+error[yaral_unfiltered_event]: An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event.
+  ╭─▶ objects/rules/frame-shapes.yaml:7:3
+  │
+6 │   modified: 2026-01-02
+7 │ detection:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_unfiltered_event
+
+== yaral_unknown_function
+error[yaral_unknown_function]: The function is not in Google's YARA-L function list, or it takes a different number of arguments.
+  ╭─▶ objects/rules/frame-shapes.yaml:2:3
+  │
+1 │ name: Frame shapes
+2 │ metadata:
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_unknown_function
+
+== yaral_unknown_udm_field
+error[yaral_unknown_udm_field]: The field path is not in the Unified Data Model.
+  ╭─▶ objects/rules/frame-shapes.yaml:3:3
+  │
+2 │ metadata:
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_unknown_udm_field
+
+== yaral_window_bound
+error[yaral_window_bound]: `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
+  ╭─▶ objects/rules/frame-shapes.yaml:4:3
+  │
+3 │   uuid: 00000000-0000-4000-8003-000000000001
+4 │   schema: rule::2.0
+  │   ━━━━━━ this value
+  │
+  ╰─ help: opentide explain yaral_window_bound
 
 == unknown_key
 error[unknown_key]: deployment.toml.x: unknown key
