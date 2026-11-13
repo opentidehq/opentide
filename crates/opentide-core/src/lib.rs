@@ -484,6 +484,20 @@ impl Diagnostic {
         }
     }
 
+    /// A finding that is worth knowing and never wrong: an optional field
+    /// left out, say. Hosts show it without counting it as a problem.
+    pub fn information(code: impl Into<String>, message: impl Into<String>, range: Range) -> Self {
+        Self {
+            severity: Severity::Information,
+            ..Self::warning(code, message, range)
+        }
+    }
+
+    pub fn with_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
+    }
+
     pub fn with_field_path(mut self, path: Vec<String>) -> Self {
         self.field_path = Some(path);
         self
@@ -594,7 +608,8 @@ pub mod codes {
     pub const FILENAME_PATTERN: &str = "filename_pattern";
     pub const MISSING_AUTHOR: &str = "missing_author";
     pub const MISSING_ORGANISATION: &str = "missing_organisation";
-    /// A field the templates ask for and validation does not require.
+    /// A field the templates ask for and validation does not require
+    /// (lint.toml `[recommended]`).
     pub const RECOMMENDED_FIELD_MISSING: &str = "recommended_field_missing";
     pub const DEFENDER_OUTPUT_COLUMNS: &str = "defender_output_columns";
     /// `::type` names no Elasticsearch release can cast to.
@@ -1337,10 +1352,14 @@ pub mod codes {
             FILENAME_PATTERN => {
                 "The file name does not match the pattern lint.toml's [filenames] sets."
             }
-            MISSING_AUTHOR => "The recommended metadata.author field is missing.",
-            MISSING_ORGANISATION => "The recommended metadata.organisation field is missing.",
+            MISSING_AUTHOR => {
+                "The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it."
+            }
+            MISSING_ORGANISATION => {
+                "The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it."
+            }
             RECOMMENDED_FIELD_MISSING => {
-                "A field the templates ask for is missing; opentide validate accepts the object without it."
+                "A field the templates ask for is missing; opentide validate accepts the object without it. Information, unless lint.toml's [recommended] severity raises it."
             }
             DEFENDER_OUTPUT_COLUMNS => {
                 "A Defender custom detection must return the columns Defender requires."

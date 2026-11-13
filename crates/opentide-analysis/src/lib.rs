@@ -441,7 +441,8 @@ pub fn check_lint(text: &str) -> Result<(), String> {
 /// Follow a workspace's `.opentide/configurations/lint.toml` (the file's
 /// text) in the Tide checks, for the whole process, as `opentide lint` does:
 /// `[filenames]` decides `filename_slug` and `filename_pattern`, `[metadata]`
-/// decides `missing_author` and `missing_organisation` (#214). `None` goes
+/// decides `missing_author` and `missing_organisation` (#214), and
+/// `[recommended]` decides `recommended_field_missing` (#249). `None` goes
 /// back to `opentide lint`'s defaults. Text that is not TOML is an error and
 /// keeps the settings in use.
 pub fn install_lint(text: Option<&str>) -> Result<(), String> {
