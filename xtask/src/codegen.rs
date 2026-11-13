@@ -1090,8 +1090,15 @@ fn configuration_verdicts(
             continue;
         };
         if name == ROUTER_NAME {
-            // The router names schemas; it validates no file.
-            if expected != document {
+            // The router names schemas; it validates no file. Its entries for
+            // the `SINCE_ORACLE` platforms' files are not the oracle's either.
+            let mut document = document.clone();
+            if let Some(files) = document.get_mut("files").and_then(Value::as_object_mut) {
+                for id in opentide_schema::platforms::SINCE_ORACLE {
+                    files.remove(&format!("platforms/{id}.toml"));
+                }
+            }
+            if *expected != document {
                 problems.push(format!("{name}: differs from the oracle's"));
             }
             continue;
