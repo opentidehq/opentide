@@ -54,7 +54,7 @@ pub struct Frames {
 pub const LINK_SCHEMES: [&str; 4] = ["file", "vscode", "cursor", "none"];
 
 /// The query languages' reference pages, by the code prefix of their findings.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -95,6 +95,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
         "cql_",
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
+    ),
+    (
+        "yaral_",
+        "YARA-L 2.0",
+        "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax",
     ),
 ];
 
