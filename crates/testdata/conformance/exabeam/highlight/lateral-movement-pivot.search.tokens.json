@@ -192,114 +192,114 @@
     "capture": "operator"
   },
   {
-    "text": "\"network-connection\"",
+    "text": "\"network-session\"",
     "range": [
       165,
-      185
+      182
     ],
     "capture": "string"
   },
   {
     "text": "]",
     "range": [
-      186,
-      187
+      183,
+      184
     ],
     "capture": "punctuation.bracket"
   },
   {
     "text": "|",
     "range": [
-      188,
-      189
+      185,
+      186
     ],
     "capture": "operator.pipe"
   },
   {
     "text": "SELECT",
     "range": [
-      190,
-      196
+      187,
+      193
     ],
     "capture": "keyword"
   },
   {
     "text": "src_host",
     "range": [
-      197,
-      205
+      194,
+      202
     ],
     "capture": "property"
   },
   {
     "text": ",",
     "range": [
-      205,
-      206
+      202,
+      203
     ],
     "capture": "punctuation.delimiter"
   },
   {
     "text": "COUNT",
     "range": [
-      207,
-      212
+      204,
+      209
     ],
     "capture": "function.builtin"
   },
   {
     "text": "(",
     "range": [
-      212,
-      213
+      209,
+      210
     ],
     "capture": "punctuation.bracket"
   },
   {
     "text": "src_host",
     "range": [
-      213,
-      221
+      210,
+      218
     ],
     "capture": "property"
   },
   {
     "text": ")",
     "range": [
-      221,
-      222
+      218,
+      219
     ],
     "capture": "punctuation.bracket"
   },
   {
     "text": "AS",
     "range": [
-      223,
-      225
+      220,
+      222
     ],
     "capture": "keyword"
   },
   {
     "text": "connections",
     "range": [
-      226,
-      237
+      223,
+      234
     ],
     "capture": "variable"
   },
   {
     "text": "GROUP-BY",
     "range": [
-      238,
-      246
+      235,
+      243
     ],
     "capture": "keyword"
   },
   {
     "text": "src_host",
     "range": [
-      247,
-      255
+      244,
+      252
     ],
     "capture": "property"
   }

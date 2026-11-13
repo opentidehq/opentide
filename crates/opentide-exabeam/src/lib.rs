@@ -47,7 +47,7 @@ pub struct AnalyzeResult {
 
 /// The codes exabeam-1.0 lists as warnings; every other `exabeam_*` code of
 /// the language is an error.
-pub const WARNINGS: [&str; 9] = [
+pub const WARNINGS: [&str; 10] = [
     codes::EXABEAM_MIXED_BOOLEAN,
     codes::EXABEAM_IMPLICIT_AND,
     codes::EXABEAM_SINGLE_GROUP,
@@ -57,6 +57,7 @@ pub const WARNINGS: [&str; 9] = [
     codes::EXABEAM_LEGACY_REGEX,
     codes::EXABEAM_UNKNOWN_FIELD,
     codes::EXABEAM_STRING_FIELD_NUMBER,
+    codes::EXABEAM_UNKNOWN_VALUE,
 ];
 
 pub fn is_warning(code: &str) -> bool {

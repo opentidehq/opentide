@@ -9,7 +9,11 @@ use opentide_exabeam::{Context, Profile, analyze_with, check};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-const CATALOGUE_CODES: [&str; 2] = ["exabeam_unknown_field", "exabeam_string_field_number"];
+const CATALOGUE_CODES: [&str; 3] = [
+    "exabeam_unknown_field",
+    "exabeam_string_field_number",
+    "exabeam_unknown_value",
+];
 
 fn dir(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
