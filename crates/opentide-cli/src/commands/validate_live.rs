@@ -1117,6 +1117,17 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
             text("port").unwrap_or_else(|| "None".to_owned())
         );
     }
+    if platform == "google_secops" {
+        // The instance's endpoint, else its location's (`_tenant_host`).
+        return text("endpoint")
+            .filter(|endpoint| !endpoint.is_empty())
+            .or_else(|| {
+                text("location")
+                    .filter(|location| !location.is_empty())
+                    .map(|location| opentide_compile::google_secops::default_endpoint(&location))
+            })
+            .unwrap_or_default();
+    }
     text("url")
         .filter(|url| !url.is_empty())
         .unwrap_or_else(|| default_host(platform).to_owned())
@@ -2311,6 +2322,24 @@ mod tests {
             tenant_host("sentinel", &tenant(&[])),
             "https://api.loganalytics.io"
         );
+        assert_eq!(
+            tenant_host(
+                "google_secops",
+                &tenant(&[("location", CJson::Str("eu".into()))])
+            ),
+            "https://eu-chronicle.googleapis.com"
+        );
+        assert_eq!(
+            tenant_host(
+                "google_secops",
+                &tenant(&[
+                    ("location", CJson::Str("eu".into())),
+                    ("endpoint", CJson::Str("https://proxy.invalid".into()))
+                ])
+            ),
+            "https://proxy.invalid"
+        );
+        assert_eq!(tenant_host("google_secops", &tenant(&[])), "");
         assert_eq!(
             read_timeout_text("sentinel_one", "https://s1.invalid", 5),
             "HTTPSConnectionPool(host='s1.invalid', port=443): Read timed out. (read timeout=5)"

@@ -809,6 +809,29 @@ fn run_on_tenant(
 
 /// The host a tenant's failures name: its `url`, else the platform's.
 fn setup_host(platform: &str, configured: &Configured) -> String {
+    if platform == "google_secops" {
+        // The instance's endpoint, else its location's (`_tenant_host`).
+        let text = |key: &str| {
+            configured
+                .setup
+                .get(key)
+                .and_then(opentide_compile::Json::as_str)
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        };
+        let endpoint = text("endpoint").or_else(|| {
+            text("location")
+                .map(|location| opentide_compile::google_secops::default_endpoint(&location))
+        });
+        return endpoint
+            .map(|endpoint| {
+                url::Url::parse(&endpoint)
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_owned))
+                    .unwrap_or(endpoint)
+            })
+            .unwrap_or_default();
+    }
     let url = configured
         .setup
         .get("url")
