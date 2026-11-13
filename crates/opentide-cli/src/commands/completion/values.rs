@@ -904,7 +904,17 @@ mod tests {
         let found = cx.platforms(&choices, "");
         let shown = values(&found);
         assert_eq!(shown.len(), choices.len());
-        assert_eq!(&shown[shown.len() - 2..], ["splunk", "crowdstrike"]);
+        // The disabled platforms come last, in the choices' order: the two
+        // disabled here, then those the corpus does not configure (the
+        // platforms the 0.23.0 fixture predates, SINCE_ORACLE).
+        let mut disabled = vec!["splunk".to_owned(), "crowdstrike".to_owned()];
+        disabled.extend(
+            choices
+                .iter()
+                .filter(|id| opentide_schema::platforms::after_oracle(id))
+                .cloned(),
+        );
+        assert_eq!(&shown[shown.len() - disabled.len()..], disabled.as_slice());
         assert_eq!(helps(&found)[0], "enabled");
         assert_eq!(helps(&found)[shown.len() - 1], "");
         assert_eq!(values(&cx.platforms(&choices, "SPL")), ["splunk"]);
