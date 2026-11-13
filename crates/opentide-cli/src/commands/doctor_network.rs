@@ -98,7 +98,7 @@ pub fn fetch_latest(env: &Environment, proxy: Option<&str>) -> Result<String, Fa
                 opentide_connectors::runtime::block_on(async {
                     let cancel = CancellationToken::new();
                     let request = client
-                        .request(reqwest::Method::GET, PYPI_URL)
+                        .request(opentide_connectors::transport::Method::GET, PYPI_URL)
                         .build()
                         .map_err(|_| Failed("InvalidURL"))?;
                     let answer = client

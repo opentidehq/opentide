@@ -3254,7 +3254,6 @@ dependencies = [
  "ratatui",
  "rayon",
  "regex",
- "reqwest",
  "rmcp",
  "rustix",
  "serde",

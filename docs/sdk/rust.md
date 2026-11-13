@@ -226,7 +226,7 @@ fn main() -> Result<(), opentide::Error> {
 
 ## Errors
 
-Every fallible call returns `opentide::Error`. Its variants each map to a stable code (`Error::code`): `configuration_invalid` or the configuration check's own code, `io_error`, the command line's usage codes, `no_json_document`, `lsp_failed`, and with `connectors` `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported` and `runtime_unavailable`. Match on the code, not the message. New variants can come in a minor release, so a `match` needs a wildcard arm. Findings about the workspace are not errors: they are `Diagnostic`s in a report.
+Every fallible call returns `opentide::Error`. Its variants each map to a stable code (`Error::code`): `configuration_invalid` or the configuration check's own code, `io_error`, the command line's usage codes, `no_json_document`, `lsp_failed`, and with `connectors` `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported`, `runtime_unavailable` and, in the WASI build only, `network_unavailable`. Match on the code, not the message. New variants can come in a minor release, so a `match` needs a wildcard arm. Findings about the workspace are not errors: they are `Diagnostic`s in a report.
 
 ## Stability
 
