@@ -25,13 +25,14 @@ use serde_json::{Value as Json, json};
 use super::faults::{Catalogue, Kind};
 use crate::validate::Approved;
 
-/// The queries check on the engines, counting the CrowdStrike queries it
-/// checked (the oracle checked none). The counts are the last check's: a
+/// The queries check on the engines, counting the CrowdStrike queries and
+/// HarfangLab YARA rules it checked (the oracle checked neither). The counts are the last check's: a
 /// `validate --fix` that writes validates twice, and its report is the second
 /// run's.
 #[derive(Default)]
 pub struct CountingQueries {
     crowdstrike: std::sync::atomic::AtomicUsize,
+    yara: std::sync::atomic::AtomicUsize,
     /// The other queries checked, by file.
     others: std::sync::Mutex<BTreeMap<PathBuf, usize>>,
 }
@@ -42,8 +43,13 @@ impl CountingQueries {
         self.crowdstrike.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// The queries other than CrowdStrike's checked in the files `files`
-    /// names.
+    /// The YARA rules checked (HarfangLab's `yara` block).
+    pub fn yara(&self) -> usize {
+        self.yara.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The queries other than CrowdStrike's and YARA's checked in the files
+    /// `files` names.
     pub fn others_in(&self, files: &std::collections::BTreeSet<PathBuf>) -> usize {
         let others = self
             .others
@@ -72,6 +78,7 @@ impl QueryCheck for CountingQueries {
         others.clear();
         self.crowdstrike
             .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.yara.store(0, std::sync::atomic::Ordering::Relaxed);
         for object in objects {
             let checked = profiles.check_object(object.source);
             let checked: Vec<_> = checked.iter().filter(|query| !query.placeholder).collect();
@@ -79,9 +86,16 @@ impl QueryCheck for CountingQueries {
                 .iter()
                 .filter(|query| query.platform == "crowdstrike")
                 .count();
+            let yara = checked
+                .iter()
+                .filter(|query| query.language == "yara")
+                .count();
             self.crowdstrike
                 .fetch_add(crowdstrike, std::sync::atomic::Ordering::Relaxed);
-            *others.entry(object.path.to_path_buf()).or_default() += checked.len() - crowdstrike;
+            self.yara
+                .fetch_add(yara, std::sync::atomic::Ordering::Relaxed);
+            *others.entry(object.path.to_path_buf()).or_default() +=
+                checked.len() - crowdstrike - yara;
         }
         found
     }
@@ -167,13 +181,13 @@ pub fn engine_findings(report: &Json) -> (Vec<Json>, Json) {
 
 /// What the Rust `validate` reports for `command` in the workspace at `dir`:
 /// its report, as `validate --json` writes it, and how many CrowdStrike
-/// queries it checked.
+/// queries and HarfangLab YARA rules it checked.
 ///
 /// # Errors
 ///
 /// The command holds options `validate` on the Rust engine does not take, or
 /// the workspace does not open.
-pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
+pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize, usize)> {
     let args = crate::validate::parse_args(command)
         .filter(|args| args.fix.is_none())
         .ok_or_else(|| anyhow!("`{}` is not a checking validate", command.join(" ")))?;
@@ -203,6 +217,7 @@ pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
     Ok((
         serde_json::to_value(&validation.report)?,
         counting.crowdstrike(),
+        counting.yara(),
     ))
 }
 
