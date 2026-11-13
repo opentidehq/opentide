@@ -268,6 +268,10 @@ generate_exports_navigator = 1.342
 rules_unreviewed = 0.580
 explain = 0.210
 lsp_first_diagnostics = 2.372
+# The oracle's load had no median on this CPU (it was held to the 9V74's + 20%,
+# and measured 1.231 s). One run: https://github.com/opentidehq/opentide/actions/runs/43444197350
+# (PR #1055; the oracle, opentide 0.23.0, is the same as in every other run).
+load = 1.231
 
 [[cpu_baseline]]
 engine = "rust"
