@@ -71,6 +71,7 @@ use serde_json::Value;
 use crate::corpus::cli::{read_folder, repo_root};
 use crate::golden::case::Spec;
 use crate::golden::recording::{Recording, recorded_ids};
+use crate::golden::report_only;
 use crate::golden::snapshot::{ChangeKind, Kind};
 use crate::verdict::{self, Instances};
 
@@ -141,16 +142,25 @@ pub fn run(args: &[String]) -> Result<u8> {
     problems.extend(engine_catalog(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
+    let mut oracle = Vec::new();
     if check {
         let (count, golden) = golden_parity(&root)?;
         compared = count;
-        problems.extend(golden);
+        oracle.extend(golden);
         let (count, verdicts) = schema_verdicts(&root)?;
         judged = count;
-        problems.extend(verdicts);
-        let (count, catalogs) = catalog_parity(&root)?;
+        oracle.extend(verdicts);
+        let (count, drift, catalogs) = catalog_parity(&root)?;
         compared += count;
-        problems.extend(catalogs);
+        problems.extend(drift);
+        oracle.extend(catalogs);
+    }
+    let reported = gate(&mut problems, oracle, report_only::enabled(&root));
+    for problem in &reported {
+        println!("report: {problem}");
+    }
+    if !reported.is_empty() {
+        println!("{}", report_only::verdict(reported.len(), None));
     }
     for problem in &problems {
         eprintln!("error: {problem}");
@@ -171,6 +181,21 @@ pub fn run(args: &[String]) -> Result<u8> {
             problems.len()
         );
         Ok(1)
+    }
+}
+
+/// Splits the differences from the oracle's recordings off the gating ones:
+/// while the catch-up train's report-only marker is committed
+/// ([`report_only::MARKER`]), they are returned to be printed as a report;
+/// otherwise they join `problems` and fail the run. The committed
+/// artifacts' drift from the generator is never in `oracle`, so it always
+/// gates.
+fn gate(problems: &mut Vec<String>, oracle: Vec<String>, report_only: bool) -> Vec<String> {
+    if report_only {
+        oracle
+    } else {
+        problems.extend(oracle);
+        Vec::new()
     }
 }
 
@@ -747,9 +772,11 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
 /// `generator` labels aside (`catalog_differences`); and each golden
 /// recording of an `opentide generate` that wrote them must hold, byte for
 /// byte, what the generator writes for the fixture with the oracle's version
-/// as the label. Returns the number of files compared and the differences.
-fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
+/// as the label. Returns the number of files compared, the committed copy's
+/// drift and the differences from the oracle's recordings.
+fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>, Vec<String>)> {
     use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    let mut drift = Vec::new();
     let mut problems = Vec::new();
     let mut compared = 0;
     let sources = bundled_sources()?;
@@ -759,8 +786,8 @@ fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
             Ok(current) if unlabelled(&path, &current)? == unlabelled(&path, &text)? => {
                 compared += 1;
             }
-            Ok(_) => problems.push(format!("{path}: differs from what the model generates")),
-            Err(_) => problems.push(format!("{path}: missing")),
+            Ok(_) => drift.push(format!("{path}: differs from what the model generates")),
+            Err(_) => drift.push(format!("{path}: missing")),
         }
     }
 
@@ -830,7 +857,7 @@ fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
     if generated.is_empty() {
         problems.push("no golden recording of `opentide generate` wrote the catalogs".to_owned());
     }
-    Ok((compared, problems))
+    Ok((compared, drift, problems))
 }
 
 /// The fixtures whose object and configuration files are validated against
@@ -1114,6 +1141,23 @@ fn compare(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_oracles_differences_gate_unless_the_train_is_report_only() {
+        let oracle = vec!["generate/x: rule.1.0 differs from the oracle's".to_owned()];
+        let drift = "data/catalogs/tide/generated/fields.json: missing".to_owned();
+        // Gated: they fail the run with the committed drift.
+        let mut problems = vec![drift.clone()];
+        let reported = gate(&mut problems, oracle.clone(), false);
+        assert!(reported.is_empty());
+        assert_eq!(problems, vec![drift.clone(), oracle[0].clone()]);
+        // Report-only: they are reported, and the drift still fails.
+        let mut problems = vec![drift.clone()];
+        let reported = gate(&mut problems, oracle.clone(), true);
+        assert_eq!(reported, oracle);
+        assert_eq!(problems, vec![drift]);
+    }
+
     use super::*;
 
     #[test]
