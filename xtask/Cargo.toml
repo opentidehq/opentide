@@ -40,6 +40,9 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
+# xtask vocab ingest: a vocabulary read in document order, as Python's
+# tomllib reads it (toml's own tables are sorted).
+toml_edit.workspace = true
 wait4.workspace = true
 regex.workspace = true
 # xtask golden (src/golden/): only the tooling uses these, at the versions

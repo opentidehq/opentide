@@ -7,8 +7,11 @@
 //!   ATT&CK v18 list from MITRE's STIX bundles.
 //! - `diff --against python` ([`diff`]): `opentide_schema::vocab` against the
 //!   oracle, on every corpus.
+//! - `ingest [--check|--apply]` ([`ingest`]): the weekly ATT&CK and MISP
+//!   ingest into the specifications' vocabularies.
 
 pub mod diff;
+pub mod ingest;
 pub mod sentinel;
 pub mod sync;
 
@@ -38,6 +41,17 @@ commands:
                  tests/golden/cases.toml) and generated misspellings with the
                  oracle and with opentide-schema, and compare; suggestion
                  differences on corpus values must be in tests/golden/vocab/APPROVED.toml
+  ingest [--check|--apply] [--no-fetch] [--stix-dir DIR] [--misp-url URL]
+         [--specifications DIR] [--now TIMESTAMP]
+                 fetch the latest MITRE ATT&CK STIX release (into DIR, else
+                 $OPENTIDE_ATTACK_STIX_DIR, else a scratch directory; --no-fetch
+                 reads DIR) and the MISP threat-actor galaxy (URL, else the
+                 bundled resources.toml's; file:// reads a file), and merge them
+                 into the specifications checkout's att&ck, att&ck.groups,
+                 mitigations, datasources and actors vocabularies with per-key
+                 versions; --apply writes them and syncs the bundle, otherwise
+                 it exits 1 when they would change. Schema pins never move.
+                 --now fixes the timestamps it writes, for a reproducible run
   help           print this message
 
 exit status: 0 passed, 1 a check failed, 2 usage error or the check could not run
@@ -52,6 +66,7 @@ pub fn main(args: &[String]) -> ExitCode {
     let result = match command.as_str() {
         "sync" => run_sync(rest),
         "sentinel-attack" => run_sentinel(rest),
+        "ingest" => ingest::parse(rest).and_then(|options| ingest::run(&repo_root()?, &options)),
         "diff" => diff::parse(rest).and_then(|options| diff::run(&options)),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
@@ -154,6 +169,9 @@ mod tests {
             &["sentinel-attack", "--frobnicate"],
             &["sentinel-attack", "--stix-dir"],
             &["diff"],
+            &["ingest", "--check", "--apply"],
+            &["ingest", "--frobnicate"],
+            &["ingest", "--misp-url"],
         ] {
             assert_eq!(main(&words(args)), usage, "{args:?}");
         }
