@@ -18,6 +18,7 @@ pub mod lint;
 pub mod lsp;
 pub mod mcp;
 pub mod mutants;
+pub mod parallel;
 pub mod payloads;
 pub mod registry;
 pub mod schema;
