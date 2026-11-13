@@ -10,7 +10,7 @@
 
 from typing import Any, Final, SupportsIndex, final
 
-__all__ = ["ValidationError", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExternalDetector", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
+__all__ = ["ValidationError", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExabeamConfig", "ExabeamCorrelation", "ExabeamEmail", "ExabeamRecurrence", "ExabeamSequence", "ExabeamSuppression", "ExabeamThreshold", "ExternalDetector", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
 
 ValidationError: Final[type[ValueError]]
 """
@@ -4407,6 +4407,722 @@ class ElasticTimeline:
         """
 
 @final
+class ExabeamConfig:
+    """
+    Exabeam New-Scale SIEM correlation rule (`ExabeamConfig`).
+    """
+    __schema_identifier__: Final[str]
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def contributors(self, /) -> list[str] | None:
+        """
+        Platform contributors.
+        """
+    @property
+    def correlation(self, /) -> ExabeamCorrelation | None:
+        """
+        Required with two or more sequences; not allowed with one.
+        """
+    @property
+    def delay(self, /) -> str | None:
+        """
+        Evaluation delay, `7m` to `180m` (`3h`). Omitted: Exabeam's default of 7 minutes.
+        """
+    @property
+    def email(self, /) -> ExabeamEmail | None:
+        """
+        Also send an email when the rule triggers.
+        """
+    @property
+    def enabled(self, /) -> bool:
+        """
+        Whether this platform block is active.
+        """
+    @property
+    def flags(self, /) -> list[str] | None:
+        """
+        Platform flags.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamConfig:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamConfig:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamConfig:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str:
+        """
+        Platform-specific rule name.
+        """
+    @property
+    def outcome(self, /) -> str | None:
+        """
+        `alert` (an alert in Threat Center), `case`, or `none`. Default: `alert`.
+        """
+    @property
+    def platform_schema(self, /) -> str | None:
+        """
+        Platform schema identifier, for example `platform::sentinel::1.0`.
+        """
+    @property
+    def schedule(self, /) -> list[ExabeamRecurrence] | None:
+        """
+        When the rule is active. Omitted: always.
+        """
+    @property
+    def schema(self, /) -> str | None:
+        """
+        The serialised name of the schema identifier field,
+        read-only (`metadata.schema`, `block.schema`).
+        """
+    @classmethod
+    def schema_identifier(cls, /) -> str:
+        """
+        The canonical schema identifier (`rule::1.0`).
+        """
+    @property
+    def sequences(self, /) -> list[ExabeamSequence]:
+        """
+        One or more sequences, in the order the events happen. Each is a filter and a condition:
+        any match, or a threshold.
+        """
+    @property
+    def severity(self, /) -> str | None:
+        """
+        `none`, `low`, `medium`, `high`, or `critical`. Derived from `response.alert_severity`
+        when omitted.
+        """
+    @property
+    def status(self, /) -> str:
+        """
+        Deployment status of this platform block, from the statuses in `deployment.toml`. Required:
+        the deploy planner selects on it.
+        """
+    @property
+    def suppression(self, /) -> ExabeamSuppression | None:
+        """
+        Suppress repeated triggers.
+        """
+    @property
+    def tenants(self, /) -> list[str] | None:
+        """
+        Target tenant identifiers.
+        """
+    @property
+    def test_mode(self, /) -> bool | None:
+        """
+        Run the rule in test mode: it triggers and writes a `rule-trigger-test` event, with no
+        outcome. Default: the tenant `test_mode`.
+        """
+
+@final
+class ExabeamCorrelation:
+    """
+    The window two or more sequences correlate in (`ExabeamCorrelation`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def group_by(self, /) -> list[str] | None:
+        """
+        Up to three fields every sequence shares (the API's limit; the console allows more)
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamCorrelation:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamCorrelation:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamCorrelation:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamCorrelation:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def within(self, /) -> str:
+        """
+        The window every sequence's condition must be met in: whole `m`, `h`, or `d`
+        """
+
+@final
+class ExabeamEmail:
+    """
+    An email when the rule triggers (`ExabeamEmail`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def attach_csv(self, /) -> bool | None:
+        """
+        Attach the matching events as CSV
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamEmail:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamEmail:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamEmail:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamEmail:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def recipients(self, /) -> list[str]:
+        """
+        One or more email addresses
+        """
+    @property
+    def subject(self, /) -> str | None:
+        """
+        Email subject
+        """
+
+@final
+class ExabeamRecurrence:
+    """
+    When the rule is active (`ExabeamRecurrence`). The YAML key is `from`,
+    a Python keyword: `from_` is an unknown key.
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def days(self, /) -> list[str] | list[int] | None:
+        """
+        `week`: one or more weekday names (`monday` … `sunday`). `month`: day numbers 1–31. Not
+        allowed otherwise.
+        """
+    @property
+    def every(self, /) -> str:
+        """
+        `day`, `week`, `month`, or `days` (a range of weekdays)
+        """
+    @property
+    def first(self, /) -> str | None:
+        """
+        `days` only: the first weekday of the range
+        """
+    @property
+    def from_(self, /) -> str:
+        """
+        Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)
+        """
+    @property
+    def last(self, /) -> str | None:
+        """
+        `days` only: the last weekday of the range
+        """
+    @property
+    def last_day(self, /) -> bool | None:
+        """
+        `month` only: also the last day of the month. A `month` recurrence has `days`,
+        `last_day: true`, or both.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamRecurrence:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamRecurrence:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamRecurrence:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamRecurrence:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def to(self, /) -> str:
+        """
+        End time, UTC, `H:MMZ` or `HH:MMZ`
+        """
+
+@final
+class ExabeamSequence:
+    """
+    One sequence: a filter and a condition (`ExabeamSequence`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def group_by(self, /) -> list[str] | None:
+        """
+        One to three fields. A threshold is evaluated per value. With any match, the rule still
+        triggers on every matching event; to trigger once per value, also set `suppression.group_by`
+        to these fields (Exabeam's granular suppression).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamSequence:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamSequence:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamSequence:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamSequence:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str | None:
+        """
+        Sequence name, shown in the console
+        """
+    @property
+    def query(self, /) -> str:
+        """
+        A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML.
+        """
+    @property
+    def threshold(self, /) -> ExabeamThreshold | None:
+        """
+        The condition. Without it, the sequence triggers on any matching event.
+        """
+
+@final
+class ExabeamSuppression:
+    """
+    Repeated triggers suppressed (`ExabeamSuppression`). The YAML key is
+    `for`, a Python keyword: `for_` is an unknown key.
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def for_(self, /) -> str:
+        """
+        Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`
+        """
+    @property
+    def group_by(self, /) -> list[str] | None:
+        """
+        One to three fields. Suppress per value instead of for the whole rule.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamSuppression:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamSuppression:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamSuppression:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamSuppression:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class ExabeamThreshold:
+    """
+    A sequence's condition (`ExabeamThreshold`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def field(self, /) -> str | None:
+        """
+        The field the function reads. Required except for `count`. `count` without a field counts
+        events.
+        """
+    @property
+    def function(self, /) -> str:
+        """
+        `count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> ExabeamThreshold:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> ExabeamThreshold:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> ExabeamThreshold:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> ExabeamThreshold:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def operator(self, /) -> str:
+        """
+        `more_than`, `less_than`, `in`, or `not_in`
+        """
+    @property
+    def value(self, /) -> int | float | list[str | int | float] | None:
+        """
+        `more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative
+        integer). `in` and `not_in`: a non-empty list of strings or numbers.
+        """
+    @property
+    def within(self, /) -> str:
+        """
+        The window: whole `m`, `h`, or `d`
+        """
+
+@final
 class ExternalDetector:
     """
     An external detector reference (`ExternalDetector`).
@@ -5791,6 +6507,11 @@ class RuleConfigurations:
     def elastic(self, /) -> ElasticConfig | None:
         """
         Elastic Security detection rule (`platform::elastic::1.0`).
+        """
+    @property
+    def exabeam(self, /) -> ExabeamConfig | None:
+        """
+        Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`).
         """
     @property
     def harfanglab(self, /) -> HarfangLabConfig | None:

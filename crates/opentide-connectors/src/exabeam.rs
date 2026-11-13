@@ -893,7 +893,7 @@ pub struct Event {
     /// What happened (the log's `error`, or `detail` for a warning).
     pub message: String,
     /// More fields of the log line (`detail`, `existing_id`, `errors`,
-    /// `trace_id`).
+    /// `trace_id`, and `name` on the create path).
     pub fields: Vec<(&'static str, String)>,
 }
 
@@ -1138,7 +1138,21 @@ async fn run(
     Ok(())
 }
 
+/// The create path (`_create`): its failures name the Exabeam rule
+/// (`name`, the compiled name), where the update path's name the object.
 async fn create(
+    session: &Session<'_>,
+    rule: &RuleDeploy,
+    outcome: &mut RuleOutcome,
+) -> Result<(), Failure> {
+    let sent = create_unnamed(session, rule, outcome).await;
+    if let Some(failure) = &mut outcome.failure {
+        failure.fields.push(("name", rule.name.clone()));
+    }
+    sent
+}
+
+async fn create_unnamed(
     session: &Session<'_>,
     rule: &RuleDeploy,
     outcome: &mut RuleOutcome,
@@ -1165,14 +1179,14 @@ async fn create(
                 format!(
                     "an Exabeam rule named {} already exists (id {ids}); deploy does not adopt \
                      it. Rename the block (name) or delete the other rule",
-                    crate::python::python_string_repr(name)
+                    opentide_schema::configuration::repr::quote(name)
                 ),
             )
             .with("existing_id", ids),
         );
         return Ok(());
     }
-    let quoted = crate::python::python_string_repr(name);
+    let quoted = opentide_schema::configuration::repr::quote(name);
     let unconfirmed = |how: &str| {
         format!(
             "the create of {quoted} {how}, so Exabeam may have created it with an id opentide \
@@ -1225,7 +1239,7 @@ async fn create(
         let id = result.get("id").map_or_else(
             || "None".to_owned(),
             |id| match id {
-                Json::Str(text) => crate::python::python_string_repr(text),
+                Json::Str(text) => opentide_schema::configuration::repr::quote(text),
                 other => py_str(other),
             },
         );

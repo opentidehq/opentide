@@ -13,8 +13,8 @@ use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
 use crate::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, HarfangLabConfig,
-    PlatformBlock, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, ExabeamConfig,
+    HarfangLabConfig, PlatformBlock, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
@@ -80,6 +80,10 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub sysdig: Option<SysdigConfig>,
+    /// Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub exabeam: Option<ExabeamConfig>,
 }
 
 impl RuleConfigurations {
@@ -103,6 +107,7 @@ impl RuleConfigurations {
             self.carbon_black_cloud.as_ref().map(PlatformBlock::status),
             self.elastic.as_ref().map(PlatformBlock::status),
             self.sysdig.as_ref().map(PlatformBlock::status),
+            self.exabeam.as_ref().map(PlatformBlock::status),
         ];
         Self::PLATFORMS
             .into_iter()

@@ -1,0 +1,31 @@
+[platform]
+enabled = false
+name = "Exabeam New-Scale SIEM"
+description = "Correlation rules for Exabeam New-Scale Security Operations Platform."
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#severity = "low"
+
+# Exabeam correlation rules, through the Correlation Rules API. The Exabeam rule
+# id (a UUID) is kept in .opentide/states/deployment/ (commit it). region is the
+# API region: us-west, us-east, ca, eu, sa, sg, ch, jp, au or uk; calls go to
+# https://api.<region>.exabeam.cloud (not the console's subdomain: use1 is
+# us-east, euw6 is ch). api_url replaces that base URL. The API key needs
+# Correlation Rules at Read Write Delete; validate query --live and opentide
+# query also need Search, Analyze and Export. test_mode = true deploys every
+# rule in test mode unless its block says otherwise.
+#[[tenants]]
+#name = "exabeam-eu"
+#description = "Exabeam New-Scale, Europe"
+#strategies = ["RELEASE"]
+#[tenants.setup]
+#ssl = true
+#region = "eu"
+#client_id = "$EXABEAM_CLIENT_ID"
+#client_secret = "$EXABEAM_CLIENT_SECRET"
+#test_mode = false

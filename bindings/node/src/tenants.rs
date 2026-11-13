@@ -1181,7 +1181,7 @@ mod tests {
 
     #[test]
     fn the_platforms_and_what_each_can_do() {
-        assert_eq!(platforms().len(), 9);
+        assert_eq!(platforms().len(), 10);
         assert!(platforms().contains(&"sentinel_one".to_owned()));
         assert_eq!(
             capabilities("sysdig".into()),
@@ -1189,6 +1189,14 @@ mod tests {
                 deploy: true,
                 live_validation: false,
                 query: false,
+            })
+        );
+        assert_eq!(
+            capabilities("exabeam".into()),
+            Some(Capabilities {
+                deploy: true,
+                live_validation: true,
+                query: true,
             })
         );
         assert_eq!(capabilities("nowhere".into()), None);

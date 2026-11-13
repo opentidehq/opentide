@@ -256,6 +256,28 @@ pub const PLATFORMS: &[Platform] = &[
         connector_rank: 8,
         configuration_rank: 8,
     },
+    Platform {
+        id: "exabeam",
+        label: "Exabeam New-Scale SIEM",
+        configuration_name: "Exabeam New-Scale SIEM",
+        config_class: "ExabeamConfig",
+        // The rule UUID Exabeam assigns, kept lower-case and canonical.
+        external_id: ExternalId::Text {
+            pattern: Some("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["exabeam"],
+        // The Exabeam Query Language comes with the engine import (E1):
+        // until then the engine parses none of these queries offline.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 9,
+        connector_rank: 9,
+        configuration_rank: 9,
+    },
 ];
 
 /// How many platforms are built in.
@@ -430,7 +452,8 @@ mod tests {
                 "harfanglab",
                 "carbon_black_cloud",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "exabeam"
             ]
         );
         assert_eq!(
@@ -444,7 +467,8 @@ mod tests {
                 "carbon_black_cloud",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "exabeam"
             ]
         );
         assert_eq!(
@@ -458,7 +482,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "exabeam"
             ]
         );
         assert_eq!(
@@ -472,7 +497,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "exabeam"
             ]
         );
     }
@@ -484,6 +510,7 @@ mod tests {
             [
                 "crowdstrike",
                 "defender_for_endpoint",
+                "exabeam",
                 "sentinel_one",
                 "sysdig"
             ]
@@ -498,6 +525,7 @@ mod tests {
                 "carbon_black_cloud",
                 "defender_for_endpoint",
                 "elastic",
+                "exabeam",
                 "sentinel",
                 "sentinel_one",
                 "splunk"
@@ -509,7 +537,7 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig"]
+            ["sentinel", "elastic", "sysdig", "exabeam"]
         );
         assert_eq!(
             query_file_suffixes(),

@@ -75,6 +75,10 @@ fn object_schemas() -> Vec<(String, Value)> {
             "SysdigConfig",
             schemars::schema_for!(platform::SysdigConfig),
         ),
+        (
+            "ExabeamConfig",
+            schemars::schema_for!(platform::ExabeamConfig),
+        ),
     ];
     schemas
         .drain(..)

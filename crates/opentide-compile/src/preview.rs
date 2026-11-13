@@ -2,8 +2,8 @@
 //! would send, or why it would fail.
 
 use opentide_schema::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, HarfangLabConfig,
-    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, ExabeamConfig,
+    HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, carbon_black, crowdstrike, defender, deploy, elastic, harfanglab, sentinel,
+    Context, carbon_black, crowdstrike, defender, deploy, elastic, exabeam, harfanglab, sentinel,
     sentinel_one, splunk, sysdig,
 };
 
@@ -40,6 +40,10 @@ pub fn compile_offline(
         "sentinel" => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
         "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
+        "exabeam" => Some(
+            exabeam::compile_deployment(cx, rule, None)
+                .map(|compiled| exabeam::create_request(&compiled)),
+        ),
         _ => None,
     }
 }
@@ -95,6 +99,10 @@ pub fn compile_tenant(
     match platform {
         "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
         "sysdig" => Some(sysdig::compile_body(cx, rule, known)),
+        "exabeam" => Some(
+            exabeam::compile_deployment(cx, rule, known)
+                .map(|compiled| exabeam::create_request(&compiled)),
+        ),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             Some(elastic::compile(cx, rule, &setup))
@@ -132,6 +140,7 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
         "carbon_black_cloud" => model_dump::<CarbonBlackConfig>(block),
         "elastic" => model_dump::<ElasticConfig>(block),
         "sysdig" => model_dump::<SysdigConfig>(block),
+        "exabeam" => model_dump::<ExabeamConfig>(block),
         _ => None,
     };
     dumped.unwrap_or_else(|| block.clone())
@@ -181,11 +190,43 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
     Json::Object(entry)
 }
 
-/// The preview of `rule` on `platform` (`preview_rule_deployment`), the
-/// entry the dry run's `payloads` lists. Sentinel and Sysdig report a rule
-/// they cannot compile as a failure; Elastic falls back to the block's dump,
-/// and every other platform shows it ([`config_dump`]).
+/// The preview of `rule` on `platform` for a run that reaches no tenant
+/// ([`preview_on`] with none).
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
+    preview_on(cx, platform, rule, &[])
+}
+
+/// The `POST /correlation-rules/v2/rules` request an Exabeam deploy would
+/// send (`_exabeam_compile_preview`). The body depends on the tenant only
+/// through its `test_mode`: the request shown is the first tenant's, and with
+/// no tenant `testMode` is the block's, else `false`. A dry run makes no
+/// call, so the name check a create starts with is not made.
+fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[&str]) -> Json {
+    let first = tenants
+        .iter()
+        .find_map(|name| deploy::tenant(cx, exabeam::PLATFORM, name).map(|table| (*name, table)));
+    match exabeam::compile_deployment(cx, rule, first.map(|(_, table)| table)) {
+        Ok(compiled) => {
+            let mut entry = Object::new();
+            entry.insert("uuid".into(), rule.uuid.clone().into());
+            entry.insert("name".into(), rule.name.clone().into());
+            entry.insert("api_request".into(), exabeam::create_request(&compiled));
+            if let Some((name, _)) = first {
+                entry.insert("tenant".into(), name.into());
+            }
+            Json::Object(entry)
+        }
+        Err(error) => failure(rule, &error),
+    }
+}
+
+/// The preview of `rule` on `platform` (`preview_rule_deployment`), the
+/// entry the dry run's `payloads` lists; `tenants` are the tenants the run
+/// sends the rule to (Exabeam's request depends on the first). Sentinel,
+/// Sysdig and Exabeam report a rule they cannot compile as a failure;
+/// Elastic falls back to the block's dump, and every other platform shows it
+/// ([`config_dump`]).
+pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[&str]) -> Json {
     match platform {
         // A compile error the oracle reports with the platform's display
         // name: compile_diagnostic(exc) names Sentinel.
@@ -200,6 +241,7 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
+        "exabeam" => exabeam_preview(cx, rule, tenants),
         "elastic" => match elastic::compile(cx, rule, &elastic::Setup::none()) {
             Ok(body) => compiled(rule, body),
             Err(_) => dump_entry(platform, rule),

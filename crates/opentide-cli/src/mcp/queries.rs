@@ -25,6 +25,7 @@ fn default_language(platform: &str) -> &'static str {
         "elastic" => "kuery",
         "sysdig" => "falco",
         "crowdstrike" => "cql",
+        "exabeam" => "exabeam",
         _ => "kql",
     }
 }

@@ -25,6 +25,7 @@ pub fn required(platform: &str) -> &'static [&'static str] {
         "sentinel_one" => &["status", "condition"],
         "crowdstrike" => &["status", "query", "details", "schedule"],
         "harfanglab" | "elastic" | "sysdig" => &["status"],
+        "exabeam" => &["status", "sequences"],
         // Carbon Black, and the oracle's default for a model it does not list.
         _ => &["status", "query"],
     }
@@ -75,7 +76,7 @@ mod tests {
     #[test]
     fn platform_root_extras_follow_the_oracle() {
         let extras = all_root_extras();
-        assert_eq!(extras.len(), 9);
+        assert_eq!(extras.len(), crate::platforms::COUNT);
         let sentinel = &extras[0].1;
         assert_eq!(
             sentinel["required"],

@@ -600,7 +600,15 @@ pub fn run(
                 continue;
             };
             let rule = Rule::new(root, Some(object.path.to_string_lossy().into_owned()));
-            let entry = preview::preview(&cx, platform, &rule);
+            // The tenants this run sends the rule to.
+            let reached: Vec<&str> = targets
+                .get(platform)
+                .into_iter()
+                .flatten()
+                .filter(|(_, sent)| sent.contains(uuid))
+                .map(|(tenant, _)| tenant.as_str())
+                .collect();
+            let entry = preview::preview_on(&cx, platform, &rule, &reached);
             if entry.get("status").and_then(Json::as_str) == Some("failed") {
                 failing.push((platform.clone(), rule.uuid.clone()));
                 diagnostics.push(diagnostic(platform, &entry, workspace.root()));

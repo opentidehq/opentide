@@ -71,6 +71,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
+        "exabeam" => exabeam::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
@@ -84,7 +85,8 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// The built-in platforms with a connector, in the order Python lists them
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
-/// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3).
+/// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
+/// Exabeam New-Scale SIEM (P-EX).
 pub fn builtin() -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
@@ -96,6 +98,7 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        Box::new(exabeam::Exabeam::new()),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).
@@ -141,6 +144,10 @@ mod tests {
             super::sysdig::http_defaults()
         );
         assert_eq!(
+            super::http_settings("exabeam", timeout),
+            super::exabeam::http_defaults()
+        );
+        assert_eq!(
             super::http_settings("unknown", timeout),
             super::HttpSettings::default()
         );
@@ -178,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn the_builtin_registry_holds_the_nine_platforms_and_what_each_can_do() {
+    fn the_builtin_registry_holds_the_ten_platforms_and_what_each_can_do() {
         let registry = super::builtin();
         assert_eq!(registry.ids(), super::plugin::BUILTIN);
         assert_eq!(
@@ -192,7 +199,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "exabeam"
             ]
         );
         let can = |id: &str| {
@@ -212,6 +220,7 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        assert_eq!(can("exabeam"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);

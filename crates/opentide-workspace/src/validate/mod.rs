@@ -501,6 +501,68 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// `exabeam_name_duplicate` and `exabeam_name_length`: the cross-rule check of
+/// Exabeam rule names (`exabeam::name_findings`), over every rule in the
+/// workspace, reported on the rules in scope. Two enabled Exabeam blocks that
+/// resolve to one name (case-insensitively) are a duplicate; a block with no
+/// `name` whose rule name is over the limit is too long.
+fn exabeam_names(index: &Index, scope: &Scope, ws: &Workspace) -> Vec<Diagnostic> {
+    use opentide_schema::objects::platform::exabeam;
+    let fs = ws.fs().as_ref();
+    let mut rules: Vec<(String, &Node, &Path)> = Vec::new();
+    for source in &index.sources {
+        if source.family != "rule" {
+            continue;
+        }
+        let Some(root) = source.document.root() else {
+            continue;
+        };
+        let Some(uuid) = root
+            .get("metadata")
+            .filter(|m| matches!(m.value, Value::Map(_)))
+            .and_then(|m| m.get("uuid"))
+            .filter(|uuid| crate::index::truthy(uuid))
+        else {
+            continue;
+        };
+        rules.push((uuid.value.to_string(), root, &source.path));
+    }
+    let pairs: Vec<(&str, &Node)> = rules
+        .iter()
+        .map(|(uuid, root, _)| (uuid.as_str(), *root))
+        .collect();
+    let in_scope: Vec<&str> = rules
+        .iter()
+        .filter(|(uuid, _, path)| {
+            scope.is_full()
+                || !scope.has_targets()
+                || scope.targets().iter().any(|target| target == uuid)
+                || scope.matches_file(fs, path)
+        })
+        .map(|(uuid, _, _)| uuid.as_str())
+        .collect();
+    let mut out = Vec::new();
+    for finding in exabeam::name_findings(&pairs, in_scope.iter().copied()) {
+        let Some((_, _, path)) = rules.iter().find(|(uuid, _, _)| *uuid == finding.uuid) else {
+            continue;
+        };
+        let mut diagnostic = Diagnostic::error(finding.code, finding.message)
+            .object(finding.uuid.clone(), "rule")
+            .file(*path)
+            .at([
+                "configurations".to_owned(),
+                "exabeam".to_owned(),
+                "name".to_owned(),
+            ])
+            .suggest(Some(finding.suggestion.to_owned()));
+        if let Some(value) = finding.value {
+            diagnostic = diagnostic.with("value", value);
+        }
+        out.push(diagnostic);
+    }
+    out
+}
+
 /// `duplicate_id`: one per UUID written again, on the later file, naming
 /// the first (`_merge_id_duplicates`).
 fn id_uniqueness(index: &Index, scope: &Scope, ws: &Workspace) -> Vec<Diagnostic> {
@@ -1031,6 +1093,9 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             && let Some(plugins) = options.platform_configurations
         {
             plugin_blocks(plugins, &work, &mut issues, &mut warnings);
+        }
+        if checks.schema {
+            issues.extend(exabeam_names(index, &scope, ws));
         }
         // Every file that writes an invalid UUID is reported, also one whose
         // object a later file with the same UUID displaced (KG-04).

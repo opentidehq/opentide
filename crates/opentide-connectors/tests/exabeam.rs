@@ -381,7 +381,10 @@ async fn an_existing_name_is_never_adopted_but_a_longer_one_is_no_conflict() {
     assert_eq!(failure_code(&outcome), Some("exabeam_name_conflict"));
     let failure = outcome.failure.unwrap();
     assert!(failure.message.contains("(id a)"), "{}", failure.message);
-    assert_eq!(failure.fields, [("existing_id", "a".to_owned())]);
+    assert_eq!(
+        failure.fields,
+        [("existing_id", "a".to_owned()), ("name", NAME.to_owned())]
+    );
     assert_eq!(outcome.state, StateChange::Keep);
     assert!(!stand.routes().await.contains(&format!("POST {RULES}")));
 

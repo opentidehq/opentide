@@ -1235,6 +1235,15 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
             }
             Err(format!("rule {name:?} has no SentinelOne query"))
         }
+        // Each sequence's filter (`_exabeam_queries`), as `query --rule` runs it.
+        "exabeam" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
+            .into_iter()
+            .map(|query| RuleQuery {
+                language: query.language.unwrap_or_default(),
+                label: query.label,
+                ..RuleQuery::plain(query.text)
+            })
+            .collect()),
         _ => Err(format!("{platform} rules cannot be queried")),
     }
 }
@@ -1359,6 +1368,13 @@ async fn generic(
         .and_then(opentide_connectors::Platform::live_validator)
         .ok_or_else(|| Early::Crashed(format!("{platform} has no live validator")))?;
     let window = TimeWindow::check(cx.now);
+    // Exabeam searches the 15 minutes before the window's end, the console's
+    // "Test Last 15 mins" (`ExabeamQueryValidator.check_rule`).
+    let window = if platform == opentide_compile::exabeam::PLATFORM {
+        opentide_connectors::exabeam::rule_check_window(window.end)
+    } else {
+        window
+    };
     let cancel = CancellationToken::new();
     let mut report = CheckReport::default();
     for batch in batches {
@@ -2072,6 +2088,28 @@ mod tests {
         let defender = rule_queries(&r, "defender_for_endpoint").unwrap();
         assert_eq!(defender[0].text_for("lab"), "T\n| where a");
         assert_eq!(defender[0].text_for("prod"), "T");
+        let exabeam = rule(
+            "name: R\nmetadata: {uuid: 00000000-0000-4000-8000-000000000001}\nconfigurations:\n  \
+             exabeam:\n    sequences: [{query: ' a '}, {query: b}]\n",
+        );
+        let sequences = rule_queries(&exabeam, "exabeam").unwrap();
+        let shown: Vec<(&str, &str, Option<&str>)> = sequences
+            .iter()
+            .map(|query| {
+                (
+                    query.text.as_str(),
+                    query.language.as_str(),
+                    query.label.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("a", "exabeam", Some("sequence 1")),
+                ("b", "exabeam", Some("sequence 2"))
+            ]
+        );
     }
 
     #[test]

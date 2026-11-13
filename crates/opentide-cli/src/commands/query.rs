@@ -2201,7 +2201,7 @@ mod tests {
         let refused = no_runner("sysdig");
         assert_eq!(
             compact_of(&Json::Object(refused.outcome.data.clone())),
-            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","harfanglab","sentinel","sentinel_one","splunk"]}"#
+            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","exabeam","harfanglab","sentinel","sentinel_one","splunk"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();

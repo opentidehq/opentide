@@ -947,7 +947,10 @@ use crate::objects::platform::elastic::{
     ElasticThreatEntry, ElasticThreatGroup, ElasticThreatMatch, ElasticThreshold, ElasticTimeline,
 };
 use crate::objects::platform::elastic::{IntegrationChoice, JobId, RiskChoice, SeverityChoice};
-use crate::objects::platform::exabeam::{ExabeamDays, ExabeamValue};
+use crate::objects::platform::exabeam::{
+    ExabeamConfig, ExabeamCorrelation, ExabeamDays, ExabeamEmail, ExabeamRecurrence,
+    ExabeamSequence, ExabeamSuppression, ExabeamThreshold, ExabeamValue,
+};
 use crate::objects::platform::harfanglab::SelectionValue;
 use crate::objects::platform::harfanglab::{
     HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
@@ -1147,6 +1150,13 @@ py_models! {
     SysdigMacro,
     SysdigList,
     SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    ExabeamThreshold,
+    ExabeamSequence,
+    ExabeamCorrelation,
+    ExabeamSuppression,
+    ExabeamEmail,
+    ExabeamRecurrence,
+    ExabeamConfig [<ExabeamConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
 }
 
 /// Names the exported `models` submodule [`MODULE`] and puts it in
@@ -1179,20 +1189,22 @@ pub mod models {
         ElasticMachineLearning, ElasticNewTerms, ElasticOverrides, ElasticRequiredField,
         ElasticRisk, ElasticRiskScoreMapping, ElasticScheduling, ElasticSeverity,
         ElasticSeverityMapping, ElasticSuppression, ElasticThreatEntry, ElasticThreatGroup,
-        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExternalDetector, HarfangLabConfig,
-        HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection, HarfangLabYara,
-        HarfangLabYaraMeta, ObjectMetadata, ObjectReferences, ObjectiveBody, ObjectiveComposition,
-        ObjectiveV1_0, Organisation, ResponseProcedure, ResponseSearch, RuleConfigurations,
-        RuleMetadata, RuleResponse, RuleV1_0, RuleV1_1, SentinelAlert, SentinelAlertGrouping,
-        SentinelConfig, SentinelCustomDetails, SentinelDynamicProperties, SentinelEntityMapping,
-        SentinelExclusion, SentinelGrouping, SentinelMappingEntry, SentinelOneCondition,
-        SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails, SentinelOneResponse,
-        SentinelOneSingleEvent, SentinelOneSubQuery, SentinelScheduling, SentinelTemplate,
-        SentinelTrigger, SignalData, SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude,
-        SplunkNotable, SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject,
-        SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange,
-        SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor,
-        ThreatBody, ThreatVectorV1_0,
+        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExabeamConfig, ExabeamCorrelation,
+        ExabeamEmail, ExabeamRecurrence, ExabeamSequence, ExabeamSuppression, ExabeamThreshold,
+        ExternalDetector, HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource,
+        HarfangLabSigmaSelection, HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata,
+        ObjectReferences, ObjectiveBody, ObjectiveComposition, ObjectiveV1_0, Organisation,
+        ResponseProcedure, ResponseSearch, RuleConfigurations, RuleMetadata, RuleResponse,
+        RuleV1_0, RuleV1_1, SentinelAlert, SentinelAlertGrouping, SentinelConfig,
+        SentinelCustomDetails, SentinelDynamicProperties, SentinelEntityMapping, SentinelExclusion,
+        SentinelGrouping, SentinelMappingEntry, SentinelOneCondition, SentinelOneConfig,
+        SentinelOneCorrelation, SentinelOneDetails, SentinelOneResponse, SentinelOneSingleEvent,
+        SentinelOneSubQuery, SentinelScheduling, SentinelTemplate, SentinelTrigger, SignalData,
+        SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude, SplunkNotable,
+        SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject, SplunkSchedule,
+        SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange, SplunkTrigger,
+        SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor, ThreatBody,
+        ThreatVectorV1_0,
     };
 
     /// The error `model_validate` raises: a `ValueError` whose instances
