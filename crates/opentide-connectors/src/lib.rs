@@ -104,12 +104,12 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        Box::new(graylog::Graylog),
         // Application Default Credentials are the process's own ambient
         // credentials (google-auth's `default()` reads the process
         // environment): a caller with an environment of its own (the CLI)
         // builds `GoogleSecops::new` with it.
         Box::new(google_secops::GoogleSecops::new(Environment::process())),
-        Box::new(graylog::Graylog),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).
@@ -220,8 +220,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "google_secops",
-                "graylog"
+                "graylog",
+                "google_secops"
             ]
         );
         let can = |id: &str| {

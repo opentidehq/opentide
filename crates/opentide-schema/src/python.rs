@@ -1171,16 +1171,16 @@ py_models! {
     SysdigMacro,
     SysdigList,
     SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
-    GoogleSecopsMatch,
-    GoogleSecopsOptions,
-    GoogleSecopsSchedule,
-    GoogleSecopsConfig [<GoogleSecopsConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     GraylogSchedule,
     GraylogAggregation,
     GraylogEventTemplate,
     GraylogLookupTable,
     GraylogEventLookup,
     GraylogConfig [<GraylogConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    GoogleSecopsMatch,
+    GoogleSecopsOptions,
+    GoogleSecopsSchedule,
+    GoogleSecopsConfig [<GoogleSecopsConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
 }
 
 /// Names the exported `models` submodule [`MODULE`] and puts it in

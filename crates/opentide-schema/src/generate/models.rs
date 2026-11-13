@@ -219,16 +219,16 @@ pub fn models() -> &'static [Model] {
             sysdig::SysdigMacro,
             sysdig::SysdigList,
             sysdig::SysdigConfig,
-            google_secops::GoogleSecopsMatch,
-            google_secops::GoogleSecopsOptions,
-            google_secops::GoogleSecopsSchedule,
-            google_secops::GoogleSecopsConfig,
             graylog::GraylogSchedule,
             graylog::GraylogAggregation,
             graylog::GraylogEventTemplate,
             graylog::GraylogLookupTable,
             graylog::GraylogEventLookup,
             graylog::GraylogConfig,
+            google_secops::GoogleSecopsMatch,
+            google_secops::GoogleSecopsOptions,
+            google_secops::GoogleSecopsSchedule,
+            google_secops::GoogleSecopsConfig,
         ]);
         all
     })

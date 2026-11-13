@@ -81,14 +81,14 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub sysdig: Option<SysdigConfig>,
-    /// Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[garde(dive)]
-    pub google_secops: Option<GoogleSecopsConfig>,
     /// Graylog event definition (`platform::graylog::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub graylog: Option<GraylogConfig>,
+    /// Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub google_secops: Option<GoogleSecopsConfig>,
 }
 
 impl RuleConfigurations {
@@ -112,8 +112,8 @@ impl RuleConfigurations {
             self.carbon_black_cloud.as_ref().map(PlatformBlock::status),
             self.elastic.as_ref().map(PlatformBlock::status),
             self.sysdig.as_ref().map(PlatformBlock::status),
-            self.google_secops.as_ref().map(PlatformBlock::status),
             self.graylog.as_ref().map(PlatformBlock::status),
+            self.google_secops.as_ref().map(PlatformBlock::status),
         ];
         Self::PLATFORMS
             .into_iter()

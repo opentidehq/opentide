@@ -309,28 +309,6 @@ pub const PLATFORMS: &[Platform] = &[
         configuration_rank: 8,
     },
     Platform {
-        id: "google_secops",
-        label: "Google Security Operations",
-        configuration_name: "Google Security Operations",
-        config_class: "GoogleSecopsConfig",
-        // google-secops-1.0: the rule id, never a revision (`@v_…`) or a
-        // resource name.
-        external_id: ExternalId::Text {
-            pattern: Some("^ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
-        },
-        deploys: true,
-        compiles_offline: true,
-        live_check: true,
-        query_runner: true,
-        runner_languages: &["yaral"],
-        // The offline YARA-L check arrives with the engine import (E1).
-        offline_languages: &[],
-        query_file_suffixes: &["yaral"],
-        cli_rank: 9,
-        connector_rank: 9,
-        configuration_rank: 9,
-    },
-    Platform {
         id: "graylog",
         label: "Graylog",
         configuration_name: "Graylog",
@@ -348,6 +326,28 @@ pub const PLATFORMS: &[Platform] = &[
         // Elastic's Lucene.
         offline_languages: &[],
         query_file_suffixes: &[],
+        cli_rank: 9,
+        connector_rank: 9,
+        configuration_rank: 9,
+    },
+    Platform {
+        id: "google_secops",
+        label: "Google Security Operations",
+        configuration_name: "Google Security Operations",
+        config_class: "GoogleSecopsConfig",
+        // google-secops-1.0: the rule id, never a revision (`@v_…`) or a
+        // resource name.
+        external_id: ExternalId::Text {
+            pattern: Some("^ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["yaral"],
+        // The offline YARA-L check arrives with the engine import (E1).
+        offline_languages: &[],
+        query_file_suffixes: &["yaral"],
         cli_rank: 10,
         connector_rank: 10,
         configuration_rank: 10,
@@ -554,8 +554,8 @@ mod tests {
                 "carbon_black_cloud",
                 "elastic",
                 "sysdig",
-                "google_secops",
-                "graylog"
+                "graylog",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -570,8 +570,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "google_secops",
-                "graylog"
+                "graylog",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -586,8 +586,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "google_secops",
-                "graylog"
+                "graylog",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -602,8 +602,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "google_secops",
-                "graylog"
+                "graylog",
+                "google_secops"
             ]
         );
     }
@@ -644,7 +644,7 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig", "google_secops", "graylog"]
+            ["sentinel", "elastic", "sysdig", "graylog", "google_secops"]
         );
         assert_eq!(
             query_file_suffixes(),

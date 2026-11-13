@@ -264,8 +264,8 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<CarbonBlackConfig>("carbon_black_cloud", "CarbonBlackConfig"),
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
-    registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
     registered::<GraylogConfig>("graylog", "GraylogConfig"),
+    registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
 ];
 
 const fn registered<T: PlatformBlock>(key: &'static str, model: &'static str) -> Registered {

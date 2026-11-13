@@ -176,8 +176,8 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("CarbonBlackConfig", of::<platform::CarbonBlackConfig>()),
         ("ElasticConfig", of::<platform::ElasticConfig>()),
         ("SysdigConfig", of::<platform::SysdigConfig>()),
-        ("GoogleSecopsConfig", of::<platform::GoogleSecopsConfig>()),
         ("GraylogConfig", of::<platform::GraylogConfig>()),
+        ("GoogleSecopsConfig", of::<platform::GoogleSecopsConfig>()),
     ]
 }
 
