@@ -265,7 +265,7 @@ TREE_AFTER = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-
 
 
 # A shard names its packages (matrix.packages, read into an array).
-NEXTEST = 'cargo nextest run --locked --profile ci "${selected[@]}"'
+NEXTEST = 'cargo nextest run --locked --profile ci "${selected[@]}" "${filter[@]}"'
 DOCTESTS = 'cargo test --locked --doc "${selected[@]}"'
 
 

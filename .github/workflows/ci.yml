@@ -516,7 +516,7 @@ jobs:
       # Linux in three shards on every pull request; macOS and Windows join in
       # the full set (the gathering job keeps their required checks' names).
       matrix:
-        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"macos-latest","shard":1,"shards":1,"packages":"--workspace"},{"os":"windows-latest","shard":1,"shards":1,"packages":"--workspace"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"}]') }}
+        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"macos-latest","shard":1,"shards":1,"packages":"--workspace"},{"os":"windows-latest","shard":1,"shards":1,"packages":"--workspace"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"}]') }}
     env:
       RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
@@ -534,6 +534,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The merge commit and its first parent: the step below reads what
+          # the pull request changed.
+          fetch-depth: 2
           persist-credentials: false
 
       # uv for the tests that provision a tool with it; nothing is synced.
@@ -577,14 +580,59 @@ jobs:
         shell: bash
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
+      # opentide-schema's compile-fail cases (trybuild, `opentide-schema::ui`)
+      # take a minute, the slowest test of its shard: they run in the full
+      # set and on a pull request that changes what they compile (the derive,
+      # the crate, the cases) or the toolchain whose messages they hold; a
+      # pull request whose merge commit cannot be read runs them.
+      - name: Whether to run opentide-schema's compile-fail cases
+        id: ui
+        shell: bash
+        env:
+          FULL_SET: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          UI_PATHS: |
+            crates/opentide-schema-derive/*
+            crates/opentide-schema/src/*
+            crates/opentide-schema/tests/ui*
+            crates/opentide-schema/Cargo.toml
+            Cargo.lock
+            rust-toolchain.toml
+            .github/workflows/ci.yml
+        run: |
+          set -euo pipefail
+          run=true
+          if [[ "${FULL_SET}" != true ]] && git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            run=false
+            while IFS= read -r file; do
+              [[ -n "${file}" ]] || continue
+              while IFS= read -r pattern; do
+                # Unquoted on the right: a pattern, not a string.
+                # shellcheck disable=SC2053
+                if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
+                  echo "compile-fail input changed: ${file}"
+                  run=true
+                fi
+              done <<<"${UI_PATHS}"
+            done < <(git diff --no-renames --name-only HEAD^1 HEAD)
+          fi
+          echo "run=${run}" >> "$GITHUB_OUTPUT"
+
       - name: cargo nextest (profile ci)
         shell: bash
         env:
           OPENTIDE_PYTHON: python
           PACKAGES: ${{ matrix.packages }}
+          UI: ${{ steps.ui.outputs.run }}
         run: |
           read -ra selected <<< "${PACKAGES}"
-          cargo nextest run --locked --profile ci "${selected[@]}"
+          filter=()
+          # The shard that tests opentide-schema; a filter names a binary
+          # only where it is built.
+          if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then
+            echo "opentide-schema::ui runs in the full set and when its inputs change"
+            filter=(-E 'not binary_id(opentide-schema::ui)')
+          fi
+          cargo nextest run --locked --profile ci "${selected[@]}" "${filter[@]}"
 
       - name: doctests
         if: runner.os == 'Linux'

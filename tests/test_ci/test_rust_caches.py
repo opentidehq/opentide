@@ -196,7 +196,7 @@ def test_the_engine_debug_tree_is_cached_once() -> None:
         cell
         for cell in _cells(_ci()["jobs"][job])
         if cell["os"] == runs_on
-        and {"opentide-lsp", "opentide-analysis"} <= set(cell["packages"].split()[1::2])
+        and {"opentide-lsp", "opentide-analysis"} <= set(ci_matrix.selection(cell["packages"])[0])
     ]
     family = f"sccache-engine-dev-ubuntu-latest-{cell['shard']}-"
     savers = [c for c in _compiler_caches() if c.job == job and (c.saves or "").startswith(family)]
