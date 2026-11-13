@@ -15,6 +15,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you pinned an `opentide-lsp-*-unknown-linux-musl` binary, build `opentide-lsp` with `cargo install opentide-lsp` instead: no musl binary ships.
 - If you pass or read the YAML values of `opentide-tide` (`IndexedObject::body`, `IndexedObject::from_body`, `index_value`, `object_refs`, `TideObject`), use `Arc<opentide_core::node::Node>` where you used `serde_yaml::Value`, and read a document with `opentide_core::node::load` (or `TideObject::parse`) where you called `serde_yaml::from_str`.
 
+- If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
+
 ### Breaking
 
 - **`opentide-tide` reads Tide YAML with `opentide_core::node`, and its YAML values are node trees** ([opentide#850](https://github.com/opentidehq/opentide/issues/850)). `IndexedObject::body` is an `Arc<Node>`, `index_value` and `IndexedObject::from_body` take one, `object_refs` takes a `&Node`, and `TideObject` (no longer `serde::Deserialize`) is read with `TideObject::parse` or `TideObject::from_node`. `serde_yaml` is no longer a dependency of any crate: the engine's Tide findings, outline, links, lens and index read the documents `validate` reads, on the same loader. On every corpus of the repository (`crates/testdata`, the `tide_corpus` workspaces, `tests/fixtures`, the golden cases' workspaces, the fuzz seeds) the findings, their ranges, the outline, links, lens, inlay hints, hover and completion are the same. Where the parsers disagreed: a document the loader refuses (a tag outside the core schema, a repeated key, a key that is a collection, an integer past 64 bits) has no query findings, symbols or index entry, as a YAML syntax error had none; a document nested past serde_yaml's 128 levels (and within the loader's 512) is analysed; and the language server checks a standalone buffer the loader refuses as an object of the family its `schema:` line names, so `validate` reports its `yaml_parse`.
@@ -55,6 +57,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Changed
 
+- **language-server 0.12.1 to 0.16.0 are in these crates, without their Tide block checks** ([opentide#790](https://github.com/opentidehq/opentide/issues/790)). The YARA (`opentide-yara`), YARA-L (`opentide-yaral`) and Exabeam Query Language (`opentide-exabeam`) engines, the Lucene Graylog dialect (`--platform graylog`), their codes, grammars, catalogs and highlighting, and `.yar`/`.yara`, `.yaral`/`.yl2` and `.exabeam` files with rename, formatting and signature help came in with their history (`docs/engine/IMPORT.md`). The checks, completion and hover of `configurations.{harfanglab,bitdefender,graylog,exabeam,google_secops}` blocks and of Exabeam, Graylog and Google SecOps hunts were written on `serde_yaml`, which these crates no longer use (#850): they are not in this release, and come back on `opentide_core::node`.
+
 - **The YAML node tree is `opentide_core::node`** ([opentide#850](https://github.com/opentidehq/opentide/issues/850)). The loader (`load`, `load_bytes`, `load_keeping_repeated_keys`, `Document`, `Node`, `Value`, `LoadError`, `Locator`, `Span`) moved down from `opentide-schema` to `opentide-core`, so `opentide-tide` (published) reads YAML with it; `opentide_schema::node` re-exports it with the writer, `to_yaml`, and every path through it keeps working. `opentide-core` depends on `saphyr` and `saphyr-parser` 0.3, which `opentide-schema` no longer names.
 
 - **The engine crates are internal: depend on `opentide`** ([opentide#836](https://github.com/opentidehq/opentide/issues/836)). Every component crate's README (`COMPONENT.md`), description and crate documentation, and `opentide-analysis`'s, say so: their APIs change with the engine at the same version and carry no stability promise, which only the `opentide` crate gives.
@@ -74,6 +78,92 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 ### Security
 
 - **`unsafe-libyaml` (RUSTSEC-2024-0449, unmaintained) is out of the dependency tree** ([opentide#850](https://github.com/opentidehq/opentide/issues/850)). It came in through `serde_yaml` 0.9, archived, which `opentide-tide` and `opentide-lsp` read Tide YAML with; neither crate depends on it now, and `deny.toml` no longer excepts the advisory. It was never a vulnerability report: nothing to upgrade for.
+
+## [0.16.0] - 2026-11-12
+
+Google Security Operations support: YARA-L 2.0 rules, searches and `configurations.google_secops` blocks are checked, completed and highlighted as you type.
+
+### Added
+
+- **`.yaral` and `.yl2` files are YARA-L 2.0, language id `yaral`.** Google Security Operations rules and searches are checked offline as yara-l-1.0 1.1 defines them; keywords are case-insensitive in any mix (`and`, `AND`, `aNd`), and Google's own examples for each form are fixtures (`testdata/conformance/google-yaral/`); Google publishes no compiler, so `verifyRuleText` in a tenant stays the live check. `docs/YARAL.md` maps each code to Google's page, and `opentide explain` describes it.
+  - Errors: `yaral_parse_error`, `yaral_section_*`, `yaral_meta_duplicate`, `yaral_reserved_identifier`, `yaral_undefined_variable`, `yaral_multi_event_match`, `yaral_match_*`, `yaral_condition_shape`, `yaral_outcome_*`, `yaral_unknown_function`, `yaral_function_unavailable`, `yaral_unknown_udm_field`, `yaral_enum_value`, `yaral_type`, `yaral_regex`, `yaral_export_value` (in a rule, a `write_row` value that is not an outcome variable; in a search, a `match` variable), `yaral_window_bound` (`window_start`/`window_end` without a window, or in `events`), and the other limits of the spec
+  - Warnings: `yaral_deprecated_field`, `yaral_unfiltered_event`, `yaral_leading_wildcard_regex`, `yaral_reference_list_deprecated`, `yaral_string_escape` (an escape Google does not document, which its own rules use)
+- **Field paths and calls are checked against Google's UDM and function list.** Every event, entity (`graph`) and detection (`detection`) field with its type and enum values, and every function with its arity and where it is available (rules or search), generated from Google's pages: all 22 `metrics.*` functions with their `filter:` expressions and `*` grouping values, `math.round` with one or two arguments, and the `window.*` functions in searches too. Reference lists, data tables and map keys are never reported unknown.
+- **Google SecOps blocks (`configurations.google_secops`) are checked as the one rule deploy assembles.** `setup`, `events`, `outcome`, `condition` and `export` are one YARA-L rule with `match` and `options` rendered from YAML, each finding on its own line in the YAML; the block's codes are reported at the spec's field paths.
+  - Errors: `google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`, and `yaral_section_header`, `yaral_section_empty`, `yaral_section_alias`, `yaral_match_shape` on the YAML
+  - Warnings: `google_secops_risk_score_missing`, `google_secops_rule_id_literal`, `google_secops_live_frequency_unavailable`
+- **Google SecOps hunts are YARA-L searches.** `response.procedure.searches[].query` with `system: google_secops` is checked under the `search` profile: bare UDM paths, grouped fields (`ip`, `hostname`, ...), `raw = /.../`, `labels["k"]`, `dedup`, `order`, `limit`, `select`, `unselect`, multi-stage `stage` blocks and `cross join`. A stage reading only earlier stages needs no `events`, `meta` is ignored, and match windows are bound as Google documents for search (hop and sliding to 48h, tumbling to 30d, 48h with a join).
+- **YARA-L editing: hover, completion and signature help.** Hover shows a UDM field's type, description and enum values, and a function's signature and availability; completion offers UDM fields after `$e.`, enum values after `metadata.event_type =`, and a namespace's functions after `strings.`.
+- **YARA-L is highlighted.** Semantic tokens use the existing HighlightSpec captures; `highlights/generated/yaral.tmLanguage.json` (`source.yaral`) is the TextMate grammar, the Tide grammar embeds a Google SecOps block's section texts as `meta.embedded.block.yaral`, and the Neovim, Helix, Zed and `@opentide/lsp-client` samples map `.yaral` and `.yl2` to `yaral`.
+- **API: `opentide_core::LanguageId::Yaral`** and the `opentide-yaral` crate.
+- **The Tide catalog knows `configurations.google_secops`.** Regenerated with opentide's generator from the opentide branch that adds the block, so editors complete and validate its keys and nested `match`, `options` and `schedule` objects.
+
+## [0.15.0] - 2026-11-12
+
+Exabeam support: Exabeam queries and `configurations.exabeam` correlation rules are checked and highlighted as you type.
+
+### Added
+
+- **`.exabeam` files are the Exabeam Query Language, language id `exabeam`.** The search language of Exabeam's New-Scale SIEM, which Exabeam's guides call "EQL" (`eql` stays Elastic's), is checked as the specification exabeam-1.0 defines it: the filter and the advanced operators (`SELECT`, `WHERE`, `GROUP-BY`, `ORDER-BY`, `LIMIT`, pipes, `FOREACH`, the aggregations, `RGX_EXTRACT`), every `exabeam_*` error and warning of the spec, and `RGX` patterns as RE2 reads them. A `.exabeam` file is a search. `opentide explain` describes each code; `docs/EXABEAM.md` lists them with the conformance results ([specifications RFC 0018](https://github.com/opentidehq/specifications/blob/main/rfcs/0018-exabeam-platform.md)) ([#243](https://github.com/opentidehq/language-server/pull/243)).
+- **Exabeam correlation rules and hunts are checked.** `configurations.exabeam.sequences[].query` is analysed under the spec's `rule` profile, where the advanced operators are `exabeam_advanced_in_rule`, and hunts with `system: exabeam` under `search`; `analyze_query` with `platform: exabeam` is the `rule` profile. On Exabeam's 2,371 published correlation rules the engine agrees with the specification's reference checker on every rule: 75 of the 2,294 Sigma conversions have errors, and none of Exabeam's 77 own rules ([#243](https://github.com/opentidehq/language-server/pull/243)).
+- **Exabeam fields come from Exabeam's Common Information Model.** Hover and completion know its 1,130 fields, subjects, activity types and outcomes (`catalogs/exabeam/`, `scripts/sync_exabeam_catalog.py`). A field it lacks is the warning `exabeam_unknown_field` (never for `c_` and `m_` fields or an earlier `AS` name), and an unquoted number on a string field (`event_code:4625`) the warning `exabeam_string_field_number` ([#243](https://github.com/opentidehq/language-server/pull/243)).
+- **The `configurations.exabeam` block is checked as exabeam-1.0 says.** Its constraint codes and advisories are reported on their fields, from the YAML itself, and the bundled Tide catalog, regenerated from the opentide that models the block, knows `configurations.exabeam` (its keys, `status`, and the threshold and outcome values) ([#243](https://github.com/opentidehq/language-server/pull/243)):
+  - Errors: `exabeam_sequences`, `exabeam_correlation`, `exabeam_threshold_function`, `exabeam_threshold_operator`, `exabeam_threshold_value`, `exabeam_group_by`, `exabeam_duration`, `exabeam_severity`, `exabeam_outcome`, `exabeam_email`, `exabeam_schedule`, `exabeam_name_length`, `exabeam_context_table_trigger`, and `exabeam_name_duplicate` across the workspace
+  - Warnings: `exabeam_outcome_silent`, `exabeam_correlation_window`
+- **Exabeam queries are highlighted.** Semantic tokens follow the spec's highlight table with the existing captures; `highlights/generated/exabeam.tmLanguage.json` (`source.exabeam`) is the TextMate grammar, and the Neovim, Helix, Zed and `@opentide/lsp-client` samples map `.exabeam` to `exabeam` ([#243](https://github.com/opentidehq/language-server/pull/243)).
+
+## [0.14.0] - 2026-11-12
+
+Graylog support: Graylog queries and `configurations.graylog` blocks are checked as you type.
+
+### Added
+
+- **Graylog queries are checked in a Graylog dialect of Lucene.** `configurations.graylog.query`, hunts with `system: graylog` and `opentide-lsp analyze --platform graylog` get Elastic's Lucene checks without the ECS and Kibana KQL advice, plus graylog-1.1's seven codes. Hover and completion offer Graylog's message fields and `_exists_` (`docs/LANGUAGE.md`) ([#242](https://github.com/opentidehq/language-server/pull/242)).
+  - Errors: `graylog_leading_wildcard` (opentide drops it for a tenant that allows leading wildcards), `graylog_regex_unsupported`, `graylog_open_range` (a `*` range bound, which Graylog's validator refuses)
+  - Warnings: `graylog_regex_operator`, `graylog_regex_quote`, `graylog_double_backslash`, `graylog_analyzed_field`
+- **The bundled Tide catalog knows the `configurations.graylog` block.** It is regenerated from opentide's Graylog models, so `opentide-lsp` run on its own and `opentide validate` agree on Graylog blocks, and the Tide TextMate grammar highlights their keys ([#242](https://github.com/opentidehq/language-server/pull/242)).
+- **Graylog blocks (`configurations.graylog`) are checked as graylog-1.0 says.** The block's constraint codes and `graylog_overlapping_window` (warning) are reported on their fields, so the editor and `opentide validate` agree; `aggregation.condition` gets completion and hover for Graylog's 12 aggregation functions. `graylog_all_streams` and `graylog_title_duplicate` stay opentide's ([#242](https://github.com/opentidehq/language-server/pull/242)).
+  - Errors: `graylog_query_blank`, `graylog_list_shape`, `graylog_schedule` (a Quartz cron as Graylog reads it, an IANA `timezone`), `graylog_event_limit`, `graylog_aggregation` (the condition grammar, nesting at most 32 deep), `graylog_event_field`, `graylog_event_key`, `graylog_priority`, `graylog_field_name`
+  - `opentide_tide::graylog::compile_condition` compiles a condition into Graylog's series and condition tree
+
+## [0.13.0] - 2026-11-11
+
+YARA support: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as you type. Bitdefender GravityZone rules are checked too.
+
+### Upgrade
+
+- If you build the engine crates or `opentide-lsp` from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates need ([#165](https://github.com/opentidehq/language-server/issues/165)).
+
+### Added
+
+- **`.yar` and `.yara` files are YARA, language id `yara`.** `opentide explain` knows every code of the YARA language spec and its HarfangLab and Bitdefender profiles, listed in `docs/YARA.md`, and describes each as yara-1.0 1.3 defines it: `yara_rule_identifier_conflict` is a rule named like a keyword or matching an earlier rule wildcard, not one named like an imported module, which is `yara_x_incompatible` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **YARA signatures are checked as libyara 4.5 compiles them.** Every error and warning of the YARA language spec is reported: undefined and unreferenced strings, unknown and unimported modules, module members and function arguments against a catalogue of the 13 modules, types, regular expressions, hex strings, string modifiers and numeric limits, and libyara's own warnings (slow strings, `entrypoint`, suspicious expressions). What only YARA-X refuses is the warning `yara_x_incompatible`, and YARA-X-only syntax is an error that names the feature. `docs/YARA.md` maps each code to its libyara source ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **YARA in HarfangLab and Bitdefender blocks is checked.** `configurations.harfanglab.yara.signature` and `configurations.bitdefender.yara.signature` are analysed under each platform's profile, and HarfangLab's `strings`, `condition` and `imports` as the one rule deploy assembles, each finding at the line it is written. The block's codes are reported: `harfanglab_rule_kind`, `harfanglab_yara_form`, `harfanglab_yara_section_header`, `harfanglab_yara_import`, `harfanglab_yara_rule_name` and `yara_signature_alias` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **YARA editing: hover, completion, signature help, outline, folding, go to definition, references, rename and formatting.** Hover and completion know every member of the 13 modules; definition, references and rename follow strings within a rule and rules across a signature, and a rename in a HarfangLab block edits `strings` and `condition` together. `.yar` files format with `yara-x-fmt`. The server advertises `renameProvider` (with `prepareRename`) and `documentFormattingProvider` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **YARA is highlighted.** Semantic tokens colour rules, tags, meta keys, strings and their counts and offsets, modules and their functions; `highlights/generated/yara.tmLanguage.json` (`source.opentide.yara`) is the TextMate grammar, and the Neovim, Helix, Zed and `@opentide/lsp-client` samples map `.yar` and `.yara` to `yara` ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **HarfangLab's decomposed YARA is checked as deploy writes it, and no finding is lost.** The rule is assembled with every meta line `compile_yara_deployment` writes, so a `"` in a value deploy writes raw (`references`, `tags`, `arch`, `context`, `os`) or a context HarfangLab does not know is reported on that value. A condition or strings cut short (`$a and`, an unclosed hex string, `condition: ""`) is an error in its field, where it was silently dropped. A `rule` inside a comment is not a section header. Tags, contexts and imports are read as deploy's YAML loader reads them: comments in a flow list, a plain item over two lines, an empty item and a block-scalar item. Any identifier but a string's past libyara's 128 characters, a module used above its `import`, `.len()` (YARA-X only) and invariant comparisons (`1 == 1`, `filesize < 0`) are reported, and a rule named like an imported module is `yara_x_incompatible`, as libyara accepts it. A module predicate YARA-X types as boolean (`pe.is_dll()`) is no longer a non-boolean condition; where YARA-X needs a number (arithmetic, an ordering, `!=`, a float comparison, an offset, an index, a range bound, a quantifier, an enumeration among integers, a function argument no YARA-X overload takes a boolean for) one is `yara_x_incompatible`. A finding on an expression covers it as written, from the module of a method call (`pe.is_dll() == 1`), with its parentheses. A loop variable an enclosing loop already binds, or one a loop names twice (`for any k, k in …`), is `yara_undefined_identifier`, as libyara refuses it. An integer compared with a boolean, or a non-boolean operand of `and`, `or`, `not` or a `for` body, is `yara_suspicious_expression`; the operand of `defined` is not. A module field called as a function (`pe.number_of_sections(0)`) and a module function used without a call (`pe.imphash`) are `yara_undefined_identifier`, as libyara refuses them. A jump bound of 2^63 or more is refused as libyara refuses it, and `pe.signatures[0].valid_on(0)` is no longer an undefined identifier ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **YARA verdicts are held to libyara and YARA-X.** 1,762 cases from both projects' own test suites, 50 public rule files from ReversingLabs and signature-base with a broken twin each, and a CI oracle against `yara-python` 4.5.4 and the `yara-x` 1.23.0 wheel: an error exactly where libyara refuses, and `yara_x_incompatible` exactly where YARA-X refuses what libyara compiles. Four known differences are listed in `docs/YARA.md`. Neither reference ships ([#165](https://github.com/opentidehq/language-server/issues/165)).
+- **Bitdefender GravityZone rules (`configurations.bitdefender`) are checked as bitdefender-1.0 says.** The block's constraint codes and advisories are reported on their fields, so the editor and `opentide validate` agree; `bitdefender_name_duplicate` stays a workspace check in opentide ([#226](https://github.com/opentidehq/language-server/issues/226)).
+  - Errors: `bitdefender_rule_kind`, `bitdefender_target`, `bitdefender_criterion_shape`, `bitdefender_criterion_relation`, `bitdefender_criterion_value`, `bitdefender_criteria_combination`, `bitdefender_action_scope`, `bitdefender_targets_shape`, `bitdefender_severity` (`bitdefender_yara_ascii` and `bitdefender_yara_size` come from the YARA checks above)
+  - `bitdefender_criterion_field`: an error on `process`, `file`, `connection` and `registry`, a warning on the XDR targets
+  - Warnings: `bitdefender_registry_full_hive`, `bitdefender_contains_no_wildcard`, `bitdefender_severity_collapsed`
+  - Completion and hover for `detection.target`, each target's criteria fields, the relations `is`, `contains` and `any`, enumerated values, and `actions`, from GravityZone's criteria catalogue (`catalogs/bitdefender/criteria.toml`, `scripts/sync_bitdefender_criteria.py`)
+
+### Changed
+
+- **The bundled Tide catalog knows `configurations.harfanglab.yara.signature` and the `configurations.bitdefender` block.** It is regenerated from opentide's models, so `opentide-lsp` run on its own and `opentide validate` agree on HarfangLab and Bitdefender blocks, and the Tide TextMate grammar highlights their keys ([#236](https://github.com/opentidehq/language-server/pull/236), [#239](https://github.com/opentidehq/language-server/pull/239)).
+
+### Fixed
+
+- **A large injected query no longer takes time in the square of its size.** Every semantic token and finding of a query in a Tide object, and every symbol of a `.yar` file, was positioned by scanning the text from its start: a rule with a 1 MB YARA signature took about 280 s to analyse and now takes about 1 s, with the same output. KQL, SPL, Falco and every other injected language share the path ([#238](https://github.com/opentidehq/language-server/pull/238)).
+
+## [0.12.1] - 2026-11-09
+
+Fixes a false unknown-key warning on a Splunk block's `advanced` table.
+
+### Fixed
+
+- **`configurations.splunk.advanced` is a field again.** The Tide catalog follows opentide, which accepts again the table of raw `savedsearches.conf` keys (a custom alert action's `action.<name>.param.*`) that opentide 0.21.0 refused, so `opentide-lsp` run on its own no longer reports it as an unknown key. As in opentide 0.20.1, it is accepted, not completed.
 
 ## [0.12.0] - 2026-11-08
 
@@ -728,6 +818,11 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.16.0]: https://github.com/opentidehq/language-server/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/opentidehq/language-server/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/opentidehq/language-server/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/opentidehq/language-server/compare/v0.12.1...v0.13.0
+[0.12.1]: https://github.com/opentidehq/language-server/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/opentidehq/language-server/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0

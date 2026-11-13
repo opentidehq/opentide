@@ -10,13 +10,17 @@ CI-only checks that compare the opentide engine with the parser each query langu
 | EQL | Elasticsearch `EqlBase.g4` at `2c85bbdf`, generated with antlr-ng 1.0.10 (the grammar has no actions) | `elastic/eql.mjs` | `oracle.yml` → Elastic and Lucene |
 | Kibana KQL (`kuery`) | Kibana `grammar.peggy` at `ea2712af`, compiled with peggy 5.1.1 | `elastic/kuery.cjs` | `oracle.yml` → Elastic and Lucene |
 | Lucene | Lucene 10.5.2 `QueryParser` (the version Elasticsearch pins), leading wildcards on | `elastic/LuceneOracle.java` | `oracle.yml` → Elastic and Lucene |
+| Lucene, Graylog | Graylog 7.2.2 and 6.3.5 `POST /api/search/validate` (`status` OK, WARNING or ERROR) | `graylog/probes.py`, with `OPENTIDE_GRAYLOG_URLS` (comma-separated base URLs), `OPENTIDE_GRAYLOG_USER` and `OPENTIDE_GRAYLOG_PASSWORD`; it records `testdata/oracles/graylog/expected.tsv` (`--write`) or compares with it | locally; `crates/opentide-lucene/tests/graylog_verdicts.rs` holds the Graylog dialect to the recorded verdicts in `cargo test`, with its exceptions listed there |
 | Lucene, Carbon Black Cloud | A Carbon Black Cloud tenant's `processes/search_validation` (`valid`, `invalid_message`, `error_offset`), as cbc_sdk's `validate_process_query` calls it | `oracle.py carbon_black`, with `OPENTIDE_CBC_URL`, `OPENTIDE_CBC_ORG_KEY` and `OPENTIDE_CBC_TOKEN` (`<api secret>/<api id>`, `org.search.events` READ) | `oracle.yml` → Carbon Black Cloud, weekly and on demand; it skips without the secrets and never runs on a pull request |
 | Falco | `falco --validate`: Falco 0.45.2 (libs 0.26.1), `falcosecurity/falco:0.45.2`, with the three default rules files of `falcosecurity/rules@e7b066bf` loaded | `falco/oracle.py`, one Falco process per case in one container | `oracle.yml` → Falco 0.45.2; see [Falco](#falco) |
 | CQL (CrowdStrike) | None in CI. CQL is closed source: there is no parser to port, LogScale self-hosted needs a licence key and Kafka, and Community Edition sign-up closed in 2024. A tenant is the only reference: LogScale's GraphQL `validateQuery` (diagnostics without positions), or a Next-Gen SIEM query job that fails with HTTP 400 | — | the engine follows CrowdStrike's published grammar and function reference, measured on 2,846 public queries; see [docs/engine/CQL.md](../../../docs/engine/CQL.md) |
+| Exabeam Query Language | None in CI. Exabeam's search language is closed source: Exabeam publishes no grammar and no parser, and the only reference is a tenant's Search API (`POST /search/v2/events`, which `opentide validate query --live` calls). The specification's reference checker (`scripts/engine/exabeam_language.py` in opentidehq/specifications) stands in: its verdicts on every conformance query are recorded in `crates/testdata/conformance/exabeam/reference.json` (`scripts/engine/sync_exabeam_conformance.py`) and held by `cargo test` | — | measured on Exabeam's 2,371 published correlation rules, which may not be redistributed; see [docs/engine/EXABEAM.md](../../../docs/engine/EXABEAM.md) |
+| YARA | libyara 4.5.4 (`yara-python` 4.5.4: `yara.compile`, warnings by `error_on_warning`) and YARA-X 1.23.0 (the `yara-x` wheel: `Compiler.add_source`, `build`) | `yara/oracle.py`, each verdict in a child process with 2 GB and 20 s | `oracle.yml` → libyara and YARA-X; see [YARA](#yara) |
+| YARA-L (Google SecOps) | None offline. Google publishes no grammar, compiler or reference parser for YARA-L; the only reference is a tenant's `verifyRuleText` (Chronicle API v1, `POST <endpoint>/v1/projects/<p>/locations/<l>/instances/<i>:verifyRuleText`, permission `chronicle.rules.verifyRuleText`), which compiles a rule without creating it | — | none yet; see [YARA-L](#yara-l). The engine follows yara-l-1.0 and Google's pages, measured on chronicle/detection-rules' 410 community rules ([docs/engine/YARAL.md](../../../docs/engine/YARAL.md)) |
 | Tide YAML | Pydantic models of this repository's `opentide` package (`src/opentide`) | `scripts/engine/pydantic_object_issues.py` | `ci.yml`, job `engine` (`cargo test`, `tide_corpus.rs`) |
 | EQL, ES\|QL, Lucene | A live Elasticsearch (8.19 and 9.x release images) | `elasticsearch/`, a throwaway container | `oracle.yml` (8.19.23 and 9.5.5), and locally for the other lines; see [Live Elasticsearch](#live-elasticsearch) |
 
-Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydantic models and requires the LSP to report every issue they find. Configuration TOML gets the same treatment in `#68`. The Elastic references are fetched at CI time: the npm packages from `elastic/package-lock.json` (`npm ci --ignore-scripts`), and `EqlBase.g4`, `grammar.peggy`, and the Lucene jars by URL with a pinned SHA-256 (`FETCH` in `oracle.py`), cached in `elastic/.cache/`. None of them is committed. CQL has none (its row above says why). Later languages (S1QL, Sigma, YARA) get an oracle when they get an engine; see `.agents/skills/add-language/SKILL.md`.
+Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydantic models and requires the LSP to report every issue they find. Configuration TOML gets the same treatment in `#68`. The Elastic references are fetched at CI time: the npm packages from `elastic/package-lock.json` (`npm ci --ignore-scripts`), and `EqlBase.g4`, `grammar.peggy`, and the Lucene jars by URL with a pinned SHA-256 (`FETCH` in `oracle.py`), cached in `elastic/.cache/`. None of them is committed. CQL and the Exabeam Query Language have none (their rows above say why). Later languages (S1QL, Sigma) get an oracle when they get an engine; see `.agents/skills/add-language/SKILL.md`.
 
 ## What is compared
 
@@ -91,7 +95,7 @@ Nothing from this reference is shipped or vendored; the image is pulled at run t
 
 ## Not shipped
 
-Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and the engine release (`.github/workflows/engine-release-build.yml`, also run as ci.yml's dry run in its full set and on a pull request that changes the release's inputs) runs `scripts/engine/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.
+Kusto.Language, Splunk, Splunk SDKs, the Elastic and Lucene references, the `yara-x` compiler crate and `yara-python` never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and the engine release (`.github/workflows/engine-release-build.yml`, also run as ci.yml's dry run in its full set and on a pull request that changes the release's inputs) runs `scripts/engine/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.
 
 ## Falco
 
@@ -106,3 +110,26 @@ Pins: Falco `0.45.2` (the `falcosecurity/falco` image), rules `falcosecurity/rul
 ```bash
 python scripts/engine/oracles/falco/oracle.py --rules ../falcosecurity-rules --docker falcosecurity/falco:0.45.2 --report report.json
 ```
+
+## YARA
+
+`yara/oracle.py` makes two checks, with the pins `yara-python==4.5.4` and `yara-x==1.23.0` (it refuses other versions):
+
+1. Every verdict recorded in `crates/testdata/conformance/yara/cases.json` (1,762 cases from YARA-X's `lib/src/tests/mod.rs` and compiler `errors`/`warnings` suites, and libyara's `tests/test-rules.c`, written by `scripts/engine/sync_yara_conformance.py`) is what the live engines say. `crates/opentide-yara/tests/conformance.rs` holds the engine to those verdicts in every `cargo test`, so the oracle only keeps them honest.
+2. Every YARA file of the repository (`crates/testdata/corpus/yara`, `crates/testdata/conformance/external/yara` with its `.broken.` twins, YARA-X's parser suite in `crates/testdata/conformance/yara-x/parser`) goes through `opentide-lsp analyze --language yara` and both references.
+
+A file agrees when the engine reports an error exactly when libyara refuses it (`yara_empty_signature` aside: libyara compiles a file of private rules), and reports `yara_x_incompatible` (or `yara_entrypoint_deprecated`) exactly when libyara compiles it and YARA-X refuses it. A disagreement fails unless a `[[yara]]` entry of `crates/testdata/oracles/exceptions.toml` lists it, with `check` naming the verdict that differs (`libyara`, `yara_x` or `both`); `conformance.rs` reads the entries whose paths are `cases.json#<origin>`. A listed path that agrees fails too. The four entries are an unterminated `/*` (libyara drops the rest of the text silently), a case libyara runs out of memory on, YARA-X's regexp size limit, and libyara's test-only `tests` module.
+
+Neither package ships: `scripts/engine/ci-oracle.sh` refuses the `yara-x` compiler crate (and its `wasmtime`) or `yara-python` in a shipped manifest, and `scripts/engine/license-scan.sh` in a release artifact. The engine parses with `yara-x-parser`, which is not the compiler.
+
+```bash
+pip install yara-python==4.5.4 yara-x==1.23.0
+cargo build -p opentide-lsp
+python3 scripts/engine/oracles/yara/oracle.py --report report.json
+```
+
+## YARA-L
+
+There is no offline reference. Google SecOps compiles YARA-L only in a tenant, and its documentation has no grammar. The checks the engine makes are the ones yara-l-1.0 derives from Google's pages; Google's community rules (chronicle/detection-rules, `crates/testdata/conformance/external/yaral/`) stand in for verdicts: a rule Google publishes is taken to compile, and each `.broken.` twin carries a fault Google's pages say the compiler refuses.
+
+An opt-in tenant job is the planned reference, as the Carbon Black Cloud job is: a `yaral` mode in `oracle.py`, run weekly and on demand by `oracle.yml` only when a sandbox tenant's secrets are set, never on a pull request. It would send each rule of the corpus (the community rules, their twins, the `rule` fixtures under `crates/testdata/corpus/yaral/`, and every Google SecOps block of a Tide rule under `crates/testdata/`, assembled as deploy assembles it) to `verifyRuleText` and compare: the tenant rejects a rule when the response has no `success: true` or holds a diagnostic with `severity: ERROR`; ours rejects it on an error-severity `yaral_*` code. Every disagreement would be a `[[yaral]]` entry of `exceptions.toml`. Searches would go through `validateQuery`. The job needs, as secrets of the workflow and never in the repository: `OPENTIDE_SECOPS_ENDPOINT` (`https://<location>-chronicle.googleapis.com`), `OPENTIDE_SECOPS_INSTANCE` (`projects/<project>/locations/<location>/instances/<customer id>`), and a service-account key with only `chronicle.rules.verifyRuleText` (and `chronicle.events.validateQuery`) on a sandbox instance. A tenant resolves reference lists and data tables, which the offline check cannot: the job's rules must use none, or the sandbox must define them. No credential is shipped, and the job is not wired yet.

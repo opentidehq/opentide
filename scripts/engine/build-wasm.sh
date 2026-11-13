@@ -63,7 +63,10 @@ for target in "${targets[@]}"; do
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
         cargo build --release -p opentide-lsp --target wasm32-wasip1
-      node "$root/scripts/engine/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+      # Node 22's fast WASI calls (fd_write, path_open) can start a garbage
+      # collection inside the call, which segfaults once the instance holds
+      # enough memory; the lsp-client wasi transport documents the same flag.
+      node --no-turbo-fast-api-calls "$root/scripts/engine/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
     clippy)
       rustup target add wasm32-unknown-unknown wasm32-wasip1 >/dev/null
       CC_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/clang" \

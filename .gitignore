@@ -149,3 +149,6 @@ highlights/test/node_modules
 # cargo-mutants output (.cargo/mutants.toml)
 /mutants.out/
 /mutants.out.old/
+
+# The YARA module generator's own build (scripts/engine/yara-modules)
+/scripts/engine/yara-modules/target/

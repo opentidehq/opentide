@@ -5,7 +5,7 @@ description: "The query languages the engine knows, with each language's grammar
 
 # Languages
 
-SQL is out of scope. There is no `opentide-sql`.
+SQL is out of scope. There is no `opentide-sql`. (Exabeam's SQL-like advanced operators are part of the specified `exabeam` language, not a SQL dialect: see [Exabeam](#exabeam).)
 
 ## KQL
 
@@ -257,6 +257,16 @@ Engine checks below the grammar (Elastic dialect unless noted):
   - `cbc_unknown_field` (warning) names a field within two edits of a catalog field and suggests it (`process_nmae` → `process_name`). A field far from every catalog field is left alone: the catalog may lack it.
   - Hover shows a field's type and description, and completion offers the catalog's fields, or a field's values after `field:`. ECS fields are never offered: they are Elastic's. A raw `.lucene` file keeps the Elastic behaviour; `opentide-lsp analyze --platform carbon_black_cloud` checks one in the Carbon Black dialect.
   - Which fields Carbon Black tokenizes is not in the catalog (Carbon Black documents it only on developer.carbonblack.com), so the upper-case regexp hint still fires on every field.
+- Graylog (`configurations.graylog.query`, [graylog-1.0](https://github.com/opentidehq/specifications/blob/main/specs/platforms/graylog-1.0.md)): Graylog sends the query to OpenSearch or Elasticsearch `query_string` unchanged, so every Elastic check above applies, without the ECS checks and `lucene_looks_like_kuery`. Graylog's validator compiles every regexp, so a regexp Lucene rejects is an error with or without a field. The dialect adds:
+  - `graylog_leading_wildcard` (error): a term that starts with `*` or `?` (`Image:*cmd.exe`, `x:*`, `*`). Graylog refuses it while `allow_leading_wildcard_searches` is off, its default; a regexp with a leading `.*` is the portable form, and `_exists_:f` replaces `f:*`. The engine always reports it; opentide drops it for a tenant that sets `allow_leading_wildcard`.
+  - `graylog_regex_unsupported` (error): PCRE syntax Lucene does not have: an inline flag or `(?…)` group (`(?i)`, `(?:`), a lookaround, a backreference (`\1`), `\b`, `\B`. Graylog matches nothing, or refuses `\b` and `\B`. It replaces the `(?…)` advice of `lucene_regexp`, so a construct is reported once.
+  - `graylog_open_range` (error): `*` as a range bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition; the message gives the rewrite (`bytes:>=1`, `bytes:<5`, `_exists_:bytes`).
+  - `graylog_regex_operator` (warning): an unescaped `#`, `&`, `@`, `~`, `<`, or `>` in a regexp (`@` is "any string": `/.*@contoso\.com/` also matches `alicecontoso.com`), outside a class, a quoted literal, and a numeric interval `<n-m>`: Lucene reads it as an operator, and Graylog's validator says OK.
+  - `graylog_regex_quote` (warning): a quoted literal (`"…"`) in a regexp. An unpaired `"` is the `lucene_regexp` error.
+  - `graylog_double_backslash` (warning): four backslashes in a row. `\\` is already one literal backslash in a Graylog query.
+  - `graylog_analyzed_field` (warning): a regexp, wildcard, or range on `message` or `full_message`, which Graylog tokenises.
+  - Hover and completion know Graylog's message fields (`message`, `full_message`, `source`, `timestamp`, `streams`, `gl2_source_input`, `gl2_source_node`, `gl2_message_id`) and `_exists_`, and offer no ECS field. `opentide-lsp analyze --platform graylog` checks a `.lucene` file in the Graylog dialect.
+  - `testdata/oracles/graylog/` holds probes with the verdicts of Graylog 7.2.2 and 6.3.5's `POST /api/search/validate` (`scripts/oracles/graylog/probes.py`); `crates/opentide-lucene/tests/graylog_verdicts.rs` holds the dialect to them: an error exactly where Graylog says ERROR, except the silent failures above and two validator gaps it lists.
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |
@@ -369,3 +379,151 @@ Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike'
 | cql.link-constraint | `link_constraint` | `link_constraint__valid`, `link_constraint__invalid` | `property`, `operator` |
 | cql.line-comment | `line_comment` | `line_comment__valid`, `line_comment__invalid` | `comment` |
 | cql.block-comment | `block_comment` | `block_comment__valid`, `block_comment__invalid` | `comment` |
+
+
+## Exabeam
+
+Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-Scale SIEM ([exabeam-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md)): `configurations.exabeam.sequences[].query` (profile `rule`), hunts with `system: exabeam` and `.exabeam` files (profile `search`). Exabeam's guides call it "EQL"; the id is never `eql`, which is Elastic's. `docs/EXABEAM.md` has the profiles, the codes and the conformance results.
+
+- **Verdicts** come from `crates/opentide-exabeam/src/check.rs`, a port of the specification's reference checker, which agrees with it on every conformance query and on Exabeam's 2,371 published rules but for three RE2 differences (`docs/EXABEAM.md`).
+- **The tree-sitter grammar** (`grammars/tree-sitter-opentide-exabeam`) colours and structures the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query but one, listed in `tests/reference.rs`.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| exabeam.statement | `statement` | `statement__valid`, `statement__invalid` | by clause |
+| exabeam.foreach | `foreach_statement` | `foreach_statement__valid`, `foreach_statement__invalid` | `keyword`, `property` |
+| exabeam.select | `select_clause` | `select_clause__valid`, `select_clause__invalid` | `keyword` |
+| exabeam.column | `column` | `column__valid`, `column__invalid` | `property`, `operator` (`*`), `variable` (alias) |
+| exabeam.aggregate | `aggregate` | `aggregate__valid`, `aggregate__invalid` | `function.builtin`, `error` (unknown) |
+| exabeam.from | `from_clause` | `from_clause__valid`, `from_clause__invalid` | `keyword`, `type` |
+| exabeam.where | `where_clause` | `where_clause__valid`, `where_clause__invalid` | `keyword` |
+| exabeam.as | `as_clause` | `as_clause__valid`, `as_clause__invalid` | `keyword`, `type` |
+| exabeam.group-by | `group_by_clause` | `group_by_clause__valid`, `group_by_clause__invalid` | `keyword`, `property` |
+| exabeam.order-by | `order_by_clause` | `order_by_clause__valid`, `order_by_clause__invalid` | `keyword`, `property` |
+| exabeam.limit | `limit_clause` | `limit_clause__valid`, `limit_clause__invalid` | `keyword`, `number` |
+| exabeam.or | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| exabeam.and | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| exabeam.not | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| exabeam.group | `group` | `group__valid`, `group__invalid` | `punctuation.bracket` |
+| exabeam.field-term | `field_term` | `field_term__valid`, `field_term__invalid` | `property`, `operator`, by value; `error` (`!=`) |
+| exabeam.context-term | `context_term` | `context_term__valid`, `context_term__invalid` | `property`, `keyword`, `type`, `punctuation.delimiter` |
+| exabeam.call | `call` | `call__valid`, `call__invalid` | `function.builtin`, `error` (unknown, non-string argument) |
+| exabeam.free-text | `free_text` | `free_text__valid`, `free_text__invalid` | `string`, `error` (bare `*`) |
+| exabeam.list | `list` | `list__valid`, `list__invalid` | `punctuation.bracket`, by value |
+| exabeam.range | `range` | `range__valid`, `range__invalid` | `keyword` (`TO`), `number`, `constant` |
+| exabeam.pipe | `"\|"` | `foreach_statement__valid` | `operator.pipe` |
+
+## YARA
+
+Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md)): HarfangLab and Bitdefender `yara` blocks. `docs/YARA.md` has the codes.
+
+- **Verdicts** come from VirusTotal's `yara-x-parser` (`crates/opentide-yara`), not from this grammar.
+- **The tree-sitter grammar** (`grammars/tree-sitter-opentide-yara`) colours and structures the text. It is written from libyara's `grammar.y`, `lexer.l` and `hex_grammar.y`, with their precedence: `expression` (booleans, comparisons, `of`, `for`) over `primary_expression` (arithmetic, string counts and offsets, module references). `\` is division, so `/` always opens a regexp.
+- **Agreement**: `crates/opentide-yara/tests/tree_sitter_agreement.rs` runs both parsers over yara-x-parser's own 71 inputs and this corpus. They agree on every input but eight, each listed with its reason. Five are YARA-X-only syntax (`with`, digit separators, float meta and `"""` strings, booleans in `of` tuples), which the grammar refuses as libyara does. Three are libyara syntax that YARA-X refuses (an escape in a `base64` alphabet, rule wildcards in `of`).
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| yara.comment | `comment` | `comment__valid`, `comment__invalid` | `comment` |
+| yara.import | `import` | `import__valid`, `import__invalid` | `keyword`, `string` |
+| yara.include | `include` | `include__valid`, `include__invalid` | `keyword`, `string` |
+| yara.rule | `rule` | `rule__valid`, `rule__invalid` | `keyword`, `type` |
+| yara.rule-modifier | `rule_modifier` | `rule_modifier__valid`, `rule_modifier__invalid` | `keyword` |
+| yara.tags | `tags` | `tags__valid`, `tags__invalid` | `punctuation.delimiter`, `constant` |
+| yara.meta-section | `meta_section` | `meta_section__valid`, `meta_section__invalid` | `keyword` |
+| yara.meta-definition | `meta_definition` | `meta_definition__valid`, `meta_definition__invalid` | `property`, `operator` |
+| yara.negative-integer | `negative_integer` | `negative_integer__valid`, `negative_integer__invalid` | `operator`, `number` |
+| yara.strings-section | `strings_section` | `strings_section__valid`, `strings_section__invalid` | `keyword` |
+| yara.string-definition | `string_definition` | `string_definition__valid`, `string_definition__invalid` | `variable`, `operator` |
+| yara.string-modifier | `string_modifier` | `string_modifier__valid`, `string_modifier__invalid` | `keyword` |
+| yara.xor-modifier | `xor_modifier` | `xor_modifier__valid`, `xor_modifier__invalid` | `keyword`, `number` |
+| yara.base64-modifier | `base64_modifier` | `base64_modifier__valid`, `base64_modifier__invalid` | `keyword`, `string` |
+| yara.hex-string | `hex_string` | `hex_string__valid`, `hex_string__invalid` | `punctuation.bracket`, `number` |
+| yara.hex-not | `hex_not` | `hex_not__valid`, `hex_not__invalid` | `operator`, `number` |
+| yara.hex-jump | `hex_jump` | `hex_jump__valid`, `hex_jump__invalid` | `punctuation.bracket`, `number` |
+| yara.hex-alternative | `hex_alternative` | `hex_alternative__valid`, `hex_alternative__invalid` | `punctuation.bracket`, `operator` |
+| yara.condition-section | `condition_section` | `condition_section__valid`, `condition_section__invalid` | `keyword` |
+| yara.filesize | `filesize` | `filesize__valid`, `filesize__invalid` | `constant` |
+| yara.entrypoint | `entrypoint` | `entrypoint__valid`, `entrypoint__invalid` | `constant` |
+| yara.parenthesized-expression | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| yara.parenthesized-primary | `parenthesized_primary` | `parenthesized_primary__valid`, `parenthesized_primary__invalid` | `punctuation.bracket` |
+| yara.not-expression | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| yara.and-expression | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| yara.or-expression | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| yara.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | `operator`, `keyword` |
+| yara.unary-expression | `unary_expression` | `unary_expression__valid`, `unary_expression__invalid` | `operator` |
+| yara.arithmetic-expression | `arithmetic_expression` | `arithmetic_expression__valid`, `arithmetic_expression__invalid` | `operator` |
+| yara.string-count-in-range | `string_count_in_range` | `string_count_in_range__valid`, `string_count_in_range__invalid` | `variable`, `keyword` |
+| yara.indexed-string | `indexed_string` | `indexed_string__valid`, `indexed_string__invalid` | `variable`, `punctuation.bracket` |
+| yara.member-expression | `member_expression` | `member_expression__valid`, `member_expression__invalid` | `type` (module), `property` |
+| yara.index-expression | `index_expression` | `index_expression__valid`, `index_expression__invalid` | `punctuation.bracket` |
+| yara.call-expression | `call_expression` | `call_expression__valid`, `call_expression__invalid` | `function.builtin` (`uint16`…), `function` |
+| yara.string-match | `string_match` | `string_match__valid`, `string_match__invalid` | `variable`, `keyword` |
+| yara.range | `range` | `range__valid`, `range__invalid` | `punctuation.bracket`, `operator` |
+| yara.of-expression | `of_expression` | `of_expression__valid`, `of_expression__invalid` | `keyword` |
+| yara.percent-quantifier | `percent_quantifier` | `percent_quantifier__valid`, `percent_quantifier__invalid` | `number`, `operator` |
+| yara.string-set | `string_set` | `string_set__valid`, `string_set__invalid` | `variable` |
+| yara.rule-set | `rule_set` | `rule_set__valid`, `rule_set__invalid` | `type` |
+| yara.for-expression | `for_expression` | `for_expression__valid`, `for_expression__invalid` | `keyword`, `variable` |
+| yara.integer-enumeration | `integer_enumeration` | `integer_enumeration__valid`, `integer_enumeration__invalid` | `number` |
+| yara.rule-wildcard | `rule_wildcard` | `rule_wildcard__valid`, `rule_wildcard__invalid` | `type` |
+| yara.string-wildcard | `string_wildcard` | `string_wildcard__valid`, `string_wildcard__invalid` | `variable` |
+| yara.string-count | `string_count` | `string_count__valid`, `string_count__invalid` | `variable` |
+| yara.string-offset | `string_offset` | `string_offset__valid`, `string_offset__invalid` | `variable` |
+| yara.string-length | `string_length` | `string_length__valid`, `string_length__invalid` | `variable` |
+| yara.float | `float` | `float__valid`, `float__invalid` | `number` |
+| yara.regexp | `regexp` | `regexp__valid`, `regexp__invalid` | `string` |
+
+## YARA-L
+
+Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations ([yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md)): `configurations.google_secops` sections, Google SecOps hunts, and rule files. `docs/YARAL.md` has the codes.
+
+- **The grammar is the verdict parser** (`grammars/tree-sitter-opentide-yaral`, written for the spec: Google publishes none). It parses a rule or a search: sections in any order (the engine reports order and profile), newline-separated predicates as juxtaposed statements, field paths whose `.segment` and `[index]` accessors follow without blanks, so a UDM segment named like a keyword (`network.dhcp.options`) stays a name.
+- **Keywords** are case-insensitive in any mix (`and`, `AND`, `aNd`): each is a token rule matching every spelling (`_kw_and`), aliased to the lower-case node, and the language's keywords are a `reserved` set, so `word` extraction keeps `metadata` an identifier and a keyword is never a name.
+- **Coverage**: every rule of chronicle/detection-rules' `rules/community` (410) parses; `testdata/conformance/external/yaral/` holds 79 of them with fault twins.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| yaral.rule | `rule_declaration` | `rule_declaration__valid`, `rule_declaration__invalid` | `keyword`, `type` |
+| yaral.meta | `meta_section` | `meta_section__valid`, `meta_section__invalid` | `keyword`, `property` |
+| yaral.setup | `setup_section` | `setup_section__valid`, `setup_section__invalid` | `keyword` |
+| yaral.graph-operation | `graph_operation` | `graph_operation__valid`, `graph_operation__invalid` | `keyword` |
+| yaral.events | `events_section` | `events_section__valid`, `events_section__invalid` | `keyword` |
+| yaral.search-events | `search_events` | `search_events__valid`, `search_events__invalid` | `property`, `string` |
+| yaral.search | `search_query` | `search_query__valid`, `search_query__invalid` | `keyword` |
+| yaral.stage | `stage` | `stage__valid`, `stage__invalid` | `keyword`, `type` |
+| yaral.cross-join | `cross_join` | `cross_join__valid`, `cross_join__invalid` | `keyword`, `variable` |
+| yaral.match | `match_section` | `match_section__valid`, `match_section__invalid` | `keyword`, `variable` |
+| yaral.match-window | `match_window` | `match_window__valid`, `match_window__invalid` | `keyword`, `number` |
+| yaral.duration | `duration` | `duration__valid`, `duration__invalid` | `number` |
+| yaral.outcome | `outcome_section` | `outcome_section__valid`, `outcome_section__invalid` | `keyword`, `constant` |
+| yaral.condition | `condition_section` | `condition_section__valid`, `condition_section__invalid` | `keyword`, `variable` |
+| yaral.options | `options_section` | `options_section__valid`, `options_section__invalid` | `keyword`, `property` |
+| yaral.export | `export_section` | `export_section__valid`, `export_section__invalid` | `keyword` |
+| yaral.table-call | `table_call` | `table_call__valid`, `table_call__invalid` | `constant`, `function.builtin` |
+| yaral.named-argument | `named_argument` | `named_argument__valid`, `named_argument__invalid` | `property` |
+| yaral.dedup | `dedup_section` | `dedup_section__valid`, `dedup_section__invalid` | `keyword` |
+| yaral.order | `order_section` | `order_section__valid`, `order_section__invalid` | `keyword` |
+| yaral.limit | `limit_section` | `limit_section__valid`, `limit_section__invalid` | `keyword`, `number` |
+| yaral.select | `select_section` | `select_section__valid`, `select_section__invalid` | `keyword` |
+| yaral.unselect | `unselect_section` | `unselect_section__valid`, `unselect_section__invalid` | `keyword` |
+| yaral.or | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| yaral.and | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| yaral.not | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| yaral.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | `operator`, `keyword` (`nocase`) |
+| yaral.in | `in_expression` | `in_expression__valid`, `in_expression__invalid` | `keyword`, `constant` |
+| yaral.binary | `binary_expression` | `binary_expression__valid`, `binary_expression__invalid` | `operator` |
+| yaral.unary | `unary_expression` | `unary_expression__valid`, `unary_expression__invalid` | `operator` |
+| yaral.of | `of_expression` | `of_expression__valid`, `of_expression__invalid` | `keyword` |
+| yaral.parenthesized | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| yaral.quantified-field | `quantified_field` | `quantified_field__valid`, `quantified_field__invalid` | `keyword` |
+| yaral.udm-field | `udm_field` | `udm_field__valid`, `udm_field__invalid` | `variable`, `property` |
+| yaral.bare-field | `bare_field` | `bare_field__valid`, `bare_field__invalid` | `property` |
+| yaral.index | `index` | `index__valid`, `index__invalid` | `punctuation.bracket`, `string` |
+| yaral.function-call | `function_call` | `function_call__valid`, `function_call__invalid` | `type`, `function.builtin` |
+| yaral.if | `if_expression` | `if_expression__valid`, `if_expression__invalid` | `keyword` |
+| yaral.array | `array` | `array__valid`, `array__invalid` | `punctuation.bracket` |
+| yaral.reference-list | `reference_list` | `reference_list__valid`, `reference_list__invalid` | `constant` |
+| yaral.data-table-column | `data_table_column` | `data_table_column__valid`, `data_table_column__invalid` | `constant`, `property` |
+| yaral.raw-string | `raw_string` | `raw_string__valid`, `raw_string__invalid` | `string` |
+| yaral.regex | `regex` | `regex__valid`, `regex__invalid` | `string` |
+| yaral.comment | `comment` | `comment__valid`, `comment__invalid` | `comment` |

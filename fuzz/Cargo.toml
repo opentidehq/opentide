@@ -86,6 +86,27 @@ doc = false
 bench = false
 
 [[bin]]
+name = "exabeam"
+path = "fuzz_targets/exabeam.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "yara"
+path = "fuzz_targets/yara.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "yaral"
+path = "fuzz_targets/yaral.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "tide"
 path = "fuzz_targets/tide.rs"
 test = false

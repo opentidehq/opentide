@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_yara",
+      "camelcase": "OpentideYara",
+      "scope": "source.yara",
+      "file-types": ["yara"],
+      "highlights": "../../highlights/queries/yara/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

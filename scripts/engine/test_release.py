@@ -662,6 +662,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # build-wasm.sh adds its own targets, but the job states them.
         self.assertEqual(targets_added(jobs["wasm"]), {"wasm32-unknown-unknown", "wasm32-wasip1"})
 
+    def test_native_adds_its_target_to_the_pinned_toolchain(self) -> None:
+        # rust-toolchain.toml pins the compiler, so a target installed for
+        # another toolchain (dtolnay's `targets:` on stable) is not the one
+        # cargo builds with: the cross builds failed with "can't find crate
+        # for `std`" (v0.13.0). The target is added with rustup in the checkout.
+        native = workflow_jobs()["native"]
+        self.assertIn("rustup target add ${{ matrix.target }}", native)
+        self.assertNotRegex(native, r"targets:\s*\$\{\{ matrix\.target \}\}")
+        self.assertLess(native.index("actions/checkout"), native.index("rustup target add"))
+
     def test_the_attest_job_builds_and_runs_nothing(self) -> None:
         attest = workflow_jobs()["attest"]
         steps = attest[attest.index("    steps:") :]

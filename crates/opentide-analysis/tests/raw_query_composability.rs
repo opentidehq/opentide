@@ -220,3 +220,156 @@ fn standalone_cql_matches_tide_crowdstrike_query_unknown_function() {
         )
     );
 }
+
+#[test]
+fn standalone_yara_matches_tide_harfanglab_signature() {
+    let signature = "rule cmd {\n  meta:\n    context = \"file\"\n  strings:\n    $a = \"cmd.exe\"\n  condition:\n    $a and $b\n}";
+    let raw = analyze_raw("signatures/broken.yar", LanguageId::Yara, signature);
+    let raw_d = operator(&raw.diagnostics, codes::YARA_UNDEFINED_STRING);
+    assert!(raw_d.message.contains("$b"), "{}", raw_d.message);
+
+    let body = signature
+        .lines()
+        .map(|line| format!("        {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let yaml = format!(
+        "name: Composability\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\nconfigurations:\n  harfanglab:\n    yara:\n      signature: |\n{body}\n"
+    );
+    let host = MemoryWorkspace {
+        files: vec![("objects/rules/composability-yara.yaml".into(), yaml.clone())],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-yara.yaml",
+        LanguageId::TideYaml,
+        &yaml,
+        &host,
+    );
+    let embedded_d = operator(&embedded.diagnostics, codes::YARA_UNDEFINED_STRING);
+    assert_same_operator(raw_d, embedded_d);
+    assert_eq!(
+        embedded_d.field_path.as_deref(),
+        Some(
+            [
+                "configurations".to_string(),
+                "harfanglab".to_string(),
+                "yara".to_string(),
+                "signature".to_string(),
+            ]
+            .as_slice()
+        )
+    );
+}
+
+/// A `.exabeam` file is a search; the same filter in a correlation-rule
+/// sequence (`configurations.exabeam.sequences[].query`) reports the same
+/// finding, at the query, and a hunt with `system: exabeam` is a search.
+#[test]
+fn standalone_exabeam_matches_tide_exabeam_sequence_and_hunt() {
+    let query = "activity_type:\"process-create\"\nAND process_command_line:contains(\"-enc\")";
+    let raw = analyze_raw("queries/broken.exabeam", LanguageId::Exabeam, query);
+    let raw_op = operator(&raw.diagnostics, codes::EXABEAM_UNKNOWN_FUNCTION);
+    assert!(
+        raw_op.message.contains("WLD(\"*x*\")"),
+        "{}",
+        raw_op.message
+    );
+    assert!(
+        raw.diagnostics
+            .iter()
+            .all(|d| d.code.starts_with("exabeam_"))
+    );
+
+    let body = query
+        .lines()
+        .map(|line| format!("          {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let yaml = format!(
+        "name: Composability\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.1\nresponse:\n  procedure:\n    searches:\n      - system: exabeam\n        query: 'SELECT user WHERE vendor:\"a\" GROUP-BY user'\nconfigurations:\n  exabeam:\n    enabled: true\n    schema: platform::exabeam::1.0\n    status: STAGING\n    sequences:\n      - query: |\n{body}\n      - query: 'SELECT user WHERE vendor:\"a\" GROUP-BY user'\n    correlation:\n      within: 1h\n"
+    );
+    let host = MemoryWorkspace {
+        files: vec![(
+            "objects/rules/composability-exabeam.yaml".into(),
+            yaml.clone(),
+        )],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-exabeam.yaml",
+        LanguageId::TideYaml,
+        &yaml,
+        &host,
+    );
+    let embedded_op = operator(&embedded.diagnostics, codes::EXABEAM_UNKNOWN_FUNCTION);
+    assert_same_operator(raw_op, embedded_op);
+    assert_eq!(
+        embedded_op.field_path.as_deref().map(|p| p.join(".")),
+        Some("configurations.exabeam.sequences.0.query".to_string())
+    );
+    // The second sequence uses the advanced form, which a rule refuses; the
+    // hunt, a search, may.
+    let advanced = operator(&embedded.diagnostics, codes::EXABEAM_ADVANCED_IN_RULE);
+    assert_eq!(
+        advanced.field_path.as_deref().map(|p| p.join(".")),
+        Some("configurations.exabeam.sequences.1.query".to_string())
+    );
+}
+
+#[test]
+fn standalone_yaral_matches_the_google_secops_block() {
+    // The same unknown UDM field, in a `.yaral` file and in the block's
+    // `events`: one finding, with the same message, in its own coordinates.
+    let rule = "rule composability {\n  meta:\n    author = \"opentide\"\n  events:\n    $e.metadata.event_type = \"PROCESS_LAUNCH\"\n    $e.target.process.comand_line = /-enc/ nocase\n  outcome:\n    $risk_score = 10\n  condition:\n    $e\n}\n";
+    let raw = analyze_raw("rules/broken.yaral", LanguageId::Yaral, rule);
+    let raw_d = operator(&raw.diagnostics, codes::YARAL_UNKNOWN_UDM_FIELD);
+    assert!(raw_d.message.contains("comand_line"), "{}", raw_d.message);
+    assert_eq!(raw_d.range.start.line, 5);
+    assert_eq!(raw_d.range.start.character, 22);
+
+    let yaml = "name: Composability\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000099\n  schema: rule::1.0\nconfigurations:\n  google_secops:\n    status: STAGING\n    events: |\n      $e.metadata.event_type = \"PROCESS_LAUNCH\"\n      $e.target.process.comand_line = /-enc/ nocase\n    outcome: |\n      $risk_score = 10\n    condition: |\n      $e\n";
+    let host = MemoryWorkspace {
+        files: vec![(
+            "objects/rules/composability-secops.yaml".into(),
+            yaml.into(),
+        )],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-secops.yaml",
+        LanguageId::TideYaml,
+        yaml,
+        &host,
+    );
+    let embedded_d = operator(&embedded.diagnostics, codes::YARAL_UNKNOWN_UDM_FIELD);
+    assert_same_operator(raw_d, embedded_d);
+    assert_eq!(
+        embedded_d.field_path.as_deref(),
+        Some(
+            [
+                "configurations".to_string(),
+                "google_secops".to_string(),
+                "events".to_string(),
+            ]
+            .as_slice()
+        )
+    );
+    // Line 9 of the object, two columns less than in the file: the block
+    // indents the text by six, the assembled rule by four.
+    assert_eq!(embedded_d.range.start.line, 9);
+    assert_eq!(embedded_d.range.start.character, 24);
+}
+
+#[test]
+fn a_yaral_hunt_is_checked_as_a_search() {
+    let query = "metadata.event_type = \"USER_LOGIN\"\n$user = target.user.userid\nmatch:\n  $user\noutcome:\n  $n = avg(metadata.id)\n";
+    let raw = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+        language: LanguageId::Yaral,
+        platform: Some("google_secops".into()),
+        stack: None,
+        text: query.into(),
+    });
+    assert!(
+        !raw.iter()
+            .any(|d| d.code == codes::YARAL_FUNCTION_UNAVAILABLE),
+        "avg is a search aggregation: {raw:?}"
+    );
+}

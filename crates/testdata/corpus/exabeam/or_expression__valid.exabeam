@@ -1,0 +1,2 @@
+# prod:or_expression valid
+process_name:"wscript.exe" OR process_name:"cscript.exe"
