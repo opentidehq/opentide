@@ -101,7 +101,7 @@ report only.
 
 ## The oracle
 
-[`ORACLE`](ORACLE) names the release (`v0.23.0`, commit `f41fe5e5`), its manylinux x86-64
+[`ORACLE`](ORACLE) names the release (`v0.28.1`, commit `164450af`; 0.23.0 until O2 of the 0.28 catch-up train), its manylinux x86-64
 wheel and the wheel's SHA-256, the CPython it runs on (uv-managed, so every machine runs the same
 build) and the platform. [`oracle-requirements.txt`](oracle-requirements.txt) pins every package
 with its hashes; the opentide line carries the ORACLE wheel's hash alone, so the install fails
