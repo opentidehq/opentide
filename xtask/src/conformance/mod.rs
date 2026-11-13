@@ -30,8 +30,36 @@ pub const VOLATILE: [&str; 3] = ["/duration_ms", "/evaluated_at", "/report/stats
 pub struct Manifest {
     /// The corpora, in the order the report lists them.
     pub corpora: Vec<Corpus>,
+    /// The stand-in tenants a run starts once, for every runner.
+    #[serde(default)]
+    pub stand_ins: Vec<StandIn>,
+    /// The tenants the tenant operations connect to.
+    #[serde(default)]
+    pub tenants: Vec<Tenant>,
     /// The operations each runner runs on each corpus.
     pub operations: Vec<Operation>,
+}
+
+/// A stand-in tenant of the manifest: `tests/cassettes/<name>/tenant.py`, on
+/// loopback, which prints its port on its first line.
+#[derive(Debug, Clone, Deserialize)]
+pub struct StandIn {
+    /// Its folder under `tests/cassettes/`, and the `{<name>}` a tenant's
+    /// setup names its URL by.
+    pub name: String,
+    /// The variables it is started with (the credential it accepts).
+    #[serde(default)]
+    pub environment: std::collections::BTreeMap<String, String>,
+}
+
+/// A tenant of the manifest. The runners read the rest of its fields
+/// (`platform`, `setup`, `environment`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct Tenant {
+    /// Its name, which a tenant operation's `tenant` names.
+    pub name: String,
+    /// Its setup: a `{<stand-in>}` in a value is that stand-in's URL.
+    pub setup: std::collections::BTreeMap<String, String>,
 }
 
 /// A corpus of the manifest.
@@ -58,10 +86,13 @@ pub struct Operation {
     /// The corpora it runs on, by the manifest's names; all when absent.
     #[serde(default)]
     pub corpora: Option<Vec<String>>,
+    /// The tenant a tenant operation runs on, by the manifest's name.
+    #[serde(default)]
+    pub tenant: Option<String>,
 }
 
 /// The calls a runner knows.
-pub const CALLS: [&str; 10] = [
+pub const CALLS: [&str; 15] = [
     "validate",
     "lint",
     "info",
@@ -72,11 +103,20 @@ pub const CALLS: [&str; 10] = [
     "coverage",
     "deploy_plan",
     "run_json",
+    "tenants",
+    "connectors",
+    "query",
+    "validate_query",
+    "deploy",
 ];
+
+/// The calls on a tenant (a `Connection`), each with its `tenant`.
+pub const TENANT_CALLS: [&str; 3] = ["query", "validate_query", "deploy"];
 
 impl Manifest {
     /// Parses and checks the manifest: unique names, known kinds and calls,
-    /// operations restricted to corpora the manifest has.
+    /// operations restricted to corpora the manifest has, tenant operations
+    /// on tenants it has, tenants on stand-ins it has.
     ///
     /// # Errors
     ///
@@ -95,6 +135,28 @@ impl Manifest {
                 other => bail!("corpus `{}`: unknown kind `{other}`", corpus.name),
             }
         }
+        let mut stand_ins = std::collections::BTreeSet::new();
+        for stand_in in &manifest.stand_ins {
+            if !stand_ins.insert(stand_in.name.as_str()) {
+                bail!("stand-in `{}` is listed twice", stand_in.name);
+            }
+        }
+        let mut tenants = std::collections::BTreeSet::new();
+        for tenant in &manifest.tenants {
+            if !tenants.insert(tenant.name.as_str()) {
+                bail!("tenant `{}` is listed twice", tenant.name);
+            }
+            for value in tenant.setup.values() {
+                for named in placeholders(value) {
+                    if !stand_ins.contains(named) {
+                        bail!(
+                            "tenant `{}` names stand-in `{named}`, which the manifest has not",
+                            tenant.name
+                        );
+                    }
+                }
+            }
+        }
         let mut names = std::collections::BTreeSet::new();
         for operation in &manifest.operations {
             if !names.insert(operation.name.as_str()) {
@@ -107,6 +169,23 @@ impl Manifest {
                     operation.call
                 );
             }
+            let on_tenant = TENANT_CALLS.contains(&operation.call.as_str());
+            match (&operation.tenant, on_tenant) {
+                (Some(tenant), true) if !tenants.contains(tenant.as_str()) => bail!(
+                    "operation `{}` names tenant `{tenant}`, which the manifest has not",
+                    operation.name
+                ),
+                (None, true) => bail!(
+                    "operation `{}`: a tenant call needs its tenant",
+                    operation.name
+                ),
+                (Some(_), false) => bail!(
+                    "operation `{}`: only a tenant call ({}) names a tenant",
+                    operation.name,
+                    TENANT_CALLS.join(", ")
+                ),
+                _ => {}
+            }
             for corpus in operation.corpora.iter().flatten() {
                 if !corpora.contains(corpus.as_str()) {
                     bail!(
@@ -118,6 +197,20 @@ impl Manifest {
         }
         Ok(manifest)
     }
+}
+
+/// The stand-ins `value` names, each `{<name>}` in it.
+pub fn placeholders(value: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut rest = value;
+    while let Some(open) = rest.find('{') {
+        let Some(close) = rest[open..].find('}') else {
+            break;
+        };
+        out.push(&rest[open + 1..open + close]);
+        rest = &rest[open + close + 1..];
+    }
+    out
 }
 
 /// The documents a runner writes for the corpora laid out (each a manifest
@@ -421,10 +514,42 @@ mod tests {
                 r#"{"corpora": [], "operations": [{"name": "a", "call": "info"}, {"name": "a", "call": "lint"}]}"#,
                 "listed twice",
             ),
+            (
+                r#"{"corpora": [], "operations": [{"name": "a", "call": "query"}]}"#,
+                "needs its tenant",
+            ),
+            (
+                r#"{"corpora": [], "operations": [{"name": "a", "call": "query", "tenant": "t"}]}"#,
+                "names tenant `t`",
+            ),
+            (
+                r#"{"corpora": [], "tenants": [{"name": "t", "setup": {}}], "operations": [{"name": "a", "call": "info", "tenant": "t"}]}"#,
+                "only a tenant call",
+            ),
+            (
+                r#"{"corpora": [], "tenants": [{"name": "t", "setup": {"url": "{s1}"}}], "operations": []}"#,
+                "names stand-in `s1`",
+            ),
+            (
+                r#"{"corpora": [], "stand_ins": [{"name": "s"}, {"name": "s"}], "operations": []}"#,
+                "stand-in `s` is listed twice",
+            ),
+            (
+                r#"{"corpora": [], "tenants": [{"name": "t", "setup": {}}, {"name": "t", "setup": {}}], "operations": []}"#,
+                "tenant `t` is listed twice",
+            ),
         ] {
             let error = Manifest::parse(text).unwrap_err();
             assert!(format!("{error:#}").contains(message), "{error:#}");
         }
+    }
+
+    #[test]
+    fn a_setup_names_its_stand_ins_by_placeholder() {
+        assert_eq!(placeholders("{sentinel_one}/web"), ["sentinel_one"]);
+        assert_eq!(placeholders("{a}:{b}"), ["a", "b"]);
+        assert!(placeholders("$S1_API_TOKEN").is_empty());
+        assert!(placeholders("{unclosed").is_empty());
     }
 
     #[test]
