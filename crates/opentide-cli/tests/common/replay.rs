@@ -761,37 +761,20 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
             );
         }
     }
-    let mut oracle = Run {
+    let oracle = Run {
         exit_code: i32::try_from(outcome["exit_code"].as_integer().unwrap()).unwrap(),
         stdout: std::fs::read(dir.join("stdout")).unwrap(),
         stderr: std::fs::read(dir.join("stderr")).unwrap(),
         files: recorded_files(dir, &outcome),
     };
-    let mut candidate = Run {
+    let candidate = Run {
         exit_code,
         stdout: stdout.into_bytes(),
         stderr: stderr.into_bytes(),
         files: written,
     };
-    let command = case["command"].as_str().unwrap();
-    // D1 (catch-up plan §4.2): the 0.26.0 documentation redesign rewrites
-    // every generated docs page, and the goldens are still recorded from
-    // opentide 0.23.0 until the oracle moves to 0.28.0 (O2). On the train the
-    // docs-page comparison is report-only — the `golden-compare` CI job runs
-    // it in full — so the in-process goldens drop the pages from both sides
-    // and keep comparing the exit code, stdout, stderr and every other file.
-    // `tests/docs_0_28` holds a `generate docs` port to 0.28.0. Remove this
-    // block when O2 re-records.
-    if command.starts_with("generate") {
-        let is_docs_page = |path: &String| {
-            path.contains("/docs/")
-                && (Path::new(path).extension().is_some_and(|ext| ext == "md")
-                    || path.ends_with("/.order"))
-        };
-        oracle.files.retain(|path, _| !is_docs_page(path));
-        candidate.files.retain(|path, _| !is_docs_page(path));
-    }
     LAST_FILES.with(|last| *last.borrow_mut() = candidate.files.clone());
+    let command = case["command"].as_str().unwrap();
     if let Ok(dump) = std::env::var("OPENTIDE_REPLAY_DUMP") {
         // The candidate's run, for `scripts/golden/ledger_entries.py`.
         let out = Path::new(&dump).join(id);
