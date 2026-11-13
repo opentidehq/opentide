@@ -2,9 +2,9 @@
 
 Internal to opentide, with no stability promise: depend on [`opentide`](https://docs.rs/opentide), the opentide Rust SDK, instead (its `lsp` feature: `opentide::lsp`).
 
-Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), and **Tide YAML** objects.
+Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), **YARA**, the **Exabeam Query Language** (`exabeam`), **YARA-L 2.0** (Google Security Operations), and **Tide YAML** objects.
 
-v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/engine/FALCO.md](../../docs/engine/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/engine/CQL.md](../../docs/engine/CQL.md)). SQL is out of scope. Names use `opentide`, never `otide`.
+v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/engine/FALCO.md](../../docs/engine/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/engine/CQL.md](../../docs/engine/CQL.md)). The Exabeam Query Language covers `configurations.exabeam` (Exabeam New-Scale SIEM correlation rules) and `system: exabeam` hunts, checked as the specification's reference checker checks it, with Exabeam's Common Information Model ([docs/engine/EXABEAM.md](../../docs/engine/EXABEAM.md)). YARA-L covers `configurations.google_secops` and Google SecOps hunts, checked against Google's UDM field list and function reference ([docs/engine/YARAL.md](../../docs/engine/YARAL.md)). SQL is out of scope. Names use `opentide`, never `otide`.
 
 ## Product hierarchy
 
@@ -63,7 +63,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 | `opentide-lsp --stdio` | Serve LSP on stdin and stdout. Exits `0` after `shutdown` then `exit`, `1` when the client exits or closes the stream without `shutdown` |
 | `opentide-lsp --listen <addr>` | Serve LSP to one TCP client (`127.0.0.1:2087`); says where it listens on stderr. Not in the WASI build |
 | `opentide-lsp --version` (`-V`) | Print `opentide-lsp <version>`. With `--json`, print what `initialize` reports in `capabilities.experimental.opentide` ([EDITORS.md](../../docs/engine/EDITORS.md#structure-providers)), without starting a session |
-| `opentide-lsp analyze <file> [--language <id>] [--platform <key>] [--blocks]` | Print the file's diagnostics as a JSON array: for a Tide file, what the server publishes (`validate`'s findings and the queries' analysis); `--blocks` adds the platform blocks' own findings, which `opentide lint` reports and the server does not (the Elastic and Sysdig blocks' advisories). The language comes from the extension (`.yaml` and `.yml` are Tide YAML) unless `--language` names it. `--platform` is the `configurations` key a query file is for: `carbon_black_cloud` checks Lucene in the Carbon Black dialect, `defender_for_endpoint` KQL against the Defender schema. A Tide file under an `objects/` folder is analysed with its workspace: the other object files, the catalog in `.opentide/lsp/catalogs/generated/` (else the bundled one) and the Elastic tenants' `setup.version`. A query file is analysed on its own |
+| `opentide-lsp analyze <file> [--language <id>] [--platform <key>] [--blocks]` | Print the file's diagnostics as a JSON array: for a Tide file, what the server publishes (`validate`'s findings and the queries' analysis); `--blocks` adds the platform blocks' own findings, which `opentide lint` reports and the server does not (the Elastic and Sysdig blocks' advisories). The language comes from the extension (`.yaml` and `.yml` are Tide YAML) unless `--language` names it. `--platform` is the `configurations` key a query file is for: `carbon_black_cloud` and `graylog` check Lucene in the Carbon Black and Graylog dialects, `defender_for_endpoint` KQL against the Defender schema. A Tide file under an `objects/` folder is analysed with its workspace: the other object files, the catalog in `.opentide/lsp/catalogs/generated/` (else the bundled one) and the Elastic tenants' `setup.version`. A query file is analysed on its own |
 | `opentide-lsp highlight <file> [--language <id>] [--html]` | Print the file's highlight tokens as JSON, or with `--html` a page that shows them |
 | `opentide-lsp generate-highlights [--check]` | Rewrite `highlights/generated/` (the TextMate grammars, the Monaco and Helix maps, `package-contributions.json`) from `highlights/spec.toml`; `--check` fails when they are stale. For this repository's CI |
 
@@ -74,6 +74,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 - I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`). No `std::fs`.
 - HighlightSpec capture rename is a **major**.
 - Never report a CQL field, saved search, lookup file or repository as unknown: they live in the tenant.
+- An Exabeam field the CIM catalogue lacks is a warning (`exabeam_unknown_field`), never an error, and so is an `activity_type`, `subject` or `outcome` value it lacks (`exabeam_unknown_value`); context tables are never checked: they live in the tenant.
 - Control commands (`.show` / `.create`) → `kql_control_command_unsupported`.
 - Highlight tokenizes **authored** SPL (implicit `| search` is semantic, not a rewrite).
 - opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
@@ -87,15 +88,17 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | --- | --- |
 | `opentide-core` | Shared types, diagnostic codes |
 | `opentide-highlight` | Frozen HighlightSpec, semantic tokens, tm/monaco/helix maps |
-| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL |
+| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL/YARA/Exabeam/YARA-L |
 | `opentide-kql` | Catalog, HIR, Sentinel/Defender profiles, `compile_kql_query` |
 | `opentide-spl` | searchbnf-informed catalog, `spl_unknown_command` |
 | `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
 | `opentide-eql` | EQL catalog, sequence/sample/pipe rules, `eql_*` diagnostics |
 | `opentide-kuery` | Kibana KQL checks, Lucene-syntax-in-kuery warnings |
-| `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings |
+| `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings, the Carbon Black and Graylog dialects |
 | `opentide-falco` | Falco rule conditions (Sysdig Secure): a port of libsinsp's filter parser and compiler checks, field and event catalogs, `falco_*` diagnostics |
 | `opentide-cql` | CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM): function, event and field catalogs, Next-Gen SIEM correlation-rule checks, `cql_*` diagnostics |
+| `opentide-exabeam` | Exabeam Query Language (New-Scale SIEM): a port of the specification's reference checker with the `rule` and `search` profiles, RE2 pattern checks, the Common Information Model catalogue, `exabeam_*` diagnostics |
+| `opentide-yaral` | YARA-L 2.0 (Google Security Operations): rule and search profiles, UDM and function catalogs, `yaral_*` diagnostics |
 | `opentide-ecs` | Elastic Common Schema field catalog (completion, hover) and the ECS checks for queries on ECS indices (`ecs_type_mismatch`, near-miss `ecs_unknown_field`; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |

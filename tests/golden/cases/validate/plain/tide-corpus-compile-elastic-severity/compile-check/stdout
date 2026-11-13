@@ -1,0 +1,7 @@
+error[compile_failed]: Elastic cannot compile this rule: 'mapping'
+   ╭─▶ Objects/Detection Rules/rule-0009-elastic-kql.yaml:23:3
+   │
+22 │ configurations:
+23 │   elastic:
+   │   ━━━━━━━
+

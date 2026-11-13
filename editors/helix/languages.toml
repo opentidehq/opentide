@@ -60,6 +60,31 @@ scope = "source.opentide.cql"
 file-types = ["cql"]
 language-servers = ["opentide-lsp"]
 
+# YARA signatures (libyara 4.5). The scope matches the TextMate grammar's,
+# which avoids the YARA extensions' `source.yara`.
+[[language]]
+name = "yara"
+scope = "source.opentide.yara"
+file-types = ["yar", "yara"]
+language-servers = ["opentide-lsp"]
+
+# The Exabeam Query Language (Exabeam New-Scale SIEM). A `.exabeam` file is
+# a search.
+[[language]]
+name = "exabeam"
+scope = "source.exabeam"
+file-types = ["exabeam"]
+language-servers = ["opentide-lsp"]
+
+# YARA-L 2.0 (Google Security Operations). The scope matches the TextMate
+# grammar's, which avoids Google's own `source.yara-l`.
+[[language]]
+name = "yaral"
+scope = "source.yaral"
+file-types = ["yaral", "yl2"]
+comment-token = "//"
+language-servers = ["opentide-lsp"]
+
 # Configuration TOML: the editor's TOML grammar highlights it, and opentide
 # checks it. Only `opentide lsp start` has the checks; `opentide-lsp` on its
 # own reports nothing for these files. Giving them their own language keeps

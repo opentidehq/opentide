@@ -1,0 +1,4 @@
+// prod:in_expression valid
+$e.principal.ip in cidr %corp_ranges
+$e.target.hostname in regex %bad_hosts nocase
+$e.principal.user.userid in %admins.userid

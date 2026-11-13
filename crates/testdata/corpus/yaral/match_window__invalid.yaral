@@ -1,0 +1,5 @@
+// prod:match_window invalid
+rule r {
+  match:
+    $user over 5m after
+}

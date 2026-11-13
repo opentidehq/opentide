@@ -261,7 +261,7 @@ pub fn build_lsp(root: &Path) -> Result<PathBuf> {
 fn run(command: &mut Command) -> Result<()> {
     let status = command
         .status()
-        .with_context(|| format!("run {:?}", command.get_program()))?;
+        .with_context(|| format!("run {}", command.get_program().display()))?;
     if !status.success() {
         bail!("{command:?} failed ({status})");
     }

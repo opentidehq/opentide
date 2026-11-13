@@ -3,11 +3,13 @@
 # against Microsoft Kusto.Language (kql), Splunk's search parser (spl),
 # @elastic/esql (esql), Elasticsearch's EqlBase.g4 (eql), Kibana's kuery
 # grammar.peggy (kuery), Lucene's QueryParser (lucene), and a Carbon Black
-# Cloud tenant's search_validation (carbon_black).
+# Cloud tenant's search_validation (carbon_black). YARA and Falco have their
+# own scripts (scripts/engine/oracles/yara/oracle.py, falco/oracle.py).
 # See scripts/engine/oracles/README.md.
 #
 #   scripts/engine/ci-oracle.sh [kql] [spl] [esql] [eql] [kuery] [lucene] [carbon_black]
 #                                                     default: all but carbon_black
+#   scripts/engine/ci-oracle.sh --manifests-only      the manifest check alone
 #
 # Optional locally: a language whose reference is unavailable (no dotnet, no
 # SPLUNK_PASSWORD, no node, no java) is skipped unless
@@ -26,11 +28,15 @@ manifests=(
 # grep exits 1 for no match and 2 when it cannot read a manifest: only 1 passes,
 # so a missing file can never hide a match.
 rc=0
-grep -IilE 'kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|antlr-ng|peggy|lucene-queryparser' "${manifests[@]}" || rc=$?
+# YARA: the yara-x compiler crate (wasmtime; the shipped parser is
+# yara-x-parser) and yara-python are oracles only.
+grep -IilE 'kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|antlr-ng|peggy|lucene-queryparser|"yara-x"|^yara-x *=|dependencies\.yara-x\]|yara-python|wasmtime' "${manifests[@]}" || rc=$?
 if [[ $rc -ne 1 ]]; then
   [[ $rc -eq 0 ]] && echo "a shipped manifest depends on an oracle reference" || echo "could not read every shipped manifest"
   exit 1
 fi
+
+[[ "${languages[0]}" == "--manifests-only" ]] && { echo "no shipped manifest depends on an oracle reference"; exit 0; }
 
 unavailable() {
   if [[ "${OPENTIDE_ORACLE_REQUIRED:-}" == "1" ]]; then

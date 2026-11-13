@@ -1,0 +1,162 @@
+{
+  "name": "opentide yara",
+  "opentideHighlightSpec": "0.3.0",
+  "patterns": [
+    {
+      "comment": "capture:comment",
+      "match": "//.*$|/\\*[\\s\\S]*?\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "capture:keyword",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:and|at|base64|base64wide|condition|contains|defined|endswith|for|icontains|iendswith|iequals|import|in|include|istartswith|matches|meta|not|of|or|rule|startswith|strings|xor)(?![A-Za-z0-9_])",
+      "name": "keyword.control.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:\\-)(?![A-Za-z0-9_])",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "!=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "%",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\&",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\*",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\+",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\.\\.",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<<",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "==",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">>",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\^",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\|",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\~",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\{",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\}",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ",",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": "\\.",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ":",
+      "name": "punctuation.delimiter.opentide"
+    }
+  ],
+  "scopeName": "source.opentide.yara"
+}

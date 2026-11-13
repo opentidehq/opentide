@@ -140,7 +140,7 @@ npm install ./opentide-opentide-*.tgz           # the package and its native pac
 npx opentide --version
 ```
 
-npm resolves the native package from the local tarball; it may print a warning for the other platforms' native packages, which are optional and not on npm at that version. With a Rust toolchain (1.85 or later), any commit also installs from source, with no artifact at all: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"` (a branch, tag or commit).
+npm resolves the native package from the local tarball; it may print a warning for the other platforms' native packages, which are optional and not on npm at that version. With a Rust toolchain (1.95 or later), any commit also installs from source, with no artifact at all: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"` (a branch, tag or commit).
 
 **Lockstep version.** The facade, the internal crates, the wheel and the npm packages carry one version, the product's. `scripts/engine/release.py bump X.Y.Z` sets the workspace version and every internal pin in the release's pull request; `release.py lockstep X.Y.Z` (in the guard) refuses a release whose crates are at another version; the workflow writes the version into every npm package (`release.py npm-version`, the tree keeps a placeholder) and checks them (`lockstep --npm`); the wheels build at the tag's version. The binaries report the release's version (`OPENTIDE_VERSION`), a candidate's included.
 

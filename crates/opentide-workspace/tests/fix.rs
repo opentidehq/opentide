@@ -73,7 +73,7 @@ fn render(lines: &[Line]) -> (String, Vec<(usize, usize, usize)>) {
         text.push_str(close);
         if line.comment {
             text.push_str("  # keep: me");
-        } else if line.value % 2 == 0 {
+        } else if line.value.is_multiple_of(2) {
             // Trailing blanks, which the parser ignores: only a byte
             // comparison sees them go.
             text.push_str(" \t ");

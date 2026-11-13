@@ -1,0 +1,4 @@
+SELECT DISTINCT src_host, SUM(bytes_out) AS sent
+WHERE subject:"network" AND NOT dest_ip:[10.0.0.0/8] AND time:[2026-11-01T00:00:00Z TO *]
+GROUP-BY src_host
+ORDER-BY sent DESC

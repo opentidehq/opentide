@@ -153,6 +153,7 @@ pub fn run(
     validate.queries = args.queries.unwrap_or_default();
     validate.query_check = Some(&EngineQueries);
     validate.platform_configurations = crate::plugins::configurations();
+    validate.compile_check = Some(&opentide_compile::validate::Compilers);
     let roots: Vec<PathBuf> = validate
         .roots()
         .into_iter()

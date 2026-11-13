@@ -28,7 +28,7 @@ rustup show active-toolchain   # names the release rust-toolchain.toml pins
 cargo --version
 ```
 
-The crates declare `rust-version = "1.85"`, but no job checks that floor (the file says why). To
+The crates declare `rust-version = "1.95"` (what `yara-x-parser` and `yara-x-fmt` need), but no job checks that floor (the file says why). To
 move to a newer release, follow the steps in the header of `rust-toolchain.toml`, in a change of
 its own.
 

@@ -1,0 +1,9 @@
+// prod:rule_declaration valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}
