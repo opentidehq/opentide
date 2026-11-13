@@ -1261,7 +1261,7 @@ fn sysdig(rng: &mut Rng, variant: usize, tags: &mut Vec<String>) -> Vec<(String,
 /// `LIVE` does not run, so it is `LIVE_CUSTOMIZABLE`). It draws nothing from
 /// `rng`.
 fn google_secops(variant: usize, process: &str, tags: &mut Vec<String>) -> Vec<(String, Yaml)> {
-    if variant % 2 == 0 {
+    if variant.is_multiple_of(2) {
         return kv(vec![
             ("run_frequency", Yaml::s("LIVE")),
             (
