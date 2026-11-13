@@ -4,8 +4,8 @@
 //! ledger does not approve.
 //!
 //! I/O-free: callers read runs and the ledger, and write the report.
-//! `cargo xtask compare` and `golden check --engine compare` use it, and so
-//! does the CLI's `OPENTIDE_ENGINE=compare` through `opentide._native`.
+//! `cargo xtask compare`, `golden check --engine rust` and the command
+//! line's golden replays use it.
 //!
 //! What is compared, for each target:
 //!
@@ -231,8 +231,7 @@ pub struct Normalisation<'a> {
 /// One CLI run of each side compared, each normalised first with its own
 /// volatile values (each ran in its own copy of the workspace) and the
 /// command's rules, as a golden case of the command is, applying `ledger`
-/// without checking it for stale entries. `OPENTIDE_ENGINE=compare` calls it
-/// through `opentide._native.compare_runs`.
+/// without checking it for stale entries.
 pub fn compare_normalised(
     case: Case,
     (mut oracle, oracle_volatile): (Run, &normalise::Volatile),

@@ -97,10 +97,11 @@ mode against every fixture it lists:
 | `agent` | pipes, with `AI_AGENT=golden` |
 
 `mcp` mode (`opentide mcp start`) is not a mode of these cases: its recorded sessions are in
-[`mcp/`](mcp/) (UC-3.7, #829): `sessions.toml` holds the requests, `cargo xtask mcp record` writes
-each session's answers from the Python server, and `cargo xtask mcp replay --engine
-python|rust|compare mcp/*.jsonl` replays them against either server or both; the Rust server's
-differences are approved in `APPROVED_DIFFS.toml` (command `mcp start`, case `<session>/<step>`);
+[`mcp/`](mcp/) (UC-3.7, #829): `sessions.toml` holds the requests, `cargo xtask mcp record --python
+PATH` writes each session's answers from the Python server of an opentide release that still has
+one (they are frozen since UC-6.2, #841), and `cargo xtask mcp replay --engine rust mcp/*.jsonl`
+replays them against this repository's server, the Rust one; its differences are approved in
+`APPROVED_DIFFS.toml` (command `mcp start`, case `<session>/<step>`);
 a session's `launch` starts the server in the workspace (the default), outside it with `--repo`, or
 in an Agent Plugin root that names no workspace. The environment is exactly the one in each case's
 `case.toml`: no CI or agent variable unless the case sets one, `HOME` and `TMPDIR` inside the case's
@@ -198,7 +199,7 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
 
-When `golden check --engine compare` compares a run with its recording (not when a case is
+When `golden check --engine rust` compares a run with its recording (not when a case is
 recorded), one more rule applies to each side:
 
 | Rule | Becomes | Why |

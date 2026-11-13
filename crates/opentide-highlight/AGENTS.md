@@ -14,7 +14,7 @@ opentide-analysis, opentide-lsp and opentide-wasm depend on it.
 
 - Renaming a capture is a major (breaking) change; adding one is a minor (`[meta].version`).
 - `highlights/generated/` is written by `opentide-lsp generate-highlights`, never by hand.
-- The bundled Tide catalog is generated from `src/opentide` (`scripts/engine/sync_opentide_schemas.py`) and checked by `tests/test_generation/test_bundled_tide_catalog.py`.
+- The bundled Tide catalog is generated from the Rust models (`cargo xtask codegen`) and checked by `cargo xtask codegen --check`.
 - A workspace catalog replaces the bundled one process-wide, so `tests/workspace_catalog.rs` is a binary of its own.
 - No `std::fs` in `src/`.
 

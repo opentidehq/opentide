@@ -72,9 +72,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
 | `doctor_checks_failed` | 1 | `doctor`: at least one check failed. Read `checks` for which |
 | `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `validate query` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
-| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lint` (its `queries` check), and `OPENTIDE_ENGINE=compare` on a command it compares. In `validate`, an `engine_unavailable` issue instead. `advice` names the reinstall command |
-| `engine_not_ported` | 2 | [`OPENTIDE_ENGINE=rust`](#choosing-the-implementation) on a command that has no Rust implementation yet; `argument` is `OPENTIDE_ENGINE` |
-| `engine_mismatch` | 70 | [`OPENTIDE_ENGINE=compare`](#choosing-the-implementation): the command's Python and Rust implementations did not do the same. `message` names the diff report |
+| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lint` (its `queries` check). In `validate`, an `engine_unavailable` issue instead. `advice` names the reinstall command |
 | `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
 | `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
 | `not_run` | non-zero | The command was skipped and says why in `message` |
@@ -146,34 +144,11 @@ An exception no command handles is a bug in opentide. The run exits `1` and, und
 
 Where the log goes, what it holds and how to report the bug: [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
 
-## Choosing the implementation
+## The implementation
 
-opentide is moving its commands from Python to Rust, one at a time ([#790](https://github.com/opentidehq/opentide/issues/790)). Each command has a default implementation, Python until its default changes. `OPENTIDE_ENGINE` chooses another, read when the command starts:
+Every command runs on opentide's Rust core, compiled into the package: `opentide` and `python -m opentide` hand their arguments to it in the process you started, with nothing in between, so Ctrl-C (`error: interrupted`, exit `130`) and SIGTERM reach the command itself (`opentide serve` exits `143`, `opentide mcp start` ends). The same core is the `opentide` binary of the npm package and of `cargo install opentide --features cli`.
 
-| Value | Runs |
-|-------|------|
-| empty or unset | The command's default implementation: Python for every command today |
-| `python` | The Python implementation, whatever the command's default |
-| `rust` | The Rust implementation. A command that has none exits `2` with `failure.code` `engine_not_ported` and `failure.argument` `OPENTIDE_ENGINE`, and so does a run whose input it does not cover yet (`new rule` without `--name` in a terminal, which would prompt for it) |
-| `compare` | Both, each on its own copy of the workspace, and compares their exit codes, stdout, stderr and the files each created, changed or deleted. JSON is compared by its data, then by the order of every object's keys, then byte for byte. If they agree, the Python run's output and exit code are the command's. If not, the command exits `70` with `failure.code` `engine_mismatch`, and `failure.message` names the diff report. A command that has no Rust implementation, or a run whose input its Rust implementation refuses with `engine_not_ported`, runs Python alone |
-
-Any other value is a usage error (`usage_invalid_choice`, exit `2`, `argument` `OPENTIDE_ENGINE`). `info` (every section), `rules unreviewed`, `generate exports`, `generate docs`, `commands`, `explain`, `lint`, `validate`, `validate query` (offline), `new threat`, `new objective`, `new rule`, `generate` (the full pipeline, and with its phases named: `generate schemas templates`), `deploy --dry-run`, `deploy migrate-state`, `doctor` (its network checks included), `setup` and its subcommands (`setup skills` with its `discover` and `show`, `--skills` and `--plugin` included: the skills are downloaded through the Rust HTTP client), `share` and its subcommands, `generate extract defender`, `generate extract elastic` and `generate extract sentinel` have a Rust implementation today, as does `validate --check cve`, which looks references up on Vulnerability-Lookup; `rust` refuses the other commands and `compare` runs them on Python alone. A command's Rust implementation can cover only some of its runs. A command that reaches tenants is routed by the platforms it names: `deploy` runs in Rust with `--dry-run` whatever its platform, and so does a deploy that sends, to the platform it names or, without `--platform`, to the workspace's enabled platforms (every platform has a Rust connector; `compare` refuses a deploy that sends, since both runs would reach the tenant); `query` runs in Rust when every `--platform` it names has a query runner (Carbon Black Cloud, CrowdStrike, Defender for Endpoint, Elastic, HarfangLab, Sentinel, SentinelOne or Splunk), a rule's query (`--rule`, `--file`) included, and `validate query --live` on every platform: CrowdStrike, HarfangLab and Sysdig answer `supported: false`, the other six check each rule's queries on their tenants through the Rust connectors, and a run that names no platform is refused as Python refuses it (`usage_missing_option`); a `query` on a platform without a query runner is refused by `rust` with `engine_not_ported` (`error: opentide query on sysdig has no Rust implementation yet`) and run in Python alone by `compare`. `compare` refuses `query` itself, which reaches tenants. The variable chooses the implementation, never what a command does: the documents on this site are the contract both implementations print.
-
-A command's default moves to Rust one at a time, in three releases ([#822](https://github.com/opentidehq/opentide/issues/822)):
-
-1. The Rust implementation ships, Python stays the default, and `compare` (in opentide's CI on every corpus, and in yours if you opt in) shows any difference.
-2. After a release with no difference, the default changes to Rust, with a changelog entry. `OPENTIDE_ENGINE=python` still runs Python for that release: the escape hatch if your workspace finds what the corpora did not.
-3. The release after, the Python implementation goes.
-
-No command's default has changed yet. `opentide serve` and `opentide mcp start` run under any engine: the engine applies to the commands `serve` runs and to the MCP validation tools (`validate_rule`, `validation_report`); `rust` also serves `mcp start` from the Rust server, and `compare` keeps the Python one ([opentide serve](./serve.md#the-rust-engine), [MCP tools](../mcp/tools.md#choosing-the-implementation)). The SDK's `run_validation` follows `OPENTIDE_ENGINE` the same way ([Validation](../sdk/validation.md#choosing-the-implementation)).
-
-Whatever the engine, a command runs in the process you started: `opentide` and `python -m opentide` read `OPENTIDE_ENGINE` before anything else and run a Rust implementation in that process, with nothing in between, so Ctrl-C (`error: interrupted`, exit `130`) and SIGTERM reach the command itself (`opentide serve` exits `143`, `opentide mcp start` ends). Only `compare` starts processes: one per implementation.
-
-```bash
-OPENTIDE_ENGINE=compare opentide --json validate
-```
-
-The diff report is a JSON file in opentide's state directory, `$XDG_STATE_HOME/opentide/compare/<time>.json` (`~/.local/state/opentide/compare/` when `XDG_STATE_HOME` is unset; `~/Library/Logs/opentide/compare/` on macOS, `%LOCALAPPDATA%\opentide\logs\compare\` on Windows), readable by you alone. It lists each difference with its `target` (`exit_code`, `stdout`, `stderr` or `file:<path>`), its `kind`, the JSON `pointer` where there is one, and the two sides; argument values named like a secret are redacted. Before comparing, both runs are normalised by the goldens' rules (`crates/opentide-compare/src/normalise.rs` lists them): each run's workspace path reads as `<WS>`, wall time as `0`, the clock's date-times on the run's dates and the week before with their digits as `0`, and, for a command that mints identifiers, its fresh UUIDs as `<UUID-n>`. Unlike a golden case, nothing is normalised per fixture. In `compare` both runs print in the mode this one resolved (`OPENTIDE_OUTPUT`, `OPENTIDE_JSON_INDENT`) but to a pipe, and read nothing from stdin, so compare is for scripts and CI, not for prompts or servers. A command that reaches outside the workspace (a tenant, a sharing destination) is refused with `usage_error`: both runs would reach it, and nothing would compare what they did there. It runs inside the workspace: from a folder outside it, or with a path outside it on the command line (absolute, or climbing out with `..`), it exits `2` with `usage_error`, since no copy would isolate what both runs do there. A symbolic link in the workspace that points outside it stays a link to the same place in both copies, so a command that writes through one writes outside, twice; folders the run only creates or removes, empty, are not carried back. When the two agree, the files the Python run changed in its copy are changed in the workspace, and its output names the workspace, as a plain run would. `--help` is the Python CLI's under the default engine, `python` and `compare`. Under `rust` it is the Rust command line's, laid out by clap (an indented list of options, one paragraph each) with the same usage line, options, descriptions, defaults and examples; so are a bare `opentide` (the home screen at a terminal, the help elsewhere), a bare command group, `--version`, `--show-completion`, `--install-completion`, a mistyped command or root option and a `--repo` that is not a folder.
+The Python implementation each command had is gone, and the variable that chose between the two with it ([#841](https://github.com/opentidehq/opentide/issues/841)). Each command was compared with the Python release it replaced (opentide 0.23.0) on every documented corpus before its Python implementation went; where the two differ on purpose, the changelog says so. The documents on this site are the contract.
 
 ## Progress events
 
@@ -235,7 +210,7 @@ In JSON, every `validate`, `validate query` and `lint` finding carries `path`, `
 | `error: …` | Failed (stderr), followed by indented `note:` and `help:` lines |
 | `→ …` | A next step: the command to run, and why |
 
-A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHONIOENCODING=ascii`) gets `ok`, `x` and `->`.
+opentide writes UTF-8 on every stream (the Windows console through its wide API): the glyphs print as shown whatever the console's code page.
 
 ## The command tree
 
@@ -243,7 +218,7 @@ A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHON
 
 ## Output schemas
 
-Each command in `opentide --json commands` carries `output_schema`: the [JSON Schema](https://json-schema.org/draft/2020-12) of the document it prints, generated from the typed result models in `src/opentide/cli/ui/results/`. It is a `$ref` into the `$defs` of the same document, `anyOf` the command's own result and `CommandError`, the document of a usage error. To check a document against its command's schema:
+Each command in `opentide --json commands` carries `output_schema`: the [JSON Schema](https://json-schema.org/draft/2020-12) of the document it prints, generated from the command line's result models (`crates/opentide-cli/src/catalog.rs`). It is a `$ref` into the `$defs` of the same document, `anyOf` the command's own result and `CommandError`, the document of a usage error. To check a document against its command's schema:
 
 ```bash
 opentide --json commands > commands.json

@@ -16,9 +16,10 @@ not approve. I/O-free: callers read runs and the ledger and write the report.
 ## Place
 
 foundation, tier 0 (`xtask/layers.toml`): it depends on no workspace crate. xtask (`cargo xtask
-compare`, `golden check --engine compare`) and opentide-native (`compare_runs`, which the CLI's
-`OPENTIDE_ENGINE=compare` calls) depend on it. `publish = false`: it serves the migration and
-goes when compare mode does (UC-6.2, #841).
+compare`, `golden check --engine rust`) and opentide-cli's golden replays (dev-dependency) depend
+on it. `publish = false`: it holds the Rust command line to the oracle's recordings, the goldens
+that stay its specification since UC-6.2 (#841) removed the Python implementation and compare
+mode.
 
 ## Invariants
 

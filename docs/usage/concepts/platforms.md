@@ -5,7 +5,7 @@ description: Nine deployment platforms, six query validators (five offline), eig
 
 # Platforms
 
-opentide integrates with **nine detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **nine detection platforms** through connectors built into its Rust core. All ship in the base PyPI package; a Python package can add another as a [platform plugin](../../sdk/platforms.md#platform-plugins).
 
 ## Capability matrix
 
@@ -114,12 +114,12 @@ Every row that now fails was already a rule that never reached the platform. Run
 
 ## Platform configuration
 
-Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; the registry loads deployers and validators for enabled systems only.
+Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; only enabled platforms are deployed to and validated.
 
 ## Live deploy dependencies
 
-Validate, generate, and dry-run deploy work with `pip install opentide` alone. **Live** API deploy to Splunk or Carbon Black may require additional vendor SDKs — see [Installation](../installation.md).
+Validate, generate, dry-run deploy and live deploy all work with `pip install opentide` alone: no vendor SDK is needed.
 
 ## SDK access
 
-Deploy and validate programmatically via `Opentide.Platforms` — see [SDK platforms](../../sdk/platforms.md).
+Deploy and validate programmatically with [`opentide.Workspace`](../../sdk/workspace.md) and its tenant operations — see [SDK platforms](../../sdk/platforms.md).

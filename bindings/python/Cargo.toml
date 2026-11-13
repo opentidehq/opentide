@@ -7,7 +7,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "EUPL-1.2"
 publish = false
-description = "The analysis engine, the language server and the differential comparator, compiled into the opentide Python package"
+description = "The analysis engine, the command line, the SDK core and the Tide models, compiled into the opentide Python package"
 repository = "https://github.com/opentidehq/opentide"
 
 [lints]
@@ -22,15 +22,13 @@ crate-type = ["cdylib"]
 # interpreter (3.14t) has no stable ABI, so it builds from the sdist.
 # generate-import-lib: a Windows build needs no python3.lib on the machine.
 pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
-# The engine and the server, from this workspace (crates/).
+# The engine, from this workspace (crates/): `opentide.analysis` checks one
+# query and highlights a text with it.
 opentide-analysis.workspace = true
-opentide-lsp.workspace = true
-# The differential comparator, for OPENTIDE_ENGINE=compare (UC-0.7, #805).
-opentide-compare.workspace = true
 # The Tide models as Python classes, opentide._native.models (UC-1.9, #815).
 opentide-schema = { workspace = true, features = ["python"] }
-# The Rust command line, for the commands ported to it (`cli_main`, run by
-# `python -m opentide.cli.rust`).
+# The command line, which the `opentide` console script runs in process
+# (`cli_main`, from `opentide._cli`).
 opentide-cli.workspace = true
 # The facade, which the SDK (`opentide._native.sdk`, `opentide.Workspace`,
 # UC-5.2, #837) binds one to one: the command line and the query engines too.
@@ -43,8 +41,6 @@ pyo3-async-runtimes = { version = "0.30.0", features = ["tokio-runtime"] }
 # The SDK's documents, handed to Python as JSON text in the facade's key order.
 serde.workspace = true
 serde_json.workspace = true
-# What the serve host's Python side could not do, logged as the CLI logs.
-tracing = "0.1"
 # The platform plugin host (UC-4.5, #835): plugins behind the connectors'
 # traits, called on the run's runtime's blocking threads, their query rows in
 # the compiler's ordered JSON.

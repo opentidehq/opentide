@@ -1031,7 +1031,6 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
             ("GITHUB_EVENT_NAME", "push".to_owned()),
             ("GITHUB_SHA", "HEAD".to_owned()),
             ("GITHUB_WORKSPACE", ws.path().display().to_string()),
-            ("OPENTIDE_ENGINE", "rust".to_owned()),
         ]
     };
     let argv = [

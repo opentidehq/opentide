@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 
 import pytest
 
@@ -147,28 +146,6 @@ def test_no_color_holds_wherever_the_root_parser_stops(
     assert result.returncode == returncode, result.stderr
     assert "\x1b[" not in result.stdout
     assert "\x1b[" not in result.stderr
-
-
-@pytest.mark.parametrize(
-    "colour_env",
-    [
-        pytest.param({"FORCE_COLOR": "1"}, id="FORCE_COLOR=1"),
-        # CI is plain mode, which colours only when FORCE_COLOR or PY_COLORS asks.
-        pytest.param({"GITHUB_ACTIONS": "true", "PY_COLORS": "1"}, id="GITHUB_ACTIONS+PY_COLORS"),
-    ],
-)
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Rich treats a piped Windows stdout as a legacy console and styles it "
-    "through win32 calls, so forced colour never shows up as ANSI escapes",
-)
-def test_typer_help_still_colours_when_asked(
-    script_runner, tide_corpus_repo, colour_env: dict[str, str]
-) -> None:
-    """Control for the pipe checks: forcing colour must keep working."""
-    result = script_runner.run(["opentide", "--help"], env=_terminal_env(colour_env))
-    assert result.returncode == 0, result.stderr
-    assert "\x1b[" in result.stdout
 
 
 def test_ci_help_has_no_colour_unless_forced(script_runner, tide_corpus_repo) -> None:

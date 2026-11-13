@@ -25,15 +25,13 @@ use std::time::{Duration, Instant, SystemTime};
 /// An implementation of the CLI that cases run against.
 #[derive(Clone, Debug)]
 pub struct Engine {
-    /// `python` (the oracle) or, later, `rust`.
+    /// `python` (the oracle), `rust` (this repository's console script) or
+    /// `node` (the npm package's bin).
     pub name: String,
     /// The directory that holds its `opentide` executable (`<ENGINE_BIN>` in `PATH`).
     pub bin_dir: PathBuf,
     /// Its installation directory, normalised to `<ENGINE>` in outputs.
     pub install_dir: PathBuf,
-    /// Variables it runs with on top of the case's (`OPENTIDE_ENGINE=rust`
-    /// for the candidate of `--engine compare`, UC-0.7).
-    pub env: BTreeMap<String, String>,
     /// Other directories of the host it reads from, with their placeholders:
     /// the Python a virtual environment links to (`<PYTHON>`), whose standard
     /// library shows in a traceback.
@@ -210,10 +208,7 @@ fn environment(
             .replace(case::HOME, &root.join("home").to_string_lossy())
             .replace(case::TMP, &root.to_string_lossy())
     };
-    let mut env: BTreeMap<String, String> =
-        case.env.iter().map(|(k, v)| (k.clone(), fill(v))).collect();
-    env.extend(ctx.engine.env.clone());
-    env
+    case.env.iter().map(|(k, v)| (k.clone(), fill(v))).collect()
 }
 
 fn execute(

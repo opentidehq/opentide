@@ -1,7 +1,6 @@
 """Type stubs for the compiled module. Keep in step with ``src/lib.rs``."""
 
-import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Sequence
 from typing import Final, Literal, final
 
 # The Tide models (UC-1.9), whose stub `cargo xtask stubs` generates.
@@ -17,7 +16,7 @@ Language = Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql
 ENGINE_VERSION: Final[str]
 #: Every diagnostic code the engine can emit.
 CODES: Final[list[str]]
-#: Every language id ``analyze`` and ``analyze_query`` accept.
+#: Every language id ``highlight`` accepts; ``analyze_query`` takes each but ``opentide-yaml``.
 LANGUAGES: Final[list[str]]
 
 @final
@@ -41,124 +40,10 @@ class Diagnostic:
     @property
     def suggestion(self) -> str | None: ...
 
-@final
-class QueryReport:
-    @property
-    def language(self) -> Language: ...
-    @property
-    def field_path(self) -> list[str]: ...
-    @property
-    def line(self) -> int: ...
-    @property
-    def column(self) -> int: ...
-    @property
-    def end_line(self) -> int: ...
-    @property
-    def end_column(self) -> int: ...
-    @property
-    def diagnostics(self) -> list[Diagnostic]: ...
-
-@final
-class Workspace:
-    def __new__(cls, files: Sequence[tuple[str, str]] = ...) -> Workspace: ...
-    @property
-    def objects(self) -> int: ...
-    def analyze(
-        self, path: str, text: str, language: str | None = None, objects: bool = True
-    ) -> list[Diagnostic]: ...
-    def analyze_queries(self, text: str) -> list[QueryReport]: ...
-    def hover(
-        self, path: str, text: str, line: int, column: int, language: str | None = None
-    ) -> str | None: ...
-
 def analyze_query(
     text: str, language: str, platform: str | None = None, stack: str | None = None
 ) -> list[Diagnostic]: ...
 def highlight(text: str, language: str) -> list[tuple[int, int, int, int, str]]: ...
-def install_catalog(
-    fields: str | None = None, deprecations: str | None = None, visibility: str | None = None
-) -> None: ...
-def set_default_catalog(
-    fields: str | None = None, deprecations: str | None = None, visibility: str | None = None
-) -> None: ...
-def install_visibility(text: str | None = None) -> None: ...
-def use_host_catalogs() -> None: ...
-def set_host_info(name: str, version: str) -> None: ...
-def dataset_status(platform: str, name: str) -> Literal["unchecked", "declared", "undeclared"]: ...
-def bundled_catalog() -> tuple[str | None, str | None]: ...
-def catalog_version() -> str: ...
-def catalog_is_workspace() -> bool: ...
 def describe_code(code: str) -> str | None: ...
 def language_for_path(path: str) -> Language | None: ...
-def serve_stdio() -> bool: ...
 def cli_main(argv: Sequence[str], version: str) -> int: ...
-def main(argv: Sequence[str] | None = None) -> int: ...
-def command_words(argv: Sequence[str]) -> list[str]: ...
-def run_cli(
-    argv: Sequence[str],
-    env: Mapping[str, str],
-    cwd: str | os.PathLike[str],
-    version: str,
-    warm: bool = False,
-) -> tuple[int, bytes, bytes]: ...
-def interrupt_cli() -> bool: ...
-
-@final
-class ServeHost:
-    """``opentide serve``'s Rust host (UC-3.8): *write* takes each message line.
-
-    Every run is Rust's, starting from *env* (the server's variables, in
-    order) and *cwd* (UC-6.0d).
-    """
-
-    def __new__(
-        cls,
-        write: Callable[[str], object],
-        version: str,
-        env: Sequence[tuple[str, str]],
-        cwd: str | os.PathLike[str],
-    ) -> ServeHost: ...
-    def receive(self, line: bytes) -> None: ...
-    def close_input(self) -> None: ...
-    def serve(self) -> int: ...
-    def pending_cancels(self) -> int: ...
-
-def invalidate_workspaces(paths: Sequence[str | os.PathLike[str]]) -> int: ...
-def clear_workspaces() -> None: ...
-def workspace_stats() -> dict[str, int]: ...
-def validate_report(
-    cwd: str | os.PathLike[str],
-    env: Mapping[str, str],
-    *,
-    repo: str | None = None,
-    check: str | None = None,
-    files: Sequence[str] = (),
-    uuids: Sequence[str] = (),
-    types: Sequence[str] = (),
-    queries: str = "error",
-    strict: bool = False,
-) -> str: ...
-
-#: One side of ``compare_runs``: exit code, stdout, stderr, the files the run
-#: left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None`` for
-#: a deleted file), the literals that normalise it with their placeholders, and
-#: the dates (``YYYY-MM-DD``, UTC) it ran on, and the week
-#: before them (a command's default window reaches back into it).
-CompareRun = tuple[
-    int,
-    bytes,
-    bytes,
-    Sequence[tuple[str, int | None, bytes | None]],
-    Sequence[tuple[str, str]],
-    Sequence[str],
-    Sequence[str],
-]
-
-def compare_runs(
-    command: str,
-    oracle: CompareRun,
-    candidate: CompareRun,
-    rules: Sequence[str] = ...,
-    known: Sequence[str] = ...,
-    git_version: str | None = None,
-) -> str: ...

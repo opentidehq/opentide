@@ -1027,7 +1027,8 @@ fn baseline(repo: &Repo, git_dir: &Path) -> Result<ObjectId, GitError> {
 }
 
 /// The entries of the tree at `path` (`/`-separated, from the top level) in
-/// the commit `id`: name, object and whether it is a blob.
+/// the commit `id`: name, object and whether it is a blob. A name that is not
+/// UTF-8 is left out.
 fn tree_entries(repo: &Repo, id: ObjectId, path: &str) -> Vec<(String, ObjectId, bool)> {
     let Some(commit) = repo.commit(id) else {
         return Vec::new();
@@ -1050,12 +1051,13 @@ fn tree_entries(repo: &Repo, id: ObjectId, path: &str) -> Vec<(String, ObjectId,
         return Vec::new();
     };
     iter.filter_map(Result::ok)
-        .map(|entry| {
-            (
-                String::from_utf8_lossy(entry.filename).into_owned(),
-                entry.oid.to_owned(),
-                entry.mode.is_blob(),
-            )
+        .filter_map(|entry| {
+            // A name that is not UTF-8 is left out, as on disk.
+            let Ok(name) = std::str::from_utf8(entry.filename) else {
+                tracing::warn!("git_path_not_utf8");
+                return None;
+            };
+            Some((name.to_owned(), entry.oid.to_owned(), entry.mode.is_blob()))
         })
         .collect()
 }
@@ -1326,7 +1328,12 @@ pub fn changed_in_folders(
             std::collections::BTreeMap::new();
         if let Ok(entries) = std::fs::read_dir(&real) {
             for entry in entries.filter_map(Result::ok) {
-                let name = entry.file_name().to_string_lossy().into_owned();
+                // A name that is not UTF-8 is left out with a warning, as
+                // `git_baseline::changed` (and the oracle) leave it out.
+                let Ok(name) = entry.file_name().into_string() else {
+                    tracing::warn!("git_path_not_utf8");
+                    continue;
+                };
                 if !keep(&name) || !entry.file_type().is_ok_and(|kind| kind.is_file()) {
                     continue;
                 }

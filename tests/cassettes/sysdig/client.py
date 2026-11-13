@@ -38,10 +38,10 @@ for flag in ("DEPLOYMENT_ERROR_RAISED", "DEPLOYMENT_WARNING_RAISED", "CI"):
 os.chdir(ROOT)
 
 import yaml  # noqa: E402 -- the workspace is set before opentide loads
-from opentide.models.system_config import ConfigurationModels  # noqa: E402
 
 from opentide.deployment.external_ids import ExternalIdAction  # noqa: E402
 from opentide.loading.rule_loader import load_rule_from_dict  # noqa: E402
+from opentide.models.system_config import ConfigurationModels  # noqa: E402
 from opentide.platforms.sysdig.client import SysdigClient, SysdigTenantError  # noqa: E402
 from opentide.platforms.sysdig.deployer import SysdigDeploy  # noqa: E402
 from opentide.states.deployment import shard_path  # noqa: E402

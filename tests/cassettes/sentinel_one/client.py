@@ -29,10 +29,9 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
-from opentide.models.system_config import ConfigurationModels as C
-
 from opentide.core.errors import Errors
 from opentide.loading.rule_loader import load_rule_from_dict
+from opentide.models.system_config import ConfigurationModels as C
 from opentide.platforms.sentinel_one import client as s1_client
 from opentide.platforms.sentinel_one import runner as s1_runner
 from opentide.platforms.sentinel_one.client import SentinelOneService

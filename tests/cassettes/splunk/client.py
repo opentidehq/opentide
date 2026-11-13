@@ -47,9 +47,9 @@ os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(ROOT)
 os.chdir(ROOT)
 
 import yaml  # noqa: E402 -- the workspace is set before opentide loads
-from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
 
 from opentide.loading.rule_loader import load_rule_from_dict  # noqa: E402
+from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
 from opentide.platforms.splunk import client as splunk_client  # noqa: E402
 from opentide.platforms.splunk import runner as splunk_runner  # noqa: E402
 from opentide.platforms.splunk.deployer import SplunkDeploy  # noqa: E402

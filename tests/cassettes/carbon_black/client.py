@@ -50,9 +50,9 @@ os.chdir(ROOT)
 
 import cbc_sdk.enterprise_edr.threat_intelligence as threat_intelligence  # noqa: E402
 import yaml  # noqa: E402 -- the workspace is set before opentide loads
-from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
 
 from opentide.loading.rule_loader import load_rule_from_dict  # noqa: E402
+from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
 from opentide.platforms.carbon_black import runner as cbc_runner  # noqa: E402
 from opentide.platforms.carbon_black.client import CarbonBlackCloudService  # noqa: E402
 from opentide.platforms.carbon_black.deployer import CarbonBlackCloudDeploy  # noqa: E402

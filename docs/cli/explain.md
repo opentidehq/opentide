@@ -99,4 +99,4 @@ error: No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.
 
 ## Source
 
-`src/opentide/cli/commands/explain.py`, `src/opentide/cli/services/explain.py`, the pages in `src/opentide/data/diagnostics/`, and `scripts/build/render_diagnostics_docs.py`, which renders [Diagnostic codes](./diagnostics.md) from them.
+`crates/opentide-cli/src/commands/explain.rs`, `crates/opentide-cli/src/explain.rs`, and the pages in `src/opentide/data/diagnostics/`, which [Diagnostic codes](./diagnostics.md) lists.

@@ -1,7 +1,7 @@
 //! The comparator's acceptance cases (#805): `cargo nextest run -p xtask
 //! comparator`. Synthetic runs of a fake command go through
 //! `opentide_compare::compare` with a ledger, as `cargo xtask compare` and
-//! `golden check --engine compare` use it.
+//! `golden check --engine rust` use it.
 
 mod comparator {
     use opentide_compare::ledger::{Ledger, Usage};

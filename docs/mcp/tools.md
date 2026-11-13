@@ -5,7 +5,7 @@ description: Tool reference for the opentide MCP server — parameters, behaviou
 
 # MCP tools
 
-Registered in `src/opentide/mcp_server/server.py`. Implementations in `src/opentide/mcp_server/tools.py`.
+Registered in `crates/opentide-cli/src/mcp/server.rs`. Implementations in `crates/opentide-cli/src/mcp/tools.rs`.
 
 Each tool below lists its parameters, an example call, and an example response so an agent knows exactly what to expect. The tool descriptions an agent reads in `tools/list` say the same in a few lines each.
 
@@ -113,7 +113,7 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 
 When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every participating UUID to that UUID's `graph`. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
 
-The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository. `Opentide.Models.chaining` remains the threat-to-threat map only. This tool does not write objective or rule lineage into that registry index.
+The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository.
 
 ## coverage
 
@@ -260,16 +260,14 @@ Every rule query is checked offline with the analysis engine, as `opentide valid
 
 A report with errors points at `explain` for the first error code, then at `validation_report` again. When any fix is `safe`, that last step's `command` is `opentide --json validate --fix` with the same `--file`, `--uuid` or `--type`, which writes the safe fixes and validates again in one run, and its `reason` is `apply the safe fixes, then validate again`; `validate_rule` does the same with `--uuid`. A clean report has `ok: true` and an empty `next_actions`.
 
-### Choosing the implementation
+### The implementation
 
-On the Python server (`OPENTIDE_ENGINE=python` or `compare` in the server's environment), `validate_rule` and `validation_report` run `validate` on the implementation `OPENTIDE_ENGINE` selects for it, read at each call from the server's environment ([Choosing the implementation](../cli/json-output.md#choosing-the-implementation)): Python by default; `rust` validates on the Rust workspace and returns the same payload; `compare` runs both and returns the Python payload, logging a warning (`engine_mismatch`) and writing a diff report to `$XDG_STATE_HOME/opentide/compare/` when they differ or when the Rust run fails, so a call never fails over a difference or the Rust half. Some differences are intended and announced in the changelog (YAML 1.2 dates, YAML error wording, an unknown schema revision checked against the newest); the report lists them too. An engine that is none fails the call with `usage_invalid_choice`. `validate_query` checks queries on the Rust engine whatever the variable says; the other tools run Python there.
-
-`opentide mcp start` serves MCP from Rust by default ([opentide mcp start](../cli/mcp.md#mcp-start)): every tool, schema, resource and answer is the Python server's, and every tool and resource runs in Rust. A few answers are worded by opentide rather than by the Python libraries the Python server used:
+`opentide mcp start` is the Rust server ([opentide mcp start](../cli/mcp.md#mcp-start)): every tool, schema, resource and answer is the one opentide 0.23.0's Python server gave, and every tool and resource runs in Rust. A few answers are worded by opentide rather than by the Python libraries the Python server used:
 
 - An argument that is missing or of the wrong type is refused in opentide's words (`Error executing tool search: argument query is required`, `argument code must be a string, not a number`, `argument live must be a boolean (true or false), not 'sometimes'`, `argument limit must be an integer, not 'many'`), where the Python server quoted Pydantic's validation error.
 - `opentide://index` holds the paths, configuration, vocabularies, generated schemas, templates, objects and files of the workspace; it leaves out the Python registry's internal schema sources (`metaschemas`, `definitions`, `subschemas`) and the Python package's data folders under `paths`. The editor schemas are at `opentide://schemas/{object_type}` once `opentide generate schemas` has written them.
 
-`OPENTIDE_ENGINE=python` in the server's environment starts the Python server for one release, as an escape hatch.
+The Python server, and the variable that chose it, are gone ([#841](https://github.com/opentidehq/opentide/issues/841)).
 
 ### Diagnostic fields
 

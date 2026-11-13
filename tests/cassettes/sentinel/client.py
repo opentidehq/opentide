@@ -59,9 +59,8 @@ def _next_id(*_: Any, **__: Any) -> uuid.UUID:
 uuid.uuid1 = _next_id  # type: ignore[assignment]
 uuid.uuid4 = _next_id  # type: ignore[assignment]
 
-from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
-
 from opentide.core.errors import Errors  # noqa: E402
+from opentide.models.system_config import ConfigurationModels as C  # noqa: E402
 from opentide.platforms.sentinel import runner as sentinel_runner  # noqa: E402
 from opentide.platforms.sentinel.client import SentinelApiError, SentinelService  # noqa: E402
 from opentide.query.models import QueryRefused, QueryRequest, TimeWindow  # noqa: E402

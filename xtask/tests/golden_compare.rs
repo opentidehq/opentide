@@ -1,4 +1,4 @@
-//! `golden check --engine compare`'s comparison (`xtask::compare::golden`):
+//! `golden check --engine rust`'s comparison (`xtask::compare::golden`):
 //! a deliberately divergent fake candidate run is caught, an approved
 //! difference passes, and a stale ledger entry fails the run (#805).
 
@@ -78,7 +78,6 @@ fn run_versions(dir: &Path, candidate: &str, versions: (&str, &str)) -> (bool, s
         &golden.join("cases"),
         &golden.join("blobs"),
         &[Ok(recording(candidate))],
-        7,
         true,
         Some(&report),
         false,
@@ -115,30 +114,6 @@ fn comparator_golden_applies_the_ledger_and_fails_a_stale_entry() {
     let (passed, report) = run(dir.path(), "{\"ok\":true,\"summary\":{\"rules\":3}}\n");
     assert!(!passed);
     assert_eq!(report["stale"][0]["entry"], 1);
-}
-
-#[test]
-fn comparator_golden_fails_a_listed_command_the_cli_refuses() {
-    // V854-S-8: the dispatch table names the command, the CLI refuses it.
-    let dir = tempfile::tempdir().unwrap();
-    repo(dir.path(), "");
-    let golden = dir.path().join("tests/golden");
-    let mut refused = recording("");
-    refused.exit_code = 2;
-    refused.stderr = format!("error: opentide info {}\n", xtask::compare::NO_RUST).into_bytes();
-    let passed = xtask::compare::golden(
-        dir.path(),
-        &golden.join("cases"),
-        &golden.join("blobs"),
-        &[Ok(refused)],
-        0,
-        true,
-        None,
-        false,
-        ("0.23.0", "0.23.0"),
-    )
-    .unwrap();
-    assert!(!passed);
 }
 
 #[test]

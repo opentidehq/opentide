@@ -22,7 +22,7 @@ from .test_mcp_stdio_e2e import StdioClient
 
 pytestmark = pytest.mark.cli_smoke
 
-#: The process ``mcp start`` runs under ``rust`` (``python -m opentide.cli.rust``),
+#: The process ``mcp start`` runs in (the console script, ``opentide._cli.main``),
 #: with a thread that writes to descriptor 1 three ways once the server has
 #: reserved it (descriptor 1 then points where descriptor 2 does): the
 #: descriptor itself, ``print``, and a child process that inherits it.
@@ -46,7 +46,7 @@ def noise():
 
 threading.Thread(target=noise, daemon=True).start()
 sys.argv = ["opentide", *sys.argv[1:]]
-from opentide.cli.rust import main
+from opentide._cli import main
 raise SystemExit(main())
 """
 
@@ -80,9 +80,7 @@ def test_stray_output_in_the_process_never_reaches_the_frames(tmp_path: Path) ->
     client = _start(
         ["-c", NOISY_SERVER, "mcp", "start"],
         repo,
-        _environment(
-            OPENTIDE_ENGINE="rust", OPENTIDE_REPO_ROOT=str(repo), OPENTIDE_TIDE_WORKSPACE=str(repo)
-        ),
+        _environment(OPENTIDE_REPO_ROOT=str(repo), OPENTIDE_TIDE_WORKSPACE=str(repo)),
     )
     client.handshake()
     hits = client.call_tool("search", {"query": CORPUS_RULE_UUIDS["sentinel"]})
@@ -101,8 +99,7 @@ def test_stray_output_in_the_process_never_reaches_the_frames(tmp_path: Path) ->
         assert stray in client.stderr, client.stderr
 
 
-@pytest.mark.parametrize("engine", ["python", "rust"])
-def test_repo_names_the_workspace_from_outside_it(tmp_path: Path, engine: str) -> None:
+def test_repo_names_the_workspace_from_outside_it(tmp_path: Path) -> None:
     """``opentide --repo <ws> mcp start`` from another folder serves ``<ws>`` to every tool."""
     repo = materialise_corpus(tmp_path / "corpus")
     outside = tmp_path / "outside"
@@ -110,7 +107,7 @@ def test_repo_names_the_workspace_from_outside_it(tmp_path: Path, engine: str) -
     client = _start(
         ["-m", "opentide", "--repo", str(repo), "mcp", "start"],
         outside,
-        _environment(OPENTIDE_ENGINE=engine),
+        _environment(),
     )
     client.handshake()
     hits = client.call_tool("search", {"query": "Rule", "platform": "sentinel"})

@@ -172,3 +172,47 @@ def test_the_documents_keep_the_command_lines_key_order(
     # The envelope hoists the result's keys to its top level, in its order.
     for key in ("plan", "payloads", "tenants"):
         assert json.dumps(plan.document[key]) == json.dumps(cli[key]), key
+
+
+def _broken_workspace(parent: Path) -> Path:
+    """A workspace on disk, under *parent*, whose one rule has an invalid UUID."""
+    repo = parent / "repo"
+    rules = repo / "objects" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "a.yaml").write_text("name: A\nmetadata:\n  uuid: not-a-uuid\n", encoding="utf-8")
+    return repo
+
+
+def test_cwd_is_where_file_paths_are_read_from(tmp_path: Path) -> None:
+    repo = _broken_workspace(tmp_path)
+    target = "repo/objects/rules/a.yaml"
+    from_parent = Workspace.open(repo, cwd=tmp_path)
+    found = from_parent.validate(check="uuid-format", files=[target], queries="off")
+    assert [issue["code"] for issue in found.report["issues"]] == ["invalid_uuid"]
+    assert from_parent.lint(files=[target]).status == "issues"
+    # From the workspace's own folder, the same path names no file.
+    from_root = Workspace.open(repo)
+    missed = from_root.validate(check="uuid-format", files=[target], queries="off")
+    assert [issue["code"] for issue in missed.report["issues"]] == ["scope_no_match"]
+    assert from_root.lint(files=[target]).unmatched == [target]
+
+
+def test_validate_lint_and_deploy_plan_narrow_to_files_and_uuids(
+    ws: Workspace, tide_corpus_repo: Path
+) -> None:
+    rule = next((tide_corpus_repo / "Objects" / "Detection Rules").glob("rule-0003-*.yaml"))
+    path = str(rule.relative_to(tide_corpus_repo))
+    assert ws.validate(files=[path], queries="off").summary["objects"] == 1
+    by_uuid = ws.validate(uuids=[CORPUS_RULE_UUIDS["splunk"]], queries="off")
+    assert by_uuid.summary["objects"] == 1
+    assert ws.lint(files=[path]).summary["files"] == 1
+    plan = ws.deploy_plan(strategies=["PREVIEW", "RELEASE"], files=[path], keep_deprecated=True)
+    assert plan.ok
+    assert list(plan.document["plan"]) == ["splunk"]
+
+
+def test_the_native_workspace_names_its_root(tide_corpus_repo: Path) -> None:
+    from opentide._native.sdk import Workspace as NativeWorkspace
+
+    native = NativeWorkspace.open(str(tide_corpus_repo))
+    assert repr(native) == f"Workspace({json.dumps(native.root)})"

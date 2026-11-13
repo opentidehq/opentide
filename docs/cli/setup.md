@@ -336,7 +336,7 @@ opentide setup skills --plugin --yes
 opentide setup skills --plugin --claude-code --yes
 ```
 
-`--plugin` adds the `opentide` marketplace (`extraKnownMarketplaces`, from GitHub `opentidehq/skills`) and enables `opentide@opentide` (`enabledPlugins`) in `.claude/settings.json`, keeping every other setting there. With `OPENTIDE_ENGINE=rust` the file is edited in place: only those two members change, so its comments, layout, line endings and a byte-order mark stay. Claude Code offers the marketplace and the plugin to whoever opens the project. With `--claude-code`, `CLAUDE.md` is written as usual but the skills are not copied to `.claude/skills/`: the plugin carries them, and a copy would load each skill twice. On its own, `--plugin` downloads nothing. JSON output has `"plugin": "opentide@opentide"`, and `advice` names the install command of each other agent (Cursor, VS Code, Copilot CLI), which install plugins from their own command or menu rather than a project file. A `.claude/settings.json` that is not a JSON object is left unchanged, with a warning.
+`--plugin` adds the `opentide` marketplace (`extraKnownMarketplaces`, from GitHub `opentidehq/skills`) and enables `opentide@opentide` (`enabledPlugins`) in `.claude/settings.json`, keeping every other setting there. The file is edited in place: only those two members change, so its comments, layout, line endings and a byte-order mark stay. Claude Code offers the marketplace and the plugin to whoever opens the project. With `--claude-code`, `CLAUDE.md` is written as usual but the skills are not copied to `.claude/skills/`: the plugin carries them, and a copy would load each skill twice. On its own, `--plugin` downloads nothing. JSON output has `"plugin": "opentide@opentide"`, and `advice` names the install command of each other agent (Cursor, VS Code, Copilot CLI), which install plugins from their own command or menu rather than a project file. A `.claude/settings.json` that is not a JSON object is left unchanged, with a warning.
 
 The plugin starts the MCP server in its own folder; [Agent Plugins](../mcp/configuration.md#agent-plugins) says how the server finds the detection workspace from there (in Claude Code, `CLAUDE_PROJECT_DIR`). Do not also run `opentide setup mcp --claude-code`, or Claude Code starts two opentide servers.
 
@@ -383,7 +383,7 @@ Interactive setup requires a TTY. In CI or an agent subprocess, provide explicit
 
 ## Source
 
-`src/opentide/cli/setup_app.py`
+`crates/opentide-cli/src/commands/setup/`
 
 ## Usage guide
 

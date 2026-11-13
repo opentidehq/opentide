@@ -92,9 +92,9 @@ Deploy plan · strategy PREVIEW · 1 platform, 0 tenants · dry run, nothing is 
 sentinel · 0 tenants
   + create or update  Sentinel KQL Rule  …000000000001  status STAGING
 
-warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 dry run, nothing sent
 ```
 
@@ -236,13 +236,13 @@ opentide --json deploy --strategy PREVIEW --platform sentinel
 
 ### On the Rust engine
 
-With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)), a deploy that sends runs on the Rust connectors, for every platform: to the platform its `--platform` names or, without one, to every platform the workspace enables, in the plan's order, with the same plan, rule lines, checklist rows, `progress` events, CI job summary (and, on a run that matched no rule, the same warning on the CI run), document, deployment-state shards and exit codes as above. Where the Rust run differs, it is on purpose:
+A deploy that sends runs on the Rust connectors ([the implementation](./json-output.md#the-implementation)), for every platform: to the platform its `--platform` names or, without one, to every platform the workspace enables, in the plan's order, with the same plan, rule lines, checklist rows, `progress` events, CI job summary (and, on a run that matched no rule, the same warning on the CI run), document, deployment-state shards and exit codes as above. Where it differs from opentide 0.23.0's Python deploy, it is on purpose:
 
 - a log line names no tenant (`tenant: ***`): the Rust CLI redacts tenant names and hosts from every line it logs; the document still names them;
 - a credential whose `$NAME` is unset is refused before any request, where the Python CLI sent the literal `$NAME` to the platform;
-- a status promotion whose rule file the Rust engine cannot read as the Python CLI reports it (YAML that does not parse, a file that is not a mapping or cannot be read) is refused with `engine_not_ported` before anything is written: run it with `OPENTIDE_ENGINE=python`.
+- a status promotion that cannot rewrite the push (no promotion target, a platform key that is not a string, promoted text that does not read back) fails the run before anything is written (exit `1`); `--skip-promotion` deploys without it.
 
-A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) runs on Rust too: the same `status promotion` step, the same rule files rewritten byte for byte (each block `status` replaced in place, a byte-order mark and line endings kept, the file written atomically), the same `rule_not_promoted` warning for a status written as an anchor, an alias or under a merge key, and the same exit codes. `OPENTIDE_ENGINE=compare` refuses a deploy that sends, since both runs would reach the tenant.
+A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is as 0.23.0's: the same `status promotion` step, the same rule files rewritten byte for byte (each block `status` replaced in place, a byte-order mark and line endings kept, the file written atomically), the same `rule_not_promoted` warning for a status written as an anchor, an alias or under a merge key, and the same exit codes.
 
 ## Subcommands
 
@@ -265,7 +265,7 @@ What it does:
 
 It exits `0` after a migration, after a second run with nothing left to move, and when the only findings are `external_id_unused` warnings. It exits `1` when any rule fails or git ignores the deployment state directory. If the command stopped after writing a shard and before editing the rule, the next run finds the two agree and finishes the edit.
 
-With `OPENTIDE_ENGINE=rust` ([choosing the implementation](./json-output.md#choosing-the-implementation)) it runs on the Rust command line, through the same deployment-state code as a deploy: the same shards, edits, warnings, document and exit codes. On a terminal its log lines are one unstyled line each.
+It runs through the same deployment-state code as a deploy: the same shards, edits, warnings, document and exit codes. On a terminal its log lines are one unstyled line each.
 
 <Callout type="warn">
 The migration is done when it is committed. Commit the edited rules together with every new file under `.opentide/states/deployment/`. A deploy from a checkout that has the stripped rules but not the shards creates a second live rule for every one of them.
@@ -328,13 +328,14 @@ error: Metadata deployment is not implemented for splunk
 ## Per-rule deployment via SDK or MCP
 
 ```python
-rule = Opentide.Rules[uuid]
-result = rule.deploy("sentinel", dry_run=True)                       # as its status says
-result = rule.deploy("sentinel", dry_run=True, strategies=["PREVIEW"])
+from opentide import Workspace
+
+ws = Workspace.open(".")
+plan = ws.deploy_plan(uuids=[uuid], platform="sentinel", strategies=["PREVIEW"])  # nothing sent
 ```
 
-Without `strategies`, the rule is deployed by the run strategies that deploy the strategy its `sentinel` status maps to, to the tenants that accept them. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys the same way. On the command line, `deploy --uuid` does the same for one rule or several, with the dry run's rendered `payloads` ([Selecting rules](#selecting-rules)).
+`Workspace.deploy_plan` is `deploy --dry-run` for those rules ([Workspace](../sdk/workspace.md#plan-a-deploy)); a real deploy is `ws.run_json(["deploy", "--uuid", uuid, "--platform", "sentinel", "--strategy", "RELEASE"])`. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys one rule by the run strategies that deploy the strategy its block's status maps to, to the tenants that accept them. On the command line, `deploy --uuid` does the same for one rule or several, with the dry run's rendered `payloads` ([Selecting rules](#selecting-rules)).
 
 ## Source
 
-`src/opentide/cli/commands/deploy.py`, `src/opentide/cli/services/deploy.py`, `src/opentide/cli/services/migrate_state.py`
+`crates/opentide-cli/src/commands/deploy.rs`, `crates/opentide-cli/src/commands/deploy_send.rs`, `crates/opentide-cli/src/commands/deploy_promote.rs`, `crates/opentide-cli/src/commands/migrate_state.rs`, `crates/opentide-compile/` (compile and plan), `crates/opentide-connectors/` (the platforms)

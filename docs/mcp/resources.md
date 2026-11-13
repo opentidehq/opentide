@@ -52,7 +52,7 @@ Missing objects return:
 
 - Collection resources (`opentide://rules`, `opentide://threats`, `opentide://objectives`, `opentide://index`) dump every object and grow with the repo. On large catalogues they can be big — read a single-object URI, or use the `search` tool to narrow, before pulling a full collection into context.
 - There is no pagination; resources return the full payload. If a collection is too large for your context window, use `search` (tool) and then fetch specific objects by UUID.
-- Resources reflect the runtime index built at `Opentide.initialise()`. If they look empty or stale, regenerate schemas (`opentide generate schemas`) and restart the server.
+- Resources reflect the workspace the server read. If they look empty or stale, regenerate schemas (`opentide generate schemas`) and restart the server.
 
 ## platforms resource shape
 
@@ -92,7 +92,7 @@ When nothing matches, the resource returns a diagnostic rather than an empty obj
 }
 ```
 
-Resources reflect the runtime index after `Opentide.initialise()` — run `opentide generate schemas` in the client repo if schemas are empty.
+Resources reflect the workspace the server read — run `opentide generate schemas` in the client repo if schemas are empty.
 
 `opentide://templates/{object_type}` accepts the same forms. Templates are
 rendered from the current model, so a versioned id resolves only when it names
@@ -119,17 +119,15 @@ An unknown name returns `{ "error": "Unknown vocabulary '…'", "available": [..
 ## SDK equivalent
 
 ```python
-from opentide import Opentide
+from opentide import Workspace
 
-Opentide.initialise()
-Opentide.Index
-Opentide.JsonSchemas.Index
-Opentide.Vocabularies.Index
-Opentide.Platforms.items()
+ws = Workspace.open(".")
+ws.info()       # the index: counts, platforms and their capabilities
+ws.catalog()    # every object, with its path and references
 ```
 
-See [SDK registry](../sdk/registry.md).
+See the [SDK's Workspace](../sdk/workspace.md).
 
 ## Source
 
-`src/opentide/mcp_server/resources.py`
+`crates/opentide-cli/src/mcp/resources.rs`

@@ -26,50 +26,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-/// Command paths with a Rust implementation; every other one is refused with
-/// `engine_not_ported`, as `OPENTIDE_ENGINE=rust` refuses it.
-/// `deploy` runs here with `--dry-run` (UC-3.1c), and a deploy that sends
-/// when it names its `--platform` (UC-4.6); one that names none is refused as
-/// unported, as `validate query --live` without `--platform` is.
-pub const PORTED: &[&str] = &[
-    "commands",
-    "explain",
-    "info",
-    "lint",
-    "validate",
-    "validate query",
-    "rules unreviewed",
-    "generate exports",
-    "generate exports navigator",
-    "generate exports objects",
-    "generate exports revisions",
-    "generate docs",
-    "generate docs rules",
-    "generate docs objectives",
-    "generate docs threats",
-    "generate docs index",
-    "deploy",
-    "deploy migrate-state",
-    "serve",
-    "query",
-    "share",
-    "share push",
-    "share preview",
-    "share status",
-    "share retract",
-    "share targets",
-    "generate extract defender",
-    "generate extract elastic",
-    "generate extract sentinel",
-];
-
-/// The file in which a run refused with `engine_not_ported` records its
-/// message, when the variable names one. `OPENTIDE_ENGINE=compare`
-/// (`src/opentide/cli/engines.py`) sets it for the Rust side: a command this
-/// engine runs for some inputs only (`generate docs` without CVE details)
-/// refuses the others, and the Python side's run is then the result.
-pub const REFUSAL_ENV: &str = "OPENTIDE_ENGINE_REFUSAL";
-
 /// What the embedding process tells the run about itself.
 pub struct Host {
     /// opentide's version, as `--version` and the catalogue print it.
@@ -253,7 +209,6 @@ impl Run<'_> {
         if self.interrupted() {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
-        self.record_refusal(outcome)?;
         match self.mode {
             Mode::Json => {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
@@ -288,22 +243,6 @@ impl Run<'_> {
         out.flush()?;
         err.flush()?;
         Ok(outcome.exit_code)
-    }
-
-    /// Writes an `engine_not_ported` refusal's message to the file
-    /// [`REFUSAL_ENV`] names, if it names one.
-    fn record_refusal(&self, outcome: &Outcome) -> std::io::Result<()> {
-        let Some(failure) = outcome
-            .failure
-            .as_ref()
-            .filter(|failure| failure.code == code::ENGINE_NOT_PORTED)
-        else {
-            return Ok(());
-        };
-        match self.env.get(REFUSAL_ENV).filter(|path| !path.is_empty()) {
-            Some(path) => std::fs::write(path, failure.message.as_bytes()),
-            None => Ok(()),
-        }
     }
 
     /// The stream the lines go to: colour in `human` mode, bold and dim only
@@ -862,6 +801,35 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
+            "deploy replay-state" => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let commit = leaf(&matches)
+                    .get_one::<String>("state_commit")
+                    .cloned()
+                    .unwrap_or_default();
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                crate::commands::deploy_replay::run(&cwd, self.env, &commit, out, err)
+            }
+            "deploy metadata" => {
+                let platform = leaf(&matches)
+                    .get_one::<crate::tree::Platform>("platform")
+                    .and_then(clap::ValueEnum::to_possible_value)
+                    .map(|value| value.get_name().to_owned())
+                    .unwrap_or_default();
+                let failure = Failure::new(
+                    "not_implemented",
+                    format!("Metadata deployment is not implemented for {platform}"),
+                );
+                self.emit(
+                    &Outcome::failed(&path, USAGE_EXIT_CODE, failure),
+                    &[],
+                    &[],
+                    out,
+                    err,
+                )
+            }
             "deploy migrate-state" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::migrate_state::run(
@@ -1015,7 +983,7 @@ impl Run<'_> {
                 }
                 self.emit_report(&report, out, err)
             }
-            _ => self.emit(&not_ported(&path), &[], &[], out, err),
+            _ => self.emit(&unhandled(&path), &[], &[], out, err),
         }
     }
 
@@ -2050,7 +2018,6 @@ impl Run<'_> {
             return Ok(INTERRUPTED_EXIT_CODE);
         }
         let outcome = &report.outcome;
-        self.record_refusal(outcome)?;
         if KEEPING_DOCUMENT.with(std::cell::Cell::get) {
             let document = outcome.document(self.duration_ms());
             KEPT_DOCUMENT.with(|kept| *kept.borrow_mut() = Some(document));
@@ -2956,15 +2923,11 @@ pub fn main(argv: &[String], version: &str) -> i32 {
     run(argv, &env, &host, &mut out, &mut err)
 }
 
-/// The refusal of a command path this command line has no implementation
-/// of (`engine_not_ported`, exit 2), as `opentide.cli.engines` words it.
-fn not_ported(path: &str) -> Outcome {
-    let message = format!(
-        "opentide {path} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare."
-    );
-    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Outcome::failed(path, USAGE_EXIT_CODE, failure)
+/// A command path of the tree that no handler answers: a bug in opentide
+/// (`internal`, exit 1). Every path the tree has is answered.
+fn unhandled(path: &str) -> Outcome {
+    let message = format!("opentide {path} has no implementation: this is a bug in opentide");
+    Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
 }
 
 #[cfg(test)]
@@ -3479,41 +3442,12 @@ mod tests {
         assert_eq!((code, stderr.as_str()), (1, ""));
     }
 
-    /// `line`, whose command has no implementation here (a path taken out
-    /// of the table): the dispatcher's `engine_not_ported` refusal.
-    fn refused(line: &str, pairs: &[(&str, &str)]) -> Ran {
-        ran(line, pairs, false, |run, out, err| {
-            Ok(run.emit(&not_ported("query"), &[], &[], out, err)?)
+    /// `line`, whose command no handler answers (a path taken out of the
+    /// dispatcher): an internal error.
+    fn unhandled_run(line: &str) -> Ran {
+        ran(line, &[], false, |run, out, err| {
+            Ok(run.emit(&unhandled("query"), &[], &[], out, err)?)
         })
-    }
-
-    /// A refusal is recorded in the file `OPENTIDE_ENGINE_REFUSAL` names, in
-    /// every mode, for `compare` to run Python alone; nothing else is.
-    #[test]
-    fn a_refusal_is_recorded_where_the_dispatcher_asks() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("refusal");
-        let path = file.to_string_lossy().into_owned();
-        for line in ["--json query --platform x q", "query --platform x q"] {
-            let run = refused(line, &[(REFUSAL_ENV, &path)]);
-            assert_eq!(run.code, 2, "{line}");
-            let recorded = std::fs::read_to_string(&file).unwrap();
-            assert!(
-                recorded.starts_with("opentide query has no Rust implementation yet"),
-                "{line}: {recorded}"
-            );
-            std::fs::remove_file(&file).unwrap();
-        }
-        let ran = dispatched("--json commands", &[(REFUSAL_ENV, &path)], false);
-        assert_eq!(ran.code, 0);
-        assert!(!file.exists());
-        // A usage error is no refusal: nothing is written.
-        let sysdig = dispatched("query --platform sysdig q", &[(REFUSAL_ENV, &path)], false);
-        assert_eq!(sysdig.code, 2);
-        assert!(!file.exists());
-        // Without the variable, nothing is written.
-        assert_eq!(refused("query --platform x q", &[]).code, 2);
-        assert!(!file.exists());
     }
 
     #[test]
@@ -3537,14 +3471,13 @@ mod tests {
             "{}",
             help.stdout
         );
-        let json = refused("--json query --platform x q", &[]);
-        assert_eq!(json.code, 2);
-        assert!(json.stdout.contains("\"code\":\"engine_not_ported\""));
-        assert!(json.stdout.contains("\"argument\":\"OPENTIDE_ENGINE\""));
-        let plain = refused("query --platform x q", &[]);
+        let json = unhandled_run("--json query --platform x q");
+        assert_eq!(json.code, 1);
+        assert!(json.stdout.contains("\"code\":\"internal\""));
+        let plain = unhandled_run("query --platform x q");
         assert_eq!(
             plain.stderr,
-            "error: opentide query has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.\n"
+            "error: opentide query has no implementation: this is a bug in opentide\n"
         );
         let sysdig = dispatched("query --platform sysdig q", &[], false);
         assert_eq!(sysdig.code, 2);
@@ -4020,7 +3953,7 @@ mod tests {
             Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
-        let failed = refused("--json query --platform x q", &[]);
+        let failed = unhandled_run("--json query --platform x q");
         assert!(
             failed.stdout.starts_with("{\"error\":"),
             "{}",

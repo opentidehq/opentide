@@ -23,8 +23,8 @@ for `src/`, annotating new and touched functions is a review requirement.
 - `Any` is allowed (`ANN401` is off) where the value really is arbitrary: parsed YAML/JSON
   payloads, vendor SDK objects without stubs. Narrow it at the boundary with `isinstance`
   rather than passing `Any` deeper.
-- `from __future__ import annotations` is the norm, but pydantic models and Typer commands
-  evaluate annotations at runtime: names used there must be importable at runtime, not only
+- `from __future__ import annotations` is the norm, but pydantic models (a plugin's
+  `configuration_model`) evaluate annotations at runtime: names used there must be importable at runtime, not only
   under `TYPE_CHECKING`.
 - Python 3.10 is the floor: no `Self` from `typing` (use `typing_extensions`), no PEP 695
   `type X = ...` / `def f[T]()` syntax.

@@ -2,7 +2,7 @@
 
 The query and Tide object analysis engine and the language server, compiled into the `opentide` package as `opentide._native`. `pip install opentide` installs it: there is no separate package and no extra.
 
-This crate binds [`opentide-analysis`](../../crates/opentide-analysis) and [`opentide-lsp`](../../crates/opentide-lsp), the engine crates of this repository's Cargo workspace (imported from opentidehq/language-server, [`docs/engine/IMPORT.md`](../../docs/engine/IMPORT.md)), by path with PyO3: KQL, SPL, ES|QL, EQL, Kibana KQL (kuery), Lucene and Tide YAML, analyzed without I/O. Python reaches it only through `src/opentide/analysis.py`.
+This crate binds [`opentide-analysis`](../../crates/opentide-analysis), the engine crate of this repository's Cargo workspace (imported from opentidehq/language-server, [`docs/engine/IMPORT.md`](../../docs/engine/IMPORT.md)), by path with PyO3: KQL, SPL, ES|QL, EQL, Kibana KQL (kuery), Lucene and Tide YAML, analyzed without I/O. Python reaches it only through `src/opentide/analysis.py`.
 
 | Command | What the engine does |
 | --- | --- |

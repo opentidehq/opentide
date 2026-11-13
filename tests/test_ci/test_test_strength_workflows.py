@@ -1,9 +1,10 @@
-"""The test-strength workflows: coverage, mutants and parity (UC-X.2, #844).
+"""The test-strength workflows: coverage and mutants (UC-X.2, #844).
 
-Two of them write: the weekly mutation run files issues and the parity
-workflow commits the dashboard. These tests hold the design that keeps that
-safe: read-only by default, a write permission only on the one job that needs
-it, only on the trigger it is for, and in a job that runs no repository code.
+The parity dashboard's workflow was retired with the Python implementation
+(UC-6.2, #841). One of them writes: the weekly mutation run files issues.
+These tests hold the design that keeps that safe: read-only by default, a
+write permission only on the one job that needs it, only on the trigger it is
+for, and in a job that runs no repository code.
 They also hold the coverage workflow to measuring the PyO3 binding with the
 whole Python suite, since only Python calls its functions.
 """
@@ -20,11 +21,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
-NAMES = ("coverage.yml", "mutants.yml", "parity.yml")
+NAMES = ("coverage.yml", "mutants.yml")
 # The only write permissions these workflows hold: (workflow, job) -> scopes.
 WRITERS = {
     ("mutants.yml", "issues"): {"issues": "write"},
-    ("parity.yml", "commit"): {"contents": "write"},
 }
 PINNED = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
 # What would run repository code in a job that holds a write token.
@@ -59,17 +59,6 @@ def test_no_writer_runs_on_a_pull_request() -> None:
     assert set(_triggers(mutants)) == {"schedule", "workflow_dispatch"}
     assert mutants["jobs"]["issues"]["if"] == "github.event_name == 'schedule'"
 
-    parity = _load("parity.yml")
-    condition = parity["jobs"]["commit"]["if"]
-    # Off by default; then only the schedule or a manual run, on two branches.
-    assert condition == (
-        "vars.PARITY_COMMIT == 'true' && "
-        "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && "
-        "(github.ref == 'refs/heads/development' || "
-        "github.ref == 'refs/heads/integration/unified-core')"
-    )
-    assert "pull_request" not in condition and "'push'" not in condition
-
 
 @pytest.mark.parametrize(("name", "job_id"), sorted(WRITERS))
 def test_a_writer_runs_no_repository_code(name: str, job_id: str) -> None:
@@ -81,16 +70,6 @@ def test_a_writer_runs_no_repository_code(name: str, job_id: str) -> None:
     if name == "mutants.yml":
         # It reads the report job's artifact and calls gh: no checkout at all.
         assert not any(u.startswith("actions/checkout@") for u in uses), uses
-
-
-def test_the_parity_commit_never_forces_and_changes_one_file() -> None:
-    run = "\n".join(str(s.get("run", "")) for s in _load("parity.yml")["jobs"]["commit"]["steps"])
-    assert "--force" not in run and " -f " not in run
-    assert "git commit --only docs/internal/parity.md" in run
-    # Back to the branch that was pushed, which the job condition limits to two.
-    assert 'git push origin "HEAD:$BRANCH"' in run
-    env = _load("parity.yml")["jobs"]["commit"]["steps"][-1]["env"]
-    assert env["BRANCH"] == "${{ github.ref }}"
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -141,17 +120,6 @@ def test_a_failing_gate_turns_the_job_red() -> None:
     assert str(gate["run"]).lstrip().startswith("set -o pipefail"), gate["run"]
     (build,) = [s for s in job["steps"] if "uv sync" in str(s.get("run", ""))]
     assert "--reinstall-package opentide" in str(build["run"])
-
-
-def test_the_dashboard_job_fails_on_a_stale_page_or_a_missing_input() -> None:
-    steps = _load("parity.yml")["jobs"]["dashboard"]["steps"]
-    runs = [str(s.get("run", "")) for s in steps]
-    renders = [r for r in runs if "cargo xtask parity dashboard" in r]
-    assert renders
-    assert all("--require-inputs" in r for r in renders), renders
-    assert any("--check" in r for r in renders), renders
-    for step in steps:
-        assert "continue-on-error" not in step, step.get("name")
 
 
 def test_the_mutation_run_accepts_survivors_and_fails_on_anything_else() -> None:

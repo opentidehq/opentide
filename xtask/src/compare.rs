@@ -10,7 +10,7 @@
 //! | `files/<path>` | each file the command created or changed, with its mode |
 //! | `deleted` | the files it deleted, one relative path per line (optional) |
 //!
-//! `golden check --engine compare` (UC-0.5, #803) reads its recordings
+//! `golden check --engine rust` (UC-0.5, #803) reads its recordings
 //! instead, and compares them with the same library.
 
 use anyhow::{Context, Result, bail};
@@ -126,9 +126,9 @@ pub fn read_ledger(path: &Path, changelog: &str) -> Result<Ledger> {
     Ok(ledger)
 }
 
-/// The candidate of `golden check --engine compare`: this repository's CLI
-/// (`.venv`, from `uv sync --group dev`) with `OPENTIDE_ENGINE=rust`, which
-/// runs a command's Rust implementation or refuses with `engine_not_ported`.
+/// The candidate of `golden check --engine rust`: this repository's CLI
+/// (`.venv`, from `uv sync --group dev`), the console script that runs the
+/// Rust core in process.
 pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
     let install_dir = repo.join(".venv");
     let bin_dir = install_dir.join("bin");
@@ -142,7 +142,6 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
         name: "rust".into(),
         bin_dir,
         install_dir,
-        env: BTreeMap::from([("OPENTIDE_ENGINE".to_owned(), "rust".to_owned())]),
         host_paths: Vec::new(),
         known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })
@@ -168,8 +167,7 @@ pub fn candidate_version(opentide: &Path) -> Result<String> {
 /// `main(argv)` as the console script in Node's process. It needs the addon
 /// `npm run build` writes beside it. The cases run it through a launcher in
 /// `target/golden-node/` that execs the `node` found on `PATH` now (a case's
-/// `PATH` is the harness's own); the commands it covers are those of
-/// [`candidate`], read from `.venv`'s dispatch table.
+/// `PATH` is the harness's own).
 #[cfg(unix)]
 pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
     use std::os::unix::fs::PermissionsExt;
@@ -216,24 +214,9 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
         name: "node".into(),
         bin_dir,
         install_dir: package,
-        env: BTreeMap::new(),
         host_paths: Vec::new(),
         known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })
-}
-
-/// Why the Node runner leaves `case` out, if it does: a run the PyPI CLI
-/// still answers in Python although its command has a Rust implementation,
-/// which the npm bin (the Rust command line alone, with no Python) answers
-/// differently. `golden check --runner node` counts these cases and says why;
-/// `--engine compare` compares them.
-///
-/// Nothing is left out since UC-6.0b and UC-6.0d (#841, #977): `--help` is
-/// the Rust command line's under both runners, and `doctor` checks nothing in
-/// Python, so the npm bin answers both as the PyPI CLI does and every case is
-/// compared. The hook stays for the next run that answers in Python.
-pub fn node_leaves_out(_case: &crate::golden::case::Case) -> Option<&'static str> {
-    None
 }
 
 /// The Node runner launches through a shell script: Unix only, as the
@@ -259,156 +242,6 @@ fn package_uuids(repo: &Path) -> Result<std::collections::BTreeSet<String>> {
         crate::golden::oracle::collect_uuids(&package, &mut out)?;
     }
     Ok(out)
-}
-
-/// Which runs of a command its Rust implementation covers
-/// (`RustCommand.requires`, `refuses`, `platforms`, `platform_scope` and
-/// `offline`).
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
-pub struct Coverage {
-    /// Flags of which a run must carry one (none: every run).
-    #[serde(default)]
-    pub requires: Vec<String>,
-    /// Flags a run must carry none of.
-    #[serde(default)]
-    pub refuses: Vec<String>,
-    /// The platforms with a Rust connector: a run is covered only when every
-    /// `--platform` it names is one, and one that names none is not (none:
-    /// every platform).
-    #[serde(default)]
-    pub platforms: Vec<String>,
-    /// The flags under which `platforms` applies (none: every run):
-    /// `validate query --live`.
-    #[serde(default)]
-    pub platform_scope: Vec<String>,
-    /// Flags under which a run reaches no tenant, so `platforms` does not
-    /// apply: `deploy --dry-run`.
-    #[serde(default)]
-    pub offline: Vec<String>,
-    /// The platform plugins installed, for a command that runs on them
-    /// (`RustCommand.plugins`, UC-4.5): a run whose every `--platform` is
-    /// one is covered whatever `requires` and `platforms` say. Empty where no
-    /// plugin is installed, as in the goldens' environment.
-    #[serde(default)]
-    pub plugins: Vec<String>,
-}
-
-/// Every `--platform` value of *options*, in order.
-fn platform_values(options: &[String]) -> Vec<&str> {
-    let mut named = Vec::new();
-    for (index, token) in options.iter().enumerate() {
-        if token == "--platform" {
-            if let Some(value) = options.get(index + 1) {
-                named.push(value.as_str());
-            }
-        } else if let Some(value) = token.strip_prefix("--platform=") {
-            named.push(value);
-        }
-    }
-    named
-}
-
-impl Coverage {
-    /// Whether every `--platform` the run names is an installed plugin's
-    /// (`RustCommand.plugin_run`).
-    fn plugin_run(&self, options: &[String]) -> bool {
-        let named = platform_values(options);
-        !named.is_empty()
-            && named
-                .iter()
-                .all(|name| self.plugins.iter().any(|plugin| plugin == name))
-    }
-
-    /// Whether the run's `--platform` values all have a Rust connector, or
-    /// `platforms` does not apply to it.
-    fn platforms_covered(&self, options: &[String]) -> bool {
-        if self.platforms.is_empty()
-            || self.offline.iter().any(|flag| options.contains(flag))
-            || (!self.platform_scope.is_empty()
-                && !self
-                    .platform_scope
-                    .iter()
-                    .any(|flag| options.contains(flag)))
-        {
-            return true;
-        }
-        let named = platform_values(options);
-        !named.is_empty()
-            && named
-                .iter()
-                .all(|name| self.platforms.iter().any(|platform| platform == name))
-    }
-}
-
-/// The command paths with a Rust implementation: the CLI's dispatch table,
-/// `opentide.cli.engines.RUST_COMMANDS`, read through this repository's
-/// `.venv`, each with the runs it covers ([`Coverage`]).
-pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
-    let python = repo.join(".venv").join("bin").join("python");
-    let output = std::process::Command::new(&python)
-        .args([
-            "-I",
-            "-c",
-            "import json; from opentide.cli import engines; \
-             from opentide.cli.engines import RUST_COMMANDS; \
-             plugins = sorted(getattr(engines, 'plugin_platforms', frozenset)()); \
-             print(json.dumps({' '.join(path): {'requires': list(command.requires), \
-             'refuses': list(getattr(command, 'refuses', ())), \
-             'platforms': list(getattr(command, 'platforms', ())), \
-             'platform_scope': list(getattr(command, 'platform_scope', ())), \
-             'offline': list(getattr(command, 'offline', ())), \
-             'plugins': plugins if getattr(command, 'plugins', False) else []} \
-             for path, command in RUST_COMMANDS.items()}))",
-        ])
-        .output()
-        .with_context(|| format!("run {} (uv sync --group dev)", python.display()))?;
-    if !output.status.success() {
-        bail!(
-            "read the dispatch table: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    serde_json::from_slice(&output.stdout).context("parse the dispatch table")
-}
-
-/// Whether the Rust implementation covers a case of `command` run with
-/// `argv`: its command is in `table`, and the arguments before `--` carry
-/// `--help` (the command tree's, whatever else they carry: #841), or one of
-/// the flags it requires, if it requires any, and none it refuses.
-pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]) -> bool {
-    let Some(coverage) = table.get(command) else {
-        return false;
-    };
-    let options = argv
-        .iter()
-        .position(|arg| arg == "--")
-        .map_or(argv, |end| &argv[..end]);
-    if options.iter().any(|arg| arg == "--help") {
-        return true;
-    }
-    if coverage.refuses.iter().any(|flag| options.contains(flag)) {
-        return false;
-    }
-    if coverage.plugin_run(options) {
-        return true;
-    }
-    coverage.platforms_covered(options)
-        && (coverage.requires.is_empty()
-            || coverage.requires.iter().any(|flag| options.contains(flag)))
-}
-
-/// What the CLI prints when `OPENTIDE_ENGINE=rust` names a command with no
-/// Rust implementation (`opentide.cli.engines`), in every output mode.
-pub const NO_RUST: &str = "has no Rust implementation yet";
-
-/// Whether the candidate refused the case: its command has no Rust implementation.
-pub fn refused(run: &crate::golden::recording::Recording) -> bool {
-    let has = |bytes: &[u8]| {
-        bytes
-            .windows(NO_RUST.len())
-            .any(|w| w == NO_RUST.as_bytes())
-    };
-    run.exit_code == 2 && (has(&run.stdout) || has(&run.stderr))
 }
 
 /// A recording as the comparator's run: a link is its target with `S_IFLNK`
@@ -454,8 +287,8 @@ pub fn run_of(recording: &crate::golden::recording::Recording) -> Run {
     }
 }
 
-/// `golden check --engine compare`: every case the candidate ran (not
-/// refused) against its recording, through the comparator and the ledger;
+/// `golden check --engine rust`: every case the candidate ran against its
+/// recording, through the comparator and the ledger;
 /// a stale ledger entry fails the run. Whether it passed.
 #[expect(
     clippy::too_many_arguments,
@@ -466,7 +299,6 @@ pub fn golden(
     cases: &Path,
     blobs: &Path,
     results: &[Result<crate::golden::recording::Recording>],
-    python_only: usize,
     complete: bool,
     report_path: Option<&Path>,
     full: bool,
@@ -495,15 +327,6 @@ pub fn golden(
                 continue;
             }
         };
-        if refused(actual) {
-            // The dispatch table names the command, yet the CLI refused it.
-            failed += 1;
-            eprintln!(
-                "{}: the CLI has no Rust implementation of `{}`",
-                actual.case.id, actual.case.command
-            );
-            continue;
-        }
         let dir = cases.join(&actual.case.id);
         let recorded = crate::golden::recording::Recording::read(&dir, blobs)
             .with_context(|| format!("{}: not recorded", actual.case.id))?;
@@ -568,7 +391,7 @@ pub fn golden(
     let different = report.cases.iter().filter(|case| !case.equal).count();
     let passed = report.equal && failed == 0;
     let line = format!(
-        "golden compare: {} case(s) compared, {python_only} Python only, {different} differ, \
+        "golden rust: {} case(s) compared, {different} differ, \
          {} stale ledger entr{}, {failed} failed to run",
         report.cases.len(),
         report.stale.len(),
@@ -625,250 +448,6 @@ changelog = "**c**"
         .unwrap();
         let owned: Vec<bool> = ledger.entries.iter().map(super::on_a_cassette).collect();
         assert_eq!(owned, [true, false]);
-    }
-
-    #[test]
-    fn the_node_runner_leaves_out_what_the_pypi_cli_answers_in_python() {
-        use crate::golden::case::{Case, Mode, Stdin, StdinKind};
-        let on = |fixture: &str, command: &str, argv: &[&str]| Case {
-            id: format!("{command}/plain/{fixture}/x"),
-            command: command.into(),
-            variant: "x".into(),
-            mode: Mode::Plain,
-            fixture: fixture.into(),
-            argv: argv.iter().map(|arg| (*arg).to_owned()).collect(),
-            cwd: ".".into(),
-            env: std::collections::BTreeMap::new(),
-            stdin: Stdin {
-                kind: StdinKind::Null,
-                input: String::new(),
-            },
-            timeout_secs: 60,
-            normalise: Vec::new(),
-            cassette: None,
-        };
-        let left_out =
-            |command: &str, argv: &[&str]| super::node_leaves_out(&on("none", command, argv));
-        // `--help` is the Rust command line's under both runners (#841).
-        assert_eq!(
-            left_out("validate", &["opentide", "validate", "--help"]),
-            None
-        );
-        assert_eq!(left_out("info", &["opentide", "-h", "info"]), None);
-        assert_eq!(left_out("doctor", &["opentide", "doctor", "--help"]), None);
-        // doctor checks nothing in Python (UC-6.0d): compared on every fixture.
-        let doctor = ["opentide", "doctor", "--offline"];
-        for fixture in [
-            "none",
-            "empty",
-            "vscode",
-            "fault",
-            "heavy-small",
-            "tide-corpus",
-        ] {
-            assert_eq!(
-                super::node_leaves_out(&on(fixture, "doctor", &doctor)),
-                None,
-                "{fixture}"
-            );
-        }
-        assert_eq!(left_out("validate", &["opentide", "validate"]), None);
-    }
-
-    #[test]
-    fn a_run_on_installed_plugins_is_covered_whatever_it_requires() {
-        use std::collections::BTreeMap;
-        let argv =
-            |args: &[&str]| -> Vec<String> { args.iter().map(|arg| (*arg).to_owned()).collect() };
-        let table = BTreeMap::from([(
-            "deploy".to_owned(),
-            super::Coverage {
-                requires: vec!["--dry-run".to_owned()],
-                refuses: vec!["--plan".to_owned()],
-                plugins: vec!["acme".to_owned()],
-                ..super::Coverage::default()
-            },
-        )]);
-        let covers = |args: &[&str]| super::covers(&table, "deploy", &argv(args));
-        assert!(covers(&[
-            "opentide",
-            "deploy",
-            "--platform",
-            "acme",
-            "--all"
-        ]));
-        assert!(covers(&["opentide", "deploy", "--platform=acme"]));
-        assert!(!covers(&["opentide", "deploy", "--platform", "other"]));
-        assert!(!covers(&["opentide", "deploy", "--platform", "sentinel"]));
-        assert!(!covers(&["opentide", "deploy", "--all"]));
-        assert!(!covers(&[
-            "opentide",
-            "deploy",
-            "--platform",
-            "acme",
-            "--plan",
-            "x"
-        ]));
-        // Without plugins installed (the goldens'), nothing changes.
-        assert!(covers(&["opentide", "deploy", "--dry-run"]));
-    }
-
-    #[test]
-    fn a_command_covers_the_runs_with_a_flag_it_requires_and_none_it_refuses() {
-        use std::collections::BTreeMap;
-        let argv =
-            |args: &[&str]| -> Vec<String> { args.iter().map(|arg| (*arg).to_owned()).collect() };
-        let table = BTreeMap::from([
-            ("info".to_owned(), super::Coverage::default()),
-            (
-                "deploy".to_owned(),
-                super::Coverage {
-                    platforms: vec!["sysdig".to_owned()],
-                    offline: vec!["--dry-run".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-            (
-                "validate query".to_owned(),
-                super::Coverage {
-                    platforms: vec!["crowdstrike".to_owned(), "sysdig".to_owned()],
-                    platform_scope: vec!["--live".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-            (
-                "query".to_owned(),
-                super::Coverage {
-                    platforms: vec!["elastic".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-            (
-                "example".to_owned(),
-                super::Coverage {
-                    refuses: vec!["--unported".to_owned()],
-                    ..super::Coverage::default()
-                },
-            ),
-        ]);
-        assert!(!super::covers(
-            &table,
-            "example",
-            &argv(&["opentide", "example", "--unported"])
-        ));
-        assert!(super::covers(
-            &table,
-            "example",
-            &argv(&["opentide", "example", "--", "--unported"])
-        ));
-        assert!(super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--platform", "elastic", "x"])
-        ));
-        assert!(super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--platform=elastic", "x"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--platform", "sentinel", "x"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "x"])
-        ));
-        assert!(super::covers(
-            &table,
-            "validate query",
-            &argv(&[
-                "opentide",
-                "validate",
-                "query",
-                "--live",
-                "--platform",
-                "sysdig"
-            ])
-        ));
-        assert!(super::covers(
-            &table,
-            "validate query",
-            &argv(&["opentide", "validate", "query", "--file", "x.kql"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "validate query",
-            &argv(&[
-                "opentide",
-                "validate",
-                "query",
-                "--live",
-                "--platform",
-                "elastic"
-            ])
-        ));
-        assert!(super::covers(
-            &table,
-            "validate query",
-            &argv(&["opentide", "validate", "query", "--", "--live"])
-        ));
-        assert!(super::covers(&table, "info", &argv(&["opentide", "info"])));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--dry-run", "--all"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--all"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--", "--dry-run"])
-        ));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--platform", "sysdig", "--all"])
-        ));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--platform", "elastic", "--dry-run"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--platform", "elastic", "--all"])
-        ));
-        assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
-        // `--help` is the command tree's, whatever the run requires (#841);
-        // after `--` it is an argument.
-        assert!(super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--help"])
-        ));
-        assert!(super::covers(
-            &table,
-            "deploy",
-            &argv(&["opentide", "deploy", "--all", "--help"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "query",
-            &argv(&["opentide", "query", "--", "--help"])
-        ));
-        assert!(!super::covers(
-            &table,
-            "lint",
-            &argv(&["opentide", "lint", "--help"])
-        ));
     }
 
     #[test]

@@ -211,6 +211,26 @@ def test_a_deploy_takes_only_the_four_operations(connection: Connection) -> None
     assert raised.value.code == "usage_invalid_choice"
 
 
+def test_a_proxy_carries_every_request(s1_url: str) -> None:
+    """The stand-in answers directly; a proxy that is not listening fails the query."""
+    proxied = Connection.open(soc(s1_url), environment=ENVIRONMENT, proxy="http://127.0.0.1:9")
+    with pytest.raises(OpentideError) as raised:
+        run(proxied.query("x"))
+    assert raised.value.code == "tenant_unreachable"
+
+
+def test_the_native_classes_name_their_tenant_and_never_its_secret(s1_url: str) -> None:
+    from opentide._native import sdk as native
+
+    tenant = native.TenantConfig(
+        "sentinel_one", "soc", [("url", s1_url), ("api_token", "native-secret")]
+    )
+    assert repr(tenant) == 'TenantConfig("sentinel_one", "soc")'
+    connection = native.Connection.open(tenant, environment=[])
+    assert repr(connection) == 'Connection("sentinel_one", "soc")'
+    assert "native-secret" not in repr(connection)
+
+
 def test_an_unreachable_tenant_is_reported() -> None:
     closed = Connection.open(soc("http://127.0.0.1:9"), environment=ENVIRONMENT)
     with pytest.raises(OpentideError) as raised:

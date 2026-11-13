@@ -32,8 +32,6 @@ pub mod code {
     pub const USAGE_MISSING_OPTION: &str = "usage_missing_option";
     /// Another usage error.
     pub const USAGE_ERROR: &str = "usage_error";
-    /// `OPENTIDE_ENGINE=rust`'s refusal: the command has no Rust implementation yet.
-    pub const ENGINE_NOT_PORTED: &str = "engine_not_ported";
     /// An unexpected error: a bug in opentide.
     pub const INTERNAL: &str = "internal";
 }

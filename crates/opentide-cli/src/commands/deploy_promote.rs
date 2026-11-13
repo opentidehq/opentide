@@ -60,9 +60,11 @@ pub enum Stop {
     Failed(String),
     /// The oracle exits 1 without a result (an invalid target).
     Exit,
-    /// This port does not reproduce the oracle here: the run is left to the
-    /// Python implementation, before anything is printed.
-    Unported(String),
+    /// The promotion cannot rewrite this push (no promotion target, a rule
+    /// file whose platform keys or promoted text it cannot read back): the run
+    /// fails before anything is printed, and `--skip-promotion` deploys
+    /// without it.
+    Unsupported(String),
 }
 
 /// One thing the promotion logs, in the order the oracle logs it.
@@ -161,7 +163,7 @@ type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>)>, Option<Stop>);
 
 /// Every file read and planned (`PromoteMDR.promote` up to its writes): the
 /// events to log, the bytes to write, and how the run stops, if it does.
-/// `Err` only for [`Stop::Unported`], before anything is shown.
+/// `Err` only for [`Stop::Unsupported`], before anything is shown.
 fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
     let settings = promotion.settings;
     let mut events = vec![Event::Info(
@@ -183,7 +185,7 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
     }
     let Some(target) = settings.valid_target() else {
         let Some(target) = settings.target.as_deref() else {
-            return Err(Stop::Unported("no promotion target".into()));
+            return Err(Stop::Unsupported("no promotion target".into()));
         };
         events.push(Event::InvalidTarget {
             target: target.to_owned(),
@@ -205,7 +207,7 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
     };
     let mut planned = Vec::new();
     for path in files {
-        let unported = |why: &str| Stop::Unported(format!("{}: {why}", path.display()));
+        let unsupported = |why: &str| Stop::Unsupported(format!("{}: {why}", path.display()));
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(error) => {
@@ -270,7 +272,7 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
                 path: path.display().to_string(),
                 detail,
             }),
-            Err(Error::Unported(why)) => return Err(unported(&why)),
+            Err(Error::Unported(why)) => return Err(unsupported(&why)),
         }
     }
     Ok((events, planned, None))
@@ -356,24 +358,18 @@ pub fn stopped(stop: &Stop) -> Vec<(String, Json)> {
             ("_exit_code".to_owned(), Json::Int(1)),
             (BARE_EXIT.to_owned(), Json::Bool(true)),
         ],
-        Stop::Unported(why) => {
-            tracing::debug!(detail = why.as_str(), "promotion_not_ported");
+        Stop::Unsupported(why) => {
+            tracing::debug!(detail = why.as_str(), "promotion_unsupported");
             vec![
                 ("status".to_owned(), Json::str("failed")),
                 (
                     "message".to_owned(),
-                    Json::str(
-                        "opentide deploy's status promotion of this push has no Rust \
-                         implementation yet: pass --skip-promotion, or unset OPENTIDE_ENGINE, \
-                         or set it to python or compare.",
-                    ),
+                    Json::str(format!(
+                        "opentide deploy's status promotion cannot rewrite this push ({why}): \
+                         pass --skip-promotion to deploy without it."
+                    )),
                 ),
-                ("_exit_code".to_owned(), Json::Int(2)),
-                (
-                    "_failure_code".to_owned(),
-                    Json::str(crate::envelope::code::ENGINE_NOT_PORTED),
-                ),
-                ("_failure_argument".to_owned(), Json::str("OPENTIDE_ENGINE")),
+                ("_exit_code".to_owned(), Json::Int(1)),
             ]
         }
     }
@@ -597,10 +593,14 @@ mod tests {
             assert!(drawn.contains("status promotion"), "{drawn}");
             assert_eq!(after, [RULE.as_bytes(), bytes]);
         }
-        let result = stopped(&Stop::Unported("why".into()));
+        let result = stopped(&Stop::Unsupported("why".into()));
+        assert!(result.contains(&("_exit_code".to_owned(), Json::Int(1))));
         assert!(result.contains(&(
-            "_failure_code".to_owned(),
-            Json::str(crate::envelope::code::ENGINE_NOT_PORTED)
+            "message".to_owned(),
+            Json::str(
+                "opentide deploy's status promotion cannot rewrite this push (why): pass \
+                 --skip-promotion to deploy without it."
+            )
         )));
     }
 

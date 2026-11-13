@@ -10,15 +10,15 @@ description: Find and close coverage gaps in opentide with pytest-cov — the 85
 - `[tool.coverage.report] fail_under = 85.0` in `pyproject.toml`, enforced in CI on the
   **Python 3.14** test cell only (`COVERAGE_PYTHON` in `ci.yml`) and locally by
   `scripts/ci-local.sh --full`.
-- `[tool.coverage.run].omit` leaves out live-tenant clients/deployers/validators,
-  `deployment/*`, `mutation/*` and `mcp_server/server.py`. Omitted is not untested: those
-  modules still need behaviour tests (see `tests/test_platforms/`), they just don't count.
+- `[tool.coverage.run].omit` leaves out `_version.py` alone. The gate covers what the package
+  holds since UC-6.2 (#841): the console script, the SDK, the models, the plugin API and
+  `analysis.py`; the Rust core's coverage is the Rust gates' (`xtask/coverage.toml`).
 - Coverage is combined across xdist workers; `COVERAGE_CORE=sysmon` (3.12+) is set
   automatically by `ci-local.sh`.
 
 ```bash
 scripts/ci-local.sh --full                                    # same gate as CI
-uv run pytest tests/test_cli -n 4 --cov=opentide.cli --cov-report=term-missing:skip-covered \
+uv run pytest tests/test_sdk -n 4 --cov=opentide --cov-report=term-missing:skip-covered \
   -m "not cli_e2e and not cli_smoke"                          # one area
 ```
 

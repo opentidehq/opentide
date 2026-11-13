@@ -477,193 +477,6 @@ pub fn ledger() -> Ledger {
     .unwrap()
 }
 
-/// How many runs this thread replayed that the Rust CLI refused with
-/// `engine_not_ported` (Python runs those alone under `compare`).
-pub fn refused() -> usize {
-    REFUSED.with(std::cell::Cell::get)
-}
-
-thread_local! {
-    static REFUSED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// What a `RUST_COMMANDS` entry covers (`RustCommand`, `xtask::compare::Coverage`).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Coverage {
-    /// Words of which a run must carry one (none: every run).
-    pub requires: Vec<String>,
-    /// Flags a run must carry none of.
-    pub refuses: Vec<String>,
-    /// The platforms with a Rust connector: every `--platform` a run names
-    /// must be one, and a run that names none is not covered (none: every
-    /// platform).
-    pub platforms: Vec<String>,
-    /// The flags under which `platforms` applies (none: every run).
-    pub platform_scope: Vec<String>,
-    /// Flags under which a run reaches no tenant (`deploy --dry-run`):
-    /// `platforms` does not apply to it.
-    pub offline: Vec<String>,
-    /// Whether a run on installed platform plugins is covered
-    /// (`RustCommand.plugins`, UC-4.5): the command line here has no plugin
-    /// host, so none is installed and no run is one.
-    pub plugins: bool,
-}
-
-/// The dispatch table, `RUST_COMMANDS` in `src/opentide/cli/engines.py`:
-/// each command path (`"generate docs"`) with what its Rust implementation
-/// covers. Read from the source, as `scripts/parity_engines.py` reads it, so
-/// the replay needs no Python environment.
-pub fn rust_commands() -> &'static BTreeMap<String, Coverage> {
-    static CELL: std::sync::OnceLock<BTreeMap<String, Coverage>> = std::sync::OnceLock::new();
-    CELL.get_or_init(|| {
-        let source = std::fs::read_to_string(repo().join("src/opentide/cli/engines.py")).unwrap();
-        parse_rust_commands(&source)
-    })
-}
-
-/// [`rust_commands`] of `source`: the `RUST_COMMANDS: ... = {` literal, one
-/// entry per `(...): RustCommand(...)`, an entry running over lines until the
-/// next key. A tuple may be written in place or named by a module constant
-/// (`platforms=RUST_QUERY_PLATFORMS`). Panics on a table it cannot read,
-/// rather than covering nothing.
-pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
-    let start = source
-        .find("\nRUST_COMMANDS:")
-        .unwrap_or_else(|| panic!("engines.py: no RUST_COMMANDS"));
-    let body = &source[start..];
-    let body = &body[body
-        .find("{\n")
-        .unwrap_or_else(|| panic!("RUST_COMMANDS: no dict literal"))
-        + 2..];
-    let body = &body[..body
-        .find("\n}")
-        .unwrap_or_else(|| panic!("RUST_COMMANDS: unterminated"))];
-    // `()` is the root's path.
-    let key = regex::Regex::new(r#"\(((?:\s*"[^"]*"\s*,?)*)\)\s*:\s*RustCommand\("#).unwrap();
-    let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
-    let words = |text: &str| -> Vec<String> {
-        word.captures_iter(text)
-            .map(|word| word[1].to_owned())
-            .collect()
-    };
-    let tuple = |arguments: &str, name: &str| -> Vec<String> {
-        let field = regex::Regex::new(&format!(
-            r"\b{name}\s*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*))"
-        ))
-        .unwrap();
-        let Some(found) = field.captures(arguments) else {
-            return Vec::new();
-        };
-        if let Some(listed) = found.get(1) {
-            return words(listed.as_str());
-        }
-        // A constant may name another (`RUST_DEPLOY_PLATFORMS =
-        // RUST_LIVE_VALIDATION_PLATFORMS`): follow it to its tuple.
-        let mut constant = found[2].to_owned();
-        for _ in 0..8 {
-            let defined = regex::Regex::new(&format!(
-                r"(?s)\n{constant}\s*:[^=\n]*=\s*(?:\(([^)]*)\)|([A-Z][A-Z0-9_]*)\s*\n)"
-            ))
-            .unwrap();
-            let defined = defined
-                .captures(source)
-                .unwrap_or_else(|| panic!("engines.py: {constant} is not a tuple of strings"));
-            if let Some(listed) = defined.get(1) {
-                return words(listed.as_str());
-            }
-            constant = defined[2].to_owned();
-        }
-        panic!("engines.py: {constant}: aliases nest too deep")
-    };
-    let plugins = regex::Regex::new(r"\bplugins\s*=\s*True\b").unwrap();
-    let keys: Vec<_> = key.captures_iter(body).collect();
-    let mut table = BTreeMap::new();
-    for (index, found) in keys.iter().enumerate() {
-        let whole = found.get(0).unwrap();
-        let until = keys
-            .get(index + 1)
-            .map_or(body.len(), |next| next.get(0).unwrap().start());
-        let arguments = &body[whole.end()..until];
-        let path = words(&found[1]);
-        table.insert(
-            path.join(" "),
-            Coverage {
-                requires: tuple(arguments, "requires"),
-                refuses: tuple(arguments, "refuses"),
-                platforms: tuple(arguments, "platforms"),
-                platform_scope: tuple(arguments, "platform_scope"),
-                offline: tuple(arguments, "offline"),
-                plugins: plugins.is_match(arguments),
-            },
-        );
-    }
-    let read = keys.len();
-    let entries = body.matches("RustCommand(").count();
-    assert_eq!(
-        read, entries,
-        "RUST_COMMANDS: read {read} of {entries} entries"
-    );
-    table
-}
-
-/// Whether `RUST_COMMANDS` covers a run of `command` with `argv`
-/// (`RustCommand.covers`, `xtask::compare::covers`): the command is in it,
-/// and the arguments before `--` carry one of the words it requires, if
-/// any, none it refuses, and only platforms it runs on, where that applies.
-pub fn covers(command: &str, argv: &[String]) -> bool {
-    let Some(coverage) = rust_commands().get(command) else {
-        return false;
-    };
-    let options = argv
-        .iter()
-        .position(|arg| arg == "--")
-        .map_or(argv, |end| &argv[..end]);
-    // `--help` is the command tree's, whatever the run requires (#841).
-    if options.iter().any(|arg| arg == "--help") {
-        return true;
-    }
-    let named = || {
-        let mut named = Vec::new();
-        for (index, token) in options.iter().enumerate() {
-            if token == "--platform" {
-                named.extend(options.get(index + 1).map(String::as_str));
-            } else if let Some(value) = token.strip_prefix("--platform=") {
-                named.push(value);
-            }
-        }
-        named
-    };
-    if coverage.refuses.iter().any(|flag| options.contains(flag)) {
-        return false;
-    }
-    if coverage.plugins && {
-        let named = named();
-        !named.is_empty()
-            && named
-                .iter()
-                .all(|name| opentide_cli::plugins::is_plugin(name))
-    } {
-        return true;
-    }
-    let platforms = coverage.platforms.is_empty()
-        || coverage.offline.iter().any(|flag| options.contains(flag))
-        || (!coverage.platform_scope.is_empty()
-            && !coverage
-                .platform_scope
-                .iter()
-                .any(|flag| options.contains(flag)))
-        || {
-            let named = named();
-            !named.is_empty()
-                && named
-                    .iter()
-                    .all(|name| coverage.platforms.iter().any(|p| p == name))
-        };
-    platforms
-        && (coverage.requires.is_empty()
-            || coverage.requires.iter().any(|flag| options.contains(flag)))
-}
-
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
 /// `cargo xtask compare`'s `package_uuids`.
 fn package_uuids() -> &'static std::collections::BTreeSet<String> {
@@ -739,10 +552,6 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         .iter()
         .map(|(_, root)| (files(root), dirs(root)))
         .collect();
-    // A refusal (`engine_not_ported`) is recorded where `compare` reads it:
-    // Python then runs alone, and there is nothing to compare.
-    let refusal_dir = tempfile::tempdir().unwrap();
-    let refusal = refusal_dir.path().join("refusal");
     // A cassette case (UC-4.1): the network is the replaying proxy, its CA
     // where the case's CA bundle variables point.
     let proxy = case
@@ -765,26 +574,16 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         || "http://127.0.0.1:9".to_owned(),
         opentide_cassette::Proxy::url,
     );
-    let env = Env::from_pairs(
-        case["env"]
-            .as_table()
+    let env = Env::from_pairs(case["env"].as_table().unwrap().iter().map(|(key, value)| {
+        let value = value
+            .as_str()
             .unwrap()
-            .iter()
-            .map(|(key, value)| {
-                let value = value
-                    .as_str()
-                    .unwrap()
-                    .replace("<CASSETTE_PROXY>", &proxy_url)
-                    .replace("<HOME>", &home.display().to_string())
-                    .replace("<TMP>", &tmp.display().to_string())
-                    .replace("<WS>", &ws.display().to_string());
-                (key.clone(), value)
-            })
-            .chain(std::iter::once((
-                "OPENTIDE_ENGINE_REFUSAL".to_owned(),
-                refusal.display().to_string(),
-            ))),
-    );
+            .replace("<CASSETTE_PROXY>", &proxy_url)
+            .replace("<HOME>", &home.display().to_string())
+            .replace("<TMP>", &tmp.display().to_string())
+            .replace("<WS>", &ws.display().to_string());
+        (key.clone(), value)
+    }));
     let terminal = mode == "human";
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
@@ -804,21 +603,6 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let mut out = Vec::new();
     let mut err = stderr.clone();
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
-    if refusal.exists() {
-        // Python runs alone only where `RUST_COMMANDS` does not cover the run
-        // (none since UC-6.0 ported the last, a bare `generate`): a refusal of a
-        // run it covers is a failure, as `cargo xtask golden check --engine compare`
-        // counts it.
-        let command = case["command"].as_str().unwrap();
-        if covers(command, &argv) {
-            return vec![format!(
-                "{id}: the CLI refused (engine_not_ported) a run of `{command}` that \
-                 RUST_COMMANDS covers: exit {exit_code}"
-            )];
-        }
-        REFUSED.with(|count| count.set(count.get() + 1));
-        return Vec::new();
-    }
     let today = opentide_compare::normalise::utc_date(std::time::SystemTime::now());
     // The case's opt-in rules (`fresh-uuids` for a command that mints
     // identifiers), with the UUIDs that are not fresh as the golden check

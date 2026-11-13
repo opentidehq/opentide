@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from opentide.models.system_config import ConfigurationModels as C
-
 from opentide.platforms.crowdstrike.client import CrowdstrikeService, DetectionRule
 from opentide.query.models import QueryRefused, QueryRequest, QueryTimedOut, TimeWindow
 

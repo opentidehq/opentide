@@ -45,4 +45,4 @@ Values are found by their path through the document, never by key name, so a Sen
 
 ## Source
 
-`src/opentide/cli/services/migrate_vocab_scope.py`
+`crates/opentide-cli/src/commands/migrate.rs`

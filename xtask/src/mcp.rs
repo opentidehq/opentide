@@ -1,23 +1,23 @@
 //! `cargo xtask mcp record|replay`: recorded MCP sessions, replayed against
-//! the Python server, the Rust server, or both (UC-3.7, #829).
+//! the Rust server (UC-3.7, #829).
 //!
 //! `tests/golden/mcp/sessions.toml` holds the requests: each session's
-//! fixture and its JSON-RPC messages, in order. `record` sends them to the
-//! Python server (`opentide mcp start` with `OPENTIDE_ENGINE=python`) and
-//! writes what it answered, one `<session>.jsonl` per session beside the
-//! file: a header line, then one line per message with the response.
-//! Recordings are never written by hand.
+//! fixture and its JSON-RPC messages, in order. The recordings beside it,
+//! one `<session>.jsonl` per session (a header line, then one line per
+//! message with the response), are what the Python server answered: the
+//! oracle, frozen since the Python implementation was removed (UC-6.2, #841).
+//! `record --python PATH` writes them again from the Python server of an
+//! opentide release that still has one (`opentide mcp start` with
+//! `OPENTIDE_ENGINE=python`, the variable those releases read); recordings
+//! are never written by hand.
 //!
-//! `replay --engine python|rust|compare FILE...` sends each recording's
-//! messages again, in order and each once the one before it was answered,
-//! to a fresh server on a fresh copy of the fixture, and compares every
-//! answer with the recording: `python` and `rust` run that engine's server
-//! (`OPENTIDE_ENGINE`, which `mcp start` reads, the Rust server running in
-//! the package's Python process through `opentide.cli.rust`); `compare` runs
-//! both, the Python server against the recording and the Rust server against
-//! the Python server's live answers. A Rust difference is approved only by an
-//! entry of `tests/golden/APPROVED_DIFFS.toml` for command `mcp start` and
-//! case `<session>/<step>`, whose target is `stdout`, the response.
+//! `replay --engine rust FILE...` sends each recording's messages again, in
+//! order and each once the one before it was answered, to a fresh server
+//! (this repository's `opentide mcp start`) on a fresh copy of the fixture,
+//! and compares every answer with the recording. A difference is approved
+//! only by an entry of `tests/golden/APPROVED_DIFFS.toml` for command
+//! `mcp start` and case `<session>/<step>`, whose target is `stdout`, the
+//! response.
 //!
 //! What a comparison sees of a message ([`canonical`]): the workspace's path
 //! reads `<WS>`, the installed `opentide` package's directory (where its
@@ -59,17 +59,17 @@ pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(300);
 
 const USAGE: &str = "\
-usage: cargo xtask mcp record [--only NAME] [--python PATH]
-       cargo xtask mcp replay --engine python|rust|compare [--python PATH]
-                              [--show-approved] FILE...
+usage: cargo xtask mcp record --python PATH [--only NAME]
+       cargo xtask mcp replay --engine rust [--python PATH] [--show-approved] FILE...
 
 record   sends each session of tests/golden/mcp/sessions.toml to the Python
-         server and writes tests/golden/mcp/<session>.jsonl
-replay   sends each recording's messages to the engine's server (compare: to
-         both) and compares the answers; differences of the Rust server only
-         through tests/golden/APPROVED_DIFFS.toml (command `mcp start`)
+         server of the opentide release PATH runs (one before the Python
+         implementation was removed) and writes tests/golden/mcp/<session>.jsonl
+replay   sends each recording's messages to this repository's server and
+         compares the answers; differences only through
+         tests/golden/APPROVED_DIFFS.toml (command `mcp start`)
 
---python names the interpreter of the package under test (default: the
+--python names the interpreter of the package (replay's default: the
 repository's .venv, or OPENTIDE_PYTHON).
 ";
 
@@ -269,23 +269,27 @@ pub fn run(args: &[String]) -> Result<u8> {
             other => files.push(PathBuf::from(other)),
         }
     }
-    let python = python.unwrap_or_else(|| default_python(&repo));
     let sessions = load_sessions(&repo)?;
     match command.as_str() {
         "record" => {
+            // This repository has no Python server any more: the recordings
+            // come from a release that has one.
+            let python = python.context(
+                "record needs --python PATH: an opentide release with the Python server",
+            )?;
             record(&repo, &python, &sessions, only.as_deref())?;
             Ok(0)
         }
         "replay" => {
-            let engine = engine.context("replay needs --engine python|rust|compare")?;
-            let engines: &[&str] = match engine.as_str() {
-                "python" => &["python"],
-                "rust" => &["rust"],
-                "compare" => &["python", "rust"],
-                other => bail!("--engine {other}: choose python, rust or compare"),
-            };
+            let python = python.unwrap_or_else(|| default_python(&repo));
+            let engine = engine.context("replay needs --engine rust")?;
+            ensure!(
+                engine == "rust",
+                "--engine {engine}: the Rust server is opentide's only one (rust); \
+                 the recordings are the Python server's"
+            );
             ensure!(!files.is_empty(), "replay needs recordings\n{USAGE}");
-            let passed = replay(&repo, &python, &sessions, engines, &files, show_approved)?;
+            let passed = replay(&repo, &python, &sessions, &files, show_approved)?;
             Ok(u8::from(!passed))
         }
         "help" | "--help" | "-h" => {
@@ -441,7 +445,6 @@ fn replay(
     repo: &Path,
     python: &Path,
     sessions: &Sessions,
-    engines: &[&str],
     files: &[PathBuf],
     show_approved: bool,
 ) -> Result<bool> {
@@ -471,28 +474,15 @@ fn replay(
             .iter()
             .map(|exchange| (exchange.step.clone(), exchange.request.clone()))
             .collect();
-        let mut python_live = None;
-        for engine in engines {
-            let live = run_session(repo, python, engine, fixture, recording.launch, &sent)?;
-            // The Rust server against the Python server's live answers when
-            // both run, else against the recording; Python always against
-            // the recording.
-            let oracle = match (*engine, &python_live) {
-                ("python", _) | (_, None) => &recording.exchanges,
-                (_, Some(answers)) => answers,
-            };
-            tally.judge(engine, &recording.session, oracle, &live);
-            if *engine == "python" {
-                python_live = Some(live);
-            }
-        }
+        let live = run_session(repo, python, "rust", fixture, recording.launch, &sent)?;
+        tally.judge(&recording.session, &recording.exchanges, &live);
     }
     // A complete run of the Rust server: an approval that applied nowhere is stale.
     let complete = sessions
         .session
         .iter()
         .all(|session| replayed.contains(&session.name));
-    let (passed, lines) = tally.finish(complete, engines);
+    let (passed, lines) = tally.finish(complete);
     for line in lines {
         println!("{line}");
     }
@@ -523,11 +513,10 @@ impl<'a> Tally<'a> {
         }
     }
 
-    /// Compares `engine`'s `live` answers in `session` with `oracle`'s. The
-    /// Python server is the oracle: only another engine's difference may be
-    /// approved by the ledger.
-    pub fn judge(&mut self, engine: &str, session: &str, oracle: &[Exchange], live: &[Exchange]) {
-        let approve = engine != "python";
+    /// Compares the Rust server's `live` answers in `session` with the
+    /// recording's (`oracle`, the Python server's); a difference only
+    /// through the ledger.
+    pub fn judge(&mut self, session: &str, oracle: &[Exchange], live: &[Exchange]) {
         for (expected, got) in oracle.iter().zip(live) {
             self.compared += 1;
             let case = format!("{session}/{}", expected.step);
@@ -535,12 +524,12 @@ impl<'a> Tally<'a> {
                 &case,
                 expected.response.as_ref(),
                 got.response.as_ref(),
-                approve.then_some(self.ledger),
+                Some(self.ledger),
                 &mut self.usage,
             );
             if !report.equal {
                 self.failures += 1;
-                self.lines.push(format!("DIFFERENT {engine} {case}"));
+                self.lines.push(format!("DIFFERENT {case}"));
                 for difference in &report.differences {
                     self.lines.push(format!(
                         "  {} at {}:\n    expected {}\n    got      {}",
@@ -551,7 +540,7 @@ impl<'a> Tally<'a> {
                     ));
                 }
             } else if self.show_approved && !report.approved.is_empty() {
-                self.lines.push(format!("APPROVED {engine} {case}"));
+                self.lines.push(format!("APPROVED {case}"));
                 for approval in &report.approved {
                     self.lines.push(format!(
                         "  entry {} ({}): {}",
@@ -563,7 +552,7 @@ impl<'a> Tally<'a> {
         if live.len() != oracle.len() {
             self.failures += 1;
             self.lines.push(format!(
-                "DIFFERENT {engine} {session}: {} answers, expected {}",
+                "DIFFERENT {session}: {} answers, expected {}",
                 live.len(),
                 oracle.len()
             ));
@@ -571,11 +560,11 @@ impl<'a> Tally<'a> {
     }
 
     /// Whether the replay passed, and what it reports. When `complete` (every
-    /// session replayed) and the Rust server ran, a replay ledger entry
-    /// ([`owns`]) that approved nothing is stale, and fails the replay.
-    pub fn finish(mut self, complete: bool, engines: &[&str]) -> (bool, Vec<String>) {
+    /// session replayed), a replay ledger entry ([`owns`]) that approved
+    /// nothing is stale, and fails the replay.
+    pub fn finish(mut self, complete: bool) -> (bool, Vec<String>) {
         let mut stale = 0usize;
-        if complete && engines.contains(&"rust") {
+        if complete {
             for (index, entry) in self.ledger.entries.iter().enumerate() {
                 if owns(entry) && !self.usage.is_used(index) {
                     stale += 1;
@@ -589,10 +578,8 @@ impl<'a> Tally<'a> {
             }
         }
         self.lines.push(format!(
-            "{} answers compared, {} different, {stale} stale approvals ({})",
-            self.compared,
-            self.failures,
-            engines.join(" + ")
+            "{} answers compared, {} different, {stale} stale approvals",
+            self.compared, self.failures
         ));
         (self.failures == 0 && stale == 0, self.lines)
     }
@@ -817,7 +804,6 @@ impl Server {
             .env("LANG", "C.UTF-8")
             .env("PYTHONHASHSEED", "0")
             .env("CI", "true")
-            .env("OPENTIDE_ENGINE", engine)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             // No network: a proxy that refuses every connection.
@@ -826,6 +812,10 @@ impl Server {
             .env("http_proxy", "http://127.0.0.1:9")
             .env("https_proxy", "http://127.0.0.1:9")
             .env("NO_PROXY", "");
+        if engine == "python" {
+            // `record`: a release with both servers, whose default was Python's.
+            command.env("OPENTIDE_ENGINE", engine);
+        }
         match launch {
             Launch::Workspace => {
                 command
@@ -1193,54 +1183,55 @@ changelog = "c"
     fn the_replay_passes_on_equal_answers_and_fails_on_a_difference() {
         let ledger = Ledger::default();
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
-        let (passed, lines) = tally.finish(true, &["rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 1));
+        let (passed, lines) = tally.finish(true);
         assert!(passed, "{lines:?}");
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 2));
-        let (passed, lines) = tally.finish(true, &["rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true);
         assert!(!passed);
-        assert_eq!(lines[0], "DIFFERENT rust s/x");
+        assert_eq!(lines[0], "DIFFERENT s/x");
         assert!(lines.last().unwrap().contains("1 different"), "{lines:?}");
         // A server that answered fewer messages than were recorded fails too.
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &[]);
-        assert!(!tally.finish(true, &["rust"]).0);
+        tally.judge("s", &answered("x", 1), &[]);
+        let (passed, lines) = tally.finish(true);
+        assert!(!passed);
+        assert_eq!(lines[0], "DIFFERENT s: 0 answers, expected 1");
     }
 
     #[test]
-    fn a_rust_approval_never_excuses_the_python_server() {
+    fn a_difference_the_ledger_approves_passes() {
         let ledger = Ledger::parse(APPROVAL).unwrap();
         let mut tally = Tally::new(&ledger, true);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 2));
-        let (passed, lines) = tally.finish(true, &["rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true);
         assert!(passed, "{lines:?}");
-        assert_eq!(lines[0], "APPROVED rust s/x");
+        assert_eq!(lines[0], "APPROVED s/x");
+        assert!(lines[1].starts_with("  entry 1 ("), "{lines:?}");
+        // Approvals are listed only when asked for.
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("python", "s", &answered("x", 1), &answered("x", 2));
-        let (passed, lines) = tally.finish(true, &["python"]);
-        assert!(!passed);
-        assert_eq!(lines[0], "DIFFERENT python s/x");
+        tally.judge("s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true);
+        assert!(passed, "{lines:?}");
+        assert_eq!(lines.len(), 1, "{lines:?}");
     }
 
     #[test]
-    fn an_approval_unused_by_a_complete_rust_replay_is_stale() {
+    fn an_approval_unused_by_a_complete_replay_is_stale() {
         let ledger = Ledger::parse(APPROVAL).unwrap();
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
-        let (passed, lines) = tally.finish(true, &["python", "rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 1));
+        let (passed, lines) = tally.finish(true);
         assert!(!passed);
         assert!(
             lines[0].starts_with("STALE ledger entry 1 (s/x "),
             "{lines:?}"
         );
-        // Only a complete replay of the Rust server can tell.
+        // Only a complete replay can tell.
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
-        assert!(tally.finish(false, &["rust"]).0);
-        let mut tally = Tally::new(&ledger, false);
-        tally.judge("python", "s", &answered("x", 1), &answered("x", 1));
-        assert!(tally.finish(true, &["python"]).0);
+        tally.judge("s", &answered("x", 1), &answered("x", 1));
+        assert!(tally.finish(false).0);
     }
 
     #[test]

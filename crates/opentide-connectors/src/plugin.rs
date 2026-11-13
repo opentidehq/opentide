@@ -98,7 +98,7 @@ pub fn unavailable(platform: &str) -> String {
     format!(
         "{platform} is not a built-in platform: if it is a platform plugin (an \
          {ENTRY_POINT_GROUP} entry point), it loads only when opentide runs from its Python \
-         package (pip install opentide, then OPENTIDE_ENGINE=rust opentide ...); this command \
+         package (pip install opentide, then opentide ...); this command \
          line cannot check its configuration or reach its tenants"
     )
 }
@@ -178,7 +178,7 @@ mod tests {
         let message = unavailable("acme");
         assert!(message.starts_with("acme is not a built-in platform"));
         assert!(message.contains("opentide.platforms entry point"));
-        assert!(message.contains("OPENTIDE_ENGINE=rust"));
+        assert!(message.contains("pip install opentide, then opentide"));
     }
 
     struct Checked;

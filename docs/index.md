@@ -14,7 +14,7 @@ description: Spec-driven development for agentic detection engineering — valid
 | [Usage](./usage/index.md) | Detection engineers setting up and operating repos | [Installation](./usage/installation.md) |
 | [CLI](./cli/index.md) | Operators and CI pipelines | [Global options](./cli/global-options.md) |
 | [MCP](./mcp/index.md) | AI agents and editor integrations | [Installation](./mcp/installation.md) |
-| [SDK](./sdk/index.md) | Python developers embedding opentide | [Registry API](./sdk/registry.md) |
+| [SDK](./sdk/index.md) | Python developers embedding opentide | [Workspace](./sdk/workspace.md) |
 
 ## Quick start
 
@@ -42,8 +42,8 @@ See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 |---------|-------|------------|
 | CLI | `opentide` | `pip install opentide` |
 | MCP server | `opentide mcp start` | `pip install opentide` |
-| Python SDK | `from opentide import Opentide` | `pip install opentide` |
-| Platform adapters | entry points under `opentide.platforms` | `pip install opentide` |
+| Python SDK | `from opentide import Workspace` | `pip install opentide` |
+| Platform plugins | `opentide.plugins`, entry points under `opentide.platforms` | your plugin's package |
 
 ## For doc site maintainers
 

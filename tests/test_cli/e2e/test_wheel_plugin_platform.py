@@ -6,11 +6,10 @@ wheel (``uv build``, as CI's packaging does, the engine on the ``develop``
 profile ``uv sync`` already compiled), installs it into a fresh virtual
 environment, and beside it the sample plugin ``tests/fixtures/plugin_platform``
 as an installer lays it out: its package and a ``.dist-info`` with its
-``opentide.platforms`` entry point. The console script of that environment,
-under the default engine, then plans a deploy on the plugin's platform, runs
-a query, checks a rule's query and deploys it against the stand-in Acme
-tenant on 127.0.0.1, and ``validate`` on the Rust core checks the plugin's
-blocks.
+``opentide.platforms`` entry point. The console script of that environment
+then plans a deploy on the plugin's platform, runs a query, checks a rule's
+query and deploys it against the stand-in Acme tenant on 127.0.0.1, and
+``validate`` checks the plugin's blocks (UC-4.5c: with nothing to set).
 """
 
 from __future__ import annotations
@@ -30,7 +29,8 @@ from tests.test_cli.e2e.test_wheel_install_regression import (
 )
 from tests.test_platforms.test_plugin_hook import CASSETTE, FIXTURE, TOKEN, VALID_RULE, StandIn
 
-pytestmark = pytest.mark.cli_e2e
+# A wheel build takes minutes: CI runs this in its full set only (cli-e2e-full).
+pytestmark = [pytest.mark.cli_e2e, pytest.mark.full_set]
 
 
 def _install_plugin(python: Path) -> None:
@@ -180,13 +180,8 @@ def test_a_plugin_runs_on_opentide_installed_from_its_wheel(tmp_path: Path) -> N
         "acme": {"lab": "acme-rule-17"}
     }
 
-    # validate on the Rust core checks the block with the plugin's model.
-    validated = _run(
-        [str(opentide), "--json", "validate"],
-        cwd=repo,
-        env={**env, "OPENTIDE_ENGINE": "rust"},
-        timeout=120,
-    )
+    # validate checks the block with the plugin's model.
+    validated = _run([str(opentide), "--json", "validate"], cwd=repo, env=env, timeout=120)
     assert validated.returncode == 1, validated.stdout + validated.stderr
     fields = {
         tuple(issue["field_path"])

@@ -3423,10 +3423,8 @@ dependencies = [
  "opentide",
  "opentide-analysis",
  "opentide-cli",
- "opentide-compare",
  "opentide-compile",
  "opentide-connectors",
- "opentide-lsp",
  "opentide-schema",
  "pyo3",
  "pyo3-async-runtimes",
@@ -3434,7 +3432,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]

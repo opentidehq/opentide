@@ -93,4 +93,4 @@ A rule block for a platform the workspace has not enabled is written anyway, wit
 
 ## Source
 
-`src/opentide/cli/commands/new.py`, `src/opentide/cli/services/new.py`
+`crates/opentide-cli/src/commands/new.rs`, `crates/opentide-cli/src/commands/new/`

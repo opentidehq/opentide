@@ -1,6 +1,6 @@
 ---
 title: Models
-description: The Tide models for rules, objectives, and threats — frozen Rust classes with the Pydantic methods, key fields, delegation helpers, results, and errors.
+description: The Tide models for rules, objectives, and threats — frozen Rust classes with the Pydantic methods, their key fields, and where the operations the registry bound to them went.
 ---
 
 # Models
@@ -45,10 +45,19 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `detection_model` | `str \| None` | UUID of the objective, or of a signal under it, that this rule implements |
 | `response` | `RuleResponse \| None` | Alert + response playbook |
 
-The YAML you author maps one-to-one onto these attributes. The [registry](./registry.md) still loads the CLI's Pydantic models, which have the same attributes; `opentide.models.delegation.from_yaml_dict(document)` reads a document into the Rust class its `metadata.schema` names:
+The YAML you author maps one-to-one onto these attributes. Read an object file into the class its `metadata.schema` names (the package reads no YAML itself: `pip install pyyaml`, or any YAML 1.2 reader), or let [`Workspace`](./workspace.md) read the whole workspace:
 
 ```python
-rule = Opentide.Rules["00000000-0000-4000-8003-000000000001"]
+import yaml
+from opentide.models import DetectionRule, DetectionRule_v1_1
+
+REVISIONS = {"rule::1.0": DetectionRule, "rule::1.1": DetectionRule_v1_1}
+with open("objects/rules/rule-0001-sentinel-kql.yaml", encoding="utf-8") as file:
+    document = yaml.safe_load(file)
+rule = REVISIONS[document["metadata"]["schema"]].model_validate(document)
+```
+
+```python
 rule.name                       # "Sentinel KQL Rule"
 rule.metadata.schema_id         # "rule::1.0"  (YAML `metadata.schema`)
 rule.metadata.schema            # "rule::1.0"  (read-only alias of schema_id)
@@ -91,7 +100,7 @@ These classes implement the [platform specs](/docs/specifications/specs/platform
 | `objective` | `ObjectiveBody` | Body: `priority`, `type`, `signals`, `threats`, … |
 
 ```python
-obj = Opentide.Objectives["00000000-0000-4000-8002-000000000001"]
+obj                             # a DetectionObjective, read as the rule above
 obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 [s.name for s in obj.objective.signals]
 ```
@@ -106,7 +115,7 @@ obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 | `threat` | `ThreatBody` | Body: `severity`, `impact` and `leverage` (non-empty `list[str]` of vocabulary names), `terrain`, `surface`, `att&ck`, `actors` (`list[ThreatActor]`), optional `cve` (`list[str]`, Vulnerability-Lookup IDs), … |
 
 ```python
-threat = Opentide.Threats["00000000-0000-4000-8001-000000000001"]
+threat                          # a ThreatVector, read as the rule above
 threat.threat.mitre_attack      # ["T1059"]  (YAML `mitre_attack`)
 threat.threat.terrain           # free-form prose
 threat.threat.surface           # vocabulary list, e.g. ["OS::Windows::Desktop"]
@@ -115,91 +124,16 @@ threat.threat.cve               # list[str] | None, e.g. ["CVE-2024-3094"] — C
 threat.threat.actors            # list[ThreatActor] | None; name is scoped (att&ck::G0006)
 ```
 
-## Delegation methods
+## Operations on a model
 
-Rules loaded through the [registry](./registry.md) are bound to it and expose operations directly. A Rust class cannot carry them (it is frozen and cannot be subclassed): for a rule from `opentide.models`, `opentide.models.delegation` has each one as a function, `validate(rule)`, `validate_query(rule, platform)`, `run_query(rule, platform, ...)`, `deploy(rule, platform, dry_run=False, *, strategies=None)`, `document(rule)` and `promote(rule, status)`, each taking an optional `registry=` (default `Opentide`). `Opentide.render_rule(rule)` and `Opentide.validate_rule(rule)` take either kind of rule.
+The models are data: frozen, with nothing bound to a workspace. What the registry's rules had as methods (`rule.validate()`, `rule.deploy(...)`, `rule.document()`, and `opentide.models.delegation` for the Rust classes) is the workspace's and the tenant's, since the Python implementation was removed:
 
-```python
-rule = Opentide.Rules[uuid]
+| Was | Now |
+|-----|-----|
+| `rule.validate()` | `Workspace.open(".").validate(uuids=[uuid])` ([Workspace](./workspace.md#validate)) |
+| `rule.validate_query(platform)` | `await Connection.open(tenant).validate_query(...)` ([tenant operations](./workspace.md#tenant-operations)), or `opentide.analysis.check_query` offline ([Query checks](./validation.md)) |
+| `rule.run_query(platform, ...)` | `await Connection.open(tenant).query(...)` |
+| `rule.deploy(platform, dry_run=True)` | `ws.deploy_plan(uuids=[uuid])`; a real deploy, `ws.run_json(["deploy", "--uuid", uuid, ...])` or `await Connection.open(tenant).deploy(...)` |
+| `rule.document()` | `ws.run_json(["generate", "docs", "rules"])` |
 
-rule.validate() -> ValidationResult                      # schema + cross-object checks
-rule.validate_query(platform) -> ValidationResult        # query syntax (supported platforms)
-rule.run_query(platform, *, tenants=(), since=None, limit=100) -> QueryRun  # rows from the tenants
-rule.deploy(platform, dry_run=False, *, strategies=None) -> DeploymentResult
-rule.document() -> str                                   # or Opentide.render_rule(rule)
-```
-
-`validate_query` runs the platform's query validator when one exists (Sentinel, Defender, Splunk, SentinelOne, Carbon Black); for CrowdStrike/HarfangLab it reports unsupported rather than faking a pass. See [Validation → query validation](./validation.md#query-validation).
-
-`run_query` sends the query this rule deploys to *platform* to the tenants `tenants` names (`["all"]` for every one; none for the only one) over the last `since` (default `24h`), and returns an `opentide.query.QueryRun`: `outcomes` holds one `TenantOutcome` per tenant, with `result.columns` and `result.rows` or an `error`. A call that cannot run raises `opentide.query.QueryUsageError`. It is [`opentide query --rule`](../cli/query.md) in Python; `opentide.query.run_query(platform, query=...)` runs a query that is not a rule's.
-
-<Callout type="warn">
-`Opentide.promote_rule()` raises `NotImplementedError` — change rule `status` in YAML and use `opentide deploy` (promotion runs inside deploy when configured).
-</Callout>
-
-## Results
-
-Delegation methods and helpers return small Pydantic result models (`opentide.models.results`):
-
-```python
-class ValidationResult(BaseModel):
-    ok: bool
-    errors: list[str] = []
-    warnings: list[str] = []
-
-class DeploymentResult(BaseModel):
-    platform: str
-    uuids: list[str]
-    dry_run: bool = False
-    message: str = ""
-```
-
-```python
-result = rule.validate()
-if not result.ok:
-    for err in result.errors:
-        print(err)
-```
-
-## Errors
-
-Exceptions live under `opentide.core.errors.Errors`. Catch the specific type you expect:
-
-| Exception | Raised when |
-|-----------|-------------|
-| `Errors.TideDataModelErrors` | Malformed Tide object (bad structure) |
-| `Errors.TideRuleDataModelErrors` | Invalid detection rule data structure. `Errors.TideMDRDataModelErrors` is the former name, kept as an alias |
-| `Errors.TideQueryValidationError` | A rule query fails validation |
-| `Errors.TideDeploymentErrors` | Any failure during deployment |
-| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host`, and counts in `timeouts` the queries in a row that got no answer when that is why |
-| `Errors.DetectionRuleCreationFailed` / `…UpdateFailed` / `…DeletionFailed` | Platform API operation failed |
-| `Errors.TideConfigurationErrors` | Invalid opentide configuration files |
-| `Errors.TenantNonExistingDeploymentPlan` | A tenant references a missing deployment plan |
-
-```python
-from opentide.core.errors import Errors
-
-try:
-    rule.deploy("sentinel")
-except Errors.TenantConnectionError:
-    ...  # credentials / connectivity
-except Errors.TideDeploymentErrors:
-    ...  # deployment failure
-```
-
-Note the difference between **results** (returned for expected pass/fail outcomes like validation) and **errors** (raised for exceptional failures like a broken connection).
-
-## Loading without the registry
-
-```python
-from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.loading.object_loader import load_object_for_validation
-```
-
-Prefer registry access for interactive work; these loaders are used internally by validation and indexing.
-
-Both pick the model from `metadata.schema`. A missing identifier raises `SchemaMissingError` (a `ValueError` from `opentide.loading.object_loader`). An unknown identifier, or one of another object type, raises `SchemaIdentifierError` (a `LookupError` from the same module). Neither falls back to the newest revision.
-
-## Source
-
-`src/opentide/models/` (the public package), `crates/opentide-schema/src/python.rs` (the classes), `src/opentide/_models/` (the CLI's Pydantic models, `results.py`), `src/opentide/core/errors.py`
+A call that cannot run raises `opentide.OpentideError`, whose `code` is stable ([errors](./workspace.md#errors)); `opentide.models.ValidationError` is what `model_validate` raises.

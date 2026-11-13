@@ -14,7 +14,7 @@ Use this skill when adding features, changing CLI/MCP/SDK surface area, or autho
 | Tab | Path | Update when |
 |-----|------|-------------|
 | Usage | `docs/usage/` | Setup flows, workflows, concepts, migration |
-| CLI | `docs/cli/` | Typer commands, flags, behaviour |
+| CLI | `docs/cli/` | Commands, flags, behaviour (the Rust command line) |
 | MCP | `docs/mcp/` | Tools, resources, config templates |
 | SDK | `docs/sdk/` | Public Python API, registry, models |
 
@@ -55,15 +55,14 @@ When modifying source, update docs in the **same PR**:
 
 | Source file | Doc target |
 |-------------|------------|
-| `src/opentide/cli/root.py`, `src/opentide/cli/commands/*.py` | `docs/cli/*.md` |
-| `src/opentide/cli/setup_app.py` | `docs/cli/setup.md`, `docs/usage/repository-setup.md` |
-| `src/opentide/mcp_server/server.py` | `docs/mcp/tools.md`, `docs/mcp/resources.md` |
-| `src/opentide/mcp_server/tools.py` | `docs/mcp/tools.md` |
+| `crates/opentide-cli/src/tree.rs`, `crates/opentide-cli/src/commands/*.rs` | `docs/cli/*.md` |
+| `crates/opentide-cli/src/commands/setup/` | `docs/cli/setup.md`, `docs/usage/repository-setup.md` |
+| `crates/opentide-cli/data/mcp/manifest.json`, `crates/opentide-cli/src/mcp/` | `docs/mcp/tools.md`, `docs/mcp/resources.md` |
 | `src/opentide/core/registry.py` | `docs/sdk/registry.md` |
 | `src/opentide/sdk.py`, `bindings/python/src/sdk.rs` | `docs/sdk/workspace.md` (its snippets run in `tests/test_docs/test_sdk_snippets.py`) |
 | `src/opentide/__init__.py` | `docs/sdk/index.md` |
-| `src/opentide/cli/enums.py` (platforms) | `docs/usage/concepts/platforms.md` (capability matrix only) |
-| `src/opentide/_models/platform.py`, `platform_configs.py` | Do not restate keys under `docs/`. Change `specs/platforms/` in [opentidehq/specifications](https://github.com/opentidehq/specifications) first. Usage and SDK pages only link there. |
+| `crates/opentide-connectors/` (platforms) | `docs/usage/concepts/platforms.md` (capability matrix only) |
+| `crates/opentide-schema/src/objects/platform/` | Do not restate keys under `docs/`. Change `specs/platforms/` in [opentidehq/specifications](https://github.com/opentidehq/specifications) first. Usage and SDK pages only link there. |
 | `src/opentide/data/setup/skills/` | `docs/usage/workflows/agentic-setup.md` |
 
 ## Verify CLI accuracy
@@ -97,7 +96,7 @@ uv run pytest tests/test_docs/test_docs_commands_golden.py -q
 
 | Gate | What fails |
 |------|------------|
-| Resolution | A documented subcommand, flag, or positional count the live Typer tree does not have |
+| Resolution | A documented subcommand, flag, or positional count the command tree (`opentide --json commands`) does not have |
 | Execution | A read-only sample (`validate`, `lint`, `info`, `generate`, `explain`, `commands`) that raises or does not emit one JSON envelope |
 | Output samples | A `text`/`json` fence tagged `output-of="opentide …"` whose lines the command no longer prints, or whose `exit=N` the command or its section contradicts |
 | Unchecked samples | A `text`/`json`/unlabelled fence under `docs/cli/` or `docs/usage/` that reads like CLI output (`"ok"`/`"status"` keys, or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, `== … ==`) with neither `output-of=` nor `illustrative` |
@@ -115,7 +114,7 @@ A failure the finished tutorial cannot produce names the repository edit it
 needs, e.g. `state=dangling-reference`; the edits are `REPO_STATES` in the
 golden test — add one there rather than leave the sample unchecked.
 
-Write samples as plain text, the `--no-color` view: the website colours CLI output fences itself (`lib/mdx/cli-output.mjs` in opentidehq/website), so never paste ANSI codes. When the CLI's styles change (`src/opentide/cli/ui/`), update that file too.
+Write samples as plain text, the `--no-color` view: the website colours CLI output fences itself (`lib/mdx/cli-output.mjs` in opentidehq/website), so never paste ANSI codes. When the CLI's styles change (`crates/opentide-cli/src/render/`), update that file too.
 
 Tagging is not optional for CLI output: an untagged fence that reads like CLI
 output fails the unchecked-samples gate. Mark a fence `illustrative` only when

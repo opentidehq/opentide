@@ -1,8 +1,8 @@
 """Ctrl-C and SIGTERM through the console script (UC-3.8b, #960).
 
-Under ``OPENTIDE_ENGINE=rust`` the console script runs the Rust command line in
-its own process. The Python launcher it replaced started a child for each Rust
-command and did not forward SIGTERM: ``serve`` and ``mcp start`` ran on,
+The console script runs the Rust command line in its own process. The Python
+launcher it replaced started a child for each Rust command and did not forward
+SIGTERM: ``serve`` and ``mcp start`` ran on,
 orphaned, until their input closed. These start the server as a client does,
 wait for its first answer, then signal it.
 """
@@ -61,7 +61,7 @@ class _Server:
             for name, value in os.environ.items()
             if name not in {"OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE"}
         }
-        env.update({"OPENTIDE_ENGINE": "rust", "NO_COLOR": "1"})
+        env.update({"NO_COLOR": "1"})
         self.process = subprocess.Popen(
             argv,
             cwd=cwd,

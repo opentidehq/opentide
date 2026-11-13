@@ -164,7 +164,7 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     let stdout = duration
         .replace_all(&String::from_utf8(out).unwrap(), r#""duration_ms":${1}0"#)
         .into_owned();
-    let stdout = without_engine_variable(&stdout);
+    let stdout = as_oracle(&stdout);
     let stderr = String::from_utf8(stderr.0.lock().unwrap().clone()).unwrap();
     Outcome {
         exit_code,
@@ -173,28 +173,20 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     }
 }
 
-/// The catalogue without its last `environment` row, `OPENTIDE_ENGINE`: the
-/// variable UC-0.7 (#805) added after the oracle, at the end of the list so
-/// that the oracle's list is a prefix of today's. The Python CLI prints it
-/// too (`opentide.cli.services.introspect.environment`). The other changes
-/// made after the oracle are undone by [`since_oracle::to_oracle`].
-fn without_engine_variable(stdout: &str) -> String {
+/// The catalogue (`--json commands`) as the oracle printed it: the changes
+/// made after the oracle undone by [`since_oracle::to_oracle`]. Any other
+/// output is returned as it is.
+fn as_oracle(stdout: &str) -> String {
     let Ok(mut document) = Json::parse(stdout) else {
         return stdout.to_owned();
     };
-    let Json::Object(members) = &mut document else {
+    // Only the catalogue (`--json commands`) holds what changed since.
+    let Json::Object(members) = &document else {
         return stdout.to_owned();
     };
-    let Some((_, Json::Array(rows))) = members.iter_mut().find(|(key, _)| key == "environment")
-    else {
+    if !members.iter().any(|(key, _)| key == "environment") {
         return stdout.to_owned();
-    };
-    let last = rows.pop();
-    assert_eq!(
-        last.as_ref().and_then(|row| row.get("name")),
-        Some(&Json::str("OPENTIDE_ENGINE")),
-        "the catalogue's last variable is OPENTIDE_ENGINE"
-    );
+    }
     since_oracle::to_oracle(&mut document);
     document_text(&document, stdout.starts_with("{\n"))
 }

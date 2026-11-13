@@ -59,9 +59,9 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     and the commands the Rust CLI runs (info, info catalog,
                     rules unreviewed, generate exports navigator, generate
                     docs, deploy --dry-run), built --release; startup
-                    (opentide --version) and explain through the launcher,
-                    opentide.cli.launch:main, with OPENTIDE_ENGINE=rust; every
-                    other command reports \"no Rust yet\"
+                    (opentide --version) and explain through the console
+                    script, opentide._cli:main; every other command reports
+                    \"not measured\"
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
@@ -653,13 +653,13 @@ fn has_rust(scenario: &Scenario) -> bool {
 /// The engine's program and arguments for a scenario, or why it has none.
 enum Program {
     Run(PathBuf, Vec<OsString>),
-    /// The console script, run with `OPENTIDE_ENGINE=rust` ([`LAUNCHER`]).
+    /// The console script ([`LAUNCHER`]).
     Launcher(PathBuf, Vec<OsString>),
     Missing(String),
 }
 
 /// The scenarios `--engine rust` measures through the console script,
-/// `opentide.cli.launch:main` (UC-3.8b, #960): the plan's startup budgets,
+/// `opentide._cli:main` (UC-3.8b, #960; UC-6.2, #841): the plan's startup budgets,
 /// `opentide --version` in 20 ms and `explain` in 30 ms (section 11; #830),
 /// are what `pip install opentide` gives a person, launcher included.
 const LAUNCHER: &[&str] = &["startup", "explain"];
@@ -687,7 +687,7 @@ struct Programs<'a> {
     load: Option<&'a Path>,
     /// opentide-workspace's `validate` example (`rust`).
     validate: Option<&'a Path>,
-    /// The console script, `opentide.cli.launch:main` (`rust`, [`LAUNCHER`]).
+    /// The console script, `opentide._cli:main` (`rust`, [`LAUNCHER`]).
     launcher: Option<&'a Path>,
 }
 
@@ -722,7 +722,7 @@ fn program(
     match (engine, scenario.kind) {
         (Engine::Python, Kind::Version) => Program::Missing(
             "not held to a budget for the oracle: startup measures the launcher, \
-             opentide.cli.launch:main (UC-3.8b), under --engine rust"
+             opentide._cli:main (UC-3.8b), under --engine rust"
                 .into(),
         ),
         (Engine::Rust, _) if LAUNCHER.contains(&scenario.id) => match launcher {
@@ -779,9 +779,7 @@ fn program(
                 Program::Run(cli.to_owned(), args(&["--json"]))
             }
             None if RUST_CLI.contains(&scenario.id) => Program::Missing("no Rust CLI built".into()),
-            _ => Program::Missing(
-                "no Rust yet: the command runs in Python until it is ported to opentide-cli".into(),
-            ),
+            _ => Program::Missing("not measured: no Rust CLI scenario names it (RUST_CLI)".into()),
         },
     }
 }
@@ -1093,7 +1091,7 @@ fn generate_here(scale: u32, dir: Option<&Path>) -> Result<Generated> {
 enum Launch {
     /// As it is.
     Direct,
-    /// The console script with `OPENTIDE_ENGINE=rust`. Its warm-up runs may
+    /// The console script. Its warm-up runs may
     /// write the bytecode of the package's modules, as a wheel's install
     /// compiles them: a measured run that compiled them would measure the
     /// compiler.
@@ -1129,11 +1127,8 @@ fn measure_scenario(
         let sample = match scenario.kind {
             Kind::Cli | Kind::Load | Kind::Version => {
                 let mut command = measure::command(program, args, &run_dir)?;
-                if launch == Launch::Launcher {
-                    command.env("OPENTIDE_ENGINE", "rust");
-                    if !measured_run {
-                        command.env_remove("PYTHONDONTWRITEBYTECODE");
-                    }
+                if launch == Launch::Launcher && !measured_run {
+                    command.env_remove("PYTHONDONTWRITEBYTECODE");
                 }
                 let measured = measure::run(&mut command, sleep)?;
                 if scenario.kind == Kind::Version {
@@ -1490,7 +1485,7 @@ mod tests {
                 (Kind::Cli, Program::Missing(why)) if RUST_CLI.contains(&scenario.id) => {
                     assert_eq!(why, "no Rust CLI built");
                 }
-                (Kind::Cli, Program::Missing(why)) => assert!(why.starts_with("no Rust yet")),
+                (Kind::Cli, Program::Missing(why)) => assert!(why.starts_with("not measured")),
                 (kind, _) => panic!("{}: {kind:?}", scenario.id),
             }
         }

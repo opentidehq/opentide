@@ -23,7 +23,7 @@ use thiserror::Error;
 pub use markdown::highlight_markdown_line;
 
 pub const SPEC_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/highlights/spec.toml"));
-/// Tide field catalog generated from opentide JSON Schema (`scripts/engine/sync_opentide_schemas.py`).
+/// Tide field catalog generated from the Rust models (`cargo xtask codegen`).
 pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/data/catalogs/tide/generated/fields.json"

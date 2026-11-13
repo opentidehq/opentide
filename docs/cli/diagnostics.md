@@ -65,8 +65,6 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`ecs_type_mismatch`](#ecs_type_mismatch) | The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index. |
 | [`ecs_unknown_field`](#ecs_unknown_field) | The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields. |
 | [`elastic_dataset_not_declared`](#elastic_dataset_not_declared) | The index pattern is not one the workspace declares in visibility.toml. |
-| [`engine_mismatch`](#engine_mismatch) | `OPENTIDE_ENGINE=compare` ran the command's Python and Rust implementations on the same input, each on its own copy of the workspace, and they did not do the same: a different exit code, stdout or stderr, or a file one of them created, changed or deleted and the other did not. |
-| [`engine_not_ported`](#engine_not_ported) | `OPENTIDE_ENGINE=rust` asked for the Rust implementation of a command that has none yet. opentide is moving its commands from Python to Rust one at a time; until a command has a Rust implementation, only its Python one runs. |
 | [`engine_unavailable`](#engine_unavailable) | The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server. |
 | [`eql_argument_type`](#eql_argument_type) | A literal has a type the EQL verifier rejects in this position. |
 | [`eql_case_sensitive`](#eql_case_sensitive) | The comparison is case-sensitive; the case-insensitive form may be meant. |
@@ -1159,38 +1157,6 @@ name = "winlogbeat-*"
 description = "Windows event logs shipped by Winlogbeat."
 system = "elastic"
 ```
-
-## engine_mismatch
-
-`OPENTIDE_ENGINE=compare` ran the command's Python and Rust implementations on the same input, each on its own copy of the workspace, and they did not do the same: a different exit code, stdout or stderr, or a file one of them created, changed or deleted and the other did not.
-
-Exit 70, as `failure.code`. The message names the diff report, a JSON file in opentide's state directory (`$XDG_STATE_HOME/opentide/compare/` on Linux), which lists each difference with where it is and both sides.
-
-### Example
-
-```text illustrative
-error: The Python and Rust implementations of opentide validate differ (2 differences); the report is /home/me/.local/state/opentide/compare/20261108T101500123456Z.json
-```
-
-### How to fix
-
-Nothing in your workspace is wrong: this is a difference between two implementations of opentide, and the Python one is the reference. Run the command again without `OPENTIDE_ENGINE` (or with `OPENTIDE_ENGINE=python`) to get its usual result, and report the difference at https://github.com/opentidehq/opentide/issues with the report attached; read it first, it holds parts of the command's output.
-
-## engine_not_ported
-
-`OPENTIDE_ENGINE=rust` asked for the Rust implementation of a command that has none yet. opentide is moving its commands from Python to Rust one at a time; until a command has a Rust implementation, only its Python one runs.
-
-Exit 2, as `failure.code`, with `failure.argument` `OPENTIDE_ENGINE`.
-
-### Example
-
-```text illustrative
-error: opentide validate has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.
-```
-
-### How to fix
-
-Unset `OPENTIDE_ENGINE`, or set it to `python` (the default) or `compare`, which runs the Python implementation alone where there is no Rust one. This is not the analysis engine failing to load: that is `engine_unavailable`.
 
 ## engine_unavailable
 
