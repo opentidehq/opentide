@@ -85,15 +85,14 @@ capabilities ([.agents/skills/lsp-host](../../.agents/skills/lsp-host/SKILL.md#d
 | `workspace/diagnostic` | Every object file of every root that no editor has open, with its `duplicate_id`, `invalid_ref` and the rest. |
 
 Diagnostics carry `range`, `severity` (error 1, warning 2, information 3,
-hint 4), `code`, `message`, `source: "opentide"` and `data: { field_path,
-suggestion }`, pushed or pulled. A client that reads them also gets
+hint 4), `code`, `message`, `source: "opentide"` and
+`data: { field_path, suggestion }`, pushed or pulled. A client that reads them also gets
 `codeDescription.href` (`https://opentide.org/docs/cli/diagnostics/#<code>`),
 the `Deprecated` tag on deprecation codes, the other file of a `duplicate_id`
 in `relatedInformation`, and the document `version` on a published set.
 
-`capabilities.experimental.opentide` says who runs the server: `{ host:
-{ name, version } | null, engine, catalog: "models" | "host",
-configurationChecks, configurationSchemas, workspaceUpdates }`. `catalog` is
+`capabilities.experimental.opentide` says who runs the server:
+`{ host: { name, version } | null, engine, catalog: "models" | "host", configurationChecks, configurationSchemas, workspaceUpdates }`. `catalog` is
 `models` when the server generates the Tide field catalogs hover, completion
 and highlighting read from opentide's models for each root's configuration
 (#926), and `host` when the host supplied them; servers before #926 said

@@ -37,6 +37,9 @@
 //!   refuse at least one, so a document handed the wrong kind of instance
 //!   fails. The configuration router must be the same document. The text
 //!   differences are listed in `tests/golden/APPROVED_DIFFS.toml`.
+//! - **Diagnostics reference** (committed): `docs/cli/diagnostics.md`, every
+//!   `opentide explain` page on one page, its prose made safe for MDX
+//!   (`opentide_cli::explain::reference_markdown`).
 //! - **Editor schemas** (committed): each object revision's schema in
 //!   `data/catalogs/tide/schemas/`, generated from the bundled configuration
 //!   with no workspace objects, vocabulary essays shortened.
@@ -81,8 +84,9 @@ pub const USAGE: &str = "usage: cargo xtask codegen [--check]
                src/opentide/schemas/data/platform_templates/*.template.yaml,
                data/catalogs/tide/schemas/<revision>.schema.json and the
                router beside them (opentide.schema.json), the language
-               server's catalogs (data/catalogs/tide/generated/) and the key
-               lists of highlights/queries/tide/highlights.scm
+               server's catalogs (data/catalogs/tide/generated/), the key
+               lists of highlights/queries/tide/highlights.scm and the
+               diagnostics reference (docs/cli/diagnostics.md)
   --check      compare them instead of writing; compare what `opentide
                generate` writes (templates, snippets, the router schema) with
                each golden recording of an `opentide generate` that ran
@@ -109,6 +113,11 @@ pub const COMMITTED_CATALOGS: &str = "data/catalogs/tide/generated";
 
 /// Where the committed platform templates live, relative to the repository.
 pub const PLATFORM_TEMPLATES: &str = "src/opentide/schemas/data/platform_templates";
+
+/// The diagnostics reference, every `opentide explain` page on one docs
+/// page (`opentide_cli::explain::reference_markdown`), relative to the
+/// repository.
+pub const DIAGNOSTICS_REFERENCE: &str = "docs/cli/diagnostics.md";
 
 /// Where the object templates the language server offers as snippets live,
 /// relative to the repository (`opentide_tide::snippet`).
@@ -148,7 +157,14 @@ pub fn run(args: &[String]) -> Result<u8> {
         let (count, verdicts) = schema_verdicts(&root)?;
         judged = count;
         problems.extend(verdicts);
-        let (count, catalogs) = catalog_parity(&root)?;
+        let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
+        let ledger = opentide_compare::ledger::Ledger::parse(
+            &std::fs::read_to_string(&ledger_path)
+                .with_context(|| format!("read {}", ledger_path.display()))?,
+        )
+        .map_err(|error| anyhow::anyhow!("{}:\n{error}", ledger_path.display()))?;
+        let mut usage = opentide_compare::ledger::Usage::default();
+        let (count, catalogs) = catalog_parity(&root, &ledger, &mut usage)?;
         compared += count;
         problems.extend(catalogs);
     }
@@ -211,6 +227,10 @@ pub fn committed_artifacts() -> Result<Vec<(String, String)>> {
             editor_reference_text(&annotated(&schema)),
         ));
     }
+    out.push((
+        DIAGNOSTICS_REFERENCE.to_owned(),
+        opentide_cli::explain::reference_markdown(),
+    ));
     Ok(out)
 }
 
@@ -748,7 +768,18 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
 /// recording of an `opentide generate` that wrote them must hold, byte for
 /// byte, what the generator writes for the fixture with the oracle's version
 /// as the label. Returns the number of files compared and the differences.
-fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
+/// A file a run left written, world-readable (the mode does not matter here:
+/// only the bytes are compared).
+fn written(bytes: Vec<u8>) -> opentide_compare::FileState {
+    opentide_compare::FileState::Written { mode: 0o644, bytes }
+}
+
+fn catalog_parity(
+    root: &Path,
+    ledger: &opentide_compare::ledger::Ledger,
+    usage: &mut opentide_compare::ledger::Usage,
+) -> Result<(usize, Vec<String>)> {
+    use opentide_compare::Run;
     use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
     let mut problems = Vec::new();
     let mut compared = 0;
@@ -815,16 +846,53 @@ fn catalog_parity(root: &Path) -> Result<(usize, Vec<String>)> {
             );
         }
         let ours = &generated[&fixture];
+        // The oracle's catalog and the generator's, compared through the
+        // approved-diffs ledger, as `golden check --engine rust` compares the
+        // same files: a field the models added after the oracle (Splunk's
+        // `advanced`, #878) is a `json-extend:` entry there, not drift here.
+        let mut oracle_run = Run::default();
+        let mut candidate_run = Run::default();
         for (name, bytes) in recorded {
+            let path = format!("{prefix}{name}");
+            oracle_run
+                .files
+                .insert(path.clone(), written(bytes.to_vec()));
             match ours.iter().find(|(known, _)| *known == name) {
-                Some((_, text)) if text.as_bytes() == bytes => compared += 1,
-                Some(_) => problems.push(format!(
-                    "{id}: {CATALOG_DIR}/{name} differs from the oracle's"
-                )),
+                Some((_, text)) => {
+                    candidate_run
+                        .files
+                        .insert(path, written(text.as_bytes().to_vec()));
+                }
                 None => problems.push(format!(
                     "{id}: {CATALOG_DIR}/{name}: the generator writes no such file"
                 )),
             }
+        }
+        compared += oracle_run.files.len();
+        let report = opentide_compare::compare(
+            opentide_compare::Case {
+                command: "generate",
+                id: &id,
+            },
+            &oracle_run,
+            &candidate_run,
+            ledger,
+            usage,
+        );
+        for difference in &report.differences {
+            problems.push(format!(
+                "{id}: {} {} differs from the oracle's{}",
+                difference.target,
+                difference.pointer.as_deref().unwrap_or(""),
+                if difference.kind == opentide_compare::Kind::JsonValue {
+                    format!(
+                        " (oracle {}, generator {})",
+                        difference.oracle, difference.candidate
+                    )
+                } else {
+                    String::new()
+                }
+            ));
         }
     }
     if generated.is_empty() {
@@ -1566,6 +1634,7 @@ mod tests {
             EDITOR_SCHEMAS,
             COMMITTED_CATALOGS,
             "highlights/queries/tide",
+            "docs/cli",
         ] {
             std::fs::create_dir_all(root.path().join(dir)).unwrap();
         }
@@ -1632,6 +1701,11 @@ mod tests {
             .unwrap();
         std::fs::write(root.join(template), "changed\n").unwrap();
         std::fs::remove_file(root.join(schema)).unwrap();
+        // A page edited by hand, or not regenerated after a page changed.
+        let reference = root.join(DIAGNOSTICS_REFERENCE);
+        let text = std::fs::read_to_string(&reference).unwrap();
+        assert!(text.contains("&lt;=>"), "the reference is not MDX-safe");
+        std::fs::write(&reference, text.replace("&lt;=>", "<=>")).unwrap();
         std::fs::write(
             root.join(PLATFORM_TEMPLATES).join("retired.template.yaml"),
             "",
@@ -1642,6 +1716,7 @@ mod tests {
             [
                 format!("{template}: differs from what the model generates"),
                 format!("{schema}: missing"),
+                format!("{DIAGNOSTICS_REFERENCE}: differs from what the model generates"),
                 format!(
                     "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
                 ),

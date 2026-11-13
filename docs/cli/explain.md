@@ -99,4 +99,4 @@ error: No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.
 
 ## Source
 
-`crates/opentide-cli/src/commands/explain.rs`, `crates/opentide-cli/src/explain.rs`, and the pages in `src/opentide/data/diagnostics/`, which [Diagnostic codes](./diagnostics.md) lists.
+`crates/opentide-cli/src/commands/explain.rs`, `crates/opentide-cli/src/explain.rs`, and the pages in `src/opentide/data/diagnostics/`, from which `cargo xtask codegen` renders [Diagnostic codes](./diagnostics.md).
