@@ -185,6 +185,8 @@ pub enum Check2 {
     Filenames,
     #[value(name = "metadata")]
     Metadata,
+    #[value(name = "recommended")]
+    Recommended,
     #[value(name = "placeholders")]
     Placeholders,
     #[value(name = "queries")]
@@ -260,6 +262,11 @@ pub struct Cli {
     pub debug: bool,
     #[arg(long = "quiet", help = "Print only the outcome line and errors")]
     pub quiet: bool,
+    #[arg(
+        long = "verbose",
+        help = "Also print notes, such as a missing optional field. --json always includes them"
+    )]
+    pub verbose: bool,
     #[arg(long = "no-color", help = "Disable colour")]
     pub no_color: bool,
     #[arg(
@@ -1612,9 +1619,12 @@ pub struct InfoArgs {
 pub struct LintArgs {
     #[arg(long = "fix", help = "Apply safe filename renames")]
     pub fix: bool,
-    #[arg(long = "strict", help = "Exit non-zero when findings exist (CI gate)")]
+    #[arg(
+        long = "strict",
+        help = "Exit non-zero when errors or warnings are left (CI gate). Notes never fail it"
+    )]
     pub strict: bool,
-    #[arg(long = "check", help = "Limit to one check: filenames, metadata, placeholders or queries (repeatable). Runs it even when lint.toml disables it", action = clap::ArgAction::Append, value_name = "CHECK")]
+    #[arg(long = "check", help = "Limit to one check: filenames, metadata, recommended, placeholders or queries (repeatable). Runs it even when lint.toml disables it", action = clap::ArgAction::Append, value_name = "CHECK")]
     pub check: Vec<Check2>,
     #[arg(
         long = "changed",
@@ -1825,7 +1835,7 @@ pub enum RootCommand {
     #[command(
         name = "lint",
         about = "Check file names and recommended metadata",
-        long_about = "Check file names and recommended metadata\n\nCatalogue hygiene: filename slugs and recommended metadata, not schema validation.",
+        long_about = "Check file names and recommended metadata\n\nCatalogue hygiene: filename slugs and recommended metadata, not schema validation.\nA missing optional field is a note: it never fails --strict, and prints with --verbose.",
         after_help = "Examples:\n  $ opentide lint\n  $ opentide lint --fix"
     )]
     Lint(LintArgs),

@@ -430,7 +430,7 @@ mod tests {
         assert_eq!(choice.failure.code, code::USAGE_INVALID_CHOICE);
         assert_eq!(
             choice.failure.message,
-            "Invalid value for '--check': 'filenamez' is not one of 'filenames', 'metadata', 'placeholders', 'queries'."
+            "Invalid value for '--check': 'filenamez' is not one of 'filenames', 'metadata', 'recommended', 'placeholders', 'queries'."
         );
         assert_eq!(choice.failure.suggestion.as_deref(), Some("filenames"));
         assert_eq!(choice.notes[1].1, "opentide lint [OPTIONS]");
