@@ -1039,25 +1039,12 @@ fn configuration_verdicts(
     problems: &mut Vec<String>,
 ) -> Result<verdict::Tally> {
     let mut sum = verdict::Tally::default();
-    // The recorded oracle (0.23.0) lacks the configuration documents of the
-    // platforms the train ports onto it; leave those out. On this oracle none
-    // are generated, so this is a no-op until a row lands.
-    let after_oracle = |name: &str| -> bool {
-        opentide_schema::platforms::SINCE_ORACLE.iter().any(|id| {
-            opentide_schema::generate::configuration::configuration_schema_name(&format!(
-                "platforms/{id}.toml"
-            )) == name
-        })
-    };
     for name in oracle.keys() {
         if !rust.iter().any(|(known, _)| known == name) {
             problems.push(format!("the oracle generates {name}, Rust does not"));
         }
     }
     for (name, document) in rust {
-        if after_oracle(name) {
-            continue;
-        }
         let Some(expected) = oracle.get(name) else {
             problems.push(format!("Rust generates {name}, the oracle does not"));
             continue;
