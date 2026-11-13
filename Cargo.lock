@@ -3425,7 +3425,6 @@ dependencies = [
  "opentide-cli",
  "opentide-compile",
  "opentide-connectors",
- "opentide-lsp",
  "opentide-schema",
  "pyo3",
  "pyo3-async-runtimes",

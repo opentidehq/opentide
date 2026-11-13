@@ -148,9 +148,9 @@ def test_the_engine_crate_is_a_member_of_the_root_workspace() -> None:
     assert "bindings/python" in root["workspace"]["members"]
     assert "workspace" not in manifest
     assert not (ROOT / "bindings" / "python" / "Cargo.lock").exists()
-    for crate in ("opentide-analysis", "opentide-lsp"):
-        assert manifest["dependencies"][crate] == {"workspace": True}
-        assert root["workspace"]["dependencies"][crate]["path"] == f"crates/{crate}"
+    crate = "opentide-analysis"
+    assert manifest["dependencies"][crate] == {"workspace": True}
+    assert root["workspace"]["dependencies"][crate]["path"] == f"crates/{crate}"
     # hatch_build.py builds an editable install with it.
     assert root["profile"]["develop"]["inherits"] == "release"
 

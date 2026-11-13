@@ -8,10 +8,7 @@
 //! The engine reports LSP positions (0-based, UTF-16 code units); every
 //! position is converted here, against the text it points into.
 
-use opentide_analysis::{
-    AnalyzeRequest, IndexedObject, LanguageId, LineStarts, MemoryWorkspace, QueryRequest, Range,
-    codes,
-};
+use opentide_analysis::{LanguageId, LineStarts, QueryRequest, codes};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -47,190 +44,6 @@ impl Diagnostic {
     }
 }
 
-/// One query a Tide object carries, analyzed in its language.
-#[pyclass(frozen, get_all, module = "opentide._native")]
-#[derive(Clone)]
-struct QueryReport {
-    /// `kql`, `spl`, `esql`, `eql`, `kuery` or `lucene`.
-    language: &'static str,
-    /// YAML path of the query (`("configurations", "sentinel", "query")`).
-    field_path: Vec<String>,
-    line: usize,
-    column: usize,
-    end_line: usize,
-    end_column: usize,
-    diagnostics: Vec<Diagnostic>,
-}
-
-#[pymethods]
-impl QueryReport {
-    fn __repr__(&self) -> String {
-        format!(
-            "QueryReport({} at {}:{}, {} diagnostics)",
-            self.field_path.join("."),
-            self.line,
-            self.column,
-            self.diagnostics.len()
-        )
-    }
-}
-
-/// The files of one workspace, indexed once for many analyses.
-#[pyclass(frozen, module = "opentide._native")]
-struct Workspace {
-    host: MemoryWorkspace,
-    index: Vec<IndexedObject>,
-    /// What `validate` reports on the objects of each workspace a file
-    /// was analysed in, by the workspace's folder: loaded once (UC-2.6).
-    objects: std::sync::Mutex<
-        std::collections::HashMap<std::path::PathBuf, std::sync::Arc<opentide_lsp::ObjectFindings>>,
-    >,
-}
-
-impl Workspace {
-    /// `validate`'s findings on the object file at `path`, from the
-    /// workspace around it (loaded and validated once per workspace).
-    fn object_findings(&self, path: &str, text: &str) -> Vec<opentide_analysis::Diagnostic> {
-        let file = std::path::Path::new(path);
-        let Some(root) = opentide_lsp::server::workspace_root(file) else {
-            return Vec::new();
-        };
-        let findings = {
-            let mut cache = self
-                .objects
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            std::sync::Arc::clone(cache.entry(root.clone()).or_insert_with(|| {
-                std::sync::Arc::new(opentide_lsp::ObjectFindings::validate(&root))
-            }))
-        };
-        findings.for_file(file, text)
-    }
-}
-
-#[pymethods]
-impl Workspace {
-    /// *files* are `(path, text)` pairs: the object files, and the Elastic
-    /// platform configuration when there is one (its tenants' stack versions
-    /// decide what ES|QL is checked against).
-    #[new]
-    #[pyo3(signature = (files=Vec::new()))]
-    fn new(py: Python<'_>, files: Vec<(String, String)>) -> Self {
-        py.detach(|| {
-            let host = MemoryWorkspace { files };
-            let index = opentide_analysis::index_workspace(&host);
-            Self {
-                host,
-                index,
-                objects: std::sync::Mutex::default(),
-            }
-        })
-    }
-
-    /// How many objects the workspace index holds.
-    #[getter]
-    fn objects(&self) -> usize {
-        self.index.len()
-    }
-
-    /// Everything the language server reports for one file: a Tide object
-    /// (what `opentide validate` reports on it, when it is in a workspace on
-    /// disk, and the engine's query and block checks), or a standalone query
-    /// file. *language* defaults to the one the file name implies (`.yaml` is
-    /// a Tide object). *objects* false leaves `validate`'s findings out (and
-    /// the run that makes them): the engine's own checks alone, for `lint`'s
-    /// queries check.
-    #[pyo3(signature = (path, text, language=None, objects=true))]
-    fn analyze(
-        &self,
-        py: Python<'_>,
-        path: String,
-        text: String,
-        language: Option<&str>,
-        objects: bool,
-    ) -> PyResult<Vec<Diagnostic>> {
-        let language = match language {
-            Some(name) => parse_language(name)?,
-            None => language_of(&path).ok_or_else(|| {
-                PyValueError::new_err(format!(
-                    "cannot tell the language of {path:?} from its name; pass language="
-                ))
-            })?,
-        };
-        Ok(py.detach(|| {
-            let mut diagnostics = if objects && language == LanguageId::TideYaml {
-                self.object_findings(&path, &text)
-            } else {
-                Vec::new()
-            };
-            let response = opentide_analysis::analyze_with_index(
-                &self.host,
-                &self.index,
-                AnalyzeRequest {
-                    uri: path,
-                    language,
-                    text: text.clone(),
-                },
-            );
-            diagnostics.extend(response.diagnostics);
-            convert_all(&text, diagnostics)
-        }))
-    }
-
-    /// What the language server's hover shows at a position of *text*, as
-    /// Markdown, or `None` where it has nothing: the field's description, a
-    /// vocabulary value's meaning, the object a UUID names, a query token. The
-    /// same content an editor running `opentide lsp start` shows. *line* and
-    /// *column* are 1-based, *column* in code points, as diagnostics report
-    /// them; a position past its line or the text is clamped.
-    #[pyo3(signature = (path, text, line, column, language=None))]
-    fn hover(
-        &self,
-        py: Python<'_>,
-        path: String,
-        text: String,
-        line: usize,
-        column: usize,
-        language: Option<&str>,
-    ) -> PyResult<Option<String>> {
-        let language = match language {
-            Some(name) => parse_language(name)?,
-            None => language_of(&path).ok_or_else(|| {
-                PyValueError::new_err(format!(
-                    "cannot tell the language of {path:?} from its name; pass language="
-                ))
-            })?,
-        };
-        Ok(py.detach(|| {
-            let offset = LineStarts::new(&text).offset(&text, line, column);
-            opentide_analysis::hover(&self.host, language, &text, offset)
-        }))
-    }
-
-    /// Every query the Tide object *text* carries, each with its diagnostics,
-    /// including queries with none. CrowdStrike and HarfangLab queries are
-    /// never analyzed, so they are not reported.
-    fn analyze_queries(&self, py: Python<'_>, text: String) -> Vec<QueryReport> {
-        py.detach(|| {
-            opentide_analysis::analyze_queries(&self.host, &text)
-                .into_iter()
-                .map(|report| {
-                    let (line, column, end_line, end_column) = convert_range(&text, report.range);
-                    QueryReport {
-                        language: report.language.as_str(),
-                        field_path: report.field_path,
-                        line,
-                        column,
-                        end_line,
-                        end_column,
-                        diagnostics: convert_all(&text, report.diagnostics),
-                    }
-                })
-                .collect()
-        })
-    }
-}
-
 /// Diagnostics for one query on its own. *platform* is a `configurations` key
 /// (`defender_for_endpoint` selects the Defender schema, `carbon_black_cloud`
 /// the Carbon Black dialect); *stack* is an Elastic stack (`"9.5"`) for ES|QL.
@@ -246,7 +59,7 @@ fn analyze_query(
     let language = parse_language(language)?;
     if language == LanguageId::TideYaml {
         return Err(PyValueError::new_err(
-            "opentide-yaml is an object file, not a query; use Workspace.analyze",
+            "opentide-yaml is an object file, not a query; use opentide.Workspace.validate",
         ));
     }
     Ok(py.detach(|| {
@@ -298,15 +111,6 @@ fn highlight(py: Python<'_>, text: String, language: &str) -> PyResult<Vec<Token
             })
             .collect()
     }))
-}
-
-/// Declare the datasets a workspace's `visibility.toml` (the file's text)
-/// names, leaving the Tide catalogs in use as they are. `None` declares none.
-/// Raises `ValueError`, and changes nothing, when the text is not TOML.
-#[pyfunction]
-#[pyo3(signature = (text=None))]
-fn install_visibility(text: Option<&str>) -> PyResult<()> {
-    opentide_analysis::install_visibility(text).map_err(PyValueError::new_err)
 }
 
 /// One sentence on what a diagnostic code means, or `None` for a code the
@@ -369,10 +173,6 @@ fn convert_all(text: &str, diagnostics: Vec<opentide_analysis::Diagnostic>) -> V
         .collect()
 }
 
-fn convert_range(text: &str, range: Range) -> (usize, usize, usize, usize) {
-    LineStarts::new(text).convert(text, range)
-}
-
 #[pymodule]
 mod _native {
     // `allow`, not `expect`: clippy's glob-import lints never fulfil an expectation.
@@ -383,10 +183,7 @@ mod _native {
     use super::*;
 
     #[pymodule_export]
-    use super::{
-        Diagnostic, QueryReport, Workspace, analyze_query, cli_main, describe_code, highlight,
-        install_visibility, language_for_path,
-    };
+    use super::{Diagnostic, analyze_query, cli_main, describe_code, highlight, language_for_path};
 
     /// The SDK's core (UC-5.2, #837): `opentide._native.sdk`, the facade's
     /// `Workspace` and `run_json`, which `opentide.Workspace` wraps.
