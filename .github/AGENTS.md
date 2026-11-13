@@ -91,7 +91,11 @@ workflows".
 Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no
 name, never floating `stable`), then its targets with `rustup target add`: that install drops
 `--target` and `--component` silently (`tests/test_ci/test_rust_toolchain.py`). Only the fuzz jobs
-name a toolchain, the dated nightly `fuzz/NIGHTLY` pins. Every job that runs cargo sets
+name a toolchain, the dated nightly `fuzz/NIGHTLY` pins. The package builds are stricter (`build-packages.yml`: every wheel and
+npm native package): `scripts/build/install-rust.sh` installs the pinned release by name with the
+minimal profile, without the file's rustfmt and clippy, and names it in `RUSTUP_TOOLCHAIN`, so that
+rustup installs nothing in the middle of a build; the Linux wheels' containers do the same in
+`pyproject.toml`'s `[tool.cibuildwheel.linux]` `before-all` and `environment`. Every job that runs cargo sets
 `RUSTFLAGS=-Dwarnings` (the nightly fuzz build aside); the test jobs also set
 `CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (CI never writes a snapshot).
 
