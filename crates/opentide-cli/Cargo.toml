@@ -7,8 +7,9 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-# Published with content, once commands run on it (docs/internal/publishing.md).
-publish = false
+# Published by the release train (publish.yml, UC-5.5), for the facade's `cli`
+# feature. Its explain pages and MCP templates come from src/opentide/data
+# (build.rs, OPENTIDE_ASSETS), which `release.py vendor` copies into the package.
 # The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
 # oracles: the explain pages it holds quote vendor SDK names the licence scan
 # keeps out of release artifacts (scripts/engine/license-scan.sh).
@@ -21,6 +22,12 @@ exclude = [
     "tests/extract_sentinel.rs",
 ]
 description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
+
+# The explain pages build.rs compiles in, which `scripts/engine/release.py
+# vendor` copies into the published crate (its `include_str!`s of
+# OPENTIDE_ASSETS, the MCP host templates, are found in the sources).
+[package.metadata.opentide]
+assets = ["src/opentide/data/diagnostics"]
 
 [lints]
 workspace = true

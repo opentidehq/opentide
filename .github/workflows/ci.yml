@@ -9,14 +9,15 @@ name: CI
 # - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
 #   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
 #   Windows CLI smoke, the facade crate's every feature and semver checks, the
-#   Node package, the cross-SDK conformance suite on three OSes, LSP clients
-#   and benchmarks. It runs nightly, on every push
-#   to development and integration/unified-core, on Run workflow, and on
-#   a pull request that carries the `full-ci` label (read at each push: add
-#   the label, then push, or Run workflow on the branch). Each of these jobs
-#   has an `if` on that condition; the release dry run (and crate packaging)
-#   also runs on a pull request that changes the release's inputs, and the
-#   grammar checks on one that changes the grammars (the `changes` job).
+#   Node package and its install from a local registry, the installable wheels
+#   and npm tarballs as run artifacts, the cross-SDK conformance suite on three
+#   OSes, LSP clients and benchmarks. It runs nightly, on every push to
+#   development and integration/unified-core, on Run workflow, and on a pull
+#   request that carries the `full-ci` label (read at each push: add the label,
+#   then push, or Run workflow on the branch). Each of these jobs has an `if`
+#   on that condition; the release dry run (and crate packaging) also runs on a
+#   pull request that changes the release's inputs, and the grammar checks on
+#   one that changes the grammars (the `changes` job).
 
 on:
   push:
@@ -572,6 +573,90 @@ jobs:
           path: golden-node.json
           if-no-files-found: ignore
 
+  # The npm packages as a user installs them, as publish.yml's smoke-npm
+  # does before a release: the tree's packages at the workspace version
+  # (`release.py npm-version`), the addon built for linux-x64-gnu only (the
+  # other five native packages packed as stand-ins without an addon, so that
+  # npm still has to choose by os/cpu/libc), published to a throwaway local
+  # registry (Verdaccio, no uplink), then `npm install @opentide/opentide` in
+  # a clean project: exactly the host's native package, `npx opentide
+  # --version`, the SDK, `runJson` and `tsc` against index.d.ts, and the same
+  # through the `opentide` alias (scripts/engine/npm-local-registry/test.mjs).
+  # It reads the node job's Rust cache.
+  npm-install:
+    name: npm install from a local registry (linux-x64-gnu)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: node
+          save-if: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            bindings/node/package-lock.json
+            scripts/engine/npm-local-registry/package-lock.json
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # Before the build: napi-rs writes the version into the loader.
+      - name: The npm packages at the workspace version
+        run: |
+          set -euo pipefail
+          version="$(python3 scripts/engine/release.py version)"
+          python3 scripts/engine/release.py npm-version "${version}"
+          python3 scripts/engine/release.py lockstep "${version}" --npm "${version}"
+          echo "NPM_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Build the addon (linux-x64-gnu)
+        working-directory: bindings/node
+        run: OPENTIDE_VERSION="${NPM_VERSION}" node build.mjs --profile develop
+
+      - name: Pack, publish to a local registry, npm install, npx, SDK and types
+        run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --pack "${RUNNER_TEMP}/npm"
+
+  # Installable builds to test without publishing anything: the wheels and
+  # the npm tarballs a release builds (build-packages.yml, which publish.yml
+  # calls too), at a development version of the workspace's (PyPI
+  # X.Y.Z.devN, npm X.Y.Z-dev.N), uploaded as this run's artifacts for 14
+  # days: wheels-<platform> (linux-x64, linux-arm64, macos-x64, macos-arm64,
+  # windows-x64, windows-arm64) and npm-<platform> (@opentide/opentide with
+  # one native package). docs/internal/publishing.md, "Testing a build
+  # without publishing", says how to install them. The full set only.
+  packages:
+    name: Installable packages
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-packages.yml
+    with:
+      revision: ${{ github.sha }}
+      retention-days: 14
+
   # The cross-SDK conformance suite (UC-5.4, #839): every operation of
   # tests/conformance/manifest.json on the tide corpus, the heavy workspace,
   # the fault workspace and each configuration fault, through the Rust, Python
@@ -769,29 +854,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/engine/release.py vendor
-      # opentide-schema (publish = false) depends on opentide-schema-derive,
-      # which is not on crates.io yet, so it cannot be packaged until both
-      # are published (crates/opentide-schema/Cargo.toml says when). A crate
-      # left out of the package step is scanned as its source directory
-      # instead (tests/test_ci/test_own_ci_workflow.py holds both to it).
-      # opentide-cli (publish = false) depends on opentide-schema and
-      # opentide-workspace for the commands ported onto it (UC-2.4), so it
-      # cannot be packaged either: its scan reads the files `cargo package
-      # --list` names, as its package would hold them (its CI-only oracle
-      # data under tests/render/ is excluded from the package, as before).
-      # opentide-lsp and opentide-wasm (publish = false) take their checks
-      # from opentide-workspace and opentide-schema (UC-2.6, ADR 0010's
-      # addendum): left out of the package step too, their sources scanned.
-      # opentide-connectors (publish = false, UC-4.1) reads tenant settings
-      # through opentide-workspace: left out too, its sources scanned. So is
-      # the opentide facade (UC-5.1), which wraps all of them, and the Node.js
-      # binding (opentide-node, bindings/node, UC-5.3a), built on the facade.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-schema --exclude opentide-workspace --exclude opentide-compile --exclude opentide-cli --exclude opentide-lsp --exclude opentide-wasm --exclude opentide-connectors --exclude opentide --exclude opentide-node --allow-dirty
+      # Every crate the release train publishes (publish.yml, UC-5.5), built
+      # from its package. Left out: the members with `publish = false` (the
+      # PyO3 and Node.js bindings, xtask, the test harnesses opentide-compare
+      # and opentide-cassette, and opentide-wasm, which ships as a release
+      # asset), whose sources are scanned instead
+      # (tests/test_ci/test_own_ci_workflow.py holds both to it). opentide-cli
+      # carries opentide's package data, its explain pages, as the wheel does:
+      # scanned as a product (license-scan.sh --product).
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
       - name: license scan (no oracle references)
         run: |
-          bash scripts/engine/license-scan.sh target/package/*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-schema crates/opentide-schema-derive crates/opentide-compare crates/opentide-workspace crates/opentide-compile crates/opentide-lsp crates/opentide-wasm crates/opentide-connectors crates/opentide bindings/node bindings/python
-          cargo package --list --locked --allow-dirty -p opentide-cli | (cd crates/opentide-cli && while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\0' "$f"; fi; done | xargs -0 bash ../../scripts/engine/license-scan.sh)
+          set -euo pipefail
+          find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
+          bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
+          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
 
   # The supply-chain gate (#843, deny.toml): licences of what we ship,
   # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second

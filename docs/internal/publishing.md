@@ -7,6 +7,8 @@ description: Every name opentide publishes under on crates.io, npm and PyPI, who
 
 opentide publishes, or will publish, under names on three registries. This page lists each name, who owns it, the workflow in this repository that may publish it with trusted publishing (OpenID Connect, no stored token), and the steps a maintainer takes to set it up. It is UC-0.1 ([#799](https://github.com/opentidehq/opentide/issues/799)) of the Unified Core epic ([#790](https://github.com/opentidehq/opentide/issues/790); plan in [#789](https://github.com/opentidehq/opentide/pull/789), decisions D-5 and D-6).
 
+Since UC-5.5 ([#840](https://github.com/opentidehq/opentide/issues/840)) every name is published by one workflow, [`publish.yml`](../../.github/workflows/publish.yml), the release train: [The release train](#the-release-train) says what it publishes, the decisions it records, and what a maintainer sets up before its first release candidate.
+
 The state under **today** was read from the registries' public APIs on **2026-11-07**; [Verify](#verify) has the commands. Only a maintainer can publish a placeholder, add an owner or register a publisher: [Maintainer steps](#maintainer-steps) lists each one with the check that proves it done, and [step 8](#8-record-the-result-on-this-page) brings these tables up to date afterwards.
 
 ## Names
@@ -18,8 +20,9 @@ The state under **today** was read from the registries' public APIs on **2026-11
 | `opentide` | not published | none | none | `opentidehq/opentide`, `publish.yml`, registered at UC-5.5, the first workflow that publishes it ([step 10](#10-at-uc-55-publishyml)) |
 | `opentide-core`, `opentide-highlight`, `opentide-syntax`, `opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-falco`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`, `opentide-lsp` (14 crates) | 0.11.0 | user `behemothsecurity` | `opentidehq/language-server`, `release.yml` (its `release.py trust` step registers it): crates.io records every 0.11.0 as published by trusted publishing from that repository | `opentidehq/opentide`, [the engine release workflow](#the-engine-release-workflow), once UC-0.3 has merged it into `development` ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)); then `publish.yml` from UC-5.5 |
 | `opentide-cql` | 0.12.0 | user `behemothsecurity` | none recorded: language-server 0.12.0 (2026-11-09) published its first version with a token, as a new crate's first version must be, so crates.io records no trusted publishing for it | the same as the 14 crates above; its publisher is added as theirs are ([step 9](#9-when-uc-03-has-merged-the-engine-release-workflow)) |
+| `opentide-schema`, `opentide-schema-derive`, `opentide-workspace`, `opentide-compile`, `opentide-connectors`, `opentide-cli` (6 crates) | not published | none | none | `opentidehq/opentide`, `publish.yml`: the release train publishes them with the facade, which depends on them; each first version needs the stored token, as every new crate's does ([step 10](#10-at-uc-55-publishyml)) |
 
-`opentide-wasm` is `publish = false` in language-server and has no crates.io name. The plan's new crates (`opentide-schema`, `opentide-schema-derive`, `opentide-workspace`, `opentide-compile`, `opentide-connectors`, `opentide-cli`) are unclaimed. crates.io's [usage policy](https://crates.io/policies) does not allow a crate that exists only to hold a name for a prolonged period, without functionality or development activity, so they are published when they have content (see [Decisions](#decisions-for-the-maintainer)).
+`opentide-wasm` is `publish = false` and has no crates.io name: it ships as the `opentide-wasm-web` zip. The plan's new crates (`opentide-schema`, `opentide-schema-derive`, `opentide-workspace`, `opentide-compile`, `opentide-connectors`, `opentide-cli`) are unclaimed: crates.io's [usage policy](https://crates.io/policies) does not allow a crate that exists only to hold a name, so they were published when they had content. The release train publishes them with the facade (UC-5.5): `cargo install opentide --features cli` needs them on crates.io. The test harnesses `opentide-compare` and `opentide-cassette` stay `publish = false`; the crates that use them name them as path dev-dependencies without a version, which cargo leaves out of a published manifest.
 
 ### npm
 
@@ -29,7 +32,8 @@ The state under **today** was read from the registries' public APIs on **2026-11
 | `opentide` | not published | none | `opentidehq/opentide`, `publish.yml` (UC-5.5) |
 | `@opentide/lsp-client` | not published | none | `opentidehq/opentide`, the engine release workflow (UC-0.3; language-server [#191](https://github.com/opentidehq/language-server/issues/191)); then `publish.yml` (UC-5.5) |
 | `@opentide/lsp-worker` | not published | none | the same |
-| `@opentide/wasm`, `@opentide/<platform>` (D-6, UC-5.3) | not published | covered by the scope | `opentidehq/opentide`, `publish.yml` (UC-5.5) |
+| `@opentide/opentide-linux-x64-gnu`, `-linux-arm64-gnu`, `-darwin-x64`, `-darwin-arm64`, `-win32-x64-msvc`, `-win32-arm64-msvc` (D-6, UC-5.3: the six native packages; no musl) | not published | covered by the scope | `opentidehq/opentide`, `publish.yml` (UC-5.5); each needs a first publish by hand before it can have one ([step 10](#10-at-uc-55-publishyml)) |
+| `@opentide/wasm` (D-6) | not published | covered by the scope | `opentidehq/opentide`, `publish.yml`, once a package of that name exists |
 | `@opentide/explorer` (not this repository's) | 0.6.0 | `behemothsecurity` | `opentidehq/explorer`, its `publish.yml` (0.6.0 carries provenance from it); listed because the organisation's settings ([step 3](#3-npm-the-opentide-organisation)) apply to it too |
 
 **The `opentide` organisation exists.** The registry lists one package in the scope, `@opentide/explorer` (created 2026-10-27, published from `opentidehq/explorer`), and only an organisation's members can create packages in its scope. The registry's public endpoints answer for `opentide` as they do for an organisation, not for a user: `GET https://registry.npmjs.org/-/org/opentide/user` returns `{}` (members are private) and `/-/org/opentide/team` asks for authentication, as for the organisation `babel`, while a user scope such as `behemothsecurity` returns `{"behemothsecurity":"owner"}` and `[]`. Its members are visible to members only.
@@ -38,7 +42,7 @@ The state under **today** was read from the registries' public APIs on **2026-11
 
 | Name | Today | Owners today | Trusted publisher today | Trusted publisher required |
 |------|-------|--------------|-------------------------|----------------------------|
-| `opentide` | 0.23.0 | `behemoth` (Owner) | `opentidehq/opentide`, `publish-pypi.yml`, environment `pypi` (read from 0.23.0's provenance; set up as [PyPI trusted publishing](./pypi-trusted-publishing.md) describes) | the same until UC-5.5 renames the workflow `publish.yml` |
+| `opentide` | 0.23.0 | `behemoth` (Owner) | `opentidehq/opentide`, `publish-pypi.yml`, environment `pypi` (read from 0.23.0's provenance; set up as [PyPI trusted publishing](./pypi-trusted-publishing.md) describes) | `opentidehq/opentide`, `publish.yml`, environment `pypi`, which replaced `publish-pypi.yml` at UC-5.5, for releases and release candidates alike ([step 10](#10-at-uc-55-publishyml)) |
 
 ## Owners required
 
@@ -55,6 +59,8 @@ Every name has **at least two owners, each a person with two-factor authenticati
 Every name above, `@opentide/explorer` aside, is published by workflows in `opentidehq/opentide` only. Each registry matches the GitHub repository owner, the repository name and the workflow **file name** (not its path), and, when one is set, the GitHub environment of the publishing job.
 
 ### The engine release workflow
+
+**Retired at UC-5.5:** `publish.yml` replaced `engine-release.yml` and `publish-pypi.yml`, and the engine's `engine-v*` tag series ended. What follows is how it was set up, kept for the publishers still registered to it ([step 10](#10-at-uc-55-publishyml) removes them).
 
 language-server's `release.yml` publishes the engine crates, the engine assets and, once language-server #191 is done, `@opentide/lsp-client` and `@opentide/lsp-worker`. UC-0.3 ([#801](https://github.com/opentidehq/opentide/issues/801)) imports it into `.github/workflows/`, and UC-5.5 replaces it with `publish.yml`. #801 does not name the imported file. This page proposes **`engine-release.yml`** ([decision 2](#decisions-for-the-maintainer)), but the name UC-0.3 merges is the one to register. The registries compare that name exactly and do not stop you from saving a name no workflow has: crates.io only warns, and npm says nothing. So no publisher names the engine release workflow until it is on `development` under its final name.
 
@@ -83,6 +89,98 @@ A trusted publisher with no environment trusts the workflow file on any branch: 
 
 [Decision 3](#decisions-for-the-maintainer) proposes an environment per registry.
 
+## The release train
+
+[`publish.yml`](../../.github/workflows/publish.yml) (UC-5.5, [#840](https://github.com/opentidehq/opentide/issues/840)) publishes one version of everything from one Run workflow on `development`, and creates the one tag, `vX.Y.Z`:
+
+| Registry | What | How |
+|----------|------|-----|
+| PyPI (environment `pypi`) | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64), the sdist | cibuildwheel and `hatch_build.py`, `uv build --sdist`; `pypa/gh-action-pypi-publish` with OIDC (and its PEP 740 attestations) |
+| crates.io | Every crate without `publish = false`, dependencies first, each pinned to the version: the engine crates, the six of the [new names](#cratesio), `opentide-lsp` and the facade `opentide` | `scripts/engine/release.py publish`, `cargo publish --no-verify` per crate, OIDC through `rust-lang/crates-io-auth-action` (a stored token only for a crate's first version) |
+| npm | `@opentide/opentide`, its six native packages (napi-rs), the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker` | `npm pack` of what the native jobs built ([`build-packages.yml`](../../.github/workflows/build-packages.yml), which builds the wheels too), `npm publish --provenance` with OIDC (npm 11.21.1) |
+| GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` (six targets), `opentide-installer.sh` and `opentide-installer.ps1` ([`publishing/installers/`](../../publishing/installers/)), `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-wasm32-wasip1.wasm`, `THIRD-PARTY-LICENSES.html`, `LICENSE`, `NOTICE`, `WASI-LIBC-LICENSES.txt`, seven CycloneDX SBOMs, `SHA256SUMS` | [`engine-release-build.yml`](../../.github/workflows/engine-release-build.yml), which ci.yml also runs as a dry run in its full set |
+
+Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, the npm tarballs) gets a GitHub artifact attestation (`actions/attest-build-provenance`) before anything is published, and the published assets are checked against `SHA256SUMS` and their attestations before any registry is touched. Each artifact is smoke-tested first the way a user installs it: `pip install` of a wheel on Linux, macOS and Windows, and of the sdist, built from source, each then run through [`scripts/build/smoke_package.py`](../../scripts/build/smoke_package.py) (`opentide --version`, the package's requirements against `pyproject.toml`, which since UC-6.2 are `pydantic` alone, `opentide --json validate` on the tide corpus, and the SDK: `Workspace.open`, `validate`, `run_json`, the models); every npm tarball published to a throwaway local registry, then `npm install @opentide/opentide` in a clean project ([The npm install test](#the-npm-install-test)); `cargo install opentide --features cli` from the crates' packages (`release.py crate-patch`, before crates.io has them); and the two installers against the built assets. After publishing, `Smoke the registries` installs from PyPI, crates.io and, for a release, npm.
+
+**Inputs.** None: a release, of the newest dated `CHANGELOG.md` version, once its notes PR merged, from `development` only. `release_candidate: N`: see [Release candidates](#release-candidates-the-rust-core-transition). `dry_run: true`: build and smoke-test everything, publish nothing (no tag, no release, no attestation, no upload), from any branch. `checkout_ref: vX.Y.Z` (or `vX.Y.Z-rc.N`): resume a release whose publishing failed partway (also `repository_dispatch` event `publish`, for GitHub App tokens).
+
+### Release candidates (the Rust-core transition)
+
+For the Rust-core transition ([#790](https://github.com/opentidehq/opentide/issues/790)), and possibly retired after it, `release_candidate: N` publishes `vX.Y.Z-rc.N` of the workspace version as pre-releases, so the Rust-only package can be installed from the real registries before `integration/unified-core` merges into `development`:
+
+| Where | What a candidate publishes |
+|-------|----------------------------|
+| Branch | Run on `integration/unified-core` (or `development`); a release runs on `development` only, and the guard refuses anything else |
+| GitHub | The tag `vX.Y.Z-rc.N` and a **pre-release** (never Latest) with every asset: the binaries, the installers, the engine assets, the SBOMs, `SHA256SUMS`, and the attestations, signed by `publish.yml` on the branch it ran from |
+| PyPI | `X.Y.ZrcN`, a pre-release on **pypi.org** (environment `pypi`, the same trusted publisher as a release; no TestPyPI). pip and uv skip it unless asked: `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or the exact version (`opentide==X.Y.ZrcN`) |
+| crates.io | Every crate at `X.Y.Z-rc.N`, a SemVer pre-release, in dependency order: the workflow runs `release.py bump X.Y.Z-rc.N` in its own checkout (the branch keeps `X.Y.Z`) before it packages and publishes. Cargo skips a pre-release unless it is asked for (`cargo install opentide --version 0.24.0-rc.1 --features cli`). **A crates.io version can be yanked, never deleted**, and the first candidate **claims every new crate name** (`opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`) |
+| npm | **Nothing.** The npm tarballs are built and smoke-tested as for a release, and ci.yml's `packages` artifacts carry them to test ([Testing a build without publishing](#testing-a-build-without-publishing)) |
+
+The guard runs `scripts/build/release.py check-candidate`, which refuses a candidate whose version is not above the newest dated `CHANGELOG.md` heading, and every smoke test passes before anything is attested or published. A candidate's GitHub notes quote `## [Unreleased]`.
+
+**Run workflow needs `publish.yml` on the default branch.** GitHub runs a `workflow_dispatch` workflow only once a file of that name is on the default branch, `development`: until then the Actions page does not list it, and the API (`gh workflow run`, the GitHub MCP `actions_run_trigger`) does not find it. A run uses the workflow file of the ref it is dispatched on, so the smallest way to run a candidate from `integration/unified-core` before it merges is to land a `publish.yml` stub on `development` first: `workflow_dispatch` with the same three inputs, `permissions: {}`, and one job that fails (it never publishes; `development`'s own release still goes through `publish-pypi.yml` until the integration merge replaces the stub with this file). The PR that adds this file says what the stub holds.
+
+### Testing a build without publishing
+
+ci.yml's full set (nightly, every push to `development` and `integration/unified-core`, Run workflow, and a pull request labelled `full-ci`) runs [`build-packages.yml`](../../.github/workflows/build-packages.yml), the build `publish.yml` uses, as its `packages` job, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
+
+| Artifact | Holds |
+|----------|-------|
+| `wheels-linux-x64`, `wheels-linux-arm64`, `wheels-macos-x64`, `wheels-macos-arm64`, `wheels-windows-x64`, `wheels-windows-arm64` | One `cp310-abi3` wheel (Python 3.10 and later) |
+| `npm-linux-x64-gnu`, `npm-linux-arm64-gnu`, `npm-darwin-x64`, `npm-darwin-arm64`, `npm-win32-x64-msvc`, `npm-win32-arm64-msvc` | `@opentide/opentide` and that platform's native package |
+
+```bash
+# A run of ci.yml that ran the full set: Actions, CI, the run's page (its id is in the URL)
+gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64
+uv venv && uv pip install opentide-*.whl        # or: python -m pip install opentide-*.whl
+.venv/bin/opentide --version
+
+gh run download <run-id> -R opentidehq/opentide -n npm-linux-x64-gnu
+npm install ./opentide-opentide-*.tgz           # the package and its native package
+npx opentide --version
+```
+
+npm resolves the native package from the local tarball; it may print a warning for the other platforms' native packages, which are optional and not on npm at that version. With a Rust toolchain (1.85 or later), any commit also installs from source, with no artifact at all: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"` (a branch, tag or commit).
+
+**Lockstep version.** The facade, the internal crates, the wheel and the npm packages carry one version, the product's. `scripts/engine/release.py bump X.Y.Z` sets the workspace version and every internal pin in the release's pull request; `release.py lockstep X.Y.Z` (in the guard) refuses a release whose crates are at another version; the workflow writes the version into every npm package (`release.py npm-version`, the tree keeps a placeholder) and checks them (`lockstep --npm`); the wheels build at the tag's version. The binaries report the release's version (`OPENTIDE_VERSION`), a candidate's included.
+
+**Decisions** recorded here:
+
+1. **The engine's tag series ended.** `engine-release.yml` retired into `publish.yml`, and there are no more `engine-vX.Y.Z` tags: the assets keep their names with the product's `vX.Y.Z` (`highlights-v0.24.0.zip`), which vscode-extension's pins and `scripts/engine/check-vscode-extension.mjs` accept. `crates/CHANGELOG.md` holds the engine's releases before the train; later changes go in `CHANGELOG.md`.
+2. **No musl.** The maintainer decided against musl builds: no musllinux wheel (`*-musllinux_*` in cibuildwheel's `skip`), no `*-unknown-linux-musl` binary, no `linux-*-musl` npm package. On Alpine, `pip install opentide` builds from the sdist, and the installers say so.
+3. **cibuildwheel and `hatch_build.py`, not maturin.** The wheels keep the build the repository already uses, which compiles the same abi3 extension maturin would; moving to maturin would change the build backend of the sdist too, for no artifact the release lacks.
+4. **Free-threaded CPython (3.14t): the sdist.** A free-threaded interpreter has no stable ABI, so a `cp314t` wheel would be one more build per platform for one interpreter. It installs from the sdist, which builds wherever a Rust toolchain is installed, as before.
+5. **No release-plz, cargo-release or cargo-dist.** `scripts/engine/release.py publish` already publishes the crates in dependency order, resumes, and waits out crates.io's rate limit for new crates. The binaries come from the existing per-target build, with two installers of our own (POSIX shell and PowerShell) that check each binary against `SHA256SUMS` before installing it; cargo-dist would have brought its own generated workflow.
+6. **No `release: published` trigger, no tag trigger.** A tag pushed or a Release created by hand publishes nothing; `publish.yml` creates both with `GITHUB_TOKEN`, which starts no other workflow. A failed run is resumed with `checkout_ref`.
+7. **The opentide command line is scanned as a product.** The oracle licence scan (`scripts/engine/license-scan.sh`) refuses the engine's oracles in every asset. The `opentide` binaries, the opentide-cli crate and `@opentide/opentide` carry opentide's own package data, as the wheel always has: its `platform_sdk` explain page (still shipped, though the Rust `doctor` has no such check since UC-6.2) names `splunklib`, the Python module of the Splunk client, so they are scanned with `--product`, which allows that name and no other. Since UC-6.2 the wheel depends on `pydantic` alone, so its SBOM is scanned with the rest of the product's assets.
+8. **Linux binaries and npm native packages are built on `ubuntu-latest`** (as language-server's were), so they need that runner's glibc or newer; the wheels are manylinux_2_28. Building them against an older glibc (a manylinux container, or napi-rs's cross toolchain) is a follow-up.
+9. **npm: the standard napi-rs layout, `@opentide/opentide-<platform>`** ([ADR 0006](./adr/0006-npm-packages.md#amendment-2026-11-12-the-package-layout-and-names), amended). `@opentide/opentide` carries the loader napi-rs generates, `index.d.ts` and the `opentide` bin, and lists the six native packages under `optionalDependencies`; each native package declares its `os` and `cpu` (and `libc: ["glibc"]` on Linux) and holds one `opentide.<platform>.node` and `LICENSE`. The names are napi-rs's default, not ADR 0006's first `@opentide/<platform>`: a bare platform name says nothing inside the organisation's scope, and napi-rs generates these (the loader, `bindings/node/npm/`), so nothing is renamed by hand.
+10. **No WebAssembly fallback** (no `@opentide/opentide-wasm32-wasi`). napi-rs's WASI build runs under WASI preview 1, which under Node.js and napi-rs has no outbound sockets, so `query`, `validate query --live` and `deploy` could not reach a tenant. On a platform without a native package, loading fails with the loader's error. Revisit when napi-rs supports WASI 0.2 or 0.3. `@opentide/wasm`, the browser build, is a separate package.
+
+### The npm install test
+
+[`scripts/engine/npm-local-registry/test.mjs`](../../scripts/engine/npm-local-registry/test.mjs) installs the npm packages the way a user does, before any registry has them. It publishes every tarball to a throwaway local registry (Verdaccio 6.11.1, started with no uplink, listening on the loopback interface only, its storage in a temporary folder), then in a clean project, with its own npm cache and configuration, runs `npm install @opentide/opentide` and checks that:
+
+- npm installed exactly the host's native package, at the release's version, with its addon and `LICENSE`;
+- `npx opentide --version` prints the release's version;
+- the SDK loads from `require` and from `import` with the loader's version check on (`NAPI_RS_ENFORCE_VERSION_CHECK=1`), from the native addon, and `runJson(['commands'])` returns the command tree;
+- `tsc --noEmit` (strict, `nodenext`) resolves the package's types, a deliberate type error included;
+- the registry serves each native package's `os`, `cpu` and `libc`, and each tarball is at the release's version, with no musl or WebAssembly package;
+- the same install through the `opentide` alias: the same native package, its bin, its SDK.
+
+Verdaccio and TypeScript come from the test's own [`package-lock.json`](../../scripts/engine/npm-local-registry/package-lock.json) (`npm ci --ignore-scripts`, from the default registry, into the work folder). Nothing is published anywhere else, and the work folder is deleted afterwards (`--keep` leaves it).
+
+It runs in `publish.yml`'s `smoke-npm`, on Linux, macOS and Windows, against the tarballs `build-packages.yml`'s `npm-pack` built, before `attest` and so before anything is published; and in ci.yml's full set (`npm-install`), on linux-x64-gnu only: the tree's packages at the workspace version, the other five native packages packed as stand-ins without an addon, so that npm still has to choose. To run it locally (Node.js 22 or later), from the repository root:
+
+```bash
+cd bindings/node && npm ci && cd ../..
+version="$(python3 scripts/engine/release.py version)"
+python3 scripts/engine/release.py npm-version "$version"     # rewrites the npm manifests: revert them afterwards
+(cd bindings/node && OPENTIDE_VERSION="$version" node build.mjs --profile develop)
+node scripts/engine/npm-local-registry/test.mjs --version "$version" --pack "$(mktemp -d)"
+git checkout -- bindings/node packages/lsp-client/package.json packages/lsp-worker/package.json
+```
+
 ## The placeholders
 
 | Path | Publishes | Contents |
@@ -107,13 +205,13 @@ Each placeholder carries a copy of the repository's `LICENSE`: the EUPL asks for
 |-----|------|
 | `crate` | `cargo fmt`, `cargo clippy -D warnings` and `cargo doc` (warnings denied) on the placeholder, then `cargo package --list` and `cargo publish --dry-run --locked`. A version crates.io already has is a warning in a dry run, so the job stays green after the placeholder is published. |
 | `npm` | npm 11.21.1 on Node 24, checked to be 11.5.1 or later; `npm pack --dry-run` must pack exactly `package.json`, `README.md` and `LICENSE`; then `npm publish --dry-run`. npm refuses a version it already has even in a dry run, so once a placeholder is on npm the job says so in a notice and checks the pack only. |
-| `pypi` | The artifacts `publish-pypi.yml` uploads, built the same way: `cibuildwheel==4.3.5` (Linux x86_64: manylinux and musllinux) and `uv build --sdist`, at the version the release guard reads from `CHANGELOG.md`, then `twine check` and the publish job's own checks (one release version, neither a dev nor a local one, `cp310-abi3` wheels, one sdist). |
+| `pypi` | The artifacts `publish.yml` uploads, built the same way ([`build-packages.yml`](../../.github/workflows/build-packages.yml)): `cibuildwheel==4.3.5` (Linux x86_64: manylinux_2_28, no musllinux) and `uv build --sdist`, at the version the release guard reads from `CHANGELOG.md`, then `twine check` and the publish job's own checks (one release version, neither a dev nor a local one, `cp310-abi3` wheels, one sdist). |
 
 Nothing in it can publish: the token is read-only (`contents: read`), no job may mint the OIDC token all three registries' trusted publishing needs (no `id-token: write`), no expression reads a secret, the only triggers are `pull_request`, `push` and `workflow_dispatch`, and every `cargo publish` and `npm publish` command has `--dry-run`, and nothing that undoes it, however it is spelled (npm also runs `npm pu` to `npm publis` as a publish, and takes options before the command). `tests/test_ci/test_publish_dry_run_workflow.py` fails if that changes.
 
 **What it leaves out.** The release guard's checks on the state of the repository: `release.py check`, the version not being tagged yet, and `check_engine_pin.py --release`. Between releases, the newest version in `CHANGELOG.md` is already tagged, and `development` may pin the engine to a git revision. Those checks would therefore fail most pull requests without saying anything about the packages. `publish-pypi.yml` still runs them before it publishes.
 
-**maturin.** Issue #799 names `maturin build`. opentide's wheel is built by hatchling with `hatch_build.py` today, and maturin arrives with the release train (UC-5.5), so the dry run builds the artifact a release builds now. When UC-5.5 moves the wheel to maturin, this job moves with it.
+**maturin.** Issue #799 names `maturin build`. opentide's wheel is built by hatchling with `hatch_build.py` and cibuildwheel, and the release train (UC-5.5) kept that build ([The release train](#the-release-train), decision 3), so the dry run builds the artifact a release builds. `publish.yml`'s own `dry_run` input rehearses everything else.
 
 The same commands run locally from a clean checkout:
 
@@ -313,17 +411,24 @@ Then record it (step 8).
 
 ### 10. At UC-5.5: `publish.yml`
 
-UC-5.5 ([#840](https://github.com/opentidehq/opentide/issues/840)) publishes everything from `publish.yml`, which replaces `publish-pypi.yml` and the engine release workflow. Once `publish.yml` is on `development`, and before its first release:
+UC-5.5 ([#840](https://github.com/opentidehq/opentide/issues/840)) publishes everything from [`publish.yml`](../../.github/workflows/publish.yml), which replaced `publish-pypi.yml` and `engine-release.yml`. The pull request that adds it targets `integration/unified-core`, which merges into `development`; a release candidate can run from `integration/unified-core` before that, once a `publish.yml` stub is on `development` ([Release candidates](#release-candidates-the-rust-core-transition)). Before the first release candidate:
 
-1. **crates.io:** add the publisher `opentidehq` / `opentide` / `publish.yml` to `opentide` (its first publisher) and to the 15 engine crates, as in step 9. After the first release, remove the engine release workflow's publisher from the engine crates, and tick **Require trusted publishing for all new versions** on `opentide`.
-2. **npm:** within two days before that release:
-   - On `@opentide/opentide` and `opentide`, which have no publisher yet, register `publish.yml` as in step 9, on the website or with `npm trust github @opentide/opentide --repo opentidehq/opentide --file publish.yml --allow-publish`.
-   - On `@opentide/lsp-client` and `@opentide/lsp-worker`, which already have the engine release workflow's publisher, use the website: **Settings**, **Trusted publishing**, **Add trusted publisher**, then the fields of step 9 with `publish.yml`. The CLI refuses a second configuration. Remove the engine release workflow's publisher after the release.
-   - If the page offers no **Add trusted publisher** (npm's single-publisher setup), replace the configuration instead, after the last engine release and before the first release from `publish.yml`. Run `npm trust list <package>` for its ID and `npm trust revoke <package> --id=<id>`, then register `publish.yml`.
+1. **PyPI:** on [pypi.org](https://pypi.org/manage/project/opentide/settings/publishing/), `opentide`, **Manage**, **Publishing**, GitHub: **Owner** `opentidehq`, **Repository name** `opentide`, **Workflow name** `publish.yml`, **Environment name** `pypi`, **Add**. A candidate publishes to PyPI too, as a pre-release, with this publisher: there is no TestPyPI publisher. Remove the `publish-pypi.yml` publisher after the first release from `publish.yml`.
+2. **The `publish.yml` stub on `development`**, for a candidate from `integration/unified-core` before it merges ([Release candidates](#release-candidates-the-rust-core-transition)).
+3. **GitHub environment `pypi`:** **Settings**, **Environments**, `pypi`: if it limits deployment branches, allow `integration/unified-core` besides `development` while candidates run from there ([step 7](#7-github-environments-if-you-decide-on-them)), with required reviewers if [decided](#decisions-for-the-maintainer).
+4. **crates.io:** the six new crates (`opentide-schema`, `opentide-schema-derive`, `opentide-workspace`, `opentide-compile`, `opentide-connectors`, `opentide-cli`) cannot use trusted publishing for their first version. Store a token as the repository secret `CARGO_REGISTRY_TOKEN` (**Settings**, **Secrets and variables**, **Actions**): on [API Tokens](https://crates.io/settings/tokens/new), **Scopes** `publish-new`, `publish-update` and `trusted-publishing`, **Crates** pattern `opentide*`, an expiry that covers the first release. That release publishes each new crate with it and then registers `publish.yml` as the trusted publisher of every crate (`release.py trust publish.yml`). Or register it yourself first, for `opentide` (its first publisher: the name's placeholder 0.0.0 is there) and the 15 engine crates, as in step 9 with **Workflow filename** `publish.yml`. After that first publish: remove the engine release workflow's publishers, tick **Require trusted publishing for all new versions** on every crate, and revoke the token. A release candidate publishes every crate at `X.Y.Z-rc.N`, so the first candidate needs the token, claims the six new names, and registers the trusted publisher; a crates.io version can be yanked, never deleted.
+5. **npm**, before the first release (a candidate publishes nothing to npm): trusted publishing needs the package to exist, and a configuration expires unless it publishes within two days, so within two days before the release:
+   - Publish each of the six native packages once by hand, as in step 4, so that it exists: `@opentide/opentide-linux-x64-gnu`, `-linux-arm64-gnu`, `-darwin-x64`, `-darwin-arm64`, `-win32-x64-msvc` and `-win32-arm64-msvc`. From the repository root, signed in (`npm whoami`):
 
-   A new package in the scope (`@opentide/wasm`, `@opentide/<platform>`) needs a first publish by hand before it can have a publisher.
-3. **PyPI:** **Manage**, **Publishing**, GitHub: **Owner** `opentidehq`, **Repository name** `opentide`, **Workflow name** `publish.yml`, **Environment name** `pypi`, **Add**. Remove the `publish-pypi.yml` publisher after that release.
-4. **Verify** PyPI's publisher from a release's provenance:
+     ```bash
+     for dir in bindings/node/npm/*/; do (cd "$dir" && npm publish --provenance=false --access public); done
+     ```
+
+     Each publishes `0.0.0` with its manifest only, which nothing installs: `@opentide/opentide` depends on the release's version. `@opentide/opentide` and `opentide` exist from step 4; `@opentide/lsp-client` and `@opentide/lsp-worker` need the same first publish if step 9 has not happened (`cd packages/lsp-client && npm publish --provenance=false --access public`, and `lsp-worker`).
+   - Register `publish.yml` on all ten packages: on each package's page, **Settings**, **Trusted publishing**, GitHub Actions, **Organization or user** `opentidehq`, **Repository** `opentide`, **Workflow filename** `publish.yml`, no environment, **Allowed actions** `npm publish`. Or `npm trust github <package> --repo opentidehq/opentide --file publish.yml --allow-publish` for each package that has no configuration yet (the CLI refuses a second). Replace the engine release workflow's configuration on the two lsp packages as described in the first version of this step: delete it (`npm trust revoke`) if the page allows only one.
+   - A release candidate publishes none of them: test its npm packages from ci.yml's artifacts ([Testing a build without publishing](#testing-a-build-without-publishing)).
+6. **The workspace version:** `python3 scripts/engine/release.py bump X.Y.Z` in a pull request to the branch the candidate runs from, X.Y.Z the next product version (above CHANGELOG.md's newest), and merge it: a candidate is of the workspace version (`release.py lockstep`). Then run the candidate: Run workflow on `integration/unified-core` with `release_candidate` `1` ([Release candidates](#release-candidates-the-rust-core-transition)).
+7. **Verify** PyPI's publisher from a release's provenance:
 
    ```bash
    curl -s -H 'Accept: application/vnd.pypi.integrity.v1+json' \
@@ -366,7 +471,7 @@ After steps 1 to 6: the owners endpoint lists two logins, and the two `npm view`
    - **Required reviewers** on each environment, including `pypi`, whose settings this page could not read.
    - **A ruleset on `development`** that requires pull requests. Today anyone with write access can push to `development` directly, and a branch rule then admits that push.
    - **How engine releases start:** **Run workflow** on `development`, or `engine-v*` tags that the people who release push; one or the other. #801 says the engine "keeps publishing from tags". Pushed tags need a tag rule, and a tag ruleset before it; once that ruleset is active, **Run workflow** can no longer create its tag (step 7.4). **Run workflow** needs neither.
-4. **maturin.** The dry run builds the wheel the way a release does today (cibuildwheel, hatchling, `hatch_build.py`). Is that the acceptable reading of the issue's `maturin build` until UC-5.5?
+4. **maturin.** Decided at UC-5.5: the release train keeps cibuildwheel, hatchling and `hatch_build.py` ([The release train](#the-release-train), decision 3).
 5. **Acceptance criterion 2 of #799.** It asks for trusted publishing on crates.io (every crate), npm (both packages) and PyPI. In UC-0.1, only PyPI's can be in place: the workflows that will publish the other names (the engine release workflow, `publish.yml`) do not exist yet, and an npm publisher expires within two days. Either amend the criterion to "every name's publisher is recorded on this page and is registered before the first workflow that publishes it runs", and move the registrations (steps 9 and 10) into #801 and #840 so that #799 closes after steps 1 to 8. Or keep #799 open until UC-5.5. #840 depends on #799, though, so the second choice blocks UC-5.5 on itself.
 6. **The plan's other crate names.** Publish `opentide-schema` and the other new crates only when they have content (crates.io's policy on name reservation), or reserve them now?
 7. **`CHANGELOG.md` as a pull request trigger.** Keep it, so that the release notes pull request rehearses the version it sets, or drop it from the `pull_request` paths (it stays on `push`) to halve the PyPI job's runs ([Dry run](#dry-run))?
