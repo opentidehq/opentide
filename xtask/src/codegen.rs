@@ -33,6 +33,9 @@
 //!   refuse at least one, so a document handed the wrong kind of instance
 //!   fails. The configuration router must be the same document. The text
 //!   differences are listed in `tests/golden/APPROVED_DIFFS.toml`.
+//! - **Diagnostics reference** (committed): `docs/cli/diagnostics.md`, every
+//!   `opentide explain` page on one page, its prose made safe for MDX
+//!   (`opentide_cli::explain::reference_markdown`).
 //! - **Editor schemas** (committed): each object revision's schema in
 //!   `data/catalogs/tide/schemas/`, generated from the bundled configuration
 //!   with no workspace objects, vocabulary essays shortened.
@@ -77,8 +80,9 @@ pub const USAGE: &str = "usage: cargo xtask codegen [--check]
                src/opentide/schemas/data/platform_templates/*.template.yaml,
                data/catalogs/tide/schemas/<revision>.schema.json and the
                router beside them (opentide.schema.json), the language
-               server's catalogs (data/catalogs/tide/generated/) and the key
-               lists of highlights/queries/tide/highlights.scm
+               server's catalogs (data/catalogs/tide/generated/), the key
+               lists of highlights/queries/tide/highlights.scm and the
+               diagnostics reference (docs/cli/diagnostics.md)
   --check      compare them instead of writing; compare what `opentide
                generate` writes (templates, snippets, the router schema) with
                each golden recording of an `opentide generate` that ran
@@ -105,6 +109,11 @@ pub const COMMITTED_CATALOGS: &str = "data/catalogs/tide/generated";
 
 /// Where the committed platform templates live, relative to the repository.
 pub const PLATFORM_TEMPLATES: &str = "src/opentide/schemas/data/platform_templates";
+
+/// The diagnostics reference, every `opentide explain` page on one docs
+/// page (`opentide_cli::explain::reference_markdown`), relative to the
+/// repository.
+pub const DIAGNOSTICS_REFERENCE: &str = "docs/cli/diagnostics.md";
 
 /// Runs `codegen`: `Ok(0)` passed, `Ok(1)` a difference.
 pub fn run(args: &[String]) -> Result<u8> {
@@ -184,6 +193,10 @@ pub fn committed_artifacts() -> Result<Vec<(String, String)>> {
             editor_reference_text(&annotated(&schema)),
         ));
     }
+    out.push((
+        DIAGNOSTICS_REFERENCE.to_owned(),
+        opentide_cli::explain::reference_markdown(),
+    ));
     Ok(out)
 }
 
@@ -1498,6 +1511,7 @@ mod tests {
             EDITOR_SCHEMAS,
             COMMITTED_CATALOGS,
             "highlights/queries/tide",
+            "docs/cli",
         ] {
             std::fs::create_dir_all(root.path().join(dir)).unwrap();
         }
@@ -1564,6 +1578,11 @@ mod tests {
             .unwrap();
         std::fs::write(root.join(template), "changed\n").unwrap();
         std::fs::remove_file(root.join(schema)).unwrap();
+        // A page edited by hand, or not regenerated after a page changed.
+        let reference = root.join(DIAGNOSTICS_REFERENCE);
+        let text = std::fs::read_to_string(&reference).unwrap();
+        assert!(text.contains("&lt;=>"), "the reference is not MDX-safe");
+        std::fs::write(&reference, text.replace("&lt;=>", "<=>")).unwrap();
         std::fs::write(
             root.join(PLATFORM_TEMPLATES).join("retired.template.yaml"),
             "",
@@ -1574,6 +1593,7 @@ mod tests {
             [
                 format!("{template}: differs from what the model generates"),
                 format!("{schema}: missing"),
+                format!("{DIAGNOSTICS_REFERENCE}: differs from what the model generates"),
                 format!(
                     "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
                 ),

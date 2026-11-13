@@ -272,6 +272,125 @@ fn retired_page(retired: &Retired) -> Page {
     }
 }
 
+/// The lines of `docs/cli/diagnostics.md` above the table of codes.
+const REFERENCE_HEAD: &[&str] = &[
+    "---",
+    "title: Diagnostic codes",
+    "description: What each opentide diagnostic code means, an example, and how to fix it.",
+    "---",
+    "",
+    "<!-- Generated from src/opentide/data/diagnostics/ and the analysis engine's codes by",
+    "     `cargo xtask codegen`. Edit the pages there. -->",
+    "",
+    "# Diagnostic codes",
+    "",
+    "Every finding `opentide validate` and `opentide lint` report carries a stable `code`, \
+     and every command that fails sets a `failure.code` \
+     ([JSON output](./json-output.md#failure-codes)). \
+     `opentide explain <code>` prints the page for either; this reference collects them all. \
+     `opentide explain` with no code lists the codes.",
+    "",
+    "| Code | Meaning |",
+    "|------|---------|",
+];
+
+/// `docs/cli/diagnostics.md` (`reference_markdown`): a table of every code
+/// and its summary, then every page with its headings one level down. A
+/// `text` fence that does not hold a command is marked `illustrative`, so
+/// the docs check does not run it; prose is made safe for MDX
+/// ([`mdx_prose`]). `cargo xtask codegen` writes it.
+pub fn reference_markdown() -> String {
+    let pages = all();
+    let mut lines: Vec<String> = REFERENCE_HEAD
+        .iter()
+        .map(|line| (*line).to_owned())
+        .collect();
+    lines.extend(pages.iter().map(|page| {
+        format!(
+            "| [`{code}`](#{code}) | {} |",
+            mdx_prose(&page.summary),
+            code = page.code
+        )
+    }));
+    for page in &pages {
+        lines.push(String::new());
+        let source: Vec<&str> = page.markdown.trim_end_matches('\n').lines().collect();
+        let mut in_fence = false;
+        for (index, line) in source.iter().enumerate() {
+            if line.starts_with("```") {
+                in_fence = !in_fence;
+                let following = source.get(index + 1).copied().unwrap_or_default();
+                if in_fence && *line == "```text" && !following.starts_with("opentide ") {
+                    // Output an example shows, not a command the docs check could run.
+                    lines.push("```text illustrative".to_owned());
+                    continue;
+                }
+                lines.push((*line).to_owned());
+            } else if in_fence {
+                lines.push((*line).to_owned());
+            } else {
+                let line = mdx_prose(line);
+                if line.starts_with('#') {
+                    lines.push(format!("#{line}"));
+                } else {
+                    lines.push(line);
+                }
+            }
+        }
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
+}
+
+/// `line` with each `<` that cannot open a tag written `&lt;`, code spans
+/// left alone (`_mdx_prose`). opentide.org renders the docs as MDX, which
+/// reads `<=>` in prose as a broken tag and refuses the page. The engine's
+/// sentences are plain text, so the reference escapes them, not the engine,
+/// and `opentide explain` prints them as they are.
+pub fn mdx_prose(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let mut out = String::with_capacity(line.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let character = chars[index];
+        if character == '`' {
+            let end = code_span_end(&chars, index);
+            let run = end.unwrap_or_else(|| backtick_run_end(&chars, index));
+            out.extend(&chars[index..run]);
+            index = run;
+            continue;
+        }
+        let opens_tag = chars
+            .get(index + 1)
+            .is_some_and(|next| next.is_ascii_alphabetic() || matches!(next, '/' | '!' | '>'));
+        if character == '<' && !opens_tag {
+            out.push_str("&lt;");
+        } else {
+            out.push(character);
+        }
+        index += 1;
+    }
+    out
+}
+
+/// The index after the run of backticks that starts at `start`.
+fn backtick_run_end(chars: &[char], start: usize) -> usize {
+    chars[start..]
+        .iter()
+        .position(|character| *character != '`')
+        .map_or(chars.len(), |offset| start + offset)
+}
+
+/// The end of the code span that opens at `start` (a run of backticks, at
+/// least one other character, then a run of backticks), or `None` when no
+/// backtick closes it: the regex `` `+(?:(?!`).)+?`+ `` of the oracle.
+fn code_span_end(chars: &[char], start: usize) -> Option<usize> {
+    let content = backtick_run_end(chars, start);
+    let close = content + chars[content..].iter().position(|c| *c == '`')?;
+    (close > content).then(|| backtick_run_end(chars, close))
+}
+
 /// Every code `validate` and `lint` can emit, and every code with a page
 /// (`rule_codes`), as the SARIF driver lists them.
 pub fn rule_catalogue() -> RuleCatalogue {
@@ -415,6 +534,63 @@ mod tests {
         let compiled: Vec<&str> = pages::PAGES.iter().map(|(code, _)| *code).collect();
         assert!(compiled.len() > 100, "{}", compiled.len());
         assert_eq!(compiled, on_disk);
+    }
+
+    /// The engine's sentence for this code names the CQL operator `<=>` in
+    /// plain prose; MDX on opentide.org reads it as a broken tag and refuses
+    /// the whole docs sync (0.24.1, #897). `opentide explain` keeps it.
+    #[test]
+    fn the_reference_escapes_a_bare_angle_bracket_for_mdx() {
+        let reference = reference_markdown();
+        let row = reference
+            .lines()
+            .find(|line| line.starts_with("| [`cql_link_outside_correlate`]"))
+            .unwrap();
+        assert!(row.contains("&lt;=>"), "{row}");
+        assert!(!row.contains("<=>"), "{row}");
+        assert!(
+            page("cql_link_outside_correlate")
+                .unwrap()
+                .markdown
+                .contains("<=>")
+        );
+    }
+
+    #[test]
+    fn mdx_prose_leaves_code_spans_tags_and_comments_alone() {
+        for (line, expected) in [
+            ("a <=> b", "a &lt;=> b"),
+            ("x < 3 and y<", "x &lt; 3 and y&lt;"),
+            ("`<=>` and ``a ` <b``", "`<=>` and ``a ` <b``"),
+            ("<Tab> </Tab> <!-- c --> <>", "<Tab> </Tab> <!-- c --> <>"),
+            ("an `unclosed <= span", "an `unclosed &lt;= span"),
+            ("``", "``"),
+            ("é < ü", "é &lt; ü"),
+        ] {
+            assert_eq!(mdx_prose(line), expected, "{line}");
+        }
+    }
+
+    #[test]
+    fn the_reference_holds_every_page_its_headings_one_level_down() {
+        let reference = reference_markdown();
+        assert!(reference.starts_with("---\ntitle: Diagnostic codes\n"));
+        assert!(reference.ends_with('\n') && !reference.ends_with("\n\n"));
+        for code in codes() {
+            assert!(
+                reference.contains(&format!("\n## {code}\n")),
+                "{code}: no section"
+            );
+            assert!(
+                reference.contains(&format!("| [`{code}`](#{code}) | ")),
+                "{code}: no row"
+            );
+        }
+        assert!(!reference.contains("\n# vocab_unknown\n"));
+        assert!(reference.contains("\n### How to fix\n"));
+        // Output an example shows is marked, a command is not.
+        assert!(reference.contains("```text illustrative\n"));
+        assert!(reference.contains("```text\nopentide validate query\n```"));
     }
 
     #[test]

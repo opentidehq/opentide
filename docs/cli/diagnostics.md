@@ -3,8 +3,8 @@ title: Diagnostic codes
 description: What each opentide diagnostic code means, an example, and how to fix it.
 ---
 
-<!-- Generated from src/opentide/data/diagnostics/ by
-     scripts/build/render_diagnostics_docs.py. Edit the pages there. -->
+<!-- Generated from src/opentide/data/diagnostics/ and the analysis engine's codes by
+     `cargo xtask codegen`. Edit the pages there. -->
 
 # Diagnostic codes
 
@@ -38,7 +38,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cql_duplicate_parameter`](#cql_duplicate_parameter) | A CQL function parameter is given more than once. |
 | [`cql_event_function_after_aggregate`](#cql_event_function_after_aggregate) | A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190. |
 | [`cql_free_text_after_aggregate`](#cql_free_text_after_aggregate) | A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190. |
-| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields. |
+| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields. |
 | [`cql_match_guard`](#cql_match_guard) | A CQL match guard is an aggregate function; a guard must be a filter. |
 | [`cql_missing_parameter`](#cql_missing_parameter) | A CQL function call leaves out a required parameter. |
 | [`cql_parameter_value`](#cql_parameter_value) | A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds. |
@@ -701,7 +701,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## cql_link_outside_correlate
 
-The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields.
 
 Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
