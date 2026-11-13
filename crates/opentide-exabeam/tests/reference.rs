@@ -17,7 +17,11 @@ use opentide_exabeam::{Profile, check};
 use std::path::PathBuf;
 
 /// Catalogue warnings: the reference checker has no catalogue.
-const CATALOGUE_CODES: [&str; 2] = ["exabeam_unknown_field", "exabeam_string_field_number"];
+const CATALOGUE_CODES: [&str; 3] = [
+    "exabeam_unknown_field",
+    "exabeam_string_field_number",
+    "exabeam_unknown_value",
+];
 
 /// Codes whose range the engine narrows: the reference checker reports them
 /// from the start of the query to the end of the statement; the engine on the

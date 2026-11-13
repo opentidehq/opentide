@@ -57,7 +57,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Changed
 
-- **language-server 0.12.1 to 0.16.0 are in these crates, without their Tide block checks** ([opentide#790](https://github.com/opentidehq/opentide/issues/790)). The YARA (`opentide-yara`), YARA-L (`opentide-yaral`) and Exabeam Query Language (`opentide-exabeam`) engines, the Lucene Graylog dialect (`--platform graylog`), their codes, grammars, catalogs and highlighting, and `.yar`/`.yara`, `.yaral`/`.yl2` and `.exabeam` files with rename, formatting and signature help came in with their history (`docs/engine/IMPORT.md`). The checks, completion and hover of `configurations.{harfanglab,bitdefender,graylog,exabeam,google_secops}` blocks and of Exabeam, Graylog and Google SecOps hunts were written on `serde_yaml`, which these crates no longer use (#850): they are not in this release, and come back on `opentide_core::node`.
+- **language-server 0.12.1 to 0.16.1 are in these crates, without their Tide block checks** ([opentide#790](https://github.com/opentidehq/opentide/issues/790)). The YARA (`opentide-yara`), YARA-L (`opentide-yaral`) and Exabeam Query Language (`opentide-exabeam`) engines, the Lucene Graylog dialect (`--platform graylog`), their codes, grammars, catalogs and highlighting, and `.yar`/`.yara`, `.yaral`/`.yl2` and `.exabeam` files with rename, formatting and signature help came in with their history (`docs/engine/IMPORT.md`). The checks, completion and hover of `configurations.{harfanglab,bitdefender,graylog,exabeam,google_secops}` blocks and of Exabeam, Graylog and Google SecOps hunts were written on `serde_yaml`, which these crates no longer use (#850): they are not in this release, and come back on `opentide_core::node`. 0.16.1's information severity for `missing_author`, `missing_organisation` and `recommended_field_missing` does not apply: these crates retired those codes for `opentide lint`'s `metadata_recommended` and `filename_mismatch` (#926).
 
 - **The YAML node tree is `opentide_core::node`** ([opentide#850](https://github.com/opentidehq/opentide/issues/850)). The loader (`load`, `load_bytes`, `load_keeping_repeated_keys`, `Document`, `Node`, `Value`, `LoadError`, `Locator`, `Span`) moved down from `opentide-schema` to `opentide-core`, so `opentide-tide` (published) reads YAML with it; `opentide_schema::node` re-exports it with the writer, `to_yaml`, and every path through it keeps working. `opentide-core` depends on `saphyr` and `saphyr-parser` 0.3, which `opentide-schema` no longer names.
 
@@ -78,6 +78,24 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 ### Security
 
 - **`unsafe-libyaml` (RUSTSEC-2024-0449, unmaintained) is out of the dependency tree** ([opentide#850](https://github.com/opentidehq/opentide/issues/850)). It came in through `serde_yaml` 0.9, archived, which `opentide-tide` and `opentide-lsp` read Tide YAML with; neither crate depends on it now, and `deny.toml` no longer excepts the advisory. It was never a vulnerability report: nothing to upgrade for.
+
+## [0.16.1] - 2026-11-13
+
+Missing optional fields such as `author` are information, not warnings. Exabeam activity types, subjects and outcomes are checked against the CIM.
+
+### Upgrade
+
+- To keep a missing `author` or `organisation` as a warning, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. For a rule's missing `configurations` or `response`, set it under `[recommended]`; that table needs opentide 0.28.1 or later, since older ones reject an unknown table.
+
+### Breaking
+
+- **A missing optional field is information, not a warning.** `missing_author`, `missing_organisation` and `recommended_field_missing` (a rule without `configurations` or `response`) now default to information, so editors stop warning about fields `opentide validate` does not require. A host or CI that counts warnings no longer counts them. `opentide lint` already reports a missing author or organisation as a note, and reports `configurations` and `response` the same way from 0.28.1 ([#249](https://github.com/opentidehq/language-server/issues/249)).
+
+### Added
+
+- **lint.toml `[recommended]`.** `enabled` and `severity` decide `recommended_field_missing`, as `[metadata]` decides `missing_author` and `missing_organisation` ([#249](https://github.com/opentidehq/language-server/issues/249)).
+- **API: `opentide_core::Diagnostic::information` and `Diagnostic::with_severity`**, next to `error`, `warning` and `with_field_path`.
+- **Exabeam `activity_type`, `subject` and `outcome` values are checked against the CIM.** A value Exabeam's Common Information Model does not list is the warning `exabeam_unknown_value`, with a near miss or the subject's activity types: `activity_type:"network-connection"` suggests `network-session`, `network-traffic` and the rest. Wildcards, functions such as `WLD` and `RGX`, values between slashes, `null`, empty values, unquoted numbers and IP addresses, `@field`s and earlier `AS` names are never reported. When an `activity_type` is a subject (`activity_type:"dns"`), or a `subject` an activity type, the message says so.
 
 ## [0.16.0] - 2026-11-12
 
@@ -818,6 +836,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.16.1]: https://github.com/opentidehq/language-server/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/opentidehq/language-server/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/opentidehq/language-server/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/opentidehq/language-server/compare/v0.13.0...v0.14.0

@@ -72,7 +72,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 - I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`). No `std::fs`.
 - HighlightSpec capture rename is a **major**.
 - Never report a CQL field, saved search, lookup file or repository as unknown: they live in the tenant.
-- An Exabeam field the CIM catalogue lacks is a warning (`exabeam_unknown_field`), never an error; context tables are never checked: they live in the tenant.
+- An Exabeam field the CIM catalogue lacks is a warning (`exabeam_unknown_field`), never an error, and so is an `activity_type`, `subject` or `outcome` value it lacks (`exabeam_unknown_value`); context tables are never checked: they live in the tenant.
 - Control commands (`.show` / `.create`) → `kql_control_command_unsupported`.
 - Highlight tokenizes **authored** SPL (implicit `| search` is semantic, not a rewrite).
 - opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.

@@ -3,15 +3,16 @@
 //! opentidehq/specifications (`scripts/exabeam_language.py`) step for step, so
 //! the two agree on every conformance query (`docs/engine/EXABEAM.md`).
 //!
-//! It reports every language code of the spec, and the two catalogue codes the
+//! It reports every language code of the spec, and the catalogue codes the
 //! reference checker cannot (`exabeam_unknown_field`,
-//! `exabeam_string_field_number`). Its tokens are the spec's highlight table;
-//! the tree-sitter grammar's highlighting is checked against them.
+//! `exabeam_string_field_number`, `exabeam_unknown_value`). Its tokens are the
+//! spec's highlight table; the tree-sitter grammar's highlighting is checked
+//! against them.
 //!
 //! Offsets are bytes into the query. Python's checker counts characters; the
 //! two agree on every ASCII query, and here a range never splits a character.
 
-use crate::catalog::{Catalog, FieldKind};
+use crate::catalog::{Catalog, FieldKind, ValueField};
 use crate::codes;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -72,7 +73,7 @@ pub struct Checked {
 }
 
 /// Every code of the language (exabeam-1.0, "Diagnostics").
-pub const LANGUAGE_CODES: [&str; 34] = [
+pub const LANGUAGE_CODES: [&str; 35] = [
     codes::EXABEAM_PARSE_ERROR,
     codes::EXABEAM_IMPLICIT_OPERATOR,
     codes::EXABEAM_NOT_EQUAL,
@@ -107,6 +108,7 @@ pub const LANGUAGE_CODES: [&str; 34] = [
     codes::EXABEAM_LEGACY_REGEX,
     codes::EXABEAM_UNKNOWN_FIELD,
     codes::EXABEAM_STRING_FIELD_NUMBER,
+    codes::EXABEAM_UNKNOWN_VALUE,
 ];
 
 /// The names of the filter functions and what each takes.
@@ -321,6 +323,18 @@ struct FieldUse {
     end: usize,
 }
 
+/// A literal an `activity_type`, `subject` or `outcome` filter compares with,
+/// checked once the whole query is read (the field may be an `AS` name).
+struct ValueUse {
+    field: ValueField,
+    /// The name as written, for the `AS` lookup.
+    name: String,
+    /// The value, unescaped.
+    value: String,
+    start: usize,
+    end: usize,
+}
+
 struct Parser<'a> {
     text: &'a str,
     profile: Profile,
@@ -331,6 +345,7 @@ struct Parser<'a> {
     in_foreach: usize,
     depth: usize,
     fields: Vec<FieldUse>,
+    values: Vec<ValueUse>,
     aliases: Vec<(String, usize)>,
 }
 
@@ -929,6 +944,7 @@ impl<'a> Parser<'a> {
             in_foreach: 0,
             depth: 0,
             fields: Vec::new(),
+            values: Vec::new(),
             aliases: Vec::new(),
         }
     }
@@ -1075,6 +1091,34 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// A plain value of `field` (`raw` as written between its quotes, or a
+    /// bare word), for `exabeam_unknown_value`. Only `activity_type`,
+    /// `subject` and `outcome` have catalogue values; a wildcard, a value
+    /// between slashes (a legacy regular expression), `null` and an empty
+    /// value are never checked.
+    fn note_value(&mut self, field: &str, raw: &str, start: usize, end: usize) {
+        let Some(value_field) = ValueField::of(field) else {
+            return;
+        };
+        if unescaped(raw, |c| c == '*' || c == '?') {
+            return;
+        }
+        let value = unescape(raw);
+        if value.is_empty()
+            || value.eq_ignore_ascii_case("null")
+            || (value.chars().count() > 2 && value.starts_with('/') && value.ends_with('/'))
+        {
+            return;
+        }
+        self.values.push(ValueUse {
+            field: value_field,
+            name: field.to_string(),
+            value,
+            start,
+            end,
+        });
+    }
+
     // -- entry ----------------------------------------------------------------
 
     fn parse(mut self) -> Checked {
@@ -1083,8 +1127,10 @@ impl<'a> Parser<'a> {
             self.diag(codes::EXABEAM_PARSE_ERROR, err.message, err.pos, err.pos);
         }
         self.check_context_tables();
-        self.out.context_tables = self.context_tables.clone();
-        self.check_fields();
+        self.out.context_tables.clone_from(&self.context_tables);
+        let first_alias = self.first_aliases();
+        self.check_fields(&first_alias);
+        self.check_values(&first_alias);
         self.out.tokens.sort_by_key(|t| (t.start, t.end));
         self.out
     }
@@ -1507,6 +1553,7 @@ impl<'a> Parser<'a> {
                     );
                 }
                 self.check_phrase(body, s, e);
+                self.note_value(field, body, s, e);
                 return Ok(());
             }
             Some('(') => return self.list_value(field),
@@ -1612,6 +1659,7 @@ impl<'a> Parser<'a> {
         }
         let lower = word.to_lowercase();
         if lower == "true" || lower == "false" {
+            self.note_value(field, word, s, e);
             return Ok("boolean");
         }
         if lower == "null" || parse_ip(word).is_some() {
@@ -1623,6 +1671,7 @@ impl<'a> Parser<'a> {
             s,
             e,
         );
+        self.note_value(field, word, s, e);
         Ok("string")
     }
 
@@ -1633,6 +1682,7 @@ impl<'a> Parser<'a> {
             if self.rest().starts_with(['"', '\'']) {
                 let (body, s, e) = self.string()?;
                 self.check_phrase(body, s, e);
+                self.note_value(field, body, s, e);
             } else {
                 self.scalar(field, false)?;
             }
@@ -1918,19 +1968,24 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `exabeam_unknown_field`: every field the query names, once the whole
-    /// query is read. `c_` and `m_` fields, and `AS` names defined earlier,
-    /// are known.
-    fn check_fields(&mut self) {
-        let catalog = Catalog::cached();
-        let uses = std::mem::take(&mut self.fields);
-        // Where each `AS` name is first defined, and each unknown name's
-        // suggestion, computed once per name: a long query repeats them.
+    /// Where each `AS` name is first defined, by its lower-case name.
+    fn first_aliases(&self) -> HashMap<String, usize> {
         let mut first_alias: HashMap<String, usize> = HashMap::new();
         for (alias, at) in &self.aliases {
             let at_min = first_alias.entry(alias.to_lowercase()).or_insert(*at);
             *at_min = (*at_min).min(*at);
         }
+        first_alias
+    }
+
+    /// `exabeam_unknown_field`: every field the query names, once the whole
+    /// query is read. `c_` and `m_` fields, and `AS` names defined earlier,
+    /// are known.
+    fn check_fields(&mut self, first_alias: &HashMap<String, usize>) {
+        let catalog = Catalog::cached();
+        let uses = std::mem::take(&mut self.fields);
+        // Each unknown name's suggestion, computed once per name: a long
+        // query repeats them.
         let mut verdicts: HashMap<String, Option<Option<String>>> = HashMap::new();
         for f in uses {
             let lower = f.name.to_lowercase();
@@ -1954,6 +2009,33 @@ impl<'a> Parser<'a> {
                 ),
             };
             self.diag(codes::EXABEAM_UNKNOWN_FIELD, message, f.start, f.end);
+        }
+    }
+
+    /// `exabeam_unknown_value`: an `activity_type`, `subject` or `outcome`
+    /// value the CIM does not list, compared without regard to case. A field
+    /// that is an `AS` name defined earlier is not the CIM's.
+    fn check_values(&mut self, first_alias: &HashMap<String, usize>) {
+        let catalog = Catalog::cached();
+        let uses = std::mem::take(&mut self.values);
+        let mut messages: HashMap<(ValueField, String), Option<String>> = HashMap::new();
+        for v in uses {
+            if first_alias
+                .get(&v.name.to_lowercase())
+                .is_some_and(|at| *at < v.start)
+            {
+                continue;
+            }
+            let message = messages
+                .entry((v.field, v.value.clone()))
+                .or_insert_with(|| {
+                    (!catalog.knows_value(v.field, &v.value))
+                        .then(|| unknown_value_message(catalog, v.field, &v.value))
+                })
+                .clone();
+            if let Some(message) = message {
+                self.diag(codes::EXABEAM_UNKNOWN_VALUE, message, v.start, v.end);
+            }
         }
     }
 
@@ -2479,6 +2561,76 @@ fn cidr_version(net: &str) -> Option<u8> {
         return (prefix <= 128).then_some(6);
     }
     None
+}
+
+/// The most activity types of one subject a message lists.
+const LISTED_ACTIVITY_TYPES: usize = 8;
+
+/// The message of `exabeam_unknown_value`: a near miss when there is one;
+/// otherwise the activity types of the value's subject, or the outcomes.
+fn unknown_value_message(catalog: &Catalog, field: ValueField, value: &str) -> String {
+    let head = format!(
+        "`{value}` is not {} of Exabeam's Common Information Model",
+        field.noun()
+    );
+    if let Some(near) = catalog.suggest_value(field, value) {
+        return format!("{head}; did you mean `{near}`? A tenant's parsers may still emit it");
+    }
+    // The likeliest mix-up: a subject written as an activity type, or the reverse.
+    if field == ValueField::Subject
+        && let Some(activity) = catalog.activity_type(value)
+    {
+        return format!(
+            "{head}; `{}` is an activity type of the subject `{}`: write \
+             `activity_type:\"{}\"`, or `subject:\"{}\"`",
+            activity.name, activity.subject, activity.name, activity.subject
+        );
+    }
+    let as_subject = (field == ValueField::ActivityType && !value.contains('-'))
+        .then(|| catalog.subject(value))
+        .flatten();
+    let known = match (field, as_subject) {
+        (ValueField::ActivityType, Some(subject)) => {
+            catalog.activity_types_of_subject(&subject.name)
+        }
+        (ValueField::ActivityType, None) => catalog.activity_types_of(value),
+        (ValueField::Outcome, _) => catalog.values(ValueField::Outcome),
+        (ValueField::Subject, _) => Vec::new(),
+    };
+    if known.is_empty() {
+        return format!("{head}; a tenant's parsers may still emit it");
+    }
+    let mut listed = known
+        .iter()
+        .take(LISTED_ACTIVITY_TYPES)
+        .map(|v| format!("`{v}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if known.len() > LISTED_ACTIVITY_TYPES {
+        listed.push_str(&format!(
+            " and {} more",
+            known.len() - LISTED_ACTIVITY_TYPES
+        ));
+    }
+    if let Some(subject) = as_subject {
+        return format!(
+            "{head}; `{}` is a subject: write `subject:\"{}\"`, or one of its activity types, \
+             {listed}",
+            subject.name, subject.name
+        );
+    }
+    let which = match field {
+        // Every activity type's prefix is its subject: name it as the catalogue spells it.
+        ValueField::ActivityType => {
+            let subject = known
+                .first()
+                .and_then(|name| catalog.activity_type(name))
+                .map_or("", |a| a.subject.as_str());
+            format!("the `{subject}` activity types")
+        }
+        _ => "the outcomes".to_string(),
+    };
+    format!("{head}; {which} are {listed}. A tenant's parsers may still emit it")
 }
 
 /// Check `text` under `profile`: every finding and the highlight tokens.

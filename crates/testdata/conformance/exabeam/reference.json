@@ -1,6 +1,6 @@
 {
  "generated_by": "scripts/sync_exabeam_conformance.py",
- "reference": "opentidehq/specifications@6807a03f737fedcddaaa5a33854622bba609fc1e scripts/exabeam_language.py, scripts/object_fixtures.py",
+ "reference": "opentidehq/specifications@f400f15751b9698f2d7f89ee5b1b67dc545e345d scripts/exabeam_language.py, scripts/object_fixtures.py",
  "queries": [
   {
    "name": "valid/event-code-and-time-window.rule.exabeam",
@@ -434,7 +434,7 @@
   {
    "name": "valid/lateral-movement-pivot.search.exabeam",
    "profile": "search",
-   "text": "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-connection\" ]\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
+   "text": "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-session\" ]\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -559,72 +559,72 @@
     ],
     [
      165,
-     185,
+     182,
      "string"
     ],
     [
-     186,
-     187,
+     183,
+     184,
      "punctuation.bracket"
     ],
     [
-     188,
-     189,
+     185,
+     186,
      "operator.pipe"
     ],
     [
-     190,
-     196,
+     187,
+     193,
      "keyword"
     ],
     [
-     197,
-     205,
+     194,
+     202,
      "property"
     ],
     [
-     205,
-     206,
+     202,
+     203,
      "punctuation.delimiter"
     ],
     [
-     207,
-     212,
+     204,
+     209,
      "function.builtin"
     ],
     [
-     212,
-     213,
+     209,
+     210,
      "punctuation.bracket"
     ],
     [
-     213,
-     221,
+     210,
+     218,
      "property"
     ],
     [
-     221,
-     222,
+     218,
+     219,
      "punctuation.bracket"
     ],
     [
-     223,
-     225,
+     220,
+     222,
      "keyword"
     ],
     [
-     226,
-     237,
+     223,
+     234,
      "variable"
     ],
     [
-     238,
-     246,
+     235,
+     243,
      "keyword"
     ],
     [
-     247,
-     255,
+     244,
+     252,
      "property"
     ]
    ]
@@ -3238,7 +3238,7 @@
   {
    "name": "highlight/lateral-movement-pivot.search.exabeam",
    "profile": "search",
-   "text": "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-connection\" ]\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
+   "text": "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-session\" ]\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -3363,72 +3363,72 @@
     ],
     [
      165,
-     185,
+     182,
      "string"
     ],
     [
-     186,
-     187,
+     183,
+     184,
      "punctuation.bracket"
     ],
     [
-     188,
-     189,
+     185,
+     186,
      "operator.pipe"
     ],
     [
-     190,
-     196,
+     187,
+     193,
      "keyword"
     ],
     [
-     197,
-     205,
+     194,
+     202,
      "property"
     ],
     [
-     205,
-     206,
+     202,
+     203,
      "punctuation.delimiter"
     ],
     [
-     207,
-     212,
+     204,
+     209,
      "function.builtin"
     ],
     [
-     212,
-     213,
+     209,
+     210,
      "punctuation.bracket"
     ],
     [
-     213,
-     221,
+     210,
+     218,
      "property"
     ],
     [
-     221,
-     222,
+     218,
+     219,
      "punctuation.bracket"
     ],
     [
-     223,
-     225,
+     220,
+     222,
      "keyword"
     ],
     [
-     226,
-     237,
+     223,
+     234,
      "variable"
     ],
     [
-     238,
-     246,
+     235,
+     243,
      "keyword"
     ],
     [
-     247,
-     255,
+     244,
+     252,
      "property"
     ]
    ]
@@ -4024,12 +4024,12 @@
   {
    "name": "external/dns-tunnel-length.broken.rule.exabeam",
    "profile": "rule",
-   "text": "activity_type:\"dns-query\"\nAND query:RGX(\"^[A-Za-z0-9]{40,}\\\\.\")\nAND NOT domain IN \"Allowed DNS Domains\" AND\n",
+   "text": "activity_type:\"dns-request\"\nAND query:RGX(\"^[A-Za-z0-9]{40,}\\\\.\")\nAND NOT domain IN \"Allowed DNS Domains\" AND\n",
    "diagnostics": [
     [
      "exabeam_parse_error",
-     108,
-     109
+     110,
+     111
     ]
    ],
    "tokens": [
@@ -4045,72 +4045,72 @@
     ],
     [
      14,
-     25,
+     27,
      "string"
     ],
     [
-     26,
-     29,
+     28,
+     31,
      "keyword"
     ],
     [
-     30,
-     35,
+     32,
+     37,
      "property"
     ],
     [
-     35,
-     36,
+     37,
+     38,
      "operator"
     ],
     [
-     36,
-     39,
+     38,
+     41,
      "function.builtin"
     ],
     [
-     39,
-     40,
+     41,
+     42,
      "punctuation.bracket"
     ],
     [
-     40,
-     62,
+     42,
+     64,
      "string"
     ],
     [
-     62,
-     63,
+     64,
+     65,
      "punctuation.bracket"
     ],
     [
-     64,
-     67,
+     66,
+     69,
      "keyword"
     ],
     [
-     68,
-     71,
+     70,
+     73,
      "keyword"
     ],
     [
-     72,
-     78,
+     74,
+     80,
      "property"
     ],
     [
-     79,
      81,
+     83,
      "keyword"
     ],
     [
-     82,
-     103,
+     84,
+     105,
      "type"
     ],
     [
-     104,
-     107,
+     106,
+     109,
      "keyword"
     ]
    ]
@@ -4118,7 +4118,7 @@
   {
    "name": "external/dns-tunnel-length.rule.exabeam",
    "profile": "rule",
-   "text": "activity_type:\"dns-query\"\nAND query:RGX(\"^[A-Za-z0-9]{40,}\\\\.\")\nAND NOT domain IN \"Allowed DNS Domains\"\n",
+   "text": "activity_type:\"dns-request\"\nAND query:RGX(\"^[A-Za-z0-9]{40,}\\\\.\")\nAND NOT domain IN \"Allowed DNS Domains\"\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -4133,67 +4133,67 @@
     ],
     [
      14,
-     25,
+     27,
      "string"
     ],
     [
-     26,
-     29,
+     28,
+     31,
      "keyword"
     ],
     [
-     30,
-     35,
+     32,
+     37,
      "property"
     ],
     [
-     35,
-     36,
+     37,
+     38,
      "operator"
     ],
     [
-     36,
-     39,
+     38,
+     41,
      "function.builtin"
     ],
     [
-     39,
-     40,
+     41,
+     42,
      "punctuation.bracket"
     ],
     [
-     40,
-     62,
+     42,
+     64,
      "string"
     ],
     [
-     62,
-     63,
+     64,
+     65,
      "punctuation.bracket"
     ],
     [
-     64,
-     67,
+     66,
+     69,
      "keyword"
     ],
     [
-     68,
-     71,
+     70,
+     73,
      "keyword"
     ],
     [
-     72,
-     78,
+     74,
+     80,
      "property"
     ],
     [
-     79,
      81,
+     83,
      "keyword"
     ],
     [
-     82,
-     103,
+     84,
+     105,
      "type"
     ]
    ]
@@ -5863,7 +5863,7 @@
   {
    "name": "external/pivot-from-privileged-login.broken.search.exabeam",
    "profile": "search",
-   "text": "FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-connection\" ] LIMIT 100\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
+   "text": "FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-session\" ] LIMIT 100\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
    "diagnostics": [
     [
      "exabeam_foreach_position",
@@ -5934,82 +5934,82 @@
     ],
     [
      81,
-     101,
+     98,
      "string"
     ],
     [
-     102,
-     103,
+     99,
+     100,
      "punctuation.bracket"
     ],
     [
-     104,
-     109,
+     101,
+     106,
      "keyword"
     ],
     [
+     107,
      110,
-     113,
      "number"
     ],
     [
-     114,
-     115,
+     111,
+     112,
      "operator.pipe"
     ],
     [
-     116,
-     122,
+     113,
+     119,
      "keyword"
     ],
     [
-     123,
-     131,
+     120,
+     128,
      "property"
     ],
     [
-     131,
-     132,
+     128,
+     129,
      "punctuation.delimiter"
     ],
     [
-     133,
-     138,
+     130,
+     135,
      "function.builtin"
     ],
     [
-     138,
-     139,
+     135,
+     136,
      "punctuation.bracket"
     ],
     [
-     139,
-     147,
+     136,
+     144,
      "property"
     ],
     [
-     147,
-     148,
+     144,
+     145,
      "punctuation.bracket"
     ],
     [
-     149,
-     151,
+     146,
+     148,
      "keyword"
     ],
     [
-     152,
-     163,
+     149,
+     160,
      "variable"
     ],
     [
-     164,
-     172,
+     161,
+     169,
      "keyword"
     ],
     [
-     173,
-     181,
+     170,
+     178,
      "property"
     ]
    ]
@@ -6017,7 +6017,7 @@
   {
    "name": "external/pivot-from-privileged-login.search.exabeam",
    "profile": "search",
-   "text": "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-connection\" ] LIMIT 100\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
+   "text": "activity_type:\"app-login\" AND outcome:\"success\" AND user IN \"Privileged Accounts\"\n| FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host AND activity_type:\"network-session\" ] LIMIT 100\n| SELECT src_host, COUNT(src_host) AS connections GROUP-BY src_host\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -6142,82 +6142,82 @@
     ],
     [
      165,
-     185,
+     182,
      "string"
     ],
     [
-     186,
-     187,
+     183,
+     184,
      "punctuation.bracket"
     ],
     [
-     188,
-     193,
+     185,
+     190,
      "keyword"
     ],
     [
+     191,
      194,
-     197,
      "number"
     ],
     [
-     198,
-     199,
+     195,
+     196,
      "operator.pipe"
     ],
     [
-     200,
-     206,
+     197,
+     203,
      "keyword"
     ],
     [
-     207,
-     215,
+     204,
+     212,
      "property"
     ],
     [
-     215,
-     216,
+     212,
+     213,
      "punctuation.delimiter"
     ],
     [
-     217,
-     222,
+     214,
+     219,
      "function.builtin"
     ],
     [
-     222,
-     223,
+     219,
+     220,
      "punctuation.bracket"
     ],
     [
-     223,
-     231,
+     220,
+     228,
      "property"
     ],
     [
-     231,
-     232,
+     228,
+     229,
      "punctuation.bracket"
     ],
     [
-     233,
-     235,
+     230,
+     232,
      "keyword"
     ],
     [
-     236,
-     247,
+     233,
+     244,
      "variable"
     ],
     [
-     248,
-     256,
+     245,
+     253,
      "keyword"
     ],
     [
-     257,
-     265,
+     254,
+     262,
      "property"
     ]
    ]
@@ -6437,22 +6437,22 @@
   {
    "name": "external/run-key-written.broken.rule.exabeam",
    "profile": "rule",
-   "text": "activity_type:\"registry-write\"\nAND registry_path:WLDi(\"*\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run*)\nAND NOT process_path:RGXi(\"^c:\\\\\\\\program files( \\\\(x86\\\\))?\\\\\\\\\")\n",
+   "text": "activity_type:\"registry-modify\"\nAND registry_path:WLDi(\"*\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run*)\nAND NOT process_path:RGXi(\"^c:\\\\\\\\program files( \\\\(x86\\\\))?\\\\\\\\\")\n",
    "diagnostics": [
     [
      "exabeam_function_arity",
-     137,
-     151
+     138,
+     152
     ],
     [
      "exabeam_function_arity",
-     152,
-     157
+     153,
+     158
     ],
     [
      "exabeam_parse_error",
-     157,
-     158
+     158,
+     159
     ]
    ],
    "tokens": [
@@ -6468,47 +6468,47 @@
     ],
     [
      14,
-     30,
+     31,
      "string"
     ],
     [
-     31,
-     34,
+     32,
+     35,
      "keyword"
     ],
     [
-     35,
-     48,
+     36,
+     49,
      "property"
     ],
     [
-     48,
      49,
+     50,
      "operator"
     ],
     [
-     49,
-     53,
+     50,
+     54,
      "function.builtin"
     ],
     [
-     53,
      54,
+     55,
      "punctuation.bracket"
     ],
     [
-     54,
-     137,
+     55,
+     138,
      "string"
     ],
     [
-     137,
-     151,
+     138,
+     152,
      "error"
     ],
     [
-     152,
-     157,
+     153,
+     158,
      "error"
     ]
    ]
@@ -6516,7 +6516,7 @@
   {
    "name": "external/run-key-written.rule.exabeam",
    "profile": "rule",
-   "text": "activity_type:\"registry-write\"\nAND registry_path:WLDi(\"*\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run*\")\nAND NOT process_path:RGXi(\"^c:\\\\\\\\program files( \\\\(x86\\\\))?\\\\\\\\\")\n",
+   "text": "activity_type:\"registry-modify\"\nAND registry_path:WLDi(\"*\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run*\")\nAND NOT process_path:RGXi(\"^c:\\\\\\\\program files( \\\\(x86\\\\))?\\\\\\\\\")\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -6531,82 +6531,82 @@
     ],
     [
      14,
-     30,
-     "string"
-    ],
-    [
      31,
-     34,
-     "keyword"
+     "string"
     ],
     [
+     32,
      35,
-     48,
+     "keyword"
+    ],
+    [
+     36,
+     49,
      "property"
     ],
     [
-     48,
      49,
+     50,
      "operator"
     ],
     [
-     49,
-     53,
+     50,
+     54,
      "function.builtin"
     ],
     [
-     53,
      54,
+     55,
      "punctuation.bracket"
     ],
     [
-     54,
-     109,
-     "string"
-    ],
-    [
-     109,
+     55,
      110,
-     "punctuation.bracket"
-    ],
-    [
-     111,
-     114,
-     "keyword"
-    ],
-    [
-     115,
-     118,
-     "keyword"
-    ],
-    [
-     119,
-     131,
-     "property"
-    ],
-    [
-     131,
-     132,
-     "operator"
-    ],
-    [
-     132,
-     136,
-     "function.builtin"
-    ],
-    [
-     136,
-     137,
-     "punctuation.bracket"
-    ],
-    [
-     137,
-     176,
      "string"
     ],
     [
-     176,
+     110,
+     111,
+     "punctuation.bracket"
+    ],
+    [
+     112,
+     115,
+     "keyword"
+    ],
+    [
+     116,
+     119,
+     "keyword"
+    ],
+    [
+     120,
+     132,
+     "property"
+    ],
+    [
+     132,
+     133,
+     "operator"
+    ],
+    [
+     133,
+     137,
+     "function.builtin"
+    ],
+    [
+     137,
+     138,
+     "punctuation.bracket"
+    ],
+    [
+     138,
      177,
+     "string"
+    ],
+    [
+     177,
+     178,
      "punctuation.bracket"
     ]
    ]
@@ -7460,12 +7460,12 @@
   {
    "name": "external/web-shell-response.broken.rule.exabeam",
    "profile": "rule",
-   "text": "subject:\"web\" AND method:\"POST\" AND http_response_code:[200 TO 299]\nAND url:RGXi(\"\\\\.(aspx|ashx)$\", \"\\\\.jsp$\")\nAND NOT user_agent:WLDi(\"*healthcheck*\")\n",
+   "text": "subject:\"http\" AND method:\"POST\" AND http_response_code:[200 TO 299]\nAND url:RGXi(\"\\\\.(aspx|ashx)$\", \"\\\\.jsp$\")\nAND NOT user_agent:WLDi(\"*healthcheck*\")\n",
    "diagnostics": [
     [
      "exabeam_function_arity",
-     76,
-     110
+     77,
+     111
     ]
    ],
    "tokens": [
@@ -7481,152 +7481,152 @@
     ],
     [
      8,
-     13,
-     "string"
-    ],
-    [
      14,
-     17,
-     "keyword"
-    ],
-    [
-     18,
-     24,
-     "property"
-    ],
-    [
-     24,
-     25,
-     "operator"
-    ],
-    [
-     25,
-     31,
      "string"
     ],
     [
+     15,
+     18,
+     "keyword"
+    ],
+    [
+     19,
+     25,
+     "property"
+    ],
+    [
+     25,
+     26,
+     "operator"
+    ],
+    [
+     26,
      32,
-     35,
-     "keyword"
+     "string"
     ],
     [
+     33,
      36,
-     54,
+     "keyword"
+    ],
+    [
+     37,
+     55,
      "property"
     ],
     [
-     54,
      55,
+     56,
      "operator"
     ],
     [
-     55,
      56,
+     57,
      "punctuation.bracket"
     ],
     [
-     56,
-     59,
-     "number"
-    ],
-    [
+     57,
      60,
-     62,
-     "keyword"
-    ],
-    [
-     63,
-     66,
      "number"
     ],
     [
-     66,
-     67,
-     "punctuation.bracket"
-    ],
-    [
-     68,
-     71,
+     61,
+     63,
      "keyword"
     ],
     [
+     64,
+     67,
+     "number"
+    ],
+    [
+     67,
+     68,
+     "punctuation.bracket"
+    ],
+    [
+     69,
      72,
-     75,
+     "keyword"
+    ],
+    [
+     73,
+     76,
      "property"
     ],
     [
-     75,
      76,
+     77,
      "operator"
     ],
     [
-     76,
-     80,
+     77,
+     81,
      "function.builtin"
     ],
     [
-     80,
      81,
+     82,
      "punctuation.bracket"
     ],
     [
-     81,
-     98,
+     82,
+     99,
      "string"
     ],
     [
-     98,
      99,
+     100,
      "punctuation.delimiter"
     ],
     [
-     100,
-     109,
+     101,
+     110,
      "string"
     ],
     [
-     109,
      110,
+     111,
      "punctuation.bracket"
     ],
     [
-     111,
-     114,
-     "keyword"
-    ],
-    [
+     112,
      115,
-     118,
      "keyword"
     ],
     [
+     116,
      119,
-     129,
+     "keyword"
+    ],
+    [
+     120,
+     130,
      "property"
     ],
     [
-     129,
      130,
+     131,
      "operator"
     ],
     [
-     130,
-     134,
+     131,
+     135,
      "function.builtin"
     ],
     [
-     134,
      135,
+     136,
      "punctuation.bracket"
     ],
     [
-     135,
-     150,
+     136,
+     151,
      "string"
     ],
     [
-     150,
      151,
+     152,
      "punctuation.bracket"
     ]
    ]
@@ -7634,7 +7634,7 @@
   {
    "name": "external/web-shell-response.rule.exabeam",
    "profile": "rule",
-   "text": "subject:\"web\" AND method:\"POST\" AND http_response_code:[200 TO 299]\nAND url:RGXi(\"\\\\.(aspx|ashx|jsp|php)$\")\nAND NOT user_agent:WLDi(\"*healthcheck*\")\n",
+   "text": "subject:\"http\" AND method:\"POST\" AND http_response_code:[200 TO 299]\nAND url:RGXi(\"\\\\.(aspx|ashx|jsp|php)$\")\nAND NOT user_agent:WLDi(\"*healthcheck*\")\n",
    "diagnostics": [],
    "tokens": [
     [
@@ -7649,142 +7649,142 @@
     ],
     [
      8,
-     13,
-     "string"
-    ],
-    [
      14,
-     17,
-     "keyword"
+     "string"
     ],
     [
+     15,
      18,
-     24,
+     "keyword"
+    ],
+    [
+     19,
+     25,
      "property"
     ],
     [
-     24,
      25,
+     26,
      "operator"
     ],
     [
-     25,
-     31,
-     "string"
-    ],
-    [
+     26,
      32,
-     35,
-     "keyword"
+     "string"
     ],
     [
+     33,
      36,
-     54,
+     "keyword"
+    ],
+    [
+     37,
+     55,
      "property"
     ],
     [
-     54,
      55,
+     56,
      "operator"
     ],
     [
-     55,
      56,
+     57,
      "punctuation.bracket"
     ],
     [
-     56,
-     59,
-     "number"
-    ],
-    [
+     57,
      60,
-     62,
-     "keyword"
-    ],
-    [
-     63,
-     66,
      "number"
     ],
     [
-     66,
+     61,
+     63,
+     "keyword"
+    ],
+    [
+     64,
      67,
-     "punctuation.bracket"
+     "number"
     ],
     [
+     67,
      68,
-     71,
-     "keyword"
+     "punctuation.bracket"
     ],
     [
+     69,
      72,
-     75,
+     "keyword"
+    ],
+    [
+     73,
+     76,
      "property"
     ],
     [
-     75,
      76,
+     77,
      "operator"
     ],
     [
-     76,
-     80,
+     77,
+     81,
      "function.builtin"
     ],
     [
-     80,
      81,
+     82,
      "punctuation.bracket"
     ],
     [
-     81,
-     106,
-     "string"
-    ],
-    [
-     106,
+     82,
      107,
-     "punctuation.bracket"
-    ],
-    [
-     108,
-     111,
-     "keyword"
-    ],
-    [
-     112,
-     115,
-     "keyword"
-    ],
-    [
-     116,
-     126,
-     "property"
-    ],
-    [
-     126,
-     127,
-     "operator"
-    ],
-    [
-     127,
-     131,
-     "function.builtin"
-    ],
-    [
-     131,
-     132,
-     "punctuation.bracket"
-    ],
-    [
-     132,
-     147,
      "string"
     ],
     [
-     147,
+     107,
+     108,
+     "punctuation.bracket"
+    ],
+    [
+     109,
+     112,
+     "keyword"
+    ],
+    [
+     113,
+     116,
+     "keyword"
+    ],
+    [
+     117,
+     127,
+     "property"
+    ],
+    [
+     127,
+     128,
+     "operator"
+    ],
+    [
+     128,
+     132,
+     "function.builtin"
+    ],
+    [
+     132,
+     133,
+     "punctuation.bracket"
+    ],
+    [
+     133,
      148,
+     "string"
+    ],
+    [
+     148,
+     149,
      "punctuation.bracket"
     ]
    ]

@@ -156,6 +156,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`exabeam_time_exact`](#exabeam_time_exact) | An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only. |
 | [`exabeam_unknown_field`](#exabeam_unknown_field) | The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it. |
 | [`exabeam_unknown_function`](#exabeam_unknown_function) | The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT. |
+| [`exabeam_unknown_value`](#exabeam_unknown_value) | An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it. |
 | [`exabeam_unquoted_value`](#exabeam_unquoted_value) | An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes. |
 | [`exabeam_wildcard_in_phrase`](#exabeam_wildcard_in_phrase) | A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
@@ -2904,6 +2905,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## exabeam_unknown_function
 
 The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT.
+
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
+
+## exabeam_unknown_value
+
+An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it.
 
 Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
