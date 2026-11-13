@@ -54,6 +54,10 @@ pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<Langu
     if system == "elastic" {
         return elastic_search_language(language);
     }
+    // Google SecOps searches are YARA-L (a block's `query` is not a key).
+    if system == "google_secops" {
+        return Some(LanguageId::Yaral);
+    }
     language_for_field_path(&["configurations", system, "query"])
 }
 
@@ -93,6 +97,9 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
             "yara",
             "signature",
         ] => Some((LanguageId::Yara, (*platform).to_string())),
+        ["configurations", "google_secops", _] => {
+            language_for_field_path(&path).map(|language| (language, "google_secops".into()))
+        }
         ["configurations", platform, "query" | "search"] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))
         }

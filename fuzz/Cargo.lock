@@ -3047,6 +3047,7 @@ dependencies = [
  "opentide-schema",
  "opentide-spl",
  "opentide-yara",
+ "opentide-yaral",
  "regex",
  "ryu",
  "serde",

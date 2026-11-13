@@ -156,6 +156,20 @@ fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
             }
         }
     }
+    // A Google SecOps block's text sections, each its own injection (the
+    // analysis checks them together, as the rule deploy assembles).
+    if let Some(secops) = configurations.and_then(|c| c.get("google_secops")) {
+        for field in ["setup", "events", "outcome", "condition", "export"] {
+            if let Some(value) = text(secops.get(field)) {
+                add(
+                    format!("configurations.google_secops.{field}"),
+                    LanguageId::Yaral,
+                    "google_secops",
+                    value,
+                );
+            }
+        }
+    }
     let searches = sequence(
         doc.get("response")
             .and_then(|r| r.get("procedure"))

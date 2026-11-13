@@ -28,6 +28,7 @@ opentide-lucene.workspace = true
 opentide-falco.workspace = true
 opentide-cql.workspace = true
 opentide-yara.workspace = true
+opentide-yaral.workspace = true
 opentide-highlight.workspace = true
 serde.workspace = true
 serde_json.workspace = true

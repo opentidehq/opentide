@@ -13,6 +13,7 @@
 
 mod elastic;
 mod falco;
+mod google_secops;
 mod injection;
 mod intel;
 mod outline;
@@ -90,6 +91,13 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
             "yara",
             "signature",
         ] => Some(LanguageId::Yara),
+        // A Google SecOps block's text sections: one rule, which
+        // `analyze_injections` checks assembled.
+        [
+            "configurations",
+            "google_secops",
+            "setup" | "events" | "outcome" | "condition" | "export",
+        ] => Some(LanguageId::Yaral),
         _ => None,
     }
 }
@@ -686,6 +694,14 @@ fn analyze_injections(
     injections: Vec<InjectedQuery>,
 ) -> Vec<QueryAnalysis> {
     let mut out = Vec::with_capacity(injections.len());
+    // A Google SecOps block's sections are checked once, as the rule deploy
+    // assembles; its findings on the block's YAML go with its first section.
+    let secops = injections
+        .iter()
+        .any(is_secops_section)
+        .then(|| google_secops::assembled(source, configurations))
+        .flatten();
+    let mut secops_block = secops.as_ref().map(|found| found.block().to_vec());
     for inj in injections {
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
@@ -795,10 +811,23 @@ fn analyze_injections(
                     .collect();
                 (diagnostics, r.tokens)
             }
-            // No Tide field injects the Exabeam Query Language or YARA-L
-            // yet: the Exabeam and Google SecOps block ports bring their
-            // injection and its analysis.
-            LanguageId::Exabeam | LanguageId::Yaral => (Vec::new(), Vec::new()),
+            LanguageId::Yaral if is_secops_section(&inj) => {
+                let key = inj.field_path.last().map_or("", String::as_str);
+                let found = secops
+                    .as_ref()
+                    .map(|found| found.section(key))
+                    .unwrap_or_default();
+                extra.extend(secops_block.take().unwrap_or_default());
+                (found, opentide_yaral::highlight(&inj.inner))
+            }
+            // A hunt with `system: google_secops`: a search.
+            LanguageId::Yaral => {
+                let r = opentide_yaral::analyze_with(&inj.inner, &opentide_yaral::Context::SEARCH);
+                (r.diagnostics, r.tokens)
+            }
+            // No Tide field injects the Exabeam Query Language yet: the
+            // Exabeam block port brings its injection and its analysis.
+            LanguageId::Exabeam => (Vec::new(), Vec::new()),
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
@@ -819,6 +848,14 @@ fn analyze_injections(
         });
     }
     out
+}
+
+/// Whether `inj` is a text section of the Google SecOps block.
+fn is_secops_section(inj: &InjectedQuery) -> bool {
+    matches!(
+        inj.field_path.iter().map(String::as_str).collect::<Vec<_>>().as_slice(),
+        ["configurations", google_secops::PLATFORM, key] if google_secops::TEXT_SECTIONS.contains(key)
+    )
 }
 
 fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
