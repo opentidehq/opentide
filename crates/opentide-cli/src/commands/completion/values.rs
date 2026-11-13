@@ -904,7 +904,13 @@ mod tests {
         let found = cx.platforms(&choices, "");
         let shown = values(&found);
         assert_eq!(shown.len(), choices.len());
-        assert_eq!(&shown[shown.len() - 2..], ["splunk", "crowdstrike"]);
+        // The disabled ones follow the enabled ones, in the choices' order:
+        // the two just disabled first (a platform with no file is disabled too).
+        let enabled = helps(&found)
+            .iter()
+            .filter(|help| *help == "enabled")
+            .count();
+        assert_eq!(&shown[enabled..enabled + 2], ["splunk", "crowdstrike"]);
         assert_eq!(helps(&found)[0], "enabled");
         assert_eq!(helps(&found)[shown.len() - 1], "");
         assert_eq!(values(&cx.platforms(&choices, "SPL")), ["splunk"]);

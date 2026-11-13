@@ -282,7 +282,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         check(
             "preview".into(),
             entry["preview"].as_str().unwrap().to_owned(),
-            preview::preview(&cx, platform, &rule).to_compact(),
+            preview::preview(&cx, platform, &rule, &[]).to_compact(),
         );
     }
     assert!(differences.is_empty(), "{}", differences.join("\n"));

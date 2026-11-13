@@ -322,16 +322,21 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             other => panic!("{id}: unknown kind {other}"),
         };
         let oracle = &table["cases"][id];
-        let difference = case
-            .get("difference")
-            .and_then(toml::Value::as_str)
-            .map(|name| {
-                let fields = differences
-                    .get(name)
-                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
-                used.insert(name.to_owned());
-                (name, fields)
-            });
+        // One difference by name, or several (a list): their fields together.
+        let names: Vec<String> = match case.get("difference") {
+            Some(toml::Value::String(name)) => vec![name.clone()],
+            other => strings(other),
+        };
+        let mut fields: BTreeSet<String> = BTreeSet::new();
+        for name in &names {
+            let allowed = differences
+                .get(name)
+                .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
+            fields.extend(allowed.iter().cloned());
+            used.insert(name.clone());
+        }
+        let joined = names.join(" and ");
+        let difference = (!names.is_empty()).then_some((joined.as_str(), &fields));
         failures.extend(compare(id, oracle, &rust, difference));
     }
     for name in differences.keys() {
@@ -369,7 +374,25 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 #[test]
 fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    let compiled: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
+    // The platforms added after the oracle bundle a file it never had: the
+    // difference `platforms-since-the-oracle` names them.
+    let cases: toml::Value = toml::from_str(CASES).unwrap();
+    let since: Vec<String> = cases["difference"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|difference| difference["id"].as_str() == Some("platforms-since-the-oracle"))
+        .map(|difference| strings(difference.get("fields")))
+        .unwrap_or_default();
+    let compiled: Vec<&str> = bundled::FILES
+        .iter()
+        .map(|(path, _)| *path)
+        .filter(|path| {
+            !since
+                .iter()
+                .any(|platform| *path == format!("platforms/{platform}.toml"))
+        })
+        .collect();
     let oracle: Vec<&str> = table["bundled"]
         .as_array()
         .unwrap()
@@ -401,7 +424,8 @@ fn configuration_bundled_files_are_the_folder_and_the_oracles() {
         }
     }
     on_disk.sort();
-    assert_eq!(compiled, on_disk);
+    let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
+    assert_eq!(every, on_disk);
     let keys: Vec<&str> = table["metadata_keys"]
         .as_array()
         .unwrap()

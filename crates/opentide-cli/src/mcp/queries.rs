@@ -21,7 +21,7 @@ pub fn query_platforms() -> Vec<&'static str> {
 fn default_language(platform: &str) -> &'static str {
     match platform {
         "splunk" => "spl",
-        "carbon_black_cloud" => "lucene",
+        "carbon_black_cloud" | "graylog" => "lucene",
         "elastic" => "kuery",
         "sysdig" => "falco",
         "crowdstrike" => "cql",

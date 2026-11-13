@@ -248,10 +248,10 @@ pub struct Registered {
     pub schema: &'static str,
 }
 
-/// `PLATFORM_CONFIG_MODELS`: the nine blocks, in the container's order. It is
+/// `PLATFORM_CONFIG_MODELS`: the blocks, in the container's order. It is
 /// closed: a key not listed is not a platform (`RuleConfigurations` refuses it
 /// as an extra key).
-pub const PLATFORM_CONFIG_MODELS: [Registered; 9] = [
+pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<SentinelConfig>("sentinel", "SentinelConfig"),
     registered::<DefenderConfig>("defender_for_endpoint", "DefenderConfig"),
     registered::<SplunkConfig>("splunk", "SplunkConfig"),
@@ -261,6 +261,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; 9] = [
     registered::<CarbonBlackConfig>("carbon_black_cloud", "CarbonBlackConfig"),
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
+    registered::<GraylogConfig>("graylog", "GraylogConfig"),
 ];
 
 const fn registered<T: PlatformBlock>(key: &'static str, model: &'static str) -> Registered {
@@ -649,6 +650,8 @@ pub enum PlatformConfig {
     Elastic(ElasticConfig),
     /// `sysdig`.
     Sysdig(SysdigConfig),
+    /// `graylog`.
+    Graylog(GraylogConfig),
 }
 
 /// Why [`parse_platform_config`] refused a block.
@@ -685,6 +688,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "carbon_black_cloud" => read(node, PlatformConfig::CarbonBlack),
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
+        "graylog" => read(node, PlatformConfig::Graylog),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",
             repr::quote(other)

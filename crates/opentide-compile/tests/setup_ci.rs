@@ -62,6 +62,20 @@ fn options(inputs: &toml::Table) -> Options {
     }
 }
 
+/// The variables of the platforms added after the oracle (0.23.0): their
+/// bundled files name them, so the pipeline's header lists them where the
+/// oracle's has none (`platforms-since-the-oracle` in opentide-schema's
+/// `oracle/config_cases.toml`).
+const SINCE_THE_ORACLE: &[&str] = &["GRAYLOG_TOKEN"];
+
+/// `text` without the lines that name one of `variables`: its line in the
+/// header (`#   NAME`) and in a job's environment (`NAME: ${{ secrets.NAME }}`).
+fn without_variables(text: &str, variables: &[&str]) -> String {
+    text.split_inclusive('\n')
+        .filter(|line| !variables.iter().any(|name| line.contains(name)))
+        .collect()
+}
+
 /// The first line the two texts differ on.
 fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
     let (a, b): (Vec<&str>, Vec<&str>) = (oracle.lines().collect(), rendered.lines().collect());
@@ -94,7 +108,7 @@ fn pipelines_are_the_oracles() {
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
         let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
-            Ok(rendered) => rendered,
+            Ok(rendered) => without_variables(&rendered, SINCE_THE_ORACLE),
             Err(error) => {
                 problems.push(format!("{name}: {error}"));
                 continue;

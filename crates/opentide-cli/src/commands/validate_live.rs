@@ -1129,6 +1129,8 @@ struct RuleQuery {
     language: String,
     label: Option<String>,
     exclusions: Option<CJson>,
+    /// The streams a Graylog query is checked against (the block's aliases).
+    index: Vec<String>,
 }
 
 impl RuleQuery {
@@ -1138,6 +1140,7 @@ impl RuleQuery {
             language: String::new(),
             label: None,
             exclusions: None,
+            index: Vec::new(),
         }
     }
 
@@ -1234,6 +1237,22 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
                     .collect();
             }
             Err(format!("rule {name:?} has no SentinelOne query"))
+        }
+        "graylog" => {
+            let text = required(block, "query", name, platform)?;
+            let streams = match block.get("streams") {
+                Some(CJson::Str(one)) => vec![one.clone()],
+                Some(CJson::Array(items)) => items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_owned))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            Ok(vec![RuleQuery {
+                language: "lucene".to_owned(),
+                index: streams,
+                ..RuleQuery::plain(text)
+            }])
         }
         _ => Err(format!("{platform} rules cannot be queried")),
     }
@@ -1385,6 +1404,7 @@ async fn generic(
                     QueryRequest::new(item.text_for(&tenant.name), &item.language, window);
                 request.limit = 1;
                 request.timeout = seconds(timeout);
+                request.index = item.index.clone();
                 tracing::info!(
                     mdr_name = rule.name.as_str(),
                     uuid = rule.uuid.as_str(),
@@ -2072,6 +2092,14 @@ mod tests {
         let defender = rule_queries(&r, "defender_for_endpoint").unwrap();
         assert_eq!(defender[0].text_for("lab"), "T\n| where a");
         assert_eq!(defender[0].text_for("prod"), "T");
+        let graylog = rule(
+            "name: G\nmetadata: {uuid: 00000000-0000-4000-8000-000000000002}\nconfigurations:\n  \
+             graylog: {query: 'source:host', streams: [sysmon, dns]}\n",
+        );
+        let gl = rule_queries(&graylog, "graylog").unwrap();
+        assert_eq!(gl[0].text, "source:host");
+        assert_eq!(gl[0].language, "lucene");
+        assert_eq!(gl[0].index, ["sysmon", "dns"]);
     }
 
     #[test]

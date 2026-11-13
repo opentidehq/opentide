@@ -110,8 +110,8 @@ pub fn models() -> &'static [Model] {
     static MODELS: OnceLock<Vec<Model>> = OnceLock::new();
     MODELS.get_or_init(|| {
         use platform::{
-            carbon_black, crowdstrike, defender, elastic, harfanglab, sentinel, sentinel_one,
-            splunk, sysdig,
+            carbon_black, crowdstrike, defender, elastic, graylog, harfanglab, sentinel,
+            sentinel_one, splunk, sysdig,
         };
         let mut all = vec![
             model::<metadata::ObjectMetadata>(true),
@@ -219,6 +219,12 @@ pub fn models() -> &'static [Model] {
             sysdig::SysdigMacro,
             sysdig::SysdigList,
             sysdig::SysdigConfig,
+            graylog::GraylogSchedule,
+            graylog::GraylogAggregation,
+            graylog::GraylogEventTemplate,
+            graylog::GraylogLookupTable,
+            graylog::GraylogEventLookup,
+            graylog::GraylogConfig,
         ]);
         all
     })

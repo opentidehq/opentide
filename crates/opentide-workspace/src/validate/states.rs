@@ -381,13 +381,16 @@ fn external_id_problem(platform: &str, value: &str) -> Option<String> {
     let canonical_decimal = value == "0"
         || (value.starts_with(|c: char| ('1'..='9').contains(&c))
             && value.chars().all(|c| c.is_ascii_digit()));
-    (opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal).then(|| {
-        format!(
+    if opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal {
+        return Some(format!(
             "{platform} external id {} is not a canonical decimal integer (no sign, no leading \
              zeroes)",
             quote(value)
-        )
-    })
+        ));
+    }
+    let shape = opentide_schema::platforms::id_shape(platform)?;
+    (!opentide_schema::platforms::id_has_shape(platform, value))
+        .then(|| format!("{platform} external id {} is not {shape}", quote(value)))
 }
 
 #[cfg(test)]
@@ -462,6 +465,18 @@ mod tests {
                 .message
                 .contains("is int, not a string")
         );
+        let (fs, _) = shard(&format!(
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65F1"}}}}}}"#
+        ));
+        assert!(
+            scan(&fs, Path::new("/w"))[0]
+                .message
+                .ends_with("graylog external id '65F1' is not 24 lower-case hex digits")
+        );
+        let (fs, _) = shard(&format!(
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65f1c0ffee0123456789abcd"}}}}}}"#
+        ));
+        assert!(scan(&fs, Path::new("/w")).is_empty());
     }
 
     #[test]

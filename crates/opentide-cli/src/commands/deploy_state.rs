@@ -129,7 +129,15 @@ fn canonical_decimal(text: &str) -> bool {
 /// *value* as the shard stores it, or `external_id_shape`
 /// (`normalise_external_id`).
 pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<String, StateError> {
+    let shape = opentide_schema::platforms::id_shape(platform);
     match value {
+        ExternalId::Int(number) if shape.is_some() => Err(StateError::new(
+            "external_id_shape",
+            format!(
+                "{platform} external id {number} is a number, not {}",
+                shape.unwrap_or_default()
+            ),
+        )),
         ExternalId::Int(number) if *number < 0 => Err(StateError::new(
             "external_id_shape",
             format!("{platform} external id {number} is negative"),
@@ -147,6 +155,15 @@ pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<Strin
                 format!(
                     "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
                      no leading zeroes)"
+                ),
+            ))
+        }
+        ExternalId::Text(text) if !opentide_schema::platforms::id_has_shape(platform, text) => {
+            Err(StateError::new(
+                "external_id_shape",
+                format!(
+                    "{platform} external id {text:?} is not {}",
+                    shape.unwrap_or_default()
                 ),
             ))
         }
@@ -714,6 +731,30 @@ mod tests {
         );
         assert!(normalise_external_id("crowdstrike", &ExternalId::Text(" ".into())).is_err());
         assert!(normalise_external_id("sysdig", &ExternalId::Int(-1)).is_err());
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex_digits() {
+        assert_eq!(
+            normalise_external_id(
+                "graylog",
+                &ExternalId::Text("65f1c0ffee0123456789abcd".into())
+            )
+            .unwrap(),
+            "65f1c0ffee0123456789abcd"
+        );
+        assert_eq!(
+            normalise_external_id("graylog", &ExternalId::Text("65F1".into()))
+                .unwrap_err()
+                .message,
+            "graylog external id \"65F1\" is not 24 lower-case hex digits"
+        );
+        assert_eq!(
+            normalise_external_id("graylog", &ExternalId::Int(12))
+                .unwrap_err()
+                .message,
+            "graylog external id 12 is a number, not 24 lower-case hex digits"
+        );
     }
 
     #[test]

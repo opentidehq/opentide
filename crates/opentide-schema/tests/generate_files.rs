@@ -30,6 +30,35 @@ fn every_platform_template_is_the_committed_one() {
     assert_eq!(platform_template("plugin").unwrap(), None);
 }
 
+/// The platforms added after the oracle (0.23.0), whose blocks its rule
+/// templates do not have (`platforms-since-the-oracle` in
+/// `oracle/config_cases.toml`).
+const SINCE_THE_ORACLE: &[&str] = &["graylog"];
+
+/// `text` without the commented-out `configurations.<platform>` block of
+/// each of `platforms`: its header line at indent 2, and every line after it
+/// indented deeper or blank, up to the next line at indent 2 or less.
+fn without_blocks(text: &str, platforms: &[&str]) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut skipping = false;
+    for line in text.split_inclusive('\n') {
+        let header = platforms
+            .iter()
+            .any(|platform| line == format!("  #{platform}:\n"));
+        if header {
+            skipping = true;
+            continue;
+        }
+        let deeper = line.starts_with("   ") || line.trim().is_empty();
+        if skipping && deeper {
+            continue;
+        }
+        skipping = false;
+        out.push_str(line);
+    }
+    out
+}
+
 #[test]
 fn every_object_template_is_the_oracles_on_the_tide_corpus() {
     // tide-corpus requires lint's default metadata keys.
@@ -41,7 +70,18 @@ fn every_object_template_is_the_oracles_on_the_tide_corpus() {
         let rendered = object_template(identifier, &Options::default())
             .unwrap()
             .unwrap();
-        assert_eq!(rendered, expected, "{identifier}");
+        assert_eq!(
+            without_blocks(&rendered, SINCE_THE_ORACLE),
+            expected,
+            "{identifier}"
+        );
+        // The blocks left out are the platforms' own templates, indented.
+        for platform in SINCE_THE_ORACLE {
+            assert!(
+                identifier != "rule::1.0" || rendered.contains(&format!("\n  #{platform}:\n")),
+                "{identifier}: no {platform} block"
+            );
+        }
     }
     assert_eq!(
         object_template("visibility::1.0", &Options::default()).unwrap(),

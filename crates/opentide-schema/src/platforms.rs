@@ -256,6 +256,28 @@ pub const PLATFORMS: &[Platform] = &[
         connector_rank: 8,
         configuration_rank: 8,
     },
+    Platform {
+        id: "graylog",
+        label: "Graylog",
+        configuration_name: "Graylog",
+        config_class: "GraylogConfig",
+        external_id: ExternalId::Text {
+            pattern: Some("^[0-9a-f]{24}$"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["lucene"],
+        // The Graylog dialect of Lucene comes with the engine import (E1):
+        // until then no query is parsed offline, rather than parsed as
+        // Elastic's Lucene.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 9,
+        connector_rank: 9,
+        configuration_rank: 9,
+    },
 ];
 
 /// How many platforms are built in.
@@ -371,6 +393,45 @@ pub fn has_integer_id(id: &str) -> bool {
     get(id).is_some_and(|platform| platform.external_id == ExternalId::Int)
 }
 
+/// What a stored id of a platform whose row names a pattern looks like, as
+/// a message says it (`_PATTERNED_IDS`); the pattern itself for one this
+/// table does not describe.
+const ID_SHAPES: &[(&str, &str)] = &[("^[0-9a-f]{24}$", "24 lower-case hex digits")];
+
+/// The shape `id`'s external ids must have, when its row names a pattern.
+pub fn id_shape(id: &str) -> Option<&'static str> {
+    let Some(Platform {
+        external_id: ExternalId::Text {
+            pattern: Some(pattern),
+        },
+        ..
+    }) = get(id)
+    else {
+        return None;
+    };
+    Some(
+        ID_SHAPES
+            .iter()
+            .find(|(known, _)| known == pattern)
+            .map_or(*pattern, |(_, shape)| *shape),
+    )
+}
+
+/// Whether `value` is an external id `id` can hold: always, unless its row
+/// names a pattern `value` does not match.
+pub fn id_has_shape(id: &str, value: &str) -> bool {
+    let Some(Platform {
+        external_id: ExternalId::Text {
+            pattern: Some(pattern),
+        },
+        ..
+    }) = get(id)
+    else {
+        return true;
+    };
+    regex::Regex::new(pattern).is_ok_and(|shape| shape.is_match(value))
+}
+
 /// The extensions of a query file, each one query in the language it names:
 /// every row's suffixes, the first time each appears.
 pub fn query_file_suffixes() -> Vec<&'static str> {
@@ -430,7 +491,8 @@ mod tests {
                 "harfanglab",
                 "carbon_black_cloud",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "graylog"
             ]
         );
         assert_eq!(
@@ -444,7 +506,8 @@ mod tests {
                 "carbon_black_cloud",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "graylog"
             ]
         );
         assert_eq!(
@@ -458,7 +521,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "graylog"
             ]
         );
         assert_eq!(
@@ -472,7 +536,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "graylog"
             ]
         );
     }
@@ -484,6 +549,7 @@ mod tests {
             [
                 "crowdstrike",
                 "defender_for_endpoint",
+                "graylog",
                 "sentinel_one",
                 "sysdig"
             ]
@@ -498,6 +564,7 @@ mod tests {
                 "carbon_black_cloud",
                 "defender_for_endpoint",
                 "elastic",
+                "graylog",
                 "sentinel",
                 "sentinel_one",
                 "splunk"
@@ -509,7 +576,7 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig"]
+            ["sentinel", "elastic", "sysdig", "graylog"]
         );
         assert_eq!(
             query_file_suffixes(),
@@ -517,6 +584,24 @@ mod tests {
                 "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco"
             ]
         );
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex() {
+        let graylog = super::get("graylog").expect("built in");
+        assert_eq!(
+            graylog.external_id,
+            ExternalId::Text {
+                pattern: Some("^[0-9a-f]{24}$")
+            }
+        );
+        assert!(!super::has_integer_id("graylog"));
+        assert_eq!(super::id_shape("graylog"), Some("24 lower-case hex digits"));
+        assert!(super::id_has_shape("graylog", "65f1c0ffee0123456789abcd"));
+        assert!(!super::id_has_shape("graylog", "65F1C0FFEE0123456789ABCD"));
+        assert!(!super::id_has_shape("graylog", "65f1c0ffee0123456789abc"));
+        assert_eq!(super::id_shape("crowdstrike"), None);
+        assert!(super::id_has_shape("crowdstrike", "anything"));
     }
 
     #[test]

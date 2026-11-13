@@ -446,7 +446,7 @@ mod tests {
         assert_eq!(missing.failure.code, code::USAGE_MISSING_OPTION);
         assert_eq!(
             missing.failure.message,
-            "Missing option '--platform': choose from sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig."
+            "Missing option '--platform': choose from sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, graylog."
         );
         assert_eq!(missing.notes[0].1, "opentide query [OPTIONS] [query]");
         let argument = parse("setup ci --yes");

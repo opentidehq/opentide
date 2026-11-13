@@ -497,3 +497,99 @@ fn parse_version_cases() {
         assert_eq!(graylog::parse_version(text), expected, "{text}");
     }
 }
+
+// --- the dry run's entry (`_graylog_compile_preview`) ----------------------------
+
+/// A workspace holding `rule`, and the fixture tenant enabled in
+/// `platforms/graylog.toml`.
+fn workspace_with_tenant(rule: &str) -> Workspace {
+    let fs = Arc::new(MemoryFs::new());
+    fs.create_dir("/ws/.opentide/configurations/platforms");
+    fs.create_dir("/ws/objects/rules");
+    fs.write("/ws/objects/rules/r.yaml", rule.to_owned());
+    fs.write(
+        "/ws/.opentide/configurations/platforms/graylog.toml",
+        fixture("tenant.toml")
+            .replace("identifier = \"graylog\"\n", "")
+            .replace("subschema = \"Graylog\"\n", "")
+            .replace("flags = []\n", ""),
+    );
+    Workspace::open(
+        fs as Arc<dyn FileSystem>,
+        Options {
+            roots: RootOptions {
+                repo: Some(PathBuf::from("/ws")),
+                cwd: PathBuf::from("/ws"),
+                ..RootOptions::default()
+            },
+        },
+    )
+    .unwrap()
+}
+
+fn preview_entry(rule: &str, tenants: &[&str]) -> serde_json::Value {
+    let workspace = workspace_with_tenant(rule);
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", &uuid_of(rule)).unwrap();
+    let rule = Rule::new(object.root().unwrap(), None);
+    let tenants: Vec<String> = tenants.iter().map(|name| (*name).to_owned()).collect();
+    data(&opentide_compile::preview::preview(
+        &cx, "graylog", &rule, &tenants,
+    ))
+}
+
+#[test]
+fn a_dry_run_shows_the_first_tenants_request_for_7_2() {
+    let entry = preview_entry(
+        &fixture("rule-graylog-aggregation-1.0.yaml"),
+        &["graylog-prod"],
+    );
+    assert_eq!(entry["server_version"], "7.2");
+    assert_eq!(entry["tenant"], "graylog-prod");
+    assert!(entry.get("unresolved").is_none());
+    assert_eq!(
+        entry["api_request"],
+        expected("rule-graylog-aggregation-1.0.7.2.create.api.json")
+    );
+}
+
+#[test]
+fn a_dry_run_without_a_tenant_lists_the_aliases_it_left_out() {
+    let entry = preview_entry(&fixture("rule-graylog-aggregation-1.0.yaml"), &[]);
+    assert!(entry.get("tenant").is_none());
+    assert_eq!(
+        entry["unresolved"],
+        serde_json::json!({
+            "reason": "this run deploys the rule to no graylog tenant: stream and notification \
+                       aliases are resolved against a tenant at deploy",
+            "streams": ["sysmon"],
+            "notifications": ["soc-slack"],
+        })
+    );
+    assert_eq!(
+        entry["api_request"]["body"]["entity"]["config"]["streams"],
+        serde_json::json!([])
+    );
+}
+
+#[test]
+fn a_dry_run_fails_on_an_alias_a_tenant_does_not_define() {
+    let rule = fixture("rule-graylog-aggregation-1.0.yaml")
+        .replace("notifications: soc-slack", "notifications: pager");
+    let entry = preview_entry(&rule, &["graylog-prod"]);
+    assert_eq!(entry["status"], "failed");
+    assert_eq!(entry["code"], "graylog_alias_unknown");
+    assert!(
+        entry["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("tenant 'graylog-prod': notification alias(es) pager"),
+        "{entry}"
+    );
+    assert_eq!(entry["api_request"], serde_json::Value::Null);
+}

@@ -6398,6 +6398,11 @@ class RuleConfigurations:
         Elastic Security detection rule (`platform::elastic::1.0`).
         """
     @property
+    def graylog(self, /) -> GraylogConfig | None:
+        """
+        Graylog event definition (`platform::graylog::1.0`).
+        """
+    @property
     def harfanglab(self, /) -> HarfangLabConfig | None:
         """
         HarfangLab Sigma or YARA rule (`platform::harfanglab::1.0`).

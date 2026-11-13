@@ -787,9 +787,20 @@ async fn create(
     outcome: &mut RuleOutcome,
 ) -> Result<(), Failure> {
     let compiled = &rule.compiled;
-    let answer = match client.create(&create_body(compiled)).await? {
-        Ok(answer) => answer,
-        Err(error) => return Err(Failure::Rule(error)),
+    let answer = match client.create(&create_body(compiled)).await {
+        Ok(Ok(answer)) => answer,
+        Ok(Err(error)) => return Err(Failure::Rule(error)),
+        // No answer: the create may have happened. Titles are not unique, so
+        // a retry could create a second definition; it is never retried.
+        Err(
+            error @ (ConnectorError::Unreachable { .. }
+            | ConnectorError::Timeout { .. }
+            | ConnectorError::Answer { .. }),
+        ) => {
+            outcome.failure = Some(create_unconfirmed(compiled, &error.to_string()));
+            return Ok(());
+        }
+        Err(error) => return Err(Failure::Tenant(error)),
     };
     let Some(definition_id) = returned_id(answer.as_ref()) else {
         outcome.failure = Some(RuleFailure {

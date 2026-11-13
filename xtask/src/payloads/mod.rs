@@ -662,7 +662,7 @@ pub fn compare(corpus: &str, workspace: &Workspace, text: &str) -> Result<Tally>
         check(
             "preview".to_owned(),
             probe.preview.clone(),
-            preview::preview(&cx, &probe.platform, &rule).to_compact(),
+            preview::preview(&cx, &probe.platform, &rule, &[]).to_compact(),
         );
     }
     Ok(tally)

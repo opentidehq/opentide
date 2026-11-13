@@ -284,7 +284,7 @@ fn a_rule_without_a_block_fails() {
     {
         block.insert("status".into(), "NOPE".into());
     }
-    let entry = preview::preview(&cx, "sysdig", &unknown);
+    let entry = preview::preview(&cx, "sysdig", &unknown, &[]);
     assert_eq!(entry.get("status").and_then(Json::as_str), Some("failed"));
     assert!(
         entry

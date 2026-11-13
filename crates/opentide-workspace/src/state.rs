@@ -98,6 +98,7 @@ fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
                 || id.trim().is_empty()
                 || (opentide_schema::platforms::has_integer_id(&platform)
                     && !canonical_decimal(&id))
+                || !opentide_schema::platforms::id_has_shape(&platform, &id)
             {
                 return None;
             }

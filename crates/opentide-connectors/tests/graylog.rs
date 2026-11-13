@@ -47,6 +47,11 @@ fn server() -> (tokio::runtime::Runtime, MockServer) {
 
 /// The fixture tenant, pointed at `url`.
 fn tenant(url: &str) -> (Tenant, HttpClient) {
+    tenant_with(url, &http_defaults())
+}
+
+/// The fixture tenant, pointed at `url`, reached with `settings`.
+fn tenant_with(url: &str, settings: &opentide_connectors::HttpSettings) -> (Tenant, HttpClient) {
     let setup: toml::Table = toml::from_str(&format!(
         r#"
 ssl = true
@@ -70,7 +75,7 @@ soc-slack = "65f0c0ffee0123456789abcf"
         &setup,
         &env,
         Resolve::Required,
-        &http_defaults(),
+        settings,
     )
     .unwrap();
     let http = HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
@@ -218,6 +223,45 @@ fn a_create_that_answers_no_id_is_unconfirmed() {
         "{failure:?}"
     );
     assert_eq!(outcome.state, StateChange::Keep);
+}
+
+#[test]
+fn a_create_that_gets_no_answer_is_unconfirmed_and_not_sent_again() {
+    let (runtime, server) = server();
+    runtime.block_on(async {
+        mount_validate(&server, ok_verdict()).await;
+        Mock::given(method("POST"))
+            .and(path("/api/events/definitions"))
+            .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(5)))
+            .mount(&server)
+            .await;
+    });
+    let settings = opentide_connectors::HttpSettings {
+        timeout: std::time::Duration::from_millis(300),
+        ..http_defaults()
+    };
+    let (tenant, http) = tenant_with(&server.uri(), &settings);
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let rule = step(Action::Create, false, Version(7, 2, 0));
+    // A rule's failure, not the tenant's: the next rule is still deployed.
+    let outcome = runtime.block_on(deploy_rule(cx, &rule)).unwrap();
+    let failure = outcome.failure.unwrap();
+    assert_eq!(failure.code, "graylog_create_unconfirmed");
+    assert!(failure.reason.contains("got no answer"), "{failure:?}");
+    assert!(failure.detail.is_some());
+    assert_eq!(outcome.state, StateChange::Keep);
+    let creates = runtime
+        .block_on(server.received_requests())
+        .unwrap()
+        .iter()
+        .filter(|request| request.url.path() == "/api/events/definitions")
+        .count();
+    assert_eq!(creates, 1);
 }
 
 #[test]
