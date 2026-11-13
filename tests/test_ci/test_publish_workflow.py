@@ -455,8 +455,11 @@ def _run_guard(
     # `gh release view` answers whether the Release exists; `python` is this one.
     (stubs / "gh").write_text(f"#!/bin/sh\nexit {0 if gh_has_release else 1}\n", encoding="utf-8")
     (stubs / "gh").chmod(0o755)
-    if not (stubs / "python").exists():
-        (stubs / "python").symlink_to(sys.executable)
+    # A wrapper, not a symlink: a virtualenv's interpreter finds its pyvenv.cfg
+    # beside the path it is run as, so a symlink here would run the base
+    # interpreter without the venv's packages (tomli, on Python 3.10).
+    (stubs / "python").write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    (stubs / "python").chmod(0o755)
     output = repo.parent / "github_output"
     output.write_text("", encoding="utf-8")
     summary = repo.parent / "summary"
