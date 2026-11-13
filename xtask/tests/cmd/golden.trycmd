@@ -12,11 +12,12 @@ commands:
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
   check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
-        [--recordings DIR]
+        [--partition K/N [--unused FILE]] [--recordings DIR]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
-  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--recordings DIR]
+  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--partition K/N]
+       [--unused FILE] [--recordings DIR]
              check, printing every difference in full
   lock [--oracle FILE]
              rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
@@ -25,6 +26,14 @@ commands:
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>), or a
                leading part of it, matches: `explain/*` is every explain case
+--partition K/N
+               (check, diff) only part K of N: the cases whose id hashes to it
+               (FNV-1a, so every host splits alike); parts 1/N to N/N run every
+               case exactly once. Like --filter, no orphan or COVERAGE.md check
+--unused FILE  with --engine rust and --partition: write the ledger entries that
+               applied to no case of this part (JSON, as the report's `stale`)
+               instead of failing on them; an entry is stale when it is in
+               every part's FILE (CI's `Golden compare` gathers them)
 --engine       python (the oracle, the default); rust: this repository's CLI against
                the recordings, every case, through the comparator and
                tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core is the

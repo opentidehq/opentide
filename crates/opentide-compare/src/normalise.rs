@@ -36,6 +36,9 @@
 //!    text quotes a literal example that must stay.
 //! 9. **Fresh UUIDs** (`<UUID-1>`, …, only for cases that opt in): UUIDs the
 //!    fixture does not contain, numbered by first appearance.
+//! 10. **Live frames** (`<LIVE></LIVE>`, only for cases that opt in with
+//!     `live-frames`): the frame rule 1 keeps, for a live display that worker
+//!     threads update, whose first render can already show their progress.
 //!
 //! When two runs are compared, and not when a case is recorded,
 //! [`opentide_version`] also replaces opentide's own version, the exact
@@ -66,6 +69,14 @@ pub enum Rule {
     /// `opentide doctor` reports. Not global: opentide's own help text
     /// carries a literal example (`✓ git 2.43.0 · git`) that must stay.
     HostGit,
+    /// The frame a live region keeps (`<LIVE>…</LIVE>`) becomes empty,
+    /// `<LIVE></LIVE>`, for commands whose live display is updated from
+    /// worker threads: their first frame can show progress made before Live's
+    /// first render (`deploy`'s platform row, bare or already at `3 rules ·
+    /// CrowdStrike create rule`). What was printed during the region, and
+    /// everything outside it (the region's outcome line, the summary), is
+    /// still compared.
+    LiveFrames,
 }
 
 /// Values that are only known once a case has run.
@@ -95,6 +106,7 @@ pub struct Normaliser {
     today: Option<Regex>,
     git: Option<String>,
     fresh_uuids: Option<FreshUuids>,
+    live_frames: bool,
 }
 
 #[derive(Debug)]
@@ -132,6 +144,7 @@ macro_rules! regex {
 
 regex!(position_cursor, r"\r\x1b\[2K((?:\x1b\[1A\x1b\[2K)*)");
 regex!(transient_erase, r"^\r((?:\x1b\[1A\x1b\[2K)+)");
+regex!(live_frame, r"(?s)<LIVE>.*?</LIVE>");
 regex!(
     log_clock,
     r"(?m)^((?:\x1b\[\?25l<LIVE>[^\n]*?</LIVE>)?(?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
@@ -202,6 +215,7 @@ impl Normaliser {
                 .clone()
                 .filter(|_| rules.contains(&Rule::HostGit)),
             fresh_uuids,
+            live_frames: rules.contains(&Rule::LiveFrames),
         }
     }
 
@@ -247,6 +261,9 @@ impl Normaliser {
     /// Applies every rule to `text`.
     pub fn text(&mut self, text: &str) -> String {
         let mut out = live_regions(text);
+        if self.live_frames {
+            out = live_frame().replace_all(&out, "<LIVE></LIVE>").into_owned();
+        }
         for (literal, placeholder) in &self.literals {
             if out.contains(literal.as_str()) {
                 out = out.replace(literal.as_str(), placeholder);
@@ -832,6 +849,50 @@ mod tests {
                 frame(2)
             )
         );
+    }
+
+    /// `deploy`'s live region as two runs of the oracle printed it: the first
+    /// frame is the bare platform row on one, and already shows the worker's
+    /// progress on the other.
+    fn deploy_region(frame: &str, warning: &str, summary: &str) -> String {
+        format!(
+            "Deploy plan\n{HIDE_CURSOR}  \x1b[1;36m⠋\x1b[0m  {frame}\r\x1b[2K\
+             warning: {warning}\n  \x1b[1;36m⠙\x1b[0m  {frame}\n{SHOW_CURSOR}\
+             \r\x1b[1A\x1b[2K  ✓  crowdstrike  {summary}\n"
+        )
+    }
+
+    #[test]
+    fn live_frames_rule_empties_the_kept_frame_and_only_that() {
+        let bare = "crowdstrike  0.4s";
+        let ahead = "crowdstrike  3 rules 0.4s CrowdStrike create rule";
+        let recorded = deploy_region(bare, "External id recorded", "3 deployed");
+        let rerun = deploy_region(ahead, "External id recorded", "3 deployed");
+        // Without the rule the two runs differ: the frame is compared.
+        assert_ne!(norm(&recorded), norm(&rerun));
+        let live = |text: &str| Normaliser::new(&volatile(), &[Rule::LiveFrames], []).text(text);
+        assert_eq!(live(&recorded), live(&rerun));
+        assert_eq!(
+            live(&recorded),
+            format!(
+                "Deploy plan\n{HIDE_CURSOR}<LIVE></LIVE>warning: External id recorded\n\
+                 {SHOW_CURSOR}\r\x1b[1A\x1b[2K  ✓  crowdstrike  3 deployed\n"
+            )
+        );
+        // What was printed during the region is still compared ...
+        let warned = deploy_region(ahead, "External id changed", "3 deployed");
+        assert_ne!(live(&recorded), live(&warned));
+        // ... and so is everything after it, the region's outcome line.
+        let failed = deploy_region(ahead, "External id recorded", "2 deployed, 1 failed");
+        assert_ne!(live(&recorded), live(&failed));
+        // A multi-line frame empties too, and the text before the region stays.
+        let erase = "\r\x1b[1A\x1b[2K\x1b[1A\x1b[2K";
+        let tall = format!("before\n{HIDE_CURSOR}a\nb\n{SHOW_CURSOR}{erase}");
+        assert_eq!(
+            live(&tall),
+            format!("before\n{HIDE_CURSOR}<LIVE></LIVE>{SHOW_CURSOR}{erase}")
+        );
+        assert_ne!(live(&tall), live(&tall.replace("before", "after")));
     }
 
     #[test]

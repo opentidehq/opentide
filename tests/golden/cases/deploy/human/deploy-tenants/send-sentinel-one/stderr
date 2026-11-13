@@ -1,6 +1,6 @@
 [1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW RELEASE[0m[1;2m · 1 platform, 1 tenant[0m
 [2mPlan: 1 to create, 1 to update, 1 to disable, 1 to delete[0m
-[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36msentinel_one[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mExternal id missing · detail: rule 00000000-0000-4000-8047-000000000013 has no sentinel_one
+[?25l<LIVE></LIVE>[1;33mwarning: [0mExternal id missing · detail: rule 00000000-0000-4000-8047-000000000013 has no sentinel_one
 id for tenant 'lab' in 
 <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so 
 nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy 

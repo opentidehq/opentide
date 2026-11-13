@@ -50,11 +50,12 @@ commands:
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
   check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
-        [--recordings DIR]
+        [--partition K/N [--unused FILE]] [--recordings DIR]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
-  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--recordings DIR]
+  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--partition K/N]
+       [--unused FILE] [--recordings DIR]
              check, printing every difference in full
   lock [--oracle FILE]
              rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
@@ -63,6 +64,14 @@ commands:
 
 --filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>), or a
                leading part of it, matches: `explain/*` is every explain case
+--partition K/N
+               (check, diff) only part K of N: the cases whose id hashes to it
+               (FNV-1a, so every host splits alike); parts 1/N to N/N run every
+               case exactly once. Like --filter, no orphan or COVERAGE.md check
+--unused FILE  with --engine rust and --partition: write the ledger entries that
+               applied to no case of this part (JSON, as the report's `stale`)
+               instead of failing on them; an entry is stale when it is in
+               every part's FILE (CI's `Golden compare` gathers them)
 --engine       python (the oracle, the default); rust: this repository's CLI against
                the recordings, every case, through the comparator and
                tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core is the
@@ -134,6 +143,46 @@ struct Command {
     out: Option<PathBuf>,
     /// `--recordings DIR` (`check`, `diff`): the recordings of `record --out DIR`.
     recordings: Option<PathBuf>,
+    /// `--partition K/N` (`check`, `diff`): part K of N, from 1.
+    partition: Option<Partition>,
+    /// `--unused FILE`: where a part writes the ledger entries it did not apply.
+    unused: Option<PathBuf>,
+}
+
+/// Part `index` of `count` of the cases (`--partition K/N`, K from 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Partition {
+    index: u64,
+    count: u64,
+}
+
+impl Partition {
+    fn parse(text: &str) -> Result<Partition> {
+        let parsed = text.split_once('/').and_then(|(k, n)| {
+            Some(Partition {
+                index: k.parse().ok()?,
+                count: n.parse().ok()?,
+            })
+        });
+        match parsed {
+            Some(p) if p.index >= 1 && p.index <= p.count => Ok(p),
+            _ => bail!("--partition `{text}`: K/N with 1 <= K <= N"),
+        }
+    }
+
+    /// Whether the case `id` is in this part: its FNV-1a hash, modulo the
+    /// count. A hash of the id alone, so a case stays in its part whatever
+    /// other cases are added or removed.
+    fn holds(self, id: &str) -> bool {
+        fnv1a(id) % self.count == self.index - 1
+    }
+}
+
+/// The 64-bit FNV-1a hash of `text`: the same on every host and toolchain.
+fn fnv1a(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
 
 fn parse(args: &[String]) -> Result<Command> {
@@ -160,6 +209,8 @@ fn parse(args: &[String]) -> Result<Command> {
         oracle: None,
         out: None,
         recordings: None,
+        partition: None,
+        unused: None,
     };
     let mut engine_given = false;
     let mut rest = rest.iter();
@@ -197,6 +248,12 @@ fn parse(args: &[String]) -> Result<Command> {
             "--recordings" if matches!(command.verb, Verb::Check | Verb::Diff) => {
                 command.recordings = Some(PathBuf::from(value()?));
             }
+            "--partition" if matches!(command.verb, Verb::Check | Verb::Diff) => {
+                command.partition = Some(Partition::parse(&value()?)?);
+            }
+            "--unused" if matches!(command.verb, Verb::Check | Verb::Diff) => {
+                command.unused = Some(PathBuf::from(value()?));
+            }
             other => bail!("unknown option `{other}` for this command\n\n{USAGE}"),
         }
     }
@@ -212,6 +269,9 @@ fn parse(args: &[String]) -> Result<Command> {
         if command.engine != "rust" {
             bail!("--runner node launches the candidate of --engine rust");
         }
+    }
+    if command.unused.is_some() && (command.partition.is_none() || command.engine != "rust") {
+        bail!("--unused is for a part of --engine rust's run: it needs --partition");
     }
     Ok(command)
 }
@@ -367,12 +427,33 @@ impl Command {
         Ok((file, oracle, dir))
     }
 
+    /// Whether the run takes every case: no `--filter`, no `--partition`.
+    fn whole(&self) -> bool {
+        self.filter.is_none() && self.partition.is_none()
+    }
+
+    /// How `--engine rust` judges the ledger's stale entries. A filtered run
+    /// leaves entries unused: only a whole run finds stale ones, or every part
+    /// of one together (CI's `Golden compare` gathers the parts' `--unused`).
+    /// The ledger is the committed oracle's: against a preview's recordings
+    /// its entries are not judged stale.
+    fn stale_check(&self, layout: &Layout) -> crate::compare::StaleCheck<'_> {
+        use crate::compare::StaleCheck;
+        if self.filter.is_some() || !layout.committed() {
+            StaleCheck::Skip
+        } else if self.partition.is_some() {
+            StaleCheck::Write(self.unused.as_deref())
+        } else {
+            StaleCheck::Fail
+        }
+    }
+
     /// `record`, `check` or `diff` with `engine`, once the repository is found
     /// and the engine installed (the tests pass a stand-in engine).
     fn run_with(&self, layout: &Layout, oracle: &Oracle, engine: run::Engine) -> Result<bool> {
         let spec = Spec::parse(&read(&layout.golden.join("cases.toml"))?)?;
         let all = spec.expand()?;
-        let selected = select(&all, self.filter.as_deref())?;
+        let selected = select(&all, self.filter.as_deref(), self.partition)?;
         // Generated fixtures are generated once per run, then copied per case.
         let (fixtures, _generated) = prepare_fixtures(&spec.fixtures, &selected, &layout.repo)?;
         // The version the candidate reports, before the engine moves in.
@@ -406,11 +487,7 @@ impl Command {
                     &layout.cases(),
                     &layout.blobs(),
                     &run_all(&selected, &ctx, jobs, "compare"),
-                    // A filtered run leaves ledger entries unused: only a whole
-                    // run (CI's `Golden check (Rust)`) finds stale ones. The
-                    // ledger is the committed oracle's: against a preview's
-                    // recordings its entries are not judged stale.
-                    self.filter.is_none() && layout.committed(),
+                    self.stale_check(layout),
                     self.report.as_deref(),
                     self.verb == Verb::Diff,
                     (&oracle.version, candidate_version.as_deref().unwrap_or("")),
@@ -560,7 +637,7 @@ impl Command {
                 );
             }
         }
-        if self.filter.is_none() {
+        if self.whole() {
             let wanted: BTreeSet<&str> = all.iter().map(|c| c.id.as_str()).collect();
             for id in recording::recorded_ids(&cases_dir)? {
                 if !wanted.contains(id.as_str()) {
@@ -645,8 +722,24 @@ fn prepare_fixtures(
 }
 
 /// The cases whose id, or a leading part of it, matches `filter` (a glob),
-/// or all of them: `explain/*` is every `explain` case, as is `explain`.
-fn select(all: &[Case], filter: Option<&str>) -> Result<Vec<Case>> {
+/// or all of them: `explain/*` is every `explain` case, as is `explain`; of
+/// those, the ones in `partition`.
+fn select(all: &[Case], filter: Option<&str>, partition: Option<Partition>) -> Result<Vec<Case>> {
+    let mut selected = select_by_filter(all, filter)?;
+    if let Some(partition) = partition {
+        selected.retain(|case| partition.holds(&case.id));
+        if selected.is_empty() {
+            bail!(
+                "--partition {}/{} holds no case",
+                partition.index,
+                partition.count
+            );
+        }
+    }
+    Ok(selected)
+}
+
+fn select_by_filter(all: &[Case], filter: Option<&str>) -> Result<Vec<Case>> {
     let Some(filter) = filter else {
         return Ok(all.to_vec());
     };
@@ -881,6 +974,95 @@ mod tests {
         assert!(parse(&args(&["check", "--filter"])).is_err());
     }
 
+    #[test]
+    fn parses_a_partition() {
+        let c = parse(&args(&[
+            "check",
+            "--engine",
+            "rust",
+            "--partition",
+            "2/3",
+            "--unused",
+            "u.json",
+        ]))
+        .unwrap();
+        assert_eq!(c.partition, Some(Partition { index: 2, count: 3 }));
+        assert_eq!(c.unused.as_deref(), Some(Path::new("u.json")));
+        assert!(!c.whole());
+        for bad in ["0/3", "4/3", "1/0", "3", "a/b", "1/3/2", ""] {
+            assert!(
+                parse(&args(&["check", "--partition", bad])).is_err(),
+                "{bad}"
+            );
+        }
+        // The recordings are all or nothing: `record` takes no part.
+        assert!(parse(&args(&["record", "--partition", "1/2"])).is_err());
+        // --unused belongs to a part of --engine rust's run.
+        assert!(parse(&args(&["check", "--engine", "rust", "--unused", "u.json"])).is_err());
+        let python = ["check", "--partition", "1/2", "--unused", "u.json"];
+        assert!(parse(&args(&python)).is_err());
+    }
+
+    /// CI's `Golden compare` runs parts 1/3 to 3/3: together they run every
+    /// case of cases.toml exactly once, and none is empty.
+    #[test]
+    fn the_partitions_run_every_case_exactly_once() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let text = std::fs::read_to_string(repo.join("tests/golden/cases.toml")).unwrap();
+        let all = Spec::parse(&text).unwrap().expand().unwrap();
+        assert!(all.len() > 100, "{} cases", all.len());
+        for count in [1, 2, 3, 4] {
+            let mut seen: std::collections::BTreeMap<String, u64> =
+                std::collections::BTreeMap::new();
+            for index in 1..=count {
+                let part = select(&all, None, Some(Partition { index, count })).unwrap();
+                // Balanced enough that no part waits long on another.
+                // Within 5 % of an even share.
+                let (len, total) = (
+                    u64::try_from(part.len()).unwrap(),
+                    u64::try_from(all.len()).unwrap(),
+                );
+                assert!(
+                    20 * (len * count).abs_diff(total) < total * count,
+                    "{index}/{count}: {len} of {total}"
+                );
+                for case in part {
+                    assert_eq!(seen.insert(case.id, index), None, "a case in two parts");
+                }
+            }
+            let every: BTreeSet<&str> = all.iter().map(|c| c.id.as_str()).collect();
+            assert_eq!(
+                seen.keys().map(String::as_str).collect::<BTreeSet<_>>(),
+                every
+            );
+        }
+        // A filter, then a part of what it selects.
+        let filtered = select(&all, Some("validate"), None).unwrap();
+        let parts: usize = (1..=3)
+            .map(|index| {
+                select(&all, Some("validate"), Some(Partition { index, count: 3 }))
+                    .map_or(0, |part| part.len())
+            })
+            .sum();
+        assert_eq!(parts, filtered.len());
+    }
+
+    /// The hash is the id's alone: a case keeps its part on every host and
+    /// whatever cases are added around it.
+    #[test]
+    fn a_case_keeps_its_part() {
+        let part = |index| Partition { index, count: 3 };
+        let id = "validate/json/none/default";
+        let holding: Vec<u64> = (1..=3).filter(|&k| part(k).holds(id)).collect();
+        assert_eq!(holding.len(), 1);
+        // FNV-1a 64 of the id, pinned: a change of hash moves every case.
+        assert_eq!(holding, vec![1 + fnv1a(id) % 3]);
+        // The published FNV-1a 64 test vectors.
+        assert_eq!(fnv1a(""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a("a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(fnv1a("foobar"), 0x8594_4171_f739_67e8);
+    }
+
     /// A stand-in for the oracle: a shell script that prints differently on a
     /// terminal and on a pipe, writes a file, takes a moment, and exits 3.
     #[cfg(unix)]
@@ -983,6 +1165,8 @@ fixtures = ["none", "empty"]
             oracle: None,
             out: None,
             recordings: None,
+            partition: None,
+            unused: None,
         }
     }
 
@@ -1329,16 +1513,19 @@ requirements = "oracle-requirements.next.txt"
         )
         .unwrap();
         let all = spec.expand().unwrap();
-        assert_eq!(select(&all, Some("*/json/*/*")).unwrap().len(), 1);
+        assert_eq!(select(&all, Some("*/json/*/*"), None).unwrap().len(), 1);
         // A glob over the leading parts of the id selects the cases below them.
-        assert_eq!(select(&all, Some("*/json/*")).unwrap().len(), 1);
-        assert_eq!(select(&all, Some("validate/*")).unwrap().len(), 2);
-        assert_eq!(select(&all, Some("validate")).unwrap().len(), 2);
+        assert_eq!(select(&all, Some("*/json/*"), None).unwrap().len(), 1);
+        assert_eq!(select(&all, Some("validate/*"), None).unwrap().len(), 2);
+        assert_eq!(select(&all, Some("validate"), None).unwrap().len(), 2);
         // `*` does not cross a `/`, nor match a part of one.
-        assert!(select(&all, Some("validate*json")).is_err());
-        assert!(select(&all, Some("valid")).is_err());
-        assert_eq!(select(&all, Some("validate/*/none/a")).unwrap().len(), 2);
-        assert_eq!(select(&all, None).unwrap().len(), 2);
-        assert!(select(&all, Some("lint/*")).is_err());
+        assert!(select(&all, Some("validate*json"), None).is_err());
+        assert!(select(&all, Some("valid"), None).is_err());
+        assert_eq!(
+            select(&all, Some("validate/*/none/a"), None).unwrap().len(),
+            2
+        );
+        assert_eq!(select(&all, None, None).unwrap().len(), 2);
+        assert!(select(&all, Some("lint/*"), None).is_err());
     }
 }
