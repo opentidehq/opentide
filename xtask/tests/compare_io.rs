@@ -9,9 +9,9 @@
 use opentide_compare::FileState;
 use std::collections::BTreeMap;
 use std::path::Path;
+use xtask::compare::{candidate, read_ledger, read_run, run_of};
 #[cfg(unix)]
-use xtask::compare::node_candidate;
-use xtask::compare::{candidate, candidate_version, read_ledger, read_run, run_of};
+use xtask::compare::{candidate_version, node_candidate};
 use xtask::golden::case::{Case, Mode, Stdin, StdinKind};
 use xtask::golden::recording::{FileRecord, Recording};
 use xtask::golden::snapshot::{ChangeKind, Kind};
