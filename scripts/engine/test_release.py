@@ -667,7 +667,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # another toolchain (dtolnay's `targets:` on stable) is not the one
         # cargo builds with: the cross builds failed with "can't find crate
         # for `std`" (v0.13.0). The target is added with rustup in the checkout.
-        native = workflow_jobs()["native"]
+        native = all_jobs()["native"]
         self.assertIn("rustup target add ${{ matrix.target }}", native)
         self.assertNotRegex(native, r"targets:\s*\$\{\{ matrix\.target \}\}")
         self.assertLess(native.index("actions/checkout"), native.index("rustup target add"))
