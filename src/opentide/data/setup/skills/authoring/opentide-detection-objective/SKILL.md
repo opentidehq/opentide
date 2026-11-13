@@ -1,3 +1,11 @@
+---
+name: opentide-detection-objective
+description: >-
+  Author an opentide detection objective (objective::1.0 YAML under objects/objectives/):
+  its required metadata, linked threat UUIDs and signals, and the validate and lint loop
+  that checks it. Use when creating or editing a detection objective.
+---
+
 # Detection objectives
 
 Author objectives as `objective::1.0` YAML under `objects/objectives/`.

@@ -1,3 +1,12 @@
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
 # Detection rules
 
 Author rules as `rule::1.1` YAML under `objects/rules/`.

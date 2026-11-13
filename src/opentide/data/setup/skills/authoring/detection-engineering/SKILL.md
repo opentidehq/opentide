@@ -1,3 +1,12 @@
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
 # Detection engineering
 
 opentide content is three object families:

@@ -13531,3 +13531,1352 @@ candidate = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statu
 reason = "A promoted rule whose rewritten text does not parse fails the run with the oracle's message, `<file>: cannot promote its statuses: <the parser's words>`; the words are the Rust YAML loader's, the problem and its place in the text it read, where PyYAML's quoted the line with a caret under each mark (UC-6.2e)."
 issue = "https://github.com/opentidehq/opentide/issues/790"
 changelog = "**Status promotion stops a deploy it cannot rewrite, before writing anything**"
+
+# The bundled authoring skills carry YAML frontmatter (`name`, `description`), which
+# the oracle's copies lacked, so skill-aware agents find them (#731): each installed
+# SKILL.md gains its frontmatter above the heading the oracle wrote first, one
+# `lines` entry per case and file.
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Detection engineering in an opentide repository: how threats, objectives and rules link,
+  the commands that create, check and preview them, and the loop of drafting, running
+  opentide validate and lint, applying each finding's fix and previewing the deployment.
+  Use when starting detection work or when unsure which object to write.
+---
+
+# Detection engineering'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Author an opentide detection rule (rule::1.1 YAML under objects/rules/): its required
+  metadata, the objective it implements, platform query blocks, and the validate, lint,
+  live query validation and preview deployment loop that checks it. Use when creating or
+  editing a detection rule or its queries.
+---
+
+# Detection rules'''
+reason = "The bundled authoring skills now start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Codex and other skill-aware agents do not list the skill. The oracle wrote the heading first."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The authoring skills `setup skills` installs are discoverable by skill-aware agents**"

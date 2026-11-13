@@ -1,3 +1,11 @@
+---
+name: opentide-threat-vector
+description: >-
+  Author an opentide threat (threat::1.0 YAML under objects/threats/): its required
+  metadata, narrative fields and chaining to other threats, and the validate and lint loop
+  that checks it. Use when creating or editing a threat vector.
+---
+
 # Threats
 
 Author threats as `threat::1.0` YAML under `objects/threats/`.
