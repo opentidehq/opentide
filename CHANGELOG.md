@@ -18,6 +18,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Changed
 
 - **`lint --strict` fails only on errors and warnings.** A missing `author` or `organisation` is a note, and no longer fails a CI gate. Raise a check's `severity` in `lint.toml` to gate on it ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`setup skills` installs the catalogue's `detection-engineering`, the one `discover` describes.** Install wrote the package's 22-line primer while `discover` and `show` described the catalogue's skill. The package copy is now used only when the skill's files cannot be downloaded (the catalogue itself must still load) and nothing is installed yet; an existing install is kept, and the result warns in both cases. `opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` still install from the package ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+
+### Fixed
+
+- **`opentide explain` calls a warning-only YARA code a warning.** The pages for `yara_module_unconfirmed`, `yara_entrypoint_deprecated`, `yara_slow_pattern` and `yara_suspicious_expression` said `opentide validate` fails on them; the engine only ever warns on these, so `validate` passes and `opentide lint` reports them. The Bitdefender and validate docs already called `yara_module_unconfirmed` a warning ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **The packaged authoring skills have frontmatter.** `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector` and `detection-engineering` were installed without `name` and `description`, so agents that discover skills by frontmatter (Claude Code, Cursor, Codex) did not find them. Each also names the catalogue's full authoring skill to install alongside it (`opentide-rule`, `opentide-objective`, `opentide-threat`) ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **`opentide lint` reports Graylog and YARA-L query warnings.** It kept an engine warning only for a language it had a reference link for, and Graylog search and YARA-L had none, so `graylog_analyzed_field`, `graylog_regex_operator`, `graylog_regex_quote`, `graylog_double_backslash` and the `yaral_*` warnings (such as `yaral_unfiltered_event`) appeared only in the editor, though their pages said `lint` reports them ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **The validate docs say Elastic `--live` writes preview alerts.** `validate query --platform elastic --live` previews each rule in Kibana, which creates no rule but writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as `opentide query` with `kuery` does ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
 
 ## [0.28.0] — 2026-11-12
 

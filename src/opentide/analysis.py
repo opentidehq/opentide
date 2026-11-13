@@ -62,6 +62,21 @@ SYSDIG_ADVISORY_CODES = frozenset({"sysdig_list_self_reference"})
 #: reports it with the query warnings; it never rejects a rule.
 HARFANGLAB_ADVISORY_CODES = frozenset({"harfanglab_yara_context"})
 
+#: YARA codes the engine reports only as warnings: the rule is still valid YARA the
+#: platform takes, so ``opentide validate`` does not fail on them and ``opentide lint``
+#: reports them with the query warnings. Their generated ``opentide explain`` page says
+#: so, instead of the generic one for a code reported as an error or a warning (a code
+#: with a page of its own under ``data/diagnostics/``, such as ``yara_meta_missing``,
+#: says it there).
+YARA_WARNING_CODES = frozenset(
+    {
+        "yara_entrypoint_deprecated",
+        "yara_module_unconfirmed",
+        "yara_slow_pattern",
+        "yara_suspicious_expression",
+    }
+)
+
 #: The engine's warnings about a dataset a query reads that ``visibility.toml``
 #: does not declare, where the workspace has a log source for the platform:
 #: ``opentide lint`` reports them with the query warnings, and their help is

@@ -54,7 +54,7 @@ configurations:
         group_by: [host]
       - name: PowerShell connects out
         query: |
-          activity_type:"network-connection" AND process_name:("powershell.exe", "pwsh.exe")
+          activity_type:"network-session" AND process_name:("powershell.exe", "pwsh.exe")
           AND NOT dest_ip:[10.0.0.0/8] AND NOT dest_ip:[172.16.0.0/12] AND NOT dest_ip:[192.168.0.0/16]
         group_by: [host]
         threshold:

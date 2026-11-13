@@ -54,10 +54,31 @@ def test_skills_show_json(invoke_cli, tide_corpus_repo) -> None:
     assert payload["skill"]["slug"] == "opentide-detection-rule"
 
 
+_CATALOGUE_COPY = (
+    b"---\nname: detection-engineering\ndescription: catalogue copy\n---\n# catalogue\n"
+)
+
+
 def test_skills_install_uses_packaged_authoring_and_agents_template(
-    invoke_cli, tmp_path: Path
+    invoke_cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#399/#405: reference-only downloads and the skills-repo AGENTS.md are gone."""
+    """#399/#405: reference-only downloads and the skills-repo AGENTS.md are gone.
+
+    ``detection-engineering`` installs the catalogue's copy (the one ``discover``
+    describes). ``opentide-detection-rule`` comes from the package even though this
+    catalogue lists it. The catalogue is a stub: whether its live content is free of
+    retired identifiers is checked in opentidehq/skills' own CI.
+    """
+    from opentide.cli.services.setup import skills as skills_mod
+
+    fetched: list[str] = []
+    monkeypatch.setattr(skills_mod, "list_github_paths", lambda prefix, **_: [f"{prefix}/SKILL.md"])
+
+    def _fetch(path: str, **_: object) -> bytes:
+        fetched.append(path)
+        return _CATALOGUE_COPY
+
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", _fetch)
     result = invoke_cli(
         "setup",
         "skills",
@@ -75,16 +96,21 @@ def test_skills_install_uses_packaged_authoring_and_agents_template(
     )
     payload = assert_json_ok(result)
     assert payload["skills"] == ["detection-engineering", "opentide-detection-rule"]
+    assert "warnings" not in payload
+    assert fetched == ["skills/detection-engineering/SKILL.md"]
     engineering = (
         tmp_path / ".agents" / "skills" / "detection-engineering" / "SKILL.md"
-    ).read_text(encoding="utf-8")
+    ).read_bytes()
     rule = (tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").read_text(
         encoding="utf-8"
     )
     agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
-    assert "rule::1.1" in engineering
+    assert engineering == _CATALOGUE_COPY
+    assert rule.startswith("---\nname: opentide-detection-rule\n")
     assert "objects/rules/" in rule
-    assert "schema: mdr::" not in engineering
+    assert "mdr::" not in rule
+    assert "Schemas/Templates" not in rule
+    assert "Configurations/systems" not in rule
     assert "SOC Detections" in agents
     assert "# remote agents" not in agents
 

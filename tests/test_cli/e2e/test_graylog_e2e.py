@@ -302,3 +302,11 @@ def test_setup_platforms_enables_graylog(invoke_cli, tmp_path: Path) -> None:
     assert_json_ok(invoke_cli("setup", "platforms", str(tmp_path), "--graylog", "--yes"))
     written = tmp_path / ".opentide" / "configurations" / "platforms" / "graylog.toml"
     assert "enabled = true" in written.read_text(encoding="utf-8")
+
+
+def test_lint_reports_the_engine_query_warnings(invoke_cli, tide_corpus_repo: Path) -> None:
+    """``lint`` kept an engine warning only for a prefix with a language reference, and
+    ``graylog_`` had none, so ``graylog_analyzed_field`` reached the editor alone."""
+    _rewrite(tide_corpus_repo, "      EventID:1\n", "      message:/.*mimikatz.*/ AND EventID:1\n")
+    payload = parse_cli_json(invoke_cli("lint", "--file", RULE))
+    assert "graylog_analyzed_field" in [item["code"] for item in payload["findings"]]

@@ -893,6 +893,12 @@ ENGINE_REFERENCES: dict[str, tuple[str, str]] = {
     "ecs_": ("ECS field", "https://www.elastic.co/docs/reference/ecs/ecs-field-reference"),
     "falco_": ("Falco condition", "https://falco.org/docs/concepts/rules/conditions/"),
     "yara_": ("YARA rule", "https://yara.readthedocs.io/en/v4.5.2/writingrules.html"),
+    "graylog_": (
+        "Graylog search query",
+        "https://go2docs.graylog.org/current/making_sense_of_your_log_data/"
+        "writing_search_queries.html",
+    ),
+    "yaral_": ("YARA-L 2.0", "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax"),
     "exabeam_": (
         "Exabeam Query Language",
         "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/"

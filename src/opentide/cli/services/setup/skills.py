@@ -21,6 +21,7 @@ from opentide.cli.services.setup.interactive import (
 )
 from opentide.cli.services.setup.skills_registry import (
     BUNDLED_AUTHORING_SKILLS,
+    CATALOGUE_FIRST_SKILLS,
     GithubTree,
     fetch_github_bytes,
     known_skill_slugs,
@@ -77,6 +78,7 @@ def _download_error(slug: str, *, source: str, ref: str) -> str:
 
 def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
     if slug in BUNDLED_AUTHORING_SKILLS:
+        # Installed from the catalogue when it has the slug, else from the package.
         return (setup_data_root() / "skills" / "authoring" / slug / "SKILL.md").is_file()
     return fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None
 
@@ -172,6 +174,23 @@ def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
     return _replace_tree(dest, files)
 
 
+def _fetch_skill_files(
+    slug: str, *, source: str, ref: str, tree: GithubTree | None
+) -> dict[str, bytes] | None:
+    """Every file under ``skills/<slug>/`` in the catalogue, or ``None`` if any is missing."""
+    paths = list_github_paths(f"skills/{slug}", source=source, ref=ref, tree=tree)
+    if not paths:
+        return None
+    prefix = f"skills/{slug}/"
+    files: dict[str, bytes] = {}
+    for path in paths:
+        payload = fetch_github_bytes(path, source=source, ref=ref)
+        if payload is None or not path.startswith(prefix):
+            return None
+        files[path[len(prefix) :]] = payload
+    return files if "SKILL.md" in files else None
+
+
 def _download_skill(
     slug: str,
     dest: Path,
@@ -179,29 +198,45 @@ def _download_skill(
     source: str,
     ref: str,
     tree: GithubTree | None = None,
+    catalogued: bool = False,
+    warnings: list[str] | None = None,
 ) -> list[str]:
     """Install one skill tree.
 
-    The four authoring skills come from the package. Every other skill is the
-    full git tree under ``skills/<slug>/``, not a fixed pair of reference files.
+    Every skill is the full git tree under ``skills/<slug>/``, not a fixed pair of
+    reference files. The four authoring skills also ship in the package and install
+    from there, except a ``CATALOGUE_FIRST_SKILLS`` slug the catalogue lists
+    (*catalogued*): it installs the catalogue's copy, which ``discover`` and ``show``
+    describe. When that copy's files cannot be downloaded, an installed copy is kept
+    and, with none, the package's is written; either way a line goes to *warnings*.
     *tree* shares one listing of the repository between the skills of a run.
     """
     _require_slug(slug)
-    if slug in BUNDLED_AUTHORING_SKILLS:
+    bundled = slug in BUNDLED_AUTHORING_SKILLS
+    if bundled and not (catalogued and slug in CATALOGUE_FIRST_SKILLS):
         return _install_bundled_skill(slug, dest)
-    paths = list_github_paths(f"skills/{slug}", source=source, ref=ref, tree=tree)
-    if not paths:
+    files = _fetch_skill_files(slug, source=source, ref=ref, tree=tree)
+    if files is not None:
+        return _replace_tree(dest, files)
+    if not bundled:
         raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-    prefix = f"skills/{slug}/"
-    files: dict[str, bytes] = {}
-    for path in paths:
-        payload = fetch_github_bytes(path, source=source, ref=ref)
-        if payload is None or not path.startswith(prefix):
-            raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-        files[path[len(prefix) :]] = payload
-    if "SKILL.md" not in files:
-        raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-    return _replace_tree(dest, files)
+    where = f".agents/skills/{slug}"
+    if (dest / "SKILL.md").is_file():
+        logger.warning("skill_kept_installed_copy", slug=slug, source=source, ref=ref)
+        if warnings is not None:
+            warnings.append(
+                f"Kept the installed {where}: its files could not be downloaded from "
+                f"{source}@{ref}. Run the command again to update it."
+            )
+        return []
+    logger.warning("skill_installed_from_package", slug=slug, source=source, ref=ref)
+    if warnings is not None:
+        warnings.append(
+            f"Installed opentide's short packaged copy of {where}: the catalogue's "
+            f"could not be downloaded from {source}@{ref}. Run the command again for "
+            "the full skill."
+        )
+    return _install_bundled_skill(slug, dest)
 
 
 def _resolve_skill_slugs(options: SkillsSetupOptions) -> list[str]:
@@ -221,7 +256,9 @@ def _resolve_skill_slugs(options: SkillsSetupOptions) -> list[str]:
     return list(_STARTER_SKILLS)
 
 
-def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
+def _install_skill_trees(
+    target: Path, slugs: list[str], warnings: list[str] | None = None
+) -> list[str]:
     manifest = load_manifest()
     tree = GithubTree(source=manifest.source, ref=manifest.ref)
     written: list[str] = []
@@ -233,6 +270,8 @@ def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
             source=manifest.source,
             ref=manifest.ref,
             tree=tree,
+            catalogued=slug in manifest.catalogue_slugs,
+            warnings=warnings,
         )
         written.extend(f".agents/skills/{slug}/{name}" for name in rel_files)
     return written
@@ -394,8 +433,9 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     slugs = _resolve_skill_slugs(options) if copies else []
     context = _entrypoint_context(options, target)
     entrypoints = _Entrypoints()
+    download_warnings: list[str] = []
     if slugs:
-        written.extend(_install_skill_trees(target, slugs))
+        written.extend(_install_skill_trees(target, slugs, download_warnings))
     also_applied: list[str] = []
     for skill_target in options.targets:
         if skill_target is SkillTarget.cursor:
@@ -431,7 +471,7 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
             + "; ".join(f"{host}: {how}" for host, how in OTHER_HOSTS.items())
             + "."
         )
-    warnings = plugin_warnings + entrypoints.warnings
+    warnings = plugin_warnings + download_warnings + entrypoints.warnings
     if warnings:
         result["warnings"] = warnings
     return result

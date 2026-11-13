@@ -47,9 +47,9 @@ class SkillEntry:
 
 
 #: Authoring skills that ship inside the wheel, under
-#: ``data/setup/skills/authoring/<slug>/``. They install from the package with
-#: no network access, so they must stay nameable and discoverable regardless of
-#: what the remote catalogue happens to list.
+#: ``data/setup/skills/authoring/<slug>/``. They install from the package with no
+#: download, except ``CATALOGUE_FIRST_SKILLS`` (below). Either way they must stay nameable and
+#: discoverable regardless of what the remote catalogue happens to list.
 #:
 #: They were previously known only through the remote manifest. When
 #: ``opentidehq/skills`` dropped three of them from ``manifest.json``, the CLI
@@ -82,6 +82,13 @@ BUNDLED_AUTHORING_ENTRIES: tuple[SkillEntry, ...] = (
 #: Slugs of the above, for the install path's package/remote branch.
 BUNDLED_AUTHORING_SKILLS = frozenset(entry.slug for entry in BUNDLED_AUTHORING_ENTRIES)
 
+#: Packaged skills that install the catalogue's copy when the catalogue lists the
+#: slug, keeping the package's as a fallback: the catalogue's is the one ``discover``
+#: and ``show`` describe. Named, not inferred from the catalogue, so a slug the
+#: catalogue starts listing again (``opentide-detection-rule`` once taught
+#: ``mdr::`` that way, #405) keeps installing the package's copy.
+CATALOGUE_FIRST_SKILLS = frozenset({"detection-engineering"})
+
 
 def _merge_bundled(entries: list[SkillEntry]) -> list[SkillEntry]:
     """Add bundled authoring skills the remote catalogue does not list.
@@ -103,6 +110,8 @@ class ManifestLoadResult:
     entries: list[SkillEntry]
     manifest_source: str
     manifest_refreshed: bool
+    #: Slugs the remote catalogue itself lists (``entries`` adds bundled ones it omits).
+    catalogue_slugs: frozenset[str] = frozenset()
 
 
 class _ManifestTtlCache:
@@ -354,6 +363,7 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
         entries=_merge_bundled(entries),
         manifest_source="remote",
         manifest_refreshed=refresh,
+        catalogue_slugs=frozenset(entry.slug for entry in entries),
     )
     _MANIFEST_CACHE.item = (now, result)
     return result
