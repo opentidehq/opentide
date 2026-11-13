@@ -10,14 +10,15 @@
 //! never move: a new key opens a minor contract that the run reports as
 //! unpinned.
 //!
-//! The files it writes are byte for byte the Python ingest's from the same
-//! inputs ([`tomli`] is `tomli_w`'s layout; `scripts/vocabulary/README.md`
-//! records the comparison).
+//! The vocabularies it writes hold the same data as the Python ingest's from
+//! the same inputs (`scripts/vocabulary/README.md` records the comparison);
+//! their layout is the `toml` crate's ([`value::to_toml`]). `[[keys]]` keep
+//! the merge order, which is data; the order of keys inside a table is not,
+//! and comes out sorted.
 
 pub mod generate;
 pub mod lifecycle;
 pub mod stix;
-pub mod tomli;
 pub mod value;
 
 use std::collections::BTreeMap;
@@ -32,7 +33,7 @@ use anyhow::{Context, Result, bail, ensure};
 use regex::Regex;
 
 use self::generate::{Inputs, Report};
-use self::value::{Table, Value, parse_json, parse_toml};
+use self::value::{Table, Value, parse_json, parse_toml, text};
 
 /// The variable naming the STIX directory (`OPENTIDE_ATTACK_STIX_DIR`).
 pub const STIX_DIR_ENV: &str = "OPENTIDE_ATTACK_STIX_DIR";
@@ -328,13 +329,14 @@ pub struct BundleSource {
 /// from (`fetch_latest_attack_stix`).
 pub fn bundle_sources(release: &Value) -> Result<(String, Vec<BundleSource>)> {
     let tag = match release.get("tag_name") {
-        Some(value) => value.py_str()?,
+        Some(value) => text(value)?,
         None => "unknown".to_owned(),
     };
     let assets = release
         .get("assets")
         .and_then(Value::as_array)
-        .unwrap_or(&[]);
+        .map(Vec::as_slice)
+        .unwrap_or_default();
     let mut sources = Vec::new();
     for (key, file) in BUNDLE_FILES {
         let url = match assets
@@ -343,8 +345,8 @@ pub fn bundle_sources(release: &Value) -> Result<(String, Vec<BundleSource>)> {
         {
             Some(asset) => asset
                 .get("browser_download_url")
-                .context("a release asset without browser_download_url")?
-                .py_str()?,
+                .context("a release asset without browser_download_url")
+                .and_then(text)?,
             None => format!(
                 "https://github.com/mitre-attack/attack-stix-data/releases/download/{tag}/{file}"
             ),
@@ -359,22 +361,21 @@ pub fn manifest_of(tag: &str, sources: &[BundleSource], now: &str) -> Table {
     let mut bundles = Table::new();
     for source in sources {
         let mut bundle = Table::new();
-        bundle.insert("path".to_owned(), Value::str(source.file));
-        bundle.insert("url".to_owned(), Value::str(source.url.clone()));
-        bundles.insert(source.key.to_owned(), Value::Table(bundle));
+        bundle.insert("path".to_owned(), Value::from(source.file));
+        bundle.insert("url".to_owned(), Value::from(source.url.clone()));
+        bundles.insert(source.key.to_owned(), Value::Object(bundle));
     }
     let mut manifest = Table::new();
-    manifest.insert("version".to_owned(), Value::str(release_version(tag)));
-    manifest.insert("tag".to_owned(), Value::str(tag));
-    manifest.insert("fetched_at".to_owned(), Value::str(now));
-    manifest.insert("bundles".to_owned(), Value::Table(bundles));
+    manifest.insert("version".to_owned(), Value::from(release_version(tag)));
+    manifest.insert("tag".to_owned(), Value::from(tag));
+    manifest.insert("fetched_at".to_owned(), Value::from(now));
+    manifest.insert("bundles".to_owned(), Value::Object(bundles));
     manifest
 }
 
-/// The text of a manifest: two-space indents and a final newline, as
-/// `orjson`'s `OPT_INDENT_2` wrote it.
+/// The text of a manifest: pretty JSON with a final newline.
 pub fn manifest_text(manifest: &Table) -> Result<String> {
-    Ok(serde_json::to_string_pretty(&Value::Table(manifest.clone()))? + "\n")
+    Ok(serde_json::to_string_pretty(manifest)? + "\n")
 }
 
 /// Downloads the latest ATT&CK STIX bundles into `dir` and writes its

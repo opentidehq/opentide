@@ -158,49 +158,55 @@ fn the_ingest_merges_every_vocabulary_and_reports_the_unpinned_contracts() {
     );
     assert!(report.dirty());
 
-    let attack = &report.attack.vocabularies[0].document;
-    let text = tomli::dump_vocab_document(attack).unwrap();
+    // What a file holds once written, read back.
+    let written = |document: &Table| -> serde_json::Value {
+        let text = value::to_toml(document).unwrap();
+        serde_json::Value::Object(parse_toml(&text).unwrap())
+    };
     assert_eq!(
-        text,
-        "name = \"MITRE ATT&CK\"\nfield = \"att&ck\"\ndescription = \"d\"\nkey = \"id\"\n\
-         stages = [\n    \"Stealth\",\n]\nsource = \"mitre-attack\"\nsource_version = \"20.0\"\n\
-         source_fetched_at = \"2026-11-02T14:23:27.420Z\"\n\
-         [[keys]]\nid = \"T1000\"\nname = \"Gone\"\ndescription = \"\"\nversion = \"1.0\"\nremoved = \"2.0\"\n\
-         [[keys]]\nid = \"T1001\"\nname = \"Kept\"\ndescription = \"new text\"\n\
-         link = \"https://attack.mitre.org/T1001\"\n\"tide.vocab.stages\" = [\n    \"Stealth\",\n]\nversion = \"1.1\"\n\
-         [[keys]]\nid = \"T1001.001\"\nname = \"Kept: Sub\"\ndescription = \"\"\n\
-         link = \"https://attack.mitre.org/T1001.001\"\nversion = \"1.2\"\n\
-         [[keys]]\nid = \"T1400\"\nname = \"Mobile : Phone\"\ndescription = \"\"\n\
-         link = \"https://attack.mitre.org/T1400\"\nversion = \"1.2\"\n"
+        written(&report.attack.vocabularies[0].document),
+        json!({
+            "name": "MITRE ATT&CK", "field": "att&ck", "description": "d", "key": "id",
+            "stages": ["Stealth"], "source": "mitre-attack", "source_version": "20.0",
+            "source_fetched_at": "2026-11-02T14:23:27.420Z",
+            "keys": [
+                {"id": "T1000", "name": "Gone", "description": "", "version": "1.0",
+                 "removed": "2.0"},
+                {"id": "T1001", "name": "Kept", "description": "new text",
+                 "link": "https://attack.mitre.org/T1001", "tide.vocab.stages": ["Stealth"],
+                 "version": "1.1"},
+                {"id": "T1001.001", "name": "Kept: Sub", "description": "",
+                 "link": "https://attack.mitre.org/T1001.001", "version": "1.2"},
+                {"id": "T1400", "name": "Mobile : Phone", "description": "",
+                 "link": "https://attack.mitre.org/T1400", "version": "1.2"},
+            ],
+        })
     );
     let mitigations = &report.attack.vocabularies[2].document;
     assert!(!mitigations.contains_key("model"));
 
-    let actors = tomli::dump_vocab_document(&report.actors.vocabularies[0].document).unwrap();
     let digest = crate::golden::blob::sha256_hex(&fs::read(root.join("galaxy.json")).unwrap());
-    assert!(
-        actors.starts_with(&format!(
-            "name = \"Threat Actors\"\nfield = \"actors\"\ndescription = \"d\"\nkey = \"id\"\n\
-             source_version = \"20.0\"\nsource_fetched_at = \"2026-11-02T14:23:27.420Z\"\n\
-             source = \"mitre-attack+misp\"\ngenerated_at = \"{NOW}\"\n\
-             source_misp_url = \"file://galaxy\"\nsource_misp_sha256 = \"{digest}\"\n\n\
-             [[stages]]\nid = \"misp\"\n"
-        )),
-        "{actors}"
+    assert_eq!(
+        written(&report.actors.vocabularies[0].document),
+        json!({
+            "name": "Threat Actors", "field": "actors", "description": "d", "key": "id",
+            "source_version": "20.0", "source_fetched_at": "2026-11-02T14:23:27.420Z",
+            "source": "mitre-attack+misp", "generated_at": NOW,
+            "source_misp_url": "file://galaxy", "source_misp_sha256": digest,
+            "stages": [{"id": "misp", "name": "MISP Threat Actor Galaxy",
+                        "description": "Threat Actors extracted from MISP Threat Actor Galaxy/Cluster"}],
+            "keys": [
+                // The Enterprise entry of a repeated group wins over Mobile's.
+                {"id": "G0001", "name": "[Enterprise] APT", "description": "",
+                 "link": "https://attack.mitre.org/G0001", "alias": ["APT", "Other\u{1}"],
+                 "tide.vocab.stages": "att&ck", "version": "1.0"},
+                {"id": "7a3f-misp", "name": "Fancy", "description": "f",
+                 "tide.vocab.stages": "misp", "alias": ["F1", "F2"], "version": "1.1"},
+                {"id": "8b4e-misp", "name": "Quiet", "description": "",
+                 "tide.vocab.stages": "misp", "version": "1.1"},
+            ],
+        })
     );
-    assert!(actors.contains(
-        "[[keys]]\nid = \"G0001\"\nname = \"[Enterprise] APT\"\ndescription = \"\"\n\
-         link = \"https://attack.mitre.org/G0001\"\nalias = [\n    \"APT\",\n    \"Other\\u0001\",\n]\n\
-         \"tide.vocab.stages\" = \"att&ck\"\nversion = \"1.0\"\n"
-    ), "{actors}");
-    assert!(
-        !actors.contains("[Mobile]"),
-        "the Enterprise entry of a repeated group wins"
-    );
-    assert!(actors.contains(
-        "id = \"7a3f-misp\"\nname = \"Fancy\"\ndescription = \"f\"\n\"tide.vocab.stages\" = \"misp\"\n\
-         alias = [\n    \"F1\",\n    \"F2\",\n]\nversion = \"1.1\"\n"
-    ));
 }
 
 #[test]
@@ -219,8 +225,8 @@ fn check_writes_nothing_apply_writes_and_syncs_and_then_check_passes() {
     );
 
     assert!(run(&repo, &options(root, false, true)).unwrap());
-    let written = fs::read_to_string(vocabularies.join("att&ck.vocab.toml")).unwrap();
-    assert!(written.contains("removed = \"2.0\""));
+    let written = generate::read_vocab_document(&vocabularies.join("att&ck.vocab.toml")).unwrap();
+    assert_eq!(written["keys"][0]["removed"], "2.0");
     assert_eq!(
         fs::read_to_string(repo.join("src/opentide/data/vocabulary/actors.vocab.toml")).unwrap(),
         fs::read_to_string(vocabularies.join("actors.vocab.toml")).unwrap(),
@@ -330,11 +336,14 @@ fn a_release_names_its_bundles_and_the_manifest_records_them() {
         ]
     );
     let manifest = manifest_of(&tag, &sources[..1], NOW);
+    let text = manifest_text(&manifest).unwrap();
+    assert!(text.ends_with("}\n"));
     assert_eq!(
-        manifest_text(&manifest).unwrap(),
-        "{\n  \"version\": \"20.1\",\n  \"tag\": \"v20.1\",\n  \"fetched_at\": \"2026-11-13T10:00:00.123Z\",\n  \
-         \"bundles\": {\n    \"enterprise\": {\n      \"path\": \"enterprise-attack.json\",\n      \
-         \"url\": \"https://github.com/mitre-attack/attack-stix-data/releases/download/v20.1/enterprise-attack.json\"\n    }\n  }\n}\n"
+        value::parse_json(text.as_bytes()).unwrap(),
+        json!({"version": "20.1", "tag": "v20.1", "fetched_at": NOW, "bundles": {"enterprise": {
+            "path": "enterprise-attack.json",
+            "url": "https://github.com/mitre-attack/attack-stix-data/releases/download/v20.1/enterprise-attack.json",
+        }}})
     );
     let (tag, _) = bundle_sources(&value::parse_json(b"{}").unwrap()).unwrap();
     assert_eq!(tag, "unknown");

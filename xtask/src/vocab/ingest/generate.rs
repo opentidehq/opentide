@@ -10,8 +10,7 @@ use anyhow::{Context, Result, bail};
 
 use super::lifecycle::{Lifecycle, merge};
 use super::stix;
-use super::tomli::dump_vocab_document;
-use super::value::{Table, Value, parse_json, parse_toml};
+use super::value::{Table, Value, parse_json, parse_toml, text, to_toml, truthy};
 
 /// The file name suffix of a vocabulary.
 pub const VOCAB_SUFFIX: &str = ".vocab.toml";
@@ -103,11 +102,10 @@ pub fn read_vocab_document(path: &Path) -> Result<Table> {
     let expected = field_of(path)?;
     if document.get("field").and_then(Value::as_str) != Some(expected.as_str()) {
         bail!(
-            "Vocabulary field '{}' does not match filename '{expected}' in {}",
-            document.get("field").map_or_else(
-                || "None".to_owned(),
-                |value| value.py_str().unwrap_or_default()
-            ),
+            "Vocabulary field {} does not match filename '{expected}' in {}",
+            document
+                .get("field")
+                .map_or_else(|| "(none)".to_owned(), Value::to_string),
             path.display()
         );
     }
@@ -123,13 +121,11 @@ pub fn write_vocab_file(path: &Path, document: &Table) -> Result<()> {
         && field.as_str() != Some(expected.as_str())
     {
         bail!(
-            "Vocabulary field '{}' does not match path '{}'",
-            field.py_str()?,
+            "Vocabulary field {field} does not match path '{}'",
             path.display()
         );
     }
-    fs::write(path, dump_vocab_document(document)?)
-        .with_context(|| format!("write {}", path.display()))
+    fs::write(path, to_toml(document)?).with_context(|| format!("write {}", path.display()))
 }
 
 /// The vocabulary a generator starts from (`_load_template`), `keys`
@@ -150,9 +146,10 @@ fn keys_of(document: &Table) -> Vec<Table> {
     document
         .get("keys")
         .and_then(Value::as_array)
-        .unwrap_or(&[])
+        .map(Vec::as_slice)
+        .unwrap_or_default()
         .iter()
-        .filter_map(Value::as_table)
+        .filter_map(Value::as_object)
         .cloned()
         .collect()
 }
@@ -160,7 +157,7 @@ fn keys_of(document: &Table) -> Vec<Table> {
 fn set_keys(document: &mut Table, lifecycle: &Lifecycle) {
     document.insert(
         "keys".to_owned(),
-        Value::Array(lifecycle.keys.iter().cloned().map(Value::Table).collect()),
+        Value::Array(lifecycle.keys.iter().cloned().map(Value::Object).collect()),
     );
 }
 
@@ -172,7 +169,7 @@ fn manifest(stix_dir: &Path) -> Result<Table> {
     }
     let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
     match parse_json(&bytes).with_context(|| format!("parse {}", path.display()))? {
-        Value::Table(table) => Ok(table),
+        Value::Object(table) => Ok(table),
         _ => bail!("{} is not an object", path.display()),
     }
 }
@@ -226,22 +223,22 @@ impl Bundles {
 
 /// `_stamp_source`.
 fn stamp_source(document: &mut Table, manifest: &Table, now: &str) {
-    document.shift_remove("version");
-    document.insert("source".to_owned(), Value::str("mitre-attack"));
+    document.remove("version");
+    document.insert("source".to_owned(), Value::from("mitre-attack"));
     document.insert(
         "source_version".to_owned(),
         manifest
             .get("version")
             .cloned()
-            .unwrap_or_else(|| Value::str("unknown")),
+            .unwrap_or_else(|| Value::from("unknown")),
     );
     document.insert(
         "source_fetched_at".to_owned(),
         manifest
             .get("fetched_at")
-            .filter(|value| value.truthy())
+            .filter(|value| truthy(value))
             .cloned()
-            .unwrap_or_else(|| Value::str(now)),
+            .unwrap_or_else(|| Value::from(now)),
     );
 }
 
@@ -270,8 +267,8 @@ fn attack_vocabulary(
 
 fn keyed_template(vocab_dir: &Path, field: &str, key: &str) -> Result<Table> {
     let mut document = template(vocab_dir, field)?;
-    document.insert("key".to_owned(), Value::str(key));
-    document.shift_remove("model");
+    document.insert("key".to_owned(), Value::from(key));
+    document.remove("model");
     Ok(document)
 }
 
@@ -285,15 +282,15 @@ pub fn attack(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
 
     let mut techniques = template(vocab_dir, "att&ck")?;
     let previous_source = techniques.get("source_version").cloned();
-    techniques.insert("key".to_owned(), Value::str("id"));
-    techniques.shift_remove("model");
+    techniques.insert("key".to_owned(), Value::from("id"));
+    techniques.remove("model");
     // The header lists the Enterprise matrix's tactics, so it follows
     // ATT&CK's renames (v19: Defense Evasion became Stealth).
     let matrix = stix::matrix_tactics(&bundles.enterprise)?;
     if !matrix.is_empty() {
         techniques.insert(
             "stages".to_owned(),
-            Value::Array(matrix.into_iter().map(Value::Str).collect()),
+            Value::Array(matrix.into_iter().map(Value::String).collect()),
         );
     }
     let upstream = stix::merged_techniques(&bundles.ordered([
@@ -355,13 +352,12 @@ pub fn attack(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
         now,
     )?);
 
-    let release = manifest
-        .get("version")
-        .cloned()
-        .unwrap_or_else(|| Value::str("unknown"))
-        .py_str()?;
-    let previous = match previous_source.filter(Value::truthy) {
-        Some(value) => value.py_str()?,
+    let release = match manifest.get("version") {
+        Some(value) => text(value)?,
+        None => "unknown".to_owned(),
+    };
+    let previous = match previous_source.filter(truthy) {
+        Some(value) => text(&value)?,
         None => String::new(),
     };
     Ok(Report {
@@ -377,7 +373,8 @@ fn misp_actors(url: &str, raw: &[u8]) -> Result<(Vec<Table>, Table)> {
     let values = galaxy
         .get("values")
         .and_then(Value::as_array)
-        .unwrap_or(&[]);
+        .map(Vec::as_slice)
+        .unwrap_or_default();
     for actor in values {
         let mut entry = Table::new();
         entry.insert(
@@ -398,25 +395,25 @@ fn misp_actors(url: &str, raw: &[u8]) -> Result<(Vec<Table>, Table)> {
             "description".to_owned(),
             actor
                 .get("description")
-                .filter(|value| value.truthy())
+                .filter(|value| truthy(value))
                 .cloned()
-                .unwrap_or_else(|| Value::str("")),
+                .unwrap_or_else(|| Value::from("")),
         );
-        entry.insert("tide.vocab.stages".to_owned(), Value::str("misp"));
+        entry.insert("tide.vocab.stages".to_owned(), Value::from("misp"));
         if let Some(synonyms) = actor
             .get("meta")
             .and_then(|meta| meta.get("synonyms"))
-            .filter(|value| value.truthy())
+            .filter(|value| truthy(value))
         {
             entry.insert("alias".to_owned(), synonyms.clone());
         }
         actors.push(entry);
     }
     let mut provenance = Table::new();
-    provenance.insert("source_misp_url".to_owned(), Value::str(url));
+    provenance.insert("source_misp_url".to_owned(), Value::from(url));
     provenance.insert(
         "source_misp_sha256".to_owned(),
-        Value::str(crate::golden::blob::sha256_hex(raw)),
+        Value::from(crate::golden::blob::sha256_hex(raw)),
     );
     Ok((actors, provenance))
 }
@@ -426,8 +423,8 @@ fn misp_actors(url: &str, raw: &[u8]) -> Result<(Vec<Table>, Table)> {
 pub fn actors(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
     let path = vocab_dir.join(format!("actors{VOCAB_SUFFIX}"));
     let mut document = read_vocab_document(&path)?;
-    document.insert("key".to_owned(), Value::str("id"));
-    document.shift_remove("model");
+    document.insert("key".to_owned(), Value::from("id"));
+    document.remove("model");
 
     let mut actors = Vec::new();
     for (name, prefix) in [
@@ -438,7 +435,7 @@ pub fn actors(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
         let bundle = inputs.stix_dir.join(name);
         if bundle.is_file() {
             for mut group in stix::groups(&stix::load_bundle(&bundle)?, prefix)? {
-                group.insert("tide.vocab.stages".to_owned(), Value::str("att&ck"));
+                group.insert("tide.vocab.stages".to_owned(), Value::from("att&ck"));
                 actors.push(group);
             }
         }
@@ -454,44 +451,44 @@ pub fn actors(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
     let previous_attack = document.get("source_version").cloned();
     let lifecycle = merge(&keys_of(&document), &actors, "id")?;
     set_keys(&mut document, &lifecycle);
-    document.shift_remove("version");
+    document.remove("version");
     let manifest_path = inputs.stix_dir.join("manifest.json");
     if manifest_path.is_file() {
         let manifest = manifest(&inputs.stix_dir)?;
         document.insert(
             "source_version".to_owned(),
-            Value::str(
-                manifest
-                    .get("version")
-                    .cloned()
-                    .unwrap_or_else(|| Value::str("unknown"))
-                    .py_str()?,
-            ),
+            Value::from(match manifest.get("version") {
+                Some(value) => text(value)?,
+                None => "unknown".to_owned(),
+            }),
         );
         document.insert(
             "source_fetched_at".to_owned(),
             manifest
                 .get("fetched_at")
                 .cloned()
-                .unwrap_or_else(|| Value::str("")),
+                .unwrap_or_else(|| Value::from("")),
         );
     } else {
-        document.insert("source_fetched_at".to_owned(), Value::str(&inputs.now));
+        document.insert(
+            "source_fetched_at".to_owned(),
+            Value::from(inputs.now.as_str()),
+        );
     }
-    document.insert("source".to_owned(), Value::str("mitre-attack+misp"));
-    document.insert("generated_at".to_owned(), Value::str(&inputs.now));
+    document.insert("source".to_owned(), Value::from("mitre-attack+misp"));
+    document.insert("generated_at".to_owned(), Value::from(inputs.now.as_str()));
     for (key, value) in &provenance {
         document.insert(key.clone(), value.clone());
     }
 
     let text_of = |value: Option<Value>| -> Result<String> {
-        match value.filter(Value::truthy) {
-            Some(value) => value.py_str(),
+        match value.filter(truthy) {
+            Some(value) => text(&value),
             None => Ok(String::new()),
         }
     };
     let release = match document.get("source_version") {
-        Some(value) => value.py_str()?,
+        Some(value) => text(value)?,
         None => "unknown".to_owned(),
     };
     let mut source_changed = text_of(previous_attack)? != release;

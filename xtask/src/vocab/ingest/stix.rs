@@ -1,12 +1,13 @@
 //! MITRE ATT&CK STIX 2.1 bundles into vocabulary keys
 //! (`opentide.vocabulary.stix_attack`).
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::value::{Table, Value, parse_json, py_strip, py_title};
+use super::value::{Table, Value, parse_json, strip, text as text_of, title, truthy};
 
 /// The external reference source that carries ATT&CK ids and links.
 const MITRE_SOURCE: &str = "mitre-attack";
@@ -23,10 +24,10 @@ pub fn load_bundle(path: &Path) -> Result<Vec<Value>> {
 fn bundle_objects(document: Value) -> Result<Vec<Value>> {
     match document {
         Value::Array(objects) => Ok(objects),
-        Value::Table(mut table) => match table.shift_remove("objects") {
+        Value::Object(mut table) => match table.remove("objects") {
             // `list(data.get("objects") or [])`
             Some(Value::Array(objects)) => Ok(objects),
-            Some(value) if !value.truthy() => Ok(Vec::new()),
+            Some(value) if !truthy(&value) => Ok(Vec::new()),
             None if table.get("type").and_then(Value::as_str) == Some("bundle") => Ok(Vec::new()),
             _ => bail!("no list of objects"),
         },
@@ -39,7 +40,7 @@ fn kind(object: &Value) -> Option<&str> {
 }
 
 fn flag(object: &Value, key: &str) -> bool {
-    object.get(key).is_some_and(Value::truthy)
+    object.get(key).is_some_and(truthy)
 }
 
 /// `x_mitre_deprecated or revoked`.
@@ -50,17 +51,17 @@ fn retired(object: &Value) -> bool {
 fn references(object: &Value) -> &[Value] {
     object
         .get("external_references")
-        .filter(|value| value.truthy())
         .and_then(Value::as_array)
-        .unwrap_or(&[])
+        .map(Vec::as_slice)
+        .unwrap_or_default()
 }
 
 fn mitre_reference(object: &Value, field: &str) -> Result<Option<String>> {
     for reference in references(object) {
         if reference.get("source_name").and_then(Value::as_str) == Some(MITRE_SOURCE)
-            && let Some(value) = reference.get(field).filter(|value| value.truthy())
+            && let Some(value) = reference.get(field).filter(|value| truthy(value))
         {
-            return Ok(Some(value.py_str()?));
+            return Ok(Some(text_of(value)?));
         }
     }
     Ok(None)
@@ -78,18 +79,16 @@ pub fn mitre_url(object: &Value) -> Result<Option<String>> {
 
 /// `str(obj.get(key, ""))`.
 fn text(object: &Value, key: &str) -> Result<String> {
-    object
-        .get(key)
-        .map_or_else(|| Ok(String::new()), Value::py_str)
+    object.get(key).map_or_else(|| Ok(String::new()), text_of)
 }
 
 /// `obj.get("description") or ""`, the value as it is.
 fn description(object: &Value) -> Value {
     object
         .get("description")
-        .filter(|value| value.truthy())
+        .filter(|value| truthy(value))
         .cloned()
-        .unwrap_or_else(|| Value::str(""))
+        .unwrap_or_else(|| Value::from(""))
 }
 
 /// Tactic short names to display names (`build_tactic_name_map`).
@@ -101,14 +100,14 @@ pub fn tactic_names(objects: &[Value]) -> Result<Table> {
         }
         let shortname = object
             .get("x_mitre_shortname")
-            .filter(|value| value.truthy())
+            .filter(|value| truthy(value))
             .or_else(|| object.get("x-mitre-shortname"));
         let name = object.get("name");
         if let (Some(shortname), Some(name)) = (shortname, name)
-            && shortname.truthy()
-            && name.truthy()
+            && truthy(shortname)
+            && truthy(name)
         {
-            names.insert(shortname.py_str()?, Value::str(name.py_str()?));
+            names.insert(text_of(shortname)?, Value::from(text_of(name)?));
         }
     }
     Ok(names)
@@ -118,21 +117,21 @@ fn normalise_tactic(name: &str) -> String {
     if name == "Evasion Ics" {
         return "Defense Evasion".to_owned();
     }
-    py_strip(&name.replace("Ics", "")).to_owned()
+    strip(&name.replace("Ics", "")).to_owned()
 }
 
 fn technique_stages(object: &Value, tactics: &Table) -> Result<Vec<String>> {
     let mut stages: Vec<String> = Vec::new();
     let phases = object
         .get("kill_chain_phases")
-        .filter(|value| value.truthy())
         .and_then(Value::as_array)
-        .unwrap_or(&[]);
+        .map(Vec::as_slice)
+        .unwrap_or_default();
     for phase in phases {
         let phase_name = text(phase, "phase_name")?;
         let display = match tactics.get(&phase_name) {
-            Some(name) => name.py_str()?,
-            None => py_title(&phase_name.replace('-', " ")),
+            Some(name) => text_of(name)?,
+            None => title(&phase_name.replace('-', " ")),
         };
         let display = normalise_tactic(&display);
         if !display.is_empty() && !stages.contains(&display) {
@@ -148,10 +147,10 @@ pub fn matrix_tactics(objects: &[Value]) -> Result<Vec<String>> {
     let mut tactics = Table::new();
     for object in objects {
         if kind(object) == Some("x-mitre-tactic")
-            && object.get("id").is_some_and(Value::truthy)
+            && object.get("id").is_some_and(truthy)
             && !retired(object)
         {
-            tactics.insert(text(object, "id")?, Value::str(text(object, "name")?));
+            tactics.insert(text(object, "id")?, Value::from(text(object, "name")?));
         }
     }
     let mut stages: Vec<String> = Vec::new();
@@ -161,12 +160,12 @@ pub fn matrix_tactics(objects: &[Value]) -> Result<Vec<String>> {
         }
         let refs = object
             .get("tactic_refs")
-            .filter(|value| value.truthy())
             .and_then(Value::as_array)
-            .unwrap_or(&[]);
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         for reference in refs {
-            let name = match tactics.get(&reference.py_str()?) {
-                Some(name) => name.py_str()?,
+            let name = match tactics.get(&text_of(reference)?) {
+                Some(name) => text_of(name)?,
                 None => String::new(),
             };
             let name = normalise_tactic(&name);
@@ -188,14 +187,14 @@ fn parent_technique_names(objects: &[Value]) -> Result<Table> {
             && id.starts_with('T')
             && !id.contains('.')
         {
-            names.insert(id, Value::str(text(object, "name")?));
+            names.insert(id, Value::from(text(object, "name")?));
         }
     }
     Ok(names)
 }
 
 fn strings(values: Vec<String>) -> Value {
-    Value::Array(values.into_iter().map(Value::Str).collect())
+    Value::Array(values.into_iter().map(Value::String).collect())
 }
 
 /// Technique keys from `attack-pattern` objects (`parse_techniques`). An
@@ -222,19 +221,19 @@ pub fn techniques(objects: &[Value], prefix: &str, tactics: &Table) -> Result<Ve
         };
         let mut name = text(object, "name")?;
         if let Some((parent, _)) = id.split_once('.')
-            && let Some(parent_name) = parents.get(parent).filter(|value| value.truthy())
+            && let Some(parent_name) = parents.get(parent).filter(|value| truthy(value))
         {
-            name = format!("{}: {name}", parent_name.py_str()?);
+            name = format!("{}: {name}", text_of(parent_name)?);
         }
         let mut entry = Table::new();
-        entry.insert("id".to_owned(), Value::str(id));
+        entry.insert("id".to_owned(), Value::from(id));
         entry.insert(
             "name".to_owned(),
-            Value::str(format!("{name_prefix}{name}")),
+            Value::from(format!("{name_prefix}{name}")),
         );
         entry.insert("description".to_owned(), description(object));
         if let Some(url) = mitre_url(object)?.filter(|url| !url.is_empty()) {
-            entry.insert("link".to_owned(), Value::str(url));
+            entry.insert("link".to_owned(), Value::from(url));
         }
         let stages = technique_stages(object, tactics)?;
         if !stages.is_empty() {
@@ -262,23 +261,25 @@ pub fn groups(objects: &[Value], prefix: &str) -> Result<Vec<Table>> {
             continue;
         };
         let mut entry = Table::new();
-        entry.insert("id".to_owned(), Value::str(id));
+        entry.insert("id".to_owned(), Value::from(id));
         entry.insert(
             "name".to_owned(),
-            Value::str(format!("{name_prefix}{}", text(object, "name")?)),
+            Value::from(format!("{name_prefix}{}", text(object, "name")?)),
         );
         entry.insert("description".to_owned(), description(object));
         if let Some(url) = mitre_url(object)?.filter(|url| !url.is_empty()) {
-            entry.insert("link".to_owned(), Value::str(url));
+            entry.insert("link".to_owned(), Value::from(url));
         }
-        if let Some(aliases) = object.get("aliases").filter(|value| value.truthy()) {
+        if let Some(aliases) = object.get("aliases").filter(|value| truthy(value)) {
             let aliases = match aliases {
                 Value::Array(items) => Value::Array(items.clone()),
                 // `list(aliases)` of a string is its characters; of a table,
                 // its keys.
-                Value::Str(text) => Value::Array(text.chars().map(Value::str).collect()),
-                Value::Table(table) => {
-                    Value::Array(table.keys().map(|key| Value::str(key.clone())).collect())
+                Value::String(text) => {
+                    Value::Array(text.chars().map(|c| Value::from(c.to_string())).collect())
+                }
+                Value::Object(table) => {
+                    Value::Array(table.keys().map(|key| Value::from(key.as_str())).collect())
                 }
                 other => bail!("aliases is not iterable: {other:?}"),
             };
@@ -305,14 +306,14 @@ pub fn mitigations(objects: &[Value], prefix: &str) -> Result<Vec<Table>> {
             continue;
         };
         let mut entry = Table::new();
-        entry.insert("id".to_owned(), Value::str(id));
+        entry.insert("id".to_owned(), Value::from(id));
         entry.insert(
             "name".to_owned(),
-            Value::str(format!("{name_prefix}{}", text(object, "name")?)),
+            Value::from(format!("{name_prefix}{}", text(object, "name")?)),
         );
         entry.insert("description".to_owned(), description(object));
         if let Some(url) = mitre_url(object)?.filter(|url| !url.is_empty()) {
-            entry.insert("link".to_owned(), Value::str(url));
+            entry.insert("link".to_owned(), Value::from(url));
         }
         entries.push(entry);
     }
@@ -326,7 +327,7 @@ pub fn datasources(objects: &[Value]) -> Result<Vec<Table>> {
         id: String,
         link: String,
     }
-    let mut sources: indexmap::IndexMap<String, Source> = indexmap::IndexMap::new();
+    let mut sources: HashMap<String, Source> = HashMap::new();
     for object in objects {
         if kind(object) != Some("x-mitre-data-source") {
             continue;
@@ -336,8 +337,8 @@ pub fn datasources(objects: &[Value]) -> Result<Vec<Table>> {
         };
         let stix = object
             .get("id")
-            .context("a data source without a STIX id")?
-            .py_str()?;
+            .context("a data source without a STIX id")
+            .and_then(text_of)?;
         sources.insert(
             stix,
             Source {
@@ -355,22 +356,22 @@ pub fn datasources(objects: &[Value]) -> Result<Vec<Table>> {
                     continue;
                 };
                 let mut entry = Table::new();
-                entry.insert("id".to_owned(), Value::str(id));
-                entry.insert("name".to_owned(), Value::str(text(object, "name")?));
+                entry.insert("id".to_owned(), Value::from(id));
+                entry.insert("name".to_owned(), Value::from(text(object, "name")?));
                 entry.insert("description".to_owned(), description(object));
                 if let Some(url) = mitre_url(object)?.filter(|url| !url.is_empty()) {
-                    entry.insert("link".to_owned(), Value::str(url));
+                    entry.insert("link".to_owned(), Value::from(url));
                 }
                 entries.push(entry);
             }
             Some("x-mitre-data-component") => {
                 let parent_ref = object
                     .get("x_mitre_data_source_ref")
-                    .filter(|value| value.truthy())
+                    .filter(|value| truthy(value))
                     .or_else(|| object.get("x-mitre-data-source-ref"))
-                    .filter(|value| value.truthy());
+                    .filter(|value| truthy(value));
                 let parent = match parent_ref {
-                    Some(reference) => sources.get(&reference.py_str()?),
+                    Some(reference) => sources.get(&text_of(reference)?),
                     None => None,
                 };
                 let link = match parent.map(|source| source.link.clone()) {
@@ -380,16 +381,16 @@ pub fn datasources(objects: &[Value]) -> Result<Vec<Table>> {
                 let mut entry = Table::new();
                 entry.insert(
                     "id".to_owned(),
-                    Value::str(parent.map(|source| source.id.clone()).unwrap_or_default()),
+                    Value::from(parent.map(|source| source.id.clone()).unwrap_or_default()),
                 );
                 // The component's own name, with or without a parent: the
                 // old ingest built "Source: Component" (`full_name`) but kept
                 // it only when there was no parent name to prefix, where the
                 // two are the same.
-                entry.insert("name".to_owned(), Value::str(text(object, "name")?));
+                entry.insert("name".to_owned(), Value::from(text(object, "name")?));
                 entry.insert("description".to_owned(), description(object));
-                entry.insert("link".to_owned(), Value::str(link));
-                entry.retain(|_, value| value.truthy());
+                entry.insert("link".to_owned(), Value::from(link));
+                entry.retain(|_, value| truthy(value));
                 entries.push(entry);
             }
             _ => {}
@@ -483,7 +484,7 @@ mod tests {
         assert_eq!(keys[0]["alias"].as_array().unwrap().len(), 2);
         assert_eq!(
             keys[0].keys().collect::<Vec<_>>(),
-            ["id", "name", "description", "link", "alias"]
+            ["alias", "description", "id", "link", "name"]
         );
     }
 
@@ -501,7 +502,7 @@ mod tests {
         assert_eq!(keys[0]["name"].as_str(), Some("Process Creation"));
         assert!(!keys[0].contains_key("description"), "empty values dropped");
         assert_eq!(keys[1]["name"].as_str(), Some("Process"));
-        assert_eq!(keys[2].keys().collect::<Vec<_>>(), ["name", "description"]);
+        assert_eq!(keys[2].keys().collect::<Vec<_>>(), ["description", "name"]);
     }
 
     #[test]

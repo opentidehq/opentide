@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
 
-use super::value::{Table, Value, py_strip, tables_eq};
+use super::value::{Table, Value, strip, text, truthy};
 
 /// The version of a key that names none.
 pub const DEFAULT_VERSION: &str = "1.0";
@@ -67,15 +67,15 @@ pub fn identity(entry: &Table, key_field: &str) -> Result<Option<String>> {
     let Some(value) = entry.get(key_field) else {
         return Ok(None);
     };
-    let text = value.py_str()?;
-    let text = py_strip(&text);
+    let text = text(value)?;
+    let text = strip(&text);
     Ok((!text.is_empty()).then(|| text.to_owned()))
 }
 
 /// Python's `int()` of a version part: surrounding white space, a sign and
 /// digit-separating underscores allowed.
 fn py_int(text: &str) -> Result<i64> {
-    let trimmed = py_strip(text);
+    let trimmed = strip(text);
     let body = trimmed.trim_start_matches(['+', '-']);
     let valid = !body.is_empty()
         && !body.starts_with('_')
@@ -99,8 +99,8 @@ pub fn parse_version(version: &str) -> Result<(i64, i64)> {
 
 /// A key's `(major, minor)`, `1.0` when it names none.
 fn entry_version(entry: &Table) -> Result<(i64, i64)> {
-    let raw = match entry.get("version").filter(|value| value.truthy()) {
-        Some(value) => value.py_str()?,
+    let raw = match entry.get("version").filter(|value| truthy(value)) {
+        Some(value) => text(value)?,
         None => DEFAULT_VERSION.to_owned(),
     };
     parse_version(&raw).with_context(|| format!("version {raw:?}"))
@@ -166,29 +166,29 @@ pub fn merge(existing: &[Table], upstream: &[Table], key_field: &str) -> Result<
 
     for (identity, old) in &existing_index {
         let mut merged = old.clone();
-        let version = match old.get("version").filter(|value| value.truthy()) {
-            Some(value) => value.py_str()?,
+        let version = match old.get("version").filter(|value| truthy(value)) {
+            Some(value) => text(value)?,
             None => {
                 backfilled.push(identity.clone());
                 DEFAULT_VERSION.to_owned()
             }
         };
-        merged.insert("version".to_owned(), Value::str(version.clone()));
+        merged.insert("version".to_owned(), Value::from(version.clone()));
 
         if let Some(incoming) = upstream_index.get(identity) {
             let mut incoming = incoming.clone();
-            incoming.insert("version".to_owned(), Value::str(version));
-            let revived = old.get("removed").is_some_and(Value::truthy);
-            incoming.shift_remove("removed");
-            if revived || !tables_eq(&payload(&incoming), &payload(old)) {
+            incoming.insert("version".to_owned(), Value::from(version));
+            let revived = old.get("removed").is_some_and(truthy);
+            incoming.remove("removed");
+            if revived || payload(&incoming) != payload(old) {
                 updated.push(identity.clone());
             }
             result.push(incoming);
             continue;
         }
 
-        if !merged.get("removed").is_some_and(Value::truthy) {
-            merged.insert("removed".to_owned(), Value::str(removal_version.clone()));
+        if !merged.get("removed").is_some_and(truthy) {
+            merged.insert("removed".to_owned(), Value::from(removal_version.clone()));
             removed.push(identity.clone());
         }
         result.push(merged);
@@ -201,13 +201,13 @@ pub fn merge(existing: &[Table], upstream: &[Table], key_field: &str) -> Result<
         let mut entry = incoming.clone();
         entry.insert(
             "version".to_owned(),
-            Value::str(
+            Value::from(
                 introducing_version
                     .clone()
                     .unwrap_or_else(|| DEFAULT_VERSION.to_owned()),
             ),
         );
-        entry.shift_remove("removed");
+        entry.remove("removed");
         result.push(entry);
         added.push(identity.clone());
     }
@@ -235,17 +235,13 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .map(|value| value.as_table().unwrap().clone())
+            .map(|value| value.as_object().unwrap().clone())
             .collect()
     }
 
     fn ids(keys: &[Table], field: &str) -> Vec<String> {
         keys.iter()
-            .map(|key| {
-                key.get(field)
-                    .map(|v| v.py_str().unwrap())
-                    .unwrap_or_default()
-            })
+            .map(|key| key.get(field).map(|v| text(v).unwrap()).unwrap_or_default())
             .collect()
     }
 
@@ -287,11 +283,6 @@ mod tests {
         assert_eq!(merged.backfilled, ["B"]);
         assert_eq!(merged.new_contract(), Some("1.2"));
         assert_eq!(merged.removal_version.as_deref(), Some("2.0"));
-        assert_eq!(
-            merged.keys[0].keys().collect::<Vec<_>>(),
-            ["id", "name", "version"],
-            "an upstream entry takes its version last"
-        );
     }
 
     #[test]

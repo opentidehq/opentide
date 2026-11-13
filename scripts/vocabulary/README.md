@@ -5,8 +5,9 @@ fetches the canonical upstream sources and regenerates the canonical
 `{field}.vocab.toml` files under `specifications/vocabularies/`. It is the Rust
 port (UC-6.3) of the Python package's `opentide.vocabulary` and of the scripts
 that were in this directory, removed with the Python implementation (UC-6.2,
-[#841](https://github.com/opentidehq/opentide/issues/841)), and it writes the
-same files byte for byte from the same inputs ([below](#the-port-and-the-python-ingest)).
+[#841](https://github.com/opentidehq/opentide/issues/841)), and from the same
+inputs it writes the same data, laid out by the `toml` crate
+([below](#the-port-and-the-python-ingest)).
 
 It writes into specifications, then syncs the bundled copy in
 `src/opentide/data/vocabulary/` and `data/specifications.lock.json`
@@ -84,20 +85,30 @@ companion PR (bundle, lockfile).
 
 ## The port and the Python ingest
 
-The files are written in the layout `tomli_w` 1.2.0 gave the Python ingest
-(`ingest/tomli.rs`): the header's keys first, its tables after, then one
-`[[keys]]` table per key, keys in their merge order, four-space array indents.
-The values keep Python's semantics where they decide an output byte: tables
-keep insertion order, JSON is read in document order, `==` and truthiness are
-Python's (`ingest/value.rs`).
+The vocabularies are written with the `toml` crate (`ingest/value.rs`), not in
+the layout `tomli_w` gave the Python ingest: a TOML file is right when it reads
+back as the same data. The order of a list is data and is kept: `[[keys]]`
+follow the merge order (existing keys first, in their order, then the new ones,
+in source order), and `stages` keep the matrix's order. The order of keys inside
+a table is not data, and the crate writes them sorted. What is left of Python's
+semantics decides values, not layout: truthiness in the `x or default` and
+`removed`/`version` rules, `str.strip()` on an identity, `str.title()` on a
+tactic without a display name.
 
-The proof (UC-6.3) ran both on the same inputs: the Python ingest from
+The first `--apply` after this change therefore reformats the five files it
+writes in specifications (`att&ck`, `att&ck.groups`, `mitigations`,
+`datasources`, `actors`) once, with no change to their data; later runs change
+only what upstream changed.
+
+The comparison (UC-6.3) ran both on the same inputs: the Python ingest from
 `ca32f5558d95fd77d5550084ee0f9d0681397fdc` (the last commit that has it, in a
 worktree of its own, its clock fixed and its bundle sync left out) and
 `cargo xtask vocab ingest --apply --no-fetch --now ...`, each on its own copy of
 the specifications vocabularies, with the same ATT&CK bundles and the same MISP
-galaxy file. Every file of `vocabularies/` and the printed summary were
-identical in each case:
+galaxy file. In each case every file of `vocabularies/` held the same data and
+the printed summary was identical. That run compared the files byte for byte,
+when the port still copied `tomli_w`'s layout; the data, and with it the claim,
+are unchanged now that the layout comes from the crate:
 
 | Case | Vocabularies | ATT&CK | What it exercises |
 |------|--------------|--------|-------------------|
