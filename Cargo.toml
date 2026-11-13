@@ -168,7 +168,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-native-certs = "0.8"
 tokio = { version = "1.48", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
-backon = { version = "1", default-features = false, features = ["tokio-sleep"] }
+backon = { version = "1", default-features = false }
 # The recorded-HTTP harness (opentide-cassette, never shipped): wiremock
 # replays cassettes; the recording proxy terminates TLS with a CA rcgen makes
 # for the run (tokio-rustls, hyper's server).

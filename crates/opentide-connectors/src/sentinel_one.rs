@@ -133,7 +133,7 @@ impl SentinelOne {
     async fn call(
         cx: TenantContext<'_>,
         setup: &Setup,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         url: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Answer, ConnectorError> {
@@ -165,9 +165,9 @@ impl SentinelOne {
         let method = match rule_id {
             Some(id) => {
                 url.push_str(&format!("/{id}"));
-                reqwest::Method::PUT
+                crate::transport::Method::PUT
             }
-            None => reqwest::Method::POST,
+            None => crate::transport::Method::POST,
         };
         let answer = Self::call(cx, &setup, method, &url, Some(bytes)).await?;
         if answer.status == 200 {
@@ -194,7 +194,8 @@ impl SentinelOne {
         cx: TenantContext<'_>,
         rule_id: i64,
     ) -> Result<(), SentinelOneError> {
-        self.by_filter(cx, reqwest::Method::PUT, rule_id).await
+        self.by_filter(cx, crate::transport::Method::PUT, rule_id)
+            .await
     }
 
     /// Deletes rule *rule_id* (`delete_detection_rule`).
@@ -203,13 +204,14 @@ impl SentinelOne {
         cx: TenantContext<'_>,
         rule_id: i64,
     ) -> Result<(), SentinelOneError> {
-        self.by_filter(cx, reqwest::Method::DELETE, rule_id).await
+        self.by_filter(cx, crate::transport::Method::DELETE, rule_id)
+            .await
     }
 
     async fn by_filter(
         &self,
         cx: TenantContext<'_>,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         rule_id: i64,
     ) -> Result<(), SentinelOneError> {
         let setup = setup(cx)?;
@@ -251,7 +253,14 @@ impl SentinelOne {
                 message: format!("the query cannot be written: {error}"),
             })?;
         let url = format!("{}{QUERY_PATH}", setup.url);
-        let answer = Self::call(cx, &setup, reqwest::Method::POST, &url, Some(bytes)).await?;
+        let answer = Self::call(
+            cx,
+            &setup,
+            crate::transport::Method::POST,
+            &url,
+            Some(bytes),
+        )
+        .await?;
         match answer.status {
             200 => Ok(QueryValidation::Ran),
             400 => {
@@ -304,7 +313,14 @@ impl SentinelOne {
         let url = format!("{}{QUERY_PATH}", setup.url);
         // A timeout too long to add to the clock never comes.
         let deadline = Instant::now().checked_add(request.timeout);
-        let answer = Self::call(cx, &setup, reqwest::Method::POST, &url, Some(bytes)).await?;
+        let answer = Self::call(
+            cx,
+            &setup,
+            crate::transport::Method::POST,
+            &url,
+            Some(bytes),
+        )
+        .await?;
         let mut data = data(&answer, &tenant)?;
         let query_id = data
             .get("queryId")
@@ -344,7 +360,7 @@ impl SentinelOne {
                 "{ping}?{}",
                 crate::encode::urlencode([("queryId", id.as_str())])
             );
-            let answer = Self::call(cx, &setup, reqwest::Method::GET, &url, None).await?;
+            let answer = Self::call(cx, &setup, crate::transport::Method::GET, &url, None).await?;
             data = self::data(&answer, &tenant)?;
         }
         let names: Vec<String> = match data.get("columns") {

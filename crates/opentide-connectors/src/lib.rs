@@ -52,6 +52,7 @@ pub mod sysdig;
 pub mod tenant;
 pub mod text;
 pub mod tls;
+pub mod transport;
 pub mod vulnerability;
 
 pub use connector::{Platform, Registry};

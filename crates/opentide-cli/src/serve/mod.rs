@@ -16,6 +16,7 @@
 //! are its.
 
 pub mod decode;
+pub mod fetch;
 pub mod runner;
 pub mod server;
 

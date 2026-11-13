@@ -137,7 +137,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
 # Only the features tokio builds on wasm32 here; `fs` and `io-std`, which
 # `mcp start`'s native transport needs, are added off WASI below.
-tokio = { version = "1.48", default-features = false, features = ["rt", "io-util"] }
+tokio = { version = "1.48", default-features = false, features = ["rt", "io-util", "sync", "time", "macros"] }
 # `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
 # the connectors' HTTP client, through the proxy and CA bundle the
 # environment names. Under WASI the connectors answer every request with
@@ -145,6 +145,8 @@ tokio = { version = "1.48", default-features = false, features = ["rt", "io-util
 opentide-connectors.workspace = true
 reqwest.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
+# `opentide serve`'s `opentide/fetch` (src/serve/fetch.rs): request and answer bodies.
+base64.workspace = true
 
 [features]
 default = ["terminal"]

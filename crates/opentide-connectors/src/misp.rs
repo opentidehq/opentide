@@ -251,8 +251,7 @@ impl MispClient {
             explicit_proxy,
         )
         .map_err(|_| connectivity())?;
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+        let runtime = crate::runtime::builder()
             .enable_all()
             .build()
             .map_err(|_| connectivity())?;
@@ -274,7 +273,7 @@ impl MispClient {
     /// One request; the decoded answer (`_request`, `_decode`).
     fn request(
         &self,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         path: &str,
         data: Option<&Json>,
     ) -> Result<Json, MispCallError> {
@@ -283,10 +282,10 @@ impl MispClient {
         let mut builder = self
             .http
             .request(method, &url)
-            .header(reqwest::header::AUTHORIZATION, &self.key)
-            .header(reqwest::header::USER_AGENT, &self.user_agent)
-            .header(reqwest::header::ACCEPT, "application/json")
-            .header(reqwest::header::CONTENT_TYPE, "application/json");
+            .header(http::header::AUTHORIZATION, &self.key)
+            .header(http::header::USER_AGENT, &self.user_agent)
+            .header(http::header::ACCEPT, "application/json")
+            .header(http::header::CONTENT_TYPE, "application/json");
         // PyMISP drops the top level's `None` values; an empty mapping is
         // no data at all (`dict(data) if data else None`).
         if let Some(Json::Object(object)) = data
@@ -315,7 +314,7 @@ impl MispClient {
 
     fn view(&self, remote: &RemoteEvent) -> Result<Option<RemoteEvent>, MispCallError> {
         match self.request(
-            reqwest::Method::GET,
+            crate::transport::Method::GET,
             &format!("events/view/{}", remote.address()),
             None,
         ) {
@@ -342,7 +341,7 @@ impl MispClient {
                 .collect(),
             );
             let payload = self.request(
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 "galaxy_clusters/restSearch",
                 Some(&body),
             )?;
@@ -368,7 +367,7 @@ impl MispClient {
 
 impl Misp for MispClient {
     fn get_version(&self) -> Result<String, MispCallError> {
-        let payload = self.request(reqwest::Method::GET, "servers/getVersion", None)?;
+        let payload = self.request(crate::transport::Method::GET, "servers/getVersion", None)?;
         match payload.get("version") {
             Some(Json::Str(version)) if !version.is_empty() => Ok(version.clone()),
             _ => Err(MispCallError::new(
@@ -380,14 +379,14 @@ impl Misp for MispClient {
     }
 
     fn current_organisation_uuid(&self) -> Result<String, MispCallError> {
-        let payload = self.request(reqwest::Method::GET, "users/view/me", None)?;
+        let payload = self.request(crate::transport::Method::GET, "users/view/me", None)?;
         organisation_uuid(&payload)
             .ok_or_else(|| MispCallError::new(Kind::Other, "organisation_uuid_unverified", None))
     }
 
     fn object_template(&self) -> Result<TemplateView, MispCallError> {
         match self.request(
-            reqwest::Method::GET,
+            crate::transport::Method::GET,
             &format!("objectTemplates/view/{OPENTIDE_TEMPLATE_UUID}"),
             None,
         ) {
@@ -415,7 +414,11 @@ impl Misp for MispClient {
                 .map(|(key, value)| (key.to_owned(), value))
                 .collect(),
             );
-            let payload = self.request(reqwest::Method::POST, "events/restSearch", Some(&body))?;
+            let payload = self.request(
+                crate::transport::Method::POST,
+                "events/restSearch",
+                Some(&body),
+            )?;
             let batch = event_nodes(&payload);
             let mut identities = Vec::new();
             for node in &batch {
@@ -443,14 +446,14 @@ impl Misp for MispClient {
     }
 
     fn add_event(&self, event: &Json) -> Result<RemoteEvent, MispCallError> {
-        let payload = self.request(reqwest::Method::POST, "events/add", Some(event))?;
+        let payload = self.request(crate::transport::Method::POST, "events/add", Some(event))?;
         remote_event(&payload)
             .ok_or_else(|| MispCallError::new(Kind::Rejected, "remote_rejected", None))
     }
 
     fn edit_event(&self, event_id: &str, event: &Json) -> Result<RemoteEvent, MispCallError> {
         let payload = self.request(
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &format!("events/edit/{event_id}"),
             Some(event),
         )?;
@@ -460,7 +463,7 @@ impl Misp for MispClient {
 
     fn publish_event(&self, event_id: &str) -> Result<(), MispCallError> {
         self.request(
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &format!("events/publish/{event_id}"),
             None,
         )
@@ -469,7 +472,7 @@ impl Misp for MispClient {
 
     fn unpublish_event(&self, event_id: &str) -> Result<(), MispCallError> {
         self.request(
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &format!("events/unpublish/{event_id}"),
             None,
         )
@@ -477,7 +480,11 @@ impl Misp for MispClient {
     }
 
     fn delete_event(&self, event_id: &str) -> Result<(), MispCallError> {
-        match self.request(reqwest::Method::DELETE, &format!("events/{event_id}"), None) {
+        match self.request(
+            crate::transport::Method::DELETE,
+            &format!("events/{event_id}"),
+            None,
+        ) {
             Ok(_) => Ok(()),
             Err(error) if error.status == Some(404) => Ok(()),
             Err(error) => Err(error),

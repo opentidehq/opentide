@@ -20,10 +20,24 @@ use crate::TenantLabel;
 use crate::error::ConnectorError;
 use crate::progress::{ProgressSink, TenantEvent};
 
+/// A runtime's builder: two worker threads, or, on WASI (one thread), the
+/// current thread.
+pub fn builder() -> tokio::runtime::Builder {
+    #[cfg(not(target_os = "wasi"))]
+    {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+        builder.worker_threads(2);
+        builder
+    }
+    #[cfg(target_os = "wasi")]
+    {
+        tokio::runtime::Builder::new_current_thread()
+    }
+}
+
 /// Runs *work* to completion on a runtime of its own.
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
+    let runtime = builder()
         .enable_all()
         .build()
         .map_err(|error| format!("cannot start the network runtime: {error}"))?;

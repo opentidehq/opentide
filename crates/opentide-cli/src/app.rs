@@ -3899,7 +3899,9 @@ mod tests {
                 let error = opentide_connectors::runtime::block_on(async {
                     let request = client.request(reqwest::Method::GET, &url).build()?;
                     let cancel = tokio_util::sync::CancellationToken::new();
-                    Ok::<_, reqwest::Error>(client.send(request, &cancel).await)
+                    Ok::<_, opentide_connectors::transport::BuildError>(
+                        client.send(request, &cancel).await,
+                    )
                 })??
                 .unwrap_err();
                 tracing::error!(detail = %error, "tenant_request_failed");

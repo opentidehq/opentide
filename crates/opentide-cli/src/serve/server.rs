@@ -56,6 +56,15 @@ struct Inner {
     /// The client's input, read on this thread when no thread reads it
     /// ([`Server::read_inline`]: the WASI build, which has no threads).
     inline: Mutex<Option<Lines<Box<dyn Read + Send>>>>,
+    /// The client's `opentide/fetch`, once `initialize` asked for it: the
+    /// requests in flight, and the transport factory every run's tenant
+    /// clients use until the server ends.
+    fetch: Mutex<
+        Option<(
+            Arc<super::fetch::Fetcher>,
+            opentide_connectors::transport::Installed,
+        )>,
+    >,
 }
 
 /// The lines of a stream, one at a time, without their `\n`; a last line
@@ -253,6 +262,7 @@ impl Server {
                 state: Mutex::new(State::default()),
                 version: version.to_owned(),
                 inline: Mutex::new(None),
+                fetch: Mutex::new(None),
             }),
         }
     }
@@ -388,6 +398,7 @@ impl Server {
         }
         let method = match member(&message, "method") {
             Some(Json::Str(method)) => method.clone(),
+            _ if self.answered_fetch(&message) => return,
             _ => {
                 let id = member(&message, "id").cloned().unwrap_or(Json::Null);
                 self.error(&id, INVALID_REQUEST, "Invalid request: no method");
@@ -417,6 +428,60 @@ impl Server {
         self.push(Some(message));
     }
 
+    /// Hands the client's answer to one of the server's `opentide/fetch`
+    /// requests to the run waiting for it; whether *message* was one.
+    fn answered_fetch(&self, message: &Json) -> bool {
+        let Some(Json::Str(id)) = member(message, "id") else {
+            return false;
+        };
+        if !id.starts_with(super::fetch::ID_PREFIX) {
+            return false;
+        }
+        let reply = match (member(message, "result"), member(message, "error")) {
+            (Some(result), None) => Ok(result.clone()),
+            (None, Some(error)) => Err(error.clone()),
+            _ => return false,
+        };
+        let fetcher = self
+            .inner
+            .fetch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .map(|(fetcher, _)| Arc::clone(fetcher));
+        fetcher.is_some_and(|fetcher| fetcher.deliver(id, reply))
+    }
+
+    /// Has every run's tenant requests made by the client from now on
+    /// (`initialize`'s `capabilities.fetch`).
+    fn enable_fetch(&self) {
+        let mut slot = self
+            .inner
+            .fetch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if slot.is_some() {
+            return;
+        }
+        let writer = Arc::downgrade(&self.inner);
+        let runs = Arc::downgrade(&self.inner);
+        let fetcher = super::fetch::Fetcher::new(
+            move |message: &str| {
+                if let Some(inner) = writer.upgrade() {
+                    Server { inner }.send(message);
+                }
+            },
+            move || {
+                let inner = runs.upgrade()?;
+                let state = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
+                state.active.as_ref().map(|(id, _)| id.clone())
+            },
+        );
+        let installed =
+            opentide_connectors::transport::install(super::fetch::ClientFetch::new(&fetcher));
+        *slot = Some((fetcher, installed));
+    }
+
     fn push(&self, message: Option<Json>) {
         self.inner
             .queue
@@ -434,6 +499,15 @@ impl Server {
     /// Stops the running command now and runs no queued one, then leaves:
     /// each queued `run` is answered 130, as a cancelled one is.
     pub fn close(&self) {
+        if let Some((fetcher, _)) = self
+            .inner
+            .fetch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+        {
+            fetcher.close();
+        }
         let active = {
             let mut state = self.state();
             state.closing = true;
@@ -569,7 +643,13 @@ impl Server {
         }
         match method {
             "initialize" => {
-                let result = self.initialize();
+                let fetch = member(&params, "capabilities")
+                    .and_then(|capabilities| member(capabilities, "fetch"))
+                    == Some(&Json::Bool(true));
+                if fetch {
+                    self.enable_fetch();
+                }
+                let result = self.initialize(fetch);
                 self.respond(id, &result);
             }
             "run" => match run_params(&params) {
@@ -587,7 +667,7 @@ impl Server {
         }
     }
 
-    fn initialize(&self) -> String {
+    fn initialize(&self, fetch: bool) -> String {
         let known = self.state().digest.clone();
         let digest = known.unwrap_or_else(|| {
             let request = RunRequest {
@@ -601,8 +681,15 @@ impl Server {
             self.state().digest = Some(digest.clone());
             digest
         });
+        // A client that asked for `opentide/fetch` is told it is on; any
+        // other gets the answer it always had.
+        let capabilities = if fetch {
+            ",\"capabilities\":{\"fetch\":true}"
+        } else {
+            ""
+        };
         format!(
-            "{{\"protocol\":{PROTOCOL_VERSION},\"version\":{},\"commands_digest\":{}}}",
+            "{{\"protocol\":{PROTOCOL_VERSION},\"version\":{},\"commands_digest\":{}{capabilities}}}",
             compact(&Json::str(&self.inner.version)),
             compact(&Json::str(digest))
         )

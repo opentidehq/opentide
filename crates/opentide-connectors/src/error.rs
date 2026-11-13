@@ -7,6 +7,7 @@
 //! reaches a message: the request's URL is dropped from every reqwest error
 //! before its text is read ([`describe`]).
 
+#[cfg(not(target_os = "wasi"))]
 use std::error::Error as _;
 
 /// The `failure.code` of a command that failed for a reason not more
@@ -227,6 +228,7 @@ pub fn origin(url: &url::Url) -> String {
     }
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The text of a reqwest error and of the errors under it, without the
 /// request's URL (which may carry a credential in its query or user info).
 pub fn describe(error: reqwest::Error) -> String {
@@ -245,6 +247,7 @@ pub fn describe(error: reqwest::Error) -> String {
     parts.join(": ")
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// A reqwest error from a request to *url* on the tenant *label*, as a
 /// [`ConnectorError`].
 pub fn from_reqwest(
