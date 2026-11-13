@@ -337,6 +337,41 @@ mod validate {
     }
 
     #[test]
+    fn google_secops_advisories_warn_and_shared_rule_names_fail() {
+        let fs = workspace();
+        let block = |name: &str| {
+            format!(
+                "configurations:\n  google_secops:\n    enabled: true\n    name: {name}\n    \
+                 status: X\n    events: $e.metadata.event_type = \"X\"\n    condition: \
+                 $e\n"
+            )
+        };
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("{}{}", rule(U1, "A"), block("shared_name")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            format!("{}{}", rule(U2, "B"), block("SHARED_name")),
+        );
+        let validation = run(&fs, &Options::default());
+        let advised = with_code(&validation, "google_secops_risk_score_missing");
+        assert_eq!(advised.len(), 2);
+        assert_eq!(advised[0].severity, Severity::Warning);
+        assert_eq!(advised[0].field_path, ["configurations", "google_secops"]);
+        let duplicates = with_code(&validation, "google_secops_name_duplicate");
+        assert_eq!(duplicates.len(), 2);
+        assert_eq!(duplicates[0].severity, Severity::Error);
+        assert!(
+            duplicates
+                .iter()
+                .any(|d| d.object_uuid == U1 && d.message.contains(U2)),
+            "{duplicates:?}"
+        );
+        assert!(duplicates.iter().all(|d| d.yaml_line.is_some()));
+    }
+
+    #[test]
     fn a_misspelled_enabled_key_is_named() {
         let fs = workspace();
         fs.write(

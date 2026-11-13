@@ -1,0 +1,32 @@
+# A whole community rule pasted into events: the header, meta, and the other
+# section labels belong to deploy and to their own keys.
+# Expected code: yaral_section_header.
+name: Google SecOps events holding a whole rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000063
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A community rule pasted whole into the events key.
+status: STAGING
+severity: Medium
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    events: |
+      rule office_powershell {
+        meta:
+          author = "someone"
+        events:
+          $e.metadata.event_type = "PROCESS_LAUNCH"
+        condition:
+          $e
+      }
+    condition: |
+      $e

@@ -90,6 +90,7 @@ fn empty_configurations() -> RuleConfigurations {
         carbon_black_cloud: None,
         elastic: None,
         sysdig: None,
+        google_secops: None,
     }
 }
 

@@ -163,6 +163,10 @@ vt100 = "0.18"
 [dev-dependencies]
 # The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
 opentide-cassette.workspace = true
+# A stand-in Google SecOps instance (tests/google_secops.rs): its rules are
+# deployed and checked through the CLI flow against wiremock, no recording
+# of a real instance being shareable.
+wiremock.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"

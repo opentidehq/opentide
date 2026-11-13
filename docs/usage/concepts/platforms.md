@@ -20,6 +20,7 @@ opentide integrates with **nine detection platforms** through connectors built i
 | CrowdStrike Falcon | `crowdstrike` | yes | no | yes | yes | correlation rule (CQL) |
 | HarfangLab | `harfanglab` | yes | no | no | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
+| Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | no | yes (`udmSearch`) | YARA-L 2.0 |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -44,6 +45,36 @@ Every platform but Sysdig answers [`opentide query`](../../cli/query.md), which 
 
 Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exceptions, and the macros and lists only that rule uses), which deploy creates through the Sysdig Secure runtime API and adds to the runtime policies the tenant or block names, keeping Sysdig's rule id in [deployment state](deployment-state.md). Deploy expands the block's own macros and lists into the condition and derives the Falco `desc`, `priority`, MITRE tags and a default `output` from the rule. The analysis engine checks the Falco condition offline; Sysdig has no rule preview, so `validate query --platform sysdig --live` reports `supported: false`. `deploy --dry-run` shows the API body.
 
+Google Security Operations (Google SecOps, formerly Chronicle) takes YARA-L 2.0 custom rules. A `google_secops` block carries the rule's sections as keys: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, written as block scalars, and `match` and `options` as YAML objects. Deploy assembles the rule from them: `rule <name> {`, a `meta` section it derives from the rule (author, description, severity, priority, the ATT&CK `technique` list Google's coverage matrix reads, `opentide_uuid` and `opentide_version`, then the block's own `meta`), then each section under its label. The rule name is the block's `name`, else the rule's title in `snake_case`.
+
+```yaml
+configurations:
+  google_secops:
+    schema: platform::google_secops::1.0
+    status: PRODUCTION
+    run_frequency: LIVE_CUSTOMIZABLE
+    events: |
+      $fail.metadata.event_type = "USER_LOGIN"
+      $fail.security_result.action = "BLOCK"
+      $fail.target.user.userid = $user
+      $success.metadata.event_type = "USER_LOGIN"
+      $success.security_result.action = "ALLOW"
+      $success.target.user.userid = $user
+    match:
+      group_by: [$user]
+      window: 30m
+    outcome: |
+      $risk_score = max(80)
+    condition: |
+      #fail >= 10 and $success
+    options:
+      suppression_window: 1h
+```
+
+`condition` is a block scalar on purpose: `condition: #fail >= 10 and $success` as a plain scalar is a YAML comment, loads as null, and fails with `yaral_section_empty`. `opentide validate` checks the block's constraints (`google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`) and the sections' structure (`yaral_section_missing`, `yaral_section_empty`, `yaral_section_header`, `yaral_match_shape`, `yaral_match_window`, `yaral_option`), each at its field path, and that no two enabled blocks share a rule name, ignoring case (`google_secops_name_duplicate`). It warns, as `opentide lint` does, when `outcome` assigns no `$risk_score` (Google then gives every detection the instance's default score, 40 for an alert and 15 otherwise unless the instance's settings change them), when a rule matches a producer by a literal `ru_…` id, and on `run_frequency: LIVE` for a rule with two or more event variables, which deploy refuses because Google allows `LIVE` for single-event rules only (write `LIVE_CUSTOMIZABLE`).
+
+Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision (a new revision is re-initialised for about an hour). A bound rule is read with its deployment, unarchived first when archived, then its text, its `scope` and its run state are each updated only where they differ. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, even when the rule's new text fails `verifyRuleText` or its update (the failure is still reported, and an archived rule is left archived), and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`, archiving it instead when Google refuses (any 4xx but 401, 403, 404 and 429): deploy never deletes a rule's detections. `runFrequency` is sent only when the block names `run_frequency`: otherwise Google keeps the rule's frequency, or gives a new rule its default, and never moves a rule off a legacy schedule, which it cannot undo. A block `schedule` is compared as Google stores it, and removed from the rule when removed from the block. `data_access_scope` is a data access scope id or its full resource name; a changed or removed one reaches every rule. Credentials are a service-account key, or Application Default Credentials (a service-account key, a gcloud user login or the metadata server), applied with their quota project; a token that cannot be obtained stops the tenant before any request (`google_secops_tenant_unauthorized`). A 429, or a 503 on any call but a create, is waited out (`Retry-After`, else Google's `RetryInfo`, else 5, 15 and 60 seconds, three resends at most); a create is never resent after a 5xx or no answer (`google_secops_create_unconfirmed`). Deploy warns when Google reports a bound rule's execution as limited or paused (`google_secops_rule_execution_limited`) or its compilation as failed (`google_secops_rule_compilation_failed`). It manages custom rules and their deployment only: curated rules, rule exclusions, reference lists, data tables, retrohunts and rule tests stay in the console. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. `deploy --dry-run` shows the assembled rule.
+
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
 ## Platform block schemas
@@ -60,6 +91,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Next-Gen SIEM correlation rule in CQL. Checked offline; no tenant query check." />
   <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
+  <Card title="Google Security Operations" href="/docs/specifications/specs/platforms/google-secops-1.0/" description="YARA-L 2.0 rule written as sections, assembled with derived meta, through the Chronicle API v1." />
 </Cards>
 
 ## Inspecting capabilities at runtime

@@ -592,6 +592,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
 | `harfanglab` | ❌ `supported: false` | ❌ |
+| `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ❌ |
 
 ### Elastic live validation and deploy
 
