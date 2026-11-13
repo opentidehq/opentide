@@ -57,7 +57,7 @@ pub const USAGE_NEEDS_INPUT: &str = super::setup::USAGE_NEEDS_INPUT;
 
 /// Keys a platform block needs beyond its model's required fields, so it
 /// holds detection logic and deploys (`PLATFORM_EXTRA_KEYS`).
-const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 6] = [
+const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 7] = [
     (
         "defender_for_endpoint",
         &[&["scope"], &["scope", "selection"]],
@@ -81,6 +81,15 @@ const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 6] = [
     ),
     ("harfanglab", &[&["sigma"]]),
     ("sysdig", &[&["condition"]]),
+    (
+        "bitdefender",
+        &[
+            &["severity"],
+            &["detection", "target"],
+            &["detection", "criteria", "field"],
+            &["detection", "criteria", "is"],
+        ],
+    ),
 ];
 
 /// A key under a platform block, its value, and whether it is a placeholder.
@@ -89,14 +98,28 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 1] = [(
-    "sentinel",
-    &[
-        (&["scheduling", "frequency"], "1h", true),
-        (&["scheduling", "lookback"], "1h", true),
-        (&["grouping", "event"], "SingleAlert", false),
-    ],
-)];
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 2] = [
+    (
+        "sentinel",
+        &[
+            (&["scheduling", "frequency"], "1h", true),
+            (&["scheduling", "lookback"], "1h", true),
+            (&["grouping", "event"], "SingleAlert", false),
+        ],
+    ),
+    (
+        "bitdefender",
+        &[
+            // What GravityZone sends for the scaffold's Informational alert
+            // severity, written out so the rule does not earn
+            // bitdefender_severity_collapsed.
+            (&["severity"], "Low", false),
+            (&["detection", "target"], "process", true),
+            (&["detection", "criteria", "field"], "Process.Name", true),
+            (&["detection", "criteria", "is"], "...", true),
+        ],
+    ),
+];
 
 /// `opentide new <family>`'s arguments.
 #[derive(Debug, Clone, Default)]

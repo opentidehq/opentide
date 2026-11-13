@@ -176,6 +176,7 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("CarbonBlackConfig", of::<platform::CarbonBlackConfig>()),
         ("ElasticConfig", of::<platform::ElasticConfig>()),
         ("SysdigConfig", of::<platform::SysdigConfig>()),
+        ("BitdefenderConfig", of::<platform::BitdefenderConfig>()),
     ]
 }
 
@@ -440,7 +441,7 @@ mod tests {
     #[test]
     fn every_model_and_every_platform_block_has_a_schema() {
         let schemas = rust_schemas();
-        assert_eq!(schemas.len(), 29);
+        assert_eq!(schemas.len(), 30);
         for entry in platform::PLATFORM_CONFIG_MODELS {
             assert!(
                 schemas.iter().any(|(name, _)| *name == entry.model),

@@ -265,7 +265,8 @@ pub const PLATFORMS: &[Platform] = &[
             pattern: Some("^[0-9a-f]{24}$"),
         },
         deploys: true,
-        compiles_offline: false,
+        // The createCustomRule request, without the tenant's targets.
+        compiles_offline: true,
         live_check: false,
         query_runner: false,
         runner_languages: &[],
@@ -535,7 +536,7 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig"]
+            ["sentinel", "elastic", "sysdig", "bitdefender"]
         );
         assert_eq!(
             query_file_suffixes(),

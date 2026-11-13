@@ -6459,6 +6459,11 @@ class RuleConfigurations:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
+    def bitdefender(self, /) -> BitdefenderConfig | None:
+        """
+        Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`).
+        """
+    @property
     def carbon_black_cloud(self, /) -> CarbonBlackConfig | None:
         """
         Carbon Black Cloud watchlist report (`platform::carbon_black_cloud::1.0`).

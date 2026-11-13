@@ -1086,7 +1086,7 @@ pub struct BitdefenderTenantTargets {
 
 /// `targets`: a [`BitdefenderTenantTargets`] that sets exactly one list
 /// (`_exactly_one_list`, an after-validator).
-fn tenant_targets(node: &Node, cx: &mut Context) -> Option<Option<BitdefenderTenantTargets>> {
+pub fn tenant_targets(node: &Node, cx: &mut Context) -> Option<Option<BitdefenderTenantTargets>> {
     let targets = Option::<BitdefenderTenantTargets>::from_node(node, cx)?;
     if let Some(set) = &targets
         && set.endpoint_tags.is_none() == set.companies.is_none()

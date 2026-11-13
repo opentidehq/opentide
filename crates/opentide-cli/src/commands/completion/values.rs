@@ -904,7 +904,22 @@ mod tests {
         let found = cx.platforms(&choices, "");
         let shown = values(&found);
         assert_eq!(shown.len(), choices.len());
-        assert_eq!(&shown[shown.len() - 2..], ["splunk", "crowdstrike"]);
+        // The disabled ones last, in choice order: the two turned off above
+        // and any the corpus does not configure.
+        let disabled: Vec<&str> = choices
+            .iter()
+            .map(String::as_str)
+            .filter(|platform| {
+                ["splunk", "crowdstrike"].contains(platform)
+                    || !ws
+                        .join(format!(
+                            ".opentide/configurations/platforms/{platform}.toml"
+                        ))
+                        .is_file()
+            })
+            .collect();
+        assert!(disabled.contains(&"splunk") && disabled.contains(&"crowdstrike"));
+        assert_eq!(&shown[shown.len() - disabled.len()..], disabled);
         assert_eq!(helps(&found)[0], "enabled");
         assert_eq!(helps(&found)[shown.len() - 1], "");
         assert_eq!(values(&cx.platforms(&choices, "SPL")), ["splunk"]);
