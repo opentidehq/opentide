@@ -1515,10 +1515,13 @@ jobs:
         if: matrix.part == 'diffs'
         run: cargo xtask registry diff --against python --corpus all
       # opentide-compile's request bodies against the oracle's (UC-3.1, #823):
-      # every Sentinel, Elastic and Sysdig block of every rule of every corpus,
-      # the dry run's body, each tenant's and the dry run's payload entry, byte
-      # for byte. The blocks of the platforms opentide-compile does not compile
-      # yet are listed as "not compared", per corpus.
+      # every platform block of every rule of every corpus, all nine platforms,
+      # byte for byte: the dry run's body (Sentinel, Elastic, Sysdig), each
+      # configured tenant's body or, for Defender, Splunk, SentinelOne,
+      # CrowdStrike, HarfangLab and Carbon Black, the writes their deployer
+      # sends, and the dry run's payload entry. Only a rule the oracle's data
+      # model refuses, or one the Rust index does not hold, is listed as "not
+      # compared", per corpus.
       - name: Deploy compile against the oracle (payloads diff)
         if: matrix.part == 'diffs'
         run: >-

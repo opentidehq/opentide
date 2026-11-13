@@ -75,21 +75,13 @@ pub fn with_plugins(host: Option<&dyn PluginHost>) -> (Registry, Vec<PluginError
 
 /// Whether *id* names one of the built-in platforms.
 pub fn is_builtin(id: &str) -> bool {
-    BUILTIN.contains(&id)
+    opentide_schema::platforms::is_builtin(id)
 }
 
-/// The identifiers of the built-in platforms, in [`crate::builtin`]'s order.
-pub const BUILTIN: [&str; 9] = [
-    "sentinel",
-    "defender_for_endpoint",
-    "splunk",
-    "sentinel_one",
-    "carbon_black_cloud",
-    "crowdstrike",
-    "harfanglab",
-    "elastic",
-    "sysdig",
-];
+/// The identifiers of the built-in platforms, in [`crate::builtin`]'s order
+/// ([`opentide_schema::platforms::Order::Connector`]).
+pub const BUILTIN: [&str; opentide_schema::platforms::COUNT] =
+    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Connector);
 
 /// What a command line without a plugin host (the native binary, the npm
 /// package) says about *platform*, a platform the workspace enables that is

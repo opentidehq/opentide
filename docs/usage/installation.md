@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.23.0** (6 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.28.1** (13 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -49,7 +49,7 @@ The latest release is **0.23.0** (6 November 2026). The first public release was
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==0.23.0'     # pin the current release
+pip install 'opentide==0.28.1'     # pin the current release
 ```
 
 </Tab>
@@ -58,7 +58,7 @@ pip install 'opentide==0.23.0'     # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==0.23.0'    # pin the current release
+uv pip install 'opentide==0.28.1'    # pin the current release
 ```
 
 </Tab>
@@ -83,7 +83,16 @@ An older command such as `pip install 'opentide[mcp]'` still installs opentide: 
 
 The offline query checks (`opentide validate`, `opentide validate query`, `opentide lint`), the language server (`opentide lsp start`) and MCP `validate_query` run a compiled engine, which is part of the opentide package: `pip install opentide` installs it, with nothing else to install. There is no `opentide[lsp]` extra and no separate `opentide-lsp` to install.
 
-opentide has a wheel for CPython 3.10 and later on Linux (x86_64 and arm64, glibc and musl), macOS (Intel and Apple silicon) and Windows (x64 and Arm), with the engine compiled in. On any other platform, or on a free-threaded interpreter (`python3.14t`), pip builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)). `opentide doctor` reports it (`analysis_engine`); see [`opentide lsp`](../cli/lsp.md) to set up an editor.
+opentide has a wheel for CPython 3.10 and later on Linux (x86_64 and arm64, glibc), macOS (Intel and Apple silicon) and Windows (x64 and Arm), with the engine compiled in. There is no wheel for musl Linux (Alpine), by decision. On musl, on any other platform, or on a free-threaded interpreter (`python3.14t`), pip builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)) and a C compiler. On Alpine:
+
+```bash
+apk add build-base curl
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+pip install opentide
+```
+
+The build takes several minutes. `opentide doctor` reports it (`analysis_engine`); see [`opentide lsp`](../cli/lsp.md) to set up an editor.
 
 ### Windows and PowerShell
 
