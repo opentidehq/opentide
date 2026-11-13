@@ -39,61 +39,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "pyyaml",
+    # The plugin API (opentide.plugins): a platform plugin's configuration_model
+    # is a pydantic model, which PlatformPlugin.check_configuration validates a
+    # rule's block with. Everything else is the Rust core, compiled into this
+    # package (opentide._native, bindings/python/, by hatch_build.py): the
+    # command line, the SDK, the Tide models and the platform connectors.
     "pydantic>=2.0",
-    "dulwich>=1.2.12",
-    "orjson>=3.9",
-    "tomli>=2.0; python_version < '3.11'",
-    "tomli-w>=1.0",
-    "structlog>=24.0",
-    "rich>=13.0",
-    "typing_extensions>=4.0",
-    # Required by the `opentide` console script (opentide.cli imports typer at import time).
-    # Typer 0.27+ ships rich/shellingham/colorama as default deps; extra `all` was removed.
-    # Capped below 0.29: opentide builds its CLI on Typer's vendored Click
-    # (typer._click, typer._completion_*, rich_utils._get_rich_console), which has
-    # no public equivalent, and 0.29.0 rewrote it (Parameter.type, click_type and
-    # typer._types are gone). Raise the cap only after the suite passes on the new
-    # release; tests/test_package/test_typer_compat.py checks the cap is present.
-    "typer>=0.27.0,<0.29",
-    "ruamel.yaml",
-    "questionary>=2.1.1",
-    # `opentide tui`. A dependency, not an extra, because `pip install opentide`
-    # is the only install. Imported only by opentide.cli.tui_app when the UI
-    # opens, so no command, nor `opentide tui --help`, pays for it at start-up.
-    "textual>=8.0",
-    # The per-user cache of the language-server catalogs opentide generates
-    # (opentide.analysis). Already installed with textual; declared because it
-    # is imported directly.
-    "platformdirs>=4.0",
-    "requests>=2.34.2",
-    "pymisp>=2.5.34.4",
-    # The MCP server (`opentide mcp start`) imports `mcp.server.mcpserver`
-    # (MCPServer), which mcp 1.x does not have. Standalone `fastmcp` is a
-    # different package and unused.
-    "mcp>=2.3,<3",
-    # Platform SDKs. `pip install opentide` is the only install: there are no
-    # extras, so live query validation, deploy and import work for every
-    # platform out of the box, including in generated CI pipelines.
-    # Sentinel deploys through the ARM REST API directly (no
-    # azure-mgmt-securityinsight: it is pre-release only, and uv refuses a
-    # transitive pre-release).
-    "azure-identity>=1.17",
-    "azure-monitor-query>=1.4",
-    "splunk-sdk>=2.0",
-    "carbon-black-cloud-sdk>=1.0",
-    # cbc_sdk imports boto3 when it loads (credential_providers imports its AWS
-    # Secrets Manager provider at module level), though opentide passes the
-    # tenant's token and never uses that provider.
-    # carbon-black-cloud-sdk requires boto3 unpinned. botocore caps
-    # python-dateutil below 3, and once 3.0.0 was out uv's resolver chose it and
-    # walked boto3 back to 0.0.3, whose botocore fails on `six.moves`. The floor
-    # makes the resolver keep a current boto3 and cap python-dateutil instead.
-    "boto3>=1.35",
-    # The query and Tide object engine and the language server (the queries
-    # checks of `validate` and `lint`, `validate query`, `opentide lsp`) are not a dependency:
-    # they are Rust, compiled from bindings/python/ into this package (opentide._native)
-    # by hatch_build.py.
 ]
 
 [dependency-groups]
@@ -104,10 +55,10 @@ dev = [
     "pytest-console-scripts>=1.4",
     "pytest-xdist>=3.6",
     "pytest-split>=0.9",
-    # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
-    # the interactive path had no e2e coverage (#260).
+    # Drives the console script on a real PTY (the setup wizard's Ctrl-C).
     "pexpect>=4.9",
-    "syrupy>=5.5.3,<7",
+    # CI's contract tests read the workflows (tests/test_ci/).
+    "pyyaml>=6.0",
     "ruff>=0.17.2",
     "ty>=0.0.65",
     "pre-commit>=4.0",
@@ -146,18 +97,7 @@ Repository = "https://github.com/opentidehq/opentide"
 Issues = "https://github.com/opentidehq/opentide/issues"
 
 [project.scripts]
-opentide = "opentide.cli.launch:main"
-
-[project.entry-points."opentide.platforms"]
-sentinel = "opentide.platforms.sentinel:declare"
-splunk = "opentide.platforms.splunk:declare"
-crowdstrike = "opentide.platforms.crowdstrike:declare"
-carbon_black_cloud = "opentide.platforms.carbon_black:declare"
-defender_for_endpoint = "opentide.platforms.defender_for_endpoint:declare"
-sentinel_one = "opentide.platforms.sentinel_one:declare"
-harfanglab = "opentide.platforms.harfanglab:declare"
-elastic = "opentide.platforms.elastic:declare"
-sysdig = "opentide.platforms.sysdig:declare"
+opentide = "opentide._cli:main"
 
 [tool.hatch.version]
 source = "vcs"
@@ -272,9 +212,10 @@ addopts = [
     "--cov-report=term-missing:skip-covered",
 ]
 markers = [
-    "cli_e2e: in-process Typer CliRunner end-to-end tests (separate CI job, Python 3.14)",
+    "cli_e2e: end-to-end tests of the console script (separate CI job, Python 3.14)",
     "cli_smoke: subprocess console-script smoke (same CI job as cli_e2e)",
     "gitlab_ci_lint: glint and gitlab-ci-verify on generated GitLab CI (CI job, needs the binaries)",
+    "full_set: too slow for every pull request; CI runs it in the full set only (cli-e2e-full)",
 ]
 
 [tool.coverage.run]
@@ -282,12 +223,6 @@ source = ["src/opentide"]
 relative_files = true
 omit = [
     "src/opentide/_version.py",
-    "src/opentide/deployment/*",
-    "src/opentide/mutation/*",
-    "src/opentide/platforms/*/client.py",
-    "src/opentide/platforms/*/deployer.py",
-    "src/opentide/platforms/*/validator.py",
-    "src/opentide/mcp_server/server.py",
 ]
 
 [tool.coverage.report]
@@ -319,7 +254,6 @@ src = ["src", "tests"]
 select = [
     "E", "F", "I", "UP", "B", "SIM",
     "C4", "DTZ", "ERA", "FURB", "G", "ISC", "LOG", "PGH", "PIE", "PLE", "PLW1510", "RUF", "T20",
-    "TID251",
 ]
 ignore = [
     "C408",    # dict(a=1) vs {"a": 1} is style, not a defect
@@ -327,49 +261,16 @@ ignore = [
 ]
 allowed-confusables = ["–", "×"]
 
+[tool.ruff.lint.isort]
+# The oracle's scripts (tests/cassettes/, scripts/golden/) import modules this
+# checkout no longer has: opentide is first-party wherever it comes from.
+known-first-party = ["opentide"]
+
 [tool.ruff.lint.per-file-ignores]
-# Entry points whose job is to print: the CLI's JSON writer and small `main()`s.
-"src/opentide/cli/output.py" = ["T201"]
-"src/opentide/cli/findings.py" = ["T201"]
-"src/opentide/ci/state_replay.py" = ["T201"]
-"src/opentide/mcp_server/launcher.py" = ["T201"]
-"src/opentide/vocabulary/sync_upstream.py" = ["T201"]
+# Scripts whose job is to print.
 "scripts/**" = ["T201"]
 # Tests assert on return codes, and their fakes use class attributes.
 "tests/**" = ["PLW1510", "RUF012"]
-# The requests.Session ban guards tenant TLS policy: platform clients only,
-# minus transport.py, which defines TenantSession.
-"!src/opentide/platforms/**" = ["TID251"]
-"src/opentide/platforms/transport.py" = ["TID251"]
-
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"requests.Session".msg = "Platform clients use opentide.platforms.transport.TenantSession, which keeps the tenant's ssl over REQUESTS_CA_BUNDLE and applies a timeout."
-
-[tool.ruff.lint.flake8-bugbear]
-# Typer declares CLI parameters as call defaults; they are immutable markers.
-extend-immutable-calls = ["typer.Option", "typer.Argument", "opentide.cli.enums.platform_help"]
 
 [tool.ty.src]
 include = ["src/opentide"]
-
-[tool.ty.rules]
-# Tide domain models intentionally shadow Pydantic BaseModel.validate (instance delegation).
-invalid-method-override = "warn"
-# Per-platform system configs narrow the nested SystemConfig.Tenant and
-# .Tenant.Setup dataclasses so each platform's tenant carries its own setup
-# fields (Sentinel gets a workspace, Splunk gets a port, and so on). Narrowing a
-# mutable attribute is unsound for writes in the general case, which is what ty
-# reports here, but these objects are parsed once from system configuration and
-# read thereafter. Metadata.schema and PlatformConfigBase.schema trip the same
-# pattern: both deliberately expose the object's `schema` YAML key, which would
-# otherwise resolve to the deprecated BaseModel.schema() classmethod.
-#
-# ty reports these same 19 sites under three overlapping override rules, so
-# silencing one surfaces the next -- all three are listed deliberately. The
-# names also churn between ty patch releases (0.0.86 used the first two, 0.0.87
-# added the third), so a ty bump that reds the lint job is usually a rename
-# rather than a new finding: compare the reported sites before changing code.
-invalid-property-type-override = "ignore"
-invalid-attribute-override = "ignore"
-invalid-mutable-override = "ignore"
-redundant-cast = "ignore"
