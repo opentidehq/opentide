@@ -184,11 +184,18 @@ jobs:
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
+          # Model field descriptions are the editor hovers; they are checked against
+          # the field tables in the specifications repository.
+          if grep -qE "^(crates/opentide-schema/src/objects/.*|xtask/src/spec_fields\\.rs|\\.github/workflows/ci\\.yml)$" <<<"$changed_files"; then
+            echo "fields=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "fields=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Without a specifications clone, --check only compares the lockfile with the
       # bundle, so pins edited by hand and relocked would pass.
       - name: Checkout specifications
-        if: steps.vocab_changes.outputs.changed == 'true'
+        if: steps.vocab_changes.outputs.changed == 'true' || steps.vocab_changes.outputs.fields == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opentidehq/specifications
@@ -205,6 +212,17 @@ jobs:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
           RUSTFLAGS: "-Dwarnings"
         run: cargo xtask vocab sync --check
+
+      # `cargo xtask spec-fields` (xtask/src/spec_fields.rs): the Rust models' field
+      # descriptions against the specifications' field tables. It exits 2 without
+      # a checkout and 1 when fewer than 100 rows match a field, so it cannot pass
+      # by not running.
+      - name: Check model field descriptions against the specifications
+        if: steps.vocab_changes.outputs.fields == 'true'
+        env:
+          OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
+          RUSTFLAGS: "-Dwarnings"
+        run: cargo xtask spec-fields
 
   # ---------------------------------------------------------------------------
   # The Cargo workspace: the engine crates (crates/, imported from

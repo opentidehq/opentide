@@ -103,14 +103,19 @@ commands:
   payloads diff --against python [--corpus NAME|all]
                  the deploy compile's request bodies against the oracle's, on
                  every corpus (UC-3.1, #823); `cargo xtask payloads help`
-  vocab <sync|sentinel-attack|diff> [options]
+  vocab <sync|sentinel-attack|diff|ingest> [options]
                  the vocabularies: sync and check them against specifications,
                  generate Sentinel's ATT&CK list, compare with the oracle
-                 (UC-1.6, #812); `cargo xtask vocab help` lists the options
+                 (UC-1.6, #812), ingest ATT&CK and MISP into specifications;
+                 `cargo xtask vocab help` lists the options
   schema diff --against python [options]
                  the object models against the oracle: their JSON Schemas,
                  and their verdict on every object file of every corpus
                  (UC-1.3, #809); `cargo xtask schema help` lists the options
+  spec-fields [--specifications DIR] [--list]
+                 check every model field's description against its row in the
+                 field tables of the specifications checkout (DIR, else
+                 $OPENTIDE_SPECIFICATIONS_ROOT, else ../specifications)
   stubs [--check] [--library FILE]
                  generate src/opentide/_native/models.pyi and sdk.pyi, the
                  stubs of the Tide models' Python classes and of the SDK's
@@ -235,6 +240,7 @@ fn main() -> ExitCode {
         "payloads" => xtask::payloads::main(rest),
         "vocab" => xtask::vocab::main(rest),
         "schema" => xtask::schema::main(rest),
+        "spec-fields" => xtask::spec_fields::main(rest),
         "stubs" => xtask::stubs::main(rest),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");

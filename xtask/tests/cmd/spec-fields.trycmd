@@ -1,0 +1,23 @@
+`cargo xtask spec-fields`: the usage, and its usage errors (exit 2). Without a
+specifications checkout it cannot run, which is an error, never a pass.
+
+```console
+$ xtask spec-fields --help
+usage: cargo xtask spec-fields [--specifications DIR] [--list]
+...
+
+$ xtask spec-fields --bogus
+? 2
+xtask spec-fields: unknown option `--bogus`
+...
+
+$ xtask spec-fields --specifications
+? 2
+xtask spec-fields: --specifications needs a directory
+...
+
+$ xtask spec-fields --specifications no-such-checkout
+? 2
+xtask spec-fields: no specifications checkout at no-such-checkout (set $OPENTIDE_SPECIFICATIONS_ROOT or pass --specifications)
+
+```
