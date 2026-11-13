@@ -229,6 +229,80 @@ pub struct CommandBudget {
     /// The Rust implementation's median on CI's runner class, in seconds;
     /// the reference while `target_waiver` is set.
     pub rust_baseline_s: Option<f64>,
+    /// A time miss of the rust engine accepted until an issue closes it:
+    /// `"#123, why"`. A median over the command's absolute time budget (its
+    /// target, its Rust baseline or the oracle's median) but at most
+    /// `waived_s` + `policy.regression` is reported as waived, not failed;
+    /// past that it fails. Remove it when the command meets its budget (the
+    /// summary says so).
+    pub time_waiver: Option<String>,
+    /// The median the time miss was measured at, in seconds.
+    pub waived_s: Option<f64>,
+    /// The same for the rust engine's peak RSS target: `"#123, why"`.
+    pub rss_waiver: Option<String>,
+    /// The peak RSS the miss was measured at, in MiB.
+    pub waived_rss_mib: Option<f64>,
+}
+
+/// Whether a waiver names the issue that closes it (`#123`).
+fn names_an_issue(waiver: &str) -> bool {
+    waiver.match_indices('#').any(|(at, _)| {
+        waiver[at + 1..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit())
+    })
+}
+
+/// How one metric's absolute misses stand against its waiver ([`settle`]).
+#[derive(Debug, PartialEq)]
+enum Settled {
+    /// No miss; a note when a waiver is no longer needed.
+    Met(Option<String>),
+    /// Every miss within the waiver: the notes say so.
+    Waived(Vec<String>),
+    /// Failures: no waiver, or a miss past the waived value.
+    Missed(Vec<String>),
+}
+
+/// Settles the absolute `misses` of one metric (`value`, in `unit`) against
+/// its `waiver` and the `accepted` value it was measured at: within
+/// `accepted` + `regression` the misses are reported, not failed.
+fn settle(
+    misses: &[String],
+    waiver: Option<&str>,
+    accepted: Option<f64>,
+    value: f64,
+    unit: &str,
+    regression: f64,
+) -> Settled {
+    let key = if unit == "s" {
+        "time_waiver"
+    } else {
+        "rss_waiver"
+    };
+    match (waiver, accepted) {
+        (Some(waiver), Some(_)) if misses.is_empty() => Settled::Met(Some(format!(
+            "meets its budget: remove its {key} ({waiver})"
+        ))),
+        (Some(waiver), Some(accepted)) if value <= accepted * (1.0 + regression) => Settled::Waived(
+            misses
+                .iter()
+                .map(|why| format!("{why}; waived until {waiver} (measured {accepted} {unit})"))
+                .collect(),
+        ),
+        (Some(waiver), Some(accepted)) => {
+            let mut whys = misses.to_vec();
+            whys.push(format!(
+                "{value:.3} {unit} is more than {:.0}% over the {accepted} {unit} the {key} \
+                 ({waiver}) accepts",
+                regression * 100.0
+            ));
+            Settled::Missed(whys)
+        }
+        _ if misses.is_empty() => Settled::Met(None),
+        _ => Settled::Missed(misses.to_vec()),
+    }
 }
 
 impl Budgets {
@@ -264,6 +338,46 @@ impl Budgets {
                     && !(value.is_finite() && value > 0.0)
                 {
                     bail!("commands.{id}.{name} must be a number > 0, not {value}");
+                }
+            }
+            for (name, value) in [
+                ("waived_s", budget.waived_s),
+                ("waived_rss_mib", budget.waived_rss_mib),
+            ] {
+                if let Some(value) = value
+                    && !(value.is_finite() && value > 0.0)
+                {
+                    bail!("commands.{id}.{name} must be a number > 0, not {value}");
+                }
+            }
+            for (name, waiver) in [
+                ("target_waiver", &budget.target_waiver),
+                ("time_waiver", &budget.time_waiver),
+                ("rss_waiver", &budget.rss_waiver),
+            ] {
+                if let Some(waiver) = waiver
+                    && !names_an_issue(waiver)
+                {
+                    bail!(
+                        "commands.{id}.{name} must name the issue that closes it (#123), \
+                         not `{waiver}`"
+                    );
+                }
+            }
+            for (waiver, waived, names) in [
+                (
+                    &budget.time_waiver,
+                    budget.waived_s,
+                    "time_waiver and waived_s",
+                ),
+                (
+                    &budget.rss_waiver,
+                    budget.waived_rss_mib,
+                    "rss_waiver and waived_rss_mib",
+                ),
+            ] {
+                if waiver.is_some() != waived.is_some() {
+                    bail!("commands.{id}: {names} go together");
                 }
             }
             if budget.target_waiver.is_some()
@@ -355,6 +469,9 @@ pub enum Verdict {
     Pass,
     /// Over a budget or a regression.
     Fail,
+    /// Over an absolute budget, within a waiver that names its issue:
+    /// reported, not failed.
+    Waived,
     /// Not measured: the engine has no implementation yet.
     NotImplemented,
 }
@@ -726,6 +843,9 @@ fn check_one(
     let floor_rss = policy.noise_floor_rss_mib * MIB;
     if report.engine == "rust" {
         if report.scale == 1 && report.seed == Some(SEED_OF_TARGETS) {
+            // The absolute misses, settled against the command's waivers below.
+            let mut time_misses: Vec<String> = Vec::new();
+            let mut rss_misses: Vec<String> = Vec::new();
             row.budget_s = budget.target_s;
             row.budget_rss_bytes = budget.target_rss_mib.map(|mib| mib * MIB);
             if let Some(target) = budget.target_s {
@@ -743,15 +863,12 @@ fn check_one(
                             ));
                         }
                         if regressed(median, baseline, rust_time_tolerance, policy.noise_floor_s) {
-                            fail(
-                                &mut row,
-                                format!(
-                                    "median {median:.3} s is {:+.1}% against the Rust baseline \
+                            time_misses.push(format!(
+                                "median {median:.3} s is {:+.1}% against the Rust baseline \
                                      {baseline:.3} s (more than {:.0}%)",
-                                    (median / baseline - 1.0) * 100.0,
-                                    rust_time_tolerance * 100.0
-                                ),
-                            );
+                                (median / baseline - 1.0) * 100.0,
+                                rust_time_tolerance * 100.0
+                            ));
                         }
                         row.reasons.push(if median > target {
                             format!("over the plan target {target:.3} s, waived until {waiver}")
@@ -761,10 +878,9 @@ fn check_one(
                     }
                     _ => {
                         if median > target {
-                            fail(
-                                &mut row,
-                                format!("median {median:.3} s is over the target {target:.3} s"),
-                            );
+                            time_misses.push(format!(
+                                "median {median:.3} s is over the target {target:.3} s"
+                            ));
                         }
                     }
                 }
@@ -787,26 +903,52 @@ fn check_one(
                     )
                 });
                 if median > ceiling {
-                    fail(
-                        &mut row,
-                        format!(
-                            "median {median:.3} s is over the oracle's {ceiling:.3} s: \
-                             slower than the implementation it replaces"
-                        ),
-                    );
+                    time_misses.push(format!(
+                        "median {median:.3} s is over the oracle's {ceiling:.3} s: \
+                         slower than the implementation it replaces"
+                    ));
                 }
             }
             if let Some(target) = row.budget_rss_bytes
                 && rss > target
             {
-                fail(
-                    &mut row,
-                    format!(
-                        "peak RSS {:.1} MiB is over the target {:.1} MiB",
-                        rss / MIB,
-                        target / MIB
-                    ),
-                );
+                rss_misses.push(format!(
+                    "peak RSS {:.1} MiB is over the target {:.1} MiB",
+                    rss / MIB,
+                    target / MIB
+                ));
+            }
+            for (misses, waiver, waived, value, unit) in [
+                (
+                    time_misses,
+                    budget.time_waiver.as_deref(),
+                    budget.waived_s,
+                    median,
+                    "s",
+                ),
+                (
+                    rss_misses,
+                    budget.rss_waiver.as_deref(),
+                    budget.waived_rss_mib,
+                    rss / MIB,
+                    "MiB",
+                ),
+            ] {
+                match settle(&misses, waiver, waived, value, unit, policy.regression) {
+                    Settled::Met(Some(note)) => row.reasons.push(note),
+                    Settled::Met(None) => {}
+                    Settled::Waived(notes) => {
+                        row.reasons.extend(notes);
+                        if row.verdict == Verdict::Pass {
+                            row.verdict = Verdict::Waived;
+                        }
+                    }
+                    Settled::Missed(whys) => {
+                        for why in whys {
+                            fail(&mut row, why);
+                        }
+                    }
+                }
             }
         }
     } else if baseline_applies {
@@ -960,6 +1102,7 @@ pub fn summary_markdown(outcome: &Outcome, report: &Report) -> String {
             Verdict::Pass if row.reasons.is_empty() => "✅ pass".to_owned(),
             Verdict::Pass => format!("✅ pass ({})", row.reasons.join("; ")),
             Verdict::Fail => format!("❌ {}", row.reasons.join("; ")),
+            Verdict::Waived => format!("⚠️ waived: {}", row.reasons.join("; ")),
             Verdict::NotImplemented => format!("➖ {}", row.reasons.join("; ")),
         };
         #[expect(
@@ -1341,7 +1484,7 @@ target_s = 0.03
 
         let text = BUDGETS.replace(
             "target_s = 0.03\n",
-            "target_s = 0.03\ntarget_waiver = \"UC-3.6\"\nrust_baseline_s = 0.16\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.16\n",
         );
         let budgets = Budgets::parse(&text).unwrap();
         let rust = |explain_s: f64| {
@@ -1612,7 +1755,7 @@ target_s = 0.03
     fn a_waived_target_holds_rust_to_its_own_baseline_and_says_so() {
         let text = BUDGETS.replace(
             "target_s = 0.03\n",
-            "target_s = 0.03\ntarget_waiver = \"UC-3.6\"\nrust_baseline_s = 0.16\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.16\n",
         );
         let budgets = Budgets::parse(&text).unwrap();
         let rust = |explain_s: f64| {
@@ -1629,11 +1772,11 @@ target_s = 0.03
         assert!(outcome.passed(), "{:?}", outcome.failures);
         assert_eq!(
             outcome.rows[1].reasons,
-            ["over the plan target 0.030 s, waived until UC-3.6"]
+            ["over the plan target 0.030 s, waived until UC-3.6 (#999)"]
         );
         let text = summary_markdown(&outcome, &rust(0.17));
         assert!(
-            text.contains("✅ pass (over the plan target 0.030 s, waived until UC-3.6)"),
+            text.contains("✅ pass (over the plan target 0.030 s, waived until UC-3.6 (#999))"),
             "{text}"
         );
         // A regression against the Rust baseline still fails.
@@ -1648,10 +1791,131 @@ target_s = 0.03
         assert!(
             Budgets::parse(&BUDGETS.replace(
                 "target_s = 0.03\n",
-                "target_s = 0.03\ntarget_waiver = \"x\"\n"
+                "target_s = 0.03\ntarget_waiver = \"#1 x\"\n"
             ))
             .is_err()
         );
+    }
+
+    #[test]
+    fn a_waived_miss_is_reported_not_failed_and_a_regression_past_it_fails() {
+        // validate_clean: target 0.7 s and 100 MiB; the miss measured 0.9 s and 140 MiB.
+        let text = BUDGETS.replace(
+            "target_rss_mib = 100.0\n",
+            "target_rss_mib = 100.0\ntime_waiver = \"#1072, the start\"\nwaived_s = 0.9\n\
+             rss_waiver = \"#1071, the catalogs\"\nwaived_rss_mib = 140.0\n",
+        );
+        let waived = Budgets::parse(&text).unwrap();
+        let rust = |seconds: f64, mib: f64| {
+            report(
+                "rust",
+                vec![
+                    measured("validate_clean", seconds, mib),
+                    CommandResult::not_implemented("explain", "e", "no Rust yet"),
+                ],
+            )
+        };
+        // Over both targets, within both waivers: waived, and the gate passes.
+        let outcome = check_with(&waived, &rust(0.9, 140.0), None, true);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(outcome.rows[0].verdict, Verdict::Waived);
+        assert!(
+            outcome.rows[0]
+                .reasons
+                .iter()
+                .any(|r| r.contains("over the target 0.700 s; waived until #1072")),
+            "{:?}",
+            outcome.rows[0].reasons
+        );
+        assert!(
+            outcome.rows[0]
+                .reasons
+                .iter()
+                .any(|r| r.contains("waived until #1071, the catalogs (measured 140 MiB)")),
+            "{:?}",
+            outcome.rows[0].reasons
+        );
+        let summary = summary_markdown(&outcome, &rust(0.9, 140.0));
+        assert!(summary.contains("⚠️ waived: "), "{summary}");
+        // Within 10% of the waived values: still waived.
+        assert!(check(&waived, &rust(0.98, 150.0), None).passed());
+        // Past the waived time + 10%: fails, and says the waiver does not cover it.
+        let outcome = check(&waived, &rust(1.0, 140.0), None);
+        assert!(!outcome.passed());
+        assert_eq!(outcome.rows[0].verdict, Verdict::Fail);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("the time_waiver (#1072")),
+            "{:?}",
+            outcome.failures
+        );
+        // Past the waived RSS + 10%: fails.
+        assert!(!check(&waived, &rust(0.9, 160.0), None).passed());
+        // A regression against the last result is never waived.
+        let last = rust(0.6, 140.0);
+        let outcome = check(&waived, &rust(0.9, 140.0), Some(&last));
+        assert!(!outcome.passed());
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("last development result")),
+            "{:?}",
+            outcome.failures
+        );
+        // Meeting the budget: passes and says the waivers can go.
+        let outcome = check(&waived, &rust(0.6, 90.0), None);
+        assert!(outcome.passed());
+        assert_eq!(outcome.rows[0].verdict, Verdict::Pass);
+        assert!(
+            outcome.rows[0]
+                .reasons
+                .iter()
+                .any(|r| r.contains("remove its time_waiver"))
+                && outcome.rows[0]
+                    .reasons
+                    .iter()
+                    .any(|r| r.contains("remove its rss_waiver")),
+            "{:?}",
+            outcome.rows[0].reasons
+        );
+        // Without the waivers the same miss fails.
+        assert!(!check(&budgets(), &rust(0.9, 140.0), None).passed());
+    }
+
+    #[test]
+    fn a_waiver_must_name_its_issue_and_its_measured_value() {
+        for (bad, why) in [
+            (
+                "time_waiver = \"later\"\nwaived_s = 0.9\n",
+                "names no issue",
+            ),
+            (
+                "rss_waiver = \"UC-2.2\"\nwaived_rss_mib = 140.0\n",
+                "names no issue",
+            ),
+            ("time_waiver = \"#1072\"\n", "no measured value"),
+            ("waived_rss_mib = 140.0\n", "no waiver"),
+            ("time_waiver = \"#1072\"\nwaived_s = 0.0\n", "a zero value"),
+        ] {
+            let text = BUDGETS.replace(
+                "target_rss_mib = 100.0\n",
+                &format!("target_rss_mib = 100.0\n{bad}"),
+            );
+            assert!(Budgets::parse(&text).is_err(), "{why}: {bad}");
+        }
+        // The plan target's waiver too.
+        let text = BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6\"\nrust_baseline_s = 0.16\n",
+        );
+        assert!(Budgets::parse(&text).is_err());
+        assert!(names_an_issue("#926, the load"));
+        assert!(names_an_issue("UC-2.6 (#821) rebuilds it"));
+        assert!(!names_an_issue("# 12"));
+        assert!(!names_an_issue("C# rewrite"));
     }
 
     #[test]

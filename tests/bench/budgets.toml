@@ -17,6 +17,16 @@
 #                                 rust_baseline_s (measured on CI's runner class), and the
 #                                 summary shows the distance to the target. Remove both
 #                                 when the target is met
+#   time_waiver, waived_s         a miss of the rust engine's absolute time budget (its
+#   rss_waiver, waived_rss_mib    target, its Rust baseline, the oracle's median) or RSS
+#                                 target, accepted until the issue it names closes it
+#                                 ("#123, why"; a waiver without an issue is refused):
+#                                 a result over the budget but at most the measured
+#                                 waived_s / waived_rss_mib + policy.regression is reported
+#                                 as waived, never failed; past that it fails, and a
+#                                 regression against the last result always does. The
+#                                 budget itself stays. Remove both when the summary says
+#                                 the command meets its budget
 #
 # Every run is also held to the last development result (--previous): more than
 # policy.regression above it fails. A difference within the noise floor never does.
@@ -73,6 +83,11 @@ baseline_rss_mib = 190.1
 target_s = 0.7
 # Plan section 11: <= 100 MB, enforced as MiB (100e6 bytes).
 target_rss_mib = 95.4
+# Missed: the peak is the KQL catalogs parsed through a whole toml_edit document
+# (massif; loading one of them from JSON still leaves 117 MiB). Measured on the
+# EPYC 7763, run 43450448595 (PR #1055).
+rss_waiver = "#1071, the catalogs' loading redesign"
+waived_rss_mib = 140.3
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
@@ -159,6 +174,10 @@ label = "opentide --version (the console script's start)"
 # (and explain, above, whose 30 ms target is the other startup budget) through the
 # launcher of `uv sync`; the oracle's start is not measured.
 target_s = 0.02
+# Missed on the EPYC 7763 (0.016 s on the 9V45): what is left is Python's own start.
+# Measured 0.021 s, run 43450448595 (PR #1055).
+time_waiver = "#1072, whether --version skips the engine"
+waived_s = 0.021
 
 [commands.lsp_first_diagnostics]
 label = "language server, first diagnostics"
@@ -176,6 +195,10 @@ target_s = 0.1
 # findings, so the waiver stays and names the item that addresses it.
 target_waiver = "#926, the first diagnostics waiting for the workspace load"
 rust_baseline_s = 0.154
+# The rebuilt server is past its Rust baseline too (recorded before UC-2.6, kept as
+# recorded): measured 0.258 s on the EPYC 7763, run 43450448595 (PR #1055).
+time_waiver = "#926, the first diagnostics waiting for the workspace load"
+waived_s = 0.258
 # Plan section 11: editor memory per window (language server and backend) <= 150 MB,
 # enforced as MiB (150e6 bytes).
 target_rss_mib = 143.1

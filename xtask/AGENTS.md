@@ -81,7 +81,11 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline;
   where the plan names no target, over the oracle's median on the same CPU, or on a CPU recorded
   nowhere over the slowest recorded + 20%: never slower than the implementation it replaces);
-  differences within the noise floor (20 ms, 2 MiB) never fail. With `--require-reference`
+  differences within the noise floor (20 ms, 2 MiB) never fail. A miss of a rust absolute budget
+  (time or RSS) that a `time_waiver` / `rss_waiver` names an issue for (`"#123, why"`, refused
+  without one) is reported as waived, not failed, up to its measured `waived_s` /
+  `waived_rss_mib` + 10%; past that, or against the last result, it fails, and the budget
+  itself stays. With `--require-reference`
   (CI), a measured command that no baseline, target or comparable previous result applies to
   fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
   Markdown table per command.
