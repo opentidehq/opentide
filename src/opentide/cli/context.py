@@ -26,6 +26,8 @@ class CliContext:
     no_color: bool = False
     #: ``--quiet``: print only the outcome line and errors.
     quiet: bool = False
+    #: ``--verbose``: print notes (``info`` findings) too. JSON and reports always hold them.
+    verbose: bool = False
     show_banner: bool = True
     #: True when ``--repo`` was typed on the command line rather than inherited
     #: from ``OPENTIDE_REPO_ROOT``. An explicit path has to win over a stale

@@ -9,8 +9,9 @@ import pytest
 
 from opentide import analysis
 from opentide.analysis import ELASTIC_ADVISORY_CODES, SYSDIG_ADVISORY_CODES, Finding
+from opentide.cli.enums import LintCheck
 from opentide.cli.services import explain
-from opentide.cli.services.lint import _ObjectRecord, _query_findings
+from opentide.cli.services.lint import _engine_findings, _ObjectRecord
 
 
 def _finding(code: str) -> Finding:
@@ -36,7 +37,7 @@ def test_the_sysdig_advisory_is_a_lint_warning(
     record = _ObjectRecord(
         path=tmp_path / "rule.yaml", relative="objects/rules/rule.yaml", text="a\nb\nc\n"
     )
-    found: list[dict[str, Any]] = _query_findings(tmp_path, [record])
+    found: list[dict[str, Any]] = _engine_findings(tmp_path, [record], [LintCheck.queries])
     assert [(item["_code"], item["severity"]) for item in found] == [
         ("sysdig_list_self_reference", "warning")
     ]
@@ -87,7 +88,7 @@ def test_the_engine_copy_of_an_advisory_opentide_reports_is_dropped(
     record = _ObjectRecord(
         path=tmp_path / "rule.yaml", relative="objects/rules/rule.yaml", text=_SIGNATURE_FILE
     )
-    assert _query_findings(tmp_path, [record]) == []
+    assert _engine_findings(tmp_path, [record], [LintCheck.queries]) == []
 
 
 def test_an_advisory_only_the_engine_reports_is_kept(
@@ -99,7 +100,7 @@ def test_an_advisory_only_the_engine_reports_is_kept(
     record = _ObjectRecord(
         path=tmp_path / "rule.yaml", relative="objects/rules/rule.yaml", text=_SIGNATURE_FILE
     )
-    found = _query_findings(tmp_path, [record])
+    found = _engine_findings(tmp_path, [record], [LintCheck.queries])
     assert sorted((item["_code"], item["yaml_line"]) for item in found) == [
         ("harfanglab_yara_context", 13),
         ("yara_meta_missing", 5),
@@ -118,11 +119,11 @@ def test_a_decomposed_advisory_is_keyed_by_form(
         path=tmp_path / "rule.yaml", relative="objects/rules/rule.yaml", text=decomposed
     )
     engine_reports.append(_engine("yara_meta_missing", 1))  # the engine's, on the rule name
-    assert _query_findings(tmp_path, [record]) == []
+    assert _engine_findings(tmp_path, [record], [LintCheck.queries]) == []
     engine_reports[:] = [_engine("harfanglab_yara_context", 1)]  # a code opentide did not find
-    assert [item["_code"] for item in _query_findings(tmp_path, [record])] == [
-        "harfanglab_yara_context"
-    ]
+    assert [
+        item["_code"] for item in _engine_findings(tmp_path, [record], [LintCheck.queries])
+    ] == ["harfanglab_yara_context"]
 
 
 _EXABEAM_FILE = (
@@ -152,3 +153,24 @@ def test_the_exabeam_advisories_are_lint_warnings_at_their_key(tmp_path: Path) -
     other = _ObjectRecord(path=path, relative="r.yaml", text="name: x\n")
     broken = _ObjectRecord(path=path, relative="r.yaml", text="exabeam: [\n")
     assert _exabeam_findings([other, broken]) == []
+
+
+def test_the_recommended_field_is_a_note_of_its_own_check(
+    tmp_path: Path, engine_reports: list[Finding]
+) -> None:
+    """The engine before #249 reports it as a warning; lint's severity is its own."""
+    engine_reports.extend(
+        [
+            Finding("recommended_field_missing", "warning", "x", 1, 1, 1, 9, ("response",)),
+            _finding("sysdig_list_self_reference"),
+        ]
+    )
+    record = _ObjectRecord(
+        path=tmp_path / "rule.yaml", relative="objects/rules/rule.yaml", text="a\nb\nc\n"
+    )
+    found: list[dict[str, Any]] = _engine_findings(tmp_path, [record], [LintCheck.recommended])
+    assert [(item["check"], item["severity"], item["message"]) for item in found] == [
+        ("recommended", "info", "Recommended field missing: response")
+    ]
+    both = _engine_findings(tmp_path, [record], [LintCheck.recommended, LintCheck.queries])
+    assert [item["check"] for item in both] == ["recommended", "queries"]

@@ -437,7 +437,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload == {
         "path": str(tmp_path.resolve()),
-        "checks": ["filenames", "metadata", "placeholders", "queries"],
+        "checks": ["filenames", "metadata", "recommended", "placeholders", "queries"],
         "findings": [
             {
                 "check": "metadata",
@@ -555,7 +555,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
 def test_lint_cli_human_shows_severity_and_line(tmp_path: Path) -> None:
     """The human line carries the severity and a one-based ``path:line``, like validate."""
     _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
-    result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
+    result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint", "--verbose"])
     assert result.exit_code == 0, result.output
     assert (
         "note[metadata_recommended]: Recommended metadata missing: author, organisation\n"
@@ -788,3 +788,108 @@ def test_lint_fix_never_changes_whether_a_file_is_debug(
     assert renamed.name.endswith(suffix)
     assert is_debug_file_name(renamed.name) is is_debug_file_name(src.name)
     assert _lint_names(tmp_path, style=style)["count"] == 0
+
+
+# --- optional fields are notes (#1028) -------------------------------------------------------
+
+_RULE_WITHOUT_OPTIONAL_BLOCKS = """\
+name: Simulated Rule
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000002
+  schema: rule::1.0
+  author: Jane
+  organisation: Acme
+"""
+
+
+def _lint_toml(root: Path, text: str) -> None:
+    path = root / ".opentide" / "configurations" / "lint.toml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_a_rule_without_configurations_or_response_is_a_recommended_note(tmp_path: Path) -> None:
+    """The editor reported these and lint did not: no lint.toml setting reached them."""
+    _write_object(tmp_path, "rules", "simulated-rule.yaml", _RULE_WITHOUT_OPTIONAL_BLOCKS)
+    findings = run_lint(tmp_path, checks=[LintCheck.recommended])["findings"]
+    assert [
+        (item["check"], item["severity"], item["code"], item["message"]) for item in findings
+    ] == [
+        (
+            "recommended",
+            "info",
+            "recommended_field_missing",
+            "Recommended field missing: configurations",
+        ),
+        ("recommended", "info", "recommended_field_missing", "Recommended field missing: response"),
+    ]
+
+
+def test_the_queries_check_does_not_repeat_the_recommended_fields(tmp_path: Path) -> None:
+    _write_object(tmp_path, "rules", "simulated-rule.yaml", _RULE_WITHOUT_OPTIONAL_BLOCKS)
+    assert run_lint(tmp_path, checks=[LintCheck.queries])["findings"] == []
+
+
+@pytest.mark.parametrize(
+    ("toml", "expected"),
+    [
+        ("[recommended]\nenabled = false\n", []),
+        ('[recommended]\nseverity = "warning"\n', ["warning", "warning"]),
+        ("[metadata]\nenabled = false\n", ["info", "info"]),
+    ],
+)
+def test_lint_toml_recommended_decides_the_recommended_check(
+    tmp_path: Path, toml: str, expected: list[str]
+) -> None:
+    _write_object(tmp_path, "rules", "simulated-rule.yaml", _RULE_WITHOUT_OPTIONAL_BLOCKS)
+    _lint_toml(tmp_path, toml)
+    findings = run_lint(tmp_path)["findings"]
+    assert [item["severity"] for item in findings if item["check"] == "recommended"] == expected
+
+
+def test_strict_does_not_fail_on_notes(tmp_path: Path) -> None:
+    """A rule without an author failed a `lint --strict` CI gate, though the field is optional."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    result = run_lint(tmp_path, strict=True)
+    assert {item["severity"] for item in result["findings"]} == {"info"}
+    assert result["status"] == "issues"
+    assert result["_exit_code"] == 0
+
+
+def test_strict_fails_on_notes_lint_toml_raises(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    _lint_toml(tmp_path, '[metadata]\nseverity = "warning"\n')
+    result = run_lint(tmp_path, strict=True)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+
+
+def test_notes_print_only_with_verbose(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    base = ["--no-color", "--repo", str(tmp_path), "lint"]
+    quiet = runner.invoke(app, base)
+    assert quiet.exit_code == 0, quiet.output
+    assert "metadata_recommended" not in quiet.output
+    assert "opentide lint --verbose" in quiet.output
+    assert "show 1 note" in quiet.output
+    verbose = runner.invoke(app, [*base, "--verbose"])
+    assert verbose.exit_code == 0, verbose.output
+    assert "note[metadata_recommended]" in verbose.output
+    assert "--verbose" not in verbose.output
+
+
+def test_verbose_does_not_change_json(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    base = ["--json", "--repo", str(tmp_path), "lint"]
+    plain = json.loads(runner.invoke(app, base).stdout)
+    verbose = json.loads(runner.invoke(app, [*base, "--verbose"]).stdout)
+    for payload in (plain, verbose):
+        payload.pop("duration_ms", None)
+    assert plain == verbose
+    assert [item["severity"] for item in plain["findings"]] == ["info"]
+
+
+def test_quiet_and_verbose_are_a_usage_error(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--repo", str(tmp_path), "lint", "--quiet", "--verbose"])
+    assert result.exit_code == 2
+    assert "--quiet and --verbose cannot be used together" in result.output

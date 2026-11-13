@@ -118,6 +118,9 @@ class LintCheck(str, Enum):
 
     filenames = "filenames"
     metadata = "metadata"
+    #: Fields the templates ask for and validation does not require (a rule's
+    #: ``configurations`` and ``response``), as the language server reports them.
+    recommended = "recommended"
     placeholders = "placeholders"
     #: The analysis engine's warnings and notes on rule queries (style, not validity).
     queries = "queries"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -24,14 +25,17 @@ def lint_cmd(
     ctx: typer.Context,
     fix: bool = typer.Option(False, "--fix", help="Apply safe filename renames"),
     strict: bool = typer.Option(
-        False, "--strict", help="Exit non-zero when findings exist (CI gate)"
+        False,
+        "--strict",
+        help="Exit non-zero when errors or warnings are left (CI gate). Notes never fail it",
     ),
     check: list[LintCheck] = typer.Option(
         [],
         "--check",
         metavar="CHECK",
         help=(
-            "Limit to one check: filenames, metadata, placeholders or queries (repeatable). "
+            "Limit to one check: filenames, metadata, recommended, placeholders or queries "
+            "(repeatable). "
             "Runs it even when lint.toml disables it"
         ),
     ),
@@ -52,6 +56,7 @@ def lint_cmd(
     """Check file names and recommended metadata
 
     Catalogue hygiene: filename slugs and recommended metadata, not schema validation.
+    A missing optional field is a note: it never fails --strict, and prints with --verbose.
     """
     from opentide.cli.services.lint import run_lint
     from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
@@ -79,15 +84,23 @@ def lint_cmd(
     ]
     write_report_file(report_format, output, diagnostics, command="lint")
     if not cli.json_output:
-        from opentide.cli.ui.codeframe import render_diagnostics
+        from opentide.cli.ui.codeframe import hidden_notes_step, render_diagnostics
         from opentide.core.logging.config import get_stdout_console
 
         if report_format is not ReportFormat.text and output is None:
             print_report(report_format, diagnostics, outcome, command="lint")
-        render_diagnostics(
-            get_stdout_console(), diagnostics, sources=sources, mode=text_mode(cli), quiet=cli.quiet
+        hidden = render_diagnostics(
+            get_stdout_console(),
+            diagnostics,
+            sources=sources,
+            mode=text_mode(cli),
+            quiet=cli.quiet,
+            verbose=cli.verbose,
         )
         publish_findings(
             cli, diagnostics, outcome, command="lint", outcome=outcome.outcome or outcome.message
         )
+        step = hidden_notes_step(hidden, "opentide lint")
+        if step is not None:
+            outcome = replace(outcome, next_actions=(*outcome.next_actions, step))
     emit_result(cli, outcome)

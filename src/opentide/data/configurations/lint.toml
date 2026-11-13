@@ -1,6 +1,8 @@
 # `opentide lint` checks. Override any key in .opentide/configurations/lint.toml;
 # tables merge, and a list (such as `required`) replaces the default wholesale.
 # `opentide lint --check <name>` runs that check even when it is disabled here.
+# `--strict` fails on errors and warnings. A missing optional field is a note
+# ("info"): it never fails a run, and `opentide lint --verbose` prints it.
 
 [filenames]
 enabled = true
@@ -25,7 +27,15 @@ enabled = true
 # Metadata keys every object must fill. Generated templates leave these keys
 # uncommented, so a scaffolded object shows each one lint asks for.
 required = ["author", "organisation"]
-# severity = "info"
+# These fields are optional, so a missing one is a note ("info"). Set
+# "warning" or "error" to make `--strict` and the editor treat it as a problem.
+# severity = "warning"
+
+[recommended]
+# Fields the templates ask for and opentide validate does not require: today a
+# rule's `configurations` and `response`. A missing one is a note, as above.
+enabled = true
+# severity = "warning"
 
 [placeholders]
 enabled = true

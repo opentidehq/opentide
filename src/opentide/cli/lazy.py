@@ -21,7 +21,7 @@ from opentide.cli.commands import ROOT_COMMANDS, CommandSpec
 
 #: Boolean root options that may follow the command: ``opentide validate --json``.
 #: Value-taking root options (``--repo``, ``--data``, ``--proxy``) stay before it.
-HOISTED_FLAGS = frozenset({"--json", "--no-color", "--debug", "--quiet"})
+HOISTED_FLAGS = frozenset({"--json", "--no-color", "--debug", "--quiet", "--verbose"})
 
 #: ``ctx.meta`` key for the leading words of the command line, ``("mcp", "start")``.
 COMMAND_WORDS_KEY = "opentide.command_words"

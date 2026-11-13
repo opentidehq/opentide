@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
@@ -47,6 +47,12 @@ if TYPE_CHECKING:
 logger = structlog.get_logger("opentide.cli.services.lint")
 
 _OBJECT_FAMILIES = ("threats", "objectives", "rules")
+
+#: The engine's code for a field the templates ask for and validation does not require.
+RECOMMENDED_FIELD_CODE = "recommended_field_missing"
+
+#: The checks whose findings come from the analysis engine, in one pass per file.
+_ENGINE_CHECKS = frozenset({LintCheck.recommended, LintCheck.queries})
 
 
 @dataclass
@@ -570,12 +576,21 @@ def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object
     ]
 
 
-def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, object]]:
-    """The engine's style findings on each object: query warnings and notes, platform advisories.
+def _engine_findings(
+    root: Path, records: list[_ObjectRecord], checks: Collection[LintCheck]
+) -> list[dict[str, object]]:
+    """What the engine reports for the ``queries`` and ``recommended`` *checks*, one pass per file.
 
-    A query the engine rejects (an error) is ``opentide validate``'s finding,
-    and the engine's object checks are validate's and lint's other checks'.
-    A placeholder query is the ``placeholders`` check's.
+    ``queries``: the engine's style findings, query warnings and notes and
+    platform advisories. A query the engine rejects (an error) is ``opentide
+    validate``'s finding, and the engine's other object checks are validate's
+    and lint's other checks'. A placeholder query is the ``placeholders`` check's.
+
+    ``recommended``: a field the templates ask for and validation does not
+    require (``recommended_field_missing``), a note as the editor shows it.
+    This process installs no ``lint.toml`` into the engine, so the engine
+    reports every such field and lint's own configuration decides.
+
     Raises :class:`~opentide.analysis.EngineUnavailableError`.
     """
     from opentide.analysis import (
@@ -601,6 +616,12 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         lines = record.text.splitlines()
         marked = {marked.line + 1 for marked in record.placeholder_lines}
         for finding in check_file(space, record.path, record.text):
+            if finding.code == RECOMMENDED_FIELD_CODE:
+                if LintCheck.recommended in checks:
+                    findings.append(_recommended_finding(root, record, finding))
+                continue
+            if LintCheck.queries not in checks:
+                continue
             if finding.severity == "error" or _in_placeholder(finding, lines, marked):
                 continue
             if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
@@ -631,6 +652,24 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                 }
             )
     return findings
+
+
+def _recommended_finding(root: Path, record: _ObjectRecord, finding: Finding) -> dict[str, object]:
+    """A ``recommended`` note for the engine's ``recommended_field_missing`` *finding*."""
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine
+
+    dotted = ".".join(finding.field_path)
+    return {
+        "check": LintCheck.recommended.value,
+        "severity": "info",
+        "path": record.relative,
+        "yaml_line": finding.line - 1,
+        "uuid": record.uuid,
+        "message": f"Recommended field missing: {dotted}",
+        "_code": finding.code,
+        "_field_path": list(finding.field_path),
+        "_diagnostic": diagnostic_from_engine(finding, file_path=record.path, workspace=root),
+    }
 
 
 def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
@@ -984,19 +1023,24 @@ def run_lint(
         findings.extend(_metadata_findings(shown, config.required_metadata))
     if LintCheck.placeholders in selected:
         findings.extend(_placeholder_findings(shown))
-    if LintCheck.queries in selected:
+    engine_checks = [item for item in selected if item in _ENGINE_CHECKS]
+    if engine_checks:
         from opentide.analysis import EngineUnavailableError
 
         # The HarfangLab YARA, Bitdefender, Graylog, Exabeam and Google SecOps advisories
         # need no engine: reported whether it loads or not.
-        advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
-        advisories.extend(_bitdefender_findings(shown))
-        advisories.extend(_graylog_findings(shown))
-        advisories.extend(_exabeam_findings(shown))
-        advisories.extend(_google_secops_findings(shown))
+        advisories: list[dict[str, object]] = []
+        if LintCheck.queries in selected:
+            advisories = [
+                finding for record in shown for finding in _harfanglab_yara_findings(record)
+            ]
+            advisories.extend(_bitdefender_findings(shown))
+            advisories.extend(_graylog_findings(shown))
+            advisories.extend(_exabeam_findings(shown))
+            advisories.extend(_google_secops_findings(shown))
         findings.extend(advisories)
         try:
-            findings.extend(_query_findings(target, shown))
+            findings.extend(_engine_findings(target, shown, engine_checks))
         except EngineUnavailableError as exc:
             from opentide.cli.services.engine import engine_unavailable_result
 
@@ -1023,7 +1067,8 @@ def run_lint(
     )
     # What --fix just fixed is reported, but no longer counts against the run.
     left = [item for item in findings if item.get("fixed") is not True]
-    if left and strict:
+    # A note (a missing optional field) never fails a run, --strict or not.
+    if strict and any(item.get("severity") != "info" for item in left):
         status = "failed"
     elif left:
         status = "issues"

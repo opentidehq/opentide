@@ -34,6 +34,7 @@ from rich.console import Console
 from rich.style import Style
 from rich.text import Text
 
+from opentide.cli.ui.contract import NextAction
 from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, engine_reference, relative_path
 from opentide.cli.ui.glyphs import glyph
 from opentide.cli.ui.mode import OutputMode, get_mode
@@ -411,19 +412,24 @@ def render_diagnostics(
     sources: SourceFiles | None = None,
     mode: OutputMode | None = None,
     quiet: bool = False,
+    verbose: bool = False,
     cwd: Path | None = None,
     highlight: bool | None = None,
-) -> None:
+) -> int:
     """Print each diagnostic as a code frame, a blank line after each one.
 
-    ``quiet`` keeps errors only. *highlight* colours the query lines of a
-    frame; by default only in the human mode. JSON and MCP modes never reach
-    this function.
+    ``quiet`` keeps errors only. Notes (a missing optional field, say) print
+    only with *verbose*. *highlight* colours the query lines of a frame; by
+    default only in the human mode. JSON and MCP modes never reach this
+    function. Returns how many notes were left out, for the hint after the
+    outcome line (:func:`hidden_notes_step`).
     """
     mode = mode or get_mode()
     sources = sources or SourceFiles()
     encoding = console.encoding or "utf-8"
-    shown = [item for item in diagnostics if not quiet or item.severity == "error"]
+    shown = [item for item in diagnostics if shows(item.severity, quiet=quiet, verbose=verbose)]
+    hidden_notes = 0 if quiet else sum(1 for item in diagnostics if item.severity == "note")
+    hidden_notes -= sum(1 for item in shown if item.severity == "note")
     # Only a terminal wraps a long line, and it breaks wherever the edge falls.
     columns = console.width if console.is_terminal else None
     # Colour, so a person at a terminal only: plain output stays plain.
@@ -442,6 +448,24 @@ def render_diagnostics(
         ):
             console.print(line, soft_wrap=True)
         console.print()
+    return hidden_notes
+
+
+def shows(severity: str, *, quiet: bool = False, verbose: bool = False) -> bool:
+    """Whether a finding of *severity* prints: ``--quiet`` errors only, notes with ``--verbose``."""
+    if quiet:
+        return severity == "error"
+    return verbose or severity != "note"
+
+
+def hidden_notes_step(hidden: int, command: str) -> NextAction | None:
+    """The step that shows the *hidden* notes *command* left out; ``None`` when there are none."""
+    if hidden <= 0:
+        return None
+    noun = "note" if hidden == 1 else "notes"
+    return NextAction(
+        f"{command} --verbose", f"show {hidden} {noun}, such as a missing optional field"
+    )
 
 
 # --------------------------------------------------------------------------
