@@ -6385,7 +6385,6 @@ dependencies = [
  "opentide-core",
  "opentide-lsp",
  "opentide-schema",
- "opentide-tide",
  "opentide-workspace",
  "pyo3-introspection",
  "regex",

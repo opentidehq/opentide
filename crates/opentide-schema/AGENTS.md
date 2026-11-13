@@ -94,12 +94,12 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   `[[difference]]`.
 - Falco's terms (operators, modifiers, priorities, keywords, the name rule) and the Elastic
   duration grammar are `opentide_core::falco` and `opentide_core::duration`, shared with
-  opentide-tide's `sysdig` and `elastic` (the language server): never a second table here. The
-  two Sysdig engines read the same YAML node tree (`opentide_core::node`, #850) but walk it their own way and place
-  findings their own way; this crate is authoritative for the CLI (it is checked against the
-  oracle), and `xtask/tests/sysdig_engines.rs` runs both on `tests/oracle/platform_cases.toml`'s
-  Sysdig cases and compares the codes, a difference by design listed there with its reason. The
-  language server's walk goes when it reads this model (UC-2.6, #821).
+  opentide-tide's `sysdig` and `elastic` (the language server): never a second table here. This
+  crate is the one Sysdig constraint engine: it is checked against the oracle
+  (`tests/oracle/platform_cases.toml`) and `opentide validate` reports it, the language server
+  with it (UC-2.6, #821). The language server's own walk of the block, and
+  `xtask/tests/sysdig_engines.rs`, which held the two engines together, went with that;
+  opentide-tide's `sysdig` keeps only `sysdig_list_self_reference`, the advisory `lint` owns.
 - A generated template, snippet file or router schema is byte for byte what the oracle writes:
   `cargo xtask codegen --check` compares them with every golden recording of `opentide
   generate`. A generated JSON Schema (each revision's, `visibility.toml`'s, the configuration

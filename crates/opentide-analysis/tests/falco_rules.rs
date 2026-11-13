@@ -14,8 +14,8 @@
 )]
 
 use opentide_analysis::{
-    AnalyzeRequest, LanguageId, MemoryWorkspace, Position, analyze, analyze_queries, codes,
-    completions, hover,
+    AnalyzeRequest, LanguageId, MemoryWorkspace, Position, analyze, analyze_blocks,
+    analyze_queries, codes, completions, hover,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -46,6 +46,9 @@ fn rule(name: &str) -> String {
         .1
 }
 
+/// Every `falco_*` finding of the object: its condition's, and the Sysdig
+/// block's own ([`analyze_blocks`], which `lint` reports and the editor
+/// leaves to it: UC-2.6, #821).
 fn falco_codes(path: &str, text: &str) -> Vec<(String, String)> {
     let host = MemoryWorkspace {
         files: vec![(path.into(), text.into())],
@@ -60,6 +63,7 @@ fn falco_codes(path: &str, text: &str) -> Vec<(String, String)> {
     )
     .diagnostics
     .into_iter()
+    .chain(analyze_blocks(&host, text))
     .filter(|d| d.code.starts_with("falco_"))
     .map(|d| {
         let line = text.lines().nth(d.range.start.line as usize).unwrap_or("");
@@ -148,6 +152,50 @@ fn every_converted_rule_is_clean() {
         }
         assert_eq!(falco_codes(&path, &text), vec![], "{path}");
     }
+}
+
+/// UC-2.6 (#821): an exception value the field's type cannot hold is a
+/// fault of the condition Falco appends it to, so `opentide validate`'s
+/// queries check has it ([`analyze_queries`], as an error). The editor
+/// publishes `validate`'s findings and checks the block no longer, so
+/// [`analyze`] does not report it a second time.
+#[test]
+fn an_exception_value_the_field_cannot_hold_is_the_conditions_fault() {
+    let text = rule("terminal-shell-in-container.yaml").replacen(
+        "fields: [proc.pname, container.image.repository]",
+        "fields: [proc.pid, container.image.repository]",
+        1,
+    );
+    let host = MemoryWorkspace::default();
+    let condition = analyze_queries(&host, &text)
+        .into_iter()
+        .find(|q| q.field_path == ["configurations", "sysdig", "condition"])
+        .unwrap_or_else(|| panic!("no condition query"));
+    let errors: Vec<&str> = condition
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == opentide_analysis::Severity::Error)
+        .map(|d| d.code.as_str())
+        .collect();
+    assert_eq!(
+        errors,
+        [codes::FALCO_EXCEPTION],
+        "{:?}",
+        condition.diagnostics
+    );
+    let editor = analyze(
+        &host,
+        AnalyzeRequest {
+            uri: "objects/rules/terminal-shell-in-container.yaml".into(),
+            language: LanguageId::TideYaml,
+            text: text.clone(),
+        },
+    )
+    .diagnostics;
+    assert!(
+        !editor.iter().any(|d| d.code == codes::FALCO_EXCEPTION),
+        "{editor:?}"
+    );
 }
 
 #[test]
