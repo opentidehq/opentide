@@ -377,9 +377,10 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     if save_if is False:
                         continue
                     save_if = str(save_if)
-                    assert save_if.startswith("${{ " + PUSH_ONLY) or save_if.startswith(
-                        "${{ github.event_name != 'pull_request'"
-                    ), f"{where}: rust-cache saves on a pull request ({save_if})"
+                    allowed = ("${{ " + PUSH_ONLY, "${{ github.event_name != 'pull_request'")
+                    assert save_if.startswith(allowed), (
+                        f"{where}: rust-cache saves on a pull request ({save_if})"
+                    )
                     checked += 1
                 elif uses.startswith(SCCACHE_SAVE):
                     assert str(step.get("if", "")).startswith(PUSH_ONLY), where
