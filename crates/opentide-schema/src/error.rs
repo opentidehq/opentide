@@ -73,10 +73,13 @@ pub enum ErrorKind {
     /// rejects, with Pydantic's exact type: `value_error`, `literal_error`,
     /// `greater_than_equal`, …
     InvalidValue(&'static str),
-    /// A platform block's constraint (bitdefender-1.0's `bitdefender_*`
-    /// codes): the oracle raises it as a `PydanticCustomError` whose type is
-    /// the code, and `issues_from_pydantic` reports the code itself, not
-    /// `schema_validation`.
+    /// A platform block's constraint finding (bitdefender-1.0's
+    /// `bitdefender_*`, and the other platforms' constraint codes). Its
+    /// Pydantic error type ([`ErrorKind::pydantic_type`]) and its diagnostic
+    /// code ([`SchemaError::code`], on every surface) are both the constraint
+    /// code itself, as 0.28.0 reports them: the block's validator raises a
+    /// `PydanticCustomError` typed by the code, and `issues_from_pydantic`
+    /// reports that type as the issue's code, never `schema_validation`.
     Constraint(&'static str),
     /// The conversion stopped: the document produced more work than
     /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to

@@ -712,6 +712,22 @@ fn a_rate_limit_waits_and_resends_the_same_request() {
 }
 
 #[test]
+fn a_long_retry_after_is_waited_for_at_most_120_seconds() {
+    // A deliberate difference from 0.28.0, which waited as long as asked
+    // (CHANGELOG, [Unreleased]): every connector caps a Retry-After.
+    let run = Run::new();
+    run.script(|_| ResponseTemplate::new(429).insert_header("Retry-After", "3600"));
+    run.script(|body| {
+        answer(200, &error(&body["id"], -32003, "Too many requests", None))
+            .insert_header("Retry-After", "86400")
+    });
+    let outcome = run.deploy(&create()).unwrap();
+    assert_eq!(run.methods().len(), 3);
+    assert_eq!(run.slept(), [Duration::from_secs(120); 2]);
+    assert_eq!(outcome.state, StateChange::Record(FIRST_ID.to_owned()));
+}
+
+#[test]
 fn a_rate_limit_that_never_clears_fails() {
     let run = Run::new();
     for _ in 0..11 {
