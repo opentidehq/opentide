@@ -257,7 +257,8 @@ published assets, and publishes to PyPI, crates.io and npm with trusted publishi
 session can release. `release_candidate: N`, for the Rust-core transition (it may be retired
 after), runs from `integration/unified-core` or `development` and publishes `vX.Y.Z-rc.N` as
 pre-releases: a GitHub pre-release, PyPI `X.Y.ZrcN` and the crates at `X.Y.Z-rc.N` on crates.io,
-nothing on npm; `dry_run` publishes nothing;
+nothing on npm. The Rust core is 1.0.0, held at candidates (`v1.0.0-rc.1`: PyPI `1.0.0rc1`,
+crates.io `1.0.0-rc.1`) until the maintainer accepts the final 1.0.0. `dry_run` publishes nothing;
 `checkout_ref: vX.Y.Z` resumes a release. Steps:
 [release-management](../.agents/skills/release-management/SKILL.md); the registries' settings and
 the decisions (no musl, the free-threaded sdist): [`docs/internal/publishing.md`](../docs/internal/publishing.md#the-release-train).
@@ -267,7 +268,7 @@ workflow's shape (which jobs may mint an OIDC token, what runs before what).
 
 `publish-pypi.yml` (PyPI) and `engine-release.yml` (the engine's `engine-v*` releases) retired into
 it: no more `engine-v*` tags. The assets keep language-server's names with the product's version
-(`highlights-v0.24.0.zip`, `opentide-lsp-v0.24.0-<target>`); each asset's attestation is signed by
+(`highlights-v1.0.0.zip`, `opentide-lsp-v1.0.0-<target>`); each asset's attestation is signed by
 `opentidehq/opentide/.github/workflows/publish.yml` on `development` (a candidate's, on the branch it
 ran from: `development` or `integration/unified-core`).
 

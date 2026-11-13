@@ -106,14 +106,14 @@ Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, 
 
 ### Release candidates (the Rust-core transition)
 
-For the Rust-core transition ([#790](https://github.com/opentidehq/opentide/issues/790)), and possibly retired after it, `release_candidate: N` publishes `vX.Y.Z-rc.N` of the workspace version as pre-releases, so the Rust-only package can be installed from the real registries before `integration/unified-core` merges into `development`:
+For the Rust-core transition ([#790](https://github.com/opentidehq/opentide/issues/790)), and possibly retired after it, `release_candidate: N` publishes `vX.Y.Z-rc.N` of the workspace version as pre-releases, so the Rust-only package can be installed from the real registries before `integration/unified-core` merges into `development`. The Rust core ships as **1.0.0**, held at candidates (`v1.0.0-rc.1`, `-rc.2`, ...; `1.0.0rc1` on PyPI) until the maintainer accepts the final 1.0.0; breaking changes may land between candidates:
 
 | Where | What a candidate publishes |
 |-------|----------------------------|
 | Branch | Run on `integration/unified-core` (or `development`); a release runs on `development` only, and the guard refuses anything else |
 | GitHub | The tag `vX.Y.Z-rc.N` and a **pre-release** (never Latest) with every asset: the binaries, the installers, the engine assets, the SBOMs, `SHA256SUMS`, and the attestations, signed by `publish.yml` on the branch it ran from |
-| PyPI | `X.Y.ZrcN`, a pre-release on **pypi.org** (environment `pypi`, the same trusted publisher as a release; no TestPyPI). pip and uv skip it unless asked: `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or the exact version (`opentide==X.Y.ZrcN`) |
-| crates.io | Every crate at `X.Y.Z-rc.N`, a SemVer pre-release, in dependency order: the workflow runs `release.py bump X.Y.Z-rc.N` in its own checkout (the branch keeps `X.Y.Z`) before it packages and publishes. Cargo skips a pre-release unless it is asked for (`cargo install opentide --version 0.24.0-rc.1 --features cli`). **A crates.io version can be yanked, never deleted**, and the first candidate **claims every new crate name** (`opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`) |
+| PyPI | `X.Y.ZrcN`, a pre-release on **pypi.org** (environment `pypi`, the same trusted publisher as a release; no TestPyPI). pip and uv skip it unless asked: `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or the exact version (`opentide==1.0.0rc1`) |
+| crates.io | Every crate at `X.Y.Z-rc.N`, a SemVer pre-release, in dependency order: the workflow runs `release.py bump X.Y.Z-rc.N` in its own checkout (the branch keeps `X.Y.Z`) before it packages and publishes. Cargo skips a pre-release unless it is asked for (`cargo install opentide --version 1.0.0-rc.1 --features cli`). **A crates.io version can be yanked, never deleted**, and the first candidate **claims every new crate name** (`opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`) |
 | npm | **Nothing.** The npm tarballs are built and smoke-tested as for a release, and ci.yml's `packages` artifacts carry them to test ([Testing a build without publishing](#testing-a-build-without-publishing)) |
 
 The guard runs `scripts/build/release.py check-candidate`, which refuses a candidate whose version is not above the newest dated `CHANGELOG.md` heading, and every smoke test passes before anything is attested or published. A candidate's GitHub notes quote `## [Unreleased]`.
@@ -146,7 +146,7 @@ npm resolves the native package from the local tarball; it may print a warning f
 
 **Decisions** recorded here:
 
-1. **The engine's tag series ended.** `engine-release.yml` retired into `publish.yml`, and there are no more `engine-vX.Y.Z` tags: the assets keep their names with the product's `vX.Y.Z` (`highlights-v0.24.0.zip`), which vscode-extension's pins and `scripts/engine/check-vscode-extension.mjs` accept. `crates/CHANGELOG.md` holds the engine's releases before the train; later changes go in `CHANGELOG.md`.
+1. **The engine's tag series ended.** `engine-release.yml` retired into `publish.yml`, and there are no more `engine-vX.Y.Z` tags: the assets keep their names with the product's `vX.Y.Z` (`highlights-v1.0.0.zip`), which vscode-extension's pins and `scripts/engine/check-vscode-extension.mjs` accept. `crates/CHANGELOG.md` holds the engine's releases before the train; later changes go in `CHANGELOG.md`.
 2. **No musl.** The maintainer decided against musl builds: no musllinux wheel (`*-musllinux_*` in cibuildwheel's `skip`), no `*-unknown-linux-musl` binary, no `linux-*-musl` npm package. On Alpine, `pip install opentide` builds from the sdist, and the installers say so.
 3. **cibuildwheel and `hatch_build.py`, not maturin.** The wheels keep the build the repository already uses, which compiles the same abi3 extension maturin would; moving to maturin would change the build backend of the sdist too, for no artifact the release lacks.
 4. **Free-threaded CPython (3.14t): the sdist.** A free-threaded interpreter has no stable ABI, so a `cp314t` wheel would be one more build per platform for one interpreter. It installs from the sdist, which builds wherever a Rust toolchain is installed, as before.

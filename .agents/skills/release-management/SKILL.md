@@ -33,7 +33,7 @@ Never tag by hand. Trunk is `development`.
 | Fact | Detail |
 |------|--------|
 | Package | `opentide` on PyPI |
-| Tag | `v0.x.y` (leading `v`); a release candidate `v0.x.y-rc.N` (the Rust-core transition) |
+| Tag | `v0.x.y` (leading `v`); a release candidate `v1.0.0-rc.N` (the Rust-core transition: 1.0.0, held at candidates) |
 | Release | **Run workflow** on `development`, no inputs → [`publish.yml`](../../../.github/workflows/publish.yml) checks, builds, smoke-tests, attests, creates the tag + GitHub Release, then publishes to PyPI, crates.io and npm. Nothing else publishes: no workflow runs on a `v*` tag or a Release made by hand |
 | Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
 | Lockstep | The crates are at that version: `python3 scripts/engine/release.py lockstep 0.x.y` (the workspace version and every internal pin). The workflow writes it into the npm packages (`release.py npm-version`) and checks them (`lockstep --npm`) |
@@ -53,7 +53,7 @@ Every artifact carries a GitHub artifact attestation (build provenance). **No mu
 
 ## Patch vs minor
 
-The package is pre-1.0, so the minor number carries breaking and behaviour changes. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:
+The package is pre-1.0, so the minor number carries breaking and behaviour changes. **The Rust core is 1.0.0**, released first as candidates (`1.0.0-rc.N` on crates.io, `1.0.0rcN` on PyPI) and held there until the maintainer accepts the final 1.0.0; breaking changes may land between candidates. Never cut the final 1.0.0 without that decision. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:
 
 - changes what input is accepted (schema or model shape, validation strictness);
 - changes CLI output, JSON fields, or exit codes that scripts depend on;
@@ -86,19 +86,19 @@ Do not skip Step 1. The tag must sit on the merge commit that **already contains
 The crates carry the product version: in a pull request to `development` (it can be the notes PR of Step 1, or come before it so that a candidate can run first), or to `integration/unified-core` for a candidate cut there before it merges:
 
 ```bash
-python3 scripts/engine/release.py bump 0.x.y      # workspace version, internal pins, Cargo.lock
-python3 scripts/engine/release.py lockstep 0.x.y  # what the release guard checks
+python3 scripts/engine/release.py bump 1.0.0      # workspace version, internal pins, Cargo.lock
+python3 scripts/engine/release.py lockstep 1.0.0  # what the release guard checks
 ```
 
 The `Cargo.lock` diff is only the workspace crates' `version` lines; anything else means Cargo re-resolved: restore the lock and bump again.
 
-**Release candidate** (for the Rust-core transition; it may be retired after). Once the bump is on the branch, Run **Publish** on `integration/unified-core` (or `development`) with `release_candidate: 1` (then 2, ...); the guard refuses a candidate from any other branch, and a release from anything but `development`. It publishes `v0.x.y-rc.N` as pre-releases:
+**Release candidate** (for the Rust-core transition; it may be retired after). Once the bump is on the branch, Run **Publish** on `integration/unified-core` (or `development`) with `release_candidate: 1` (then 2, ...); the guard refuses a candidate from any other branch, and a release from anything but `development`. It publishes `v1.0.0-rc.N` as pre-releases:
 
 | Where | What |
 |-------|------|
-| GitHub | A **pre-release** (never Latest) tagged `v0.x.y-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
-| PyPI | `0.x.yrcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==0.x.yrcN` |
-| crates.io | Every crate at `0.x.y-rc.N`, in dependency order (the workflow runs `release.py bump 0.x.y-rc.N` in its own checkout; the branch keeps `0.x.y`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
+| GitHub | A **pre-release** (never Latest) tagged `v1.0.0-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
+| PyPI | `1.0.0rcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==1.0.0rc1` |
+| crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
 | npm | **Nothing.** Test the npm packages from ci.yml's `packages` artifacts (`npm-<platform>`) |
 
 Its notes quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates").
