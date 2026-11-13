@@ -321,3 +321,31 @@ def test_a_failed_rustup_setup_fails_the_step(path: Path) -> None:
 )
 def test_a_masked_rustup_setup_is_seen(step: dict[str, Any], masked: int) -> None:
     assert len(_masked_setups(step)) == masked
+
+
+def _cibuildwheel_linux() -> dict[str, Any]:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return pyproject["tool"]["cibuildwheel"]["linux"]
+
+
+def test_the_linux_wheels_build_with_the_pinned_release_minimal() -> None:
+    """The manylinux containers install rust-toolchain.toml's release, minimal,
+    in before-all, and RUSTUP_TOOLCHAIN names it for the build. Without it,
+    rustup read the file in /project and auto-installed the release with its
+    components (rustfmt, clippy) mid-build, behind hatch_build.py's quiet
+    `rustc -vV`; an install that failed there left a partial toolchain, and
+    cargo failed on `clippy-preview ... detected conflict: 'bin/cargo-clippy'`
+    (linux-arm64, #1031, #1048)."""
+    channel = tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))[
+        "toolchain"
+    ]["channel"]
+    linux = _cibuildwheel_linux()
+    assert linux["environment"]["RUSTUP_TOOLCHAIN"] == channel
+    before_all = linux["before-all"]
+    assert isinstance(before_all, str)
+    installer = before_all.split("|", 1)[1]
+    words = installer.split()
+    assert words[words.index("--profile") + 1] == "minimal"
+    # The release the build runs, installed before it, never `stable`.
+    assert words[words.index("--default-toolchain") + 1] == '"$RUSTUP_TOOLCHAIN"'
+    assert not re.search(r"(?:-c|--component)\b|clippy|rustfmt", installer), installer
