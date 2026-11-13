@@ -2122,6 +2122,86 @@ code = "config_check_failed"
 reason = "the language server's code for a configuration checker that raised; no CLI path emits it"
 
 [[unreachable]]
+code = "cql_assignment_as"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_correlate_aggregate"
+reason = "an engine error only in a correlation rule (a CrowdStrike block's query), and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_correlate_placement"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_deprecated_function"
+reason = "an engine warning lint's query filter drops: _query_findings (cli/services/lint.py) keeps a warning only when its code has a prefix in ENGINE_REFERENCES (cli/ui/diagnostics.py), which has no cql_ (the engine's check_file reports it on a CrowdStrike rule); validate keeps errors only and never checks CrowdStrike queries (validation/query_platforms.py); held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_duplicate_parameter"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_event_function_after_aggregate"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_free_text_after_aggregate"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_link_outside_correlate"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_match_guard"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_missing_parameter"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_parameter_value"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_parse_error"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_regex_flag"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_regex_group_under_or"
+reason = "an engine warning lint's query filter drops: _query_findings (cli/services/lint.py) keeps a warning only when its code has a prefix in ENGINE_REFERENCES (cli/ui/diagnostics.py), which has no cql_ (the engine's check_file reports it on a CrowdStrike rule); validate keeps errors only and never checks CrowdStrike queries (validation/query_platforms.py); held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_removed_function"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_string_escape"
+reason = "an engine warning lint's query filter drops: _query_findings (cli/services/lint.py) keeps a warning only when its code has a prefix in ENGINE_REFERENCES (cli/ui/diagnostics.py), which has no cql_ (the engine's check_file reports it on a CrowdStrike rule); validate keeps errors only and never checks CrowdStrike queries (validation/query_platforms.py); held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_unknown_event"
+reason = "an engine warning lint's query filter drops: _query_findings (cli/services/lint.py) keeps a warning only when its code has a prefix in ENGINE_REFERENCES (cli/ui/diagnostics.py), which has no cql_ (the engine's check_file reports it on a CrowdStrike rule); validate keeps errors only and never checks CrowdStrike queries (validation/query_platforms.py); held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_unknown_function"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_unknown_parameter"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
+code = "cql_unnamed_argument"
+reason = "an engine error on a CrowdStrike query, and 0.28.1 never checks one: validate skips CrowdStrike queries (validation/query_platforms.py: 'CrowdStrike is never checked'; a rule with it validates with queries_checked 0), validate query --platform crowdstrike is refused ('query validation not supported for crowdstrike') and --file x.cql matches no rule file, and lint keeps no engine errors; held by crates/opentide-cli/tests/cql_codes.rs (the Rust CLI checks CQL) and opentide-cql's unit tests"
+
+[[unreachable]]
 code = "defender_output_columns"
 reason = "declared in opentide-core's codes but emitted by no crate"
 
@@ -2228,86 +2308,6 @@ owner = "P-BD"
 [[pending]]
 code = "bitdefender_yara_size"
 owner = "P-BD"
-
-[[pending]]
-code = "cql_assignment_as"
-owner = "C1"
-
-[[pending]]
-code = "cql_correlate_aggregate"
-owner = "C1"
-
-[[pending]]
-code = "cql_correlate_placement"
-owner = "C1"
-
-[[pending]]
-code = "cql_deprecated_function"
-owner = "C1"
-
-[[pending]]
-code = "cql_duplicate_parameter"
-owner = "C1"
-
-[[pending]]
-code = "cql_event_function_after_aggregate"
-owner = "C1"
-
-[[pending]]
-code = "cql_free_text_after_aggregate"
-owner = "C1"
-
-[[pending]]
-code = "cql_link_outside_correlate"
-owner = "C1"
-
-[[pending]]
-code = "cql_match_guard"
-owner = "C1"
-
-[[pending]]
-code = "cql_missing_parameter"
-owner = "C1"
-
-[[pending]]
-code = "cql_parameter_value"
-owner = "C1"
-
-[[pending]]
-code = "cql_parse_error"
-owner = "C1"
-
-[[pending]]
-code = "cql_regex_flag"
-owner = "C1"
-
-[[pending]]
-code = "cql_regex_group_under_or"
-owner = "C1"
-
-[[pending]]
-code = "cql_removed_function"
-owner = "C1"
-
-[[pending]]
-code = "cql_string_escape"
-owner = "C1"
-
-[[pending]]
-code = "cql_unknown_event"
-owner = "C1"
-
-[[pending]]
-code = "cql_unknown_function"
-owner = "C1"
-
-[[pending]]
-code = "cql_unknown_parameter"
-owner = "C1"
-
-[[pending]]
-code = "cql_unnamed_argument"
-owner = "C1"
 
 [[pending]]
 code = "exabeam_advanced_in_rule"
