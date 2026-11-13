@@ -930,6 +930,10 @@ use crate::objects::objective::{
     ObjectiveV1_0, SignalData,
 };
 use crate::objects::platform::PlatformBlock;
+use crate::objects::platform::bitdefender::{
+    BitdefenderActions, BitdefenderConfig, BitdefenderCriterion, BitdefenderDetection,
+    BitdefenderProcessScope, BitdefenderTargets, BitdefenderYara, CriterionValue, ProcessAction,
+};
 use crate::objects::platform::carbon_black::CarbonBlackConfig;
 use crate::objects::platform::crowdstrike::{
     CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,
@@ -1012,6 +1016,7 @@ py_value! {
     Suppression => type_hint_union!(hint::STR, hint::BOOL),
     SentinelTechnique => hint::STR,
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
+    CriterionValue => type_hint_union!(hint::STR, hint::INT),
     SavedSearchValue => type_hint_union!(hint::STR, hint::INT, hint::FLOAT, hint::BOOL),
 }
 
@@ -1042,6 +1047,27 @@ py_union! {
     SeverityChoice { Level, Mapped } => type_hint_union!(hint::STR, <ElasticSeverity as pyo3::PyTypeInfo>::TYPE_HINT),
     RiskChoice { Score, Mapped } => type_hint_union!(hint::INT, <ElasticRisk as pyo3::PyTypeInfo>::TYPE_HINT),
     IntegrationChoice { Package, Detailed } => type_hint_union!(hint::STR, <ElasticIntegration as pyo3::PyTypeInfo>::TYPE_HINT),
+}
+
+/// `Literal[True] | BitdefenderProcessScope`: `True`, or the scope's class
+/// instance, as Pydantic holds it.
+impl<'py> IntoPyObject<'py> for &ProcessAction {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        hint::BOOL,
+        <BitdefenderProcessScope as pyo3::PyTypeInfo>::TYPE_HINT
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        match self {
+            ProcessAction::On(flag) => Ok(PyBool::new(py, *flag).to_owned().into_any()),
+            ProcessAction::Scoped(scope) => Ok(Bound::new(py, scope.clone())?.into_any()),
+        }
+    }
 }
 
 /// `GraylogEventField`: a field name or template string, or one of its two
@@ -1088,6 +1114,13 @@ py_models! {
     ThreatActor,
     ThreatBody,
     ThreatVectorV1_0 [ThreatVectorV1_0::SCHEMA_IDENTIFIER],
+    BitdefenderCriterion,
+    BitdefenderDetection,
+    BitdefenderYara,
+    BitdefenderTargets,
+    BitdefenderProcessScope,
+    BitdefenderActions,
+    BitdefenderConfig [<BitdefenderConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     CarbonBlackConfig [<CarbonBlackConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
@@ -1204,8 +1237,10 @@ pub mod models {
 
     #[pymodule_export]
     use super::{
-        CarbonBlackConfig, CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,
-        DefenderAlert, DefenderAllowBlockAction, DefenderAllowBlockGroupScoping, DefenderConfig,
+        BitdefenderActions, BitdefenderConfig, BitdefenderCriterion, BitdefenderDetection,
+        BitdefenderProcessScope, BitdefenderTargets, BitdefenderYara, CarbonBlackConfig,
+        CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule, DefenderAlert,
+        DefenderAllowBlockAction, DefenderAllowBlockGroupScoping, DefenderConfig,
         DefenderDeviceActions, DefenderExclusion, DefenderFileActions, DefenderGroupScoping,
         DefenderImpactedEntities, DefenderResponseActions, DefenderUserActions, DetectionExample,
         DetectionSignal, ElasticActions, ElasticCardinality, ElasticConfig, ElasticEql,

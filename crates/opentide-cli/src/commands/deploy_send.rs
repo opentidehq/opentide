@@ -1741,6 +1741,7 @@ impl Sender<'_, '_> {
         };
         let settings = match platform {
             "sysdig" => opentide_connectors::sysdig::http_defaults(),
+            "bitdefender" => opentide_connectors::bitdefender::http_defaults(),
             "google_secops" => opentide_connectors::google_secops::http_defaults(),
             "graylog" => opentide_connectors::graylog::http_defaults(),
             _ => http_settings(platform, Duration::from_secs(timeout)),
@@ -1794,6 +1795,7 @@ impl Sender<'_, '_> {
         match platform {
             "elastic" => self.elastic(&batches, log),
             "sysdig" => self.sysdig(&batches, log),
+            "bitdefender" => self.bitdefender(&batches, log),
             "google_secops" => self.google_secops(&batches, log),
             "graylog" => self.graylog(&batches, log),
             "defender_for_endpoint" | "sentinel_one" | "crowdstrike" => {
@@ -3087,6 +3089,182 @@ impl Sender<'_, '_> {
         }
         Ok(())
     }
+    /// Bitdefender GravityZone: each rule planned from deployment state,
+    /// compiled for the tenant (its targets resolved), then created (its id
+    /// recorded), updated or disabled with the whole payload, or deleted
+    /// (its id forgotten) (`BitdefenderDeploy.deploy_tenant`).
+    fn bitdefender(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        use opentide_compile::bitdefender::{GravityZoneRule, compile_rule};
+        use opentide_connectors::bitdefender::{
+            Action, Failure, RuleDeploy, StateChange, deploy_rule,
+        };
+        const PLATFORM: &str = "bitdefender";
+        let logger = "opentide.platforms.bitdefender.deployer";
+        for batch in batches {
+            let tenant = batch.tenant.name.clone();
+            let planned = self.screen(PLATFORM, batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect(PLATFORM, batch)?;
+            let automatic = opentide_compile::deploy::setup(&batch.table, "automatic_actions")
+                .is_none_or(CJson::truthy);
+            for (rule, action) in planned {
+                let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
+                let strategy = match self.strategy_of(rule, PLATFORM) {
+                    Ok(strategy) => strategy,
+                    Err(raised) => {
+                        self.close(log, result, Err(raised.clone()))?;
+                        continue;
+                    }
+                };
+                let compiled = match &action {
+                    // A delete sends the recorded id alone.
+                    Planned::Delete(_) => GravityZoneRule {
+                        uuid: rule.uuid.clone(),
+                        kind: opentide_schema::objects::platform::bitdefender::Kind::Detection,
+                        name: rule.name.clone(),
+                        description: String::new(),
+                        tags: Vec::new(),
+                        settings: opentide_compile::json::Object::new(),
+                        targets: None,
+                        company_id: None,
+                    },
+                    _ => match compile_rule(self.compile, rule, strategy, Some(&batch.table)) {
+                        Ok(compiled) => compiled,
+                        Err(error) => {
+                            let message = format!("{}: {}", error.code, error.reason);
+                            tracing::error!(
+                                code = error.code,
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                name = rule.name.as_str(),
+                                error = message.as_str(),
+                                logger,
+                                "{}",
+                                error.code
+                            );
+                            self.rule_error(&mut result, &message);
+                            log.finished(result);
+                            continue;
+                        }
+                    },
+                };
+                let actions_unsupported = !automatic
+                    && rule
+                        .block(PLATFORM)
+                        .and_then(|block| block.get("actions"))
+                        .is_some_and(|actions| !actions.is_null());
+                let root = self.workspace.root().to_path_buf();
+                let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
+                    Some(ignore) => Some(StateError {
+                        code: "deployment_state_ignored",
+                        message: deploy_state::ignored_message(&ignore),
+                    }),
+                    None => self.unpersisted(&rule.uuid, PLATFORM, &tenant),
+                };
+                let request = RuleDeploy {
+                    action: match &action {
+                        Planned::Create => Action::Create,
+                        Planned::Update(id) => Action::Update(id.clone()),
+                        Planned::Delete(id) => Action::Delete(id.clone()),
+                    },
+                    compiled,
+                    disable: strategy == StatusStrategy::Disablement,
+                    actions_unsupported,
+                    recreate_refusal: recreate_refusal
+                        .as_ref()
+                        .map(|refusal| refusal.message.clone()),
+                };
+                let context = self.context(&connection);
+                match self.block(deploy_rule(context, &request)) {
+                    Ok(outcome) => {
+                        for warning in &outcome.warnings {
+                            if warning.raised {
+                                self.warned = true;
+                            }
+                            tracing::warn!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                detail = warning.detail.as_str(),
+                                logger,
+                                "{}",
+                                warning.event
+                            );
+                        }
+                        match &outcome.state {
+                            StateChange::Record(id) => {
+                                tracing::info!(
+                                    uuid = rule.uuid.as_str(),
+                                    rule_id = id.as_str(),
+                                    logger,
+                                    "bitdefender_rule_created"
+                                );
+                                let external = ExternalId::Text(id.clone());
+                                self.record_created(&mut result, PLATFORM, &tenant, &external);
+                            }
+                            StateChange::Forget => {
+                                tracing::info!(
+                                    uuid = rule.uuid.as_str(),
+                                    logger,
+                                    "bitdefender_rule_deleted"
+                                );
+                                self.record_deleted(&mut result, PLATFORM, &tenant);
+                            }
+                            StateChange::Keep => {}
+                        }
+                        match &outcome.failure {
+                            Some(Failure::Refused(message)) => {
+                                if let Some(refusal) = recreate_refusal
+                                    .as_ref()
+                                    .filter(|refusal| refusal.message == *message)
+                                {
+                                    self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
+                                }
+                                self.failed = true;
+                                result.fail(message);
+                            }
+                            Some(Failure::Request {
+                                code,
+                                error,
+                                detail,
+                            }) => {
+                                tracing::error!(
+                                    code = *code,
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    error = error.as_str(),
+                                    detail = detail.as_deref().unwrap_or_default(),
+                                    logger,
+                                    "{}",
+                                    code
+                                );
+                                self.rule_error(&mut result, &format!("{code}: {error}"));
+                            }
+                            None => {}
+                        }
+                        log.finished(result);
+                    }
+                    Err(error) => {
+                        let text = error.text();
+                        tracing::error!(
+                            tenant = tenant.as_str(),
+                            error = text.as_str(),
+                            critical = true,
+                            logger,
+                            "bitdefender_tenant_deployment_failed"
+                        );
+                        self.failed = true;
+                        result.fail(&text);
+                        log.finished(result);
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Google Security Operations: each rule verified, created, updated,
     /// disabled, archived or deleted by the id deployment state records
     /// (`GoogleSecopsDeploy`). Credentials that cannot be loaded, refused

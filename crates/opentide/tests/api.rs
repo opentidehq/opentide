@@ -38,7 +38,7 @@ fn a_workspace_opens_and_counts_its_objects() {
         (1, 1, 10)
     );
     assert_eq!(info.load_errors, 0);
-    assert_eq!(info.platforms.len(), 11);
+    assert_eq!(info.platforms.len(), 12);
     assert!(
         info.platforms
             .iter()

@@ -22,6 +22,7 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 pub mod attack;
+pub mod bitdefender;
 pub mod carbon_black;
 pub mod ci;
 pub mod crowdstrike;

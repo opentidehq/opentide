@@ -538,7 +538,7 @@ fn preview_entry(rule: &str, tenants: &[&str]) -> serde_json::Value {
     let object = index.get("rule", &uuid_of(rule)).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
     let tenants: Vec<String> = tenants.iter().map(|name| (*name).to_owned()).collect();
-    data(&opentide_compile::preview::preview(
+    data(&opentide_compile::preview::preview_on(
         &cx, "graylog", &rule, &tenants,
     ))
 }

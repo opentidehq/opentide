@@ -6,6 +6,12 @@ Each class is the frozen Rust model of the same name (``opentide._native.models`
 from __future__ import annotations
 
 from opentide._native.models import (
+    BitdefenderActions,
+    BitdefenderCriterion,
+    BitdefenderDetection,
+    BitdefenderProcessScope,
+    BitdefenderTargets,
+    BitdefenderYara,
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
     DefenderAlert,
@@ -88,6 +94,12 @@ from opentide._native.models import (
 )
 
 __all__ = [
+    "BitdefenderActions",
+    "BitdefenderCriterion",
+    "BitdefenderDetection",
+    "BitdefenderProcessScope",
+    "BitdefenderTargets",
+    "BitdefenderYara",
     "CrowdstrikeDetails",
     "CrowdstrikeSchedule",
     "DefenderAlert",

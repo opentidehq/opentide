@@ -28,6 +28,7 @@
 //! `connectors` feature, and `plugins` for the plugin host).
 
 pub mod answer;
+pub mod bitdefender;
 pub mod carbon_black;
 pub mod connector;
 pub mod credentials;
@@ -76,6 +77,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
+        "bitdefender" => bitdefender::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
         "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
@@ -92,7 +94,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
-/// and Graylog (the 0.28.0 catch-up).
+/// and Bitdefender GravityZone and Graylog (the catch-up to 0.28.0).
 pub fn builtin() -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
@@ -104,6 +106,7 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        Box::new(bitdefender::Bitdefender),
         Box::new(graylog::Graylog),
         // Application Default Credentials are the process's own ambient
         // credentials (google-auth's `default()` reads the process
@@ -220,6 +223,7 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "bitdefender",
                 "graylog",
                 "google_secops"
             ]
@@ -241,6 +245,7 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        assert_eq!(can("bitdefender"), (true, false, false));
         assert_eq!(can("google_secops"), (true, true, true));
         assert_eq!(can("graylog"), (true, true, true));
         // The platform table says the same of each connector.

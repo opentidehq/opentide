@@ -25,6 +25,7 @@
 //! each one's message is the oracle's (`ElasticConfig validation failed with
 //! code(s): …`), the codes sorted and joined as Python joins them.
 
+pub mod bitdefender;
 pub mod carbon_black;
 pub mod crowdstrike;
 pub mod defender;
@@ -56,6 +57,7 @@ use crate::from_node::{Context, FromNode};
 use crate::node::{Node, Value};
 use crate::objects::checks::Violation;
 
+pub use bitdefender::BitdefenderConfig;
 pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
@@ -264,6 +266,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<CarbonBlackConfig>("carbon_black_cloud", "CarbonBlackConfig"),
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
+    registered::<BitdefenderConfig>("bitdefender", "BitdefenderConfig"),
     registered::<GraylogConfig>("graylog", "GraylogConfig"),
     registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
 ];
@@ -296,6 +299,7 @@ pub type LegacyKeys = &'static [(&'static str, Option<&'static str>)];
 pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("ElasticConfig", &[]),
     ("SysdigConfig", &[]),
+    ("BitdefenderConfig", &[]),
     ("GoogleSecopsConfig", &[]),
 ];
 
@@ -398,11 +402,13 @@ pub struct NamedCheck {
 }
 
 /// The named checks, by name: `elastic_rule_shape` (rule types, removed flat
-/// keys, and every other constraint of `ElasticConfig`'s before-validator),
-/// `sysdig_rule_shape` (a condition or `append_to_rule`, and every other
-/// constraint of `SysdigConfig`'s) and `graylog_constraints` (every
-/// `graylog_*` constraint code, each at its key).
-pub const NAMED_CHECKS: [NamedCheck; 3] = [
+/// keys, and every other constraint of `ElasticConfig`'s before-validator)
+/// and `sysdig_rule_shape` (a condition or `append_to_rule`, and every other
+/// constraint of `SysdigConfig`'s), and `bitdefender_rule_shape` (the
+/// bitdefender-1.0 constraint codes, which `BitdefenderConfig` reports one
+/// per finding at its path, [`bitdefender::block_findings`]), and
+/// `graylog_constraints` (every `graylog_*` constraint code, each at its key).
+pub const NAMED_CHECKS: [NamedCheck; 4] = [
     NamedCheck {
         name: "elastic_rule_shape",
         model: "ElasticConfig",
@@ -420,6 +426,14 @@ pub const NAMED_CHECKS: [NamedCheck; 3] = [
         model: "GraylogConfig",
         run: graylog::block_codes,
         findings: Some(graylog::findings),
+    },
+    NamedCheck {
+        name: "bitdefender_rule_shape",
+        model: "BitdefenderConfig",
+        run: bitdefender::block_codes,
+        // Its model reports each finding at its path itself
+        // (`bitdefender::block_findings`).
+        findings: None,
     },
 ];
 
@@ -666,6 +680,8 @@ pub enum PlatformConfig {
     Elastic(ElasticConfig),
     /// `sysdig`.
     Sysdig(SysdigConfig),
+    /// `bitdefender`.
+    Bitdefender(BitdefenderConfig),
     /// `google_secops`.
     GoogleSecops(GoogleSecopsConfig),
     /// `graylog`.
@@ -706,6 +722,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "carbon_black_cloud" => read(node, PlatformConfig::CarbonBlack),
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
+        "bitdefender" => read(node, PlatformConfig::Bitdefender),
         "google_secops" => read(node, PlatformConfig::GoogleSecops),
         "graylog" => read(node, PlatformConfig::Graylog),
         other => Err(ParseError::UnknownPlatform(format!(

@@ -600,18 +600,18 @@ pub fn run(
                 continue;
             };
             let rule = Rule::new(root, Some(object.path.to_string_lossy().into_owned()));
-            // The tenants the run sends the rule to, in the run's order.
-            let reached: Vec<String> = targets
+            let canonical = crate::rule::canonical_uuid(uuid);
+            let tenants: Vec<String> = targets
                 .get(platform)
                 .map(|per_tenant| {
                     per_tenant
                         .iter()
-                        .filter(|(_, uuids)| uuids.contains(uuid))
+                        .filter(|(_, ids)| ids.contains(&canonical))
                         .map(|(tenant, _)| tenant.clone())
                         .collect()
                 })
                 .unwrap_or_default();
-            let entry = preview::preview(&cx, platform, &rule, &reached);
+            let entry = preview::preview_on(&cx, platform, &rule, &tenants);
             if entry.get("status").and_then(Json::as_str) == Some("failed") {
                 failing.push((platform.clone(), rule.uuid.clone()));
                 diagnostics.push(diagnostic(platform, &entry, workspace.root()));

@@ -107,7 +107,7 @@ def test_bundled_data_ships_with_the_package() -> None:
     data_path = Path(str(files("opentide.data")))
     assert data_path.is_dir()
     platforms = list((data_path / "configurations" / "platforms").glob("*.toml"))
-    assert len(platforms) == 11
+    assert len(platforms) == 12
     assert (data_path / "diagnostics" / "engine_unavailable.md").is_file()
 
 

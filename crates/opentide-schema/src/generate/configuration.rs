@@ -21,11 +21,12 @@ use serde_json::{Map, Value, json};
 
 use crate::configuration::checks::{FILE_MODELS, GENERIC_PLATFORM_FILE};
 use crate::configuration::models::{
-    CarbonBlackCloudConfiguration, CrowdstrikeConfiguration, DefenderForEndpointConfiguration,
-    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
-    GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration, PLATFORMS,
-    PathsConfiguration, PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration,
-    SharingConfiguration, SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
+    BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
+    DefenderForEndpointConfiguration, DeploymentConfiguration, DocumentationConfiguration,
+    ElasticConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
+    PLATFORMS, PathsConfiguration, PlatformConfiguration, SentinelConfiguration,
+    SentinelOneConfiguration, SharingConfiguration, SplunkConfiguration, SysdigConfiguration,
+    VisibilityConfig,
 };
 
 use super::schema::StripFrameworkKeywords;
@@ -93,6 +94,7 @@ fn raw(file_key: &str) -> Option<Schema> {
         "platforms/harfanglab.toml" => model_schema::<HarfangLabConfiguration>(),
         "platforms/elastic.toml" => model_schema::<ElasticConfiguration>(),
         "platforms/sysdig.toml" => model_schema::<SysdigConfiguration>(),
+        "platforms/bitdefender.toml" => model_schema::<BitdefenderConfiguration>(),
         "platforms/google_secops.toml" => model_schema::<GoogleSecopsConfiguration>(),
         "platforms/graylog.toml" => model_schema::<GraylogConfiguration>(),
         GENERIC_PLATFORM_FILE => model_schema::<PlatformConfiguration>(),
