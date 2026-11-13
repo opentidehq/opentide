@@ -1112,9 +1112,16 @@ impl Pages<'_, '_> {
         let body = &threat.threat;
         let meta = meta!(&threat.metadata);
         let (objectives, rules) = coverage_counts(&self.catalog.coverage_graph(&record.uuid));
-        let ids = cve::identifiers(body.cve.as_deref().unwrap_or_default());
+        let cves = cve::CveFindings::lookup(
+            cve::identifiers(body.cve.as_deref().unwrap_or_default()),
+            self.settings.cve_details,
+            &self.settings.cve_source,
+        );
         let mut page = self.page(THREAT, &threat.name, &meta, &body.description);
-        page.add_lead([self.threat_overview(threat, objectives, rules, ids.len())]);
+        page.add_lead([self.threat_overview(threat, objectives, rules, &cves)]);
+        if let Some(warning) = cves.exploited_warning() {
+            page.add_lead([callout(self.flavor(), Callout::Warning, &warning)]);
+        }
         if objectives == 0 {
             page.add_lead([callout(
                 self.flavor(),
@@ -1151,14 +1158,7 @@ impl Pages<'_, '_> {
             "ATT&CK techniques",
             [self.attack_table(&body.mitre_attack, Some(&detections))],
         ));
-        page.add(Section::new(
-            "CVE",
-            [if ids.is_empty() {
-                String::new()
-            } else {
-                self.cve_body(&ids)
-            }],
-        ));
+        page.add(Section::new("CVE", [self.cve_body(&cves)]));
         page.add(
             Section::new(
                 "Chaining",
@@ -1184,7 +1184,7 @@ impl Pages<'_, '_> {
         threat: &opentide_schema::objects::ThreatVector,
         objectives: usize,
         rules: usize,
-        cves: usize,
+        cves: &cve::CveFindings,
     ) -> String {
         let body = &threat.threat;
         let detection = if objectives == 0 {
@@ -1225,14 +1225,7 @@ impl Pages<'_, '_> {
             ),
             ("Actors", table_cell(&actors.join(", "))),
             ("ATT&CK", self.technique_links(&body.mitre_attack)),
-            (
-                "CVE",
-                if cves == 0 {
-                    String::new()
-                } else {
-                    plural(cves, "CVE")
-                },
-            ),
+            ("CVE", cves.overview()),
             ("Detection coverage", detection),
         ];
         key_value_table(&rows, ["Property", "Value"])
@@ -1460,93 +1453,65 @@ impl Pages<'_, '_> {
         )
     }
 
-    /// The CVE section: each identifier as a link to its record page, or,
-    /// with `[cve] retrieve_details` on, a row of each record's details.
-    fn cve_body(&self, ids: &[String]) -> String {
+    /// The CVE section (`render_cves`): each identifier as a link to its
+    /// record page, or, with `[cve] retrieve_details` on, a row of each
+    /// record's severity, exploit likelihood, exploitation and weakness, and
+    /// a line of what it is, affects and scores. Empty without identifiers.
+    fn cve_body(&self, findings: &cve::CveFindings) -> String {
+        if findings.identifiers.is_empty() {
+            return String::new();
+        }
         let links = &self.settings.cve;
         let link = |id: &str| Flavor::link(id, &links.page_url(id));
         let note = paragraph(
             "Identifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
              which aggregates CVE, GHSA, CSAF, NVD, and related feeds.",
         );
-        if !self.settings.cve_details {
-            let bullets = ids.iter().fold(String::new(), |mut out, id| {
-                use std::fmt::Write as _;
-                let _ = writeln!(out, "- {}", link(id));
-                out
-            });
+        if !findings.enriched() {
+            let bullets = findings
+                .identifiers
+                .iter()
+                .fold(String::new(), |mut out, id| {
+                    use std::fmt::Write as _;
+                    let _ = writeln!(out, "- {}", link(id));
+                    out
+                });
             return note + &bullets;
         }
-        let mut rows: Vec<[String; 4]> = Vec::new();
-        let mut missing: Vec<&str> = Vec::new();
-        let mut unreachable = false;
-        for id in ids {
-            match self.settings.cve_source.get(id) {
-                cve::CveDetail::Unavailable => {
-                    unreachable = true;
-                    rows.push([
-                        link(id),
-                        "-".to_owned(),
-                        "-".to_owned(),
-                        "Details unavailable from Vulnerability-Lookup.".to_owned(),
-                    ]);
-                }
-                cve::CveDetail::NotFound => {
-                    missing.push(id);
-                    rows.push([
-                        link(id),
-                        "-".to_owned(),
-                        "-".to_owned(),
-                        "Not found in Vulnerability-Lookup.".to_owned(),
-                    ]);
-                }
-                cve::CveDetail::Found(record) => {
-                    let ident = if record.identifier.is_empty() {
-                        id.as_str()
-                    } else {
-                        record.identifier.as_str()
-                    };
-                    let url = if record.page_url.is_empty() {
-                        links.page_url(ident)
-                    } else {
-                        record.page_url.clone()
-                    };
-                    let mut label = Flavor::link(ident, &url);
-                    let aliases: Vec<String> = record
-                        .aliases
-                        .iter()
-                        .filter(|alias| alias.as_str() != ident)
-                        .map(|alias| link(alias))
-                        .collect();
-                    if !aliases.is_empty() {
-                        label = format!("{label}<br>{}", aliases.join(", "));
-                    }
-                    let summary = record
-                        .title
-                        .as_deref()
-                        .filter(|text| !text.is_empty())
-                        .or(record
-                            .description
-                            .as_deref()
-                            .filter(|text| !text.is_empty()))
-                        .unwrap_or("-");
-                    rows.push([
-                        label,
-                        record.published.clone().unwrap_or_else(|| "-".to_owned()),
-                        record
-                            .severity
-                            .clone()
-                            .or_else(|| record.state.clone())
-                            .unwrap_or_else(|| "-".to_owned()),
-                        table_cell(&cve::truncate(summary, 280)),
-                    ]);
-                }
-            }
+        let mut rows: Vec<[String; 6]> = Vec::new();
+        let mut details: Vec<String> = Vec::new();
+        for (id, detail) in findings.identifiers.iter().zip(&findings.details) {
+            let cve::CveDetail::Found(record) = detail else {
+                let text = if matches!(detail, cve::CveDetail::NotFound) {
+                    "Not found in Vulnerability-Lookup."
+                } else {
+                    "Details unavailable from Vulnerability-Lookup."
+                };
+                let dash = || "-".to_owned();
+                rows.push([link(id), dash(), dash(), dash(), dash(), text.to_owned()]);
+                continue;
+            };
+            rows.push(Self::cve_row(record, id, &link));
+            details.push(cve::detail_line(record));
         }
         let mut parts = vec![
             note,
-            table(&["Identifier", "Published", "Severity", "Summary"], &rows),
+            table(
+                &[
+                    "Identifier",
+                    "Severity",
+                    "EPSS",
+                    "Exploitation",
+                    "Weakness",
+                    "Published",
+                ],
+                &rows,
+            ),
         ];
+        if !details.is_empty() {
+            parts.push(details.join("\n") + "\n");
+        }
+        let missing = findings.missing();
         if !missing.is_empty() {
             parts.push(paragraph(&format!(
                 "Could not resolve: {}.",
@@ -1557,13 +1522,92 @@ impl Pages<'_, '_> {
                     .join(", ")
             )));
         }
-        if unreachable {
+        if findings.unreachable() {
             parts.push(paragraph(
                 "Vulnerability-Lookup was unreachable for at least one identifier; links still \
                  point at the CIRCL record page.",
             ));
         }
+        if findings.epss_unavailable() {
+            parts.push(paragraph(
+                "Vulnerability-Lookup returned no EPSS score for at least one identifier; those \
+                 rows show none.",
+            ));
+        }
+        parts.push(paragraph(
+            "*EPSS: FIRST's probability of exploitation in the next 30 days. Exploitation: \
+             CISA's Known Exploited Vulnerabilities catalog, else its SSVC assessment.*",
+        ));
         join(parts)
+    }
+
+    /// One record's row of the CVE table (`_cve_row`).
+    fn cve_row(record: &cve::CveRecord, id: &str, link: &dyn Fn(&str) -> String) -> [String; 6] {
+        let ident = if record.identifier.is_empty() {
+            id
+        } else {
+            record.identifier.as_str()
+        };
+        let mut label = if record.page_url.is_empty() {
+            link(ident)
+        } else {
+            Flavor::link(ident, &record.page_url)
+        };
+        let aliases: Vec<String> = record
+            .aliases
+            .iter()
+            .filter(|alias| alias.as_str() != ident)
+            .map(|alias| link(alias))
+            .collect();
+        if !aliases.is_empty() {
+            label = format!("{label}<br>{}", aliases.join(", "));
+        }
+        let severity = match &record.cvss {
+            Some(cvss) => format!(
+                "{}<br>CVSS {}",
+                format!("**{:.1}** {}", cvss.score, cvss.severity).trim(),
+                cvss.version
+            ),
+            None => table_cell(
+                record
+                    .severity
+                    .as_deref()
+                    .or(record.state.as_deref())
+                    .unwrap_or("-"),
+            ),
+        };
+        let likelihood = match &record.epss {
+            cve::EpssDetail::Score(epss) => format!(
+                "{}<br>top {}",
+                cve::share(epss.probability),
+                cve::share(1.0 - epss.percentile)
+            ),
+            _ => "-".to_owned(),
+        };
+        let weakness = join_lines(record.weaknesses.iter().map(|weakness| {
+            let url = weakness.url();
+            let mut cell = if url.is_empty() {
+                weakness.identifier.clone()
+            } else {
+                Flavor::link(&weakness.identifier, &url)
+            };
+            if !weakness.name.is_empty() {
+                cell = format!("{cell} {}", table_cell(&weakness.name));
+            }
+            cell
+        }));
+        [
+            label,
+            severity,
+            likelihood,
+            cve::exploitation(record),
+            if weakness.is_empty() {
+                "-".to_owned()
+            } else {
+                weakness
+            },
+            record.published.clone().unwrap_or_else(|| "-".to_owned()),
+        ]
     }
 
     // ---- indexes -------------------------------------------------------

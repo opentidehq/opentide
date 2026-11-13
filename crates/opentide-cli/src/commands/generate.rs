@@ -333,13 +333,14 @@ struct DocsRun {
 }
 
 /// The CVE details `generate docs` writes with `[cve] retrieve_details` on
-/// (UC-4.4, #834): each identifier asked of Vulnerability-Lookup with its
-/// linked records, once per run, through the run's proxy.
+/// (UC-4.4, #834; 0.26.0): each identifier asked of Vulnerability-Lookup with
+/// its linked records, then the EPSS score of its CVE, each once per run,
+/// through the run's proxy (`lookup_cves`).
 fn cve_source(
     resolved: &opentide_schema::configuration::resolve::Resolved,
     cx: &Context<'_>,
 ) -> opentide_compile::generate::docs::cve::CveSource {
-    use opentide_compile::generate::docs::cve::{CveDetail, CveRecord, CveSource};
+    use opentide_compile::generate::docs::cve::{CveDetail, CveSource, EpssDetail};
     let settings = super::cve::Settings::from_documentation(resolved.get("documentation"));
     let links = settings.links();
     let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
@@ -354,16 +355,14 @@ fn cve_source(
     );
     CveSource::new(
         move |id: &str| match lookup.get(id, true, &|key: &str| links.page_url(key)) {
-            Ok(Some(record)) => CveDetail::Found(CveRecord {
-                identifier: record.identifier,
-                title: record.title,
-                description: record.description,
-                published: record.published,
-                state: record.state,
-                severity: record.severity,
-                aliases: record.aliases,
-                page_url: record.page_url,
-            }),
+            Ok(Some(record)) => {
+                let epss = match record.cve_id().map(|cve| lookup.epss(&cve)) {
+                    Some(Ok(Some(score))) => EpssDetail::Score(score),
+                    Some(Err(_)) => EpssDetail::Unavailable,
+                    None | Some(Ok(None)) => EpssDetail::None,
+                };
+                CveDetail::Found(Box::new(record.into_docs(epss)))
+            }
             Ok(None) => CveDetail::NotFound,
             Err(_) => CveDetail::Unavailable,
         },

@@ -17,7 +17,7 @@
 //! - [`diagrams`]: the diagrams pages show (coverage, deployment map,
 //!   chaining, kill-chain maps, the threat landscape), built as a model that
 //!   [`mermaid`] writes within each flavour's Mermaid; [`vocab`]: vocabulary
-//!   labels; [`cve`]: CVE links.
+//!   labels; [`cve`]: CVE links and details (CVSS, EPSS, KEV, CWE).
 //! - [`inflight`]: the open pull requests' objects, overlaid on the index for
 //!   the run (the inflight preview).
 //! - [`changed`]: `--changed`, the objects git reports as changed against the
