@@ -274,7 +274,7 @@ fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
             ],
             "usage_invalid_value",
             "--to",
-            "--to 'soon' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z",
+            "--to \"soon\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z",
         ),
         (
             &[
@@ -288,7 +288,7 @@ fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
             ],
             "usage_invalid_value",
             "--since",
-            "--since '1 fortnight' is not a duration, such as 15m, 24h, 7d or PT1H",
+            "--since \"1 fortnight\" is not a duration, such as 15m, 24h, 7d or PT1H",
         ),
         (
             &["--json", "query", "--platform", "elastic", "  \n "],
@@ -351,7 +351,7 @@ fn a_language_the_platform_does_not_take_is_refused_with_the_closest() {
     let document = ran.document();
     assert_eq!(
         document["failure"]["message"],
-        "elastic queries are esql, eql, lucene, kuery, not 'esq'"
+        "elastic queries are esql, eql, lucene, kuery, not \"esq\""
     );
     assert_eq!(document["failure"]["suggestion"], "esql");
     assert_eq!(document["platform"], "elastic");
@@ -393,7 +393,7 @@ fn tenants_are_chosen_among_those_configured() {
     assert_eq!(ran.code, 2);
     assert_eq!(
         document["failure"]["message"],
-        "elastic has no tenant named 'prdo'; configured: prod, lab"
+        "elastic has no tenant named \"prdo\"; configured: prod, lab"
     );
     assert_eq!(document["failure"]["suggestion"], "prod");
 }
@@ -588,7 +588,7 @@ fn a_rules_query_runs_as_deploy_would_send_it() {
     assert_eq!(missing.code, 2);
     assert_eq!(
         missing.document()["message"],
-        "rule 'Hosts' has no splunk configuration"
+        "rule \"Hosts\" has no splunk configuration"
     );
     assert_eq!(missing.document()["failure"]["argument"], "--rule");
 }
@@ -681,7 +681,7 @@ fn a_tenant_that_does_not_answer_in_time_fails_with_advice() {
     let document = ran.document();
     assert_eq!(
         document["results"][0]["error"],
-        "elastic tenant 'slow' did not answer the query within 1s: \
+        "elastic tenant \"slow\" did not answer the query within 1s: \
          HTTPSConnectionPool(host='127.0.0.1', port=443): Read timed out. (read timeout=1)"
     );
     assert_eq!(document["detail"], "narrow the window or raise --timeout");
@@ -790,9 +790,9 @@ fn a_splunk_search_a_gateway_answers_is_a_timeout_with_advice() {
     let (error, detail) = tenant_failure(&ran);
     assert!(
         error.starts_with(
-            "splunk tenant 'lab' did not answer the query within 120s: Splunk at \
+            "splunk tenant \"lab\" did not answer the query within 120s: Splunk at \
              https://splunk.invalid:8089 answered with an HTML page (HTTP 504), not its REST API \
-             (page title: '504 Gateway Time-out'). HTTP 504 Gateway Timeout is what a gateway"
+             (page title: \"504 Gateway Time-out\"). HTTP 504 Gateway Timeout is what a gateway"
         ),
         "{error}"
     );
@@ -834,7 +834,7 @@ fn a_carbon_black_tenant_that_refuses_the_token_fails_authentication() {
     let (error, detail) = tenant_failure(&ran);
     assert_eq!(
         error,
-        "cannot authenticate to carbon_black_cloud tenant 'lab': Unauthorized (Check API \
+        "cannot authenticate to carbon_black_cloud tenant \"lab\": Unauthorized (Check API \
          creds): attempted to POST \
          https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation"
     );

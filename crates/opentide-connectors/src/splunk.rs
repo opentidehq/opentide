@@ -25,7 +25,7 @@ use crate::connector::{
 };
 use crate::encode::{quote, quote_plus, urlencode};
 use crate::error::ConnectorError;
-use crate::python::{python_bytes_repr, python_str, python_string_repr};
+use crate::python::python_str;
 use crate::{HttpSettings, TenantLabel};
 
 /// The platform's identifier.
@@ -84,7 +84,7 @@ impl Reply {
                     self.reason()
                 )
                 .as_str(),
-                context = python_bytes_repr(&self.answer.body).as_str(),
+                context = format!("{:?}", String::from_utf8_lossy(&self.answer.body)).as_str(),
                 critical = true,
                 logger = "opentide.platforms.splunk.client",
                 "fatal_error"
@@ -98,7 +98,9 @@ impl Reply {
         let detail = match xml_message(&self.answer.body) {
             XmlDetail::Message(text) => format!(" -- {text}"),
             XmlDetail::None => String::new(),
-            XmlDetail::NotXml => format!(" -- {}", python_bytes_repr(&self.answer.body)),
+            XmlDetail::NotXml => {
+                format!(" -- {:?}", String::from_utf8_lossy(&self.answer.body))
+            }
         };
         format!("HTTP {} {}{detail}", self.answer.status, self.reason())
     }
@@ -355,7 +357,7 @@ impl Splunk {
         let port: u16 = port.parse().map_err(|_| ConnectorError::Setup {
             platform: PLATFORM.into(),
             tenant: cx.tenant.label.tenant.clone(),
-            message: format!("port must be a number, got {}", python_string_repr(&port)),
+            message: format!("port must be a number, got {port:?}"),
         })?;
         Ok(format!("https://{host}:{port}"))
     }
@@ -443,9 +445,8 @@ impl Splunk {
                 PLATFORM,
                 &cx.tenant.label.tenant,
                 format!(
-                    "Splunk on {} answered server/info with the version {}",
-                    cx.tenant.label.tenant,
-                    python_string_repr(&version)
+                    "Splunk on {} answered server/info with the version {version:?}",
+                    cx.tenant.label.tenant
                 ),
                 None,
             ));
@@ -524,10 +525,7 @@ impl Splunk {
                 ConnectorError::refused(
                     PLATFORM,
                     &cx.tenant.label.tenant,
-                    format!(
-                        "Splunk created no saved search named {}",
-                        python_string_repr(name)
-                    ),
+                    format!("Splunk created no saved search named {name:?}"),
                     None,
                 )
             }),
@@ -749,7 +747,7 @@ impl Splunk {
         if reply.failed() {
             let body = &reply.answer.body;
             if reply.reason() == "Temporary Redirect"
-                && python_bytes_repr(body).contains("Network Error")
+                && String::from_utf8_lossy(body).contains("Network Error")
             {
                 return Ok(LiveCheck {
                     result: None,
@@ -856,7 +854,7 @@ fn html_answer(cx: TenantContext<'_>, url: &str, answer: &Answer) -> ConnectorEr
         .map(crate::error::origin)
         .unwrap_or_default();
     let page = page_title(&answer.body)
-        .map(|title| format!(" (page title: {})", python_string_repr(&title)))
+        .map(|title| format!(" (page title: {title:?})"))
         .unwrap_or_default();
     let answered = format!(
         "Splunk at {origin} answered with an HTML page (HTTP {}), not its REST API{page}",
@@ -1016,7 +1014,7 @@ mod tests {
                 elapsed: Duration::ZERO,
             },
         };
-        assert_eq!(reply(404, b"").http_error(), "HTTP 404 Not Found -- b''");
+        assert_eq!(reply(404, b"").http_error(), "HTTP 404 Not Found -- \"\"");
         assert_eq!(
             reply(
                 400,
@@ -1027,7 +1025,7 @@ mod tests {
         );
         assert_eq!(
             reply(400, b"{\"a\": 1}").http_error(),
-            "HTTP 400 Bad Request -- b'{\"a\": 1}'"
+            "HTTP 400 Bad Request -- \"{\\\"a\\\": 1}\""
         );
         assert_eq!(
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),
