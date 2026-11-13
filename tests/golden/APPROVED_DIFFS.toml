@@ -13483,7 +13483,7 @@ oracle = "{\"53\": {\"code\": \"engine_mismatch\", \"meaning\": \"`OPENTIDE_ENGI
 candidate = "247"
 reason = "engine_mismatch and engine_not_ported were the codes of OPENTIDE_ENGINE's compare and rust modes, removed with the Python implementation: the server lists every other code as the recorded Python server did"
 issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Rust is opentide's only engine: the Python implementation, and `OPENTIDE_ENGINE`, are removed**"
+changelog = "**Every command needs opentide's compiled core: the Python implementation is removed**"
 
 # UC-6.2e: promoted text that does not read back fails the run with the
 # oracle's ValueError, its parser's words the Rust loader's.
