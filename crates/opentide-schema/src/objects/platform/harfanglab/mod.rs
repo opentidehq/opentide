@@ -1,11 +1,24 @@
 //! HarfangLab Sigma or YARA rule, `platform::harfanglab::1.0`
-//! (`HarfangLabConfig` and its nested models).
+//! (`HarfangLabConfig` and its nested models), harfanglab-1.0 1.2 and 1.3:
+//! one kind per block, and a YARA rule as a whole `signature` or the
+//! decomposed form ([`yara`]).
+//!
+//! | Oracle | Here |
+//! |--------|------|
+//! | `HarfangLabConfig._validate_raw_harfanglab_block` (before) | [`yara::block_codes`], the named check `harfanglab_rule_shape` |
+//! | `HarfangLabYara._decomposed_form_is_complete` (after) | `decomposed_form`, the model's `after` |
+//! | `DetectionRule._harfanglab_yara_rule_name` (after) | [`rule_name`], the rule model's `after` |
+
+pub mod yara;
 
 use garde::Validate;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::FromNode;
+use crate::from_node::Context;
+use crate::node::Node;
+use crate::objects::checks::Violation;
 use crate::objects::platform::platform_block;
 use crate::pins::Pins;
 
@@ -185,13 +198,14 @@ pub struct HarfangLabYaraMeta {
     pub classification: Option<String>,
 }
 
-/// File or memory scan rule (`HarfangLabYara`).
+/// One form: `signature`, or the decomposed `meta`, `strings`, `condition`, and `imports`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[garde(allow_unvalidated)]
-#[schemars(rename = "HarfangLabYara", description = "")]
-#[from_node(model = "HarfangLabYara")]
+#[garde(custom(garde_decomposed_form))]
+#[schemars(rename = "HarfangLabYara")]
+#[from_node(model = "HarfangLabYara", after = "decomposed_form")]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(
@@ -210,15 +224,75 @@ pub struct HarfangLabYaraMeta {
     )
 )]
 pub struct HarfangLabYara {
-    /// Scan context, OS, and optional score override.
-    pub meta: HarfangLabYaraMeta,
-    /// YARA string section body, one definition per line, without the `strings:` header.
-    pub strings: String,
-    /// YARA condition body, without the `condition:` header.
-    pub condition: String,
-    /// YARA modules (`pe`, `elf`). Each becomes `import "<module>"`.
+    /// A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy
+    /// sends it as the YaraFile `content`, verbatim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("tide.template.multiline" = true))]
+    pub signature: Option<String>,
+    /// Decomposed form: scan context, OS, and optional score override. Required without
+    /// `signature`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<HarfangLabYaraMeta>,
+    /// Decomposed form: YARA string section body, one definition per line, without the
+    /// `strings:` header. Required without `signature`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strings: Option<String>,
+    /// Decomposed form: YARA condition body, without the `condition:` header. Required without
+    /// `signature`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
+    /// Decomposed form: YARA modules (`pe`, `elf`). Each becomes `import "<module>"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imports: Option<Vec<String>>,
+}
+
+/// The message of `_decomposed_form_is_complete`.
+fn decomposed_form_message(missing: &[&str]) -> String {
+    format!(
+        "a yara object sets signature, or the decomposed meta, strings and condition; missing {}",
+        missing.join(", ")
+    )
+}
+
+/// The decomposed form's keys a `yara` object without `signature` leaves
+/// out (`_decomposed_form_is_complete`).
+fn missing_keys(value: &HarfangLabYara) -> Vec<&'static str> {
+    if value.signature.is_some() {
+        return Vec::new();
+    }
+    [
+        ("meta", value.meta.is_none()),
+        ("strings", value.strings.is_none()),
+        ("condition", value.condition.is_none()),
+    ]
+    .into_iter()
+    .filter_map(|(key, absent)| absent.then_some(key))
+    .collect()
+}
+
+/// `_decomposed_form_is_complete` (after): a `yara` object without
+/// `signature` sets `meta`, `strings` and `condition`. As in Pydantic, it
+/// runs only once the fields validated.
+fn decomposed_form(value: &HarfangLabYara, node: &Node, cx: &mut Context) -> bool {
+    let missing = missing_keys(value);
+    if missing.is_empty() {
+        return true;
+    }
+    Violation::value_error(decomposed_form_message(&missing)).report(node, cx);
+    false
+}
+
+/// garde: `_decomposed_form_is_complete` on a value built in memory.
+fn garde_decomposed_form(value: &HarfangLabYara, _pins: &Pins) -> garde::Result {
+    let missing = missing_keys(value);
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(garde::Error::new(format!(
+            "Value error, {}",
+            decomposed_form_message(&missing)
+        )))
+    }
 }
 
 fn experimental() -> String {
@@ -239,8 +313,9 @@ platform_block! {
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
     #[garde(allow_unvalidated)]
+    #[garde(custom(garde_block))]
     #[schemars(rename = "HarfangLabConfig", description = "")]
-    #[from_node(model = "HarfangLabConfig")]
+    #[from_node(model = "HarfangLabConfig", before = "raw_block")]
     #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "HarfangLabConfig", module = "opentide._native.models"))]
     #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct HarfangLabConfig ["platform::harfanglab::1.0"] {
@@ -253,14 +328,40 @@ platform_block! {
         /// What the agent does on a match. Mapped to `global_state`.
         #[serde(default = "alert")]
         pub action: String,
-        /// Sigma tags, and the YARA `tags` meta line.
+        /// Sigma tags, and the YARA `tags` meta line of the decomposed form.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub tags: Option<Vec<String>>,
-        /// Behavioural rule. Preferred when `yara` is also set.
+        /// Behavioural rule. Not with `yara`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub sigma: Option<HarfangLabSigma>,
-        /// File or memory scan rule.
+        /// File or memory scan rule. Not with `sigma`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub yara: Option<HarfangLabYara>,
     }
+}
+
+fn raw_block(node: &Node, cx: &mut Context) -> bool {
+    crate::objects::platform::before("HarfangLabConfig", node, cx)
+}
+
+fn garde_block(block: &HarfangLabConfig, _pins: &Pins) -> garde::Result {
+    crate::objects::platform::garde_named("HarfangLabConfig", block)
+}
+
+/// `DetectionRule._harfanglab_yara_rule_name` (after): the decomposed
+/// HarfangLab YARA form names its YARA rule after the Tide rule `name`, and
+/// libyara refuses a keyword, a non-ASCII letter or more than 128 characters.
+/// `None` when the rule has no decomposed HarfangLab YARA block.
+#[must_use]
+pub fn rule_name(name: &str, block: Option<&HarfangLabConfig>) -> Option<String> {
+    let yara = block?.yara.as_ref()?;
+    if yara.signature.is_some() {
+        return None;
+    }
+    let problem = yara::rule_name_problem(name)?;
+    Some(format!(
+        "DetectionRule validation failed with code(s): {} (rule {}: {problem})",
+        yara::codes::RULE_NAME,
+        yara::python_repr(name)
+    ))
 }

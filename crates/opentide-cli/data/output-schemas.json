@@ -5251,6 +5251,9 @@
             "kuery",
             "lucene",
             "falco",
+            "yara",
+            "exabeam",
+            "yaral",
             "cql"
           ],
           "title": "Language",

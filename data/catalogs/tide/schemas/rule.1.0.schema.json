@@ -3326,8 +3326,8 @@
               "type": "null"
             }
           ],
-          "description": "Behavioural rule. Preferred when yara is also set.",
-          "markdownDescription": "Behavioural rule. Preferred when `yara` is also set."
+          "description": "Behavioural rule. Not with yara.",
+          "markdownDescription": "Behavioural rule. Not with `yara`."
         },
         "status": {
           "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
@@ -3335,11 +3335,11 @@
           "type": "string"
         },
         "tags": {
-          "description": "Sigma tags, and the YARA tags meta line.",
+          "description": "Sigma tags, and the YARA tags meta line of the decomposed form.",
           "items": {
             "type": "string"
           },
-          "markdownDescription": "Sigma tags, and the YARA `tags` meta line.",
+          "markdownDescription": "Sigma tags, and the YARA `tags` meta line of the decomposed form.",
           "type": [
             "array",
             "null"
@@ -3364,7 +3364,8 @@
               "type": "null"
             }
           ],
-          "description": "File or memory scan rule."
+          "description": "File or memory scan rule. Not with sigma.",
+          "markdownDescription": "File or memory scan rule. Not with `sigma`."
         }
       },
       "required": [
@@ -3468,38 +3469,57 @@
     },
     "HarfangLabYara": {
       "additionalProperties": false,
+      "description": "One form: signature, or the decomposed meta, strings, condition, and imports.",
+      "markdownDescription": "One form: `signature`, or the decomposed `meta`, `strings`, `condition`, and `imports`.",
       "properties": {
         "condition": {
-          "description": "YARA condition body, without the condition: header.",
-          "markdownDescription": "YARA condition body, without the `condition:` header.",
-          "type": "string"
+          "description": "Decomposed form: YARA condition body, without the condition: header. Required without signature.",
+          "markdownDescription": "Decomposed form: YARA condition body, without the `condition:` header. Required without\n`signature`.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "imports": {
-          "description": "YARA modules (pe, elf). Each becomes import \"<module>\".",
+          "description": "Decomposed form: YARA modules (pe, elf). Each becomes import \"<module>\".",
           "items": {
             "type": "string"
           },
-          "markdownDescription": "YARA modules (`pe`, `elf`). Each becomes `import \"<module>\"`.",
+          "markdownDescription": "Decomposed form: YARA modules (`pe`, `elf`). Each becomes `import \"<module>\"`.",
           "type": [
             "array",
             "null"
           ]
         },
         "meta": {
-          "$ref": "#/$defs/HarfangLabYaraMeta",
-          "description": "Scan context, OS, and optional score override."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarfangLabYaraMeta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Decomposed form: scan context, OS, and optional score override. Required without signature.",
+          "markdownDescription": "Decomposed form: scan context, OS, and optional score override. Required without\n`signature`."
+        },
+        "signature": {
+          "description": "A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy sends it as the YaraFile content, verbatim.",
+          "markdownDescription": "A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy\nsends it as the YaraFile `content`, verbatim.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "strings": {
-          "description": "YARA string section body, one definition per line, without the strings: header.",
-          "markdownDescription": "YARA string section body, one definition per line, without the `strings:` header.",
-          "type": "string"
+          "description": "Decomposed form: YARA string section body, one definition per line, without the strings: header. Required without signature.",
+          "markdownDescription": "Decomposed form: YARA string section body, one definition per line, without the\n`strings:` header. Required without `signature`.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": [
-        "meta",
-        "strings",
-        "condition"
-      ],
       "type": "object"
     },
     "HarfangLabYaraMeta": {

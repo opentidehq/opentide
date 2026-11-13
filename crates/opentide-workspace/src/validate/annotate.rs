@@ -222,13 +222,20 @@ impl<'a> Sources<'a> {
     fn alias_anchor(&mut self, path: &Path, field_path: &[String]) -> Option<Span> {
         let document = self.document(path)?;
         let platform = field_path.get(1)?;
-        let (_, anchor) =
-            opentide_schema::objects::platform::bitdefender::checks::signature_aliases(
+        let node = if platform == "harfanglab" {
+            // HarfangLab's own check (harfanglab-1.0 1.2): the anchor's node.
+            opentide_schema::objects::platform::harfanglab::yara::aliased_signature(
                 document.root()?,
-            )
-            .into_iter()
-            .find(|(aliased, _)| aliased == platform)?;
-        let node = walk(&document, &anchor)?;
+            )?
+        } else {
+            let (_, anchor) =
+                opentide_schema::objects::platform::bitdefender::checks::signature_aliases(
+                    document.root()?,
+                )
+                .into_iter()
+                .find(|(aliased, _)| aliased == platform)?;
+            walk(&document, &anchor)?
+        };
         let start = node.start;
         let line = document.source().lines().nth(start.line.checked_sub(1)?)?;
         let chars: Vec<char> = line.chars().collect();

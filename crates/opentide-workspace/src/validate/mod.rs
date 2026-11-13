@@ -1323,18 +1323,22 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
                 .filter(|issue| issue.field_path.last().is_some_and(|last| last == "query"))
                 .map(query_place)
                 .collect();
+            // A YARA code the model and the engine both find is shown once. Only
+            // an engine *error* replaces the model's: with --queries warn the
+            // model's error stays, so validate fails the rule as deploy would,
+            // and the engine's warning for the same code is dropped instead.
+            issues = without_engine_reported_yara(issues, &found.errors);
+            let modelled = model_yara_codes(&issues);
             issues.extend(
                 found
                     .errors
                     .into_iter()
                     .filter(|issue| !rejected.contains(&query_place(issue))),
             );
-            warnings.extend(
-                found
-                    .warnings
-                    .into_iter()
-                    .filter(|issue| !rejected.contains(&query_place(issue))),
-            );
+            warnings.extend(found.warnings.into_iter().filter(|issue| {
+                !rejected.contains(&query_place(issue))
+                    && !modelled.contains(&yara_place(issue, &issue.code))
+            }));
             stats.queries_checked = Some(found.queries);
         }
     }
@@ -1455,6 +1459,93 @@ impl<'a> ListedPaths<'a> {
 
 /// Which query a finding is about: a platform block, or the query's own
 /// path elsewhere (a hunt).
+/// Codes both a platform model and the engine's YARA language report.
+const YARA_PREFIXES: [&str; 2] = ["yara_", "bitdefender_yara_"];
+
+fn is_yara_code(code: &str) -> bool {
+    YARA_PREFIXES.iter().any(|prefix| code.starts_with(prefix))
+}
+
+/// The codes a coded model validator's finding carries (`_model_codes`):
+/// HarfangLab names them in a `schema_validation` message (`HarfangLabConfig
+/// validation failed with code(s): yara_include`); Bitdefender reports each
+/// as its own finding, under its code (bitdefender-1.0).
+fn model_codes(issue: &Diagnostic) -> Vec<&str> {
+    if is_yara_code(&issue.code) {
+        return vec![issue.code.as_str()];
+    }
+    if issue.code != "schema_validation" {
+        return Vec::new();
+    }
+    let Some((_, codes)) = issue.message.split_once("validation failed with code(s): ") else {
+        return Vec::new();
+    };
+    let codes = codes
+        .split(|c: char| {
+            !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == ',' || c == ' ')
+        })
+        .next()
+        .unwrap_or_default();
+    codes
+        .split(", ")
+        .map(str::trim)
+        .filter(|code| {
+            !code.is_empty()
+                && code
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        })
+        .collect()
+}
+
+/// `(file, configurations block, code)`: where a YARA code is about.
+fn yara_place(issue: &Diagnostic, code: &str) -> (Option<PathBuf>, Vec<String>, String) {
+    let block = issue.field_path.iter().take(2).cloned().collect();
+    (issue.file_path.clone(), block, code.to_owned())
+}
+
+/// The `yara_*` codes the model reports, each at its block (`_model_yara_codes`).
+fn model_yara_codes(issues: &[Diagnostic]) -> BTreeSet<(Option<PathBuf>, Vec<String>, String)> {
+    issues
+        .iter()
+        .flat_map(|issue| {
+            model_codes(issue)
+                .into_iter()
+                .filter(|code| is_yara_code(code))
+                .map(|code| yara_place(issue, code))
+        })
+        .collect()
+}
+
+/// `issues`, without a model finding the engine already reported with its
+/// place (`_without_engine_reported_yara`). The HarfangLab model checks the
+/// YARA-language codes a scan decides (`yara_include`, ...) so deploy and the
+/// paths without the engine keep them; the engine reports the same code at
+/// its line and column. A finding on a `configurations` block is dropped when
+/// every code it carries is a `yara_*` code the engine reported as an error
+/// (`engine`) in that block of that file. A `harfanglab_*` constraint code
+/// keeps it.
+fn without_engine_reported_yara(issues: Vec<Diagnostic>, engine: &[Diagnostic]) -> Vec<Diagnostic> {
+    let reported: BTreeSet<_> = engine
+        .iter()
+        .filter(|item| is_yara_code(&item.code))
+        .map(|item| yara_place(item, &item.code))
+        .collect();
+    if reported.is_empty() {
+        return issues;
+    }
+    issues
+        .into_iter()
+        .filter(|issue| {
+            let codes = model_codes(issue);
+            codes.is_empty()
+                || !codes
+                    .iter()
+                    .all(|code| is_yara_code(code) && reported.contains(&yara_place(issue, code)))
+        })
+        .collect()
+}
+
 fn query_place(issue: &Diagnostic) -> (Option<PathBuf>, Vec<String>) {
     let mut path = issue.field_path.clone();
     if path.len() == 3 && path[0] == "configurations" {
