@@ -119,6 +119,7 @@ impl Check {
                 "chaining_relation_unknown",
                 "external_id_in_rule",
                 "external_id_shape",
+                "google_secops_name_duplicate",
                 "deployment_state_uuid_mismatch",
                 "deployment_state_platform",
                 "deployment_state_shape",
@@ -170,6 +171,7 @@ pub const VALIDATION_CODES: &[&str] = &[
     "engine_unavailable",
     "external_id_in_rule",
     "external_id_shape",
+    "google_secops_name_duplicate",
     "invalid_cve",
     "invalid_ref",
     "invalid_uuid",
@@ -549,6 +551,44 @@ fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default()
+}
+
+/// `google_secops_name_duplicate`: each rule in scope whose enabled Google
+/// SecOps block resolves to the YARA-L rule name of another rule's, compared
+/// case-insensitively (`google_secops_name_issues`).
+fn name_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
+    use opentide_schema::objects::platform::google_secops::advisories::{
+        NAME_DUPLICATE, NameDuplicate, name_duplicates,
+    };
+    let Some(rules) = index.objects.get("rule") else {
+        return Vec::new();
+    };
+    let all: Vec<(&str, &Node)> = rules
+        .iter()
+        .filter_map(|(uuid, object)| Some((uuid.as_str(), object.root()?)))
+        .collect();
+    let in_scope = work
+        .iter()
+        .filter(|subject| subject.family == "rule")
+        .map(|subject| subject.uuid);
+    name_duplicates(all, in_scope)
+        .into_iter()
+        .map(|duplicate| {
+            let subject = work
+                .iter()
+                .find(|subject| subject.family == "rule" && subject.uuid == duplicate.uuid);
+            let mut diagnostic = Diagnostic::error(NAME_DUPLICATE, duplicate.message())
+                .object(duplicate.uuid.as_str(), "rule")
+                .at(NameDuplicate::field_path())
+                .suggest(Some(NameDuplicate::SUGGESTION.to_owned()))
+                .with("value", duplicate.name.as_str());
+            if let Some(subject) = subject {
+                diagnostic = diagnostic.file(subject.path);
+                diagnostic.yaml_line = subject.document.locator().yaml_line(&diagnostic.field_path);
+            }
+            diagnostic
+        })
+        .collect()
 }
 
 /// `duplicate_id`: one per UUID written again, on the later file, naming
@@ -1153,6 +1193,9 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             && let Some(plugins) = options.platform_configurations
         {
             plugin_blocks(plugins, &work, &mut issues, &mut warnings);
+        }
+        if checks.schema {
+            issues.extend(name_duplicates(index, &work));
         }
         // Every file that writes an invalid UUID is reported, also one whose
         // object a later file with the same UUID displaced (KG-04).

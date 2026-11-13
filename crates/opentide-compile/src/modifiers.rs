@@ -6,8 +6,8 @@
 
 use opentide_schema::from_node::Model;
 use opentide_schema::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, HarfangLabConfig,
-    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, GoogleSecopsConfig,
+    HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 
 use crate::json::{Json, Object};
@@ -26,6 +26,7 @@ pub fn typed_roots(platform: &str) -> Vec<&'static str> {
         "carbon_black_cloud" => CarbonBlackConfig::FIELDS,
         "elastic" => ElasticConfig::FIELDS,
         "sysdig" => SysdigConfig::FIELDS,
+        "google_secops" => GoogleSecopsConfig::FIELDS,
         _ => &[],
     };
     let mut roots = Vec::with_capacity(fields.len() * 2);
