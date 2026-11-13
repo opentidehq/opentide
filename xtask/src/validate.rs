@@ -127,7 +127,47 @@ pub const APPROVED: &[Approved] = &[
                     query Next-Gen SIEM would refuse**",
         applies: crowdstrike_cql,
     },
+    Approved {
+        id: "splunk-advanced",
+        reason: "a Splunk block's `advanced` table is a field of the platform::splunk::1.0 \
+                 layout again (0.24.0, #878), the only place a rule sets savedsearches.conf \
+                 keys no other field sets; the oracle (0.23.0) refused it as an unknown key",
+        changelog: "**A Splunk block's `advanced` table validates and deploys again**",
+        applies: splunk_advanced,
+    },
+    Approved {
+        id: "legacy-text-id-crash",
+        reason: "a legacy `rule_id::<tenant>` key whose id is text is `external_id_in_rule` \
+                 (0.26.0, #913); the oracle (0.23.0) read the tenant as a schema version and \
+                 crashed before it wrote a report",
+        changelog: "**`validate` no longer crashes on a legacy external-id key with a text value**",
+        applies: legacy_text_id_crash,
+    },
 ];
+
+/// The oracle's `schema_validation` of a Splunk block's `advanced` table,
+/// which the Rust run accepts.
+fn splunk_advanced(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), None) = (oracle, rust) else {
+        return false;
+    };
+    code(oracle) == "schema_validation"
+        && oracle["field_path"] == json!(["configurations", "splunk", "advanced"])
+        && oracle["message"] == json!("Extra inputs are not permitted")
+}
+
+/// A case the oracle crashed on with #913's error (its `failure`, no
+/// report), which the Rust run validates.
+fn legacy_text_id_crash(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    rust == &json!("a report")
+        && oracle["code"] == json!("internal")
+        && oracle["message"].as_str().is_some_and(|message| {
+            message.starts_with("ValueError: invalid literal for int() with base 10: ")
+        })
+}
 
 /// The parts of a `--fix` case no approved finding explains.
 const FIX_PARTS: [&str; 7] = [
@@ -506,7 +546,8 @@ fn run_case(
             out.push(Difference {
                 case: case.id.clone(),
                 what: "report".to_owned(),
-                oracle: None,
+                // What the oracle printed instead: its failure.
+                oracle: Some(recorded["failure"].clone()),
                 rust: Some(json!("a report")),
                 oracle_list: Arc::from(Vec::new()),
             });
@@ -883,7 +924,10 @@ pub fn run(args: &[String]) -> Result<u8> {
             .or_insert(true) &= explained;
     }
     for difference in &differences {
-        let rule = if is_list(difference) || difference.what == QUERIES_CHECKED {
+        let rule = if is_list(difference)
+            || difference.what == QUERIES_CHECKED
+            || difference.what == "report"
+        {
             rule_of(difference)
         } else {
             None
@@ -935,6 +979,25 @@ pub fn run(args: &[String]) -> Result<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_catchup_rules_name_one_finding_and_one_crash() {
+        let refused = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
+            "field_path": ["configurations", "splunk", "advanced"]});
+        assert!(splunk_advanced(Some(&refused), None, &[]));
+        assert!(!splunk_advanced(Some(&refused), Some(&refused), &[]));
+        let other = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
+            "field_path": ["configurations", "splunk", "search"]});
+        assert!(!splunk_advanced(Some(&other), None, &[]));
+
+        let crash = json!({"code": "internal",
+            "message": "ValueError: invalid literal for int() with base 10: 'prod'"});
+        let report = json!("a report");
+        assert!(legacy_text_id_crash(Some(&crash), Some(&report), &[]));
+        let other = json!({"code": "internal", "message": "KeyError: 'x'"});
+        assert!(!legacy_text_id_crash(Some(&other), Some(&report), &[]));
+        assert!(!legacy_text_id_crash(None, Some(&report), &[]));
+    }
 
     fn argv(args: &[&str]) -> Vec<String> {
         ["opentide", "--json", "validate"]
