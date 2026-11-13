@@ -323,6 +323,15 @@ pub fn golden(
             Err(error) => return Ok(Err(format!("error: {error:#}"))),
         };
         let dir = cases.join(&actual.case.id);
+        // A case with no recording fails on its own: a preview's recordings
+        // (`golden record --out`) may lack the cases the oracle could not run.
+        if !dir.join("case.toml").is_file() {
+            return Ok(Err(format!(
+                "{}: not recorded in {}",
+                actual.case.id,
+                cases.display()
+            )));
+        }
         let recorded = crate::golden::recording::Recording::read(&dir, blobs)
             .with_context(|| format!("{}: not recorded", actual.case.id))?;
         // Each side's own version, the exact string it reports, is not behaviour.
