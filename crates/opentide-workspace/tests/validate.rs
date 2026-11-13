@@ -372,6 +372,35 @@ mod validate {
     }
 
     #[test]
+    fn a_google_secops_section_written_as_an_alias_is_an_error() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  google_secops:\n    status: X\n    meta:\n      note: &c \
+                 \"$e\"\n    events: $e.metadata.event_type = \"X\"\n    outcome: \
+                 $risk_score = 1\n    condition: *c\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let aliased = with_code(&validation, "yaral_section_alias");
+        assert_eq!(aliased.len(), 1, "{aliased:?}");
+        let issue = aliased[0];
+        assert_eq!(issue.severity, Severity::Error);
+        assert_eq!(
+            issue.field_path,
+            ["configurations", "google_secops", "condition"]
+        );
+        assert_eq!(
+            issue.help.as_deref(),
+            Some("Write the condition text under configurations.google_secops.condition")
+        );
+        // Placed where the alias's anchor is, as opentide 0.28.1 places it.
+        assert_eq!(issue.yaml_line, Some(8));
+    }
+
+    #[test]
     fn a_misspelled_enabled_key_is_named() {
         let fs = workspace();
         fs.write(
