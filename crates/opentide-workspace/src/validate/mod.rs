@@ -167,6 +167,7 @@ pub const VALIDATION_CODES: &[&str] = &[
     "engine_unavailable",
     "external_id_in_rule",
     "external_id_shape",
+    "google_secops_name_duplicate",
     "invalid_cve",
     "invalid_ref",
     "invalid_uuid",

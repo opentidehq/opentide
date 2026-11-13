@@ -176,8 +176,14 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("CarbonBlackConfig", of::<platform::CarbonBlackConfig>()),
         ("ElasticConfig", of::<platform::ElasticConfig>()),
         ("SysdigConfig", of::<platform::SysdigConfig>()),
+        ("GoogleSecopsConfig", of::<platform::GoogleSecopsConfig>()),
     ]
 }
+
+/// The models of the platforms the 0.23.0 oracle predates: it writes no
+/// schema for them (until O2 moves the oracle; then the platform table's
+/// `SINCE_ORACLE` list says which).
+const SINCE_ORACLE_MODELS: [&str; 1] = ["GoogleSecopsConfig"];
 
 /// Compares the oracle's schemas (`probe.py schemas`) with the models'. The
 /// differences by model; an empty list passes.
@@ -199,6 +205,9 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         ));
     }
     for (name, rust) in rust_schemas() {
+        if SINCE_ORACLE_MODELS.contains(&name) && oracle["schemas"].get(name).is_none() {
+            continue;
+        }
         let pydantic = oracle["schemas"]
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
@@ -440,7 +449,7 @@ mod tests {
     #[test]
     fn every_model_and_every_platform_block_has_a_schema() {
         let schemas = rust_schemas();
-        assert_eq!(schemas.len(), 29);
+        assert_eq!(schemas.len(), 30);
         for entry in platform::PLATFORM_CONFIG_MODELS {
             assert!(
                 schemas.iter().any(|(name, _)| *name == entry.model),
