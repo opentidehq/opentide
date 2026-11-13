@@ -486,6 +486,12 @@ fn replay(
     for line in lines {
         println!("{line}");
     }
+    // The catch-up train reports its differences instead of failing on them
+    // (`golden::report_only`).
+    if !passed && crate::golden::report_only::enabled(repo) {
+        println!("{}", crate::golden::report_only::verdict(1, None));
+        return Ok(true);
+    }
     Ok(passed)
 }
 
