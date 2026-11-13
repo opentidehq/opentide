@@ -1,6 +1,6 @@
 [1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW RELEASE[0m[1;2m · 1 platform, 1 tenant[0m
 [2mPlan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 1 to delete[0m
-[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36msplunk[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;31merror: [0mFatal error · detail: Received HTTP Error Code 404 Not Found · context: b'<?xml version="1.0"
+[?25l<LIVE></LIVE>[1;31merror: [0mFatal error · detail: Received HTTP Error Code 404 Not Found · context: b'<?xml version="1.0"
 encoding="UTF-8"?>\n<response>\n  <messages>\n    <msg type="ERROR">Could not find object 
 id=absent</msg>\n  </messages>\n</response>\n'
 
