@@ -142,11 +142,9 @@ signal-hook = { version = "0.3", default-features = false, features = ["iterator
 # `tests/lsp_start.rs`: the Ctrl-C (SIGINT) a person sends `lsp start`.
 rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "pty", "termios"] }
 # `tests/tui_pty.rs`: `opentide tui` driven in a pseudo-terminal (open, run
-# validate, quit), as a person at a terminal runs it. rexpect, the rust-cli
-# expect crate: expectrl reaches the unmaintained pin-utils through nix 0.26
-# (RUSTSEC-2026-0441), which cargo deny refuses. vt100 reads what the UI drew
-# back into a screen: ratatui writes only the cells that changed.
-rexpect = "0.7"
+# validate, quit) through portable-pty, as a person at a terminal runs it.
+# vt100 reads what the UI drew back into a screen: ratatui writes only the
+# cells that changed.
 vt100 = "0.18"
 
 [dev-dependencies]
@@ -155,8 +153,9 @@ opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"
-# The `setup` wizard's pseudo-terminal test (tests/setup_wizard.rs), on
-# wezterm's portable-pty: a pty on Unix, ConPTY on Windows.
+# The pseudo-terminal tests (tests/setup_wizard.rs, tests/tui_pty.rs), on
+# wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
+# that drives a run at a terminal.
 portable-pty = "0.9"
 # The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
 
