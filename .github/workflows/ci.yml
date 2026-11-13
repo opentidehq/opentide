@@ -2538,6 +2538,12 @@ jobs:
       fail-fast: false
       matrix:
         part: [1, 2, 3]
+    # Whether the checkout carries tests/golden/REPORT_ONLY (the catch-up
+    # train's marker): the gather then reports stale ledger entries rather
+    # than failing on them, as `golden check` itself does under the marker.
+    # Every part checks out the same commit, so each writes the same value.
+    outputs:
+      report_only: ${{ steps.marker.outputs.report_only }}
     env:
       RUSTFLAGS: -Dwarnings
       PYO3_PYTHON: /usr/bin/python3
@@ -2550,6 +2556,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Report-only marker
+        id: marker
+        run: |
+          if [[ -f tests/golden/REPORT_ONLY ]]; then
+            echo "report_only=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "report_only=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -2663,6 +2678,7 @@ jobs:
         env:
           RESULT: ${{ needs.golden-compare-part.result }}
           PARTS: "3"
+          REPORT_ONLY: ${{ needs.golden-compare-part.outputs.report_only }}
         run: |
           echo "golden compare parts: ${RESULT}"
           test "${RESULT}" = success
@@ -2678,6 +2694,13 @@ jobs:
             | "error: tests/golden/APPROVED_DIFFS.toml entry \(.entry) (\(.command) \(.case) \(.target) \(.rule)) applied to no case: it is stale, remove it"
           ' "${files[@]}")"
           if [[ -n "${stale}" ]]; then
+            if [[ "${REPORT_ONLY:-false}" == true ]]; then
+              # The catch-up train: the ledger is being re-based on the next
+              # oracle (O2), so a stale entry is reported, not gated.
+              echo "${stale}" | sed 's/^error: /::warning::report only: /'
+              echo "tests/golden/REPORT_ONLY is present: stale entries reported, not gated"
+              exit 0
+            fi
             echo "${stale}"
             exit 1
           fi
