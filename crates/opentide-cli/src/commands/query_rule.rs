@@ -240,6 +240,12 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
              no query to search telemetry with. Pass a telemetry query instead, such as \
              'processes process_name=cmd.exe'"
         )),
+        "google_secops" => Err(format!(
+            "rule {name}: --rule is not supported for google_secops. A YARA-L rule runs in the \
+             detection engine, whose results differ from a search's, and a retrohunt writes \
+             detections; write the search as a hunt (response.procedure.searches) and pass it as \
+             QUERY"
+        )),
         _ => Err(format!("{platform} rules cannot be queried")),
     }
 }
@@ -426,6 +432,14 @@ mod tests {
         assert_eq!(
             rule_queries(&sysdig, "sysdig").unwrap_err(),
             "sysdig rules cannot be queried"
+        );
+        let secops = rule(&format!(
+            "{HEAD}configurations:\n  google_secops:\n    condition: $e\n"
+        ));
+        assert!(
+            rule_queries(&secops, "google_secops")
+                .unwrap_err()
+                .starts_with("rule \"R\": --rule is not supported for google_secops.")
         );
     }
 

@@ -38,6 +38,7 @@ pub mod encode;
 pub mod env;
 pub mod error;
 pub mod exabeam;
+pub mod google_secops;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
@@ -76,6 +77,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
         "exabeam" => exabeam::http_defaults(),
+        "google_secops" => google_secops::http_settings(timeout),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
@@ -103,6 +105,11 @@ pub fn builtin() -> Registry {
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
         Box::new(exabeam::Exabeam::new()),
+        // Application Default Credentials are the process's own ambient
+        // credentials (google-auth's `default()` reads the process
+        // environment): a caller with an environment of its own (the CLI)
+        // builds `GoogleSecops::new` with it.
+        Box::new(google_secops::GoogleSecops::new(Environment::process())),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).
@@ -142,6 +149,10 @@ mod tests {
         assert_eq!(
             super::http_settings("defender_for_endpoint", timeout),
             super::defender::http_settings()
+        );
+        assert_eq!(
+            super::http_settings("google_secops", timeout),
+            super::google_secops::http_settings(timeout)
         );
         assert_eq!(
             super::http_settings("sysdig", timeout),
@@ -204,7 +215,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "exabeam"
+                "exabeam",
+                "google_secops"
             ]
         );
         let can = |id: &str| {
@@ -225,6 +237,7 @@ mod tests {
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
         assert_eq!(can("exabeam"), (true, true, true));
+        assert_eq!(can("google_secops"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);

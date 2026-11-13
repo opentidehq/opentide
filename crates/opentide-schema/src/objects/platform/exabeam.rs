@@ -1369,16 +1369,8 @@ pub const CORRELATION_WINDOW: &str = "exabeam_correlation_window";
 /// an any-match sequence evaluates events for one minute.
 const STEP_MINUTES: u64 = 1;
 
-/// One advisory, at its path from the rule's root.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Advisory {
-    /// [`OUTCOME_SILENT`] or [`CORRELATION_WINDOW`].
-    pub code: &'static str,
-    /// Where, from the rule's root.
-    pub field_path: Vec<String>,
-    /// What the rule then does.
-    pub message: String,
-}
+/// Every advisory code (`ADVISORY_CODES`).
+pub const ADVISORY_CODES: [&str; 2] = [OUTCOME_SILENT, CORRELATION_WINDOW];
 
 fn minutes(node: Option<&Node>) -> Option<u64> {
     let (number, unit) = node_duration(node, "mhd")?;
@@ -1417,8 +1409,8 @@ pub fn ordered_minutes(sequences: &[std::sync::Arc<Node>]) -> Option<u64> {
 }
 
 /// Every advisory a rule's `exabeam` block, as authored, earns
-/// (`exabeam_advisories`).
-pub fn advisories(rule: &Node) -> Vec<Advisory> {
+/// (`exabeam_advisories`), each one of [`ADVISORY_CODES`].
+pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
     let Some(block) = rule_block(rule) else {
         return Vec::new();
     };
@@ -1431,7 +1423,7 @@ pub fn advisories(rule: &Node) -> Vec<Advisory> {
     };
     let mut found = Vec::new();
     if text(field(block, "outcome")) == Some("none") && field(block, "email").is_none() {
-        found.push(Advisory {
+        found.push(super::Advisory {
             code: OUTCOME_SILENT,
             field_path: at(&["outcome"]),
             message: "outcome: none and no email: the rule only writes a rule-trigger event, \
@@ -1450,7 +1442,7 @@ pub fn advisories(rule: &Node) -> Vec<Advisory> {
         let within = field(correlation, "within")
             .map(|node| repr::node(node).trim_matches('\'').to_owned())
             .unwrap_or_default();
-        found.push(Advisory {
+        found.push(super::Advisory {
             code: CORRELATION_WINDOW,
             field_path: at(&["correlation", "within"]),
             message: format!(

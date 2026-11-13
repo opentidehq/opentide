@@ -411,7 +411,7 @@ mod tests {
         );
         let set = |name: &str| name == "API_KEY";
         let all = platforms(Some(&systems), None, &set);
-        assert_eq!(all.len(), 10);
+        assert_eq!(all.len(), opentide_schema::platforms::COUNT);
         let elastic = platforms(Some(&systems), Some("elastic"), &set).remove(0);
         assert!(elastic.enabled);
         let tenants = elastic.tenants;

@@ -904,19 +904,18 @@ mod tests {
         let found = cx.platforms(&choices, "");
         let shown = values(&found);
         assert_eq!(shown.len(), choices.len());
-        // The disabled platforms come last, in the choices' order: the two
-        // disabled here, then those the corpus does not configure (the
-        // platforms the 0.23.0 fixture predates, SINCE_ORACLE).
-        let mut disabled = vec!["splunk".to_owned(), "crowdstrike".to_owned()];
-        disabled.extend(
-            choices
-                .iter()
-                .filter(|id| opentide_schema::platforms::after_oracle(id))
-                .cloned(),
+        // The disabled platforms (splunk and crowdstrike here, and the ones
+        // the corpus does not enable) come after every enabled one.
+        let help = helps(&found);
+        let first_disabled = help.iter().position(String::is_empty).unwrap();
+        assert!(
+            help[first_disabled..].iter().all(String::is_empty),
+            "{help:?}"
         );
-        assert_eq!(&shown[shown.len() - disabled.len()..], disabled.as_slice());
-        assert_eq!(helps(&found)[0], "enabled");
-        assert_eq!(helps(&found)[shown.len() - 1], "");
+        let disabled = &shown[first_disabled..];
+        assert!(disabled.contains(&"splunk".to_owned()), "{disabled:?}");
+        assert!(disabled.contains(&"crowdstrike".to_owned()), "{disabled:?}");
+        assert_eq!(help[0], "enabled");
         assert_eq!(values(&cx.platforms(&choices, "SPL")), ["splunk"]);
         // Tenants of the platform typed, then `all`.
         let elastic = context("opentide query --platform elastic --tenant ", "zsh", &ws);

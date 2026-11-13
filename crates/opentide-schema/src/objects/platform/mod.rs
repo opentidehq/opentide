@@ -34,6 +34,7 @@ pub use opentide_core::duration as durations;
 pub mod elastic;
 pub mod exabeam;
 pub mod falco_text;
+pub mod google_secops;
 pub mod harfanglab;
 pub mod schema;
 pub mod sentinel;
@@ -59,6 +60,8 @@ pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
 pub use exabeam::ExabeamConfig;
+pub use google_secops::GoogleSecopsConfig;
+pub use google_secops::advisories::Advisory;
 pub use harfanglab::HarfangLabConfig;
 pub use sentinel::SentinelConfig;
 pub use sentinel_one::SentinelOneConfig;
@@ -247,7 +250,7 @@ pub struct Registered {
     pub schema: &'static str,
 }
 
-/// `PLATFORM_CONFIG_MODELS`: the nine blocks, in the container's order. It is
+/// `PLATFORM_CONFIG_MODELS`: the ten blocks, in the container's order. It is
 /// closed: a key not listed is not a platform (`RuleConfigurations` refuses it
 /// as an extra key).
 pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
@@ -261,6 +264,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
     registered::<ExabeamConfig>("exabeam", "ExabeamConfig"),
+    registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
 ];
 
 const fn registered<T: PlatformBlock>(key: &'static str, model: &'static str) -> Registered {
@@ -292,6 +296,7 @@ pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("ElasticConfig", &[]),
     ("SysdigConfig", &[]),
     ("ExabeamConfig", &[]),
+    ("GoogleSecopsConfig", &[]),
 ];
 
 /// The legacy keys of `model` ([`LEGACY_KEYS`]); a model that declares none
@@ -392,6 +397,17 @@ pub const NAMED_CHECKS: [NamedCheck; 2] = [
         run: sysdig::block_codes,
     },
 ];
+
+/// Every block advisory a rule earns, each platform's in the platform
+/// table's order: a warning that never rejects the rule, which `validate`
+/// and `lint`'s `queries` check report at its field path. Exabeam's
+/// ([`exabeam::advisories`]), then Google SecOps'
+/// ([`google_secops::advisories::advisories`]).
+pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
+    let mut found = exabeam::advisories(rule);
+    found.extend(google_secops::advisories::advisories(rule));
+    found
+}
 
 /// The named check called `name`.
 pub fn named_check(name: &str) -> Option<&'static NamedCheck> {
@@ -594,6 +610,8 @@ pub enum PlatformConfig {
     Sysdig(SysdigConfig),
     /// `exabeam`.
     Exabeam(ExabeamConfig),
+    /// `google_secops`.
+    GoogleSecops(GoogleSecopsConfig),
 }
 
 /// Why [`parse_platform_config`] refused a block.
@@ -631,6 +649,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
         "exabeam" => read(node, PlatformConfig::Exabeam),
+        "google_secops" => read(node, PlatformConfig::GoogleSecops),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",
             repr::quote(other)

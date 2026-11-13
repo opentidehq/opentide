@@ -155,7 +155,7 @@ None: each platform's connector, compiled into opentide's Rust core, speaks its 
 
 `deploy --dry-run` compiles each rule into the exact request a live deploy sends. A bare `opentide validate query` checks the queries offline with the analysis engine; `generate`, `validate`, offline query checks and dry-run deploy need no credentials.
 
-Releases up to 0.28.0 installed the vendors' Python SDKs (`azure-identity`, `azure-monitor-query`, `splunk-sdk`, `carbon-black-cloud-sdk` with `boto3`, `pymisp`) for the Python implementation; opentide no longer depends on them. Releases up to 0.15.0 shipped them as extras (`opentide[sentinel]`, `opentide[splunk]`, `opentide[carbon-black]`); an install command that still names one installs opentide with a warning about the unknown extra.
+Releases up to 0.28.0 installed the vendors' Python SDKs (`azure-identity`, `azure-monitor-query`, `splunk-sdk`, `carbon-black-cloud-sdk` with `boto3`, `pymisp`, `google-auth`) for the Python implementation; opentide no longer depends on them. Releases up to 0.15.0 shipped them as extras (`opentide[sentinel]`, `opentide[splunk]`, `opentide[carbon-black]`); an install command that still names one installs opentide with a warning about the unknown extra.
 
 ### Platform identifiers
 
@@ -173,6 +173,7 @@ These `--platform` values are built into the package:
 | `harfanglab` | HarfangLab |
 | `sysdig` | Sysdig Secure (Falco) |
 | `exabeam` | Exabeam New-Scale SIEM |
+| `google_secops` | Google Security Operations (YARA-L 2.0) |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
 

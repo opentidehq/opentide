@@ -79,6 +79,10 @@ fn object_schemas() -> Vec<(String, Value)> {
             "ExabeamConfig",
             schemars::schema_for!(platform::ExabeamConfig),
         ),
+        (
+            "GoogleSecopsConfig",
+            schemars::schema_for!(platform::GoogleSecopsConfig),
+        ),
     ];
     schemas
         .drain(..)

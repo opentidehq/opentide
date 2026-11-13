@@ -819,6 +819,7 @@ fn platform_block(
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
         "exabeam" => pairs.extend(exabeam(rng, variant, process, &mut tags)),
+        "google_secops" => pairs.extend(google_secops(variant, process, &mut tags)),
         _ => {}
     }
     (Yaml::Map(pairs), tags)
@@ -1315,6 +1316,51 @@ fn exabeam(
     pairs
 }
 
+/// A valid `google_secops` block (google-secops-1.0): a single-event rule,
+/// or every other variant a multi-event rule with a `match` window (which
+/// `LIVE` does not run, so it is `LIVE_CUSTOMIZABLE`). It draws nothing from
+/// `rng`.
+fn google_secops(variant: usize, process: &str, tags: &mut Vec<String>) -> Vec<(String, Yaml)> {
+    if variant.is_multiple_of(2) {
+        return kv(vec![
+            ("run_frequency", Yaml::s("LIVE")),
+            (
+                "events",
+                Yaml::s(format!(
+                    "$e.metadata.event_type = \"PROCESS_LAUNCH\"\n\
+                     $e.target.process.file.full_path = /{process}$/ nocase\n"
+                )),
+            ),
+            (
+                "outcome",
+                Yaml::s("$risk_score = 60\n$host = $e.principal.hostname\n"),
+            ),
+            ("condition", Yaml::s("$e\n")),
+        ]);
+    }
+    tags.push("google_secops:match".to_string());
+    kv(vec![
+        ("run_frequency", Yaml::s("LIVE_CUSTOMIZABLE")),
+        (
+            "events",
+            Yaml::s(
+                "$fail.metadata.event_type = \"USER_LOGIN\"\n\
+                 $fail.security_result.action = \"BLOCK\"\n\
+                 $fail.target.user.userid = $user\n",
+            ),
+        ),
+        (
+            "match",
+            Yaml::map(vec![
+                ("group_by", Yaml::strs(&["$user"])),
+                ("window", Yaml::s("30m")),
+            ]),
+        ),
+        ("outcome", Yaml::s("$risk_score = max(70)\n")),
+        ("condition", Yaml::s("#fail >= 10\n")),
+    ])
+}
+
 /// A tenant's `[tenants.setup]`: endpoints on reserved example domains and
 /// `$VARIABLE` references, never a literal secret.
 fn tenant_setup(platform: &str, tenant: &str) -> String {
@@ -1498,6 +1544,20 @@ fn configuration_files(layout: Layout) -> Vec<File> {
 mod tests {
     use super::super::vocab;
     use super::{Counts, date, slugify};
+
+    #[test]
+    fn google_secops_blocks_pass_the_block_checks() {
+        use opentide_schema::objects::platform::google_secops::block_findings;
+        for variant in 0..2 {
+            let mut tags = Vec::new();
+            let block = super::Yaml::Map(super::google_secops(variant, "cmd.exe", &mut tags));
+            let document = opentide_schema::node::load(&block.render()).expect("YAML");
+            let root = document.root().expect("a block");
+            let findings = block_findings(root);
+            assert!(findings.is_empty(), "variant {variant}: {findings:?}");
+            assert_eq!(tags.len(), variant);
+        }
+    }
 
     #[test]
     fn the_generated_corpus_leaves_out_platforms_the_oracle_lacks() {

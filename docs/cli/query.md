@@ -21,7 +21,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | Input | Purpose |
 |-------|---------|
 | `[QUERY]` | The query, in the platform's language. `-` reads it from stdin |
-| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `crowdstrike`, `harfanglab`, `elastic` or `exabeam`. `sysdig` has no query runner: it exits `2` (`usage_invalid_value`) |
+| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `crowdstrike`, `harfanglab`, `elastic`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner: it exits `2` (`usage_invalid_value`) |
 | `--tenant` | A configured tenant name (repeatable), or `all`. Default: the only tenant configured |
 | `--rule` | Run the query this rule (by UUID) deploys to the platform |
 | `--file` | Run the query of the rule in this YAML file, saved or not: a path from the current directory or the repository root |

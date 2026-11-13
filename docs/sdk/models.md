@@ -82,6 +82,7 @@ rule.configurations.sentinel.query
 | `CarbonBlackConfig` | `carbon_black_cloud` | `platform::carbon_black_cloud::1.0` | [carbon-black-cloud-1.0](/docs/specifications/specs/platforms/carbon-black-cloud-1.0/) |
 | `SysdigConfig` | `sysdig` | `platform::sysdig::1.0` | [sysdig-1.0](/docs/specifications/specs/platforms/sysdig-1.0/) |
 | `ExabeamConfig` | `exabeam` | `platform::exabeam::1.0` | [exabeam-1.0](/docs/specifications/specs/platforms/exabeam-1.0/) |
+| `GoogleSecopsConfig` | `google_secops` | `platform::google_secops::1.0` | [google-secops-1.0](/docs/specifications/specs/platforms/google-secops-1.0/) |
 
 ```python
 rule.configurations.sentinel.query

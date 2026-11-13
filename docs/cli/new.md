@@ -26,7 +26,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 |--------|---------|
 | `--name` | The object's `name`. The filename is its slug, or follows the `style` set in `lint.toml` (see below) |
 | `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`) |
-| `--platform` | `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `sysdig` or `exabeam` |
+| `--platform` | `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `sysdig`, `exabeam` or `google_secops` |
 | `--objective`, `--threat` | The UUID of an object already in the catalogue. A malformed UUID exits `2` with `usage_invalid_value`; one no object carries exits `2` with `reference_not_found` |
 
 ## What the new file holds

@@ -44,6 +44,11 @@ percent-encoding = "2"
 shlex = "2.0"
 # Sentinel (UC-4.3): the request ids MSAL and azure-core stamp their requests with.
 uuid = { workspace = true, features = ["v4"] }
+# Google SecOps: the service-account JWT (RS256) exchanged for an access token
+# on the tenant's own client (google-cloud-auth sends through a client of its
+# own, so it would bypass the tenant's proxy, CA bundles and timeouts). 9.x
+# signs with ring, the provider rustls already uses here.
+jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }
 
 [dev-dependencies]
 # The Sysdig test compiles the tide corpus's rule as deploy does.
@@ -56,3 +61,5 @@ wiremock.workspace = true
 tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 tokio-rustls.workspace = true
 tempfile = "3"
+# Google SecOps: the test key's public half, to verify the assertion's signature.
+ring = "0.17"

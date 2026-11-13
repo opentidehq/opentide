@@ -106,11 +106,32 @@ fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
 /// underscore or hyphen form, matched case-insensitively, which also catches
 /// its credential variables (`$EXABEAM_CLIENT_ID`). No other platform id is a
 /// substring of these, and 0.23.0 output holds none of them, so a 0.23.0
-/// render is returned unchanged.
+/// render is returned unchanged. A credential variable that does not hold the
+/// id (Bitdefender's `$GRAVITYZONE_API_KEY`) is found in the platform's
+/// bundled `platforms/<id>.toml`.
 fn without_since_oracle_lines(text: &str) -> String {
+    let variables = |id: &str| -> Vec<String> {
+        let file = format!("platforms/{id}.toml");
+        opentide_schema::configuration::bundled::FILES
+            .iter()
+            .filter(|(path, _)| *path == file)
+            .flat_map(|(_, text)| text.split('$').skip(1))
+            .map(|rest| {
+                rest.chars()
+                    .take_while(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
+                    .collect::<String>()
+                    .to_ascii_lowercase()
+            })
+            .filter(|name| !name.is_empty())
+            .collect()
+    };
     let tokens: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
         .iter()
-        .flat_map(|id| [(*id).to_owned(), id.replace('_', "-")])
+        .flat_map(|id| {
+            let mut tokens = vec![(*id).to_owned(), id.replace('_', "-")];
+            tokens.extend(variables(id));
+            tokens
+        })
         .collect();
     text.split_inclusive('\n')
         .filter(|line| {

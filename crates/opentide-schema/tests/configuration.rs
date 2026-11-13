@@ -407,7 +407,7 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 #[test]
 fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    let compiled: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
+    let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
     let oracle: Vec<&str> = table["bundled"]
         .as_array()
         .unwrap()
@@ -417,7 +417,7 @@ fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     // The recorded oracle (0.23.0) predates the platforms the train ports onto
     // it; leave their bundled configuration out before comparing with it, and
     // compare the whole set with the folder on disk (both live).
-    let without_since_oracle: Vec<&str> = compiled
+    let without_since_oracle: Vec<&str> = every
         .iter()
         .copied()
         .filter(|path| !is_since_oracle_platform_file(path))
@@ -447,7 +447,7 @@ fn configuration_bundled_files_are_the_folder_and_the_oracles() {
         }
     }
     on_disk.sort();
-    assert_eq!(compiled, on_disk);
+    assert_eq!(every, on_disk);
     let keys: Vec<&str> = table["metadata_keys"]
         .as_array()
         .unwrap()

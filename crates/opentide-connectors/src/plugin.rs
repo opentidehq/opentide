@@ -131,10 +131,9 @@ mod tests {
     fn plugins_follow_the_builtin_platforms_and_cannot_replace_one() {
         let (registry, errors) = with_plugins(Some(&Host));
         let ids = registry.ids();
-        let count = opentide_schema::platforms::COUNT;
-        assert_eq!(ids.len(), count + 1);
-        assert_eq!(ids[..count], BUILTIN);
-        assert_eq!(ids[count], "acme");
+        assert_eq!(ids.len(), BUILTIN.len() + 1);
+        assert_eq!(ids[..BUILTIN.len()], BUILTIN);
+        assert_eq!(ids[BUILTIN.len()], "acme");
         let acme = registry.get("acme").expect("registered");
         assert!(acme.is_plugin());
         assert!(acme.deployer().is_none() && acme.configuration_check().is_none());

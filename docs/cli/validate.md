@@ -593,6 +593,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
 | `harfanglab` | ❌ `supported: false` | ❌ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ❌ |
+| `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ❌ |
 
 ### Exabeam live validation
 

@@ -951,6 +951,9 @@ use crate::objects::platform::exabeam::{
     ExabeamConfig, ExabeamCorrelation, ExabeamDays, ExabeamEmail, ExabeamRecurrence,
     ExabeamSequence, ExabeamSuppression, ExabeamThreshold, ExabeamValue,
 };
+use crate::objects::platform::google_secops::{
+    GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
+};
 use crate::objects::platform::harfanglab::SelectionValue;
 use crate::objects::platform::harfanglab::{
     HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
@@ -1159,6 +1162,10 @@ py_models! {
     ExabeamEmail,
     ExabeamRecurrence,
     ExabeamConfig [<ExabeamConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    GoogleSecopsMatch,
+    GoogleSecopsOptions,
+    GoogleSecopsSchedule,
+    GoogleSecopsConfig [<GoogleSecopsConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
 }
 
 /// Names the exported `models` submodule [`MODULE`] and puts it in
@@ -1193,7 +1200,8 @@ pub mod models {
         ElasticSeverityMapping, ElasticSuppression, ElasticThreatEntry, ElasticThreatGroup,
         ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExabeamConfig, ExabeamCorrelation,
         ExabeamEmail, ExabeamRecurrence, ExabeamSequence, ExabeamSuppression, ExabeamThreshold,
-        ExternalDetector, HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource,
+        ExternalDetector, GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions,
+        GoogleSecopsSchedule, HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource,
         HarfangLabSigmaSelection, HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata,
         ObjectReferences, ObjectiveBody, ObjectiveComposition, ObjectiveV1_0, Organisation,
         ResponseProcedure, ResponseSearch, RuleConfigurations, RuleMetadata, RuleResponse,

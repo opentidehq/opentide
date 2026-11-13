@@ -414,6 +414,16 @@ pub fn check_object(
             );
         }
         if subject.family == "rule" {
+            warnings.extend(
+                opentide_schema::objects::platform::block_advisories(root)
+                    .into_iter()
+                    .map(|advisory| {
+                        Diagnostic::warning(advisory.code, advisory.message)
+                            .object(subject.uuid, "rule")
+                            .file(subject.path)
+                            .at(advisory.field_path)
+                    }),
+            );
             for (platform, key) in states::legacy_external_id_keys(root) {
                 issues.push(
                     new(

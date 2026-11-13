@@ -91,6 +91,7 @@ fn empty_configurations() -> RuleConfigurations {
         elastic: None,
         sysdig: None,
         exabeam: None,
+        google_secops: None,
     }
 }
 
