@@ -21,7 +21,9 @@ mod yaml_path;
 mod yaml_scalar;
 mod yara;
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, codes, span_to_range};
+use opentide_core::{
+    ByteSpan, Diagnostic, LanguageId, LineIndex, Range, Severity, codes, span_to_range,
+};
 use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
     tide_schema_root, tokens_from_spans,
@@ -677,7 +679,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 ),
             ] {
                 if missing && lint.requires(key) {
-                    let mut d = Diagnostic::warning(
+                    let mut d = Diagnostic::information(
                         code,
                         format!("recommended field metadata.{key} is missing"),
                         key_range(input.source, "metadata"),
@@ -706,7 +708,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     }
 
     diagnose_catalog_values(&catalog_schema, &object, input.source, &mut diagnostics);
-    diagnose_shape(&schema, input.source, &mut diagnostics);
+    diagnose_shape(&schema, input.source, &lint, &mut diagnostics);
     diagnose_deprecations(&object_type, input.source, &mut diagnostics);
 
     let uuid = object
@@ -1716,7 +1718,15 @@ fn diagnose_catalog_values(
 /// Unknown keys only when the catalog has that exact revision: a revision it
 /// does not know, or a catalog keyed by family, says nothing about which
 /// keys exist. A field another check already reported is not repeated.
-fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
+///
+/// A field only the templates ask for (`recommended_field_missing`) follows
+/// lint.toml `[recommended]`: information by default, none when disabled.
+fn diagnose_shape(
+    schema: &str,
+    source: &str,
+    lint: &lint::LintSettings,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let Some((revision, root)) = tide_schema_root(schema) else {
         return;
     };
@@ -1737,6 +1747,9 @@ fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>)
             .collect(),
         seen: std::collections::BTreeSet::new(),
         found: Vec::new(),
+        recommended: lint
+            .recommended_enabled
+            .then(|| lint.recommended_severity.unwrap_or(Severity::Information)),
     };
     shape.mapping(&[], &[], mapping, root.closed, &root.legacy);
     diagnostics.extend(shape.found);
@@ -1762,6 +1775,9 @@ struct ShapeCheck<'a> {
     /// What this check reported, by path with list items: one per place.
     seen: std::collections::BTreeSet<Vec<Step>>,
     found: Vec<Diagnostic>,
+    /// The severity of `recommended_field_missing`; `None` when lint.toml
+    /// `[recommended]` disables it.
+    recommended: Option<Severity>,
 }
 
 impl ShapeCheck<'_> {
@@ -1785,7 +1801,8 @@ impl ShapeCheck<'_> {
         }
         for field in &children {
             let key = serde_yaml::Value::String(field.name.clone());
-            if !(field.required || field.recommended) || mapping.contains_key(&key) {
+            let wanted = field.required || (field.recommended && self.recommended.is_some());
+            if !wanted || mapping.contains_key(&key) {
                 continue;
             }
             // A legacy spelling that fills the field counts (`search` for `query`).
@@ -1811,11 +1828,14 @@ impl ShapeCheck<'_> {
                     self.range(steps),
                 )
             } else {
-                Diagnostic::warning(
-                    codes::RECOMMENDED_FIELD_MISSING,
-                    format!("recommended field '{dotted}' is missing"),
-                    self.range(steps),
-                )
+                Diagnostic {
+                    severity: self.recommended.unwrap_or(Severity::Information),
+                    ..Diagnostic::information(
+                        codes::RECOMMENDED_FIELD_MISSING,
+                        format!("recommended field '{dotted}' is missing"),
+                        self.range(steps),
+                    )
+                }
             };
             self.found.push(diagnostic.with_field_path(field_path));
         }
@@ -2440,16 +2460,33 @@ objective:
         assert_eq!(shape_findings(&source)[0].0, "configurations.splunk.query");
     }
 
-    #[test]
-    fn a_field_only_the_templates_ask_for_is_a_warning() {
-        // opentide validate accepts a rule without configurations or response.
-        let source = VALID_RULE
+    /// `recommended_field_missing` on `source` under `lint_toml`, as (message, severity).
+    fn recommended_findings(source: &str, lint_toml: &str) -> Vec<(String, Severity)> {
+        let lint = parse_lint_settings(lint_toml).expect("lint.toml");
+        let mut found = Vec::new();
+        diagnose_shape("rule::1.0", source, &lint, &mut found);
+        found
+            .into_iter()
+            .filter(|d| d.code == codes::RECOMMENDED_FIELD_MISSING)
+            .map(|d| (d.message, d.severity))
+            .collect()
+    }
+
+    /// `VALID_RULE` without `configurations` and `response`, which opentide
+    /// validate accepts.
+    fn rule_without_optional_blocks() -> String {
+        VALID_RULE
             .split("response:")
             .next()
             .expect("head")
-            .to_string();
+            .to_string()
+    }
+
+    #[test]
+    fn a_field_only_the_templates_ask_for_is_information() {
+        let source = rule_without_optional_blocks();
         assert_eq!(shape_findings(&source), vec![]);
-        let warnings: Vec<String> = analyze(AnalyzeInput {
+        let found: Vec<(String, Severity)> = analyze(AnalyzeInput {
             path: "objects/rules/rule.yaml",
             source: &source,
             workspace: &[],
@@ -2458,13 +2495,65 @@ objective:
         .diagnostics
         .into_iter()
         .filter(|d| d.code == codes::RECOMMENDED_FIELD_MISSING)
-        .map(|d| d.message)
+        .map(|d| (d.message, d.severity))
         .collect();
         assert_eq!(
-            warnings,
+            found,
             vec![
-                "recommended field 'configurations' is missing",
-                "recommended field 'response' is missing"
+                (
+                    "recommended field 'configurations' is missing".to_string(),
+                    Severity::Information
+                ),
+                (
+                    "recommended field 'response' is missing".to_string(),
+                    Severity::Information
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn lint_toml_recommended_decides_the_missing_optional_blocks() {
+        let source = rule_without_optional_blocks();
+        assert!(recommended_findings(&source, "[recommended]\nenabled = false\n").is_empty());
+        let raised = recommended_findings(&source, "[recommended]\nseverity = \"warning\"\n");
+        assert_eq!(raised.len(), 2, "{raised:?}");
+        assert!(raised.iter().all(|(_, s)| *s == Severity::Warning));
+        // `[metadata]` does not decide them.
+        let metadata = recommended_findings(&source, "[metadata]\nenabled = false\n");
+        assert_eq!(metadata.len(), 2, "{metadata:?}");
+        assert!(metadata.iter().all(|(_, s)| *s == Severity::Information));
+    }
+
+    #[test]
+    fn a_missing_author_or_organisation_is_information() {
+        let source = VALID_RULE
+            .lines()
+            .filter(|line| {
+                let key = line.trim_start();
+                !key.starts_with("author:") && !key.starts_with("organisation:")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let found: Vec<(String, Severity)> = analyze(AnalyzeInput {
+            path: "objects/rules/rule.yaml",
+            source: &source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::MISSING_AUTHOR || d.code == codes::MISSING_ORGANISATION)
+        .map(|d| (d.code, d.severity))
+        .collect();
+        assert_eq!(
+            found,
+            vec![
+                (codes::MISSING_AUTHOR.to_string(), Severity::Information),
+                (
+                    codes::MISSING_ORGANISATION.to_string(),
+                    Severity::Information
+                ),
             ]
         );
     }

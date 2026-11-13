@@ -30,15 +30,16 @@ Pydantic stays CLI authority. LSP emits the same `{code, field_path, severity}`:
 - `duplicate_id`
 - `invalid_ref` — error on the reference field when the UUID names nothing in the workspace: a rule's `detection_model` that is neither an indexed objective nor a signal one declares, an objective's `objective.threats` entry, or a threat's `threat.chaining.<i>.vector` that is not an indexed threat.
 - `chaining_relation_unknown`
+- `recommended_field_missing` — information on the parent key when a field the templates ask for and validation does not require is absent: today a rule's `configurations` and `response`. `[recommended]` in `lint.toml` decides it.
 - `deprecated_field`
 - `filename_slug` — warning on the `name` value. A non-empty file stem must equal the stem `[filenames] style` derives from the name, or start with `{stem}-`. With `style = "slug"` (the default) that is `slugify(name)`: ASCII alphanumerics lowercased, each run of other characters one `-`, and `-` trimmed from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). With `style = "name"` it is the name less `<>:"\/|?*`, control characters, the spaces and dots around it and a trailing `.debug`, as `opentide lint` derives it. `style = "none"` compares no stem. The file stem is the file name less `.yaml` (or `.yml`) and a `.debug` infix, as opentide's `object_stem` reads it. Suggestion text is `{stem}.yaml`, or `{stem}.debug.yaml` for a debug file. A document that is not a file (`untitled:Untitled-1`) gets neither filename check.
 - `filename_pattern` — warning on the `name` value when the file stem does not match `[filenames] pattern` (the whole stem less a `.debug` infix, as `re.fullmatch` matches it). A pattern the Rust `regex` crate cannot compile (look-around, backreferences) is not checked here; `opentide lint` still checks it.
-- `missing_author` — warning on the `metadata` key when `metadata` has no `author` and `[metadata] required` names it (the default does).
-- `missing_organisation` — warning on the `metadata` key when `metadata` has no `organisation` and `[metadata] required` names it (the default does).
+- `missing_author` — information on the `metadata` key when `metadata` has no `author` and `[metadata] required` names it (the default does). The field is optional, so it is not a warning unless `[metadata] severity` makes it one.
+- `missing_organisation` — information on the `metadata` key when `metadata` has no `organisation` and `[metadata] required` names it (the default does). The field is optional, so it is not a warning unless `[metadata] severity` makes it one.
 
 ### `lint.toml`
 
-The four checks above follow the root's `.opentide/configurations/lint.toml` as `opentide lint` does ([#214](https://github.com/opentidehq/language-server/issues/214)), so the editor and the CLI agree:
+The filename and metadata checks above, and `recommended_field_missing`, follow the root's `.opentide/configurations/lint.toml` as `opentide lint` does ([#214](https://github.com/opentidehq/language-server/issues/214)), so the editor and the CLI agree:
 
 | `lint.toml` | Decides |
 | --- | --- |
@@ -46,9 +47,10 @@ The four checks above follow the root's `.opentide/configurations/lint.toml` as 
 | `[filenames] style`, `pattern`, and `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` (a key a kind leaves unset comes from `[filenames]`) | `filename_slug`, `filename_pattern` |
 | `[metadata] enabled = false` | no `missing_author` or `missing_organisation` |
 | `[metadata] required` | which of `missing_author` and `missing_organisation` apply |
-| `[filenames] severity`, `[metadata] severity` (`error`, `warning`, `info`) | the findings' severity |
+| `[recommended] enabled = false` | no `recommended_field_missing` |
+| `[filenames] severity`, `[metadata] severity`, `[recommended] severity` (`error`, `warning`, `info`) | the findings' severity |
 
-Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no pattern, `author` and `organisation` required. Other keys `required` names (`reviewed`) have no engine finding. The language server reads the file of the document's root: the editor's buffer while it is open, else the file on disk, else the root's `lint.toml` among the documents a browser host supplies; editing it re-checks open documents. Another host installs it with `opentide_analysis::install_lint`. The host checks the file itself (`opentide-config`); a value of the wrong type keeps its default here. `testdata/conformance/lint-toml` is a workspace with its own conventions and `opentide-lint.json` what `opentide lint` reports for it (`scripts/opentide_lint_findings.py` records it); `crates/opentide-analysis/tests/lint_settings.rs` checks the engine reports the same.
+Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no pattern, `author` and `organisation` required. A missing optional field is information, not a warning: `missing_author`, `missing_organisation` and `recommended_field_missing` default to information, and `severity` raises them for a team that requires them ([#249](https://github.com/opentidehq/language-server/issues/249)). Other keys `required` names (`reviewed`) have no engine finding. The language server reads the file of the document's root: the editor's buffer while it is open, else the file on disk, else the root's `lint.toml` among the documents a browser host supplies; editing it re-checks open documents. Another host installs it with `opentide_analysis::install_lint`. The host checks the file itself (`opentide-config`); a value of the wrong type keeps its default here. `testdata/conformance/lint-toml` is a workspace with its own conventions and `opentide-lint.json` what `opentide lint` reports for it (`scripts/opentide_lint_findings.py` records it); `crates/opentide-analysis/tests/lint_settings.rs` checks the engine reports the same.
 
 Query extras (the engines add these inside an injected query, and on a raw query file):
 

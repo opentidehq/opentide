@@ -6,6 +6,19 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Upgrade
+
+- To keep missing `author` and `organisation` as warnings, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. For a rule's missing `configurations` or `response`, set it under `[recommended]`.
+
+### Changed
+
+- **A missing optional field is information, not a warning.** `missing_author`, `missing_organisation` and `recommended_field_missing` (a rule without `configurations` or `response`) now default to information, so editors stop showing a warning for fields `opentide validate` does not require. This matches `opentide lint`, which already reports them as notes ([#249](https://github.com/opentidehq/language-server/issues/249)).
+
+### Added
+
+- **lint.toml `[recommended]`.** `enabled` and `severity` decide `recommended_field_missing`, as `[metadata]` decides `missing_author` and `missing_organisation` ([#249](https://github.com/opentidehq/language-server/issues/249)).
+- **API: `opentide_core::Diagnostic::information`**, next to `error` and `warning`.
+
 ## [0.16.0] - 2026-11-12
 
 Google Security Operations support: YARA-L 2.0 rules, searches and `configurations.google_secops` blocks are checked, completed and highlighted as you type.

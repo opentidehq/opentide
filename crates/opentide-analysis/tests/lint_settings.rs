@@ -139,7 +139,7 @@ fn a_check_lint_toml_disables_is_not_reported() {
 #[test]
 fn a_check_severity_replaces_the_findings() {
     let _turn = SETTINGS.lock().unwrap_or_else(|p| p.into_inner());
-    install_lint(Some("[metadata]\nseverity = \"info\"\n")).unwrap();
+    install_lint(Some("[metadata]\nseverity = \"warning\"\n")).unwrap();
     let root = root();
     let path = root.join("objects/objectives/O-0001.yaml");
     let text = fs::read_to_string(&path).unwrap();
@@ -155,6 +155,33 @@ fn a_check_severity_replaces_the_findings() {
         },
     );
     install_lint(None).unwrap();
+    let missing: Vec<_> = response
+        .diagnostics
+        .iter()
+        .filter(|d| d.code.starts_with("missing_"))
+        .collect();
+    assert_eq!(missing.len(), 2, "{missing:?}");
+    assert!(missing.iter().all(|d| d.severity == Severity::Warning));
+}
+
+#[test]
+fn a_missing_optional_field_is_information_by_default() {
+    let _turn = SETTINGS.lock().unwrap_or_else(|p| p.into_inner());
+    install_lint(None).unwrap();
+    let root = root();
+    let path = root.join("objects/objectives/O-0001.yaml");
+    let text = fs::read_to_string(&path).unwrap();
+    let host = MemoryWorkspace {
+        files: vec![(path.display().to_string(), text.clone())],
+    };
+    let response = analyze(
+        &host,
+        AnalyzeRequest {
+            uri: path.display().to_string(),
+            language: LanguageId::TideYaml,
+            text,
+        },
+    );
     let missing: Vec<_> = response
         .diagnostics
         .iter()

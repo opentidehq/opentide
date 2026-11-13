@@ -6,9 +6,11 @@
 //! | --- | --- |
 //! | `[filenames] enabled`, `style`, `pattern`, `severity`, and `[filenames.<kind>]` | `filename_slug`, `filename_pattern` |
 //! | `[metadata] enabled`, `required`, `severity` | `missing_author`, `missing_organisation` |
+//! | `[recommended] enabled`, `severity` | `recommended_field_missing` |
 //!
 //! Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no
-//! pattern, and `author` and `organisation` required. The text is read, not
+//! pattern, and `author` and `organisation` required. A missing optional field
+//! (`[metadata]`, `[recommended]`) is information unless `severity` raises it. The text is read, not
 //! checked: the host checks configuration TOML (`opentide-config`), so a
 //! value of the wrong type is ignored here and its default kept. The host
 //! installs the settings ([`install_lint_settings`]); this crate reads no file.
@@ -78,6 +80,9 @@ pub struct LintSettings {
     pub metadata_severity: Option<Severity>,
     /// The metadata keys every object must fill.
     pub required_metadata: Vec<String>,
+    pub recommended_enabled: bool,
+    /// Replaces the severity of `recommended_field_missing`.
+    pub recommended_severity: Option<Severity>,
 }
 
 impl Default for LintSettings {
@@ -94,6 +99,8 @@ impl Default for LintSettings {
             metadata_enabled: true,
             metadata_severity: None,
             required_metadata: vec!["author".into(), "organisation".into()],
+            recommended_enabled: true,
+            recommended_severity: None,
         }
     }
 }
@@ -148,6 +155,10 @@ pub fn parse_lint_settings(text: &str) -> Result<LintSettings, String> {
                 settings.required_metadata = keys;
             }
         }
+    }
+    if let Some(table) = value.get("recommended") {
+        settings.recommended_enabled = bool_or(table, "enabled", true);
+        settings.recommended_severity = severity(table);
     }
     Ok(settings)
 }
@@ -249,6 +260,20 @@ mod tests {
         assert_eq!(s.filenames_for("rule").style, FilenameStyle::Slug);
         assert!(s.requires("author") && s.requires("organisation"));
         assert!(!s.filenames_for("rule").has_pattern());
+        assert!(s.recommended_enabled);
+        assert_eq!(s.recommended_severity, None);
+    }
+
+    #[test]
+    fn reads_the_recommended_table() {
+        let s = parse_lint_settings("[recommended]\nseverity = \"warning\"\n").unwrap();
+        assert!(s.recommended_enabled);
+        assert_eq!(s.recommended_severity, Some(Severity::Warning));
+        let s = parse_lint_settings("[recommended]\nenabled = false\n").unwrap();
+        assert!(!s.recommended_enabled);
+        // It is its own check: `[metadata]` leaves it on.
+        let s = parse_lint_settings("[metadata]\nenabled = false\n").unwrap();
+        assert!(s.recommended_enabled);
     }
 
     #[test]
