@@ -597,17 +597,8 @@ fn truthy(node: &Node) -> bool {
 }
 
 /// The platforms opentide knows (`Opentide.Platforms`), in name order.
-pub const PLATFORMS: [&str; 9] = [
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-    "sysdig",
-];
+pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] =
+    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Name);
 
 /// Whether `platform` is one opentide deploys to: built in, or an installed
 /// platform plugin's.
