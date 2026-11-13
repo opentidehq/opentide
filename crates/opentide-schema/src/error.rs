@@ -217,6 +217,17 @@ mod tests {
     }
 
     #[test]
+    fn a_constraint_is_reported_under_its_code() {
+        let error = at(ErrorKind::Constraint("graylog_schedule"));
+        assert_eq!(error.code(Surface::Object), "graylog_schedule");
+        assert_eq!(error.code(Surface::Configuration), "graylog_schedule");
+        assert_eq!(
+            ErrorKind::Constraint("graylog_schedule").pydantic_type(),
+            Some("graylog_schedule")
+        );
+    }
+
+    #[test]
     fn configuration_errors_follow_configuration_py() {
         let codes = [
             (ErrorKind::Syntax, "config_parse"),
@@ -250,6 +261,13 @@ mod tests {
             ErrorKind::InvalidValue("value_error").pydantic_type(),
             Some("value_error")
         );
+    }
+
+    #[test]
+    fn a_platform_constraint_is_reported_as_its_code() {
+        let error = at(ErrorKind::Constraint("bitdefender_target"));
+        assert_eq!(error.code(Surface::Object), "bitdefender_target");
+        assert_eq!(error.kind.pydantic_type(), Some("bitdefender_target"));
     }
 
     #[test]

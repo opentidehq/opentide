@@ -16,19 +16,32 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
-| [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target. |
-| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`. |
-| [`bitdefender_criteria_combination`](#bitdefender_criteria_combination) | The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion. |
-| [`bitdefender_criterion_field`](#bitdefender_criterion_field) | The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list). |
-| [`bitdefender_criterion_relation`](#bitdefender_criterion_relation) | The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`. |
-| [`bitdefender_criterion_shape`](#bitdefender_criterion_shape) | A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value. |
-| [`bitdefender_criterion_value`](#bitdefender_criterion_value) | The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535. |
-| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`. |
-| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule). |
-| [`bitdefender_severity`](#bitdefender_severity) | `severity` is not `Low`, `Medium`, or `High`. |
-| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`. |
-| [`bitdefender_target`](#bitdefender_target) | `detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused. |
-| [`bitdefender_targets_shape`](#bitdefender_targets_shape) | `targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias. |
+| [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is not allowed for the rule's kind or target. |
+| [`bitdefender_actions_unsupported`](#bitdefender_actions_unsupported) | The block sets `actions`, and the tenant's subscription has no automatic actions. |
+| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
+| [`bitdefender_create_no_id`](#bitdefender_create_no_id) | A GravityZone create answered something other than a 24-hex rule id. |
+| [`bitdefender_create_unconfirmed`](#bitdefender_create_unconfirmed) | A GravityZone create got no answer, and its retry found the name already taken. |
+| [`bitdefender_criteria_combination`](#bitdefender_criteria_combination) | The criteria combine fields or values GravityZone does not allow together. |
+| [`bitdefender_criterion_field`](#bitdefender_criterion_field) | A criterion's `field` does not belong to the block's `target`. |
+| [`bitdefender_criterion_relation`](#bitdefender_criterion_relation) | A criterion uses a relation its field does not take. |
+| [`bitdefender_criterion_shape`](#bitdefender_criterion_shape) | A criterion does not have `field` and exactly one of `is`, `contains` and `any`. |
+| [`bitdefender_criterion_value`](#bitdefender_criterion_value) | A criterion's value is not one its field accepts. |
+| [`bitdefender_incidents_api_unavailable`](#bitdefender_incidents_api_unavailable) | The tenant has no Incidents API, so it cannot take custom rules. |
+| [`bitdefender_kind_changed`](#bitdefender_kind_changed) | An update was refused because the block's kind differs from the GravityZone rule's. |
+| [`bitdefender_name_conflict`](#bitdefender_name_conflict) | GravityZone refused a create because a rule with the same name exists in the company. |
+| [`bitdefender_name_duplicate`](#bitdefender_name_duplicate) | Two enabled Bitdefender blocks resolve to the same GravityZone rule name. |
+| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches. |
+| [`bitdefender_request_failed`](#bitdefender_request_failed) | GravityZone refused a call for this rule with a JSON-RPC error. |
+| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets both `detection` and `yara`, or neither. |
+| [`bitdefender_rule_missing`](#bitdefender_rule_missing) | A rule to disable is gone from GravityZone, so its recorded id was removed. |
+| [`bitdefender_rule_recreated`](#bitdefender_rule_recreated) | The recorded GravityZone rule was gone, so deploy created it again. |
+| [`bitdefender_severity`](#bitdefender_severity) | The block `severity` is not `Low`, `Medium` or `High`. |
+| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`. |
+| [`bitdefender_target`](#bitdefender_target) | The `detection.target` is not a GravityZone detection target. |
+| [`bitdefender_target_unknown`](#bitdefender_target_unknown) | A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table. |
+| [`bitdefender_targets_shape`](#bitdefender_targets_shape) | `targets` sets both `endpoint_tags` and `companies`, or an empty list. |
+| [`bitdefender_tenant_unauthorized`](#bitdefender_tenant_unauthorized) | GravityZone refused the tenant's API key, so no rule deploys to it. |
+| [`bitdefender_tenant_unreachable`](#bitdefender_tenant_unreachable) | A call to the GravityZone tenant got no answer, so no further rule deploys to it. |
 | [`bitdefender_yara_ascii`](#bitdefender_yara_ascii) | A Bitdefender YARA signature holds a character that is not ASCII. |
 | [`bitdefender_yara_size`](#bitdefender_yara_size) | A Bitdefender YARA signature is longer than 30,000 characters. |
 | [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
@@ -228,23 +241,44 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`google_secops_tenant_unauthorized`](#google_secops_tenant_unauthorized) | A Google SecOps instance refused opentide's credentials. |
 | [`google_secops_tenant_unreachable`](#google_secops_tenant_unreachable) | A Google SecOps instance did not answer, so no rule was deployed to it. |
 | [`google_secops_verify_failed`](#google_secops_verify_failed) | Google SecOps does not compile a rule, so deploy neither creates nor updates it. |
-| [`graylog_aggregation`](#graylog_aggregation) | A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments. |
-| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value. |
-| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row: `\\` is already one literal backslash, so `\\\\` matches two. |
-| [`graylog_event_field`](#graylog_event_field) | A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`. |
-| [`graylog_event_key`](#graylog_event_key) | A Graylog `event_key` item is not an `event_fields` name. |
-| [`graylog_event_limit`](#graylog_event_limit) | A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation. |
-| [`graylog_field_name`](#graylog_field_name) | A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`). |
-| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form. |
-| [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not one string or a list of distinct non-blank strings. |
-| [`graylog_open_range`](#graylog_open_range) | A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`. |
-| [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run. |
-| [`graylog_priority`](#graylog_priority) | A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`. |
-| [`graylog_query_blank`](#graylog_query_blank) | A Graylog block's `query` is missing or blank. |
-| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character. |
-| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped `"`, which Lucene reads as a quoted literal, not the character: escape it as `\"`. |
-| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses an inline flag, a `(?…)` group, `\b`, `\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query. |
-| [`graylog_schedule`](#graylog_schedule) | A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`. |
+| [`graylog_aggregation`](#graylog_aggregation) | A Graylog aggregation condition does not parse, or a call has the wrong arguments. |
+| [`graylog_alias_unknown`](#graylog_alias_unknown) | A Graylog block names a stream or notification alias the tenant does not define. |
+| [`graylog_all_streams`](#graylog_all_streams) | A Graylog definition names no stream, so it searches every stream. |
+| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard or range applies to Graylog's analysed message field. |
+| [`graylog_create_unconfirmed`](#graylog_create_unconfirmed) | A Graylog create got no answer, so the definition may exist without a binding. |
+| [`graylog_definition_immutable`](#graylog_definition_immutable) | Graylog refuses to change or delete an event definition outside the default scope. |
+| [`graylog_definition_in_use`](#graylog_definition_in_use) | Graylog refuses to delete an event definition another one depends on. |
+| [`graylog_definition_invalid`](#graylog_definition_invalid) | Graylog refused an event definition, naming the fields at fault. |
+| [`graylog_definition_missing`](#graylog_definition_missing) | The recorded Graylog event definition was gone when deploy came to disable it. |
+| [`graylog_definition_recreated`](#graylog_definition_recreated) | The recorded Graylog event definition was gone, so deploy created it again. |
+| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row. |
+| [`graylog_event_field`](#graylog_event_field) | A Graylog event field has an invalid name or value. |
+| [`graylog_event_key`](#graylog_event_key) | A Graylog event_key item is not an event field of the block. |
+| [`graylog_event_limit`](#graylog_event_limit) | A Graylog block's event_limit is out of range, or set on an aggregation. |
+| [`graylog_field_name`](#graylog_field_name) | A Graylog aggregation groups by a name that is not a field name. |
+| [`graylog_field_unsupported_version`](#graylog_field_unsupported_version) | A Graylog block sets a field the tenant's version cannot take. |
+| [`graylog_forbidden`](#graylog_forbidden) | Graylog refused a request for want of a permission. |
+| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`. |
+| [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not a string or a list of distinct, non-blank strings. |
+| [`graylog_open_range`](#graylog_open_range) | A Graylog range has an open end, which Graylog's validator refuses. |
+| [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a window longer than its interval. |
+| [`graylog_priority`](#graylog_priority) | A Graylog block's priority is not one of Graylog's priorities. |
+| [`graylog_priority_collapsed`](#graylog_priority_collapsed) | Graylog before 7.1 has no Informational priority: the definition is sent as Low. |
+| [`graylog_query_blank`](#graylog_query_blank) | A Graylog block has no query, or an empty one. |
+| [`graylog_query_invalid`](#graylog_query_invalid) | Graylog refused a query, so deploy saved nothing. |
+| [`graylog_query_warning`](#graylog_query_warning) | Graylog has a reservation about a query. |
+| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds a character Lucene reads as a regex operator. |
+| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped double quote. |
+| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses syntax Lucene's regex engine does not have. |
+| [`graylog_request_failed`](#graylog_request_failed) | A Graylog request failed for a reason the failure table does not name. |
+| [`graylog_schedule`](#graylog_schedule) | A Graylog block's schedule is invalid. |
+| [`graylog_tenant_unauthorized`](#graylog_tenant_unauthorized) | A Graylog tenant refused the access token. |
+| [`graylog_tenant_unreachable`](#graylog_tenant_unreachable) | A Graylog tenant did not answer. |
+| [`graylog_title_duplicate`](#graylog_title_duplicate) | Two enabled Graylog blocks resolve to one event definition title. |
+| [`graylog_unknown_field`](#graylog_unknown_field) | Graylog does not know a field the query names, on the streams it searches. |
+| [`graylog_value_type`](#graylog_value_type) | A query compares a Graylog field with a value of the wrong type. |
+| [`graylog_version_unsupported`](#graylog_version_unsupported) | A Graylog tenant runs a version opentide does not deploy to. |
+| [`graylog_version_vulnerable`](#graylog_version_vulnerable) | A Graylog tenant runs a version affected by the access-token revocation flaw. |
 | [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
 | [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho. |
 | [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
@@ -521,243 +555,562 @@ Correct the asset name, or declare the asset under `[[assets]]`.
 
 ## bitdefender_action_scope
 
-An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target.
+An automatic action is not allowed for the rule's kind or target.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). `kill_process` is for Basic rules only. `sandbox`, `kill_process` and `quarantine` need a `process` or `file` target or a `*.CreatedBy.*` criterion; a YARA rule takes `sandbox` and `quarantine`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    actions:
+      kill_process: true
+    yara:
+      signature: |
+        rule A { condition: true }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Remove the action, or use one the kind and target allow (`isolate`, `collect_investigation_package`, `antimalware_scan`, `risk_scan` are allowed everywhere).
+
+## bitdefender_actions_unsupported
+
+The block sets `actions`, and the tenant's subscription has no automatic actions.
+
+Severity: warning. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). With `automatic_actions = false` in the tenant setup, deploy omits `automaticActions` and the rule deploys without them.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    actions:
+      isolate: true   # tenant: automatic_actions = false
+```
+
+### How to fix
+
+Remove the block's `actions`, or set `automatic_actions = true` once the subscription includes them.
 
 ## bitdefender_contains_no_wildcard
 
-A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`.
+A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: GravityZone's `contains` relation compares the whole value with `*` and `?` as wildcards, so a value without one is an exact match, and the author most likely meant a substring.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.CommandLine
+          contains: -enc
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add the wildcards you mean (`contains: "*-enc*"`), or use `is` for an exact match.
+
+## bitdefender_create_no_id
+
+A GravityZone create answered something other than a 24-hex rule id.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). Deploy sends `returnRuleId: true` and records the id it gets back. Without one the rule may exist on the tenant with no binding in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+bitdefender_create_no_id: createCustomRule for 'Encoded PowerShell' answered True
+```
+
+### How to fix
+
+Find the rule by name in the GravityZone console and record its id in the rule's deployment state shard, or delete it and deploy again.
+
+## bitdefender_create_unconfirmed
+
+A GravityZone create got no answer, and its retry found the name already taken.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+
+### Example
+
+```text illustrative
+bitdefender_create_unconfirmed: the first create of 'Office application spawns encoded PowerShell'
+got no answer and the retry found the name taken
+```
+
+### How to fix
+
+Find the rule by its name in the GravityZone console (Incidents, Custom rules). Delete it and deploy again, or record its 24-hex id under `platforms.bitdefender.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
 
 ## bitdefender_criteria_combination
 
-The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion.
+The criteria combine fields or values GravityZone does not allow together.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). EDR-only and XDR-only fields or values are not mixed (`File.CreatedBy.*` with `File.MD5`, `rename` with `downloaded`). `File.Certificate*` needs `File.Name` or `File.FullPathName`. `Connection.Protocol` needs `Connection.Domain`. An XDR detection uses `alert` or an operation criterion, not both.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: connection
+      criteria:
+        - field: Connection.Protocol
+          is: smb
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add the field the pairing needs (`Connection.Domain`), or split EDR and XDR conditions into two rules.
 
 ## bitdefender_criterion_field
 
-The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list).
+A criterion's `field` does not belong to the block's `target`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Each target has its own fields in Bitdefender's criteria catalogue: `process` has `Process.*`, `file` has `File.*`, `connection` has `Connection.*` and `registry` has `Registry.*`. A field the catalogue does not list for any other target is a warning. The alert filter (`detection`) is never a criterion, on any target: write it as the block's `alert`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.Hash
+          is: 44d88612fea8a8f36de82e1278abb02f
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use a field of the target, as the catalogue spells it (`Process.MD5`), or change the target.
 
 ## bitdefender_criterion_relation
 
-The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`.
+A criterion uses a relation its field does not take.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Enum fields (`File.Operation`, `Registry.Operation`, `Registry.DataType`, `Connection.Protocol`, ...) take `is` or `any` only, and `*.MD5` and `*.SHA2` do not take `contains`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Operation
+          contains: key_*
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `is` with one value or `any` with several: `any: [key_created, key_renamed]`.
 
 ## bitdefender_criterion_shape
 
-A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value.
+A criterion does not have `field` and exactly one of `is`, `contains` and `any`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). `is` takes a string or an integer, `contains` a string, and `any` a non-empty list of strings or integers.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: powershell.exe
+          contains: "*shell*"
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep one relation per criterion. Two conditions on one field are two criteria, which must both match.
 
 ## bitdefender_criterion_value
 
-The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535.
+A criterion's value is not one its field accepts.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). An enum field takes only its catalogue values (`Registry.Operation`: `key_created`, `key_deleted`, ...), and a port is an integer from 0 to 65535.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: connection
+      criteria:
+        - field: Connection.DestinationPort
+          any: [443, 70000]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use a catalogue value, or a port in range written as a number.
+
+## bitdefender_incidents_api_unavailable
+
+The tenant has no Incidents API, so it cannot take custom rules.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). GravityZone answered `-32601` (method not found). On-premises GravityZone has no Incidents API.
+
+### Example
+
+```toml
+url = "https://gravityzone.example.internal/api"   # on-premises
+```
+
+### How to fix
+
+Use a GravityZone cloud or partner console URL, ending in `/api`.
+
+## bitdefender_kind_changed
+
+An update was refused because the block's kind differs from the GravityZone rule's.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). GravityZone cannot turn a YARA rule into a Basic rule or back, and `updateCustomRule` takes no `subtype`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    # deployed as yara, now a detection block
+    detection:
+      target: process
+```
+
+### How to fix
+
+Deploy the rule with a `DELETION` status first, then deploy it again with the new kind.
+
+## bitdefender_name_conflict
+
+GravityZone refused a create because a rule with the same name exists in the company.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. GravityZone names are unique per company, and deploy never adopts a rule it did not create: it has no id for it in `.opentide/states/deployment/`. `opentide validate` reports two opentide rules with one GravityZone name as `bitdefender_name_duplicate`; this code is a rule created outside opentide, or by another workspace.
+
+### Example
+
+```yaml
+name: Office application spawns encoded PowerShell   # a console rule has this name
+configurations:
+  bitdefender:
+    status: PRODUCTION
+```
+
+### How to fix
+
+Set a distinct `configurations.bitdefender.name`, or delete the other rule in the console. To take over a rule opentide created and lost track of, record its id in the rule's deployment state shard.
+
+## bitdefender_name_duplicate
+
+Two enabled Bitdefender blocks resolve to the same GravityZone rule name.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). The GravityZone name is the block's `name`, else the rule's `name`, normalised and cut at 128 characters. GravityZone refuses a second rule with one name in a company, so the second deploy would fail with `bitdefender_name_conflict`.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Office application spawns encoded PowerShell
+configurations:
+  bitdefender:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.bitdefender.name`, or rename one of the rules.
 
 ## bitdefender_registry_full_hive
 
-A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`.
+A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: the rule validates and deploys, but GravityZone stores registry keys under the short hive names, so `HKEY_LOCAL_MACHINE\…` never triggers.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Key
+          contains: HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run*
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the short hive name, as in `HKLM\Software\Microsoft\Windows\CurrentVersion\Run*`: `HKLM`, `HKCU`, `HKCR` or `HKCC`; `HKU` for a user's hive, `HKEY_USERS\<SID>…`; and `HKLU` for any other `HKEY_USERS\…` key. The hive name is compared case-insensitively.
+
+## bitdefender_request_failed
+
+GravityZone refused a call for this rule with a JSON-RPC error.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). A response with an `error` member is a failure even with HTTP 200; the message carries its code and `error.data.details`. Other rules on the tenant carry on.
+
+### Example
+
+```text illustrative
+bitdefender_request_failed: updateCustomRule: error -32602: Invalid params (Invalid value for parameter settings.criteriaList)
+```
+
+### How to fix
+
+Read `error.data.details` in the message, fix the block it points at, and deploy again. `opentide validate` catches most refusals before any call.
 
 ## bitdefender_rule_kind
 
-A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule).
+A Bitdefender block sets both `detection` and `yara`, or neither.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A GravityZone custom rule is one kind: a Basic rule (`detection`, a list of criteria) or a YARA rule (`yara`, a signature). An `exclusion` key is unknown: GravityZone exclusion rules are not opentide rules, and deploy never creates, updates or deletes one.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: mshta.exe
+    yara:
+      signature: |
+        rule A { condition: filesize < 10 }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep one kind per rule. Split a Basic rule and a YARA rule into two opentide rules; manage exclusions in the GravityZone console.
+
+## bitdefender_rule_missing
+
+A rule to disable is gone from GravityZone, so its recorded id was removed.
+
+Severity: warning. Reported by `opentide deploy` under `DISABLEMENT` on a `bitdefender` block (bitdefender-1.0). `updateCustomRule` answered `-32002`. Nothing exists to disable, so deploy creates nothing and forgets the binding.
+
+### Example
+
+```text illustrative
+bitdefender_rule_missing: the recorded rule no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state.
+
+## bitdefender_rule_recreated
+
+The recorded GravityZone rule was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). `updateCustomRule` answered `-32002` (resource not found): someone deleted the rule in the console. Deploy creates it again and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+bitdefender_rule_recreated: the recorded rule no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete rules through a `DELETION` status, not in the console.
 
 ## bitdefender_severity
 
-`severity` is not `Low`, `Medium`, or `High`.
+The block `severity` is not `Low`, `Medium` or `High`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). GravityZone has three severities, spelled with a capital letter. Without `severity`, deploy derives it from `response.alert_severity`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    severity: Critical
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `Low`, `Medium` or `High`, or remove the key.
 
 ## bitdefender_severity_collapsed
 
-`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`.
+`response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a rule with a `bitdefender` block that sets no `severity` (bitdefender-1.0). GravityZone has three severities: deploy sends `Critical` as `High` and `Informational` as `Low`. It is an advisory: the rule validates and deploys.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    status: PRODUCTION
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set `configurations.bitdefender.severity` to `Low`, `Medium` or `High` to choose the GravityZone level, or accept the mapping.
 
 ## bitdefender_target
 
-`detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused.
+The `detection.target` is not a GravityZone detection target.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). The target must be spelled as the API spells it: `process`, `file`, `connection`, `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`, `sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`, `automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`, `jira project` or `confluence page`. The exclusion-only targets `flow` and `bitbucket repository` are refused.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: flow
+      criteria:
+        - field: Flow.Source
+          is: 10.0.0.1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use one of the detection targets, in lower case with spaces, such as `process`.
+
+## bitdefender_target_unknown
+
+A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table.
+
+Severity: error. Reported by `opentide deploy`, before any call for the rule on a `bitdefender` block (bitdefender-1.0). A rule file carries aliases, because GravityZone ids differ per tenant; each tenant maps them in `platforms/bitdefender.toml`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    targets:
+      endpoint_tags: [tier0-servers]   # the tenant has no tier0-servers
+```
+
+### How to fix
+
+Add the alias to the tenant's `[tenants.setup.endpoint_tags]` (or `companies`) table, or change the block's `targets`.
 
 ## bitdefender_targets_shape
 
-`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias.
+`targets` sets both `endpoint_tags` and `companies`, or an empty list.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A rule applies to endpoint tags or, on a partner tenant, to companies; neither means the whole company. Each list names aliases from the tenant's tables.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    targets:
+      endpoint_tags: [tier0-servers]
+      companies: [acme]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep one of the two lists, with at least one alias, or remove `targets`.
+
+## bitdefender_tenant_unauthorized
+
+GravityZone refused the tenant's API key, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). A `-32001` answer, HTTP 401 or HTTP 403 stops the tenant. The key must be valid and have the Incidents API enabled.
+
+### Example
+
+```text illustrative
+bitdefender_tenant_unauthorized: tenant gravityzone-eu refused the API key: API Key is not allowed to access the selected API: Incidents
+```
+
+### How to fix
+
+Check the variable `api_key` names, and enable the Incidents API for the key in GravityZone (My Account, API keys). `key_type` must match the key: `personal` or `service`.
+
+## bitdefender_tenant_unreachable
+
+A call to the GravityZone tenant got no answer, so no further rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+
+### Example
+
+```text illustrative
+bitdefender_tenant_unreachable: HTTPSConnectionPool(host='cloudgz.gravityzone.bitdefender.com', port=443): Read timed out
+```
+
+### How to fix
+
+Check the tenant `url` (it ends in `/api`), the network path to it, and the tenant's `ssl` setting, then deploy again.
 
 ## bitdefender_yara_ascii
 
 A Bitdefender YARA signature holds a character that is not ASCII.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block's `yara.signature` (bitdefender-1.0): GravityZone takes ASCII only. The analysis engine checks the signature under its Bitdefender profile and places the finding on the character; without the engine, `opentide validate` still reports it on `yara.signature`. `opentide validate query --platform bitdefender` reports it in a `.yar` file. Deploy refuses the rule.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Loader {
+          meta:
+            description = "Stage-1 loader — config blob"
+          condition:
+            true
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Replace the character with ASCII (`-` for `—`), or match it as a hex string (`{ E2 80 94 }`), then run `opentide validate` again.
 
 ## bitdefender_yara_size
 
 A Bitdefender YARA signature is longer than 30,000 characters.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block's `yara.signature` (bitdefender-1.0): GravityZone takes at most 30,000 characters. The analysis engine checks the signature under its Bitdefender profile; without the engine, `opentide validate` still reports it on `yara.signature`. `opentide validate query --platform bitdefender` reports it in a `.yar` file. Deploy refuses the rule.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Loader {
+          strings:
+            $a01 = "..."   # thousands of strings, 30,001 characters in all
+          condition:
+            any of them
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Shorten the signature: drop comments and unused strings, or split its rules across several Tide rules, then run `opentide validate` again.
 
 ## cbc_unknown_field
 
@@ -4065,275 +4418,660 @@ Fix the section the diagnostic names and run `opentide validate query --platform
 
 ## graylog_aggregation
 
-A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments.
+A Graylog aggregation condition does not parse, or a call has the wrong arguments.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `aggregation.condition` (or `aggregation` when it has no condition). The condition compares series with numbers: `count() >= 3 OR card(parent_image_lc) >= 2`. The functions are `avg`, `card`, `count`, `latest`, `max`, `min`, `percentage`, `percentile`, `stddev`, `sum`, `sumofsquares` and `variance`; `count` takes no field or one, `percentile` a field and a percentile from above 0 to 100, every other function one field. Operators `AND`, `OR` and `NOT` are upper case. Arguments are separated by one comma (`percentile(bytes, 95)`), and parentheses and `NOT` nest at most 32 deep.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    aggregation:
+      condition: count() >= 3 or avg() > 1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the condition in the grammar: `count() >= 3 OR avg(bytes) > 1`.
+
+## graylog_alias_unknown
+
+A Graylog block names a stream or notification alias the tenant does not define.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0), before any call for that rule, and by `opentide deploy --dry-run`. Blocks name streams and notifications by alias; each tenant maps the aliases to ids in `stream_ids` and `notification_ids`.
+
+### Example
+
+```text illustrative
+graylog_alias_unknown: tenant 'graylog-prod': stream alias(es) sysmon are not in the tenant's stream_ids table
+```
+
+### How to fix
+
+Add the alias to the tenant's table in `platforms/graylog.toml`, or change the block.
+
+## graylog_all_streams
+
+A Graylog definition names no stream, so it searches every stream.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0); never fails a rule. The block sets no `streams` and no `stream_categories`, and a tenant it deploys to sets no default `streams`: Graylog then searches every stream the token's user can read.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: EventID:1
+```
+
+### How to fix
+
+Set `streams` on the block, or default `streams` on the tenant's `[tenants.setup]`.
 
 ## graylog_analyzed_field
 
-A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value.
+A regex, wildcard or range applies to Graylog's analysed message field.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `message` and `full_message` are tokenised and lower-cased, so a regex or wildcard matches single tokens, never the whole value.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: message:/.*powershell -enc.*/
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Match a keyword field the pipeline extracts, or search the words as a phrase (`message:"powershell -enc"`).
+
+## graylog_create_unconfirmed
+
+A Graylog create got no answer, so the definition may exist without a binding.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `POST /api/events/definitions` got no answer (a timeout, a reset), or answered no id. The create may have succeeded, but its id never reached opentide, so nothing was recorded. Titles are not unique, so deploy does not retry, which could create a second definition, and never lists definitions to find it.
+
+### Example
+
+```text illustrative
+graylog_create_unconfirmed: the create got no answer, so it may have succeeded with an id opentide
+does not know. Find the definition by the title 'mshta remote script' or the tag
+'opentide.00000000-0000-4000-8003-000000000061' in Graylog
+```
+
+### How to fix
+
+Find the definition by its title (on 7.2, by the `opentide.<uuid>` tag). Delete it and deploy again, or record its 24-hex id under `platforms.graylog.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## graylog_definition_immutable
+
+Graylog refuses to change or delete an event definition outside the default scope.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered "Immutable entity cannot be modified" or "Non-deletable entity cannot be deleted": the definition's `_scope` is not `DEFAULT` (a content pack or Illuminate installed it). Deploy always sends `_scope: DEFAULT` and never changes a scope.
+
+### Example
+
+```text illustrative
+graylog_definition_immutable: Immutable entity cannot be modified; deploy never changes a definition's scope
+```
+
+### How to fix
+
+Point the rule's binding in `.opentide/states/deployment/<uuid>.json` at a definition opentide created, or remove it so deploy creates one.
+
+## graylog_definition_in_use
+
+Graylog refuses to delete an event definition another one depends on.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) under `DELETION`. Another definition (a correlation) depends on this one, so Graylog keeps it, and the binding stays.
+
+### Example
+
+```text illustrative
+graylog_definition_in_use: another definition depends on this one: ...
+```
+
+### How to fix
+
+Remove or change the dependent definitions named in the message, then deploy again.
+
+## graylog_definition_invalid
+
+Graylog refused an event definition, naming the fields at fault.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered 400 with `{"errors": {<field>: [<message>]}}`: a value it does not accept, such as a stream or notification id that does not exist.
+
+### Example
+
+```text illustrative
+graylog_definition_invalid: notifications: Notification 65f0c0ffee0123456789abcf doesn't exist
+```
+
+### How to fix
+
+Fix the field Graylog names: for an id, the tenant's `stream_ids` or `notification_ids` table.
+
+## graylog_definition_missing
+
+The recorded Graylog event definition was gone when deploy came to disable it.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) under `DISABLEMENT`. `PUT` answered 404; there is nothing to disable, so deploy creates nothing and removes the id from `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+graylog_definition_missing: the recorded definition no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state.
+
+## graylog_definition_recreated
+
+The recorded Graylog event definition was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `PUT /api/events/definitions/{id}` answered 404: someone deleted the definition in Graylog. Deploy creates it again and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+graylog_definition_recreated: the recorded definition no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete definitions through a `DELETION` status, not in Graylog.
 
 ## graylog_double_backslash
 
-A Graylog query holds four backslashes in a row: `\\` is already one literal backslash, so `\\\\` matches two.
+A Graylog query holds four backslashes in a row.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. In a Graylog query, `\\` is one literal backslash, so `\\\\` matches two, which a Windows path does not have.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: 'image_lc:/.*\\\\\\\\mshta\.exe/'
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write one literal backslash as `\\` in the query text (in single-quoted YAML, as written).
 
 ## graylog_event_field
 
-A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`.
+A Graylog event field has an invalid name or value.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_fields.<name>`. A name matches `[A-Za-z0-9_.@-]+`. A value is a bare message field name (copied from the message that fired the event), a string containing `${` (a Graylog template), `{template: ...}`, or `{lookup: {table, key_field}}`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    event_fields:
+      family: two words
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write constant text as `{template: "two words"}`, or name a message field.
 
 ## graylog_event_key
 
-A Graylog `event_key` item is not an `event_fields` name.
+A Graylog event_key item is not an event field of the block.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_key`. Graylog builds the event key from event fields, and refuses a key field `event_fields` does not define.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    event_fields: {host: source}
+    event_key: user
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add the field to `event_fields`, or key on one that is there.
 
 ## graylog_event_limit
 
-A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation.
+A Graylog block's event_limit is out of range, or set on an aggregation.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_limit`. `event_limit` caps the events one run of a filter creates: an integer from 1 to 1,000. An aggregation creates one event per group and takes none.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    event_limit: 5000
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set a value from 1 to 1,000, or remove `event_limit` from an aggregation.
 
 ## graylog_field_name
 
-A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`).
+A Graylog aggregation groups by a name that is not a field name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `aggregation.group_by`. A Graylog field name matches `[A-Za-z0-9_.@-]+`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    aggregation:
+      group_by: [src ip]
+      condition: count() > 1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Group by the field's real name (`src_ip`).
+
+## graylog_field_unsupported_version
+
+A Graylog block sets a field the tenant's version cannot take.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `summary` (the event summary template) needs Graylog 7.1, and block `tags` need 7.2. Deploy leaves the field out of the request rather than let Graylog 6.3 drop it silently or 7.x refuse it.
+
+### Example
+
+```text illustrative
+graylog_field_unsupported_version: summary is left out: Graylog 6.3.5 has no event summary template (7.1 and later)
+```
+
+### How to fix
+
+Upgrade the tenant, or remove the field from the block.
+
+## graylog_forbidden
+
+Graylog refused a request for want of a permission.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered 403; the rule fails and the next one is sent. The token's user needs `eventdefinitions:create`, `eventdefinitions:read`, `eventdefinitions:edit` and `eventdefinitions:delete`, and `streams:read` on every stream a definition names.
+
+### Example
+
+```text illustrative
+graylog_forbidden: POST /api/events/definitions?schedule=true was refused (HTTP 403)
+```
+
+### How to fix
+
+Grant the token's user the permissions, most often `streams:read` on the definition's streams.
 
 ## graylog_leading_wildcard
 
-A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form.
+A Graylog query term starts with `*` or `?`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. Graylog passes the query to `query_string` with `allow_leading_wildcard` from the server's `allow_leading_wildcard_searches`, `false` by default, and refuses the query ("'*' or '?' not allowed as first character"). opentide drops the finding when every tenant the block deploys to sets `allow_leading_wildcard = true`; offline, with no tenant, it is an error.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: image_lc:*\\mshta.exe
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write a regex with a leading `.*` (`image_lc:/.*\\mshta\.exe/`), or set `allow_leading_wildcard = true` on every tenant whose server allows leading wildcards.
 
 ## graylog_list_shape
 
-A Graylog list field is not one string or a list of distinct non-blank strings.
+A Graylog list field is not a string or a list of distinct, non-blank strings.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at the list field: `tags`, `streams`, `stream_categories`, `event_key`, `notifications` or `aggregation.group_by`. Each takes one string or a list of strings; a string is a one-item list.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    streams: [sysmon, sysmon]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write one string, or a list whose items are non-blank and not repeated.
 
 ## graylog_open_range
 
-A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`.
+A Graylog range has an open end, which Graylog's validator refuses.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `[1 TO *]` and `{* TO 5}` are refused by `POST /api/search/validate`, so deploy would never save the definition.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: EventID:[4624 TO *]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the bound as a comparison (`EventID:>=4624`), or give both ends.
 
 ## graylog_overlapping_window
 
-A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run.
+A Graylog filter searches a window longer than its interval.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `schedule`; never fails a rule. With `window` longer than `every`, consecutive runs search overlapping time ranges, and a filter (no `aggregation`) creates an event for each message once per run that sees it.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    schedule: {every: 5m, window: 15m}
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Make `window` equal to `every` (the default), or turn the filter into an aggregation.
 
 ## graylog_priority
 
-A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`.
+A Graylog block's priority is not one of Graylog's priorities.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `priority`. The priorities are `Informational`, `Low`, `Medium`, `High` and `Critical`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    priority: Urgent
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write one of the five, or leave `priority` out to derive it from `response.alert_severity`.
+
+## graylog_priority_collapsed
+
+Graylog before 7.1 has no Informational priority: the definition is sent as Low.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). The priority comes from the block's `priority`, else `response.alert_severity`. Graylog 7.1 added priority 0 (Informational); before it, deploy sends 1 (Low).
+
+### Example
+
+```text illustrative
+graylog_priority_collapsed: Graylog 7.0.16 has no Informational priority: sent as Low (1)
+```
+
+### How to fix
+
+Upgrade the tenant to 7.1 or later, or set `priority: Low` on the block.
 
 ## graylog_query_blank
 
-A Graylog block's `query` is missing or blank.
+A Graylog block has no query, or an empty one.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `query`. Every event definition searches with a query; an empty one would search every message.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    status: STAGING
+    query: ""
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the Graylog search query, for example `query: EventID:1 AND image_lc:/.*mshta\.exe/`.
+
+## graylog_query_invalid
+
+Graylog refused a query, so deploy saved nothing.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Before every create and every update but a `DISABLEMENT`, deploy sends the query to `POST /api/search/validate`; Graylog stores a query it cannot parse without complaint, so an `ERROR` verdict fails the rule and no request saves it.
+
+### Example
+
+```text illustrative
+graylog_query_invalid: Graylog refuses the query, so nothing is saved: Query parsing error:
+Cannot parse query, cause: incomplete query, query ended unexpectedly (line 1, column 0)
+```
+
+### How to fix
+
+Fix the query at the line and column Graylog names, and check it with `opentide validate query --platform graylog --live`.
+
+## graylog_query_warning
+
+Graylog has a reservation about a query.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`: a `WARNING` or `INFO` explanation of `POST /api/search/validate` that is neither an unknown field nor a value type, such as `INVALID_OPERATOR`.
+
+### Example
+
+```text illustrative
+graylog_query_warning: Invalid operator: Query contains invalid operator "and" (line 1, column 10)
+```
+
+### How to fix
+
+Read Graylog's explanation and change the query; an operator is upper case (`AND`).
 
 ## graylog_regex_operator
 
-A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character.
+A Graylog regex holds a character Lucene reads as a regex operator.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An unescaped `#`, `&`, `@`, `<`, `>` or `~`, other than a numeric interval `<n-m>`, is an operator in Lucene's regex syntax, and Graylog's validator still says OK. `@` is "any string": `/.*@contoso\.com/` also matches `alicecontoso.com`; write `\@`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: url_lc:/.*#section.*/
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Escape the character (`\#`) when you mean it literally.
 
 ## graylog_regex_quote
 
-A Graylog regex holds an unescaped `"`, which Lucene reads as a quoted literal, not the character: escape it as `\"`.
+A Graylog regex holds an unescaped double quote.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. The regex then matches nothing.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: 'command_line_lc:/.*"c:.*/'
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Escape the quote (`\"`), or match without it.
 
 ## graylog_regex_unsupported
 
-A Graylog regex uses an inline flag, a `(?…)` group, `\b`, `\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query.
+A Graylog regex uses syntax Lucene's regex engine does not have.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An inline flag such as `(?i)`, `\b`, `\B`, lookahead or lookbehind, or a backreference: Lucene's regex engine accepts none of them, and Graylog matches nothing without saying so.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: command_line:/(?i).*mimikatz.*/
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Match a lower-cased copy of the field instead (`command_line_lc:/.*mimikatz.*/`), written by a tenant pipeline; see the case section of the Graylog platform spec.
+
+## graylog_request_failed
+
+A Graylog request failed for a reason the failure table does not name.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0): an answer that is not 2xx and none of 400 with field errors, 401, 403, 404 on update, an immutable entity or a definition in use, such as a 500.
+
+### Example
+
+```text illustrative
+graylog_request_failed: PUT /api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=true: HTTP 500: ...
+```
+
+### How to fix
+
+Read Graylog's message and server log, then deploy again.
 
 ## graylog_schedule
 
-A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`.
+A Graylog block's schedule is invalid.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `schedule` or the offending `schedule.<key>`. Exactly one of `every` and `cron` is set (or neither); `every` and `window` are durations greater than zero (`5m`, `1h10m`, `PT15M`); `cron` is a Quartz expression of 6 or 7 fields with `?` in day of month or day of week; `timezone` is an IANA zone name; `window` is set when `cron` is.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    schedule: {cron: "0 */5 * * * ?"}
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Fix the key the finding names: with `cron`, also set `window` (`schedule: {cron: "0 */5 * * * ?", window: 5m}`).
+
+## graylog_tenant_unauthorized
+
+A Graylog tenant refused the access token.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0). Graylog answered 401; no rule on the tenant deploys. The token is sent as HTTP Basic, the token as user name and `token` as password.
+
+### Example
+
+```text illustrative
+graylog_tenant_unauthorized: tenant graylog-prod refused the access token: HTTP 401
+```
+
+### How to fix
+
+Set the token's environment variable (`token = "$GRAYLOG_TOKEN"`) to a valid access token; access tokens expire after 30 days by default.
+
+## graylog_tenant_unreachable
+
+A Graylog tenant did not answer.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0): DNS, a refused or reset connection, TLS or a timeout on a request other than a create. No further rule on the tenant deploys.
+
+### Example
+
+```text illustrative
+graylog_tenant_unreachable: HTTPSConnectionPool(host='graylog.example.com', port=443): Max retries exceeded
+```
+
+### How to fix
+
+Check the tenant's `url`, the network path, and `ssl`.
+
+## graylog_title_duplicate
+
+Two enabled Graylog blocks resolve to one event definition title.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0); never fails a rule. The title is the block's `name`, else the rule's `name`. Graylog allows two definitions with one title, and its alert list cannot tell them apart.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Office application spawns PowerShell
+configurations:
+  graylog:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.graylog.name`, or rename one of the rules.
+
+## graylog_unknown_field
+
+Graylog does not know a field the query names, on the streams it searches.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`. Graylog's `UNKNOWN_FIELD`: no index of the definition's streams maps the field, so the query matches nothing until messages carry it. Field names are case-sensitive.
+
+### Example
+
+```text illustrative
+graylog_unknown_field: Unknown field: Query contains unknown field: command_line_lc (line 1, column 12)
+```
+
+### How to fix
+
+Check the field's spelling and case, the streams the definition searches, and the pipeline that writes the field.
+
+## graylog_value_type
+
+A query compares a Graylog field with a value of the wrong type.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`. Graylog's `INVALID_VALUE_TYPE`: the field is mapped as a number or a date, and the value is not one.
+
+### Example
+
+```text illustrative
+graylog_value_type: Invalid value type: Type of EventID is long, cannot use value abc (line 1, column 30)
+```
+
+### How to fix
+
+Compare the field with a value of its type.
+
+## graylog_version_unsupported
+
+A Graylog tenant runs a version opentide does not deploy to.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0). Deploy reads `GET /api/system` once per tenant, before any write, and builds every request for that version. Graylog below 6.3, or a server that reports no version, stops the tenant.
+
+### Example
+
+```text illustrative
+graylog_version_unsupported: tenant graylog-prod runs Graylog '6.2.4+1a2b3c4'; opentide deploys to Graylog 6.3 and later
+```
+
+### How to fix
+
+Upgrade the server to Graylog 6.3 or later, or remove the tenant from `platforms/graylog.toml`.
+
+## graylog_version_vulnerable
+
+A Graylog tenant runs a version affected by the access-token revocation flaw.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0), once per run. Graylog below 6.3.12, 7.0.16 or 7.1.12 is affected by GHSA-j769-9gv9-65gr: a revoked access token may keep working. Deploy goes on.
+
+### Example
+
+```text illustrative
+graylog_version_vulnerable: Graylog 6.3.5 does not revoke access tokens reliably (GHSA-j769-9gv9-65gr)
+```
+
+### How to fix
+
+Upgrade the server to 6.3.12, 7.0.16, 7.1.12 or later.
 
 ## harfanglab_rule_kind
 

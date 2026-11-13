@@ -15,9 +15,10 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::types::{
-    ElasticVersionPattern, EnvPlaceholder, HttpUrlPattern, HttpsUrlPattern, Matching,
-    MispNamePattern, NonEmptyList, NonEmptyString, OrganisationUuidPattern, PositiveFloat,
-    RunStrategyName, SslWordPattern, StatusStrategyName,
+    ElasticVersionPattern, EnvPlaceholder, GravityZoneIdPattern, GraylogIdPattern,
+    GraylogNamePattern, HttpUrlPattern, HttpsUrlPattern, Matching, MispNamePattern, NonEmptyList,
+    NonEmptyString, OrganisationUuidPattern, PositiveFloat, RunStrategyName, SslWordPattern,
+    StatusStrategyName, TargetAliasPattern,
 };
 use crate::FromNode;
 use crate::error::{ErrorKind, PathSegment};
@@ -1052,6 +1053,110 @@ platform!(
     SysdigConfiguration, "SysdigConfiguration", SysdigTenant
 );
 
+/// A GravityZone id, 24 lower-case hex digits (`GravityZoneId`).
+pub type GravityZoneId = Matching<GravityZoneIdPattern>;
+
+/// An `endpoint_tags` entry: the GravityZone tag and the company that owns
+/// it (`BitdefenderEndpointTag`).
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "BitdefenderEndpointTag")]
+pub struct BitdefenderEndpointTag {
+    /// GravityZone tag id, 24 hex.
+    pub tag_id: GravityZoneId,
+    /// Company id of the tag, 24 hex.
+    pub company_id: GravityZoneId,
+}
+
+/// `[tenants.setup.targets]`: default targets for blocks that set none
+/// (`BitdefenderTenantTargets`). The same shape as a block's `targets`
+/// (`bitdefender_targets_shape`): exactly one of the two lists, non-empty. A
+/// default never means "no targets": a tenant that applies rules to the
+/// whole company leaves `targets` out.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "BitdefenderTenantTargets")]
+pub struct BitdefenderTenantTargets {
+    /// Aliases from the tenant's endpoint_tags table.
+    #[serde(default)]
+    pub endpoint_tags: Option<NonEmptyList<Matching<TargetAliasPattern>>>,
+    /// Aliases from the tenant's companies table.
+    #[serde(default)]
+    pub companies: Option<NonEmptyList<Matching<TargetAliasPattern>>>,
+}
+
+/// `targets`: a [`BitdefenderTenantTargets`] that sets exactly one list
+/// (`_exactly_one_list`, an after-validator).
+pub fn tenant_targets(node: &Node, cx: &mut Context) -> Option<Option<BitdefenderTenantTargets>> {
+    let targets = Option::<BitdefenderTenantTargets>::from_node(node, cx)?;
+    if let Some(set) = &targets
+        && set.endpoint_tags.is_none() == set.companies.is_none()
+    {
+        value_error(
+            cx,
+            "Value error, targets sets exactly one of endpoint_tags and companies \
+             (bitdefender_targets_shape); leave targets out for the whole company",
+            node,
+        );
+        return None;
+    }
+    Some(targets)
+}
+
+crate::objects::platform::literal_enum! {
+    /// `personal` or `service`.
+    BitdefenderKeyType { Personal = "personal", Service = "service", }
+}
+
+fn personal() -> BitdefenderKeyType {
+    BitdefenderKeyType::Personal
+}
+
+/// `[tenants.setup]` for Bitdefender GravityZone.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "BitdefenderSetup")]
+pub struct BitdefenderSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// Control Center API Access URL, ending in /api. Calls go to
+    /// `<url>/v1.0/jsonrpc/incidents`.
+    pub url: String,
+    /// GravityZone API key with the Incidents API. Must be a $NAME placeholder.
+    pub api_key: EnvPlaceholder,
+    /// personal: HTTP Basic with the key as user name; service: X-API-Key header.
+    #[serde(default = "personal")]
+    pub key_type: BitdefenderKeyType,
+    /// Partner tenants: the company that owns created rules.
+    #[serde(default)]
+    pub company_id: Option<GravityZoneId>,
+    /// false for subscriptions without automatic actions.
+    #[serde(default = "yes")]
+    pub automatic_actions: bool,
+    /// Default targets for blocks that set none.
+    #[serde(default)]
+    #[from_node(with = "tenant_targets")]
+    pub targets: Option<BitdefenderTenantTargets>,
+    /// Alias to {tag_id, company_id}.
+    #[serde(default)]
+    pub endpoint_tags: indexmap::IndexMap<String, BitdefenderEndpointTag>,
+    /// Alias to company id.
+    #[serde(default)]
+    pub companies: indexmap::IndexMap<String, GravityZoneId>,
+    /// Tags added to every rule.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+tenant!(
+    /// `[[tenants]]` for Bitdefender GravityZone.
+    BitdefenderTenant, "BitdefenderTenant", BitdefenderSetup
+);
+platform!(
+    /// Merged `platforms/bitdefender.toml`.
+    BitdefenderConfiguration, "BitdefenderConfiguration", BitdefenderTenant
+);
+
 /// Exabeam's API regions (`ExabeamSetup.region`); each is served at
 /// `https://api.<region>.exabeam.cloud`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, FromNode, JsonSchema)]
@@ -1234,6 +1339,76 @@ tenant!(
 platform!(
     /// Merged `platforms/google_secops.toml`.
     GoogleSecopsConfiguration, "GoogleSecopsConfiguration", GoogleSecopsTenant
+);
+
+/// A Graylog alias or tag: one, or a list (`GraylogName | list[GraylogName]`).
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum GraylogNames {
+    /// One.
+    #[from_node(tag = "str")]
+    One(Matching<GraylogNamePattern>),
+    /// Several.
+    #[from_node(tag = "list[str]")]
+    Many(Vec<Matching<GraylogNamePattern>>),
+}
+
+impl Default for GraylogNames {
+    fn default() -> Self {
+        Self::Many(Vec::new())
+    }
+}
+
+impl GraylogNames {
+    /// The names: one is a one-item list.
+    pub fn items(&self) -> Vec<&str> {
+        match self {
+            Self::One(one) => vec![one.as_str()],
+            Self::Many(many) => many.iter().map(Matching::as_str).collect(),
+        }
+    }
+}
+
+/// `[tenants.setup]` for Graylog.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "GraylogSetup")]
+pub struct GraylogSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// The Graylog web interface's base URL. Calls go to `<url>/api/...`.
+    #[schemars(description = "The Graylog web interface's base URL. Calls go to <url>/api/....")]
+    pub url: String,
+    /// A Graylog access token, sent as HTTP Basic `<token>:token`. Must be a $NAME placeholder.
+    #[schemars(
+        description = "A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME placeholder."
+    )]
+    pub token: EnvPlaceholder,
+    /// Mirrors the server's allow_leading_wildcard_searches.
+    #[serde(default)]
+    pub allow_leading_wildcard: bool,
+    /// Default stream aliases for blocks that set no streams.
+    #[serde(default)]
+    pub streams: GraylogNames,
+    /// Alias to stream id, 24 hex.
+    #[serde(default)]
+    pub stream_ids: indexmap::IndexMap<String, Matching<GraylogIdPattern>>,
+    /// Alias to notification id, 24 hex.
+    #[serde(default)]
+    pub notification_ids: indexmap::IndexMap<String, Matching<GraylogIdPattern>>,
+    /// Tags added to every definition on this tenant (7.2+).
+    #[serde(default)]
+    pub tags: GraylogNames,
+}
+tenant!(
+    /// `[[tenants]]` for Graylog.
+    GraylogTenant, "GraylogTenant", GraylogSetup
+);
+platform!(
+    /// Merged `platforms/graylog.toml`.
+    GraylogConfiguration, "GraylogConfiguration", GraylogTenant
 );
 
 /// `[tenants.setup]` of a platform opentide has no model for: open.

@@ -13,9 +13,9 @@ use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
 use crate::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, HarfangLabConfig, PlatformBlock, SentinelConfig, SentinelOneConfig,
-    SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, PlatformBlock,
+    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
@@ -81,6 +81,14 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub sysdig: Option<SysdigConfig>,
+    /// Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub bitdefender: Option<BitdefenderConfig>,
+    /// Graylog event definition (`platform::graylog::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub graylog: Option<GraylogConfig>,
     /// Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
@@ -112,6 +120,8 @@ impl RuleConfigurations {
             self.carbon_black_cloud.as_ref().map(PlatformBlock::status),
             self.elastic.as_ref().map(PlatformBlock::status),
             self.sysdig.as_ref().map(PlatformBlock::status),
+            self.bitdefender.as_ref().map(PlatformBlock::status),
+            self.graylog.as_ref().map(PlatformBlock::status),
             self.exabeam.as_ref().map(PlatformBlock::status),
             self.google_secops.as_ref().map(PlatformBlock::status),
         ];

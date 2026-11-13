@@ -923,6 +923,12 @@ mod tests {
                 "https://library.humio.com/crowdstrike-query-language/"
             ))
         );
+        // 0.28.1: the Graylog dialect's warnings have their reference, so
+        // `lint` keeps them (`graylog_analyzed_field`, `graylog_regex_operator`).
+        assert_eq!(
+            engine_reference("graylog_analyzed_field").map(|(language, _)| language),
+            Some("Graylog search query")
+        );
         assert_eq!(engine_reference("vocab_unknown"), None);
         assert_eq!(
             engine_reference("yara_slow_pattern").map(|(language, _)| language),

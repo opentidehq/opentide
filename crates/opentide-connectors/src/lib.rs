@@ -28,6 +28,7 @@
 //! `connectors` feature, and `plugins` for the plugin host).
 
 pub mod answer;
+pub mod bitdefender;
 pub mod carbon_black;
 pub mod connector;
 pub mod credentials;
@@ -39,6 +40,7 @@ pub mod env;
 pub mod error;
 pub mod exabeam;
 pub mod google_secops;
+pub mod graylog;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
@@ -76,8 +78,10 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
+        "bitdefender" => bitdefender::http_defaults(),
         "exabeam" => exabeam::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
+        "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
@@ -92,7 +96,8 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
-/// Exabeam New-Scale SIEM (P-EX).
+/// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
+/// New-Scale SIEM (P-EX).
 pub fn builtin() -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
@@ -104,6 +109,8 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        Box::new(bitdefender::Bitdefender),
+        Box::new(graylog::Graylog),
         Box::new(exabeam::Exabeam::new()),
         // Application Default Credentials are the process's own ambient
         // credentials (google-auth's `default()` reads the process
@@ -194,13 +201,22 @@ mod tests {
                 toml::Value::Integer(3)
             ])
         );
-        assert!(!setup.contains_key("nested") && !setup.contains_key("none"));
+        // A table is kept, for the tenant's string tables (Graylog's
+        // `stream_ids`); a null has no TOML form and is left out.
+        assert_eq!(
+            setup["nested"],
+            toml::Value::Table(toml::map::Map::from_iter([(
+                "a".to_owned(),
+                toml::Value::Integer(1)
+            )]))
+        );
+        assert!(!setup.contains_key("none"));
         assert!(tenants[1].1.is_empty());
         assert!(super::tenant::configured(&config, "elastic").is_empty());
     }
 
     #[test]
-    fn the_builtin_registry_holds_the_ten_platforms_and_what_each_can_do() {
+    fn the_builtin_registry_holds_the_platforms_and_what_each_can_do() {
         let registry = super::builtin();
         assert_eq!(registry.ids(), super::plugin::BUILTIN);
         assert_eq!(
@@ -215,6 +231,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "bitdefender",
+                "graylog",
                 "exabeam",
                 "google_secops"
             ]
@@ -236,8 +254,10 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        assert_eq!(can("bitdefender"), (true, false, false));
         assert_eq!(can("exabeam"), (true, true, true));
         assert_eq!(can("google_secops"), (true, true, true));
+        assert_eq!(can("graylog"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);

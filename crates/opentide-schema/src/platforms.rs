@@ -309,6 +309,50 @@ pub const PLATFORMS: &[Platform] = &[
         configuration_rank: 8,
     },
     Platform {
+        id: "bitdefender",
+        label: "Bitdefender GravityZone",
+        configuration_name: "Bitdefender GravityZone",
+        config_class: "BitdefenderConfig",
+        external_id: ExternalId::Text {
+            pattern: Some("^[0-9a-f]{24}$"),
+        },
+        deploys: true,
+        // The createCustomRule request, without the tenant's targets.
+        compiles_offline: true,
+        live_check: false,
+        query_runner: false,
+        runner_languages: &[],
+        // `yara` (the Bitdefender profile), and `.yar`/`.yara` files, come
+        // with the YARA lane.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 9,
+        connector_rank: 9,
+        configuration_rank: 9,
+    },
+    Platform {
+        id: "graylog",
+        label: "Graylog",
+        configuration_name: "Graylog",
+        config_class: "GraylogConfig",
+        external_id: ExternalId::Text {
+            pattern: Some("[0-9a-f]{24}"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["lucene"],
+        // The Graylog dialect of Lucene comes with the engine import (E1):
+        // until then no query is parsed offline, rather than parsed as
+        // Elastic's Lucene.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 10,
+        connector_rank: 10,
+        configuration_rank: 10,
+    },
+    Platform {
         id: "exabeam",
         label: "Exabeam New-Scale SIEM",
         configuration_name: "Exabeam New-Scale SIEM",
@@ -326,9 +370,9 @@ pub const PLATFORMS: &[Platform] = &[
         // until then the engine parses none of these queries offline.
         offline_languages: &[],
         query_file_suffixes: &[],
-        cli_rank: 9,
-        connector_rank: 9,
-        configuration_rank: 9,
+        cli_rank: 11,
+        connector_rank: 11,
+        configuration_rank: 11,
     },
     Platform {
         id: "google_secops",
@@ -348,9 +392,9 @@ pub const PLATFORMS: &[Platform] = &[
         // The offline YARA-L check arrives with the engine import (E1).
         offline_languages: &["yaral"],
         query_file_suffixes: &["yaral"],
-        cli_rank: 10,
-        connector_rank: 10,
-        configuration_rank: 10,
+        cli_rank: 12,
+        connector_rank: 12,
+        configuration_rank: 12,
     },
 ];
 
@@ -554,6 +598,8 @@ mod tests {
                 "carbon_black_cloud",
                 "elastic",
                 "sysdig",
+                "bitdefender",
+                "graylog",
                 "exabeam",
                 "google_secops"
             ]
@@ -570,6 +616,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "bitdefender",
+                "graylog",
                 "exabeam",
                 "google_secops"
             ]
@@ -586,6 +634,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "bitdefender",
+                "graylog",
                 "exabeam",
                 "google_secops"
             ]
@@ -602,6 +652,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "bitdefender",
+                "graylog",
                 "exabeam",
                 "google_secops"
             ]
@@ -613,10 +665,12 @@ mod tests {
         assert_eq!(
             state_platforms(),
             [
+                "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
                 "exabeam",
                 "google_secops",
+                "graylog",
                 "sentinel_one",
                 "sysdig"
             ]
@@ -633,6 +687,7 @@ mod tests {
                 "elastic",
                 "exabeam",
                 "google_secops",
+                "graylog",
                 "sentinel",
                 "sentinel_one",
                 "splunk"
@@ -640,11 +695,19 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Name, |p| p.query_runner).len(),
-            PLATFORMS.len() - 1
+            PLATFORMS.len() - 2
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig", "exabeam", "google_secops"]
+            [
+                "sentinel",
+                "elastic",
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
+            ]
         );
         assert_eq!(
             query_file_suffixes(),
@@ -652,6 +715,23 @@ mod tests {
                 "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco", "yaral"
             ]
         );
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex() {
+        use super::{IdShape, external_id_problem};
+        assert!(!super::has_integer_id("graylog"));
+        assert_eq!(
+            external_id_problem("graylog", "65f1c0ffee0123456789abcd"),
+            None
+        );
+        for bad in ["65F1C0FFEE0123456789ABCD", "65f1c0ffee0123456789abc", "12"] {
+            assert_eq!(
+                external_id_problem("graylog", bad),
+                Some(IdShape::Pattern("[0-9a-f]{24}")),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

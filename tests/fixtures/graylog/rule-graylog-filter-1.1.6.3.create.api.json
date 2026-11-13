@@ -1,0 +1,71 @@
+{
+  "method": "POST",
+  "path": "/api/events/definitions?schedule=true",
+  "body": {
+    "_scope": "DEFAULT",
+    "title": "mshta remote script",
+    "description": "mshta.exe ran a script fetched from a URL.\n\nATT&CK: T1218.005, TA0005",
+    "priority": 1,
+    "alert": true,
+    "config": {
+      "type": "aggregation-v1",
+      "query": "EventID:1 AND image_lc:/.*\\\\mshta\\.exe/ AND command_line_lc:/.*https?:\\/\\/.*/",
+      "query_parameters": [],
+      "filters": [],
+      "streams": [
+        "65f0c0ffee0123456789abcd"
+      ],
+      "stream_categories": [],
+      "group_by": [],
+      "series": [],
+      "conditions": {
+        "expression": null
+      },
+      "search_within_ms": 600000,
+      "execute_every_ms": 600000,
+      "use_cron_scheduling": true,
+      "cron_expression": "0 */10 * * * ?",
+      "cron_timezone": "Europe/Paris",
+      "event_limit": 50
+    },
+    "field_spec": {
+      "host": {
+        "data_type": "string",
+        "providers": [
+          {
+            "type": "template-v1",
+            "template": "${source.source}",
+            "require_values": false
+          }
+        ]
+      },
+      "technique_family": {
+        "data_type": "string",
+        "providers": [
+          {
+            "type": "template-v1",
+            "template": "LOLBin",
+            "require_values": false
+          }
+        ]
+      },
+      "attack_techniques": {
+        "data_type": "string",
+        "providers": [
+          {
+            "type": "template-v1",
+            "template": "T1218.005,TA0005",
+            "require_values": false
+          }
+        ]
+      }
+    },
+    "key_spec": [],
+    "notification_settings": {
+      "grace_period_ms": 0,
+      "backlog_size": 0
+    },
+    "notifications": [],
+    "share_request": null
+  }
+}

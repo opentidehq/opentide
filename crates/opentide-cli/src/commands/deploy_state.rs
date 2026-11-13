@@ -730,6 +730,24 @@ mod tests {
     }
 
     #[test]
+    fn a_graylog_id_is_24_lower_case_hex_digits() {
+        assert_eq!(
+            normalise_external_id(
+                "graylog",
+                &ExternalId::Text("65f1c0ffee0123456789abcd".into())
+            )
+            .unwrap(),
+            "65f1c0ffee0123456789abcd"
+        );
+        assert_eq!(
+            normalise_external_id("graylog", &ExternalId::Text("65F1".into()))
+                .unwrap_err()
+                .message,
+            "graylog external id \"65F1\" does not match \"[0-9a-f]{24}\""
+        );
+    }
+
+    #[test]
     fn an_exabeam_id_is_a_lower_case_rule_uuid() {
         let id = "0f8fad5b-d9cb-469f-a165-70867728950e";
         assert_eq!(

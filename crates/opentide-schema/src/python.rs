@@ -930,6 +930,10 @@ use crate::objects::objective::{
     ObjectiveV1_0, SignalData,
 };
 use crate::objects::platform::PlatformBlock;
+use crate::objects::platform::bitdefender::{
+    BitdefenderActions, BitdefenderConfig, BitdefenderCriterion, BitdefenderDetection,
+    BitdefenderProcessScope, BitdefenderTargets, BitdefenderYara, CriterionValue, ProcessAction,
+};
 use crate::objects::platform::carbon_black::CarbonBlackConfig;
 use crate::objects::platform::crowdstrike::{
     CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,
@@ -953,6 +957,10 @@ use crate::objects::platform::exabeam::{
 };
 use crate::objects::platform::google_secops::{
     GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
+};
+use crate::objects::platform::graylog::{
+    GraylogAggregation, GraylogConfig, GraylogEventField, GraylogEventLookup, GraylogEventTemplate,
+    GraylogLookupTable, GraylogSchedule, StringOrList,
 };
 use crate::objects::platform::harfanglab::SelectionValue;
 use crate::objects::platform::harfanglab::{
@@ -1011,12 +1019,14 @@ py_value! {
     Version => type_hint_union!(hint::STR, hint::INT),
     Killchain => type_hint_union!(hint::STR, hint::STRS),
     OneOrMany => type_hint_union!(hint::STR, hint::STRS),
+    StringOrList => type_hint_union!(hint::STR, hint::STRS),
     JobId => type_hint_union!(hint::STR, hint::STRS),
     ListItem => type_hint_union!(hint::STR, hint::INT, hint::FLOAT),
     SelectionValue => type_hint_union!(hint::STR, hint::STRS, hint::BOOL, hint::INT, hint::FLOAT),
     Suppression => type_hint_union!(hint::STR, hint::BOOL),
     SentinelTechnique => hint::STR,
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
+    CriterionValue => type_hint_union!(hint::STR, hint::INT),
     SavedSearchValue => type_hint_union!(hint::STR, hint::INT, hint::FLOAT, hint::BOOL),
     ExabeamValue => type_hint_union!(hint::INT, hint::FLOAT, hint::SCALARS),
     ExabeamDays => type_hint_union!(hint::STRS, hint::INTS),
@@ -1051,6 +1061,50 @@ py_union! {
     IntegrationChoice { Package, Detailed } => type_hint_union!(hint::STR, <ElasticIntegration as pyo3::PyTypeInfo>::TYPE_HINT),
 }
 
+/// `Literal[True] | BitdefenderProcessScope`: `True`, or the scope's class
+/// instance, as Pydantic holds it.
+impl<'py> IntoPyObject<'py> for &ProcessAction {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        hint::BOOL,
+        <BitdefenderProcessScope as pyo3::PyTypeInfo>::TYPE_HINT
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        match self {
+            ProcessAction::On(flag) => Ok(PyBool::new(py, *flag).to_owned().into_any()),
+            ProcessAction::Scoped(scope) => Ok(Bound::new(py, scope.clone())?.into_any()),
+        }
+    }
+}
+
+/// `GraylogEventField`: a field name or template string, or one of its two
+/// models' instances, as Pydantic holds them.
+impl<'py> IntoPyObject<'py> for &GraylogEventField {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        hint::STR,
+        <GraylogEventTemplate as pyo3::PyTypeInfo>::TYPE_HINT,
+        <GraylogEventLookup as pyo3::PyTypeInfo>::TYPE_HINT
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        match self {
+            GraylogEventField::Text(text) => Ok(text.into_pyobject(py)?.into_any()),
+            GraylogEventField::Template(model) => Ok(Bound::new(py, model.clone())?.into_any()),
+            GraylogEventField::Lookup(model) => Ok(Bound::new(py, model.clone())?.into_any()),
+        }
+    }
+}
+
 py_models! {
     Organisation,
     ObjectMetadata (schema = schema_id: String),
@@ -1072,6 +1126,13 @@ py_models! {
     ThreatActor,
     ThreatBody,
     ThreatVectorV1_0 [ThreatVectorV1_0::SCHEMA_IDENTIFIER],
+    BitdefenderCriterion,
+    BitdefenderDetection,
+    BitdefenderYara,
+    BitdefenderTargets,
+    BitdefenderProcessScope,
+    BitdefenderActions,
+    BitdefenderConfig [<BitdefenderConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     CarbonBlackConfig [<CarbonBlackConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
@@ -1155,6 +1216,12 @@ py_models! {
     SysdigMacro,
     SysdigList,
     SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    GraylogSchedule,
+    GraylogAggregation,
+    GraylogEventTemplate,
+    GraylogLookupTable,
+    GraylogEventLookup,
+    GraylogConfig [<GraylogConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     ExabeamThreshold,
     ExabeamSequence,
     ExabeamCorrelation,
@@ -1189,8 +1256,10 @@ pub mod models {
 
     #[pymodule_export]
     use super::{
-        CarbonBlackConfig, CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,
-        DefenderAlert, DefenderAllowBlockAction, DefenderAllowBlockGroupScoping, DefenderConfig,
+        BitdefenderActions, BitdefenderConfig, BitdefenderCriterion, BitdefenderDetection,
+        BitdefenderProcessScope, BitdefenderTargets, BitdefenderYara, CarbonBlackConfig,
+        CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule, DefenderAlert,
+        DefenderAllowBlockAction, DefenderAllowBlockGroupScoping, DefenderConfig,
         DefenderDeviceActions, DefenderExclusion, DefenderFileActions, DefenderGroupScoping,
         DefenderImpactedEntities, DefenderResponseActions, DefenderUserActions, DetectionExample,
         DetectionSignal, ElasticActions, ElasticCardinality, ElasticConfig, ElasticEql,
@@ -1215,6 +1284,12 @@ pub mod models {
         SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange, SplunkTrigger,
         SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor, ThreatBody,
         ThreatVectorV1_0,
+    };
+
+    #[pymodule_export]
+    use super::{
+        GraylogAggregation, GraylogConfig, GraylogEventLookup, GraylogEventTemplate,
+        GraylogLookupTable, GraylogSchedule,
     };
 
     /// The error `model_validate` raises: a `ValueError` whose instances

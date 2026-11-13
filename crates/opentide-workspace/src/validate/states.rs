@@ -465,6 +465,43 @@ mod tests {
                 .message
                 .contains("is int, not a string")
         );
+        let (fs, _) = shard(&format!(
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65F1"}}}}}}"#
+        ));
+        assert!(
+            scan(&fs, Path::new("/w"))[0]
+                .message
+                .ends_with("graylog external id '65F1' does not match '[0-9a-f]{24}'")
+        );
+        let (fs, _) = shard(&format!(
+            r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65f1c0ffee0123456789abcd"}}}}}}"#
+        ));
+        assert!(scan(&fs, Path::new("/w")).is_empty());
+    }
+
+    /// Bitdefender stores GravityZone rule ids, 24 lowercase hex digits: its
+    /// row's pattern is enforced where `validate` reads a shard.
+    #[test]
+    fn a_bitdefender_id_must_match_its_pattern() {
+        let body = |id: &str| {
+            format!(
+                r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"bitdefender":{{"prod":"{id}"}}}}}}"#
+            )
+        };
+        let (fs, _) = shard(&body("65f1c0de9a1b2c3d4e5f6a7b"));
+        assert!(scan(&fs, Path::new("/w")).is_empty());
+        for malformed in ["65F1C0DE9A1B2C3D4E5F6A7B", "65f1c0de", "rule-1"] {
+            let (fs, _) = shard(&body(malformed));
+            let errors = scan(&fs, Path::new("/w"));
+            assert_eq!(errors.len(), 1, "{malformed}");
+            assert_eq!(
+                errors[0].message,
+                format!(
+                    "/w/.opentide/states/deployment/{UUID}.json platforms.bitdefender.prod: \
+                     bitdefender external id '{malformed}' does not match '^[0-9a-f]{{24}}$'"
+                ),
+            );
+        }
     }
 
     #[test]

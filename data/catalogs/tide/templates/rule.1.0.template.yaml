@@ -522,10 +522,10 @@ configurations:
     #policies:
       #- 
     #minimum_engine_version: 3
-  #exabeam:
+  #bitdefender:
     #enabled: false
     #name: 
-    #schema: platform::exabeam::1.0
+    #schema: platform::bitdefender::1.0
     #status: 
     #flags:
       #- 
@@ -533,45 +533,82 @@ configurations:
       #- 
     #contributors:
       #- 
-    #sequences:
-      #- query: |
-          #...
-        #name: 
-        #threshold:
-          #function: count
-          #field: 
-          #operator: more_than
-          #value:
+    #severity: Low
+    #tags:
+      #- 
+    #targets:
+      #endpoint_tags:
+        #- 
+      #companies:
+        #- 
+    #actions:
+      #isolate: true
+      #collect_investigation_package: true
+      #sandbox: true
+      #kill_process:
+        #include_parent: false
+        #include_children: false
+      #antimalware_scan: quick
+      #quarantine:
+        #include_parent: false
+        #include_children: false
+      #risk_scan: true
+    #detection:
+      #target: 
+      #criteria:
+        #- field: 
+          #is: 
+          #contains: 
+          #any:
             #- 
-          #within: 
-        #group_by:
-          #- 
-    #correlation:
-      #within: 
-      #group_by:
-        #- 
-    #severity: none
-    #outcome: alert
-    #email:
-      #recipients:
-        #- 
-      #subject: 
-      #attach_csv: false
-    #suppression:
-      #for: 
-      #group_by:
-        #- 
-    #delay: 
+      #alert: 
+    #yara:
+      #signature: |
+        #...
+      #on_access: true
+  #graylog:
+    #enabled: false
+    #name: 
+    #schema: platform::graylog::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+
+    #query: |
+      #...
+    #priority: 
+    #alert: true
+    #tags:
+      #- 
+    #streams:
+      #- 
+    #stream_categories:
+      #- 
     #schedule:
-      #- every: day
-        #from: 
-        #to: 
-        #days:
-          #- 
-        #last_day: false
-        #first: 
-        #last: 
-    #test_mode: false
+      #every: 
+      #window: 
+      #cron: 
+      #timezone: 
+    #event_limit: 3
+    #aggregation:
+      #group_by:
+        #- 
+      #condition: 
+    #event_fields:
+      #key:
+        #template: 
+    #event_key:
+      #- 
+    #notifications:
+      #- 
+    #grace_period: 
+    #backlog: 3
+    #summary: 
+    #remediation: 
   #google_secops:
     #enabled: false
     #name: 

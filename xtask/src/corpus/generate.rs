@@ -818,8 +818,10 @@ fn platform_block(
         "harfanglab" => pairs.extend(harfanglab(rng, variant, process, name, &mut tags)),
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
+        "bitdefender" => pairs.extend(bitdefender(process)),
         "exabeam" => pairs.extend(exabeam(rng, variant, process, &mut tags)),
         "google_secops" => pairs.extend(google_secops(variant, process, &mut tags)),
+        "graylog" => pairs.extend(graylog(rng, variant, process, &mut tags)),
         _ => {}
     }
     (Yaml::Map(pairs), tags)
@@ -1258,6 +1260,30 @@ fn sysdig(rng: &mut Rng, variant: usize, tags: &mut Vec<String>) -> Vec<(String,
     pairs
 }
 
+/// A Bitdefender GravityZone Basic rule on the process target, which
+/// bitdefender-1.0's checks accept.
+fn bitdefender(process: &str) -> Vec<(String, Yaml)> {
+    kv(vec![(
+        "detection",
+        Yaml::map(vec![
+            ("target", Yaml::s("process")),
+            (
+                "criteria",
+                Yaml::Seq(vec![
+                    Yaml::map(vec![
+                        ("field", Yaml::s("Process.Name")),
+                        ("is", Yaml::s(process)),
+                    ]),
+                    Yaml::map(vec![
+                        ("field", Yaml::s("Process.CommandLine")),
+                        ("contains", Yaml::s("*-enc*")),
+                    ]),
+                ]),
+            ),
+        ]),
+    )])
+}
+
 /// An Exabeam block: one or two sequences of filter queries, the second with
 /// a threshold and grouping (exabeam-1.0, Sequences).
 fn exabeam(
@@ -1359,6 +1385,44 @@ fn google_secops(variant: usize, process: &str, tags: &mut Vec<String>) -> Vec<(
         ("outcome", Yaml::s("$risk_score = max(70)\n")),
         ("condition", Yaml::s("#fail >= 10\n")),
     ])
+}
+
+/// A Graylog event definition: a Lucene query over one stream, by id (no
+/// tenant alias to resolve), scheduled by interval; every other variant
+/// aggregates instead of filtering.
+fn graylog(
+    rng: &mut Rng,
+    variant: usize,
+    process: &str,
+    tags: &mut Vec<String>,
+) -> Vec<(String, Yaml)> {
+    let stream = format!("65f0c0ffee0123456789{:04x}", rng.below(0x1_0000));
+    let every = rng.pick(&["5m", "10m", "15m"]);
+    let mut pairs = kv(vec![
+        (
+            "query",
+            Yaml::s(format!(
+                "EventID:1 AND image_lc:/.*\\\\{}/",
+                process.to_ascii_lowercase().replace('.', "\\.")
+            )),
+        ),
+        ("streams", Yaml::s(stream)),
+        (
+            "schedule",
+            Yaml::map(vec![("every", Yaml::s(every)), ("window", Yaml::s("15m"))]),
+        ),
+    ]);
+    if variant % 2 == 1 {
+        tags.push("graylog:aggregation".to_string());
+        pairs.push((
+            "aggregation".to_string(),
+            Yaml::map(vec![
+                ("group_by", Yaml::s("source")),
+                ("condition", Yaml::s("count() >= 3")),
+            ]),
+        ));
+    }
+    pairs
 }
 
 /// A tenant's `[tenants.setup]`: endpoints on reserved example domains and
