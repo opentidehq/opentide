@@ -39,9 +39,9 @@ def test_the_guard_checks_the_marker_against_the_gated_bases() -> None:
     """The step reads github.base_ref and fails on a gated base with the marker."""
     steps = _ci()["jobs"]["report-only-guard"]["steps"]
     run = next(step["run"] for step in steps if "run" in step and MARKER in step["run"])
-    assert "github.base_ref" in str(
-        _ci()["jobs"]["report-only-guard"]["steps"]
-    ), "the guard reads the pull request's base"
+    assert "github.base_ref" in str(_ci()["jobs"]["report-only-guard"]["steps"]), (
+        "the guard reads the pull request's base"
+    )
     for base in GATED_BASES:
         assert base in run, f"the guard names {base}"
     # It exits non-zero on a gated base, and tolerates the marker's absence.
