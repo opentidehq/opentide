@@ -12,14 +12,12 @@
 
 use std::sync::{Arc, OnceLock};
 
-use opentide_connectors::connector::{
-    BoxFuture, ConfigurationCheck, ConfigurationFinding, DeployOutcome, DeployRequest, Deployer,
-    LiveCheck, LiveValidator, Operation, Platform, QueryColumn, QueryOutcome, QueryRequest,
-    QueryRunner, TenantContext, TimeWindow,
+use opentide::plugins::{
+    BoxFuture, ConfigurationCheck, ConfigurationFinding, ConnectorError, Credential, DeployOutcome,
+    DeployRequest, Deployer, ENTRY_POINT_GROUP, Json, LiveCheck, LiveValidator, Operation,
+    Platform, PluginError, PluginHost, QueryColumn, QueryOutcome, QueryRequest, QueryRunner,
+    Tenant, TenantContext, TimeWindow,
 };
-use opentide_connectors::credentials::Credential;
-use opentide_connectors::plugin::{ENTRY_POINT_GROUP, PluginError, PluginHost};
-use opentide_connectors::{ConnectorError, Tenant};
 use pyo3::prelude::*;
 use serde_json::{Value, json};
 
@@ -297,13 +295,13 @@ fn outcome_of(value: &Value) -> Result<QueryOutcome, String> {
         None | Some(Value::Null) => Vec::new(),
         Some(rows) => {
             // Re-read in order: serde_json's map sorts its keys.
-            let ordered: opentide_compile::Json = serde_json::from_str(&rows.to_string())
+            let ordered: Json = serde_json::from_str(&rows.to_string())
                 .map_err(|error| format!("rows: {error}"))?;
             match ordered {
-                opentide_compile::Json::Array(items) => items
+                Json::Array(items) => items
                     .into_iter()
                     .map(|item| match item {
-                        opentide_compile::Json::Object(row) => Ok(row),
+                        Json::Object(row) => Ok(row),
                         _ => Err("rows: a row is not an object".to_owned()),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
@@ -326,7 +324,7 @@ fn outcome_of(value: &Value) -> Result<QueryOutcome, String> {
                     .map(str::to_owned),
             })
             .collect(),
-        None => opentide_connectors::connector::columns_of(&rows),
+        None => opentide::plugins::columns_of(&rows),
     };
     let flag = |name: &str| value.get(name).and_then(Value::as_bool).unwrap_or(false);
     Ok(QueryOutcome {

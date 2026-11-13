@@ -107,11 +107,13 @@ fn the_ledger_is_read_and_checked_against_the_changelog() {
 #[test]
 fn the_candidate_needs_the_repository_cli() {
     let dir = tempfile::tempdir().unwrap();
-    let error = candidate(dir.path()).unwrap_err().to_string();
+    let error = candidate(dir.path(), &dir.path().join("target"))
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("uv sync --group dev"), "{error}");
 
     write(&dir.path().join(".venv/bin/opentide"), "");
-    let engine = candidate(dir.path()).unwrap();
+    let engine = candidate(dir.path(), &dir.path().join("target")).unwrap();
     assert_eq!(engine.name, "rust");
     assert!(engine.known_uuids.is_empty());
 
@@ -121,12 +123,116 @@ fn the_candidate_needs_the_repository_cli() {
         &dir.path().join("src/opentide/data/vocab.toml"),
         &format!("id = \"{uuid}\"\n"),
     );
-    let engine = candidate(dir.path()).unwrap();
+    let engine = candidate(dir.path(), &dir.path().join("target")).unwrap();
     assert!(
         engine.known_uuids.contains(uuid),
         "{:?}",
         engine.known_uuids
     );
+}
+
+/// Sets `path`'s modification time to `secs` after the epoch.
+fn age(path: &Path, secs: u64) {
+    let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs);
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(time)
+        .unwrap();
+}
+
+/// A console script whose native module is older than a file it was built
+/// from fails before any case runs, naming the file and the rebuild; one built
+/// after its inputs passes. The inputs come from cargo's dep-info, spaces
+/// escaped; a dep-info entry since deleted does not count.
+#[test]
+fn the_candidate_refuses_a_native_module_older_than_its_sources() {
+    use xtask::compare::{REBUILD_NATIVE, native_freshness, parse_dep_info};
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    let target = repo.join("target");
+    write(&repo.join(".venv/bin/opentide"), "");
+    let module = repo.join("src/opentide/_native.abi3.so");
+    write(&module, "elf");
+    let lib = repo.join("crates/a b/src/lib.rs");
+    write(&lib, "pub fn f() {}\n");
+    let data = repo.join("src/opentide/data/x.toml");
+    write(&data, "x = 1\n");
+    write(
+        &target.join("develop/lib_native.d"),
+        &format!(
+            "{}: {} {} {}\n",
+            target.join("develop/lib_native.so").display(),
+            lib.display().to_string().replace(' ', "\\ "),
+            data.display(),
+            repo.join("gone.rs").display()
+        ),
+    );
+    assert_eq!(
+        parse_dep_info(&std::fs::read_to_string(target.join("develop/lib_native.d")).unwrap()),
+        [lib.clone(), data.clone(), repo.join("gone.rs")]
+    );
+
+    // Built after every input: fresh.
+    age(&lib, 1_000);
+    age(&data, 1_000);
+    age(&module, 2_000);
+    native_freshness(repo, &target).unwrap();
+    candidate(repo, &target).unwrap();
+
+    // A source changed since the build: the run stops, and says how to rebuild.
+    age(&lib, 3_000);
+    let error = candidate(repo, &target).unwrap_err().to_string();
+    assert!(error.contains(REBUILD_NATIVE), "{error}");
+    assert!(error.contains("a b/src/lib.rs"), "{error}");
+    assert!(error.contains("_native.abi3.so"), "{error}");
+    // So does data the module compiles in.
+    age(&lib, 1_000);
+    age(&data, 3_000);
+    let error = native_freshness(repo, &target).unwrap_err().to_string();
+    assert!(error.contains("data/x.toml"), "{error}");
+    age(&module, 4_000);
+    native_freshness(repo, &target).unwrap();
+
+    // No module of an editable install: nothing to compare.
+    std::fs::remove_file(&module).unwrap();
+    native_freshness(repo, &target).unwrap();
+}
+
+/// Without a dep-info, the tracked Rust sources and manifests of `crates/` and
+/// `bindings/python/` are the inputs; tests are not.
+#[test]
+fn without_a_dep_info_the_tracked_rust_sources_are_the_inputs() {
+    use xtask::compare::native_freshness;
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    let git = |args: &[&str]| {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    };
+    git(&["init", "-q"]);
+    let module = repo.join("src/opentide/_native.abi3.so");
+    write(&module, "elf");
+    let lib = repo.join("crates/x/src/lib.rs");
+    write(&lib, "pub fn f() {}\n");
+    let test = repo.join("crates/x/tests/t.rs");
+    write(&test, "#[test] fn t() {}\n");
+    git(&["add", "crates"]);
+    age(&lib, 1_000);
+    age(&module, 2_000);
+    age(&test, 3_000);
+    // A test edited since the build is not an input of the module.
+    native_freshness(repo, &repo.join("target")).unwrap();
+    age(&lib, 3_000);
+    let error = native_freshness(repo, &repo.join("target"))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("crates/x/src/lib.rs"), "{error}");
 }
 
 #[cfg(unix)]

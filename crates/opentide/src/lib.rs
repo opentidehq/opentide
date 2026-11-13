@@ -38,12 +38,16 @@
 //! | Feature | Default | What it adds |
 //! |---------|:-------:|--------------|
 //! | `schema` | yes | [`models`]: the Tide models, every revision, schema identifiers |
+//! | `analysis` | no | [`analysis`]: check one query on its own, highlight a text, without a workspace (the bindings' `analyze_query`, `highlight`) |
 //! | `workspace` | yes | [`Workspace`]: open, [`Workspace::validate`], [`Workspace::lint`], [`Workspace::info`], [`Workspace::rules`], [`Workspace::objectives`], [`Workspace::threats`], [`Workspace::catalog`], [`Workspace::coverage`] |
 //! | `compile` | yes | [`Workspace::deploy_plan`] and [`deploy`] |
 //! | `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 //! | `cli` | no | `cli::main(argv)`, `cli::run_json(argv)` and the `opentide` binary (`cargo install opentide --features cli`); implies `compile` and `queries` |
 //! | `lsp` | no | `lsp`: the language server, on stdio or one message at a time |
 //! | `connectors` | no | [`connectors`]: the tenants a workspace configures ([`Workspace::tenants`]), and on each a query run, a live query check and a rule deploy (async, on tokio); implies `compile` |
+//! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`. Heavy |
+//! | `python` | no | [`python`]: the Tide models as Python classes ([`python::register`]); brings PyO3 |
+//! | `stubs` | no | PyO3 introspection behind `python`, for `cargo xtask stubs` |
 //!
 //! Without `queries`, a queries check is never skipped: validate reports one
 //! `engine_unavailable` error and lint fails with that code, as the Python
@@ -99,6 +103,15 @@ pub mod error;
 
 #[cfg(feature = "schema")]
 pub mod models;
+
+#[cfg(feature = "python")]
+pub mod python;
+
+#[cfg(feature = "analysis")]
+pub mod analysis;
+
+#[cfg(feature = "plugins")]
+pub mod plugins;
 
 #[cfg(feature = "workspace")]
 pub mod catalog;

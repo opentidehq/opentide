@@ -484,11 +484,15 @@ fn the_first_diagnostics_do_not_build_the_editor_index() {
     assert_eq!(parsed, 0, "the index read the workspace's parses");
 }
 
-/// #914: an Elastic rule's advisories still read the objects on disk: a
-/// technique it inherits through `detection_model` that is not Enterprise
-/// ATT&CK is reported on its first diagnostics.
+/// #821 (UC-2.6): an Elastic rule's advisories are not the editor's. The
+/// language server publishes `validate`'s findings, and the Elastic block's
+/// advisories are `opentide lint`'s, so a technique the rule inherits
+/// through `detection_model` that is not Enterprise ATT&CK
+/// (`technique_not_enterprise`, which lint reports:
+/// `lint_reports_every_elastic_block_advisory`) is not published, and the
+/// editor's index is not read for the first diagnostics.
 #[test]
-fn an_elastic_rule_reads_the_techniques_it_inherits() {
+fn an_elastic_rule_publishes_no_advisory_of_its_own() {
     let scratch = workspace("lazy-index-elastic", false);
     let root = &scratch.0;
     let objective = fixture(OBJECTIVE).replacen(
@@ -512,24 +516,21 @@ fn an_elastic_rule_reads_the_techniques_it_inherits() {
     );
     open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
     let diagnostics = published_for(&mut lsp, &rule_uri);
-    let inherited = diagnostics
-        .iter()
-        .find(|d| d["code"] == "technique_not_enterprise")
-        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
     assert!(
-        inherited["message"].as_str().unwrap().contains("T1626"),
-        "{inherited}"
+        !diagnostics
+            .iter()
+            .any(|d| d["code"] == "technique_not_enterprise"),
+        "{diagnostics:#?}"
     );
+    assert_eq!(editor_indexed(&mut lsp), 0);
 }
 
-/// #821: the first diagnostics of an Elastic rule index the objects its
-/// advisories look up (the objective `detection_model` names and that
-/// objective's threats), not every object of the root: a technique it
-/// inherits through the objective's threat is still reported, and objects
-/// that name neither are left for the first request that reads the whole
-/// index.
+/// #821 (UC-2.6): no object of the root is indexed by the editor for an
+/// Elastic rule's first diagnostics, now that the platform-block advisories
+/// that looked up the objects it inherits from are `lint`'s alone. The index
+/// is still built, every file at once, on the first request that reads it.
 #[test]
-fn an_elastic_rule_indexes_only_the_objects_it_inherits_from() {
+fn an_elastic_rule_indexes_nothing_of_the_root_for_its_diagnostics() {
     let scratch = workspace("scoped-index-elastic", true);
     let root = &scratch.0;
     let threats = root.join("objects/threats");
@@ -557,19 +558,10 @@ fn an_elastic_rule_indexes_only_the_objects_it_inherits_from() {
         fixture(RULE)
     );
     open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
-    let diagnostics = published_for(&mut lsp, &rule_uri);
-    let inherited = diagnostics
-        .iter()
-        .find(|d| d["code"] == "technique_not_enterprise")
-        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
-    assert!(
-        inherited["message"].as_str().unwrap().contains("T1626"),
-        "{inherited}"
-    );
-    // The rule's file, the objective and its threat; not the 4 others.
-    assert_eq!(editor_indexed(&mut lsp), 3);
+    published_for(&mut lsp, &rule_uri);
+    assert_eq!(editor_indexed(&mut lsp), 0);
 
-    // A request that reads the whole index indexes the rest.
+    // A request that reads the whole index indexes every object.
     let symbols = lsp.request("workspace/symbol", json!({ "query": "Other Actor" }));
     assert_eq!(symbols["result"].as_array().unwrap().len(), 4, "{symbols}");
     assert_eq!(editor_indexed(&mut lsp), 7);
@@ -1053,6 +1045,65 @@ fn lint_s_file_name_and_metadata_findings_are_published() {
     );
     assert!(
         !codes.contains(&"metadata_recommended".to_string()),
+        "{codes:?}"
+    );
+}
+
+/// opentide 0.28.1 (#1028, language-server #250): a missing optional field
+/// is information. A rule without `response` gets lint's
+/// `recommended_field_missing` as an Information diagnostic (severity 3,
+/// not a warning), at the top of the file; `[recommended] enabled = false` leaves
+/// it out, and a rule with both fields has none.
+#[test]
+fn a_missing_recommended_field_is_information() {
+    let scratch = workspace("recommended-field", true);
+    let root = &scratch.0;
+    let path = root.join("objects/rules/rule-1.0.yaml");
+    let full = fixture(RULE);
+    let start_at = full.find("\nresponse:").unwrap() + 1;
+    let end_at = full.find("\nconfigurations:").unwrap() + 1;
+    let text = format!("{}{}", &full[..start_at], &full[end_at..]);
+    std::fs::write(&path, &text).unwrap();
+    let uri = file_uri(&path);
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    open(&mut lsp, &uri, "opentide-yaml", &text);
+    let published = published_for(&mut lsp, &uri);
+    let found: Vec<&Value> = published
+        .iter()
+        .filter(|d| d["code"] == "recommended_field_missing")
+        .collect();
+    assert_eq!(found.len(), 1, "{published:#?}");
+    assert_eq!(found[0]["severity"], 3, "{}", found[0]);
+    assert_eq!(found[0]["range"]["start"]["line"], 0, "{}", found[0]);
+    assert!(
+        found[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Recommended field missing: response"),
+        "{}",
+        found[0]
+    );
+    drop(lsp);
+
+    std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
+    std::fs::write(
+        root.join(".opentide/configurations/lint.toml"),
+        "[recommended]\nenabled = false\n",
+    )
+    .unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let codes = codes_for(&mut lsp, &uri, &text);
+    assert!(
+        !codes.contains(&"recommended_field_missing".to_string()),
+        "{codes:?}"
+    );
+    drop(lsp);
+    std::fs::write(&path, &full).unwrap();
+    std::fs::remove_file(root.join(".opentide/configurations/lint.toml")).unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let codes = codes_for(&mut lsp, &uri, &full);
+    assert!(
+        !codes.contains(&"recommended_field_missing".to_string()),
         "{codes:?}"
     );
 }

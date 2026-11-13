@@ -349,16 +349,27 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
         let mut rust = rust;
         drop_since_oracle(&mut rust);
         let oracle = &table["cases"][id];
-        let difference = case
-            .get("difference")
-            .and_then(toml::Value::as_str)
-            .map(|name| {
-                let fields = differences
-                    .get(name)
-                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
-                used.insert(name.to_owned());
-                (name, fields)
-            });
+        // One difference's name, or a list of them: their fields together.
+        let names: Vec<&str> = match case.get("difference") {
+            Some(toml::Value::String(name)) => vec![name.as_str()],
+            Some(toml::Value::Array(names)) => {
+                names.iter().filter_map(toml::Value::as_str).collect()
+            }
+            _ => Vec::new(),
+        };
+        let mut fields = BTreeSet::new();
+        for name in &names {
+            fields.extend(
+                differences
+                    .get(*name)
+                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"))
+                    .iter()
+                    .cloned(),
+            );
+            used.insert((*name).to_owned());
+        }
+        let joined = names.join(" + ");
+        let difference = (!names.is_empty()).then_some((joined.as_str(), &fields));
         failures.extend(compare(id, oracle, &rust, difference));
     }
     for name in differences.keys() {

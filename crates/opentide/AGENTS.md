@@ -24,7 +24,10 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 | `src/queries.rs` | The queries checks: the engines (`queries` feature, from opentide-cli's `queries`), else a stand-in that reports `engine_unavailable` |
 | `src/deploy.rs` | `Workspace::deploy_plan` over `opentide_compile::dry_run`; `Strategy`, `DeployPlanOptions`, `DeployPlan` |
 | `src/models.rs`, `catalog.rs`, `validate.rs`, `lint.rs` | Curated re-exports of the internal crates' types |
-| `src/cli.rs` | `cli` feature: `main`, `exit`, `run_json`, `VERSION` |
+| `src/cli.rs` | `cli` feature: `main`, `main_with_version` (a host whose version is its package's: the Python binding), `exit`, `run_json`, `VERSION` |
+| `src/analysis.rs` | `analysis` feature: `analyze_query`, `highlight`, `legend` and their types, over `opentide-analysis` (the Python binding's `analyze_query` and `highlight`, the browser build) |
+| `src/plugins.rs` | `plugins` feature: the platform plugin host, `set_host`, `configurations` and the connectors' traits a plugin implements (the Python binding's plugin host, UC-4.5) |
+| `src/python.rs` | `python` feature: `register` and `models`, the Tide models as Python classes (opentide-schema's `python`; `stubs` adds its introspection data) |
 | `src/lsp.rs` | `lsp` feature: `run_stdio`, `serve`, `MessageSession` |
 | `src/connectors.rs` | `connectors` feature: `Workspace::tenants`, `TenantConfig`, `ConnectOptions`, `Connection` (`query`, `validate_query`, `deploy`: async, on tokio, over `opentide-connectors`' traits), `Canceller`, `block_on`, `Error::Connector`'s codes |
 | `src/bin/opentide.rs` | The `opentide` binary (`required-features = ["cli"]`) |
@@ -45,7 +48,14 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 - **Semver.** Every exported item is the API, re-exports included. New options structs and enums
   are `#[non_exhaustive]` with a `Default` and builder methods. A breaking change raises the minor
   version while 0.x and gets a **Breaking** entry in `crates/CHANGELOG.md`. CI's `facade` job runs
-  `cargo semver-checks` against the base branch.
+  `cargo semver-checks` against the pull request's base (the merge commit's first parent): the
+  baseline stays the PR base until the crate is published on crates.io, and only then becomes the
+  last published version. Do not switch it earlier; there is no published API to hold to yet.
+- **The bindings' surface.** Every binding and host (`bindings/python`, `bindings/node`,
+  `crates/opentide-wasm`) depends on this crate alone from the workspace, which `cargo xtask
+  check-layers` enforces (`may_depend_on` in `xtask/layers.toml`). What a binding genuinely needs
+  comes here, documented and minimal, behind a feature when it is heavy (`analysis`, `plugins`,
+  `python`); never add an internal crate to a binding's manifest.
 - **Docs.** `missing_docs` holds; every public item has a doc comment, and a sample is a doctest.
   `cargo doc -p opentide --all-features --no-deps` with `RUSTDOCFLAGS=-D warnings` is clean.
 - **Features.** A build without `queries` never skips a queries check: it reports

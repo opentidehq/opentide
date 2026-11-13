@@ -3093,6 +3093,7 @@ name = "opentide"
 version = "0.12.0"
 dependencies = [
  "jiff",
+ "opentide-analysis",
  "opentide-cli",
  "opentide-compare",
  "opentide-compile",
@@ -3269,7 +3270,6 @@ dependencies = [
  "serde_json",
  "shlex 2.0.1",
  "tempfile",
- "textwrap",
  "thiserror 2.0.20",
  "toml 0.8.23",
  "tracing",
@@ -3467,11 +3467,6 @@ version = "0.0.0"
 dependencies = [
  "jiff",
  "opentide",
- "opentide-analysis",
- "opentide-cli",
- "opentide-compile",
- "opentide-connectors",
- "opentide-schema",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-build-config",
@@ -3569,6 +3564,7 @@ dependencies = [
  "opentide-kql",
  "opentide-kuery",
  "opentide-lucene",
+ "opentide-schema",
  "opentide-spl",
  "regex",
  "ryu",
@@ -3583,10 +3579,7 @@ name = "opentide-wasm"
 version = "0.12.0"
 dependencies = [
  "js-sys",
- "opentide-analysis",
- "opentide-core",
- "opentide-highlight",
- "opentide-lsp",
+ "opentide",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -6386,7 +6379,6 @@ dependencies = [
  "opentide-core",
  "opentide-lsp",
  "opentide-schema",
- "opentide-tide",
  "opentide-workspace",
  "pyo3-introspection",
  "regex",

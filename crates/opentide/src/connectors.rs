@@ -40,6 +40,9 @@ use tokio_util::sync::CancellationToken;
 use crate::{Error, Workspace};
 
 pub use jiff::Timestamp;
+/// A value of a [`Row`]: JSON that keeps its keys' order (`serde_json`'s map
+/// sorts them), as the tenant returned it.
+pub use opentide_compile::Json;
 pub use opentide_connectors::connector::{
     DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployOutcome, DeployRequest, LiveCheck, Operation,
     QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow,

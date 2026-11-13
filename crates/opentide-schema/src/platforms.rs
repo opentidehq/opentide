@@ -37,6 +37,58 @@ impl ExternalId {
     pub const fn is_stored(self) -> bool {
         !matches!(self, Self::None)
     }
+
+    /// What a stored id `text` lacks to be one of these, or `None` when it is
+    /// one (or the platform stores none). An empty id is the caller's to
+    /// refuse first: each says so in its own words.
+    pub fn shape_problem(self, text: &str) -> Option<IdShape> {
+        match self {
+            Self::Int => (!is_canonical_decimal(text)).then_some(IdShape::CanonicalDecimal),
+            Self::Text {
+                pattern: Some(pattern),
+            } => (!matches_whole(pattern, text)).then_some(IdShape::Pattern(pattern)),
+            Self::Text { pattern: None } | Self::None => None,
+        }
+    }
+}
+
+/// The shape a stored external id lacks ([`ExternalId::shape_problem`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdShape {
+    /// A canonical decimal integer: no sign, no leading zero.
+    CanonicalDecimal,
+    /// The whole id matches this regular expression.
+    Pattern(&'static str),
+}
+
+/// Whether `text` is a canonical decimal integer (no sign, no leading zero).
+pub fn is_canonical_decimal(text: &str) -> bool {
+    text == "0"
+        || (text.starts_with(|c: char| ('1'..='9').contains(&c))
+            && text.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// Whether the whole of `text` matches `pattern`. The table's patterns are
+/// compiled once; a pattern that does not compile matches nothing (the tests
+/// compile every row's).
+fn matches_whole(pattern: &'static str, text: &str) -> bool {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static COMPILED: LazyLock<Mutex<HashMap<&'static str, Option<regex::Regex>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    let Ok(mut compiled) = COMPILED.lock() else {
+        return anchored(pattern).is_some_and(|regex| regex.is_match(text));
+    };
+    compiled
+        .entry(pattern)
+        .or_insert_with(|| anchored(pattern))
+        .as_ref()
+        .is_some_and(|regex| regex.is_match(text))
+}
+
+/// `pattern`, anchored at both ends.
+fn anchored(pattern: &str) -> Option<regex::Regex> {
+    regex::Regex::new(&format!("^(?:{pattern})$")).ok()
 }
 
 /// The orders platform lists are printed in.
@@ -391,6 +443,13 @@ pub fn has_integer_id(id: &str) -> bool {
     get(id).is_some_and(|platform| platform.external_id == ExternalId::Int)
 }
 
+/// What the stored id `text` of built-in platform `id` lacks
+/// ([`ExternalId::shape_problem`]); `None` for a valid id or a platform that
+/// is not built in (a plugin's ids are its own).
+pub fn external_id_problem(id: &str, text: &str) -> Option<IdShape> {
+    get(id)?.external_id.shape_problem(text)
+}
+
 /// The extensions of a query file, each one query in the language it names:
 /// every row's suffixes, the first time each appears.
 pub fn query_file_suffixes() -> Vec<&'static str> {
@@ -537,6 +596,60 @@ mod tests {
                 "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco"
             ]
         );
+    }
+
+    #[test]
+    fn a_stored_id_has_its_platforms_shape() {
+        use super::{IdShape, anchored, external_id_problem};
+        let int = ExternalId::Int;
+        assert_eq!(int.shape_problem("17"), None);
+        assert_eq!(int.shape_problem("0"), None);
+        for bad in ["017", "-1", "+1", "1.0", "x"] {
+            assert_eq!(
+                int.shape_problem(bad),
+                Some(IdShape::CanonicalDecimal),
+                "{bad}"
+            );
+        }
+        let free = ExternalId::Text { pattern: None };
+        assert_eq!(free.shape_problem("anything at all"), None);
+        let hex = ExternalId::Text {
+            pattern: Some("[0-9a-f]{24}"),
+        };
+        assert_eq!(hex.shape_problem("0123456789abcdef01234567"), None);
+        // The whole id matches, not a part of it.
+        for bad in [
+            "0123456789abcdef0123456",
+            "x0123456789abcdef01234567",
+            "0123456789ABCDEF01234567",
+        ] {
+            assert_eq!(
+                hex.shape_problem(bad),
+                Some(IdShape::Pattern("[0-9a-f]{24}")),
+                "{bad}"
+            );
+        }
+        let either = ExternalId::Text {
+            pattern: Some("a|b"),
+        };
+        assert_eq!(either.shape_problem("ab"), Some(IdShape::Pattern("a|b")));
+        assert_eq!(either.shape_problem("b"), None);
+        assert_eq!(ExternalId::None.shape_problem(""), None);
+        // Through the table: built-in rows only.
+        assert_eq!(
+            external_id_problem("sysdig", "012"),
+            Some(IdShape::CanonicalDecimal)
+        );
+        assert_eq!(external_id_problem("crowdstrike", "012"), None);
+        assert_eq!(external_id_problem("acme", "012"), None);
+        for platform in PLATFORMS {
+            if let ExternalId::Text {
+                pattern: Some(pattern),
+            } = platform.external_id
+            {
+                assert!(anchored(pattern).is_some(), "{}: {pattern}", platform.id);
+            }
+        }
     }
 
     #[test]

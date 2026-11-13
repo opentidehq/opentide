@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
-use opentide_compile::generate::docs::render::{Pages, Templates};
+use opentide_compile::generate::docs::render::Pages;
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
     Counts, FlavorHints, Settings as DocsSettings, changed, index_pages, inflight as docs_inflight,
@@ -333,13 +333,14 @@ struct DocsRun {
 }
 
 /// The CVE details `generate docs` writes with `[cve] retrieve_details` on
-/// (UC-4.4, #834): each identifier asked of Vulnerability-Lookup with its
-/// linked records, once per run, through the run's proxy.
+/// (UC-4.4, #834; 0.26.0): each identifier asked of Vulnerability-Lookup with
+/// its linked records, then the EPSS score of its CVE, each once per run,
+/// through the run's proxy (`lookup_cves`).
 fn cve_source(
     resolved: &opentide_schema::configuration::resolve::Resolved,
     cx: &Context<'_>,
 ) -> opentide_compile::generate::docs::cve::CveSource {
-    use opentide_compile::generate::docs::cve::{CveDetail, CveRecord, CveSource};
+    use opentide_compile::generate::docs::cve::{CveDetail, CveSource, EpssDetail};
     let settings = super::cve::Settings::from_documentation(resolved.get("documentation"));
     let links = settings.links();
     let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
@@ -354,16 +355,14 @@ fn cve_source(
     );
     CveSource::new(
         move |id: &str| match lookup.get(id, true, &|key: &str| links.page_url(key)) {
-            Ok(Some(record)) => CveDetail::Found(CveRecord {
-                identifier: record.identifier,
-                title: record.title,
-                description: record.description,
-                published: record.published,
-                state: record.state,
-                severity: record.severity,
-                aliases: record.aliases,
-                page_url: record.page_url,
-            }),
+            Ok(Some(record)) => {
+                let epss = match record.cve_id().map(|cve| lookup.epss(&cve)) {
+                    Some(Ok(Some(score))) => EpssDetail::Score(score),
+                    Some(Err(_)) => EpssDetail::Unavailable,
+                    None | Some(Ok(None)) => EpssDetail::None,
+                };
+                CveDetail::Found(Box::new(record.into_docs(epss)))
+            }
             Ok(None) => CveDetail::NotFound,
             Err(_) => CveDetail::Unavailable,
         },
@@ -510,7 +509,6 @@ fn docs_phase(
     let catalog =
         Catalog::build(index, Statuses::from_resolved(resolved)).map_err(|error| error.detail)?;
     let vocabularies = Vocabularies::bundled();
-    let templates = Templates::new();
     // What deploy would do with each rule: the statuses, the enabled
     // platforms, their tenants (never their credentials) and the state's ids.
     let config = opentide_compile::Json::from_node(&resolved.tree);
@@ -526,7 +524,6 @@ fn docs_phase(
         catalog: &catalog,
         settings: &settings,
         vocab: Vocab::new(&vocabularies),
-        templates: &templates,
         deployment: &deployment,
     };
     let output_text = Json::str(settings.output.to_string_lossy().as_ref());

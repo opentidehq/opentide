@@ -14,6 +14,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
+use opentide_schema::platforms::IdShape;
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = opentide_workspace::state::SCHEMA_ID;
@@ -120,12 +121,6 @@ impl ExternalId {
     }
 }
 
-fn canonical_decimal(text: &str) -> bool {
-    text == "0"
-        || (text.starts_with(|c: char| ('1'..='9').contains(&c))
-            && text.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
 /// *value* as the shard stores it, or `external_id_shape`
 /// (`normalise_external_id`).
 pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<String, StateError> {
@@ -139,18 +134,22 @@ pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<Strin
             "external_id_shape",
             format!("{platform} external id is empty"),
         )),
-        ExternalId::Text(text)
-            if opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal(text) =>
-        {
-            Err(StateError::new(
-                "external_id_shape",
-                format!(
-                    "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
+        ExternalId::Text(text) => {
+            match opentide_schema::platforms::external_id_problem(platform, text) {
+                Some(IdShape::CanonicalDecimal) => Err(StateError::new(
+                    "external_id_shape",
+                    format!(
+                        "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
                      no leading zeroes)"
-                ),
-            ))
+                    ),
+                )),
+                Some(IdShape::Pattern(pattern)) => Err(StateError::new(
+                    "external_id_shape",
+                    format!("{platform} external id {text:?} does not match {pattern:?}"),
+                )),
+                None => Ok(text.clone()),
+            }
         }
-        ExternalId::Text(text) => Ok(text.clone()),
     }
 }
 

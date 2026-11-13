@@ -1,0 +1,12 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 1 to disable, 1 to delete
+warning: External id missing · detail: rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant 'lab' in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand. · code: external_id_missing · uuid: 00000000-0000-4000-8047-000000000013 · platform: sentinel_one · tenant: lab
+
+Deploying to sentinel_one / lab · 4 rules
+  [1/4] · skipped   SentinelOne disable rule never deployed  rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant 'lab' in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.
+  [2/4] ✗ failed    SentinelOne create rule                  ProxyError: HTTPSConnectionPool(host='s1.invalid', port=443): Max retries exceeded with url: /web/api/v2.1/cloud-detection/rules (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+  [3/4] · skipped   SentinelOne retire rule                  not attempted after a failure
+  [4/4] · skipped   SentinelOne update rule                  not attempted after a failure
+✗ sentinel_one · 0 deployed, 1 failed, 1 skipped, 2 not attempted · <SECONDS>
+✗ Deployment failed · 1 skipped, 1 failed, 2 not attempted · <SECONDS>
+tip: add --json for machine-readable output

@@ -205,11 +205,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return report;
     }
     let frames = terminal.frames(cx.cwd, cx.env);
-    report.body.push(Block::Raw(frames.render(
+    let (text, hidden) = frames.render_notes(
         &diagnostics,
         &mut SourceFiles::default(),
         terminal.quiet,
-    )));
+        terminal.verbose,
+    );
+    report.body.push(Block::Raw(text));
     let outcome = lint.outcome.clone().unwrap_or_else(|| lint.message.clone());
     let published = findings::publish(
         &diagnostics,
@@ -223,5 +225,6 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if !published.is_empty() {
         report.body.push(Block::Raw(published));
     }
+    terminal.hidden_notes_step(&mut report.outcome.next_actions, hidden);
     report
 }
