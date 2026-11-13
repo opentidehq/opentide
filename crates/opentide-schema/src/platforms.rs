@@ -24,11 +24,22 @@ pub enum ExternalId {
     Int,
     /// Text, matching `pattern` when the platform names one.
     Text {
-        /// The regular expression a stored id matches, if any. No built-in
-        /// platform names one yet (CrowdStrike's ids are free text); the
-        /// platforms whose ids have a shape bring theirs with their row.
-        pattern: Option<&'static str>,
+        /// The shape a stored id has, if any. No built-in platform names one
+        /// yet (CrowdStrike's ids are free text); the platforms whose ids have
+        /// a shape bring theirs with their row.
+        pattern: Option<IdPattern>,
     },
+}
+
+/// The shape of a platform's text ids (`_PATTERNED_IDS`): a regular
+/// expression the whole id matches, and how messages name it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdPattern {
+    /// The regular expression, matched against the whole id.
+    pub regex: &'static str,
+    /// The shape in words, as a message says what the id is not
+    /// ("24 lower-case hex digits").
+    pub shape: &'static str,
 }
 
 impl ExternalId {
@@ -46,8 +57,18 @@ impl ExternalId {
             Self::Int => (!is_canonical_decimal(text)).then_some(IdShape::CanonicalDecimal),
             Self::Text {
                 pattern: Some(pattern),
-            } => (!matches_whole(pattern, text)).then_some(IdShape::Pattern(pattern)),
+            } => (!matches_whole(pattern.regex, text)).then_some(IdShape::Pattern(pattern)),
             Self::Text { pattern: None } | Self::None => None,
+        }
+    }
+
+    /// The shape a number given as an id is not, when the platform's ids are
+    /// patterned text (`"<id> is a number, not <shape>"`); `None` when a
+    /// number is stored as its decimal text.
+    pub const fn refuses_number(self) -> Option<IdPattern> {
+        match self {
+            Self::Text { pattern } => pattern,
+            Self::Int | Self::None => None,
         }
     }
 }
@@ -57,8 +78,8 @@ impl ExternalId {
 pub enum IdShape {
     /// A canonical decimal integer: no sign, no leading zero.
     CanonicalDecimal,
-    /// The whole id matches this regular expression.
-    Pattern(&'static str),
+    /// The whole id matches this pattern.
+    Pattern(IdPattern),
 }
 
 /// Whether `text` is a canonical decimal integer (no sign, no leading zero).
@@ -423,11 +444,19 @@ pub fn has_integer_id(id: &str) -> bool {
     get(id).is_some_and(|platform| platform.external_id == ExternalId::Int)
 }
 
+/// How platform `id` stores its external ids. A platform that is not built
+/// in (a plugin's) stores free text: its ids are its own.
+pub fn external_id_kind(id: &str) -> ExternalId {
+    get(id).map_or(ExternalId::Text { pattern: None }, |platform| {
+        platform.external_id
+    })
+}
+
 /// What the stored id `text` of built-in platform `id` lacks
 /// ([`ExternalId::shape_problem`]); `None` for a valid id or a platform that
 /// is not built in (a plugin's ids are its own).
 pub fn external_id_problem(id: &str, text: &str) -> Option<IdShape> {
-    get(id)?.external_id.shape_problem(text)
+    external_id_kind(id).shape_problem(text)
 }
 
 /// The extensions of a query file, each one query in the language it names:
@@ -580,7 +609,11 @@ mod tests {
 
     #[test]
     fn a_stored_id_has_its_platforms_shape() {
-        use super::{IdShape, anchored, external_id_problem};
+        use super::{IdPattern, IdShape, anchored, external_id_kind, external_id_problem};
+        const HEX: IdPattern = IdPattern {
+            regex: "[0-9a-f]{24}",
+            shape: "24 lower-case hex digits",
+        };
         let int = ExternalId::Int;
         assert_eq!(int.shape_problem("17"), None);
         assert_eq!(int.shape_problem("0"), None);
@@ -593,9 +626,7 @@ mod tests {
         }
         let free = ExternalId::Text { pattern: None };
         assert_eq!(free.shape_problem("anything at all"), None);
-        let hex = ExternalId::Text {
-            pattern: Some("[0-9a-f]{24}"),
-        };
+        let hex = ExternalId::Text { pattern: Some(HEX) };
         assert_eq!(hex.shape_problem("0123456789abcdef01234567"), None);
         // The whole id matches, not a part of it.
         for bad in [
@@ -603,16 +634,16 @@ mod tests {
             "x0123456789abcdef01234567",
             "0123456789ABCDEF01234567",
         ] {
-            assert_eq!(
-                hex.shape_problem(bad),
-                Some(IdShape::Pattern("[0-9a-f]{24}")),
-                "{bad}"
-            );
+            assert_eq!(hex.shape_problem(bad), Some(IdShape::Pattern(HEX)), "{bad}");
         }
-        let either = ExternalId::Text {
-            pattern: Some("a|b"),
+        let a_or_b = IdPattern {
+            regex: "a|b",
+            shape: "a or b",
         };
-        assert_eq!(either.shape_problem("ab"), Some(IdShape::Pattern("a|b")));
+        let either = ExternalId::Text {
+            pattern: Some(a_or_b),
+        };
+        assert_eq!(either.shape_problem("ab"), Some(IdShape::Pattern(a_or_b)));
         assert_eq!(either.shape_problem("b"), None);
         assert_eq!(ExternalId::None.shape_problem(""), None);
         // Through the table: built-in rows only.
@@ -622,12 +653,22 @@ mod tests {
         );
         assert_eq!(external_id_problem("crowdstrike", "012"), None);
         assert_eq!(external_id_problem("acme", "012"), None);
+        // A number is refused only where ids are patterned text.
+        assert_eq!(hex.refuses_number(), Some(HEX));
+        assert_eq!(free.refuses_number(), None);
+        assert_eq!(int.refuses_number(), None);
+        assert_eq!(external_id_kind("acme"), free);
         for platform in PLATFORMS {
             if let ExternalId::Text {
                 pattern: Some(pattern),
             } = platform.external_id
             {
-                assert!(anchored(pattern).is_some(), "{}: {pattern}", platform.id);
+                assert!(
+                    anchored(pattern.regex).is_some(),
+                    "{}: {pattern:?}",
+                    platform.id
+                );
+                assert!(!pattern.shape.is_empty(), "{}", platform.id);
             }
         }
     }
