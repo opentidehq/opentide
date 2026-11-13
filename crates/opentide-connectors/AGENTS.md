@@ -19,7 +19,6 @@ host is `bindings/python/src/plugins.rs`, the plugin API `src/opentide/plugins.p
 | `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `ConfigurationCheck` (a plugin's own check of its rule block), `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the nine platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
-| `body.rs` | `python_json`: a body as `json.dumps` writes it (`, ` and `: `, ASCII escapes), through a serde_json formatter | `requests`' `json=` |
 | `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers), `exchange`; `describe_answer` for one that is not the API's JSON (a gateway's page), quoting as Python's `repr` | `transport.py` `describe_answer`, `not_json_detail` |
 | `python.rs` | Python's `str` and `repr` of a parsed JSON value, as the clients interpolate a body into a message | `repr()`, `str()` |
 | `encode.rs` | Query strings and form bodies as `requests` encodes them (`quote_plus`), through `percent-encoding`; `quote(text, safe)` for a path | `urllib.parse.urlencode`, `quote` |
@@ -55,8 +54,11 @@ and the facade's `connectors` feature wraps its traits (`opentide::connectors`).
 - **A body is bytes**: `DeployRequest.body` is what `opentide-compile` wrote, so key order and
   layout reach the platform unchanged (serde_json's `Value` sorts keys; the workspace does not turn
   on `preserve_order`).
-- **Proven against recorded HTTP**: a connector's requests are compared, byte for byte and in
-  order, with the cassette recorded from the Python client (`opentide-cassette`,
+- **Bodies are serde_json's compact JSON**: a body is data, never a copy of `json.dumps`'
+  layout. A string a platform reads as JSON is serde_json's too.
+- **Proven against recorded HTTP**: a connector's requests are compared, in order, with the
+  cassette recorded from the Python client: a JSON body as the same data (key order, spacing and
+  escapes are layout; `opentide_cassette::replay::same_body`), any other body byte for byte (`opentide-cassette`,
   `tests/cassettes/`, `cargo xtask cassettes`). `tests/harness.rs` is the pattern.
 
 ## Platforms
@@ -73,13 +75,13 @@ timeout and retries its Python client mounts). A cassette scenario per platform 
 `cargo nextest run -p opentide-connectors framework harness crowdstrike harfanglab sysdig`: `tests/framework.rs` (TLS, CA,
 proxy, `no_proxy`, `--proxy`, timeouts and retries with tenants of different settings in one
 run; credentials; redaction; fan-out, cancellation, progress; bodies) and `tests/harness.rs` (the
-sample connector against `tests/cassettes/mock-platform/deploy.json`; one byte off fails; no
+sample connector against `tests/cassettes/mock-platform/deploy.json`; a changed value fails; no
 credential in any cassette).
 
 `cargo nextest run -p opentide-connectors defender elastic sentinel_one splunk carbon_black sentinel`: each platform against its
 cassettes (`tests/cassettes/<platform>/<scenario>.json`, recorded from the oracle against the stand-in tenant
 `tenant.py` beside them), the inputs the Python client was given in `tests/fixtures/<platform>.json` (written by
-`client.py fixture`); one byte off fails.
+`client.py fixture`); a changed value fails.
 
 The SDK platforms (UC-4.3) are recorded from the SDKs themselves: the stand-in tenants answer as
 the SDK expects (Splunk's Atom feeds, cbc_sdk's search jobs, MSAL's OpenID configuration), and

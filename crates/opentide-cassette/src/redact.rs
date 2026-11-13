@@ -14,8 +14,8 @@
 //! - **URLs** lose their user info and the values of query parameters named
 //!   so.
 //! - **Bodies** lose the values of JSON keys and form fields named so, in
-//!   place: the rest of the bytes stay as they were, so a body is still
-//!   compared byte for byte.
+//!   place: the rest of the bytes stay as they were, so a body that is not
+//!   JSON is still compared byte for byte.
 //! - **Known secrets** (the values a scenario's credentials have) are
 //!   replaced wherever they appear.
 
