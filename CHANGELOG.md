@@ -6,12 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Upgrade
+
+- If your CI runs `opentide lint --strict` to require `author` or `organisation`, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. Notes no longer fail `--strict`.
+
+### Added
+
+- **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` now hide notes by default, count them on the outcome line, and suggest the same command with `--verbose`. `validate --watch` still shows every finding. `--json` and reports always include them. `--verbose` and `--quiet` cannot be combined ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check reports the fields the templates ask for and `validate` does not require, as the editor already did. It needs no analysis engine. Turn it off or raise it with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+
+### Changed
+
+- **`lint --strict` fails only on errors and warnings.** A missing `author` or `organisation` is a note, and no longer fails a CI gate. Raise a check's `severity` in `lint.toml` to gate on it ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`setup skills` installs the catalogue's `detection-engineering`, the one `discover` describes.** Install wrote the package's 22-line primer while `discover` and `show` described the catalogue's skill. The package copy is now used only when the skill's files cannot be downloaded (the catalogue itself must still load) and nothing is installed yet; an existing install is kept, and the result warns in both cases. `opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` still install from the package ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+
 ### Fixed
 
-- **`opentide explain` calls a warning-only YARA code a warning.** The pages for `yara_module_unconfirmed`, `yara_entrypoint_deprecated`, `yara_slow_pattern` and `yara_suspicious_expression` said `opentide validate` fails on them; the engine only ever warns on these, so `validate` passes and `opentide lint` reports them. The Bitdefender and validate docs already called `yara_module_unconfirmed` a warning.
-- **The packaged authoring skills have frontmatter.** `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector` and `detection-engineering` were installed without `name` and `description`, so agents that discover skills by frontmatter (Claude Code, Cursor, Codex) did not find them. Each also names the catalogue's full authoring skill to install alongside it (`opentide-rule`, `opentide-objective`, `opentide-threat`).
-- **`setup skills` installs the `detection-engineering` that `discover` describes.** `discover` and `show` described the catalogue's skill while install wrote the package's 22-line primer. A bundled slug the catalogue lists now installs the catalogue's copy, falling back to the package's when GitHub is unreachable; the other three still install from the package.
-- **The validate docs say Elastic `--live` writes preview alerts.** `validate query --platform elastic --live` previews each rule in Kibana, which creates no rule but writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as `opentide query` with `kuery` does.
+- **`opentide explain` calls a warning-only YARA code a warning.** The pages for `yara_module_unconfirmed`, `yara_entrypoint_deprecated`, `yara_slow_pattern` and `yara_suspicious_expression` said `opentide validate` fails on them; the engine only ever warns on these, so `validate` passes and `opentide lint` reports them. The Bitdefender and validate docs already called `yara_module_unconfirmed` a warning ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **The packaged authoring skills have frontmatter.** `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector` and `detection-engineering` were installed without `name` and `description`, so agents that discover skills by frontmatter (Claude Code, Cursor, Codex) did not find them. Each also names the catalogue's full authoring skill to install alongside it (`opentide-rule`, `opentide-objective`, `opentide-threat`) ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **The validate docs say Elastic `--live` writes preview alerts.** `validate query --platform elastic --live` previews each rule in Kibana, which creates no rule but writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as `opentide query` with `kuery` does ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
 
 ## [0.28.0] — 2026-11-12
 

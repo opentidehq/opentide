@@ -68,6 +68,8 @@ class _ObjectRecord:
     placeholder_lines: list[_Marked] = field(default_factory=list)
     #: The file's text, for the queries check; ``None`` when it was not read.
     text: str | None = None
+    #: The parsed mapping, for the recommended check; ``None`` when it did not parse.
+    body: dict[str, Any] | None = None
 
 
 def _object_files(root: Path) -> tuple[list[Path], list[Path]]:
@@ -237,6 +239,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         # file, found an empty file".
         record.parse_error = problem
         return record
+    record.body = data
     record.name = _as_str(data.get("name"))
     metadata = data.get("metadata")
     if isinstance(metadata, dict):
@@ -633,6 +636,55 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     return findings
 
 
+def _recommended_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """One note per field the templates ask for and validation does not require.
+
+    The fields come from the catalog the engine reads (``recommended_fields``),
+    so lint reports what the editor reports as ``recommended_field_missing``,
+    without the engine. A field counts as missing only inside a mapping the
+    object has, as the engine checks it; an unknown schema is validate's.
+    """
+    from opentide.generation.lsp_catalog import recommended_fields
+
+    findings: list[dict[str, object]] = []
+    for record in records:
+        schema_id = _as_str(record.metadata.get("schema"))
+        if record.parse_error or record.body is None or schema_id is None:
+            continue
+        try:
+            fields = recommended_fields(schema_id)
+        except LookupError:
+            continue
+        for item in fields:
+            parent_path, _, key = item.path.rpartition(".")
+            parent = _mapping_at(record.body, parent_path)
+            if parent is None or key in parent or any(old in parent for old in item.filled_by):
+                continue
+            top = item.path.split(".", 1)[0]
+            line = 0 if not parent_path else _key_line(record, top)
+            finding = _finding(
+                LintCheck.recommended,
+                "info",
+                record,
+                f"Recommended field missing: {item.path}",
+                code=LINT_CODES["recommended"],
+                yaml_line=line,
+            )
+            finding["_field_path"] = item.path.split(".")
+            if line is not None:
+                finding["_position"] = (line + 1, 1)
+            findings.append(finding)
+    return findings
+
+
+def _mapping_at(body: dict[str, Any], dotted: str) -> dict[str, Any] | None:
+    """The mapping at *dotted* in *body* (``""`` is *body*), or ``None`` when there is none."""
+    current: object = body
+    for part in dotted.split(".") if dotted else ():
+        current = current.get(part) if isinstance(current, dict) else None
+    return current if isinstance(current, dict) else None
+
+
 def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     """The Bitdefender advisories (bitdefender-1.0), at the value each points at."""
     from opentide.platforms.bitdefender.advisories import bitdefender_advisories
@@ -982,6 +1034,8 @@ def run_lint(
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
         findings.extend(_metadata_findings(shown, config.required_metadata))
+    if LintCheck.recommended in selected:
+        findings.extend(_recommended_findings(shown))
     if LintCheck.placeholders in selected:
         findings.extend(_placeholder_findings(shown))
     if LintCheck.queries in selected:
@@ -1023,7 +1077,8 @@ def run_lint(
     )
     # What --fix just fixed is reported, but no longer counts against the run.
     left = [item for item in findings if item.get("fixed") is not True]
-    if left and strict:
+    # A note (a missing optional field) never fails a run, --strict or not.
+    if strict and any(item.get("severity") != "info" for item in left):
         status = "failed"
     elif left:
         status = "issues"
