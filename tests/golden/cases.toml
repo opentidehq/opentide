@@ -1437,7 +1437,7 @@ env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY 
 # opentide 0.28.1 (#1028, #1029): optional fields are notes. lint hides
 # them without --verbose (and suggests it), --strict does not fail on them,
 # the recommended check reports a rule without configurations or response,
-# and --quiet refuses --verbose. Definitions only until O2 records them.
+# and --quiet refuses --verbose.
 [[case]]
 command = "lint"
 variant = "verbose"
