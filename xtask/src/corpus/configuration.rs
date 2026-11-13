@@ -231,6 +231,20 @@ pub fn oracle_findings(document: &Json, sharing: bool) -> Vec<Json> {
     found
 }
 
+/// The bold lead of the CHANGELOG.md entry for [`quoting_only`].
+pub const QUOTING_CHANGELOG: &str = "**Messages quote values the same way everywhere**";
+
+/// `messages-quote-values` (`config_cases.toml`): the findings differ only
+/// in the quote characters around the values their messages name.
+pub fn quoting_only(oracle: &[Json], rust: &[Json]) -> bool {
+    let unquoted = |findings: &[Json]| {
+        let mut all: Vec<Json> = findings.iter().map(crate::lint::unquoted_json).collect();
+        all.sort_by_key(ToString::to_string);
+        all
+    };
+    oracle != rust && unquoted(oracle) == unquoted(rust)
+}
+
 /// Only the codes and severities of `findings`, for an approved difference.
 pub fn codes_only(findings: &[Json]) -> Vec<Json> {
     findings
@@ -242,6 +256,17 @@ pub fn codes_only(findings: &[Json]) -> Vec<Json> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn findings_that_differ_only_in_their_quotes_are_the_quoting_difference() {
+        let finding = |message: &str| json!({"code": "duplicate_name", "message": message});
+        let oracle = [finding("Name 'circl' is used by more than one block")];
+        let rust = [finding(r#"Name "circl" is used by more than one block"#)];
+        assert!(quoting_only(&oracle, &rust));
+        assert!(!quoting_only(&oracle, &oracle));
+        let other = [finding(r#"Name "misp" is used by more than one block"#)];
+        assert!(!quoting_only(&oracle, &other));
+    }
 
     #[test]
     fn every_configuration_kind_is_in_the_catalogue() {

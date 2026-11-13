@@ -96,7 +96,7 @@ fn unquoted(text: &str) -> String {
 }
 
 /// A JSON value with every string [`unquoted`].
-fn unquoted_json(value: &Json) -> Json {
+pub fn unquoted_json(value: &Json) -> Json {
     match value {
         Json::String(text) => Json::String(unquoted(text)),
         Json::Array(items) => Json::Array(items.iter().map(unquoted_json).collect()),
