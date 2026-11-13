@@ -149,7 +149,7 @@ async function hunt() {
 hunt().then((rows) => console.log(rows.length)) // 2
 ```
 
-`query(text, options)` searches the 24 hours before now unless given `start` and `end` (RFC 3339 instants: `date.toISOString()`), resolves to at most `limit` rows (100 by default) as a `QueryResult` (`columns`, `rows`, `truncated`, `partial`, `warnings`, `vendorQueryId`, `sent`, `language`) and saves nothing on the tenant. Each row is an object of its columns in the order they came. `language` is the query's (`kql`, `esql`, `s1ql`; unset takes the platform's first), `index` the Elastic indices, the HarfangLab telemetry source or the CrowdStrike repository, `dataView` Elastic's, and `timeout` how long, in seconds, an asynchronous search may run. `validateQuery` takes the same options and searches for one row over the minute before now; it resolves to a `LiveCheck` (`result`, `errors`, `warnings`) for a query the tenant accepts, whose `errors` are why validation still fails it (Defender's required columns).
+`query(text, options)` searches the 24 hours before now unless given `start` and `end` (each a `Date` or an RFC 3339 instant such as `'2026-11-12T09:00:00Z'`; an invalid `Date` rejects with `usage_invalid_value`), resolves to at most `limit` rows (100 by default) as a `QueryResult` (`columns`, `rows`, `truncated`, `partial`, `warnings`, `vendorQueryId`, `sent`, `language`) and saves nothing on the tenant. Each row is an object of its columns in the order they came. `language` is the query's (`kql`, `esql`, `s1ql`; unset takes the platform's first), `index` the Elastic indices, the HarfangLab telemetry source or the CrowdStrike repository, `dataView` Elastic's, and `timeout` how long, in seconds, an asynchronous search may run. `validateQuery` takes the same options and searches for one row over the minute before now; it resolves to a `LiveCheck` (`result`, `errors`, `warnings`) for a query the tenant accepts, whose `errors` are why validation still fails it (Defender's required columns).
 
 `deploy(ruleId, operation, body)` creates, updates, disables or deletes one rule on the tenant, sending `body` (a `Buffer`, `Uint8Array` or string: the request `opentide deploy` compiles for this tenant) as its bytes, and resolves to a `DeployOutcome` with the platform's identifier of the rule (`remoteId`). `ruleId` is the rule's identifier on the platform, which a deploy keeps in its deployment state. A whole deploy run, with its plan, deployment state and retirements, is `runJson(['deploy', ...])`.
 
@@ -163,7 +163,21 @@ connection
   .then((outcome) => console.log(outcome.operation)) // create
 ```
 
-`connection.canceller()` returns a `Canceller` that stops the connection's operations from elsewhere, a `SIGINT` handler or a timer: the running one, and every later one, rejects with `interrupted`, and a search it stops is stopped on the tenant where the API allows it (CrowdStrike).
+`query`, `validateQuery` and `deploy` each take a `signal` option, an `AbortSignal`, that stops that one operation: when it aborts, the promise rejects with `interrupted` and a search it stops is stopped on the tenant where the API allows it (CrowdStrike); the connection's other operations run on. A signal already aborted rejects at once. `deploy` takes it as its fourth argument, `{ signal }`; a deploy aborted after the tenant received it may have been applied.
+
+```js
+const { Connection, Workspace } = require('@opentide/opentide')
+
+const connection = Connection.open(Workspace.open('.').tenants('sentinel_one')[0])
+const end = new Date()
+const start = new Date(end.getTime() - 60 * 60 * 1000)
+connection
+  .query("EventType = 'Process Creation'", { start, end, signal: AbortSignal.timeout(30_000) })
+  .then((found) => console.log(found.rows.length)) // 2
+  .catch((error) => console.error(error.code)) // `interrupted` if the search outlives 30 s
+```
+
+`connection.canceller()` returns a `Canceller` that stops every operation of the connection from elsewhere, a `SIGINT` handler or a timer: the running one, and every later one, rejects with `interrupted`, and a search it stops is stopped on the tenant where the API allows it (CrowdStrike).
 
 A platform that cannot do an operation rejects with `operation_unsupported`, never a faked result: CrowdStrike, HarfangLab and Sysdig cannot check a query live, Sysdig runs no queries, and Elastic deploys only through `opentide deploy`. A tenant that refuses a query rejects with `tenant_refused`, with the vendor's words in `detail`:
 

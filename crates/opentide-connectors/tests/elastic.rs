@@ -1,7 +1,7 @@
 //! Elastic Security against the cassettes recorded from the Python client
 //! (`tests/cassettes/elastic/`, `cargo xtask cassettes record
 //! elastic/<scenario>`): every request the connector sends must be the
-//! Python client's, byte for byte and in order, the retries of a gateway's
+//! Python client's, in order (a JSON body as the same data), the retries of a gateway's
 //! answer included.
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]

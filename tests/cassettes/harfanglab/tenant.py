@@ -6,8 +6,9 @@ it. It answers the threat-intelligence and telemetry calls the Python client
 makes, with the bodies the Python tests stand in with
 (``tests/test_platforms/test_query_runners.py``): Sigma rules (``PUT`` of a
 rule it does not hold is a 404, so the client creates it with ``POST``), YARA
-files, and a telemetry source's search. Standard library only; deterministic
-answers.
+files, and a telemetry source's search. ``POST /__stand-in/reset`` forgets every
+rule and file, as a fresh start would (the cross-SDK conformance suite resets it
+before each SDK's runner). Standard library only; deterministic answers.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from urllib.parse import parse_qsl, urlsplit
 SIGMA = "/api/data/threat_intelligence/SigmaRule/"
 YARA = "/api/data/threat_intelligence/YaraFile/"
 TELEMETRY = "/api/data/telemetry/"
+RESET = "/__stand-in/reset"
 
 SIGMA_RULES: dict[str, dict[str, Any]] = {}
 YARA_FILES: dict[str, dict[str, Any]] = {}
@@ -95,9 +97,14 @@ class Handler(BaseHTTPRequestHandler):
         self._answer(404, {"detail": "Not found."})
 
     def do_POST(self) -> None:
+        path = urlsplit(self.path).path
+        if path == RESET:
+            SIGMA_RULES.clear()
+            YARA_FILES.clear()
+            self._answer(200, {"reset": True})
+            return
         if not self._authorised():
             return
-        path = urlsplit(self.path).path
         rule = self._body()
         if self._refused(rule):
             return

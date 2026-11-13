@@ -34,12 +34,20 @@ RUST_CACHE = "Swatinem/rust-cache@"
 KEY_ENV_PREFIXES = ("CARGO", "CC", "CFLAGS", "CXX", "CMAKE", "RUST")
 DEFAULT_WORKSPACES = ". -> target"
 MATRIX = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
-# `save-if: ${{ matrix.<axis> == env.<NAME> }}`: one cell of the matrix saves.
-SAVE_IF_CELL = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*==\s*env\.([A-Za-z0-9_]+)\s*\}\}")
+# `save-if: ${{ matrix.<axis> == env.<NAME> }}`: one cell of the matrix saves
+# (on the events the condition's other terms allow).
+SAVE_IF_CELL = re.compile(
+    r"\$\{\{\s*(?:github\.event_name == 'push' && )?"
+    r"matrix\.([A-Za-z0-9_-]+)\s*==\s*env\.([A-Za-z0-9_]+)\s*\}\}"
+)
+# Caches are saved from pushes to the base branches only (#841): a pull
+# request's cache serves that pull request alone, and its gigabytes evicted
+# the base branches' caches every other pull request reads.
+PUSH_ONLY = "github.event_name == 'push'"
 
 # The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
 # that build a subset of it read it.
-ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test", "ubuntu-latest")
+ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test-part", "ubuntu-latest")
 ENGINE_DEBUG_READERS = (("ci.yml", "clients"), ("ci.yml", "elastic-sweep"))
 # The Python jobs' `uv sync` build of the binding: test's 3.14 cell saves it.
 PYTHON_PRODUCER = ("ci.yml", "test")
@@ -232,3 +240,151 @@ def test_a_release_restores_no_other_cache() -> None:
                 if uses.startswith("actions/setup-node@"):
                     # It may enable npm's cache by itself (a `packageManager` field).
                     assert inputs.get("package-manager-cache") is False, (name, job_id)
+
+
+# sccache (#841): the workspace's own crates, which rust-cache drops before
+# saving, cached by content. Each cache name has one job that saves it.
+SCCACHE_RESTORE = "actions/cache/restore@"
+SCCACHE_SAVE = "actions/cache/save@"
+SCCACHE_KEY = re.compile(r"^sccache-(?P<name>.+)-\$\{\{ hashFiles\(.*\) \}\}$")
+
+
+class CompilerCache(NamedTuple):
+    job: str
+    runs_on: str
+    restores: str | None
+    saves: str | None
+    save_condition: str | None
+
+
+def _ci() -> dict[str, Any]:
+    return yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
+
+
+def _compiler_caches() -> list[CompilerCache]:
+    caches: list[CompilerCache] = []
+    for job_id, job in _ci()["jobs"].items():
+        steps = job.get("steps") or []
+        restores = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
+        saves = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_SAVE)]
+        assert len(restores) <= 1 and len(saves) <= 1, job_id
+        for cell in _cells(job):
+            restore = _resolve((restores[0]["with"] if restores else {}).get("key"), cell)
+            save = _resolve((saves[0]["with"] if saves else {}).get("key"), cell)
+            caches.append(
+                CompilerCache(
+                    job=job_id,
+                    runs_on=str(_resolve(job.get("runs-on"), cell)),
+                    restores=restore,
+                    saves=save,
+                    save_condition=saves[0].get("if") if saves else None,
+                )
+            )
+    return caches
+
+
+def _wraps_with_sccache(job: dict[str, Any]) -> bool:
+    return (job.get("env") or {}).get("RUSTC_WRAPPER") == "sccache"
+
+
+def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
+    """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
+    jobs = _ci()["jobs"]
+    wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
+    assert {"engine-test-part", "test", "cli-e2e", "golden-compare", "corpus-part"} <= set(wrapped)
+    for job_id in wrapped:
+        steps = jobs[job_id]["steps"]
+        installs = [
+            n
+            for n, s in enumerate(steps)
+            if (s.get("with") or {}).get("tool", "").startswith("sccache@")
+        ]
+        assert len(installs) == 1, job_id
+        cargo = [
+            n
+            for n, s in enumerate(steps)
+            if re.search(r"\b(cargo|uv sync|uv build|uv run)\b", str(s.get("run", "")))
+        ]
+        assert cargo and installs[0] < min(cargo), f"{job_id}: install sccache before cargo"
+        restores = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
+        assert len(restores) == 1, f"{job_id}: restore a compiler cache"
+        directory = str((jobs[job_id].get("env") or {}).get("SCCACHE_DIR", ""))
+        # actions/cache refuses a path with `..` (a warning, and nothing saved).
+        assert directory and ".." not in directory.split("/"), (job_id, directory)
+        assert directory == "${{ github.workspace }}/.sccache", (job_id, directory)
+    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".sccache/" in ignored, "engine-test fails when the tests leave a file git shows"
+
+
+def test_every_compiler_cache_has_one_saver_and_its_readers_restore_its_name() -> None:
+    caches = _compiler_caches()
+    for cache in caches:
+        for key in (cache.restores, cache.saves):
+            if key is not None:
+                assert SCCACHE_KEY.match(key), (cache.job, key)
+        if cache.saves is not None:
+            assert cache.saves == cache.restores, f"{cache.job}: save the key it restores"
+            # An exact hit has nothing new to save.
+            assert "steps.sccache.outputs.cache-hit != 'true'" in str(cache.save_condition)
+    # One job per name (test's cells save under a matrix condition: its 3.14 cell).
+    savers: dict[str, set[str]] = defaultdict(set)
+    for cache in caches:
+        if cache.saves is not None:
+            savers[cache.saves].add(cache.job)
+    for key, producers in savers.items():
+        assert len(producers) == 1, f"{key} is saved by {sorted(producers)}"
+    saved = set(savers)
+    for cache in caches:
+        if cache.restores is not None:
+            assert cache.restores in saved, (
+                f"{cache.job} restores {cache.restores}: no job saves it"
+            )
+
+
+def test_the_python_jobs_share_one_pyo3_configuration() -> None:
+    """PyO3's build script reruns when PYO3_PYTHON changes, and cargo rebuilds
+    every engine crate above it: each Python job names the same interpreter, so
+    the binding in the cache is the one it builds (#841)."""
+    jobs = _ci()["jobs"]
+    python_jobs = [job for workflow, job in (PYTHON_PRODUCER, *PYTHON_READERS)]
+    python_jobs += ["cli-e2e-full", "golden-compare"]
+    seen = {(jobs[job].get("env") or {}).get("PYO3_PYTHON") for job in python_jobs}
+    assert seen == {"/usr/bin/python3"}, seen
+
+
+def _pull_request_workflows() -> list[Path]:
+    found = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        triggers = workflow.get("on", workflow.get(True)) or {}
+        if "pull_request" in triggers or "workflow_call" in triggers:
+            found.append(path)
+    return found
+
+
+def test_no_cache_is_saved_from_a_pull_request() -> None:
+    """Every rust-cache and sccache save in a workflow a pull request runs
+    (or calls) saves on a push only: pull requests restore."""
+    checked = 0
+    for path in _pull_request_workflows():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in (workflow.get("jobs") or {}).items():
+            for step in job.get("steps") or []:
+                uses = str(step.get("uses", ""))
+                where = f"{path.name} {job_id}"
+                if uses.startswith(RUST_CACHE):
+                    save_if = (step.get("with") or {}).get("save-if", True)
+                    if save_if is False:
+                        continue
+                    save_if = str(save_if)
+                    allowed = ("${{ " + PUSH_ONLY, "${{ github.event_name != 'pull_request'")
+                    assert save_if.startswith(allowed), (
+                        f"{where}: rust-cache saves on a pull request ({save_if})"
+                    )
+                    checked += 1
+                elif uses.startswith(SCCACHE_SAVE):
+                    assert str(step.get("if", "")).startswith(PUSH_ONLY), where
+                    checked += 1
+                elif uses.startswith("actions/cache@"):
+                    raise AssertionError(f"{where}: actions/cache saves on every event")
+    assert checked >= 20

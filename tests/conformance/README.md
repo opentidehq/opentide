@@ -21,12 +21,13 @@ builds report; the npm package's own is `0.0.0` until the release sets it (UC-5.
 |-------|-------|
 | The manifest: corpora and operations | [`manifest.json`](manifest.json) |
 | The comparator, the corpora's layout, the runners' commands | `cargo xtask conformance` ([`xtask/src/conformance/`](../../xtask/src/conformance/)) |
-| The Rust runner | [`crates/opentide/tests/conformance.rs`](../../crates/opentide/tests/conformance.rs) (`cargo test -p opentide --features cli --profile develop --test conformance`) |
+| The Rust runner | [`crates/opentide/tests/conformance.rs`](../../crates/opentide/tests/conformance.rs) (`cargo test -p opentide --features cli,connectors --profile develop --test conformance`) |
 | The Python runner | [`test_python_runner.py`](test_python_runner.py) (pytest under `uv run`) |
 | The Node runner | [`bindings/node/test/conformance.test.mjs`](../../bindings/node/test/conformance.test.mjs) (`node --test`) |
 
-`cargo xtask conformance` lays the corpora out under `<target>/conformance/corpora/`, writes
-`plan.json` (each workspace's name and folder, and the operations), runs each runner with
+`cargo xtask conformance` lays the corpora out under `<target>/conformance/corpora/`, starts the
+manifest's stand-in tenants (below), writes `plan.json` (each workspace's name and folder, the
+operations, the tenants and the stand-ins' URLs), runs each runner with
 `OPENTIDE_CONFORMANCE_PLAN` and `OPENTIDE_CONFORMANCE_OUT`, then compares
 `documents/<runner>/<corpus>/<operation>.json` with the first runner's (the reference). The first
 difference in each document is reported by its JSON pointer: a value first, then the order of an
@@ -46,6 +47,25 @@ the divergence flag.
 | `faults` | `faults` | The combined fault workspace (`cargo xtask corpus faults --out`) |
 | `configuration` | `configuration_faults` | Each configuration fault kind (`xtask/src/corpus/configuration.rs`) applied alone to the fault catalogue's base workspace: `configuration/<kind>`, one workspace each; some stop `Workspace.open` |
 
+## Tenants
+
+The tenant operations (`query`, `validate_query`, `deploy`: the Rust facade's `connectors`
+feature, the Python SDK's `async` methods, the Node SDK's promises) run against stand-in tenants
+on loopback, never a real host:
+
+| Piece | What |
+|-------|------|
+| `stand_ins` | `tests/cassettes/<name>/tenant.py` (standard library only), started with its `environment` (the credential it accepts); it prints its port first. Today SentinelOne (PowerQuery, `slow` polled, `fails` and `\| syntax` refused; STAR rules) and HarfangLab (telemetry rows with nested objects, mixed keys and an integer; Sigma rules) |
+| `tenants` | Each a `TenantConfig`: `platform`, `name`, `setup` (a `{<stand-in>}` in a value is that stand-in's URL) and the `environment` `Connection.open` is given, so no proxy of the process applies. `closed` is a loopback port nothing listens on (`tenant_unreachable`), `unset` a credential the environment lacks (`credential_unset`) |
+| operations | `call` the operation, `tenant` its tenant; `text` and `options` (`language`, `start`, `end`, `limit`, `index`, `data_view`, `timeout`) for a query or a check, `rule_id`, `operation` and `body` (sent as its UTF-8 bytes) for a deploy |
+
+xtask starts each stand-in once and every runner talks to it: the documents hold the stand-in's
+URL where a message names the tenant. The stand-ins keep state (SentinelOne numbers its queries
+`pq-<n>` and its rules from `1900000000000000001`, HarfangLab its Sigma rules `sigma-<n>`), so
+xtask resets each (`POST /__stand-in/reset`) before each runner, and the operations run in the
+manifest's order: `deploy-soc-update` updates the rule `deploy-soc-create` made. Run alone, a
+runner starts the stand-ins itself (with `$PYTHON`, else `python3`; `python` on Windows).
+
 ## How a runner builds a document
 
 The same in the three runners; a difference anywhere else is a difference between the SDKs.
@@ -61,6 +81,16 @@ The same in the three runners; a difference anywhere else is a difference betwee
   summary, ok}`; the Node API's camelCase members (`exitCode`) are written by these names. The
   other calls' results are written as they come. A call that throws or raises gives the error
   document.
+- **Tenant operations.** A tenant is opened once per runner (`Connection.open`); a tenant that
+  does not open gives every operation on it the error document. A query's document is `{columns,
+  rows, truncated, partial, warnings, vendor_query_id, sent, language}` (each column `{name,
+  type}`), a live check's `{result, errors, warnings}`, a deploy's `{remote_id, operation}`;
+  `tenants` is `[{platform, name, setup_keys}]` and `connectors` `{platforms, capabilities}`
+  (each `{deploy, live_validation, query}`). A tenant operation's error document adds the
+  vendor's words: `{"error": {"code", "message", "detail"}}`. The window's instants go to each SDK
+  as its own type: an RFC 3339 instant to Rust, a `datetime` to Python, a `Date` to Node; a
+  missing `start` is the SDKs' default (24 hours before `end` for a query, the minute before it
+  for a check).
 - **`run_json`.** Run from the workspace's folder, with `--repo <root>` first unless `repo:
   false`, so that relative paths are the same in every runner.
 - **Normalised.** Three members, where a document has them, are written as `null`: `/duration_ms`
@@ -89,6 +119,8 @@ no other's. CI runs it after the real comparison.
 - An operation: add it to `manifest.json`, with each runner's handling if it is a new `call`.
 - A corpus kind: `lay_out` in `xtask/src/conformance/cli.rs`, and the kinds `Manifest::parse`
   accepts.
+- A tenant: an entry of `tenants`; a stand-in: an entry of `stand_ins` whose `tenant.py` answers
+  `POST /__stand-in/reset` by forgetting what earlier runners made.
 - A difference is fixed in the binding that is wrong, never by normalising it away here.
 
 ## Known differences
