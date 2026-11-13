@@ -19,7 +19,6 @@ use std::time::{Duration, Instant};
 
 use opentide_connectors::connector::{QueryOutcome, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::python::python_string_repr;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 
@@ -331,8 +330,7 @@ fn parse_instant(value: &str, flag: &str) -> Result<jiff::Timestamp, String> {
         return Ok(moment.timestamp());
     }
     Err(format!(
-        "{flag} {} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z",
-        python_string_repr(value)
+        "{flag} {value:?} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
     ))
 }
 
@@ -359,10 +357,7 @@ fn resolve_window(
             let lookback = since.unwrap_or(DEFAULT_SINCE);
             let not_a_duration = || {
                 (
-                    format!(
-                        "--since {} is not a duration, such as 15m, 24h, 7d or PT1H",
-                        python_string_repr(lookback)
-                    ),
+                    format!("--since {lookback:?} is not a duration, such as 15m, 24h, 7d or PT1H"),
                     "--since",
                 )
             };
@@ -560,8 +555,7 @@ fn select<'t>(
     if let Some(unknown) = wanted.iter().find(|name| !known.contains(name)) {
         return Err((
             format!(
-                "{platform} has no tenant named {}; configured: {}",
-                python_string_repr(unknown),
+                "{platform} has no tenant named {unknown:?}; configured: {}",
                 known.join(", ")
             ),
             Some(unknown.clone()),
@@ -800,14 +794,14 @@ fn run_on_tenant(
         }
         Err(ConnectorError::Authentication { message, .. }) => {
             outcome.error = Some(format!(
-                "cannot authenticate to {platform} tenant {}: {message}",
-                python_string_repr(&configured.name)
+                "cannot authenticate to {platform} tenant {:?}: {message}",
+                configured.name
             ));
         }
         Err(ConnectorError::Gateway { message, .. }) => {
             outcome.error = Some(format!(
-                "{platform} tenant {} did not answer the query within {}s: {message}",
-                python_string_repr(&configured.name),
+                "{platform} tenant {:?} did not answer the query within {}s: {message}",
+                configured.name,
                 seconds_g(request.timeout.as_secs_f64()),
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
@@ -815,10 +809,10 @@ fn run_on_tenant(
         Err(ConnectorError::Timeout { seconds, .. }) => {
             let host = setup_host(platform, configured);
             outcome.error = Some(format!(
-                "{platform} tenant {} did not answer the query within {}s: \
+                "{platform} tenant {:?} did not answer the query within {}s: \
                  HTTPSConnectionPool(host='{host}', port=443): Read timed out. (read \
                  timeout={seconds})",
-                python_string_repr(&configured.name),
+                configured.name,
                 seconds_g(request.timeout.as_secs_f64()),
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
@@ -941,9 +935,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return usage_with(
             platform,
             &format!(
-                "{platform} queries are {}, not {}",
-                languages.join(", "),
-                python_string_repr(language)
+                "{platform} queries are {}, not {language:?}",
+                languages.join(", ")
             ),
             "--language",
             suggest(language, &choices),
@@ -1218,7 +1211,7 @@ fn cell(value: Option<&Json>) -> String {
     let text = match value {
         None | Some(Json::Null) => return String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
-        Some(value) => python_str(value),
+        Some(value) => scalar_text(value),
     };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if text.chars().count() <= CELL_WIDTH {
@@ -1230,12 +1223,9 @@ fn cell(value: Option<&Json>) -> String {
     }
 }
 
-/// `str(value)` of a row's value.
-fn python_str(value: &Json) -> String {
+/// A row's value as text: a string as is, anything else as its JSON.
+fn scalar_text(value: &Json) -> String {
     match value {
-        Json::Null => "None".into(),
-        Json::Bool(true) => "True".into(),
-        Json::Bool(false) => "False".into(),
         Json::Str(text) => text.clone(),
         other => crate::json::document_text(other, false)
             .trim_end()
@@ -1300,7 +1290,7 @@ fn csv_value(value: Option<&Json>) -> String {
     match value {
         None | Some(Json::Null) => String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
-        Some(value) => python_str(value),
+        Some(value) => scalar_text(value),
     }
 }
 

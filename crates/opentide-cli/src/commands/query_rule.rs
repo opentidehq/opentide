@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 
 use opentide_compile::Json as CJson;
 use opentide_compile::rule::Rule;
-use opentide_connectors::python::python_string_repr;
 
 use super::{open, placement};
 use crate::env::Env;
@@ -192,8 +191,8 @@ fn required(text: Option<&CJson>, rule: &Rule, platform: &str) -> Result<String,
     match text.and_then(CJson::as_str).map(str::trim) {
         Some(text) if !text.is_empty() => Ok(text.to_owned()),
         _ => Err(format!(
-            "rule {} has an empty {platform} query",
-            python_string_repr(&rule.name)
+            "rule {:?} has an empty {platform} query",
+            rule.name
         )),
     }
 }
@@ -206,7 +205,7 @@ fn required(text: Option<&CJson>, rule: &Rule, platform: &str) -> Result<String,
 /// The rule has no block for `platform`, or the block holds nothing a search
 /// can run: the message (`RuleQueryError`).
 pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, String> {
-    let name = python_string_repr(&rule.name);
+    let name = format!("{:?}", rule.name);
     let Some(block) = rule.block(platform) else {
         return Err(format!("rule {name} has no {platform} configuration"));
     };
@@ -247,7 +246,7 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
 /// A SentinelOne rule's query: its single event's, or each correlation
 /// sub-query's, labelled.
 fn sentinel_one(block: &CJson, rule: &Rule) -> Result<Vec<RuleQuery>, String> {
-    let name = python_string_repr(&rule.name);
+    let name = format!("{:?}", rule.name);
     let condition = field(block, "condition");
     let kind = condition
         .and_then(|condition| condition.get("type"))
@@ -292,8 +291,8 @@ fn elastic(block: &CJson, rule: &Rule) -> Result<RuleQuery, String> {
     let kind = block.get("type").and_then(CJson::as_str).unwrap_or("query");
     if kind == "machine_learning" {
         return Err(format!(
-            "rule {} is an Elastic machine_learning rule, which has no query",
-            python_string_repr(&rule.name)
+            "rule {:?} is an Elastic machine_learning rule, which has no query",
+            rule.name
         ));
     }
     let text = required(block.get("query"), rule, "elastic")?;

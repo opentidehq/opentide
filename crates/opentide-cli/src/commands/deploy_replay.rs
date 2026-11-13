@@ -131,12 +131,9 @@ fn bindings(shard: &Shard) -> IndexMap<(String, String), String> {
         .collect()
 }
 
-/// A Python `repr` of an optional id, as the conflict line prints it.
+/// An optional id as the conflict line prints it: quoted, or `null`.
 fn shown(value: Option<&String>) -> String {
-    value.map_or_else(
-        || "None".to_owned(),
-        |value| opentide_connectors::python::python_string_repr(value),
-    )
+    value.map_or_else(|| "null".to_owned(), |value| format!("{value:?}"))
 }
 
 /// A private folder under the system's temporary directory, removed when dropped.

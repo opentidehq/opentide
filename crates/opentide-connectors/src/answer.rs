@@ -11,7 +11,6 @@ use tokio_util::sync::CancellationToken;
 use crate::connector::TenantContext;
 use crate::error::ConnectorError;
 use crate::http::HttpClient;
-use crate::python::python_string_repr;
 
 /// An answer slower than this that is not the API's is read as a gateway's
 /// (`SLOW_ANSWER_SECONDS`).
@@ -161,10 +160,7 @@ pub fn describe_answer(
         if kind == "text/html" || head.starts_with(b"<!doctype html") || head.starts_with(b"<html")
         {
             match page_title(body) {
-                Some(title) => format!(
-                    "HTTP {status} with an HTML page titled {}",
-                    python_string_repr(&title)
-                ),
+                Some(title) => format!("HTTP {status} with an HTML page titled {title:?}"),
                 None => format!("HTTP {status} with an HTML page"),
             }
         } else if body.trim_ascii().is_empty() {
@@ -172,10 +168,7 @@ pub fn describe_answer(
         } else {
             let snippet = String::from_utf8_lossy(&body[..body.len().min(200)]);
             let snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
-            format!(
-                "HTTP {status} with a body that is not JSON ({})",
-                python_string_repr(&snippet)
-            )
+            format!("HTTP {status} with a body that is not JSON ({snippet:?})")
         };
     match gateway_answer(status, elapsed) {
         Some(hint) => format!("{text}: {hint}"),

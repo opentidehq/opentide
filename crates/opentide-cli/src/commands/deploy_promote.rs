@@ -124,50 +124,18 @@ fn invalid_target(target: &Setting, detail: &str) {
             tracing::error!(target = number, detail, logger = LOGGER, "{event}");
         }
         other => {
-            let text = python_str(other);
+            let text = setting_text(other);
             tracing::error!(target = text.as_str(), detail, logger = LOGGER, "{event}");
         }
     }
 }
 
-/// A TOML value as Python's `str` writes what `tomllib` reads it as.
-fn python_str(value: &Setting) -> String {
+/// A TOML value as the log shows it: a string as is, anything else as its
+/// JSON.
+fn setting_text(value: &Setting) -> String {
     match value {
-        Setting::Null => "None".to_owned(),
         Setting::Str(text) => text.clone(),
-        other => python_repr_of(other),
-    }
-}
-
-/// A TOML value as Python's `repr` writes what `tomllib` reads it as.
-fn python_repr_of(value: &Setting) -> String {
-    match value {
-        Setting::Null => "None".to_owned(),
-        Setting::Bool(true) => "True".to_owned(),
-        Setting::Bool(false) => "False".to_owned(),
-        Setting::Int(number) => number.to_string(),
-        Setting::Float(number) => format!("{number:?}"),
-        Setting::Str(text) => crate::serve::runner::python_repr(text),
-        Setting::Array(items) => format!(
-            "[{}]",
-            items
-                .iter()
-                .map(python_repr_of)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Setting::Object(entries) => format!(
-            "{{{}}}",
-            entries
-                .iter()
-                .map(|(key, value)| format!(
-                    "{}: {}",
-                    crate::serve::runner::python_repr(key),
-                    python_repr_of(value)
-                ))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        other => other.to_compact(),
     }
 }
 
@@ -335,7 +303,7 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
             }
             // `expected["configurations"][platform]`'s `KeyError`.
             Err(Error::KeyError(key)) => {
-                let message = crate::serve::runner::python_repr(&key);
+                let message = format!("{key:?}");
                 return (events, Vec::new(), Some(Stop::Failed(message)));
             }
         }
@@ -368,10 +336,7 @@ fn os_error(error: &std::io::Error, path: &Path) -> String {
             let words = text
                 .strip_suffix(&format!(" (os error {code})"))
                 .unwrap_or(&text);
-            format!(
-                "[Errno {code}] {words}: {}",
-                crate::serve::runner::python_repr(&path.display().to_string())
-            )
+            format!("[Errno {code}] {words}: {:?}", path.display().to_string())
         }
         None => text,
     }
@@ -664,14 +629,15 @@ mod tests {
             assert_eq!(after[0], RULE.as_bytes());
             assert!(drawn.contains("✗ status promotion · 1 rule"), "{drawn}");
         }
-        assert_eq!(python_str(&Setting::Null), "None");
+        assert_eq!(setting_text(&Setting::Null), "null");
+        assert_eq!(setting_text(&Setting::Str("A".into())), "A");
         assert_eq!(
-            python_str(&Setting::Array(vec![
+            setting_text(&Setting::Array(vec![
                 Setting::Str("A".into()),
                 Setting::Float(1.5),
                 Setting::Bool(false),
             ])),
-            "['A', 1.5, False]"
+            r#"["A",1.5,false]"#
         );
     }
 

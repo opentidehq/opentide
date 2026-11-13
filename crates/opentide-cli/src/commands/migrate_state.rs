@@ -23,7 +23,6 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_connectors::python::python_string_repr;
 use opentide_schema::configuration::merge::to_json;
 use opentide_schema::node::{self, Node, Value};
 use opentide_workspace::{OsFs, root};
@@ -100,28 +99,10 @@ impl RuleIds {
     }
 }
 
-/// Python's `repr` of a scalar or collection node, as the oracle's messages
-/// interpolate the value PyYAML constructed.
+/// A node as a message shows it: the JSON of the value the YAML holds
+/// (`"x"`, `1.5`, `null`, `true`, `[1, "x"]` without spaces).
 fn node_repr(node: &Node) -> String {
-    match &node.value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::Int(integer) => integer.to_string(),
-        Value::Float(float) => opentide_schema::configuration::repr::float_text(*float),
-        Value::Str(text) | Value::Datetime(text) => python_string_repr(text),
-        Value::Seq(items) => {
-            let inner: Vec<String> = items.iter().map(|item| node_repr(item)).collect();
-            format!("[{}]", inner.join(", "))
-        }
-        Value::Map(entries) => {
-            let inner: Vec<String> = entries
-                .iter()
-                .map(|entry| format!("{}: {}", node_repr(&entry.key), node_repr(&entry.value)))
-                .collect();
-            format!("{{{}}}", inner.join(", "))
-        }
-    }
+    opentide_compile::json::Json::from_node(node).to_compact()
 }
 
 /// The node as a vendor id: a string or an integer (`normalise_external_id`
@@ -261,11 +242,7 @@ fn bind(
         Err(error) => {
             rule.fail(
                 error.code,
-                format!(
-                    "{platform} tenant {}: {}",
-                    python_string_repr(tenant),
-                    error.message
-                ),
+                format!("{platform} tenant {tenant:?}: {}", error.message),
             );
             return;
         }
@@ -274,10 +251,7 @@ fn bind(
     if seen.contains(&key) {
         rule.fail(
             "external_id_conflict",
-            format!(
-                "{platform} tenant {} is mapped more than once on the rule",
-                python_string_repr(tenant)
-            ),
+            format!("{platform} tenant {tenant:?} is mapped more than once on the rule"),
         );
         return;
     }
@@ -350,7 +324,7 @@ fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
                     rule,
                     &platform,
                     Some(tenant),
-                    &python_string_repr(tenant),
+                    &format!("{tenant:?}"),
                     &entry.value,
                     &mut seen,
                 );
@@ -465,7 +439,7 @@ fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
         match canonical {
             Some(uuid) => rule.object_uuid = Some(uuid),
             None => {
-                let shown = raw_uuid.map_or_else(|| "None".to_owned(), |uuid| node_repr(uuid));
+                let shown = raw_uuid.map_or_else(|| "null".to_owned(), |uuid| node_repr(uuid));
                 rule.fail(
                     "invalid_uuid",
                     format!("metadata.uuid {shown} is not a UUID"),
@@ -529,11 +503,10 @@ fn check_shard(rule: &mut RuleIds, workspace: &Path) -> Option<Shard> {
             let existing = shard.get(&binding.platform, &binding.tenant)?;
             (existing != binding.stored).then(|| {
                 format!(
-                    "{} tenant {} is {} on the rule but {} in {}",
+                    "{} tenant {:?} is {:?} on the rule but {existing:?} in {}",
                     binding.platform,
-                    python_string_repr(&binding.tenant),
-                    python_string_repr(&binding.stored),
-                    python_string_repr(existing),
+                    binding.tenant,
+                    binding.stored,
                     shard.path.display()
                 )
             })
@@ -1183,13 +1156,13 @@ mod tests {
     }
 
     #[test]
-    fn values_print_as_python_reprs() {
+    fn values_print_as_the_json_they_hold() {
         let document = node::load("a: [1, null, 1.5, x, {k: false}]\nb: 2024-01-01\n").unwrap();
         let root = document.root().unwrap();
         assert_eq!(
             node_repr(root.get("a").unwrap()),
-            "[1, None, 1.5, 'x', {'k': False}]"
+            r#"[1,null,1.5,"x",{"k":false}]"#
         );
-        assert_eq!(node_repr(root.get("b").unwrap()), "'2024-01-01'");
+        assert_eq!(node_repr(root.get("b").unwrap()), r#""2024-01-01""#);
     }
 }

@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use opentide_schema::node::{Node, Value};
-use opentide_schema::vocab::quote;
 use serde_json::Value as Json;
 
 use crate::fs::{EntryKind, FileSystem};
@@ -254,17 +253,6 @@ fn type_name(value: &Json) -> &'static str {
     }
 }
 
-/// Python's `repr` of a JSON value, for the messages that quote one.
-fn repr(value: &Json) -> String {
-    match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
-        Json::String(text) => quote(text),
-        other => other.to_string(),
-    }
-}
-
 /// One shard file, checked (`DeploymentState.from_file`).
 fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Result<(), StateError> {
     let name = path
@@ -304,7 +292,7 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
     if schema.as_str() != Some(SCHEMA_ID) {
         return Err(StateError::shape(
             path,
-            &format!("has schema {}, expected {}", repr(schema), quote(SCHEMA_ID)),
+            &format!("has schema {schema}, expected {SCHEMA_ID:?}"),
         ));
     }
     let Some(object_uuid) = payload.get("object_uuid").and_then(Json::as_str) else {
@@ -314,10 +302,8 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
         return Err(StateError::new(
             "deployment_state_uuid_mismatch",
             format!(
-                "{} records object_uuid {}, but its file name is {}",
-                path.display(),
-                quote(object_uuid),
-                quote(stem)
+                "{} records object_uuid {object_uuid:?}, but its file name is {stem:?}",
+                path.display()
             ),
             path,
         ));
@@ -330,9 +316,8 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
             return Err(StateError::new(
                 "deployment_state_platform",
                 format!(
-                    "{} names platform {}; only {} store external ids",
+                    "{} names platform {platform:?}; only {} store external ids",
                     path.display(),
-                    quote(platform),
                     STATE_PLATFORMS.join(", ")
                 ),
                 path,
@@ -364,10 +349,9 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
                 return Err(StateError::shape(
                     path,
                     &format!(
-                        "platforms.{platform} tenant {} has surrounding whitespace; the key must \
-                         be the tenant name exactly ({})",
-                        quote(tenant),
-                        quote(tenant.trim())
+                        "platforms.{platform} tenant {tenant:?} has surrounding whitespace; the \
+                         key must be the tenant name exactly ({:?})",
+                        tenant.trim()
                     ),
                 ));
             }
@@ -392,9 +376,8 @@ fn external_id_problem(platform: &str, value: &str) -> Option<String> {
             && value.chars().all(|c| c.is_ascii_digit()));
     (INTEGER_ID_PLATFORMS.contains(&platform) && !canonical_decimal).then(|| {
         format!(
-            "{platform} external id {} is not a canonical decimal integer (no sign, no leading \
-             zeroes)",
-            quote(value)
+            "{platform} external id {value:?} is not a canonical decimal integer (no sign, no \
+             leading zeroes)"
         )
     })
 }

@@ -24,7 +24,7 @@ use crate::connector::{
     QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow, columns_of, flatten, utc_z,
 };
 use crate::error::ConnectorError;
-use crate::python::{python_repr, python_str, python_string_repr};
+use crate::python::python_str;
 use crate::retry::RetryPolicy;
 use crate::{Credential, HttpSettings};
 
@@ -482,7 +482,7 @@ fn error_payload(answer: &Answer) -> (String, String, String) {
         .get("reason")
         .filter(|value| value.truthy())
         .map_or_else(|| text.clone(), python_str);
-    (kind, reason, python_repr(error))
+    (kind, reason, error.to_compact())
 }
 
 /// The fields' capabilities, or the warning that the sources hold nothing.
@@ -1822,8 +1822,7 @@ async fn indices(
                 PLATFORM,
                 tenant,
                 format!(
-                    "cannot read data view {} on {tenant} (HTTP {})",
-                    python_string_repr(view),
+                    "cannot read data view {view:?} on {tenant} (HTTP {})",
                     answer.status
                 ),
                 answer.not_json_detail(),
@@ -1833,10 +1832,7 @@ async fn indices(
             return Err(ConnectorError::refused(
                 PLATFORM,
                 tenant,
-                format!(
-                    "cannot read data view {} on {tenant}",
-                    python_string_repr(view)
-                ),
+                format!("cannot read data view {view:?} on {tenant}"),
                 answer.not_json_detail(),
             ));
         };

@@ -8,7 +8,7 @@ use crate::deploy::{self, Action, Write};
 use crate::json::{Json, Object};
 use crate::kql;
 use crate::rule::{CompileError, Rule};
-use crate::strategy::{StatusStrategy, python_repr};
+use crate::strategy::StatusStrategy;
 
 /// The platform's key under `configurations`.
 pub const PLATFORM: &str = "defender_for_endpoint";
@@ -164,7 +164,7 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
         "Low" => "low",
         "Medium" => "medium",
         "High" | "Critical" => "high",
-        other => return Err(CompileError::failed(DISPLAY, &python_repr(other))),
+        other => return Err(CompileError::failed(DISPLAY, &format!("{other:?}"))),
     })
 }
 

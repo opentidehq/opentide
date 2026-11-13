@@ -23,7 +23,6 @@ use crate::connector::{
     utc_z,
 };
 use crate::error::ConnectorError;
-use crate::python::{python_bytes_repr, python_string_repr};
 use crate::retry::RetryPolicy;
 use crate::{HttpSettings, Secret};
 
@@ -242,9 +241,9 @@ impl CarbonBlack {
         match serde_json::from_slice::<Value>(&answer.body) {
             Ok(value) => Ok(Ok(Some(value))),
             Err(_) => Ok(Err(SdkError::Api(format!(
-                "Received error code {} from API (Cannot parse response as JSON: {})",
+                "Received error code {} from API (Cannot parse response as JSON: {:?})",
                 answer.status,
-                python_bytes_repr(&answer.body)
+                String::from_utf8_lossy(&answer.body)
             )))),
         }
     }
@@ -533,11 +532,13 @@ impl CarbonBlack {
                 .get("invalid_message")
                 .map(value_str)
                 .unwrap_or_default();
+            let sent = serde_json::json!({
+                "time_range": {"start": start, "end": end},
+                "query": request.text,
+                "sort": null,
+            });
             return Err(refused(SdkError::Api(format!(
-                "Invalid query: {{'time_range': {{'start': {}, 'end': {}}}, 'query': {}, 'sort': None}}: {message}",
-                python_string_repr(&start),
-                python_string_repr(&end),
-                python_string_repr(&request.text)
+                "Invalid query: {sent}: {message}"
             ))));
         }
         let mut window = Map::new();
@@ -720,9 +721,7 @@ fn truthy(value: &Value) -> bool {
 fn value_str(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
-        other => serde_json::from_value::<Json>(other.clone())
-            .map(|json| crate::python::python_repr(&json))
-            .unwrap_or_default(),
+        other => other.to_string(),
     }
 }
 
