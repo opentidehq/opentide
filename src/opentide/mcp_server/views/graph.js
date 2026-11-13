@@ -131,11 +131,12 @@
         const id = stack.pop();
         const node = model.nodes.get(id);
         if (!node) continue;
-        for (const next of node[direction]) if (!seen.has(next + direction)) { seen.add(next + direction); stack.push(next); }
+        for (const next of node[direction]) if (!seen.has(direction + "|" + next)) { seen.add(direction + "|" + next); stack.push(next); }
       }
     };
-    for (const id of ids) { seen.add(id + "up"); seen.add(id + "down"); walk(id, "up"); walk(id, "down"); }
-    const result = new Set(Array.from(seen, (key) => key.replace(/(up|down)$/, "")));
+    // Keys are "direction|id": an id is never parsed, whatever it ends with.
+    for (const id of ids) { seen.add("up|" + id); seen.add("down|" + id); walk(id, "up"); walk(id, "down"); }
+    const result = new Set(Array.from(seen, (key) => key.slice(key.indexOf("|") + 1)));
     if (withChains) for (const id of ids) for (const link of (model.nodes.get(id) || { chain: [] }).chain) result.add(link.to);
     return result;
   }
