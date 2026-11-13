@@ -1,7 +1,10 @@
 # The MCP sessions `cargo xtask mcp record` sends to the Python server
 # (`opentide mcp start`, src/opentide/mcp_server/) and records, one file per
-# session, as `<name>.jsonl` beside this file; `cargo xtask mcp replay` sends
-# them again to the Python server, the Rust server, or both (UC-3.7, #829).
+# session, as `<name>.jsonl` beside this file; `cargo xtask mcp replay --engine
+# rust` sends them again to this repository's server, the Rust one, and
+# compares its answers with the recordings (UC-3.7, #829). The recordings are
+# frozen since the Python server was removed (UC-6.2, #841): `record` needs
+# `--python` naming an opentide release that still has it.
 #
 # This file is the reviewed source: the requests. The responses are only ever
 # recorded (`cargo xtask mcp record`), never written by hand.

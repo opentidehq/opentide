@@ -9,7 +9,9 @@
 use opentide_compare::FileState;
 use std::collections::BTreeMap;
 use std::path::Path;
-use xtask::compare::{candidate, read_ledger, read_run, run_of};
+#[cfg(unix)]
+use xtask::compare::node_candidate;
+use xtask::compare::{candidate, candidate_version, read_ledger, read_run, run_of};
 use xtask::golden::case::{Case, Mode, Stdin, StdinKind};
 use xtask::golden::recording::{FileRecord, Recording};
 use xtask::golden::snapshot::{ChangeKind, Kind};
@@ -111,8 +113,68 @@ fn the_candidate_needs_the_repository_cli() {
     write(&dir.path().join(".venv/bin/opentide"), "");
     let engine = candidate(dir.path()).unwrap();
     assert_eq!(engine.name, "rust");
-    // The console script runs the Rust core: no variable chooses an engine.
-    assert!(engine.env.is_empty());
+    assert!(engine.known_uuids.is_empty());
+
+    // The UUIDs of the package's bundled data are never fresh ones.
+    let uuid = "0b7a6a39-7d1d-4b5e-9c3f-0e6f1d2a3b4c";
+    write(
+        &dir.path().join("src/opentide/data/vocab.toml"),
+        &format!("id = \"{uuid}\"\n"),
+    );
+    let engine = candidate(dir.path()).unwrap();
+    assert!(
+        engine.known_uuids.contains(uuid),
+        "{:?}",
+        engine.known_uuids
+    );
+}
+
+#[cfg(unix)]
+fn script(path: &Path, body: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    write(path, &format!("#!/bin/sh\n{body}\n"));
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn the_candidate_s_version_is_what_its_version_option_prints() {
+    let dir = tempfile::tempdir().unwrap();
+    let opentide = dir.path().join("opentide");
+    script(
+        &opentide,
+        r#"[ "$1" = --version ] && echo "opentide 1.2.3.dev4+g0123""#,
+    );
+    assert_eq!(candidate_version(&opentide).unwrap(), "1.2.3.dev4+g0123");
+    script(&opentide, "echo 'opentide'");
+    let error = format!("{:#}", candidate_version(&opentide).unwrap_err());
+    assert!(
+        error.contains("read the candidate's version from `opentide`"),
+        "{error}"
+    );
+    script(&opentide, "echo 'something else 1.0'");
+    assert!(candidate_version(&opentide).is_err());
+    let error = format!(
+        "{:#}",
+        candidate_version(&dir.path().join("none")).unwrap_err()
+    );
+    assert!(error.starts_with("run "), "{error}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_node_candidate_needs_the_built_addon() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("target");
+    let error = format!("{:#}", node_candidate(dir.path(), &target).unwrap_err());
+    assert!(error.starts_with("read "), "{error}");
+    write(&dir.path().join("bindings/node/cli.js"), "");
+    let error = node_candidate(dir.path(), &target).unwrap_err().to_string();
+    assert!(
+        error.ends_with("has no addon: run `npm ci && npm run build` there first"),
+        "{error}"
+    );
+    assert!(!target.exists());
 }
 
 fn recording(exit_code: i32, stderr: &str, files: Vec<FileRecord>) -> Recording {

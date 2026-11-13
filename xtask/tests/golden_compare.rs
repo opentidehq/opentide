@@ -1,4 +1,4 @@
-//! `golden check --engine compare`'s comparison (`xtask::compare::golden`):
+//! `golden check --engine rust`'s comparison (`xtask::compare::golden`):
 //! a deliberately divergent fake candidate run is caught, an approved
 //! difference passes, and a stale ledger entry fails the run (#805).
 

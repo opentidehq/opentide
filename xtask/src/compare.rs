@@ -10,7 +10,7 @@
 //! | `files/<path>` | each file the command created or changed, with its mode |
 //! | `deleted` | the files it deleted, one relative path per line (optional) |
 //!
-//! `golden check --engine compare` (UC-0.5, #803) reads its recordings
+//! `golden check --engine rust` (UC-0.5, #803) reads its recordings
 //! instead, and compares them with the same library.
 
 use anyhow::{Context, Result, bail};
@@ -142,7 +142,6 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
         name: "rust".into(),
         bin_dir,
         install_dir,
-        env: BTreeMap::new(),
         host_paths: Vec::new(),
         known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })
@@ -215,7 +214,6 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
         name: "node".into(),
         bin_dir,
         install_dir: package,
-        env: BTreeMap::new(),
         host_paths: Vec::new(),
         known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })

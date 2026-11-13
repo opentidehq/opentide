@@ -163,6 +163,12 @@ cargo xtask check-layers
   The oracle runs only in `cargo xtask corpus faults --check` (ci.yml's `corpus` job).
 - `tests/corpus_runner.rs`: the runner's pass/fail guards (a mismatch, a dirty base, a silence
   that checked nothing, `clean`, `coverage --check`) through a fake oracle script (Unix only).
+- `tests/mcp_replay.rs`: `mcp`'s command line and `replay` end to end on a stand-in server (a
+  shell script as the package's interpreter, Unix only): equal answers pass under each `launch`, a
+  different one fails, a server that writes anything but JSON-RPC to stdout or exits non-zero
+  cannot be replayed. The real server's replay is CI's `Golden compare` job.
+- `src/lsp.rs` unit tests run `lsp parity` in-process on a few fault kinds; `src/codegen.rs` unit
+  tests write the committed artifacts and the engine catalog into a scratch layout and check them.
 - `tests/bench.rs`: `bench` end to end on a stand-in `opentide`: a measured run, then an injected
   slowdown that `--check` must fail; `tests/cmd/bench.trycmd` holds `--check` to fixed reports.
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed

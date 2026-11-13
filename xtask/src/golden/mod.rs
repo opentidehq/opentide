@@ -835,7 +835,6 @@ fixtures = ["none", "empty"]
             bin_dir: bin,
             install_dir: install,
             host_paths: Vec::new(),
-            env: std::collections::BTreeMap::new(),
             known_uuids: std::sync::Arc::default(),
         };
         (dir, layout, oracle, engine)
