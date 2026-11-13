@@ -21,6 +21,11 @@
 #   - npm-native-<platform>: each addon with the loader napi-rs wrote (an
 #     intermediate of npm-pack).
 #
+# It builds one commit, `revision`, a 40-hex SHA it checks before any
+# checkout: publish.yml's guard resolves the run's ref (or the tag it resumes)
+# to that SHA, and ci.yml passes github.sha. A branch or tag name, which could
+# move or name code nobody checked, is refused.
+#
 # Nothing here publishes or holds a token: `contents: read`, no OIDC token, no
 # secret, and no cache restored (a release builds from nothing).
 name: Build packages
@@ -28,8 +33,8 @@ name: Build packages
 on:
   workflow_call:
     inputs:
-      ref:
-        description: "The commit to build."
+      revision:
+        description: "The commit to build, as its 40-hex SHA: publish.yml's guard resolves and checks it; ci.yml passes github.sha. Nothing else is accepted."
         required: true
         type: string
       pypi-version:
@@ -62,10 +67,21 @@ jobs:
       pypi: ${{ steps.versions.outputs.pypi }}
       npm: ${{ steps.versions.outputs.npm }}
     steps:
+      # Before any checkout: the revision is a commit SHA, never a branch or
+      # tag name that could move. Every other job needs this one.
+      - name: The revision is a commit SHA
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${REVISION}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::revision must be a 40-hex commit SHA, not '${REVISION}'." >&2
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.revision }}
       - name: The versions
         id: versions
         env:
@@ -117,7 +133,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.revision }}
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -216,7 +232,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.revision }}
       # The other images carry rustup; this one may not.
       - name: Rust on Windows on Arm
         if: matrix.os == 'windows-11-arm'
@@ -280,7 +296,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.revision }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"

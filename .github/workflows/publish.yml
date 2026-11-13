@@ -104,6 +104,10 @@ jobs:
       base: ${{ steps.version.outputs.base }}
       pypi_version: ${{ steps.version.outputs.pypi_version }}
       channel: ${{ steps.version.outputs.channel }}
+      # The commit every later job checks out and builds: the guard's
+      # checkout, resolved once to its 40-hex SHA (a moved tag or a new push
+      # cannot change what the run builds after this point).
+      revision: ${{ steps.version.outputs.revision }}
       create_release: ${{ steps.version.outputs.create_release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -183,7 +187,13 @@ jobs:
           base="${version%%-rc.*}"
           # One product version: the crates (and their pins) are at it.
           python scripts/engine/release.py lockstep "${base}"
+          revision="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ ! "${revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::the checkout resolved to ${revision}, not a commit SHA." >&2
+            exit 1
+          fi
           {
+            echo "revision=${revision}"
             echo "tag=${tag}"
             echo "version=${version}"
             echo "base=${base}"
@@ -206,7 +216,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
@@ -260,7 +270,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/build-packages.yml
     with:
-      ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+      revision: ${{ needs.guard.outputs.revision }}
       pypi-version: ${{ needs.guard.outputs.pypi_version }}
       npm-version: ${{ needs.guard.outputs.version }}
 
@@ -277,7 +287,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -313,7 +323,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -346,7 +356,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -386,7 +396,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -414,7 +424,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
@@ -842,7 +852,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
@@ -950,7 +960,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+          ref: ${{ needs.guard.outputs.revision }}
           sparse-checkout: rust-toolchain.toml
           sparse-checkout-cone-mode: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

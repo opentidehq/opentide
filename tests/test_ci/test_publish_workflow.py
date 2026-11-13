@@ -119,12 +119,16 @@ def test_the_triggers_are_run_workflow_and_the_resume_dispatch() -> None:
     assert workflow["permissions"] == {"contents": "read"}
 
     # Everything a registry receives is built from one commit: the run's, or
-    # the resumed tag's.
+    # the resumed tag's. The guard checks out the run's ref or the tag and
+    # resolves it to a commit SHA; every later job checks out that SHA, which
+    # neither a moved tag nor a new push can change, and is the only revision
+    # build-packages.yml is handed.
     jobs = workflow["jobs"]
     ref = (
         "${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref"
         " || github.sha }}"
     )
+    revision = "${{ needs.guard.outputs.revision }}"
     for name, job in jobs.items():
         for step in job.get("steps", []):
             if not str(step.get("uses", "")).startswith("actions/checkout@"):
@@ -133,8 +137,12 @@ def test_the_triggers_are_run_workflow_and_the_resume_dispatch() -> None:
             if name in ("release", "verify-assets"):
                 # They read scripts only; the Release targets GITHUB_SHA.
                 assert "ref" not in step["with"], name
-            else:
+            elif name == "guard":
                 assert step["with"]["ref"] == ref, name
+            else:
+                assert step["with"]["ref"] == revision, name
+                assert "guard" in job["needs"], name
+    assert jobs["packages"]["with"]["revision"] == revision
     # The guard compares the checkout with the tag, so it needs the tags.
     guard = next(s for s in jobs["guard"]["steps"] if "actions/checkout@" in str(s.get("uses")))
     assert guard["with"]["fetch-depth"] == 0
@@ -377,6 +385,7 @@ def test_the_guard_reads_every_mode_from_the_inputs() -> None:
         "pypi_version",
         "channel",
         "create_release",
+        "revision",
     }
 
 
@@ -474,6 +483,12 @@ def _run_guard(
     outputs = dict(
         line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines() if line
     )
+    if outputs:
+        # The commit every later job builds: the guard's checkout, as its SHA.
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        assert outputs.pop("revision") == head
     return result, outputs
 
 
@@ -743,6 +758,65 @@ def test_wheels_are_built_on_windows_on_arm() -> None:
     runners = {entry["os"]: entry["platform"] for entry in matrix}
     assert runners["windows-11-arm"] == "windows-arm64"
     assert runners["windows-latest"] == "windows-x64"
+
+
+def test_the_packages_build_only_a_validated_commit_sha() -> None:
+    """build-packages.yml takes one revision, a 40-hex SHA it checks before any
+    checkout: no branch or tag name, which could move or name untrusted code."""
+    workflow = _packages()
+    inputs = _triggers(workflow)["workflow_call"]["inputs"]
+    assert inputs["revision"]["required"] is True
+    assert "ref" not in inputs
+    jobs = workflow["jobs"]
+    steps = jobs["versions"]["steps"]
+    check = next(i for i, s in enumerate(steps) if s.get("name") == "The revision is a commit SHA")
+    first_checkout = next(
+        i for i, s in enumerate(steps) if "actions/checkout@" in str(s.get("uses"))
+    )
+    assert check < first_checkout
+    assert steps[check]["env"] == {"REVISION": "${{ inputs.revision }}"}
+    for name, job in jobs.items():
+        for step in job.get("steps", []):
+            if "actions/checkout@" in str(step.get("uses")):
+                assert step["with"] == {
+                    "persist-credentials": False,
+                    "ref": "${{ inputs.revision }}",
+                }, name
+        if name != "versions":
+            needs = job["needs"] if isinstance(job["needs"], list) else [job["needs"]]
+            # Every job waits for the check, directly or through another job.
+            assert set(needs) & {"versions", "npm-native", "npm-pack"}, name
+    ci = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    assert ci["jobs"]["packages"]["with"]["revision"] == "${{ github.sha }}"
+
+
+@pytest.mark.parametrize(
+    ("revision", "accepted"),
+    [
+        ("0123456789abcdef0123456789abcdef01234567", True),
+        ("0123456789abcdef", False),
+        ("0123456789ABCDEF0123456789ABCDEF01234567", False),
+        ("v1.2.3", False),
+        ("development", False),
+        ("refs/pull/1/head", False),
+        ("0123456789abcdef0123456789abcdef01234567\nmain", False),
+        ("", False),
+    ],
+)
+def test_the_revision_check(revision: str, accepted: bool) -> None:
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to run the workflow step")
+    steps = _packages()["jobs"]["versions"]["steps"]
+    script = next(s for s in steps if s.get("name") == "The revision is a commit SHA")["run"]
+    result = subprocess.run(
+        [bash, "--noprofile", "--norc", "-c", script],
+        env={"PATH": os.environ.get("PATH", ""), "REVISION": revision},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is accepted, result.stderr
 
 
 def test_publish_builds_the_packages_with_the_reusable_workflow() -> None:
