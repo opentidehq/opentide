@@ -265,6 +265,38 @@ fn indented(lines: &mut Vec<String>, text: &str) {
 /// The YARA file body (`YaraRule`, `overwrite` true).
 fn yara(rule: &Rule, block: &Json, yara: &Json, tenant: &Json) -> Json {
     let settings = common(block, rule);
+    // The signature form: the author's YARA text, verbatim (harfanglab-1.0
+    // 1.2, Deploy), with `\n` line endings and one trailing newline.
+    let content = match yara.get("signature").and_then(Json::as_str) {
+        Some(signature) => {
+            opentide_schema::objects::platform::harfanglab::yara::deployed_signature(signature)
+        }
+        None => assembled(rule, block, yara),
+    };
+    let mut body = Object::new();
+    body.insert("name".into(), rule.name.clone().into());
+    body.insert("content".into(), content.into());
+    body.insert(
+        "source_id".into(),
+        deploy::setup(tenant, "source_id")
+            .cloned()
+            .unwrap_or(Json::Null),
+    );
+    body.insert("global_state".into(), settings.global_state.into());
+    body.insert("hl_status".into(), settings.status.into());
+    body.insert(
+        "rule_confidence_override".into(),
+        settings.confidence.into(),
+    );
+    body.insert("rule_level_override".into(), settings.level.into());
+    body.insert("overwrite".into(), Json::Bool(true));
+    Json::Object(body)
+}
+
+/// The one YARA rule the decomposed form builds (`_assemble_yara`): imports,
+/// the derived name, the meta deploy generates, and the bodies.
+fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
+    let settings = common(block, rule);
     let mut lines: Vec<String> = Vec::new();
     let imports = strings(yara.get("imports"));
     if !imports.is_empty() {
@@ -358,24 +390,7 @@ fn yara(rule: &Rule, block: &Json, yara: &Json, tenant: &Json) -> Json {
         string(Some(yara), "condition").unwrap_or_default(),
     );
     lines.push("}".into());
-    let mut body = Object::new();
-    body.insert("name".into(), rule.name.clone().into());
-    body.insert("content".into(), lines.join("\n").into());
-    body.insert(
-        "source_id".into(),
-        deploy::setup(tenant, "source_id")
-            .cloned()
-            .unwrap_or(Json::Null),
-    );
-    body.insert("global_state".into(), settings.global_state.into());
-    body.insert("hl_status".into(), settings.status.into());
-    body.insert(
-        "rule_confidence_override".into(),
-        settings.confidence.into(),
-    );
-    body.insert("rule_level_override".into(), settings.level.into());
-    body.insert("overwrite".into(), Json::Bool(true));
-    Json::Object(body)
+    lines.join("\n")
 }
 
 /// The writes a deploy sends for `rule` to `tenant`: the Sigma rule

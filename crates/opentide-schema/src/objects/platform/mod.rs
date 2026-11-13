@@ -13,6 +13,7 @@
 //! | `QueryText` (`_query_not_blank`, after) | [`check_query_text`], [`query_text`] |
 //! | `ElasticConfig._validate_raw_elastic_block` (before) | [`elastic::block_codes`], the named check `elastic_rule_shape` |
 //! | `SysdigConfig._validate_raw_sysdig_block` (before) | [`sysdig::block_codes`], the named check `sysdig_rule_shape` |
+//! | `HarfangLabConfig._validate_raw_harfanglab_block` (before) | [`harfanglab::yara::block_codes`], the named check `harfanglab_rule_shape` |
 //! | `SentinelTechnique` (`check_sentinel_technique`, after) | [`sentinel::check_technique`], [`sentinel::check_duration`] |
 //! | `minimum_engine_version` (`ge=0`, strict) | [`sysdig::minimum_engine_version`] |
 //! | `__legacy_keys__` | [`LEGACY_KEYS`] (none in the oracle: Elastic's and Sysdig's are declared empty) |
@@ -386,8 +387,10 @@ pub struct NamedCheck {
 /// and `sysdig_rule_shape` (a condition or `append_to_rule`, and every other
 /// constraint of `SysdigConfig`'s), and `bitdefender_rule_shape` (the
 /// bitdefender-1.0 constraint codes, which `BitdefenderConfig` reports one
-/// per finding at its path, [`bitdefender::block_findings`]).
-pub const NAMED_CHECKS: [NamedCheck; 3] = [
+/// per finding at its path, [`bitdefender::block_findings`]), and
+/// `harfanglab_rule_shape` (harfanglab-1.0 1.2's one kind per block and the
+/// YARA forms' codes, [`harfanglab::yara::block_codes`]).
+pub const NAMED_CHECKS: [NamedCheck; 4] = [
     NamedCheck {
         name: "elastic_rule_shape",
         model: "ElasticConfig",
@@ -402,6 +405,11 @@ pub const NAMED_CHECKS: [NamedCheck; 3] = [
         name: "bitdefender_rule_shape",
         model: "BitdefenderConfig",
         run: bitdefender::block_codes,
+    },
+    NamedCheck {
+        name: "harfanglab_rule_shape",
+        model: "HarfangLabConfig",
+        run: harfanglab::yara::block_codes,
     },
 ];
 
