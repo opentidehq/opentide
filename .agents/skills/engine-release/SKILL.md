@@ -29,7 +29,7 @@ What changed for the engine:
 | `publish_only` resumed crates.io | `checkout_ref: vX.Y.Z` resumes every registry |
 
 `scripts/engine/release.py` stays the train's tool for the crates and the assets: `bump`,
-`lockstep`, `vendor`, `publish` (and `publish --dry-run` for a candidate), `trust publish.yml`,
+`lockstep`, `vendor`, `publish` (a candidate's crates too, after `bump X.Y.Z-rc.N`), `trust publish.yml`,
 `assets`, `check-assets`, `sums`, `verify-sums`, `unpublished`, `npm-version`, `crate-patch`.
 
 To verify an asset of an `engine-vX.Y.Z` release, the identity is `engine-release.yml` run from

@@ -55,6 +55,7 @@ starts on every pull request and can be required.
 | `facade` | The `opentide` facade crate with every feature: its tests and doctests (the binary's `--json commands` against the PyPI CLI's recording and the ledger, `cli::run_json`, the language server), rustdoc as docs.rs builds it, and `cargo semver-checks` (0.51.0) against the first parent; `engine-test` runs its default features on every pull request |
 | `node` | The Node package `@opentide/opentide` (`bindings/node`, UC-5.3): the napi-rs addon built for linux-x64-gnu, its generated `index.js` and `index.d.ts` against the committed ones, `npm test` (the SDK, the bin and Ctrl-C, the packages, the TypeScript page's snippets, a `tsc --noEmit` consumer), `npx . --json commands` byte for byte this repository's PyPI CLI's (`duration_ms` zeroed), and `cargo xtask golden check --runner node` (every ported golden case through the Node bin and the comparator, but `--help` and `doctor`, which the PyPI CLI still answers in Python); the `golden-node` artifact holds the report |
 | `npm-install` | The npm packages installed as a user installs them, as `publish.yml`'s `smoke-npm` does before a release: the tree's packages at the workspace version (`release.py npm-version`), the addon built for linux-x64-gnu (the other five native packages packed as stand-ins without an addon), published to a throwaway local registry (Verdaccio 6.11.1, no uplink), then `npm install @opentide/opentide` in a clean project: exactly the host's native package, `npx opentide --version`, the SDK from `require` and `import`, `runJson(['commands'])`, `tsc` against `index.d.ts`, and the same through the `opentide` alias (`scripts/engine/npm-local-registry/test.mjs`); it reads the `node` job's Rust cache |
+| `packages` | Installable builds to test without publishing: [`build-packages.yml`](workflows/build-packages.yml), the wheels and npm tarballs a release builds, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`), kept 14 days as `wheels-<platform>` (`linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64`, `windows-arm64`) and `npm-<platform>` (`@opentide/opentide` and one native package); how to install them: [`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing) |
 | `conformance` | The cross-SDK conformance suite (UC-5.4) on Linux, macOS and Windows: `uv sync`, the Node addon (develop profile, `OPENTIDE_VERSION` the workspace's), then `cargo xtask conformance --runners rust,python,node` (every operation of `tests/conformance/manifest.json` on the tide corpus, the heavy workspace, the fault workspace and each configuration fault, the three SDKs' documents byte for byte; [`tests/conformance/README.md`](../tests/conformance/README.md)) and `--diverge node` on the tide corpus, which passes only when the comparator catches the deliberate divergence; the `conformance-<os>` artifact holds `report.json` |
 | `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages (`check-npm-packs.mjs`) and the TypeScript client against the native, worker and WASI servers |
 | `engine-package` | Every crate the release train publishes, the facade and its crates included, packaged and built as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships; the opentide-cli crate, which carries opentide's package data, with `--product`) |
@@ -66,7 +67,7 @@ starts on every pull request and can be required.
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
 The other workflows follow the same split: `coverage.yml` (Rust coverage gates), golden.yml's
-`Golden determinism`, `parity.yml`, `docs.yml` and `publish-dry-run.yml` run their jobs in the
+`Golden determinism`, `docs.yml` and `publish-dry-run.yml` run their jobs in the
 full set only (their `pull_request` trigger has no path filter, so the label reaches them);
 `schema.yml` and `oracle.yml` run on a pull request only when it changes their inputs (a path
 filter on the trigger), and on every push; `bench.yml` keeps its `perf` label. Below, "The other
@@ -171,6 +172,8 @@ removed from the rule too, or every pull request that does not run it waits for 
 ## The other workflows
 
 - [`publish.yml`](workflows/publish.yml): the release train (below).
+- [`build-packages.yml`](workflows/build-packages.yml): the wheels and npm packages, a reusable
+  workflow that `publish.yml` and ci.yml's `packages` job call.
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target for ten minutes a night with
   the corpus it keeps, and uploads what crashed; a schedule of its own, so not part of ci.yml.
 - [`bench.yml`](workflows/bench.yml), nightly on `development`, on demand and on a pull request
@@ -246,12 +249,15 @@ Where each of language-server's workflow jobs went (or why it was dropped):
 
 **One release train** ([`publish.yml`](workflows/publish.yml), UC-5.5): merge the notes PR, then
 Run workflow on `development` with no inputs. It checks (every crate built from its package, the
-licence scan), builds (the wheels, the sdist, the npm packages, the binaries and engine assets of
+licence scan), builds (the wheels and npm packages of
+[`build-packages.yml`](workflows/build-packages.yml), the sdist, the binaries and engine assets of
 [`engine-release-build.yml`](workflows/engine-release-build.yml)), smoke-tests each artifact as a
 user installs it, attests every artifact, tags `vX.Y.Z` with the GitHub Release, verifies the
 published assets, and publishes to PyPI, crates.io and npm with trusted publishing, so a cloud
-session can release. `release_candidate: N` publishes `vX.Y.Z-rc.N` to the test channels (a
-pre-release, TestPyPI, npm `next`, crates `--dry-run`); `dry_run` publishes nothing;
+session can release. `release_candidate: N`, for the Rust-core transition (it may be retired
+after), runs from `integration/unified-core` or `development` and publishes `vX.Y.Z-rc.N` as
+pre-releases: a GitHub pre-release, PyPI `X.Y.ZrcN` and the crates at `X.Y.Z-rc.N` on crates.io,
+nothing on npm; `dry_run` publishes nothing;
 `checkout_ref: vX.Y.Z` resumes a release. Steps:
 [release-management](../.agents/skills/release-management/SKILL.md); the registries' settings and
 the decisions (no musl, the free-threaded sdist): [`docs/internal/publishing.md`](../docs/internal/publishing.md#the-release-train).
@@ -262,7 +268,8 @@ workflow's shape (which jobs may mint an OIDC token, what runs before what).
 `publish-pypi.yml` (PyPI) and `engine-release.yml` (the engine's `engine-v*` releases) retired into
 it: no more `engine-v*` tags. The assets keep language-server's names with the product's version
 (`highlights-v0.24.0.zip`, `opentide-lsp-v0.24.0-<target>`); each asset's attestation is signed by
-`opentidehq/opentide/.github/workflows/publish.yml` on `development`.
+`opentidehq/opentide/.github/workflows/publish.yml` on `development` (a candidate's, on the branch it
+ran from: `development` or `integration/unified-core`).
 
 ## Local parity
 

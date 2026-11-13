@@ -22,6 +22,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-dry-run.yml"
 PUBLISH = ROOT / ".github" / "workflows" / "publish.yml"
+#: The release's wheel build (publish.yml calls it).
+PACKAGES = ROOT / ".github" / "workflows" / "build-packages.yml"
 PLACEHOLDERS = ROOT / "publishing" / "placeholders"
 #: What trusted publishing on npm needs (docs.npmjs.com/trusted-publishers).
 NPM_FLOOR = (11, 5, 1)
@@ -354,7 +356,7 @@ def test_npm_is_new_enough_for_trusted_publishing(workflow: dict[Any, Any]) -> N
 
 
 def test_pypi_job_builds_as_the_release_does(workflow: dict[Any, Any]) -> None:
-    release = _load(PUBLISH)
+    release = _load(PACKAGES)
     release_runs = "\n".join(_runs(release))
     runs = "\n".join(_runs(workflow, "pypi"))
     (cibuildwheel,) = set(re.findall(r"cibuildwheel==[\w.]+", release_runs))

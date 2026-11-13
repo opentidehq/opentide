@@ -188,7 +188,8 @@ def test_a_candidates_notes_quote_unreleased(repo: Path) -> None:
     _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", fixed)
     notes = _script().notes(repo, "v1.3.0-rc.2")
     assert notes.startswith("Release candidate 2 of 1.3.0, for testing")
-    assert "TestPyPI" in notes and "`next`" in notes
+    assert "pre-release on PyPI" in notes and "crates.io" in notes and "not on npm" in notes
+    assert "TestPyPI" not in notes
     assert "- **A fix.**" in notes
     # Nothing of the released version leaks in.
     assert "Minor." not in notes

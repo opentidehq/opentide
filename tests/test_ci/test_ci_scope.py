@@ -7,17 +7,18 @@ carry no ``if``: a required check that never starts blocks the merge, and one
 skipped by its ``if`` would pass without running.
 
 The full set adds everything else (Python 3.11-3.13, the engine release dry
-run, WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
-Windows CLI smoke, the facade crate's every feature and semver checks, the
-Node package and its install from a local registry, the cross-SDK
-conformance suite, LSP clients, benchmarks, the E2E tests marked
-``full_set``, Rust coverage, golden determinism, the docs check and the
-publish dry run). It runs nightly, on every push to development and
-integration/unified-core, on Run workflow, and on a pull request that carries
-the ``full-ci`` label: each such job's ``if`` is exactly ``FULL_SET``. The engine release dry run (and crate
-packaging) also runs on a pull request that changes the release's inputs, and
-the grammar checks on one that changes the grammars, through ci.yml's
-``changes`` job, which fails open.
+run, WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke,
+the Windows CLI smoke, the facade crate's every feature and semver checks, the
+Node package and its install from a local registry, the installable wheels and
+npm tarballs (run artifacts), the cross-SDK conformance suite, LSP clients,
+benchmarks, the E2E tests marked ``full_set``, Rust coverage, golden
+determinism, the docs check and the publish dry run). It runs nightly, on
+every push to development and integration/unified-core, on Run workflow, and
+on a pull request that carries the ``full-ci`` label: each such job's ``if``
+is exactly ``FULL_SET``. The engine release dry run (and crate packaging) also
+runs on a pull request that changes the release's inputs, and the grammar
+checks on one that changes the grammars, through ci.yml's ``changes`` job,
+which fails open.
 """
 
 from __future__ import annotations
@@ -83,6 +84,7 @@ CI_FULL = {
     "facade",
     "node",
     "npm-install",
+    "packages",
     "conformance",
 }
 # ci.yml's jobs in the full set and on a pull request that changes their inputs.

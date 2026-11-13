@@ -191,9 +191,10 @@ skip = ["*-win32", "*_i686", "*_ppc64le", "*_s390x", "*_armv7l", "*_riscv64", "*
 # The workflow sets the version from the release tag: the Linux containers
 # build from a copy of the checkout.
 environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
-# cryptography publishes no Windows on Arm wheel after 46.0.3, so the test
-# install would pick a newer one and compile it: publish.yml installs
-# that wheel itself, with cryptography from a wheel (--only-binary).
+# The win_arm64 wheel is installed and tested by build-packages.yml itself,
+# the way a user installs it, with scripts/build/smoke_package.py (cibuildwheel
+# skipped it when its test install compiled cryptography, a dependency until
+# UC-6.2).
 test-skip = "*-win_arm64"
 test-command = [
     "opentide --version",

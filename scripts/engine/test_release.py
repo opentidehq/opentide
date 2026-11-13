@@ -206,24 +206,47 @@ class PublishTest(unittest.TestCase):
             self.assertIn("--no-verify", command)
 
 
-class PublishDryRunTest(unittest.TestCase):
-    def test_a_candidates_crates_are_one_workspace_dry_run(self) -> None:
-        done = subprocess.CompletedProcess([], 0)
-        with mock.patch.object(release.subprocess, "run", return_value=done) as run:
-            release.publish_dry_run()
-        command = run.call_args.args[0]
-        self.assertEqual(command[:2], ["cargo", "publish"])
-        for flag in ["--workspace", "--dry-run", "--locked", "--no-verify"]:
-            self.assertIn(flag, command)
+class BumpTest(unittest.TestCase):
+    """`bump` sets the workspace version and the pins: X.Y.Z in a release's
+    pull request, X.Y.Z-rc.N in a candidate's workflow checkout (its crates
+    are crates.io pre-releases)."""
 
-    def test_the_cli_runs_it(self) -> None:
+    def _bump(self, version: str) -> str:
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        workspace = root / "Cargo.toml"
+        workspace.write_text(
+            '[workspace.package]\nversion = "1.2.3"\n\n[workspace.dependencies]\n'
+            'opentide-core = { path = "crates/opentide-core", version = "=1.2.3" }\n'
+            'opentide-compare = { path = "crates/opentide-compare" }\n',
+            encoding="utf-8",
+        )
+        done = subprocess.CompletedProcess([], 0)
         with (
-            mock.patch.object(release, "publish_dry_run") as dry,
-            mock.patch.object(release, "publish") as real,
+            mock.patch.object(release, "WORKSPACE", workspace),
+            mock.patch.object(release.subprocess, "run", return_value=done) as run,
         ):
-            release.main(["publish", "--dry-run"])
-        dry.assert_called_once_with()
-        real.assert_not_called()
+            release.bump(version)
+        self.assertEqual(run.call_args.args[0], ["cargo", "update", "--workspace"])
+        return workspace.read_text(encoding="utf-8")
+
+    def test_a_release_version(self) -> None:
+        text = self._bump("1.3.0")
+        self.assertIn('version = "1.3.0"', text)
+        self.assertIn('version = "=1.3.0"', text)
+        self.assertIn('opentide-compare = { path = "crates/opentide-compare" }', text)
+
+    def test_a_candidates_pre_release_version(self) -> None:
+        text = self._bump("1.3.0-rc.2")
+        self.assertIn('[workspace.package]\nversion = "1.3.0-rc.2"', text)
+        self.assertIn(
+            'opentide-core = { path = "crates/opentide-core", version = "=1.3.0-rc.2" }', text
+        )
+
+    def test_anything_else_is_refused(self) -> None:
+        for version in ["1.3", "v1.3.0", "1.3.0-rc.0", "1.3.0-dev.1", "1.3.0-beta.1"]:
+            with self.subTest(version=version), self.assertRaises(SystemExit):
+                self._bump(version)
 
 
 class CratePatchTest(unittest.TestCase):
@@ -326,8 +349,12 @@ class LockstepTest(unittest.TestCase):
                 release.npm_problems("1.2.3-rc.1"),
                 [f"{manifest['name']} is at 1.2.2, not 1.2.3-rc.1"],
             )
-            with self.assertRaises(SystemExit):
-                release.set_npm_version("1.2")
+            # A CI build's development version (ci.yml's `packages` artifacts).
+            release.set_npm_version("1.2.3-dev.42")
+            self.assertEqual(release.npm_problems("1.2.3-dev.42"), [])
+            for bad in ["1.2", "1.2.3-dev.0", "1.2.3-beta.1", "v1.2.3"]:
+                with self.subTest(version=bad), self.assertRaises(SystemExit):
+                    release.set_npm_version(bad)
 
     def test_no_musl_package(self) -> None:
         names = [d.name for d in release.npm_native_dirs()]
@@ -339,6 +366,7 @@ class LockstepTest(unittest.TestCase):
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 WORKFLOW = WORKFLOWS / "publish.yml"
 BUILD = WORKFLOWS / "engine-release-build.yml"
+PACKAGES = WORKFLOWS / "build-packages.yml"
 
 
 def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
@@ -361,10 +389,17 @@ def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
 
 
 def all_jobs() -> dict[str, str]:
-    """The jobs of both workflows; their names do not collide."""
-    release, build = workflow_jobs(WORKFLOW), workflow_jobs(BUILD)
+    """The jobs of the release workflow and the two it calls; their names do
+    not collide."""
+    release, build, packages = (
+        workflow_jobs(WORKFLOW),
+        workflow_jobs(BUILD),
+        workflow_jobs(PACKAGES),
+    )
     assert not release.keys() & build.keys(), release.keys() & build.keys()
-    return {**release, **build}
+    assert not release.keys() & packages.keys(), release.keys() & packages.keys()
+    assert not build.keys() & packages.keys(), build.keys() & packages.keys()
+    return {**release, **build, **packages}
 
 
 def workflow_header(path: Path = WORKFLOW) -> str:
@@ -512,7 +547,7 @@ class TagTest(unittest.TestCase):
         native = workflow_jobs(BUILD)["native"]
         built = re.findall(r"^\s+target: (\S+)$", native, re.MULTILINE)
         self.assertEqual(built, release.TARGETS)
-        npm = workflow_jobs()["npm-native"]
+        npm = workflow_jobs(PACKAGES)["npm-native"]
         self.assertEqual(
             sorted(re.findall(r"^\s+target: (\S+)$", npm, re.MULTILINE)), sorted(release.TARGETS)
         )
@@ -555,11 +590,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for job in minting:
             # Every job states its permissions, so none inherits a token.
             self.assertIn("permissions:", jobs[job], job)
-        # The asset build, which ci.yml also runs on pull requests, holds none.
+        # The asset and package builds, which ci.yml also runs, hold none.
         self.assertNotIn("id-token", BUILD.read_text(encoding="utf-8"))
+        self.assertNotIn("id-token", PACKAGES.read_text(encoding="utf-8"))
+        self.assertNotIn("secrets.", PACKAGES.read_text(encoding="utf-8"))
+        self.assertRegex(jobs["packages"], r"permissions:\n      contents: read\n")
         self.assertRegex(jobs["release-assets"], r"permissions:\n      contents: read\n")
-        # The candidate's crates rehearse without one.
-        self.assertRegex(jobs["crates-dry-run"], r"permissions:\n      contents: read\n")
+        # There is no crates dry-run job: a candidate's crates are published.
+        self.assertNotIn("crates-dry-run", jobs)
 
     def test_every_rust_job_installs_the_pinned_release_with_the_targets_it_builds(
         self,
@@ -589,7 +627,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
             [
                 "checks",
                 "crates",
-                "crates-dry-run",
                 "highlights",
                 "licences",
                 "native",
@@ -668,7 +705,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotRegex(smoke, r"\bnpm (?:publish|pu)\b")
         self.assertNotIn("id-token", smoke)
         # Every native package ships the licence, which the pack checks.
-        pack = jobs["npm-pack"]
+        pack = workflow_jobs(PACKAGES)["npm-pack"]
         self.assertIn('cp bindings/node/LICENSE "${dir}"', pack)
         self.assertIn("grep -qx 'package/LICENSE'", pack)
         # ci.yml's full set runs the same test on the tree's packages.
@@ -711,7 +748,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("gh attestation verify", verify_assets)
         # It runs when resuming too, when the release job is skipped.
         self.assertIn("needs.release.result == 'skipped'", verify_assets)
-        for job in ["pypi", "crates", "crates-dry-run", "npm"]:
+        for job in ["pypi", "crates", "npm"]:
             needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.MULTILINE)
             self.assertIsNotNone(needs, job)
             self.assertIn("verify-assets", needs.group(1).split(", "), job)
@@ -721,19 +758,43 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # The release job does not check: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
 
-    def test_a_release_candidate_goes_to_the_test_channels(self) -> None:
+    def test_a_release_candidate_is_a_pre_release_on_github_pypi_and_crates_io(self) -> None:
+        """For the Rust-core transition: a candidate publishes pre-releases on
+        GitHub, PyPI and crates.io, and nothing on npm."""
         jobs = workflow_jobs()
-        # crates.io only for a release; a candidate's crates are a dry run.
-        self.assertIn("if: needs.guard.outputs.channel == 'release'", jobs["crates"])
-        self.assertIn("if: needs.guard.outputs.channel == 'rc'", jobs["crates-dry-run"])
-        self.assertIn("release.py publish --dry-run", jobs["crates-dry-run"])
-        # npm: the dist-tag `next`.
-        self.assertIn("channel == 'rc' && 'next' || 'latest'", jobs["npm"])
-        self.assertIn('--tag "${DIST_TAG}"', jobs["npm"])
-        self.assertIn("--provenance", jobs["npm"])
-        # PyPI: TestPyPI, under its own environment.
-        self.assertIn("channel == 'rc' && 'testpypi' || 'pypi'", jobs["pypi"])
-        self.assertIn("repository-url: https://test.pypi.org/legacy/", jobs["pypi"])
+        # crates.io: every crate at X.Y.Z-rc.N, a pre-release, as for a release.
+        self.assertNotRegex(jobs["crates"], r"\n    if: ")
+        bump = 'python3 scripts/engine/release.py bump "${VERSION}"'
+        for job in ["checks", "crates"]:
+            body = jobs[job]
+            self.assertIn("if: needs.guard.outputs.version != needs.guard.outputs.base", body)
+            self.assertIn("VERSION: ${{ needs.guard.outputs.version }}", body)
+            # Before anything is packaged or published.
+            self.assertLess(body.index(bump), body.index("release.py vendor"), job)
+        self.assertLess(
+            jobs["crates"].index(bump),
+            jobs["crates"].index("python3 scripts/engine/release.py publish"),
+        )
+        self.assertIn(
+            '--path "${RUNNER_TEMP}/packages/opentide-${CRATES_VERSION}"', jobs["smoke-cargo"]
+        )
+        self.assertIn("CRATES_VERSION: ${{ needs.guard.outputs.version }}", jobs["smoke-cargo"])
+        # PyPI: real PyPI, the one environment; no TestPyPI anywhere.
+        self.assertRegex(jobs["pypi"], r"environment:\n      name: pypi\n")
+        self.assertNotIn("test.pypi.org", WORKFLOW.read_text(encoding="utf-8"))
+        self.assertNotIn("testpypi", WORKFLOW.read_text(encoding="utf-8"))
+        publish_step = jobs["pypi"][jobs["pypi"].index("- name: Publish to PyPI") :]
+        publish_step = publish_step[: publish_step.index("- name:", 1)]
+        self.assertNotIn("if:", publish_step)
+        # npm: a release only, under `latest`.
+        self.assertIn("if: needs.guard.outputs.channel == 'release'", jobs["npm"])
+        self.assertIn("--provenance --access public --tag latest", jobs["npm"])
+        self.assertNotIn("next", jobs["npm"])
+        smoke = jobs["smoke-registries"]
+        self.assertIn("needs.npm.result == 'skipped' && needs.guard.outputs.channel == 'rc'", smoke)
+        npx = smoke[smoke.index("- name: npx @opentide/opentide --version") :]
+        self.assertIn("if: env.CHANNEL == 'release'", npx.splitlines()[1])
+        self.assertIn('cargo install opentide --version "=${VERSION}"', smoke)
         # GitHub: a pre-release, never Latest; a release is Latest by default.
         attach = jobs["release"]
         self.assertIn("flags+=(--prerelease --latest=false)", attach)
@@ -777,8 +838,24 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_run_workflow_releases_from_development_only(self) -> None:
         guard = workflow_jobs()["guard"]
         refuse = guard.index("Run the release from development, not")
-        self.assertLess(guard.index('"${GITHUB_REF}" != "refs/heads/development"'), refuse)
+        self.assertLess(guard.index('"${GITHUB_REF}" != "refs/heads/development" ]]'), refuse)
         self.assertEqual(guard[refuse:].splitlines()[1].strip(), "exit 1")
+        # A candidate may also run from integration/unified-core, and from
+        # nowhere else; check-candidate still holds it above the last release.
+        candidate = guard.index('if [[ -z "${RELEASE_CANDIDATE}" ]]; then')
+        self.assertLess(candidate, refuse)
+        refuse_rc = guard.index(
+            "Run a release candidate from integration/unified-core or development, not"
+        )
+        self.assertLess(
+            guard.index(
+                '"${GITHUB_REF}" != "refs/heads/integration/unified-core" && '
+                '"${GITHUB_REF}" != "refs/heads/development"'
+            ),
+            refuse_rc,
+        )
+        self.assertEqual(guard[refuse_rc:].splitlines()[1].strip(), "exit 1")
+        self.assertLess(refuse_rc, guard.index("check-candidate"))
         # A release or a candidate never reuses a tag; resuming one needs its Release.
         self.assertIn('git rev-parse -q --verify "refs/tags/${tag}"', guard)
         self.assertIn("has no GitHub Release to resume", guard)
@@ -813,21 +890,44 @@ class ReleaseWorkflowTest(unittest.TestCase):
             for check in checks:
                 self.assertIn("--cert-identity-regex", check)
 
-    @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
-    def test_the_identity_is_publish_yml_on_development(self) -> None:
+    @staticmethod
+    def _identity(channel: str) -> re.Pattern[str]:
         lines = [
             line.strip()
             for line in workflow_jobs()["verify-assets"].splitlines()
-            if re.match(r"\s*(repo_re|identity)=", line)
+            if re.match(r"\s*(?:repo_re|branch_re|identity)=", line)
+            or re.match(r'\s*if \[ "\$\{CHANNEL\}" = "rc" \]; then branch_re=', line)
         ]
-        self.assertEqual(len(lines), 2, lines)
+        assert len(lines) == 4, lines
         script = "\n".join([*lines, 'printf %s "$identity"'])
-        env = {"GITHUB_REPOSITORY": "opentidehq/opentide", "TAG": "v1.2.3"}
+        env = {"GITHUB_REPOSITORY": "opentidehq/opentide", "TAG": "v1.2.3", "CHANNEL": channel}
         env["PATH"] = "/usr/bin:/bin"
         done = subprocess.run(
             ["bash", "-c", script], capture_output=True, text=True, env=env, check=True
         )
-        identity = re.compile(done.stdout)
+        return re.compile(done.stdout)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
+    def test_a_candidates_identity_is_publish_yml_on_integration_or_development(self) -> None:
+        identity = self._identity("rc")
+        workflows = "https://github.com/opentidehq/opentide/.github/workflows"
+        workflow = f"{workflows}/publish.yml"
+        for branch in ["development", "integration/unified-core"]:
+            self.assertTrue(identity.fullmatch(f"{workflow}@refs/heads/{branch}"), branch)
+        for other in [
+            f"{workflow}@refs/heads/main",
+            f"{workflow}@refs/heads/feature",
+            f"{workflow}@refs/heads/integration/unified-core-x",
+            f"{workflow}@refs/heads/integration/other",
+            f"{workflow}@refs/tags/v1.2.3-rc.1",
+            f"{workflows}/ci.yml@refs/heads/integration/unified-core",
+            workflow.replace("opentidehq", "someone") + "@refs/heads/integration/unified-core",
+        ]:
+            self.assertIsNone(identity.fullmatch(other), (identity.pattern, other))
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
+    def test_the_identity_is_publish_yml_on_development(self) -> None:
+        identity = self._identity("release")
         readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(
             encoding="utf-8"
         )
@@ -843,6 +943,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             for other in [
                 f"{workflow}@refs/heads/main",
                 f"{workflow}@refs/heads/feature",
+                f"{workflow}@refs/heads/integration/unified-core",
                 f"{workflow}@refs/tags/v1.2.3",
                 f"{workflows}/ci.yml@refs/heads/development",
                 f"{workflows}/engine-release-build.yml@refs/heads/development",

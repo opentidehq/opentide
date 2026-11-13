@@ -20,8 +20,10 @@ The crates and npm packages carry the same version: ``scripts/engine/release.py
 lockstep`` checks them, and the workflow runs both.
 
 ``check-candidate`` refuses a release candidate (``vX.Y.Z-rc.N``) of a version
-that is not newer than the last release. A candidate needs no notes PR: its
-GitHub pre-release says what ``## [Unreleased]`` holds (``notes``).
+that is not newer than the last release. Candidates are for the Rust-core
+transition (they may be retired after): pre-releases on GitHub, PyPI and
+crates.io, nothing on npm. A candidate needs no notes PR: its GitHub
+pre-release says what ``## [Unreleased]`` holds (``notes``).
 """
 
 from __future__ import annotations
@@ -148,7 +150,8 @@ def notes(root: Path, tag: str) -> str:
         unreleased = _section(changelog, "Unreleased") or "Nothing is listed under [Unreleased]."
         return (
             f"Release candidate {match.group(2)} of {match.group(1)}, for testing: "
-            "on TestPyPI, and on npm under the dist-tag `next`. "
+            "a pre-release on PyPI (`pip install --pre opentide`) and on crates.io, "
+            "not on npm. "
             f"What it holds so far, from CHANGELOG.md's [Unreleased]:\n\n{unreleased}\n"
         )
     if _TAG.fullmatch(tag) is None:

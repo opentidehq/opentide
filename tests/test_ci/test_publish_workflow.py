@@ -29,6 +29,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
+#: The wheels and npm packages, which publish.yml and ci.yml's full set build.
+PACKAGES = ROOT / ".github" / "workflows" / "build-packages.yml"
 VERIFY_STEP = "Verify PyPI lists every built file"
 WEBSITE_WARNING_STEP = "Warn when the website was not notified"
 WHEEL = "opentide-9.9.9-py3-none-any.whl"
@@ -68,37 +70,33 @@ def _verify_index() -> int:
 
 
 def test_publish_step_skips_files_pypi_already_has() -> None:
-    for name in ("Publish to PyPI", "Publish to TestPyPI"):
-        publish = _steps()[_publish_index(name)]
-        assert publish["with"]["packages-dir"] == "dist/"
-        assert publish["with"].get("skip-existing") is True
+    publish = _steps()[_publish_index("Publish to PyPI")]
+    assert publish["with"]["packages-dir"] == "dist/"
+    assert publish["with"].get("skip-existing") is True
     uploads = [s for s in _steps() if "pypa/gh-action-pypi-publish@" in str(s.get("uses", ""))]
-    assert len(uploads) == 2
+    assert len(uploads) == 1
 
 
-def test_a_release_goes_to_pypi_and_a_candidate_to_testpypi() -> None:
+def test_a_release_and_a_candidate_both_go_to_pypi() -> None:
+    """A candidate is a PyPI pre-release (X.Y.ZrcN), for the Rust-core
+    transition: real PyPI, the one trusted publisher, no TestPyPI."""
     steps = _steps()
     pypi = steps[_publish_index("Publish to PyPI")]
-    test = steps[_publish_index("Publish to TestPyPI")]
-    assert pypi["if"] == "env.CHANNEL == 'release'"
+    assert "if" not in pypi
     assert "repository-url" not in pypi["with"]
-    assert test["if"] == "env.CHANNEL == 'rc'"
-    assert test["with"]["repository-url"] == "https://test.pypi.org/legacy/"
     job = _workflow()["jobs"]["pypi"]
-    # The trusted publishers name the environment: pypi, or testpypi.
-    assert job["environment"]["name"] == (
-        "${{ needs.guard.outputs.channel == 'rc' && 'testpypi' || 'pypi' }}"
-    )
+    assert job["environment"]["name"] == "pypi"
+    assert job["environment"]["url"] == "https://pypi.org/p/opentide"
     assert job["permissions"] == {"contents": "read", "id-token": "write"}
     verify = steps[_verify_index()]
-    assert "test.pypi.org/pypi" in verify["env"]["PYPI_JSON_BASE"]
+    assert verify["env"]["PYPI_JSON_BASE"] == "https://pypi.org/pypi"
+    assert "test.pypi.org" not in WORKFLOW.read_text(encoding="utf-8")
 
 
 def test_verify_step_runs_after_upload_and_before_website_notify() -> None:
     steps = _steps()
     verify = _verify_index()
-    assert verify == _publish_index("Publish to TestPyPI") + 1
-    assert _publish_index("Publish to PyPI") + 1 == _publish_index("Publish to TestPyPI")
+    assert verify == _publish_index("Publish to PyPI") + 1
     assert "continue-on-error" not in steps[verify]
     assert "if" not in steps[verify]
     website = _step_index(lambda step: step.get("id") == "website")
@@ -511,6 +509,64 @@ def test_the_guard_releases_only_from_development(development: Path) -> None:
     assert outputs == {}
 
 
+@pytest.mark.parametrize("branch", ["integration/unified-core", "feature"])
+def test_a_release_from_another_branch_is_refused(development: Path, branch: str) -> None:
+    """Only a candidate may run from integration/unified-core: a release is development's."""
+    result, outputs = _run_guard(
+        development, GITHUB_REF=f"refs/heads/{branch}", GITHUB_REF_NAME=branch
+    )
+    assert result.returncode == 1
+    assert f"Run the release from development, not {branch}" in result.stderr
+    assert outputs == {}
+
+
+@pytest.mark.parametrize("branch", ["integration/unified-core", "development"])
+def test_a_candidate_runs_from_integration_or_development(development: Path, branch: str) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(
+        development,
+        RELEASE_CANDIDATE="1",
+        GITHUB_REF=f"refs/heads/{branch}",
+        GITHUB_REF_NAME=branch,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outputs["tag"] == "v1.3.0-rc.1"
+    assert outputs["version"] == "1.3.0-rc.1"
+    assert outputs["pypi_version"] == "1.3.0rc1"
+    assert outputs["channel"] == "rc"
+    assert outputs["create_release"] == "true"
+
+
+@pytest.mark.parametrize("branch", ["feature", "main", "integration/other"])
+def test_a_candidate_from_another_branch_is_refused(development: Path, branch: str) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(
+        development,
+        RELEASE_CANDIDATE="1",
+        GITHUB_REF=f"refs/heads/{branch}",
+        GITHUB_REF_NAME=branch,
+    )
+    assert result.returncode == 1
+    assert (
+        f"Run a release candidate from integration/unified-core or development, not {branch}"
+        in result.stderr
+    )
+    assert outputs == {}
+
+
+def test_a_candidate_from_integration_must_be_above_the_last_release(development: Path) -> None:
+    """check-candidate holds on integration/unified-core as on development."""
+    result, outputs = _run_guard(
+        development,
+        RELEASE_CANDIDATE="1",
+        GITHUB_REF="refs/heads/integration/unified-core",
+        GITHUB_REF_NAME="integration/unified-core",
+    )
+    assert result.returncode == 1
+    assert "1.2.0 is not newer than 1.2.0" in result.stderr
+    assert outputs == {}
+
+
 def test_the_guard_refuses_a_version_already_tagged(development: Path) -> None:
     _git(development, "tag", "v1.2.0")
     result, outputs = _run_guard(development)
@@ -656,10 +712,17 @@ def test_publish_refuses_a_musllinux_wheel(platform_dist: Path) -> None:
     assert "a musllinux wheel" in result.stdout
 
 
-def test_cibuildwheel_builds_no_musllinux_wheel() -> None:
-    from opentide.core.io import load_toml
+def _pyproject() -> dict[str, Any]:
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover - Python 3.10
+        import tomli as tomllib
 
-    config = load_toml(ROOT / "pyproject.toml")["tool"]["cibuildwheel"]
+    return tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def test_cibuildwheel_builds_no_musllinux_wheel() -> None:
+    config = _pyproject()["tool"]["cibuildwheel"]
     assert "*-musllinux_*" in config["skip"]
     assert config["linux"]["manylinux-x86_64-image"] == "manylinux_2_28"
     assert config["linux"]["manylinux-aarch64-image"] == "manylinux_2_28"
@@ -667,23 +730,37 @@ def test_cibuildwheel_builds_no_musllinux_wheel() -> None:
     assert config["build"] == "cp310-*"
 
 
+def _packages() -> dict[Any, Any]:
+    return yaml.safe_load(PACKAGES.read_text(encoding="utf-8"))
+
+
 def _wheel_steps() -> list[dict[str, Any]]:
-    return _job("wheels")["steps"]
+    return _packages()["jobs"]["wheels"]["steps"]
 
 
 def test_wheels_are_built_on_windows_on_arm() -> None:
-    assert "windows-11-arm" in _job("wheels")["strategy"]["matrix"]["os"]
-    assert "windows-latest" in _job("wheels")["strategy"]["matrix"]["os"]
+    matrix = _packages()["jobs"]["wheels"]["strategy"]["matrix"]["include"]
+    runners = {entry["os"]: entry["platform"] for entry in matrix}
+    assert runners["windows-11-arm"] == "windows-arm64"
+    assert runners["windows-latest"] == "windows-x64"
+
+
+def test_publish_builds_the_packages_with_the_reusable_workflow() -> None:
+    """publish.yml and ci.yml's full set build the wheels and npm packages
+    with one workflow, so what a maintainer tests is what a release ships."""
+    job = _job("packages")
+    assert job["uses"] == "./.github/workflows/build-packages.yml"
+    assert job["needs"] == ["guard", "checks"]
+    assert job["permissions"] == {"contents": "read"}
+    assert job["with"]["pypi-version"] == "${{ needs.guard.outputs.pypi_version }}"
+    assert job["with"]["npm-version"] == "${{ needs.guard.outputs.version }}"
+    for name in ("wheels", "npm-native", "npm-pack"):
+        assert name not in _workflow()["jobs"], name
 
 
 def test_the_windows_on_arm_wheel_is_installed_and_doctor_runs() -> None:
     """cibuildwheel skips testing it, so the workflow installs it itself (#748)."""
-    if sys.version_info >= (3, 11):
-        import tomllib
-    else:  # pragma: no cover - Python 3.10
-        import tomli as tomllib
-
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    pyproject = _pyproject()
     assert pyproject["tool"]["cibuildwheel"]["test-skip"] == "*-win_arm64"
     names = [step.get("name") for step in _wheel_steps()]
     build = names.index("Build wheels")
@@ -692,14 +769,36 @@ def test_the_windows_on_arm_wheel_is_installed_and_doctor_runs() -> None:
     assert rust < build < smoke
     step = _wheel_steps()[smoke]
     assert step["if"] == "matrix.os == 'windows-11-arm'"
-    assert step["env"] == {"PIP_ONLY_BINARY": "cryptography"}
+    # The package depends on pydantic alone (UC-6.2): no cryptography to pin to a wheel.
+    assert "env" not in step
     script = step["run"]
     assert "$PSNativeCommandUseErrorActionPreference = $true" in script
     assert "*-cp310-abi3-win_arm64.whl" in script
     assert "--json doctor --offline" in script
     assert "--json setup --path $workspace --yes" in script
+    # The slim package's smoke, as smoke-wheel's: the version, the
+    # requirements, validate on the tide corpus and the SDK.
+    assert (
+        "& $python -I scripts/build/smoke_package.py $env:SETUPTOOLS_SCM_PRETEND_VERSION" in script
+    )
+
+
+@pytest.mark.parametrize("job", ["smoke-wheel", "smoke-sdist"])
+def test_the_smoke_tests_run_the_package_smoke_on_the_installed_package(job: str) -> None:
+    """pip install, then scripts/build/smoke_package.py with the venv's Python:
+    `opentide --version`, the requirements against pyproject.toml (pydantic
+    alone), `--json validate` on the tide corpus and the SDK."""
+    steps = _job(job)["steps"]
+    checkout = next(i for i, s in enumerate(steps) if "actions/checkout@" in str(s.get("uses")))
+    run = next(i for i, s in enumerate(steps) if "smoke_package.py" in str(s.get("run", "")))
+    assert checkout < run
+    assert steps[checkout]["with"]["persist-credentials"] is False
+    script = steps[run]["run"]
+    assert "set -euo pipefail" in script
+    assert 'python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"' in script
+    assert "pip install --quiet" in script
     # Every action stays pinned by commit SHA.
-    for job in _workflow()["jobs"].values():
+    for job in [*_workflow()["jobs"].values(), *_packages()["jobs"].values()]:
         for item in job.get("steps", []):
             if "uses" in item:
                 assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", item["uses"]), item["uses"]

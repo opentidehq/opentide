@@ -7,13 +7,14 @@
     release.py lockstep VERSION [--npm NPM_VERSION]
                                     the crates, their pins and the npm packages carry one version
     release.py npm-version VERSION  write VERSION into every npm package of the release
+                                    (X.Y.Z, X.Y.Z-rc.N, or a CI build's X.Y.Z-dev.N)
     release.py prerelease TAG       print true for a release candidate tag, else false
     release.py asset-version TAG    print the version the asset names carry (vX.Y.Z[-rc.N])
     release.py assets TAG           print the name of every asset the tag's release carries
     release.py check-assets DIR TAG DIR holds exactly the tag's assets
-    release.py bump X.Y.Z           set the workspace version and the internal pins
+    release.py bump X.Y.Z[-rc.N]    set the workspace version and the internal pins
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
-    release.py publish [--dry-run]  publish every crate to crates.io, dependencies first
+    release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py crate-patch DIR OUT  unpack DIR's .crate files into OUT, with a cargo config
                                     that resolves them in place of crates.io's
@@ -50,9 +51,10 @@ nothing where the publishing tokens are (the release workflow's `checks` job
 built every package, with no token). It can be re-run: it skips each crate
 whose version crates.io already has, and waits out the rate limit crates.io puts
 on brand-new crates, so a first release that stops partway resumes where it
-stopped. `publish --dry-run`, a release candidate's, runs `cargo publish
---workspace --dry-run`: every package, resolved against the others, uploaded
-nowhere.
+stopped. A release candidate's crates are crates.io pre-releases
+(`X.Y.Z-rc.N`, for the Rust-core transition): the workflow runs `bump
+X.Y.Z-rc.N` in its own checkout, so the branch keeps `X.Y.Z`, then packages and
+publishes as for a release. crates.io can yank a version, never delete it.
 
 `trust` registers this repository's WORKFLOW (publish.yml) as the trusted
 publisher of every published crate, with a crates.io token that has the
@@ -295,7 +297,9 @@ def npm_problems(expected: str | None = None) -> list[str]:
 def set_npm_version(version: str) -> None:
     """Write `version` into every npm package of the release and their
     dependencies on each other (what the tree holds is a placeholder)."""
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?", version):
+    # X.Y.Z, a candidate's X.Y.Z-rc.N (smoke-tested, not published), or a CI
+    # build's X.Y.Z-dev.N (ci.yml's `packages` artifacts, never published).
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:rc|dev)\.[1-9]\d*)?", version):
         sys.exit(f"npm-version: not a release version: {version}")
     main_name = read_json(NPM_NODE / "package.json")["name"]
     for directory in npm_packages():
@@ -312,7 +316,10 @@ def set_npm_version(version: str) -> None:
 
 
 def bump(version: str) -> None:
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+    """Set the workspace version and every internal pin to `version`: X.Y.Z in
+    a release's pull request, or X.Y.Z-rc.N in a candidate's workflow checkout
+    only (its crates are crates.io pre-releases; the branch keeps X.Y.Z)."""
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?", version):
         sys.exit(f"not a version: {version}")
     text = WORKSPACE.read_text()
     text = re.sub(r'(\[workspace\.package\]\nversion = )"[^"]+"', rf'\1"{version}"', text, count=1)
@@ -431,26 +438,6 @@ def use_new_crate_token(env: dict[str, str]) -> bool:
     """
     token = env.get("NEW_CRATE_TOKEN", "")
     return bool(token) and env.get("CARGO_REGISTRY_TOKEN") != token
-
-
-def publish_dry_run() -> None:
-    """A release candidate's crates: `cargo publish --workspace --dry-run`
-    packages every publishable crate, resolves each against the others'
-    packages (none of this version is on crates.io yet) and uploads nothing.
-    `--no-verify`: the `checks` job built every package already."""
-    subprocess.run(
-        [
-            "cargo",
-            "publish",
-            "--workspace",
-            "--dry-run",
-            "--locked",
-            "--allow-dirty",
-            "--no-verify",
-        ],
-        cwd=ROOT,
-        check=True,
-    )
 
 
 def crate_patch(packages: Path, out: Path) -> Path:
@@ -737,8 +724,6 @@ def main(argv: list[str]) -> None:
             vendor(clean=True)
         case ["publish"]:
             publish()
-        case ["publish", "--dry-run"]:
-            publish_dry_run()
         case ["crate-patch", packages, out]:
             try:
                 print(crate_patch(Path(packages), Path(out)))

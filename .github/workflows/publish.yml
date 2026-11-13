@@ -22,14 +22,17 @@
 #     notes PR merged, the crates are at that version (lockstep:
 #     scripts/engine/release.py bump), and the tag does not exist yet.
 #   - release_candidate: N, a release candidate of the workspace version
-#     (Cargo.toml, set by `release.py bump`): the tag vX.Y.Z-rc.N, a GitHub
-#     pre-release with every asset and attestation, the wheels and sdist on
-#     TestPyPI (X.Y.ZrcN), the npm packages under the dist-tag `next`
-#     (X.Y.Z-rc.N), and the crates as `cargo publish --dry-run`. Nothing on
-#     PyPI, crates.io or npm's `latest`.
+#     (Cargo.toml, set by `release.py bump`), for the Rust-core transition
+#     (it may be retired after): run on integration/unified-core or
+#     development, it publishes the tag vX.Y.Z-rc.N, a GitHub pre-release with
+#     every asset and attestation, the wheels and sdist on PyPI as a
+#     pre-release (X.Y.ZrcN: `pip install --pre opentide`), and the crates on
+#     crates.io as pre-releases (X.Y.Z-rc.N, which can be yanked, never
+#     deleted). Nothing on npm: ci.yml's `packages` artifacts carry the npm
+#     tarballs to test.
 #   - dry_run: build and smoke-test everything, publish nothing: no tag, no
 #     release, no attestation, no upload. Any branch.
-#   - checkout_ref: vX.Y.Z (or -rc.N): resume an existing release whose
+#   - checkout_ref: vX.Y.Z (or vX.Y.Z-rc.N): resume an existing release whose
 #     publishing failed partway. It builds from that tag, uploads nothing to
 #     its GitHub Release (consumers pinned those digests), checks the
 #     published assets, and publishes only what each registry lacks.
@@ -37,12 +40,13 @@
 #     the same, for GitHub App tokens without actions: write.
 #
 # Jobs: the guard; `checks` (every crate built from its package, the licence
-# scan); the builds (`release-assets`, `wheels`, `sdist`, `npm-native` and `npm-pack`);
+# scan); the builds (`release-assets`, `packages`: the wheels and npm packages of
+# build-packages.yml, and `sdist`);
 # a smoke test per artifact (`smoke-*`); then, unless a dry run, `attest`
 # (GitHub artifact attestations of every artifact), `release` (the tag and the
 # GitHub Release, created with GITHUB_TOKEN, which starts no other workflow),
 # `verify-assets` (the published assets, their sums and attestations), the
-# registries (`pypi`, `crates` or `crates-dry-run`, `npm`) and
+# registries (`pypi`, `crates`, and for a release `npm`) and
 # `smoke-registries` (installs what they now serve).
 #
 # Only attest, pypi, crates and npm may mint an OIDC token: crates.io and npm
@@ -50,7 +54,7 @@
 # publish. Nothing restores a cache: a release builds from nothing.
 #
 # The registries' trusted publishers name this file, `publish.yml`, and PyPI's
-# the environment `pypi` (TestPyPI's `testpypi`): docs/internal/publishing.md,
+# the environment `pypi`: docs/internal/publishing.md,
 # "The release train", lists every setting.
 name: Publish
 
@@ -58,7 +62,7 @@ on:
   workflow_dispatch:
     inputs:
       release_candidate:
-        description: "Release candidate number N: publish vX.Y.Z-rc.N of the workspace version to the test channels (TestPyPI, npm next, crates --dry-run). Empty: a release."
+        description: "Release candidate number N (the Rust-core transition): publish vX.Y.Z-rc.N of the workspace version as pre-releases on GitHub, PyPI and crates.io, not npm. Run on integration/unified-core or development. Empty: a release."
         required: false
         default: ""
         type: string
@@ -147,18 +151,24 @@ jobs:
             create_release=false
             channel=dry-run
           else
-            if [[ "${GITHUB_REF}" != "refs/heads/development" ]]; then
-              echo "::error::Run the release from development, not ${GITHUB_REF_NAME}, or pass checkout_ref to resume a tag." >&2
-              exit 1
-            fi
             if [[ -z "${RELEASE_CANDIDATE}" ]]; then
-              # A release: the version the notes PR dated in CHANGELOG.md.
+              # A release, from development only: the version the notes PR
+              # dated in CHANGELOG.md.
+              if [[ "${GITHUB_REF}" != "refs/heads/development" ]]; then
+                echo "::error::Run the release from development, not ${GITHUB_REF_NAME}, or pass checkout_ref to resume a tag." >&2
+                exit 1
+              fi
               tag="v$(python scripts/build/release.py version)"
               python scripts/build/release.py check "${tag}"
               channel=release
             else
               # A candidate of the next version: the workspace's, bumped past
-              # the last release.
+              # the last release. From integration/unified-core (or
+              # development), for the Rust-core transition.
+              if [[ "${GITHUB_REF}" != "refs/heads/integration/unified-core" && "${GITHUB_REF}" != "refs/heads/development" ]]; then
+                echo "::error::Run a release candidate from integration/unified-core or development, not ${GITHUB_REF_NAME}." >&2
+                exit 1
+              fi
               tag="$(python scripts/engine/release.py tag)-rc.${RELEASE_CANDIDATE}"
               python scripts/build/release.py check-candidate "${tag}"
               channel=rc
@@ -203,6 +213,13 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      # A candidate's crates are crates.io pre-releases, X.Y.Z-rc.N: this
+      # checkout only (the branch keeps X.Y.Z) carries that version and pins.
+      - name: A candidate's crates at its pre-release version
+        if: needs.guard.outputs.version != needs.guard.outputs.base
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: python3 scripts/engine/release.py bump "${VERSION}"
       - run: python3 scripts/engine/release.py vendor
       # `cargo publish --workspace` skips the members with `publish = false`;
       # `cargo package` names them.
@@ -233,90 +250,19 @@ jobs:
       tag: ${{ needs.guard.outputs.tag }}
       wheel-version: ${{ needs.guard.outputs.pypi_version }}
 
-  # One cp310-abi3 wheel per platform, built with cibuildwheel and hatchling
-  # (hatch_build.py compiles the engine), each installed and run before it is
-  # kept ([tool.cibuildwheel] in pyproject.toml). manylinux_2_28 only: no
-  # musllinux (the maintainer's decision; docs/internal/publishing.md).
-  wheels:
-    name: Wheel (${{ matrix.os }})
+  # The wheels and the npm packages (build-packages.yml, which ci.yml's full
+  # set also runs, as installable artifacts to test): one cp310-abi3 wheel per
+  # platform (manylinux_2_28, no musllinux: the maintainer's decision), the
+  # native addons (napi-rs) and every npm tarball, at the release's version.
+  packages:
     needs: [guard, checks]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    strategy:
-      fail-fast: true
-      matrix:
-        # Native runners: the engine is compiled for the machine that builds it.
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-15-intel
-          - macos-latest
-          - windows-latest
-          - windows-11-arm
-    env:
-      # The release's version; the Linux containers build from a copy of the checkout.
-      SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.guard.outputs.pypi_version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      # The other images carry Rust; this one may not.
-      - name: Rust on Windows on Arm
-        if: matrix.os == 'windows-11-arm'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
-            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
-            & $installer -y --profile minimal
-            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          }
-
-      - name: Build wheels
-        run: |
-          python -m pip install cibuildwheel==4.3.5
-          python -m cibuildwheel --output-dir wheelhouse
-
-      # cibuildwheel's test install would take the newest cryptography, which
-      # publishes no Windows on Arm wheel (the last are 46.0.3's cp38-abi3 and
-      # cp311-abi3 ones), and compile it. Install the wheel the way a user
-      # does, with cryptography from a wheel, and check the engine and doctor.
-      - name: Install the win_arm64 wheel and run doctor
-        if: matrix.os == 'windows-11-arm'
-        shell: pwsh
-        env:
-          PIP_ONLY_BINARY: cryptography
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $wheel = @(Get-ChildItem wheelhouse -Filter '*-cp310-abi3-win_arm64.whl')
-          if ($wheel.Count -ne 1) { throw "expected one win_arm64 wheel, found $($wheel.Count)" }
-          $venv = Join-Path $env:RUNNER_TEMP 'smoke'
-          python -m venv $venv
-          $python = Join-Path $venv 'Scripts\python.exe'
-          $opentide = Join-Path $venv 'Scripts\opentide.exe'
-          & $python -m pip install --quiet $wheel[0].FullName
-          & $opentide --version
-          & $python -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
-          $workspace = Join-Path $env:RUNNER_TEMP 'smoke-workspace'
-          & $opentide --json setup --path $workspace --yes | Out-Null
-          Push-Location $workspace
-          & $opentide --json doctor --offline
-          Pop-Location
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: wheels-${{ matrix.os }}
-          path: wheelhouse/*.whl
-          if-no-files-found: error
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-packages.yml
+    with:
+      ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+      pypi-version: ${{ needs.guard.outputs.pypi_version }}
+      npm-version: ${{ needs.guard.outputs.version }}
 
   # The sdist carries the workspace's manifests, sources and embedded data: a
   # platform without a wheel (musl, free-threaded CPython) builds from it
@@ -346,177 +292,15 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
-  # @opentide/opentide's native packages (napi-rs, UC-5.3): the facade with
-  # `cli` for each target, as `opentide.<platform>.node`, built with the npm
-  # packages at the release's version (the loader napi-rs writes names it).
-  npm-native:
-    name: npm native (${{ matrix.platform }})
-    needs: [guard, checks]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: true
-      matrix:
-        # scripts/engine/release.py TARGETS, and bindings/node/package.json's
-        # napi targets: no musl.
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            platform: linux-x64-gnu
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            platform: linux-arm64-gnu
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            platform: darwin-arm64
-          # GitHub retired the Intel macOS runners; cross-compile on Apple silicon.
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            platform: darwin-x64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            platform: win32-x64-msvc
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
-            platform: win32-arm64-msvc
-    env:
-      NPM_VERSION: ${{ needs.guard.outputs.version }}
-      TARGET: ${{ matrix.target }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
-      # The other images carry rustup; this one may not.
-      - name: Rust on Windows on Arm
-        if: matrix.os == 'windows-11-arm'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
-            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
-            & $installer -y --profile minimal --default-toolchain none
-            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          }
-      # Installing the file's toolchain (no name) ignores `--target`: add it after.
-      - name: Set up Rust
-        shell: bash
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add ${{ matrix.target }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-      # `npm ci` first: it refuses a package.json whose dependencies the lock
-      # does not name, and npm-version moves the optional ones.
-      - name: npm ci
-        shell: bash
-        working-directory: bindings/node
-        run: npm ci
-      - name: The npm packages at the release's version
-        shell: bash
-        run: python scripts/engine/release.py npm-version "${NPM_VERSION}"
-      - name: Build the addon
-        shell: bash
-        working-directory: bindings/node
-        run: OPENTIDE_VERSION="${NPM_VERSION}" node build.mjs --release --target "${TARGET}"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: npm-native-${{ matrix.platform }}
-          path: |
-            bindings/node/opentide.${{ matrix.platform }}.node
-            bindings/node/index.js
-            bindings/node/index.d.ts
-          if-no-files-found: error
-
-  # Every npm package as the tarball `npm publish` uploads, at the release's
-  # version, in the order they publish: the native packages, the package,
-  # its alias, then the language server's two. No token here.
-  npm-pack:
-    name: npm packages
-    needs: [guard, npm-native]
-    runs-on: ubuntu-latest
-    env:
-      NPM_VERSION: ${{ needs.guard.outputs.version }}
-      BASE: ${{ needs.guard.outputs.base }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-          package-manager-cache: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: native
-          pattern: npm-native-*
-      # Before npm-version, which `npm ci` would find out of step with the lock.
-      - name: Build the language server's packages
-        run: |
-          set -euo pipefail
-          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
-      - name: The packages at the release's version, each with its addon
-        run: |
-          set -euo pipefail
-          python3 scripts/engine/release.py npm-version "${NPM_VERSION}"
-          python3 scripts/engine/release.py lockstep "${BASE}" --npm "${NPM_VERSION}"
-          for dir in bindings/node/npm/*/; do
-            platform="$(basename "${dir}")"
-            cp "native/npm-native-${platform}/opentide.${platform}.node" "${dir}"
-            # The licence ships with every package (npm packs LICENSE whatever `files` says).
-            cp bindings/node/LICENSE "${dir}"
-          done
-          # The loader and declarations napi-rs wrote at this version.
-          cp native/npm-native-linux-x64-gnu/index.js native/npm-native-linux-x64-gnu/index.d.ts bindings/node/
-          node scripts/engine/check-npm-packs.mjs
-      - name: Pack
-        run: |
-          set -euo pipefail
-          mkdir -p npm/1-native npm/2-package npm/3-alias npm/4-lsp
-          for dir in bindings/node/npm/*/; do
-            (cd "${dir}" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/1-native")
-          done
-          (cd bindings/node && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/2-package")
-          (cd bindings/node/alias && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/3-alias")
-          for p in lsp-client lsp-worker; do
-            (cd "packages/$p" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/4-lsp")
-          done
-          # Each native package holds its addon and the licence.
-          for tarball in npm/1-native/*.tgz; do
-            tar -tzf "${tarball}" | grep -q '^package/opentide\..*\.node$'
-            tar -tzf "${tarball}" | grep -qx 'package/LICENSE'
-          done
-          ls -lR npm
-      # The language server's packages are engine assets; @opentide/opentide
-      # carries opentide's package data (license-scan.sh --product).
-      - name: license scan (no oracle references)
-        run: |
-          set -euo pipefail
-          bash scripts/engine/license-scan.sh npm/4-lsp
-          bash scripts/engine/license-scan.sh --product npm/1-native npm/2-package npm/3-alias
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: npm-packages
-          path: npm
-          if-no-files-found: error
-
   # --- Smoke tests: each artifact installed the way a user installs it ------
 
-  # `pip install` the wheel, its dependencies from PyPI, then `opentide --version`.
+  # `pip install` the wheel, its one dependency (pydantic) from PyPI, then
+  # scripts/build/smoke_package.py: `opentide --version`, the package's
+  # requirements against pyproject.toml, `opentide --json validate` on the
+  # tide corpus, and the SDK (Workspace.open, validate, run_json, the models).
   smoke-wheel:
     name: Smoke pip install (${{ matrix.os }})
-    needs: [guard, wheels]
+    needs: [guard, packages]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -525,24 +309,27 @@ jobs:
     env:
       PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
     steps:
+      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          path: wheels
+          path: ${{ runner.temp }}/wheels
           pattern: wheels-*
           merge-multiple: true
-      - name: pip install, then opentide --version
+      - name: pip install, then the version, validate on the tide corpus and the SDK
         shell: bash
         run: |
           set -euo pipefail
           python -m venv "${RUNNER_TEMP}/venv"
           if [[ -x "${RUNNER_TEMP}/venv/Scripts/python.exe" ]]; then bin="${RUNNER_TEMP}/venv/Scripts"; else bin="${RUNNER_TEMP}/venv/bin"; fi
-          "${bin}/python" -m pip install --quiet --find-links wheels --only-binary opentide "opentide==${PYPI_VERSION}"
-          out="$("${bin}/opentide" --version)"
-          echo "${out}"
-          grep -qF "${PYPI_VERSION}" <<< "${out}"
+          "${bin}/python" -m pip install --quiet --find-links "${RUNNER_TEMP}/wheels" --only-binary opentide "opentide==${PYPI_VERSION}"
+          "${bin}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
 
   # A build from the sdist, with whatever Rust the machine has (the runner
   # image's stable; the sdist leaves rust-toolchain.toml out), as on a
@@ -555,22 +342,25 @@ jobs:
     env:
       PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
     steps:
+      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sdist
-          path: sdist
-      - name: pip install the sdist, then opentide --version
+          path: ${{ runner.temp }}/sdist
+      - name: pip install the sdist, then the version, validate on the tide corpus and the SDK
         run: |
           set -euo pipefail
           cargo --version
           python -m venv "${RUNNER_TEMP}/venv"
-          "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-binary opentide sdist/opentide-*.tar.gz
-          out="$("${RUNNER_TEMP}/venv/bin/opentide" --version)"
-          echo "${out}"
-          grep -qF "${PYPI_VERSION}" <<< "${out}"
+          "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-binary opentide "${RUNNER_TEMP}"/sdist/opentide-*.tar.gz
+          "${RUNNER_TEMP}/venv/bin/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
 
   # The npm packages installed as a user installs them, before npm has any:
   # every tarball published to a throwaway local registry (Verdaccio, no
@@ -582,7 +372,7 @@ jobs:
   # but the test's own tools (its package-lock.json).
   smoke-npm:
     name: Smoke npm install (${{ matrix.os }})
-    needs: [guard, npm-pack]
+    needs: [guard, packages]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -618,7 +408,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      BASE: ${{ needs.guard.outputs.base }}
+      # The crates' version: the release's, or a candidate's X.Y.Z-rc.N.
+      CRATES_VERSION: ${{ needs.guard.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -638,11 +429,11 @@ jobs:
         run: |
           set -euo pipefail
           config="$(python3 scripts/engine/release.py crate-patch crates-packages "${RUNNER_TEMP}/packages")"
-          cargo install --config "${config}" --path "${RUNNER_TEMP}/packages/opentide-${BASE}" \
+          cargo install --config "${config}" --path "${RUNNER_TEMP}/packages/opentide-${CRATES_VERSION}" \
             --features cli --debug --root "${RUNNER_TEMP}/cargo"
           out="$("${RUNNER_TEMP}/cargo/bin/opentide" --version)"
           echo "${out}"
-          grep -qF "${BASE}" <<< "${out}"
+          grep -qF "${CRATES_VERSION}" <<< "${out}"
 
   # The binary installers, against the assets this run built.
   smoke-installer:
@@ -692,7 +483,7 @@ jobs:
   # attest action, nothing else.
   attest:
     name: Attestations
-    needs: [guard, checks, release-assets, wheels, sdist, npm-pack, smoke-wheel, smoke-sdist, smoke-npm, smoke-cargo, smoke-installer]
+    needs: [guard, checks, release-assets, packages, sdist, smoke-wheel, smoke-sdist, smoke-npm, smoke-cargo, smoke-installer]
     if: needs.guard.outputs.channel != 'dry-run'
     runs-on: ubuntu-latest
     permissions:
@@ -730,8 +521,7 @@ jobs:
             dist/crates/*.crate
             dist/npm/*/*.tgz
 
-  # Releasing development: the tag and the GitHub Release, on the commit this
-  # run built, with every asset, before anything reaches a registry. A
+  # The tag and the GitHub Release, on the commit this run built, with every asset, before anything reaches a registry. A
   # release's notes are the file the notes PR wrote
   # (.github/release-notes/vX.Y.Z.md); a candidate's, CHANGELOG.md's
   # [Unreleased] (scripts/build/release.py notes). A candidate is a
@@ -776,7 +566,8 @@ jobs:
             "${flags[@]}"
 
   # What a consumer downloads checks out: the sums, the asset set, and each
-  # asset's attestation, signed by this workflow run from development. It runs
+  # asset's attestation, signed by this workflow run from development (a
+  # candidate's: development or integration/unified-core). It runs
   # after the release, and on its own when resuming one (checkout_ref): the
   # registries publish only once it passed.
   verify-assets:
@@ -791,6 +582,7 @@ jobs:
       attestations: read
     env:
       TAG: ${{ needs.guard.outputs.tag }}
+      CHANNEL: ${{ needs.guard.outputs.channel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -810,23 +602,29 @@ jobs:
           python3 scripts/engine/release.py check-assets published "${TAG}"
           # --repo alone accepts an attestation any workflow of the repository
           # signed, on any branch: each asset's must come from publish.yml run
-          # from development.
+          # from development (a candidate's, from development or
+          # integration/unified-core: the branches the guard runs one from).
           repo_re="${GITHUB_REPOSITORY//./\\.}"
-          identity="^https://github\\.com/${repo_re}/\\.github/workflows/publish\\.yml@refs/heads/development\$"
+          branch_re="development"
+          if [ "${CHANNEL}" = "rc" ]; then branch_re="(development|integration/unified-core)"; fi
+          identity="^https://github\\.com/${repo_re}/\\.github/workflows/publish\\.yml@refs/heads/${branch_re}\$"
           for asset in published/*; do
             gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --cert-identity-regex "${identity}"
           done
 
-  # PyPI (a release) or TestPyPI (a candidate), with trusted publishing: the
-  # environment `pypi` or `testpypi` names the publisher. The uploads are the
+  # PyPI, a release or a candidate's pre-release, with trusted publishing: the
+  # environment `pypi` names the publisher. The uploads are the
   # wheels and the sdist this run built and smoke-tested.
   pypi:
     name: Publish to PyPI
     needs: [guard, verify-assets]
     runs-on: ubuntu-latest
+    # A candidate is a PyPI pre-release (X.Y.ZrcN): pip and uv install it only
+    # when asked (`pip install --pre`, `uv pip install --prerelease=allow`) or
+    # pinned exactly. One environment, one trusted publisher.
     environment:
-      name: ${{ needs.guard.outputs.channel == 'rc' && 'testpypi' || 'pypi' }}
-      url: ${{ needs.guard.outputs.channel == 'rc' && 'https://test.pypi.org/p/opentide' || 'https://pypi.org/p/opentide' }}
+      name: pypi
+      url: https://pypi.org/p/opentide
     permissions:
       contents: read
       id-token: write
@@ -903,25 +701,16 @@ jobs:
           PY
 
       - name: Publish to PyPI
-        if: env.CHANNEL == 'release'
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist/
-          skip-existing: true
-
-      - name: Publish to TestPyPI
-        if: env.CHANNEL == 'rc'
-        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
-        with:
-          packages-dir: dist/
-          repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
       # Inline on purpose: a resumed run checks out an older tag, which would
       # not contain a helper script added after it.
       - name: Verify PyPI lists every built file
         env:
-          PYPI_JSON_BASE: ${{ needs.guard.outputs.channel == 'rc' && 'https://test.pypi.org/pypi' || 'https://pypi.org/pypi' }}
+          PYPI_JSON_BASE: https://pypi.org/pypi
           VERIFY_TIMEOUT_SECONDS: "600"
           VERIFY_INTERVAL_SECONDS: "15"
         run: |
@@ -1044,7 +833,6 @@ jobs:
   crates:
     name: Publish to crates.io
     needs: [guard, verify-assets]
-    if: needs.guard.outputs.channel == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
@@ -1061,6 +849,13 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      # A candidate's crates are crates.io pre-releases, X.Y.Z-rc.N: this
+      # checkout only (the branch keeps X.Y.Z) carries that version and pins.
+      - name: A candidate's crates at its pre-release version
+        if: needs.guard.outputs.version != needs.guard.outputs.base
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: python3 scripts/engine/release.py bump "${VERSION}"
       - run: python3 scripts/engine/release.py vendor
       # Fails until trusted publishing is registered; the token covers that.
       - name: crates.io login (trusted publishing)
@@ -1092,44 +887,20 @@ jobs:
           CRATES_IO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: python3 scripts/engine/release.py trust publish.yml
 
-  # A candidate's crates: `cargo publish --workspace --dry-run`, every
-  # package resolved against the others, uploaded nowhere. No token.
-  crates-dry-run:
-    name: crates.io (dry run)
-    needs: [guard, verify-assets]
-    if: needs.guard.outputs.channel == 'rc'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - run: python3 scripts/engine/release.py vendor
-      - run: python3 scripts/engine/release.py publish --dry-run
-
   # npm, with trusted publishing (the workflow's OIDC identity, no token) and
-  # provenance: the tarballs npm-pack packed and smoke-npm installed, in
-  # order. A candidate goes under the dist-tag `next`, so `npm install
-  # @opentide/opentide` keeps resolving the last release. A version npm has is
+  # provenance: the tarballs build-packages.yml packed and smoke-npm installed, in
+  # order. A release only: a candidate publishes nothing to npm (ci.yml's
+  # `packages` artifacts carry the tarballs to test). A version npm has is
   # skipped, so a resumed run picks up where it stopped. Trusted publishing
   # needs npm 11.5.1 or later on Node 22.14.0 or later.
   npm:
     name: Publish to npm
     needs: [guard, verify-assets]
+    if: needs.guard.outputs.channel == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    env:
-      DIST_TAG: ${{ needs.guard.outputs.channel == 'rc' && 'next' || 'latest' }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -1155,23 +926,23 @@ jobs:
               echo "${name}@${version} is already published"
               continue
             fi
-            npm publish "${tarball}" --provenance --access public --tag "${DIST_TAG}"
+            npm publish "${tarball}" --provenance --access public --tag latest
           done
 
-  # What the registries now serve installs and runs: pip from PyPI (TestPyPI
-  # for a candidate, its dependencies from PyPI), npx from npm, and for a
-  # release `cargo install opentide --features cli` from crates.io. Each
-  # waits out the registry's cache.
+  # What the registries now serve installs and runs: pip from PyPI (a
+  # candidate's pre-release by its exact version, which pip installs without
+  # --pre), `cargo install opentide --features cli` from crates.io, and for a
+  # release npx from npm. Each waits out the registry's cache.
   smoke-registries:
     name: Smoke the registries
-    needs: [guard, pypi, npm, crates, crates-dry-run]
-    if: ${{ !cancelled() && needs.pypi.result == 'success' && needs.npm.result == 'success' && (needs.crates.result == 'success' || needs.crates-dry-run.result == 'success') }}
+    needs: [guard, pypi, npm, crates]
+    if: ${{ !cancelled() && needs.pypi.result == 'success' && needs.crates.result == 'success' && (needs.npm.result == 'success' || (needs.npm.result == 'skipped' && needs.guard.outputs.channel == 'rc')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       CHANNEL: ${{ needs.guard.outputs.channel }}
-      BASE: ${{ needs.guard.outputs.base }}
-      NPM_VERSION: ${{ needs.guard.outputs.version }}
+      # The release's version, or a candidate's X.Y.Z-rc.N (the crates).
+      VERSION: ${{ needs.guard.outputs.version }}
       PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
     steps:
       # Only the toolchain pin: `cargo install` runs here with the release
@@ -1192,40 +963,36 @@ jobs:
       - name: pip install opentide, then opentide --version
         run: |
           set -euo pipefail
-          index=https://pypi.org/simple
-          if [ "${CHANNEL}" = "rc" ]; then index=https://test.pypi.org/simple; fi
           python -m venv "${RUNNER_TEMP}/venv"
           for attempt in $(seq 1 40); do
-            if "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-cache-dir \
-              --index-url "${index}" --extra-index-url https://pypi.org/simple "opentide==${PYPI_VERSION}"; then
+            if "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-cache-dir "opentide==${PYPI_VERSION}"; then
               break
             fi
-            if [ "${attempt}" = 40 ]; then echo "::error::opentide==${PYPI_VERSION} does not install from ${index}"; exit 1; fi
+            if [ "${attempt}" = 40 ]; then echo "::error::opentide==${PYPI_VERSION} does not install from PyPI"; exit 1; fi
             sleep 30
           done
           out="$("${RUNNER_TEMP}/venv/bin/opentide" --version)"
           echo "${out}"
           grep -qF "${PYPI_VERSION}" <<< "${out}"
       - name: npx @opentide/opentide --version
+        if: env.CHANNEL == 'release'
         run: |
           set -euo pipefail
           for attempt in $(seq 1 20); do
-            if out="$(npx --yes "@opentide/opentide@${NPM_VERSION}" --version)"; then
+            if out="$(npx --yes "@opentide/opentide@${VERSION}" --version)"; then
               break
             fi
-            if [ "${attempt}" = 20 ]; then echo "::error::npx @opentide/opentide@${NPM_VERSION} does not run"; exit 1; fi
+            if [ "${attempt}" = 20 ]; then echo "::error::npx @opentide/opentide@${VERSION} does not run"; exit 1; fi
             sleep 30
           done
           echo "${out}"
-          grep -qF "${NPM_VERSION}" <<< "${out}"
+          grep -qF "${VERSION}" <<< "${out}"
       - name: Set up Rust
-        if: env.CHANNEL == 'release'
         run: rustup toolchain install --profile minimal --no-self-update
       - name: cargo install opentide --features cli, then opentide --version
-        if: env.CHANNEL == 'release'
         run: |
           set -euo pipefail
-          cargo install opentide --version "=${BASE}" --features cli --locked --root "${RUNNER_TEMP}/cargo"
+          cargo install opentide --version "=${VERSION}" --features cli --locked --root "${RUNNER_TEMP}/cargo"
           out="$("${RUNNER_TEMP}/cargo/bin/opentide" --version)"
           echo "${out}"
-          grep -qF "${BASE}" <<< "${out}"
+          grep -qF "${VERSION}" <<< "${out}"

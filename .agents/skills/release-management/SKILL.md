@@ -33,11 +33,11 @@ Never tag by hand. Trunk is `development`.
 | Fact | Detail |
 |------|--------|
 | Package | `opentide` on PyPI |
-| Tag | `v0.x.y` (leading `v`); a release candidate `v0.x.y-rc.N` |
+| Tag | `v0.x.y` (leading `v`); a release candidate `v0.x.y-rc.N` (the Rust-core transition) |
 | Release | **Run workflow** on `development`, no inputs → [`publish.yml`](../../../.github/workflows/publish.yml) checks, builds, smoke-tests, attests, creates the tag + GitHub Release, then publishes to PyPI, crates.io and npm. Nothing else publishes: no workflow runs on a `v*` tag or a Release made by hand |
 | Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
 | Lockstep | The crates are at that version: `python3 scripts/engine/release.py lockstep 0.x.y` (the workspace version and every internal pin). The workflow writes it into the npm packages (`release.py npm-version`) and checks them (`lockstep --npm`) |
-| Auth | OIDC trusted publishing on all three registries. PyPI environment `pypi` (TestPyPI `testpypi`). Workflow filename `publish.yml` everywhere. `CARGO_REGISTRY_TOKEN` only for a crate's first version |
+| Auth | OIDC trusted publishing on all three registries. PyPI environment `pypi`, for releases and candidates (no TestPyPI). Workflow filename `publish.yml` everywhere. `CARGO_REGISTRY_TOKEN` only for a crate's first version (the first candidate's, for the six new names) |
 | Engine tags | The engine's own `engine-vX.Y.Z` series (`engine-release.yml`) ended with the release train; the engine skill is retired |
 
 ## What a release publishes
@@ -83,7 +83,7 @@ Do not skip Step 1. The tag must sit on the merge commit that **already contains
 
 ### Step 0 — Bump the crates, and run a release candidate
 
-The crates carry the product version: in a pull request to `development` (it can be the notes PR of Step 1, or come before it so that a candidate can run first):
+The crates carry the product version: in a pull request to `development` (it can be the notes PR of Step 1, or come before it so that a candidate can run first), or to `integration/unified-core` for a candidate cut there before it merges:
 
 ```bash
 python3 scripts/engine/release.py bump 0.x.y      # workspace version, internal pins, Cargo.lock
@@ -92,9 +92,20 @@ python3 scripts/engine/release.py lockstep 0.x.y  # what the release guard check
 
 The `Cargo.lock` diff is only the workspace crates' `version` lines; anything else means Cargo re-resolved: restore the lock and bump again.
 
-**Release candidate.** Once the bump is on `development`, Run **Publish** with `release_candidate: 1` (then 2, ...). It publishes `v0.x.y-rc.N`: a GitHub pre-release with every asset and attestation, the wheels and sdist on **TestPyPI** (`0.x.yrcN`), the npm packages under the dist-tag **`next`** (`0.x.y-rc.N`), and the crates as `cargo publish --dry-run` (nothing on crates.io). Its notes quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard refuses one whose version is not above the newest dated `CHANGELOG.md` heading.
+**Release candidate** (for the Rust-core transition; it may be retired after). Once the bump is on the branch, Run **Publish** on `integration/unified-core` (or `development`) with `release_candidate: 1` (then 2, ...); the guard refuses a candidate from any other branch, and a release from anything but `development`. It publishes `v0.x.y-rc.N` as pre-releases:
+
+| Where | What |
+|-------|------|
+| GitHub | A **pre-release** (never Latest) tagged `v0.x.y-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
+| PyPI | `0.x.yrcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==0.x.yrcN` |
+| crates.io | Every crate at `0.x.y-rc.N`, in dependency order (the workflow runs `release.py bump 0.x.y-rc.N` in its own checkout; the branch keeps `0.x.y`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
+| npm | **Nothing.** Test the npm packages from ci.yml's `packages` artifacts (`npm-<platform>`) |
+
+Its notes quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates").
 
 **Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
+
+**A build to test, nothing published.** ci.yml's full set (`packages`, `build-packages.yml`) keeps the wheels (`wheels-<platform>`) and npm tarballs (`npm-<platform>`) of a development version for 14 days: `gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64`, then `uv pip install opentide-*.whl`; `npm install ./opentide-opentide-*.tgz`. With a Rust toolchain: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"`.
 
 ### Step 1 — Prepare notes PR (must merge to `development` first)
 
@@ -214,7 +225,7 @@ Run **Publish** on `development` with no inputs:
 
 | Where | How |
 |-------|-----|
-| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish.yml`, `ref: development`, no inputs (a candidate: `inputs: {release_candidate: "1"}`) |
+| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish.yml`, `ref: development`, no inputs (a candidate: `ref: integration/unified-core`, `inputs: {release_candidate: "1"}`) |
 | Browser | Actions → Publish → Run workflow → branch `development`, inputs empty |
 | Local | `gh workflow run publish.yml --repo opentidehq/opentide --ref development` |
 
@@ -308,10 +319,12 @@ Milestones are optional; `setup-cli-v1` is the only precedent. The Cursor GitHub
 | Guard: `the workspace version in Cargo.toml is …, not 0.x.y` | Step 0: `release.py bump 0.x.y` in a pull request, merged |
 | Guard: `… is not newer than …, the last release` (a candidate) | Bump the workspace past the last release first (Step 0) |
 | Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` (a `dry_run` runs anywhere) |
+| Guard: `Run a release candidate from integration/unified-core or development` | A candidate was started on another branch. Pick one of those two |
+| Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
 | A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
 | A registry job failed after the **GitHub Release** job created the tag | Run workflow with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
 | `Verify the published assets` failed | It is the published assets that failed (sums, set, attestation): fix the cause, then resume with `checkout_ref`, or cut a patch release |
-| 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (`testpypi` on TestPyPI). Re-run; do not retag |
+| 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (a candidate's too). Re-run; do not retag |
 | crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume |
 | npm: `E404` / `ENEEDAUTH` on publish | The package has no trusted publisher for `publish.yml`, or it expired (two days without a publish). Register it, resume |
 | `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y`; `skip-existing` uploads only the missing files. The step log prints the dispatch command |

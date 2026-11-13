@@ -5,10 +5,12 @@
 # Usage: license-scan.sh [--product] <file-or-dir>...  (zips, tarballs and .crate files are unpacked)
 #
 # --product scans what carries opentide's own package data (the `opentide`
-# binaries and the opentide-cli crate, as the PyPI wheel always has): its
-# `doctor` explain page (src/opentide/data/diagnostics/platform_sdk.md) names
-# `splunklib`, the Python module of the Splunk platform client that the check
-# looks for, not an oracle. Every other oracle reference still fails it.
+# binaries, the opentide-cli crate and @opentide/opentide, as the PyPI wheel
+# always has): its `platform_sdk` explain page
+# (src/opentide/data/diagnostics/platform_sdk.md, still shipped though the Rust
+# `doctor` has no such check since UC-6.2) names `splunklib`, the Python module
+# of the Splunk platform client, not an oracle. Every other oracle reference
+# still fails it.
 set -euo pipefail
 pattern='kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|kbn-es-query|EqlBaseParser|org/apache/lucene/queryparser'
 if [[ "${1:-}" == "--product" ]]; then

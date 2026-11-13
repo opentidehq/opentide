@@ -92,6 +92,7 @@ checks each against the schema (cyclonedx-python-lib, pinned) and for references
 All seven are assets of every release of the release train (`publish.yml`, UC-5.5, #840), listed
 in `SHA256SUMS` and covered by its provenance attestations, and are generated and validated in
 every dry run (CI's full set). The engine's four are scanned for oracle references like every
-engine asset; the wheel's is not (its `splunk-sdk` dependency is a name the oracle licence scan
-refuses in engine assets). Rust SBOMs leave out build dependencies and name workspace crates by their path in
+engine asset, and the product's three (`opentide.cdx.json`, `opentide-node.cdx.json` and, since
+the wheel depends on `pydantic` alone (UC-6.2), `opentide-wheel.cdx.json`) with `--product`.
+Rust SBOMs leave out build dependencies and name workspace crates by their path in
 the repository, never the build machine's.

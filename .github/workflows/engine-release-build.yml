@@ -105,8 +105,8 @@ jobs:
           persist-credentials: false
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
       # (`rustup toolchain install` with no name), and the target the job builds.
-      # windows-11-arm's image may lack rustup (publish-pypi.yml installs it there).
-      # The other images carry rustup; this one may not (as in publish-pypi.yml).
+      # windows-11-arm's image may lack rustup (build-packages.yml installs it there
+      # too). The other images carry rustup; this one may not.
       - name: Rust on Windows on Arm
         if: matrix.os == 'windows-11-arm'
         shell: pwsh
@@ -302,9 +302,8 @@ jobs:
   # it links, the lsp npm packages (engine assets); the `opentide` binaries and
   # crate, @opentide/opentide, and the PyPI wheel built from the same commit
   # (its Python dependencies and the crates in opentide._native), which are the
-  # product's. The wheel depends on splunk-sdk (the Splunk platform client), a
-  # name the oracle licence scan rightly refuses in engine assets, so the
-  # assets job does not scan its SBOM. Each SBOM is checked against the
+  # product's. Since UC-6.2 the wheel depends on pydantic alone, so its SBOM
+  # is scanned like the rest of the product's. Each SBOM is checked against the
   # CycloneDX 1.5 schema. SOURCE_DATE_EPOCH (the commit's time) fixes their
   # timestamps.
   sbom:
@@ -394,15 +393,15 @@ jobs:
           pattern: product-asset-*
           merge-multiple: true
       # The engine's assets carry no oracle reference at all. The `opentide`
-      # binaries carry opentide's package data, as the wheel does: its doctor
-      # page names the Splunk client's Python module (license-scan.sh
-      # --product). The wheel's SBOM lists splunk-sdk, a dependency of the
-      # wheel, by name: it is not scanned.
+      # binaries carry opentide's package data, as the wheel does: its
+      # `platform_sdk` explain page names the Splunk client's Python module
+      # (license-scan.sh --product). Every product asset is scanned, the
+      # wheel's SBOM included: the wheel depends on pydantic alone (UC-6.2).
       - name: license scan (no oracle references)
         run: |
           set -euo pipefail
           bash scripts/engine/license-scan.sh dist
-          find product -type f ! -name opentide-wheel.cdx.json -print0 | xargs -0 bash scripts/engine/license-scan.sh --product
+          bash scripts/engine/license-scan.sh --product product
       # The repository's installers name no release: each published copy
       # installs its own tag by default.
       - name: installers
