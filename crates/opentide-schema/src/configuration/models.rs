@@ -1097,8 +1097,12 @@ pub struct ExabeamSetup {
     /// Verify the tenant's TLS certificate.
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
-    /// Exabeam API region. Calls go to https://api.<region>.exabeam.cloud; it is not derived
-    /// from the console URL (use1 is us-east, euw6 is ch).
+    /// Exabeam API region. Calls go to `https://api.<region>.exabeam.cloud`; it is not
+    /// derived from the console URL (use1 is us-east, euw6 is ch).
+    #[schemars(
+        description = "Exabeam API region. Calls go to https://api.<region>.exabeam.cloud; it is \
+                       not derived from the console URL (use1 is us-east, euw6 is ch)."
+    )]
     pub region: ExabeamRegion,
     /// API key with Correlation Rules at Read Write Delete. Must be a $NAME placeholder.
     pub client_id: EnvPlaceholder,
