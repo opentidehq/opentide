@@ -1208,21 +1208,11 @@ impl Run<'_> {
                 install: !flag("no_install"),
             },
             "platforms" => Step::Platforms(
-                [
-                    ("sentinel", "sentinel"),
-                    ("splunk", "splunk"),
-                    ("crowdstrike", "crowdstrike"),
-                    ("defender_for_endpoint", "defender_for_endpoint"),
-                    ("sentinel_one", "sentinel_one"),
-                    ("carbon_black_cloud", "carbon_black_cloud"),
-                    ("harfanglab", "harfanglab"),
-                    ("elastic", "elastic"),
-                    ("sysdig", "sysdig"),
-                ]
-                .into_iter()
-                .filter(|(id, _)| flag(id))
-                .map(|(_, value)| value.to_owned())
-                .collect(),
+                opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Cli)
+                    .into_iter()
+                    .filter(|id| flag(id))
+                    .map(str::to_owned)
+                    .collect(),
             ),
             "repo" => Step::Repo(RepoOptions {
                 name: text("name"),

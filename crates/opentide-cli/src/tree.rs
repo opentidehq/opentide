@@ -2380,3 +2380,60 @@ pub enum ValidateCommand {
     )]
     Query(ValidateQueryArgs),
 }
+
+#[cfg(test)]
+mod tests {
+    use clap::{Args, ValueEnum};
+
+    use super::{Platform, SetupPlatformsArgs};
+    use opentide_schema::platforms::{Order, ordered, select};
+
+    #[test]
+    fn platform_choices_are_the_platform_tables_in_its_cli_order() {
+        let names: Vec<String> = Platform::value_variants()
+            .iter()
+            .filter_map(|platform| platform.to_possible_value())
+            .map(|value| value.get_name().to_owned())
+            .collect();
+        assert_eq!(names, ordered(Order::Cli));
+    }
+
+    #[test]
+    fn setup_platforms_has_one_flag_per_platform_in_the_cli_order() {
+        let command = SetupPlatformsArgs::augment_args(clap::Command::new("platforms"));
+        let flags: Vec<(String, String)> = command
+            .get_arguments()
+            .filter(|arg| opentide_schema::platforms::is_builtin(arg.get_id().as_str()))
+            .map(|arg| {
+                (
+                    arg.get_id().to_string(),
+                    arg.get_help().map(ToString::to_string).unwrap_or_default(),
+                )
+            })
+            .collect();
+        let expected: Vec<String> = ordered(Order::Cli)
+            .iter()
+            .map(|id| (*id).to_owned())
+            .collect();
+        let ids: Vec<String> = flags.iter().map(|(id, _)| id.clone()).collect();
+        assert_eq!(ids, expected);
+        for (platform, (id, help)) in select(Order::Cli, |_| true).into_iter().zip(&flags) {
+            assert_eq!(platform.id, id);
+            assert!(
+                help.starts_with(&format!("Enable {}", platform.label)),
+                "{id}: {help}"
+            );
+            let long = arg_long(&command, id);
+            assert_eq!(long, id.replace('_', "-"), "{id}");
+        }
+    }
+
+    fn arg_long(command: &clap::Command, id: &str) -> String {
+        command
+            .get_arguments()
+            .find(|arg| arg.get_id() == id)
+            .and_then(clap::Arg::get_long)
+            .unwrap_or_default()
+            .to_owned()
+    }
+}

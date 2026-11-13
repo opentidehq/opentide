@@ -39,6 +39,7 @@ pub mod migration;
 pub mod node;
 pub mod objects;
 pub mod pins;
+pub mod platforms;
 #[cfg(feature = "python")]
 pub mod python;
 mod revision;

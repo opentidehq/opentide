@@ -83,18 +83,9 @@ pub struct RuleConfigurations {
 }
 
 impl RuleConfigurations {
-    /// The platforms, in the container's order.
-    pub const PLATFORMS: [&'static str; 9] = [
-        "sentinel",
-        "defender_for_endpoint",
-        "splunk",
-        "sentinel_one",
-        "crowdstrike",
-        "harfanglab",
-        "carbon_black_cloud",
-        "elastic",
-        "sysdig",
-    ];
+    /// The platforms, in the container's order ([`crate::platforms`]).
+    pub const PLATFORMS: [&'static str; crate::platforms::COUNT] =
+        crate::platforms::ordered(crate::platforms::Order::Container);
 
     /// Each block's `status`, keyed by platform, in the container's order,
     /// for the blocks that are set and have one: what deploy and promotion

@@ -127,4 +127,87 @@ impl<'v> Vocab<'v> {
                 )
             })
     }
+
+    /// The entry keys of `field`, in the vocabulary's order
+    /// (`vocabulary_order`).
+    pub fn order(&self, field: &str) -> Vec<String> {
+        self.vocabularies
+            .get(field)
+            .map(|vocabulary| vocabulary.entries.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// ATT&CK's tactics in matrix order, as the vocabulary's release names
+    /// them (`attack_tactics`).
+    pub fn attack_tactics(&self) -> Vec<String> {
+        self.vocabularies
+            .get("att&ck")
+            .map(|vocabulary| {
+                vocabulary
+                    .metadata
+                    .stages
+                    .iter()
+                    .filter_map(|stage| stage.name.clone().filter(|name| !name.is_empty()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The tactics a technique serves, each once, in matrix order
+    /// (`technique_tactics`).
+    pub fn technique_tactics(&self, technique: &str, order: &[String]) -> Vec<String> {
+        let mut tactics: Vec<String> = Vec::new();
+        for tactic in self.enrich("att&ck", technique).stages {
+            if !tactic.is_empty() && !tactics.contains(&tactic) {
+                tactics.push(tactic);
+            }
+        }
+        let position = |tactic: &String| {
+            order
+                .iter()
+                .position(|known| known == tactic)
+                .unwrap_or(order.len())
+        };
+        tactics.sort_by_key(position);
+        tactics
+    }
+
+    /// The kill-chain stage `phase` belongs to (its entry's first stage, else
+    /// the phase itself), or empty when the vocabulary has no such phase
+    /// (`killchain_stage`).
+    pub fn killchain_stage(&self, phase: &str) -> String {
+        let Some(vocabulary) = self.vocabularies.get("killchain") else {
+            return String::new();
+        };
+        let Some(entry) = vocabulary.entries.get(phase) else {
+            return String::new();
+        };
+        entry
+            .stages
+            .first()
+            .filter(|stage| !stage.is_empty())
+            .cloned()
+            .unwrap_or_else(|| phase.to_owned())
+    }
+
+    /// Other names of an ATT&CK group (`att&ck::G0016` is also Cozy Bear),
+    /// without the group's own name (`actor_aliases`).
+    pub fn actor_aliases(&self, actor: &str) -> Vec<String> {
+        let id = actor.rsplit("::").next().unwrap_or(actor);
+        let Some(vocabulary) = self.vocabularies.get("att&ck.groups") else {
+            return Vec::new();
+        };
+        let Some(entry) = vocabulary.entries.get(id) else {
+            return Vec::new();
+        };
+        let Some(aliases) = entry.extra.get("alias").and_then(|value| value.as_array()) else {
+            return Vec::new();
+        };
+        aliases
+            .iter()
+            .filter_map(|alias| alias.as_str())
+            .filter(|alias| !alias.is_empty() && *alias != entry.name)
+            .map(str::to_owned)
+            .collect()
+    }
 }

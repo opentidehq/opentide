@@ -243,6 +243,8 @@ pub struct Catalog<'i> {
     signal_by_uuid: HashMap<String, usize>,
     relations: Relations<'i>,
     statuses: Statuses,
+    /// Each rule's `configurations` as written, by UUID.
+    written: HashMap<String, crate::json::Json>,
 }
 
 impl<'i> Catalog<'i> {
@@ -255,8 +257,18 @@ impl<'i> Catalog<'i> {
     /// rules first, then threats, then objectives.
     pub fn build(index: &'i Index, statuses: Statuses) -> Result<Self, PhaseError> {
         let mut rules = Vec::new();
+        let mut written = HashMap::new();
         for object in index.family("rule") {
             let model = rule_model(&object.document)?;
+            if let Some(configurations) = object
+                .document
+                .root()
+                .and_then(|root| root.get("configurations"))
+            {
+                written
+                    .entry(object.uuid.clone())
+                    .or_insert_with(|| crate::json::Json::from_node(configurations));
+            }
             let name = match &model {
                 RuleModel::V1_0(rule) => rule.name.clone(),
                 RuleModel::V1_1(rule) => rule.name.clone(),
@@ -323,7 +335,14 @@ impl<'i> Catalog<'i> {
             signal_by_uuid,
             relations: Relations::new(index),
             statuses,
+            written,
         })
+    }
+
+    /// A rule's `configurations` as its file writes them: what the author
+    /// set, beside the defaults its model fills in.
+    pub fn written_configurations(&self, uuid: &str) -> Option<&crate::json::Json> {
+        self.written.get(uuid)
     }
 
     /// The records of `scope`.
