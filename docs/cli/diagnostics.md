@@ -121,6 +121,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`exabeam_threshold_function`](#exabeam_threshold_function) | A threshold's `function` is not an Exabeam function, or its `field` is missing or blank. |
 | [`exabeam_threshold_operator`](#exabeam_threshold_operator) | A threshold's `operator` is not one its function takes. |
 | [`exabeam_threshold_value`](#exabeam_threshold_value) | A threshold's `value` does not have the shape its operator takes. |
+| [`exabeam_unknown_value`](#exabeam_unknown_value) | An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
 | [`external_id_shape`](#external_id_shape) | A vendor rule id in deployment state has the wrong form. |
 | [`falco_append_condition`](#falco_append_condition) | A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not. |
@@ -2138,6 +2139,26 @@ threshold:
 ### How to fix
 
 Write a whole number for `count` and `unique_count`, a number for the other numeric functions, and a list for `in` and `not_in`.
+
+## exabeam_unknown_value
+
+An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists.
+
+Severity: warning. Reported by the analysis engine in an Exabeam Query Language query (`exabeam`, language-exabeam 1.1), at the value: `opentide lint` (its `queries` check), `opentide validate query` and an editor running `opentide lsp start` show it, and `opentide validate` does not fail on it. A tenant's parsers may emit values the CIM lacks, so it is never an error, but a value no event carries makes the filter match nothing. Values compare without regard to case. Wildcards, `WLD`/`RGX` calls, values between slashes, `null`, an empty value, an unquoted number or IP address, a `@field` and an `AS` name defined earlier are not checked. Engines before language-server 0.16.1 do not report it.
+
+### Example
+
+```text illustrative
+activity_type:"network-connection" AND process_name:"powershell.exe"
+```
+
+### How to fix
+
+Use the CIM's value, which the message suggests when one is close (`process_create` → `process-create`) and the editor completes: here `network-session` or `network-traffic`. An `activity_type` is `<subject>-<activity>`. If the tenant really emits the value, confirm it with `opentide query --platform exabeam` and keep it. Then run `opentide lint --check queries` again.
+
+```text illustrative
+activity_type:"network-session" AND process_name:"powershell.exe"
+```
 
 ## external_id_in_rule
 
