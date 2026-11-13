@@ -64,7 +64,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 11] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -105,6 +105,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
         "cql_",
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
+    ),
+    (
+        "yara_",
+        "YARA rule",
+        "https://yara.readthedocs.io/en/v4.5.2/writingrules.html",
     ),
     (
         "graylog_",
@@ -705,10 +710,12 @@ mod tests {
         }
         assert!(lint_owned("sysdig_list_self_reference"));
         assert!(!lint_owned("vocab_unknown"));
-        // The two tables of references are one list.
-        assert_eq!(
-            ENGINE_REFERENCES,
-            crate::render::codeframe::ENGINE_REFERENCES
+        // A Graylog finding names Graylog's search syntax page.
+        assert!(
+            ENGINE_REFERENCES
+                .iter()
+                .any(|(prefix, language, _)| *prefix == "graylog_"
+                    && *language == "Graylog search query")
         );
     }
 

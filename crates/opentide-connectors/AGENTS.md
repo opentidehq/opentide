@@ -70,6 +70,15 @@ timeout and retries its Python client mounts). A cassette scenario per platform 
 `client.py` that drives the oracle's own client or deployer) is replayed by
 `tests/<platform>.rs`, which also asserts the outcomes `client.py` printed when it recorded.
 
+A query runner (`QueryRunner`) saves no search or rule, and stops an asynchronous search it stops
+waiting for where the API can (CrowdStrike). An Elastic rule preview is the one write: its alerts
+land in the preview index. Both `opentide query` with `kuery` and
+`validate query --platform elastic --live`, which previews every rule, make one.
+
+A new platform also needs a platform skill in [opentidehq/skills](https://github.com/opentidehq/skills),
+whose `coverage.json` CI checks against `opentide --json info` daily; a platform the skills do not
+cover fails that check and opens an issue there (the root `AGENTS.md`, definition of done item 5).
+
 ## Tests
 
 `cargo nextest run -p opentide-connectors framework harness crowdstrike harfanglab sysdig`: `tests/framework.rs` (TLS, CA,
