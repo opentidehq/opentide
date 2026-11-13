@@ -189,10 +189,11 @@ uv run ruff format --check src/opentide tests scripts
 echo "==> Ty type check"
 uv run ty check src/opentide
 
-echo "==> Cargo workspace: rustfmt, clippy, crate layers"
+echo "==> Cargo workspace: rustfmt, clippy, crate layers, deploy cassettes"
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --quiet -- -D warnings
 cargo xtask check-layers
+cargo xtask cassettes check
 
 echo "==> Engine invariants (I/O-free crates, names, skills, generated highlights)"
 bash scripts/engine/check-io-free.sh

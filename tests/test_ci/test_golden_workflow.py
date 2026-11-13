@@ -137,7 +137,7 @@ def test_the_pull_request_trigger_has_no_filter() -> None:
 
 def test_push_and_the_nightly_schedule() -> None:
     triggers = _triggers()
-    assert triggers["push"] == {"branches": ["development", INTEGRATION]}
+    assert triggers["push"] == {"branches": ["development", INTEGRATION, "train/catchup-*"]}
     # Nightly: the determinism run is in the full set.
     assert triggers["schedule"] == [{"cron": "17 4 * * *"}]
     assert "workflow_dispatch" in triggers

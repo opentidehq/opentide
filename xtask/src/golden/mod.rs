@@ -326,7 +326,7 @@ impl Command {
                 bail!("golden record records the oracle: --engine rust is for check and diff")
             }
             "rust" => match self.runner {
-                Runner::Python => crate::compare::candidate(&layout.repo)?,
+                Runner::Python => crate::compare::candidate(&layout.repo, &layout.target)?,
                 Runner::Node => crate::compare::node_candidate(&layout.repo, &layout.target)?,
             },
             other => bail!("unknown engine `{other}`: python or rust"),
