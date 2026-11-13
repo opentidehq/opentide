@@ -231,7 +231,7 @@ opentide validate
 Each finding prints as a code frame: its code, the file, line and column, the line itself with the value underlined, and what to do. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check). The process exits `1`, and the last line counts the errors (`✗ 1 error in 1 file · 3 objects checked · 0.9s`):
 
 ```text output-of="opentide validate" exit=1 state=dangling-reference
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]

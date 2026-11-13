@@ -126,7 +126,7 @@ opentide validate --fix
 fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
 fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
 
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]

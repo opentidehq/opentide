@@ -31,7 +31,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail, ensure};
 use indexmap::IndexMap;
 use opentide_schema::vocab::{
-    Entry, KeyKind, Metadata, Selector, Unknown, Version, VocabRef, Vocabularies, Vocabulary,
+    Entry, KeyKind, Metadata, Selector, Version, VocabRef, Vocabularies, Vocabulary,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
