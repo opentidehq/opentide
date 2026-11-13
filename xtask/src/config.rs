@@ -145,8 +145,14 @@ pub fn run(args: &[String]) -> Result<u8> {
     Ok(u8::from(failed > 0))
 }
 
-/// `config_parse`'s message is the TOML crate's (an approved difference,
-/// `config_cases.toml` `toml-parse-message`): only its code is compared.
+/// The approved differences:
+///
+/// - `config_parse`'s message is the TOML crate's (`config_cases.toml`
+///   `toml-parse-message`): only its code is compared.
+/// - opentide 0.28.1 adds lint's `recommended` check (`config_cases.toml`
+///   `lint-recommended-check`): the bundled `lint.toml`'s `[recommended]`
+///   table is left out of Rust's resolved configuration where the oracle's
+///   has none. Once the oracle is 0.28.1 (O2) it has one, and both compare.
 fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
     let parse = |value: &Json| value.pointer("/error/code") == Some(&json!("config_parse"));
     if parse(oracle) && parse(rust) {
@@ -155,7 +161,15 @@ fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
             json!({"error": {"code": "config_parse"}}),
         );
     }
-    (oracle.clone(), rust.clone())
+    let mut rust = rust.clone();
+    if oracle.pointer("/resolved/lint/recommended").is_none()
+        && let Some(lint) = rust
+            .pointer_mut("/resolved/lint")
+            .and_then(Json::as_object_mut)
+    {
+        lint.remove("recommended");
+    }
+    (oracle.clone(), rust)
 }
 
 fn rust_result(workspace: &Path) -> Result<Json> {
@@ -362,6 +376,23 @@ mod tests {
             &json!({"error": {"code": "retired_configuration_file", "message": "b"}}),
         );
         assert_ne!(oracle, rust);
+    }
+
+    #[test]
+    fn the_recommended_check_compares_only_once_the_oracle_has_it() {
+        let rust = json!({"resolved": {"lint": {"metadata": {"enabled": true}, "recommended": {"enabled": true}}}, "issues": []});
+        // 0.23.0: no `recommended` table, so Rust's is left out.
+        let old = json!({"resolved": {"lint": {"metadata": {"enabled": true}}}, "issues": []});
+        let (oracle, compared) = comparable(&old, &rust);
+        assert_eq!(oracle, compared);
+        // 0.28.1: the oracle has it, so a different value still differs.
+        let new = json!({"resolved": {"lint": {"metadata": {"enabled": true}, "recommended": {"enabled": false}}}, "issues": []});
+        let (oracle, compared) = comparable(&new, &rust);
+        assert_ne!(oracle, compared);
+        // Anything else outside `recommended` still differs.
+        let other = json!({"resolved": {"lint": {"metadata": {"enabled": false}}}, "issues": []});
+        let (oracle, compared) = comparable(&other, &rust);
+        assert_ne!(oracle, compared);
     }
 
     #[test]
