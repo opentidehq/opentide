@@ -1,0 +1,9 @@
+error[compile_missing_field]: configurations.sentinel.grouping.alert is missing
+   ╭─▶ Objects/Detection Rules/rule-0001-sentinel-kql.yaml:37:5
+   │
+36 │       suppression: false
+37 │     grouping:
+   │     ━━━━━━━━
+   │
+   ╰─ help: Sentinel deploy requires incident grouping (grouping.alert.enabled)
+

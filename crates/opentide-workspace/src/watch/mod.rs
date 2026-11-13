@@ -453,6 +453,8 @@ pub struct WorkspaceValidate<'q> {
     pub query_check: Option<&'q dyn crate::validate::QueryCheck>,
     /// The plugin platforms' block checks.
     pub platform_configurations: Option<&'q dyn crate::validate::PlatformConfigurations>,
+    /// The platform compilers (the compile check).
+    pub compile_check: Option<&'q dyn crate::validate::CompileCheck>,
     /// Why the last reload failed (the configuration no longer resolves);
     /// the workspace is then as it was.
     pub reload_error: Option<crate::OpenError>,
@@ -469,6 +471,7 @@ impl WorkspaceValidate<'_> {
             queries: crate::validate::QueriesMode::default(),
             query_check: None,
             platform_configurations: None,
+            compile_check: None,
             reload_error: None,
         }
     }
@@ -506,6 +509,7 @@ impl Validate for WorkspaceValidate<'_> {
             query_check: self.query_check,
             cve_check: None,
             platform_configurations: self.platform_configurations,
+            compile_check: self.compile_check,
         });
         let objects = validation.summary.objects;
         let mut found = validation.report.issues;

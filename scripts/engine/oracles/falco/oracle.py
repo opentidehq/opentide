@@ -10,7 +10,9 @@ macros and lists it defines, or a tuning (`append_to_rule`). The case becomes
   default macros and lists resolve and Falco expands the block's own lists and
   macros itself;
 - an opentide rule with the same block under `configurations.sysdig`, which
-  `opentide-lsp analyze` checks.
+  `opentide-lsp analyze --blocks` checks: `validate`'s findings (the block's
+  constraint codes are its model check's), the queries' analysis and the
+  block advisories `opentide lint` reports.
 
 Falco runs once per case (a load failure carries over to later files in one
 run), all in one container, as many cases at once as there are CPUs. A case
@@ -37,6 +39,7 @@ import concurrent.futures
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -206,13 +209,35 @@ def run_falco(
     return results
 
 
+#: `validate`'s model check of the Sysdig block names the constraint codes it
+#: broke in one `schema_validation` finding (sysdig-1.0).
+MODEL_CODES = re.compile(r"SysdigConfig validation failed with code\(s\): (.+)$")
+
+
 def run_engine(binary: pathlib.Path, path: pathlib.Path) -> list[dict[str, Any]]:
+    """What opentide reports about the rule Falco is given.
+
+    The editor's findings (`validate`'s and the queries' analysis) and, with
+    `--blocks`, the block findings `opentide lint` reports: the Falco checks,
+    and the block's constraint codes, which `validate` names in its
+    `schema_validation` finding (UC-2.6, #821), each taken as its own error.
+    """
     out = subprocess.run(
-        [str(binary), "analyze", str(path)], check=True, capture_output=True, text=True
+        [str(binary), "analyze", "--blocks", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
-    # The Falco checks and the block's constraint codes (sysdig-1.0): both are
-    # what the engine reports about the rule Falco is given.
-    return [d for d in json.loads(out) if d["code"].startswith(("falco_", "sysdig_"))]
+    found: list[dict[str, Any]] = []
+    for d in json.loads(out):
+        if d["code"].startswith(("falco_", "sysdig_")):
+            found.append(d)
+        elif d["code"] == "schema_validation" and (named := MODEL_CODES.search(d["message"])):
+            found.extend(
+                {**d, "code": code.strip(), "severity": "error"}
+                for code in named.group(1).split(",")
+            )
+    return found
 
 
 def _documented(

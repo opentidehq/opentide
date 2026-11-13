@@ -51,6 +51,54 @@ about = "tide-corpus with one typo `validate --fix` repairs in place (`severity:
 vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
 
+[fixtures.tide-corpus-splunk-advanced]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with an `advanced` table on its Splunk rule: a custom alert action's parameters, which 0.21.0 to 0.23.0 refused as a splunk::2.x key and 0.24.0 validates and deploys again"
+edits = [{ path = "Objects/Detection Rules/rule-0003-splunk-spl.yaml", find = "\n    query: index=main | head 1\n", replace = "\n    query: index=main | head 1\n    advanced:\n      action.misp_alert_create_event.param.title: \"Canary token triggered\"\n      action.misp_alert_create_event.param.distribution: 0\n      action.misp_alert_create_event.param.publish_on_creation: false\n      action.misp_alert_create_event.param.tags:\n" }]
+
+[fixtures.tide-corpus-legacy-text-id]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a legacy `rule_id::<tenant>` key whose id is text on its Sysdig rule, a model that refuses unknown keys: 0.23.0's validate crashed reading the tenant as a schema version (#913)"
+edits = [{ path = "Objects/Detection Rules/rule-0013-sysdig-falco.yaml", find = "\n  sysdig:\n    enabled: true\n", replace = "\n  sysdig:\n    rule_id::prod: '12'\n    enabled: true\n" }]
+
+[fixtures.tide-corpus-compile-missing-field]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with its Sentinel rule's `grouping.alert` deleted: the schema accepts it and the Sentinel compiler refuses it, so validate's compile check reports `compile_missing_field` (UC-2.2, #817)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n      alert:\n        enabled: false\n", replace = "\n" }]
+
+[fixtures.tide-corpus-compile-invalid-value]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `alert.suppression: true` on its Sentinel rule, which the Sentinel compiler refuses: validate's compile check reports `compile_invalid_value` (UC-2.2, #817)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      suppression: false\n", replace = "      suppression: true\n" }]
+
+[fixtures.tide-corpus-compile-empty-block]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with its Sentinel rule's `response` empty and no `alert.severity`, so the Sentinel compiler has no alert severity to read: validate's compile check reports `compile_empty_block` (UC-2.2, #817)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nresponse:\n  alert_severity: High\n", replace = "\nresponse:\n" }]
+
+[fixtures.tide-corpus-compile-invalid-rule]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `scheduling.frequency: hourly` on its Sentinel rule: the oracle reports `compile_invalid_rule` from validate's compile check, the Rust model `schema_validation` on the field (KG-01, `sentinel-durations`)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      frequency: PT1H\n", replace = "      frequency: hourly\n" }]
+
+[fixtures.tide-corpus-compile-elastic-severity]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `severity: {default: high}` and no `mapping` on its Elastic rule: the oracle's Elastic compiler fails on the missing mapping (`compile_failed`, KG-09), the Rust one sends no severity mapping"
+edits = [{ path = "Objects/Detection Rules/rule-0009-elastic-kql.yaml", find = "    scheduling:\n      interval: 5m\n", replace = "    severity:\n      default: high\n    scheduling:\n      interval: 5m\n" }]
+
+[fixtures.tide-corpus-compile-hidden]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus-compile-missing-field with an unrelated error in another rule (`tlp: clearr`): the compile check runs only when the run has no other error, so validate reports the `vocab_unknown` alone (KG-10)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n      alert:\n        enabled: false\n", replace = "\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "  tlp: clear\n", replace = "  tlp: clearr\n" }]
+
 [fixtures.vscode-unscoped]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -843,6 +891,17 @@ args = ["validate"]
 modes = ["json", "plain"]
 fixtures = ["tide-corpus"]
 env = { OPENTIDE_PROGRESS = "json" }
+
+# UC-2.2 (#817): the compile check (#660), what a deploy would compile must
+# compile. It runs once the run has no other error (KG-10), on every rule
+# whose block's status deploys, for every enabled platform with an offline
+# compiler.
+[[case]]
+command = "validate"
+variant = "compile-check"
+args = ["validate"]
+modes = ["plain", "json"]
+fixtures = ["tide-corpus-compile-missing-field", "tide-corpus-compile-invalid-value", "tide-corpus-compile-empty-block", "tide-corpus-compile-invalid-rule", "tide-corpus-compile-elastic-severity", "tide-corpus-compile-hidden"]
 
 # ---- validate query ----
 
@@ -2490,6 +2549,41 @@ command = "validate"
 variant = "typo"
 args = ["validate"]
 fixtures = ["tide-corpus-typo"]
+
+# 0.24.0: a Splunk block's `advanced` table validates and deploys again
+# (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on
+# it: XDG_STATE_HOME names a folder no one can create, so it reports the crash
+# without writing a crash log, a file the ledger cannot approve (a presence
+# rule names the catalog cache alone); the candidate does not crash and writes
+# none either way. The crash is recorded in json mode alone: in plain mode the
+# oracle prints nothing on stdout, where the candidate prints its result, and
+# the ledger approves a block of the oracle's lines, not lines added to an
+# empty stream.
+[[case]]
+command = "validate"
+variant = "splunk-advanced"
+args = ["validate"]
+modes = ["plain", "json"]
+fixtures = ["tide-corpus-splunk-advanced"]
+
+[[case]]
+command = "deploy"
+variant = "splunk-advanced"
+args = ["deploy", "--platform", "splunk", "--dry-run", "--strategy", "PREVIEW", "--all"]
+modes = ["json"]
+fixtures = ["tide-corpus-splunk-advanced"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
+
+# #913: a legacy external-id key whose id is text is `external_id_in_rule`,
+# not a crash. The oracle crashes, recorded as the Splunk deploy above is: no
+# crash log written (XDG_STATE_HOME), json mode alone.
+[[case]]
+command = "validate"
+variant = "legacy-text-id"
+args = ["validate"]
+modes = ["json"]
+fixtures = ["tide-corpus-legacy-text-id"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
 # ---- more examples from docs/cli ----
 

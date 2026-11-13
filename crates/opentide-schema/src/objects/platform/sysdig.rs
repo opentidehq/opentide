@@ -403,8 +403,10 @@ fn null_values<'a>(node: &'a Node, out: &mut Vec<(Vec<usize>, &'a Node)>) {
 }
 
 /// `_sysdig_exception_ok`: one exception, by the checks of Falco's
-/// `validate_exception_info` and `build_rule_exception_infos`.
-fn exception_ok(entry: &Node) -> bool {
+/// `validate_exception_info` and `build_rule_exception_infos`. An exception
+/// it refuses is the block's `sysdig_exception_shape`; the engine's Falco
+/// checks of the same exception leave it to this check (UC-2.6, #821).
+pub fn exception_shape_ok(entry: &Node) -> bool {
     if !is_map(Some(entry)) || !non_blank(get(Some(entry), "name")) {
         return false;
     }
@@ -697,7 +699,7 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     let exceptions = field("exceptions").filter(|node| present(Some(node)));
     if let Some(exceptions) = exceptions {
         let ok = match &exceptions.value {
-            Value::Seq(entries) => entries.iter().all(|entry| exception_ok(entry)),
+            Value::Seq(entries) => entries.iter().all(|entry| exception_shape_ok(entry)),
             _ => false,
         };
         if !ok {

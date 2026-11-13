@@ -1,7 +1,8 @@
 # opentide-analysis — agent guide
 
 The engine's public entry point: an I/O-free orchestrator behind `WorkspaceHost`
-(`MemoryWorkspace` in tests) with `analyze`, `analyze_query`, `index_workspace`, `highlight`,
+(`MemoryWorkspace` in tests) with `analyze`, `analyze_blocks`, `analyze_query`,
+`index_workspace`, `highlight`,
 `semantic_tokens`, `hover`, `completions`, the catalogs a host installs, and the placement of the
 host's configuration findings (`config`). The types its functions use are re-exported, so a host
 needs no other engine crate. The language server, the browser build and the Python binding
@@ -16,6 +17,10 @@ by opentide-lsp, opentide-wasm and opentide-native. The plan folds it into `open
 
 - No `std::fs` in `src/`: the filesystem is the host's, behind `WorkspaceHost`.
 - Configuration TOML is checked by the host, never here: the engine only places the host checker's findings.
+- `analyze` of a Tide object is what an editor publishes beside `opentide validate`'s findings:
+  the queries, the highlighting and the symbols, and no other object of the workspace is read
+  for it. A platform block's own findings are `analyze_blocks`, which `opentide lint` reads
+  (UC-2.6, #821): never fold them back into `analyze`, or the editor shows a fault twice.
 - The README's example is a doctest (`ReadmeDoctests`): keep it compiling.
 
 ## Test

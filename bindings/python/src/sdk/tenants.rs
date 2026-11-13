@@ -543,8 +543,8 @@ mod tests {
     #[test]
     fn documents_keep_their_order() {
         let mut row = connectors::Row::new();
-        row.insert("z".into(), opentide_compile::Json::Int(1));
-        row.insert("a".into(), opentide_compile::Json::Str("x".into()));
+        row.insert("z".into(), connectors::Json::Int(1));
+        row.insert("a".into(), connectors::Json::Str("x".into()));
         let outcome = QueryOutcome {
             columns: vec![connectors::QueryColumn::named("z")],
             rows: vec![row],

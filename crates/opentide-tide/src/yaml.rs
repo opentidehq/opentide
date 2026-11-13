@@ -38,16 +38,8 @@ pub(crate) trait YamlNode {
     fn as_i64(&self) -> Option<i64>;
     /// Whether the node is `null` (`null`, `~` or nothing).
     fn is_null(&self) -> bool;
-    /// Whether the node is a string.
-    fn is_string(&self) -> bool;
-    /// Whether the node is a sequence.
-    fn is_sequence(&self) -> bool;
     /// Whether the node is a mapping.
     fn is_mapping(&self) -> bool;
-    /// Whether the node is a scalar: not a sequence or a mapping.
-    fn is_scalar(&self) -> bool {
-        !self.is_sequence() && !self.is_mapping()
-    }
     /// A string, number or boolean as text: the string itself, a number as
     /// YAML writes it ([`number_text`]), `true` or `false`. `None` for `null`
     /// and a collection.
@@ -75,14 +67,6 @@ impl YamlNode for Node {
 
     fn is_null(&self) -> bool {
         matches!(self.value, Value::Null)
-    }
-
-    fn is_string(&self) -> bool {
-        matches!(self.value, Value::Str(_))
-    }
-
-    fn is_sequence(&self) -> bool {
-        matches!(self.value, Value::Seq(_))
     }
 
     fn is_mapping(&self) -> bool {
@@ -225,9 +209,7 @@ mod tests {
         assert_eq!(doc.get("b").unwrap().as_str(), None);
         assert_eq!(doc.get("b").unwrap().as_i64(), Some(1));
         assert!(doc.get("c").unwrap().is_null());
-        assert!(doc.get("d").unwrap().is_sequence());
+        assert!(doc.get("d").unwrap().as_sequence().is_some());
         assert!(doc.get("e").unwrap().is_mapping());
-        assert!(!doc.get("e").unwrap().is_scalar());
-        assert!(doc.get("a").unwrap().is_string());
     }
 }

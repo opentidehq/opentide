@@ -29,12 +29,16 @@ cargo install --git https://github.com/opentidehq/opentide opentide --features c
 | Feature | Default | What it adds |
 |---------|:-------:|--------------|
 | `schema` | yes | `opentide::models`: the Tide models, every revision, schema identifiers |
+| `analysis` | no | `opentide::analysis`: check one query on its own and highlight a text, without a workspace |
 | `workspace` | yes | `Workspace`: open, `validate`, `lint`, `info`, `catalog`, `coverage` |
-| `compile` | yes | `Workspace::deploy_plan` and `opentide::deploy` |
+| `compile` | yes | `Workspace::deploy_plan` and `opentide::deploy`, and validate's compile check (a rule a deploy would compile must compile); without it `validate` compiles nothing |
 | `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
-| `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
+| `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::main_with_version(argv, version)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
 | `lsp` | no | `opentide::lsp`: the language server, on stdio or one message at a time |
 | `connectors` | no | `opentide::connectors`: the tenants a workspace configures (`Workspace::tenants`), and on each a query run, a live query check and a rule deploy; async, on tokio; implies `compile` |
+| `plugins` | no | `opentide::plugins`: the platform plugin host a binding embeds to add platforms (the connectors' traits, `plugins::set_host`); implies `connectors` |
+| `python` | no | `opentide::python`: the Tide models as Python classes, for the Python package's binding; brings PyO3 |
+| `stubs` | no | PyO3's introspection data behind `python`, for `cargo xtask stubs` |
 
 Without `queries`, a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. Turn the check off (`QueriesMode::Off`) to validate without it.
 
@@ -228,7 +232,7 @@ Every fallible call returns `opentide::Error`. Its variants each map to a stable
 
 - The crate follows semantic versioning as Cargo reads it. While it is `0.x`, a release that breaks the API raises the minor version (0.12 to 0.13); a patch release never breaks it.
 - Every item the crate exports is covered, re-exported types included. The `opentide-*` crates are internal: their APIs change with the engine, at the same version.
-- `cargo semver-checks` checks the crate's API in CI against the branch it merges into.
+- `cargo semver-checks` checks the crate's API in CI against the branch it merges into, until the crate is published on crates.io; from then on, against the last published version.
 - Structs that may gain a field and enums that may gain a variant are `#[non_exhaustive]`: build options with their constructors and builder methods (`ValidateOptions::default().strict(true)`).
 - The JSON documents follow the command line's JSON contract ([JSON output](../cli/json-output.md)), which only grows.
 - The minimum supported Rust version is the manifest's `rust-version`; raising it is a minor release.

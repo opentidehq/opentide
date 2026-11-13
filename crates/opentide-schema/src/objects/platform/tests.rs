@@ -996,3 +996,144 @@ fn sysdig_a_null_exception_value_is_refused() {
         format!("exceptions.0.values.1: {}", sysdig::NULL_VALUE)
     );
 }
+
+// ---------------------------------------------------------------------------
+// Splunk's `advanced` table (0.24.0's `test_platform_query_contract.py`).
+// ---------------------------------------------------------------------------
+
+fn splunk_block() -> Json {
+    json!({"status": "STAGING", "query": "index=main | head 1"})
+}
+
+/// A custom alert action's parameters: what `advanced` exists for.
+fn advanced() -> Json {
+    json!({
+        "action.misp_alert_create_event.param.title": "Canary token triggered",
+        "action.misp_alert_create_event.param.distribution": 0,
+        "action.misp_alert_create_event.param.ratio": 0.5,
+        "action.misp_alert_create_event.param.publish_on_creation": true,
+        "action.misp_alert_create_event.param.tags": null,
+    })
+}
+
+/// 0.21.0 refused `advanced` as a splunk::2.x key; it is a key of the
+/// current layout, and the only place a rule can set keys no other field
+/// sets.
+#[test]
+fn splunk_advanced_is_part_of_the_layout() {
+    use splunk::SavedSearchValue as V;
+    // From YAML, which keeps the document's order (`json!` sorts its keys).
+    let document = crate::node::load(
+        "status: STAGING\nquery: index=main | head 1\nadvanced:\n  \
+         action.misp_alert_create_event.param.title: Canary token triggered\n  \
+         action.misp_alert_create_event.param.distribution: 0\n  \
+         action.misp_alert_create_event.param.ratio: 0.5\n  \
+         action.misp_alert_create_event.param.publish_on_creation: true\n  \
+         action.misp_alert_create_event.param.tags:\n",
+    )
+    .unwrap();
+    let Ok(PlatformConfig::Splunk(config)) =
+        parse_platform_config("splunk", document.root().unwrap())
+    else {
+        panic!("the block does not read")
+    };
+    let table = config.advanced.clone().unwrap();
+    let values: Vec<(&str, Option<V>)> = table
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.clone()))
+        .collect();
+    assert_eq!(
+        values,
+        [
+            (
+                "action.misp_alert_create_event.param.title",
+                Some(V::Text("Canary token triggered".to_owned()))
+            ),
+            (
+                "action.misp_alert_create_event.param.distribution",
+                Some(V::Int(0))
+            ),
+            (
+                "action.misp_alert_create_event.param.ratio",
+                Some(V::Float(0.5))
+            ),
+            (
+                "action.misp_alert_create_event.param.publish_on_creation",
+                Some(V::Bool(true))
+            ),
+            ("action.misp_alert_create_event.param.tags", None),
+        ]
+    );
+    assert!(config.validate_with(&Pins::default()).is_ok());
+    // Written back as it was read.
+    assert_eq!(
+        serde_json::to_value(&config).unwrap()["advanced"],
+        advanced()
+    );
+    let block = merged(&splunk_block(), &json!({"advanced": advanced()}));
+    assert!(matches!(valid("splunk", &block), PlatformConfig::Splunk(_)));
+    let PlatformConfig::Splunk(none) = valid(
+        "splunk",
+        &merged(&splunk_block(), &json!({"advanced": null})),
+    ) else {
+        unreachable!()
+    };
+    assert_eq!(none.advanced, None);
+}
+
+/// `savedsearches.conf` holds text: a list or a table is refused, and so is
+/// a blank key.
+#[test]
+fn splunk_advanced_refuses_what_savedsearches_conf_cannot_hold() {
+    for (advanced, expected) in [
+        (
+            json!({"action.x.param.y": ["a", "b"]}),
+            "advanced.action.x.param.y",
+        ),
+        (
+            json!({"action.x.param.y": {"a": 1}}),
+            "advanced.action.x.param.y",
+        ),
+        (
+            json!("text"),
+            "advanced: Input should be a valid dictionary",
+        ),
+        (
+            json!({" ": "value"}),
+            "advanced. .[key]: Value error, a savedsearches.conf key must not be empty",
+        ),
+    ] {
+        let block = merged(&splunk_block(), &json!({"advanced": advanced}));
+        let report = errors("splunk", &block);
+        assert!(report.contains(expected), "{advanced}: {report}");
+    }
+    // The same check on a block built in memory.
+    let PlatformConfig::Splunk(mut config) = valid("splunk", &splunk_block()) else {
+        unreachable!()
+    };
+    config.advanced = Some([("\t".to_owned(), None)].into_iter().collect());
+    let report = config
+        .validate_with(&Pins::default())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        report.contains("a savedsearches.conf key must not be empty"),
+        "{report}"
+    );
+}
+
+/// The editor schema offers `advanced`, not deprecated; the template leaves
+/// it out.
+#[test]
+fn splunk_advanced_is_in_the_schema_and_hidden_from_the_template() {
+    let schema = schemars::schema_for!(splunk::SplunkConfig).to_value();
+    let property = &schema["properties"]["advanced"];
+    assert_eq!(property["tide.template.hide"], true);
+    assert!(property.get("deprecated").is_none());
+    assert!(property.get(crate::keys::META_DEPRECATION).is_none());
+    let template = crate::generate::workspace::platform_template("splunk")
+        .unwrap()
+        .unwrap();
+    assert!(template.contains("query:"), "{template}");
+    assert!(!template.contains("advanced"), "{template}");
+}

@@ -129,7 +129,7 @@ impl Manifest {
                 bail!("corpus `{}` is listed twice", corpus.name);
             }
             match corpus.kind.as_str() {
-                "tide_corpus" | "faults" | "configuration_faults" => {}
+                "tide_corpus" | "faults" | "configuration_faults" | "compile_faults" => {}
                 "heavy" if corpus.seed.is_some() => {}
                 "heavy" => bail!("corpus `{}`: a heavy workspace needs a seed", corpus.name),
                 other => bail!("corpus `{}`: unknown kind `{other}`", corpus.name),
