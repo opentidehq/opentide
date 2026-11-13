@@ -474,7 +474,7 @@ error: The opentide analysis engine does not load: No module named 'opentide._na
   help: reinstall opentide: pip install --force-reinstall opentide
 ```
 
-Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pip downloads opentide's wheel for Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64, engine included; elsewhere it builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)). See `opentide explain engine_unavailable`.
+Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pip downloads opentide's wheel for Linux (x86_64 and arm64, glibc), macOS and Windows, engine included; elsewhere, musl Linux (Alpine) included, it builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)) and a C compiler ([Installation](./installation.md#the-analysis-engine-and-the-language-server)). See `opentide explain engine_unavailable`.
 
 ### `opentide validate query --live` fails before it reaches the tenant
 
