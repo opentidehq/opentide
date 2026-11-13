@@ -17025,6 +17025,50 @@ issue = "https://github.com/opentidehq/opentide/issues/731"
 changelog = "**The packaged authoring skills have frontmatter**"
 
 [[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/catalogue-first-fallback"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;33mwarning: \u001b[0mSkill installed from package · slug: detection-engineering · source: opentidehq/skills · \nref: main"
+candidate = "warning: Skill installed from package · slug: detection-engineering · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**Log lines are plain, name no tenant, and JSON ones have no `logger`.**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/catalogue-first-fallback"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**Log lines are plain, name no tenant, and JSON ones have no `logger`.**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/catalogue-first-kept"
+target = "stderr"
+rule = "lines"
+oracle = "\u001b[1;33mwarning: \u001b[0mSkill kept installed copy · slug: detection-engineering · source: opentidehq/skills · ref: \nmain"
+candidate = "warning: Skill kept installed copy · slug: detection-engineering · source: opentidehq/skills · ref: main"
+reason = "A log line is written by the Rust CLI's logging layer (UC-3.3), as one unstyled line: Rich coloured its label and wrapped it at the terminal's width. The event, its fields and their order are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**Log lines are plain, name no tenant, and JSON ones have no `logger`.**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/catalogue-first-kept"
+target = "stderr"
+rule = "json:/logger"
+oracle = "\"opentide.cli.services.setup.skills\""
+candidate = "(absent)"
+reason = "A JSON log line of the Rust CLI's logging layer (UC-3.3) has no `logger` key: the Python module that logged it does not exist on the Rust side. The event, its fields and level are the oracle's."
+issue = "https://github.com/opentidehq/opentide/issues/831"
+changelog = "**Log lines are plain, name no tenant, and JSON ones have no `logger`.**"
+
+[[diff]]
 command = "setup"
 case = "setup/agent/none/skills"
 target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
