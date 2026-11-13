@@ -36,7 +36,7 @@ Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
   change is the intended one, and say so in the commit body.
 - **ty after a ty bump** — usually a rule rename; see [`uv`](../uv/SKILL.md) "Dependency upgrades".
 - **Vocab drift gate** — bundled vocabulary is generated from `opentidehq/specifications`;
-  fix it upstream and re-sync with `scripts/build/sync_vocabularies.py`, never by hand.
+  fix it upstream and re-sync with `cargo xtask vocab sync`, never by hand.
 - **Fails on `development` too** — not this PR's. Say so once on the PR with the failing
   check and link the fix if one exists; port the fix into this PR when it is small.
 

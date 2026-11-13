@@ -142,7 +142,8 @@ fn template(vocab_dir: &Path, field: &str) -> Result<Table> {
     Ok(document)
 }
 
-fn keys_of(document: &Table) -> Vec<Table> {
+/// A document's `[[keys]]` tables.
+pub fn keys_of(document: &Table) -> Vec<Table> {
     document
         .get("keys")
         .and_then(Value::as_array)
@@ -154,7 +155,8 @@ fn keys_of(document: &Table) -> Vec<Table> {
         .collect()
 }
 
-fn set_keys(document: &mut Table, lifecycle: &Lifecycle) {
+/// Replaces a document's `[[keys]]` with a merge's.
+pub fn set_keys(document: &mut Table, lifecycle: &Lifecycle) {
     document.insert(
         "keys".to_owned(),
         Value::Array(lifecycle.keys.iter().cloned().map(Value::Object).collect()),
