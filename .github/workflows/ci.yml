@@ -11,13 +11,15 @@ run-name: >-
 #
 # - A pull request runs the lean set, on Linux: lint (with actionlint), engine
 #   lint, the engine tests in two shards, Python 3.14, E2E, GitLab CI lint,
-#   golden compare and cargo deny, the core gates, whose jobs carry no `if`;
+#   golden compare in three parts and cargo deny, the core gates, whose jobs
+#   carry no `if`;
 #   and the path-scoped jobs whose inputs it changes (the `changes` job): the
 #   corpora, the Node package, the facade crate, the release dry run and the
 #   grammar checks. The required checks keep their names: macOS's and
-#   Windows's engine tests are gathered from the Linux shards, the Python 3.10
-#   cell starts and skips its steps, and the corpus check passes when its parts
-#   were not needed.
+#   Windows's engine tests are gathered from the Linux shards, golden compare
+#   from its parts, the Python 3.10 cell starts and skips its steps, and the
+#   corpus check passes when its parts were not needed. The lint job builds
+#   the sdist on every pull request, and the wheel from it in the full set.
 # - The full set adds the rest: macOS and Windows engine tests, Python
 #   3.10-3.13, the engine release dry run, WebAssembly, crate packaging,
 #   grammars, the Elastic sweep, fuzz smoke, the Windows CLI smoke, the facade
@@ -240,7 +242,9 @@ jobs:
       # cache put the dependencies: the release profile's link-time
       # optimisation is the release's to prove (publish-dry-run.yml, the
       # engine release dry run), and it took minutes here (#841).
+      # The full set: a pull request builds the sdist above and checks it.
       - name: Build the wheel from the sdist
+        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
         env:
           OPENTIDE_ENGINE_PROFILE: develop
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -356,14 +360,15 @@ jobs:
   #                       `corpus-queries` restore it
   #   python-engine       the binding `uv sync` builds: `test` (3.14) saves it,
   #                       the other Linux Python jobs restore it
-  #   golden-compare      `golden-compare`
+  #   golden-compare      `golden-compare-part` (its first part); the others restore it
   #   full-set-<OS>       the full set's other Rust jobs (facade, node,
   #                       npm-install, engine-wasm, engine-package, bench,
   #                       cli-windows-smoke): `conformance` saves it on each OS
   #
   # The one rust-cache left: `fuzz` (fuzz-smoke, the fuzz/NIGHTLY nightly,
-  # fuzz/target and cargo-fuzz in ~/.cargo/bin). The release dry run
-  # (engine-release-build.yml) keeps its own per target.
+  # fuzz/target and cargo-fuzz in ~/.cargo/bin).
+  # The release dry run (engine-release-build.yml) keeps sccache families of
+  # its own, one per runner, and saves them from a push only.
   # ---------------------------------------------------------------------------
 
   # rustfmt, clippy, rustdoc, the crate layers and the engine's invariants.
@@ -417,16 +422,22 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # xtask and opentide-lsp in one cargo build, so that their shared crates
+      # compile once and in parallel; the steps below run the binaries it
+      # built (`cargo xtask` would only check them again).
+      - name: Build xtask and the language server
+        run: cargo build --locked --package xtask --package opentide-lsp
+
       # Every dependency between workspace crates points down the layer table
       # (xtask/layers.toml, plan §4).
       - name: crate layers
-        run: cargo xtask check-layers
+        run: target/debug/xtask check-layers
 
       # The deploy cassettes (tests/cassettes, #831): one per scenario of
       # scenarios.toml, each recorded from the oracle and redacted, none
       # edited by hand. It reads the files only.
       - name: deploy cassettes
-        run: cargo xtask cassettes check
+        run: target/debug/xtask cassettes check
 
       # The artifacts generated from the Rust model (opentide-schema's
       # `generate`): the committed platform templates are current, and the
@@ -435,7 +446,7 @@ jobs:
       # schemas, templates and snippets phases and exited 0 (runs missing one
       # of them, and failed runs, are not compared; UC-1.8, #814).
       - name: generated artifacts
-        run: cargo xtask codegen --check
+        run: target/debug/xtask codegen --check
 
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
@@ -448,7 +459,7 @@ jobs:
           bash scripts/engine/check-io-free.sh
           bash scripts/engine/check-names.sh
           bash scripts/engine/validate-skills.sh
-          cargo run --locked -p opentide-lsp -- generate-highlights --check
+          target/debug/opentide-lsp generate-highlights --check
 
       # The standard library only: no `uv sync`, which compiled the engine
       # for minutes to run them (#841).
@@ -2300,13 +2311,17 @@ jobs:
   # tests/golden/APPROVED_DIFFS.toml); a stale ledger entry fails it (UC-0.7,
   # #805; every case since UC-6.2, #841). Here, not in golden.yml, so that it
   # runs on every pull request: a change anywhere in crates/, bindings/python/
-  # or src/ can change what a command does.
-  golden-compare:
-    # The name is a required check's: it stays, though the run is now
-    # `golden check --engine rust`.
-    name: Golden compare
+  # or src/ can change what a command does. In three parts, by a hash of the
+  # case id (`--partition K/3`, about 580 cases each); `golden-compare`
+  # gathers them under the required check's name.
+  golden-compare-part:
+    name: Golden compare (part ${{ matrix.part }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3]
     env:
       RUSTFLAGS: -Dwarnings
       PYO3_PYTHON: /usr/bin/python3
@@ -2353,23 +2368,41 @@ jobs:
       - name: Install this repository's CLI
         run: uv sync --group dev
 
+      # A ledger entry that applies to none of this part's cases does not
+      # fail it: it is listed in the unused file, and the gather fails on an
+      # entry every part lists (a stale one).
       - name: Compare every command with the recordings
-        run: cargo xtask golden check --engine rust --report golden-compare.json
+        env:
+          PART: ${{ matrix.part }}
+        run: >-
+          cargo xtask golden check --engine rust --partition "${PART}/3"
+          --report "golden-compare-${PART}.json" --unused "golden-unused-${PART}.json"
+
+      - name: Upload the unused ledger entries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-unused-${{ matrix.part }}
+          path: golden-unused-${{ matrix.part }}.json
+          if-no-files-found: error
 
       # The MCP server (UC-3.7, #829): the recorded sessions of the Python
-      # server replayed against the Rust server, and the MCP stdio tests.
+      # server replayed against the Rust server, and the MCP stdio tests,
+      # each in a part of its own.
       - name: Replay the recorded MCP sessions
+        if: matrix.part == 2
         run: cargo xtask mcp replay --engine rust tests/golden/mcp/*.jsonl
 
       - name: Run the MCP tests
+        if: matrix.part == 3
         run: uv run --no-sync pytest tests/test_mcp -q --no-cov -n auto
 
       - name: Compiler cache statistics
         if: ${{ !cancelled() }}
         run: sccache --show-stats
 
+      # The parts compile the same crates: one saves.
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true' && matrix.part == 1
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -2382,9 +2415,51 @@ jobs:
         # service must not fail a job whose checks passed.
         continue-on-error: true
         with:
-          name: golden-compare
-          path: golden-compare.json
+          name: golden-compare-${{ matrix.part }}
+          path: golden-compare-${{ matrix.part }}.json
           if-no-files-found: ignore
+
+  # The required check `Golden compare`: every part passed, and every ledger
+  # entry applied to a case in one part at least. An entry each part lists as
+  # unused applied nowhere in the whole run: it is stale, and fails.
+  golden-compare:
+    name: Golden compare
+    needs: golden-compare-part
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Download the parts' unused ledger entries
+        if: needs.golden-compare-part.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: golden-unused-*
+          merge-multiple: true
+
+      - name: Every part passed, and no ledger entry is stale
+        env:
+          RESULT: ${{ needs.golden-compare-part.result }}
+          PARTS: "3"
+        run: |
+          echo "golden compare parts: ${RESULT}"
+          test "${RESULT}" = success
+          files=()
+          for part in $(seq 1 "${PARTS}"); do
+            test -f "golden-unused-${part}.json"
+            files+=("golden-unused-${part}.json")
+          done
+          stale="$(jq -rs '
+            (map(map(.entry))) as $parts
+            | .[0][]
+            | select(.entry as $e | $parts | all(any(.[]; . == $e)))
+            | "error: tests/golden/APPROVED_DIFFS.toml entry \(.entry) (\(.command) \(.case) \(.target) \(.rule)) applied to no case: it is stale, remove it"
+          ' "${files[@]}")"
+          if [[ -n "${stale}" ]]; then
+            echo "${stale}"
+            exit 1
+          fi
+          echo "every ledger entry applied in a part"
 
   cli-windows-smoke:
     name: CLI Windows smoke

@@ -49,6 +49,12 @@ jobs:
     permissions:
       contents: read
       actions: read # gh run list and gh run download: the last development result
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
     strategy:
       fail-fast: false
       matrix:
@@ -63,10 +69,20 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Restore-only: the full set's compiler cache for Linux, which ci.yml's
+      # `conformance` saves (its RUSTFLAGS and dev debug level, set above, so
+      # that the crates both build hit). This workflow saves none: its two
+      # target trees evicted the caches pull requests restore (the 10 GB
+      # GitHub keeps per repository).
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          shared-key: bench-${{ matrix.engine }}
-          save-if: ${{ github.event_name != 'pull_request' }}
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       # One uv release: the oracle's Python (ORACLE_PYTHON in xtask/src/bench/oracle.rs) is
       # a uv-managed download this release knows.
