@@ -25,6 +25,9 @@ class DetectionPlatforms(Enum):
     ELASTIC = auto()
     SYSDIG = auto()
     BITDEFENDER = auto()
+    GRAYLOG = auto()
+    EXABEAM = auto()
+    GOOGLE_SECOPS = auto()
 
 
 #: What a run deploys, and what a tenant accepts: ``--strategy`` and a tenant's

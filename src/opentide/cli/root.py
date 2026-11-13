@@ -72,6 +72,11 @@ def main_callback(
         False, "--debug", help="Enable debug logging. Also OPENTIDE_DEBUG=1"
     ),
     quiet: bool = typer.Option(False, "--quiet", help="Print only the outcome line and errors"),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Also print notes, such as a missing optional field. --json always includes them",
+    ),
     no_color: bool = typer.Option(
         False,
         "--no-color",
@@ -121,6 +126,7 @@ def main_callback(
         debug=debug or debug_requested(),
         no_color=no_color,
         quiet=quiet,
+        verbose=verbose,
         repo_explicit=_came_from_command_line(ctx, "repo"),
         proxy=proxy,
     )
@@ -146,4 +152,14 @@ def main_callback(
             argument="--repo",
             code=USAGE_INVALID_VALUE,
             next_actions=steps,
+        )
+    if quiet and verbose:
+        from opentide.cli.output import emit_usage_error
+        from opentide.cli.ui.contract import USAGE_ERROR
+
+        emit_usage_error(
+            cli_ctx,
+            "--quiet and --verbose cannot be used together",
+            argument="--verbose",
+            code=USAGE_ERROR,
         )

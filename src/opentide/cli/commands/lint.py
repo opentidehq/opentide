@@ -16,7 +16,7 @@ from opentide.cli.findings import (
     publish_findings,
     write_report_file,
 )
-from opentide.cli.output import CommandResult, emit_result, text_mode
+from opentide.cli.output import CommandResult, emit_result, text_mode, with_hidden_notes_step
 from opentide.cli.ui.reports import ReportFormat
 
 
@@ -24,14 +24,17 @@ def lint_cmd(
     ctx: typer.Context,
     fix: bool = typer.Option(False, "--fix", help="Apply safe filename renames"),
     strict: bool = typer.Option(
-        False, "--strict", help="Exit non-zero when findings exist (CI gate)"
+        False,
+        "--strict",
+        help="Exit non-zero when errors or warnings are left (CI gate). Notes never fail it",
     ),
     check: list[LintCheck] = typer.Option(
         [],
         "--check",
         metavar="CHECK",
         help=(
-            "Limit to one check: filenames, metadata, placeholders or queries (repeatable). "
+            "Limit to one check: filenames, metadata, recommended, placeholders or queries "
+            "(repeatable). "
             "Runs it even when lint.toml disables it"
         ),
     ),
@@ -52,6 +55,7 @@ def lint_cmd(
     """Check file names and recommended metadata
 
     Catalogue hygiene: filename slugs and recommended metadata, not schema validation.
+    A missing optional field is a note: it never fails --strict, and prints with --verbose.
     """
     from opentide.cli.services.lint import run_lint
     from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
@@ -84,10 +88,16 @@ def lint_cmd(
 
         if report_format is not ReportFormat.text and output is None:
             print_report(report_format, diagnostics, outcome, command="lint")
-        render_diagnostics(
-            get_stdout_console(), diagnostics, sources=sources, mode=text_mode(cli), quiet=cli.quiet
+        hidden = render_diagnostics(
+            get_stdout_console(),
+            diagnostics,
+            sources=sources,
+            mode=text_mode(cli),
+            quiet=cli.quiet,
+            notes=cli.verbose,
         )
         publish_findings(
             cli, diagnostics, outcome, command="lint", outcome=outcome.outcome or outcome.message
         )
+        outcome = with_hidden_notes_step(outcome, hidden)
     emit_result(cli, outcome)

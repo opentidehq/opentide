@@ -67,11 +67,25 @@ def rule_queries(rule: DetectionRule, platform: str) -> list[RuleQuery]:
             return _sentinel_one_queries(config, rule)
         case "elastic":
             return [_elastic_query(config, rule)]
+        case "graylog":
+            from opentide.platforms.graylog.constraints import as_list
+
+            text = _required(config.query, rule, platform)
+            return [RuleQuery(text, language="lucene", index=tuple(as_list(config.streams)))]
+        case "exabeam":
+            return _exabeam_queries(config, rule)
         case "harfanglab":
             raise RuleQueryError(
                 f"rule {rule.name!r} is a HarfangLab Sigma or YARA rule, which the agents "
                 "evaluate: it holds no query to search telemetry with. Pass a telemetry "
                 "query instead, such as 'processes process_name=cmd.exe'"
+            )
+        case "google_secops":
+            raise RuleQueryError(
+                f"rule {rule.name!r}: --rule is not supported for google_secops. A YARA-L rule "
+                "runs in the detection engine, whose results differ from a search's, and a "
+                "retrohunt writes detections; write the search as a hunt "
+                "(response.procedure.searches) and pass it as QUERY"
             )
     raise RuleQueryError(f"{platform} rules cannot be queried")
 
@@ -100,6 +114,24 @@ def _sentinel_one_queries(config: object, rule: DetectionRule) -> list[RuleQuery
             for number, sub in enumerate(sub_queries, start=1)
         ]
     raise RuleQueryError(f"rule {rule.name!r} has no SentinelOne query")
+
+
+def _exabeam_queries(config: object, rule: DetectionRule) -> list[RuleQuery]:
+    """One query per sequence: its filter, as deploy sends it (exabeam-1.0)."""
+    sequences = list(getattr(config, "sequences", None) or [])
+    if not sequences:
+        raise RuleQueryError(f"rule {rule.name!r} has no Exabeam sequences")
+    several = len(sequences) > 1
+    note = "the sequence's filter only: its condition, window and grouping are not applied"
+    return [
+        RuleQuery(
+            _required(sequence.query, rule, "exabeam"),
+            language="exabeam",
+            label=f"sequence {number}" if several else None,
+            note=note if sequence.threshold is not None or sequence.group_by else None,
+        )
+        for number, sequence in enumerate(sequences, start=1)
+    ]
 
 
 def _elastic_query(config: object, rule: DetectionRule) -> RuleQuery:

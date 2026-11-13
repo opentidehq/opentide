@@ -65,4 +65,4 @@ def test_uncommented_tenant_example_loads(template: Path, monkeypatch: pytest.Mo
 
 
 def test_every_platform_template_is_checked() -> None:
-    assert len(TEMPLATES) == 10
+    assert len(TEMPLATES) == 13

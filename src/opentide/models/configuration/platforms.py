@@ -474,6 +474,145 @@ class BitdefenderConfiguration(PlatformConfigurationBase):
     )
 
 
+# --- Graylog --------------------------------------------------------------------------
+
+#: A Graylog object id: 24 lower-case hex digits.
+GraylogId = Annotated[str, Field(pattern=r"^[0-9a-f]{24}$")]
+#: A non-blank alias or tag.
+GraylogName = Annotated[str, Field(pattern=r"\S")]
+
+
+class GraylogSetup(TenantSetup):
+    """`[tenants.setup]` for Graylog."""
+
+    url: str = Field(description="The Graylog web interface's base URL. Calls go to <url>/api/....")
+    token: EnvPlaceholder = Field(
+        description="A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME "
+        "placeholder."
+    )
+    allow_leading_wildcard: bool = Field(
+        default=False, description="Mirrors the server's allow_leading_wildcard_searches."
+    )
+    streams: GraylogName | list[GraylogName] = Field(
+        default_factory=list, description="Default stream aliases for blocks that set no streams."
+    )
+    stream_ids: dict[str, GraylogId] = Field(
+        default_factory=dict, description="Alias to stream id, 24 hex."
+    )
+    notification_ids: dict[str, GraylogId] = Field(
+        default_factory=dict, description="Alias to notification id, 24 hex."
+    )
+    tags: GraylogName | list[GraylogName] = Field(
+        default_factory=list, description="Tags added to every definition on this tenant (7.2+)."
+    )
+
+
+class GraylogTenant(TenantBase):
+    """`[[tenants]]` for Graylog."""
+
+    setup: GraylogSetup = Field(description="Connection settings.")
+
+
+class GraylogConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/graylog.toml`."""
+
+    tenants: list[GraylogTenant] = Field(default_factory=list, description="Graylog tenants.")
+
+
+# --- Exabeam New-Scale SIEM -----------------------------------------------------------
+
+
+class ExabeamSetup(TenantSetup):
+    """`[tenants.setup]` for Exabeam New-Scale SIEM."""
+
+    region: Literal["us-west", "us-east", "ca", "eu", "sa", "sg", "ch", "jp", "au", "uk"] = Field(
+        description="Exabeam API region. Calls go to https://api.<region>.exabeam.cloud; it is "
+        "not derived from the console URL (use1 is us-east, euw6 is ch)."
+    )
+    client_id: EnvPlaceholder = Field(
+        description="API key with Correlation Rules at Read Write Delete. Must be a $NAME "
+        "placeholder."
+    )
+    client_secret: EnvPlaceholder = Field(
+        description="API key secret. Must be a $NAME placeholder."
+    )
+    api_url: str | None = Field(
+        default=None,
+        pattern=r"^https://",
+        description="An HTTPS base URL that replaces the region's.",
+    )
+    test_mode: bool = Field(
+        default=False, description="Default test_mode for blocks that do not set it."
+    )
+
+
+class ExabeamTenant(TenantBase):
+    """`[[tenants]]` for Exabeam New-Scale SIEM."""
+
+    setup: ExabeamSetup = Field(description="Connection settings.")
+
+
+class ExabeamConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/exabeam.toml`."""
+
+    tenants: list[ExabeamTenant] = Field(default_factory=list, description="Exabeam tenants.")
+
+
+# --- Google Security Operations -------------------------------------------------------
+
+
+class GoogleSecopsSetup(TenantSetup):
+    """`[tenants.setup]` for Google Security Operations."""
+
+    project: str = Field(
+        min_length=1,
+        description="The Google Cloud project bound to the SecOps instance, id or number.",
+    )
+    location: str = Field(
+        min_length=1,
+        description=(
+            "The instance's region: us, eu, europe, or a Google Cloud region such as europe-west2."
+        ),
+    )
+    instance: str = Field(min_length=1, description="The SecOps customer id (a UUID).")
+    endpoint: str | None = Field(
+        default=None,
+        description="The regional service endpoint. Default: https://<location>-chronicle.googleapis.com.",
+    )
+    credentials: EnvPlaceholder | None = Field(
+        default=None,
+        description=(
+            "A $NAME placeholder for a service-account key, as a JSON document or a path to "
+            "one. Without it, Application Default Credentials (workload identity, gcloud auth)."
+        ),
+    )
+    data_access_scope: str | None = Field(
+        default=None,
+        description="A data access scope id, sent as scope on create and update.",
+    )
+    deletion: Literal["archive", "delete"] = Field(
+        default="archive",
+        description=(
+            "DELETION: archive the rule (keeps its detections and the binding), or delete it "
+            "without force."
+        ),
+    )
+
+
+class GoogleSecopsTenant(TenantBase):
+    """`[[tenants]]` for Google Security Operations."""
+
+    setup: GoogleSecopsSetup = Field(description="Connection settings.")
+
+
+class GoogleSecopsConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/google_secops.toml`."""
+
+    tenants: list[GoogleSecopsTenant] = Field(
+        default_factory=list, description="Google SecOps instances."
+    )
+
+
 # --- Any other platform file ----------------------------------------------------------
 
 
@@ -519,4 +658,7 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "elastic": ElasticConfiguration,
     "sysdig": SysdigConfiguration,
     "bitdefender": BitdefenderConfiguration,
+    "graylog": GraylogConfiguration,
+    "exabeam": ExabeamConfiguration,
+    "google_secops": GoogleSecopsConfiguration,
 }

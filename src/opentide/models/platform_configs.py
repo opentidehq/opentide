@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.sentinel_attack import SentinelTechnique
@@ -910,3 +916,171 @@ class BitdefenderActions(_BitdefenderTable):
     """Quarantine the file (type 6): `true`, or `{include_parent, include_children}`."""
     risk_scan: Literal[True] | None = None
     """Run a risk scan (type 7)."""
+
+
+# --- Graylog (platform::graylog::1.0) ---------------------------------------------------
+
+
+class GraylogSchedule(TideModel):
+    every: str | None = None
+    """How often the definition runs (`execute_every_ms`). Exclusive with `cron`."""
+    window: str | None = None
+    """The time range each run searches (`search_within_ms`)"""
+    cron: str | None = None
+    """A Quartz cron expression of 6 or 7 fields (`0 */5 * * * ?`). Exclusive with `every`."""
+    timezone: str | None = None
+    """The IANA time zone `cron` runs in"""
+
+
+class GraylogAggregation(TideModel):
+    group_by: str | list[str] | None = None
+    """Message fields the events are grouped by"""
+    condition: str
+    """A boolean expression over series, in the condition grammar"""
+
+
+class GraylogEventTemplate(TideModel):
+    template: str
+    """A Graylog template (`${source.<field>}`) or constant text, sent as written."""
+
+
+class GraylogLookupTable(TideModel):
+    table: str
+    """The Graylog lookup table name."""
+    key_field: str
+    """The message field whose value is the lookup key."""
+
+
+class GraylogEventLookup(TideModel):
+    lookup: GraylogLookupTable
+    """A lookup-table value keyed by a message field."""
+
+
+#: An `event_fields` value: a bare field name or a `${...}` template string,
+#: `{template: ...}`, or `{lookup: {table, key_field}}`.
+GraylogEventField = str | GraylogEventTemplate | GraylogEventLookup
+# --- Exabeam New-Scale SIEM (platform::exabeam::1.0) -----------------------------------
+# The docstrings are the spec's table text (tests/test_models/test_spec_field_descriptions.py).
+
+
+class ExabeamThreshold(TideModel):
+    function: Literal["count", "unique_count", "value", "max", "min", "sum", "average"]
+    """`count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`"""
+    field: str | None = None
+    """The field the function reads. Required except for `count`. `count` without a field counts
+    events."""
+    operator: Literal["more_than", "less_than", "in", "not_in"]
+    """`more_than`, `less_than`, `in`, or `not_in`"""
+    value: int | float | list[str | int | float] | None = None
+    """`more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative
+    integer). `in` and `not_in`: a non-empty list of strings or numbers."""
+    within: str
+    """The window: whole `m`, `h`, or `d`"""
+
+
+class ExabeamSequence(TideModel):
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.required": True}
+    )
+    """A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML."""
+    name: str | None = None
+    """Sequence name, shown in the console"""
+    threshold: ExabeamThreshold | None = None
+    """The condition. Without it, the sequence triggers on any matching event."""
+    group_by: list[str] | None = None
+    """One to three fields. A threshold is evaluated per value. With any match, the rule still
+    triggers on every matching event; to trigger once per value, also set `suppression.group_by`
+    to these fields (Exabeam's granular suppression)."""
+
+
+class ExabeamCorrelation(TideModel):
+    within: str
+    """The window every sequence's condition must be met in: whole `m`, `h`, or `d`"""
+    group_by: list[str] | None = None
+    """Up to three fields every sequence shares (the API's limit; the console allows more)"""
+
+
+#: The YAML key is a Python keyword: read and written only as ``for``/``from``, so
+#: ``for_``/``from_`` in a rule file is an unknown key (exabeam-1.0, Requirements).
+_KEYWORD_KEY_CONFIG = ConfigDict(
+    populate_by_name=False,
+    validate_by_name=False,
+    validate_by_alias=True,
+    serialize_by_alias=True,
+)
+
+
+class ExabeamSuppression(TideModel):
+    model_config = _KEYWORD_KEY_CONFIG
+
+    for_: str = Field(alias="for")
+    """Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`"""
+    group_by: list[str] | None = None
+    """One to three fields. Suppress per value instead of for the whole rule."""
+
+
+class ExabeamEmail(TideModel):
+    recipients: list[str] = Field(min_length=1)
+    """One or more email addresses"""
+    subject: str | None = None
+    """Email subject"""
+    attach_csv: bool | None = None
+    """Attach the matching events as CSV"""
+
+
+class ExabeamRecurrence(TideModel):
+    model_config = _KEYWORD_KEY_CONFIG
+
+    every: Literal["day", "week", "month", "days"]
+    """`day`, `week`, `month`, or `days` (a range of weekdays)"""
+    from_: str = Field(alias="from")
+    """Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)"""
+    to: str
+    """End time, UTC, `H:MMZ` or `HH:MMZ`"""
+    days: list[str] | list[int] | None = None
+    """`week`: one or more weekday names (`monday` … `sunday`). `month`: day numbers 1–31. Not
+    allowed otherwise."""
+    last_day: bool | None = None
+    """`month` only: also the last day of the month. A `month` recurrence has `days`,
+    `last_day: true`, or both."""
+    first: str | None = None
+    """`days` only: the first weekday of the range"""
+    last: str | None = None
+    """`days` only: the last weekday of the range"""
+
+
+# --- Google Security Operations (platform::google_secops::1.0) ------------------------
+
+
+class GoogleSecopsMatch(TideModel):
+    group_by: list[str] = Field(min_length=1)
+    """The placeholders the rule groups by, each `$name`, non-empty, no repeats. Rendered joined
+    with `, `."""
+    window: str
+    """The match window: `<n>m`, `<n>h`, or `<n>d`. A hop or sliding window is at most `14d`, a
+    tumbling window at most `72h`."""
+    type: Literal["hop", "tumbling", "sliding"] | None = None
+    """`hop` (the default) renders `over`, `tumbling` renders `by`, `sliding` renders
+    `over … before|after $pivot`."""
+    pivot: str | None = None
+    """With `sliding`: the event variable the window is anchored on, `$name`."""
+    direction: Literal["before", "after"] | None = None
+    """With `sliding`: `before` or `after`."""
+
+
+class GoogleSecopsOptions(TideModel):
+    allow_zero_values: bool | None = Field(default=None, strict=True)
+    """Keep zero values of match placeholders (`false` by default). Rendered
+    `allow_zero_values = true`."""
+    suppression_window: str | None = None
+    """Suppress repeated detections for this duration (`m`, `h`, `d`). Rendered
+    `suppression_window = 1h`."""
+
+
+class GoogleSecopsSchedule(TideModel):
+    ensure_enrichment_completeness: bool | None = Field(default=None, strict=True)
+    """Sent as `scheduleCustomizations.ensureEnrichmentCompleteness`. Google's default when
+    omitted."""
+    late_arriving_data_adjustment: str | None = None
+    """A duration (`30m`, `2h`), sent as `scheduleCustomizations.lateArrivingDataAdjustment` in
+    seconds (`"1800s"`). Google's default when omitted."""

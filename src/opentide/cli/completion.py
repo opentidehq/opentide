@@ -61,6 +61,9 @@ PLATFORMS = (
     "elastic",
     "sysdig",
     "bitdefender",
+    "graylog",
+    "exabeam",
+    "google_secops",
 )
 
 #: ``--strategy`` values and what each deploys, as
@@ -674,6 +677,7 @@ def install_completion(ctx: Any, param: Any, value: Any) -> Any:
         repo=Path.cwd(),
         json_output=get_mode() is OutputMode.JSON,
         quiet="--quiet" in flags,
+        verbose="--verbose" in flags,
         no_color="--no-color" in flags,
     )
     # The root callback, which configures the consoles, has not run: this flag is eager.

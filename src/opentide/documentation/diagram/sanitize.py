@@ -1,37 +1,63 @@
-"""Mermaid string sanitization utilities."""
+"""Make object names safe inside Mermaid labels without changing what they say.
+
+Names are written inside quoted labels (``["..."]``), where Mermaid accepts
+brackets and parentheses as text. What it does not accept is escaped with
+Mermaid's entity codes (``#quot;``), which every supported release decodes,
+so ``Gather (Azure) "victim" data`` keeps its punctuation instead of losing it.
+"""
 
 from __future__ import annotations
 
-import re
+#: ``#`` first: it starts every entity code written after it.
+_NODE_ENTITIES = (
+    ("#", "#35;"),
+    ('"', "#quot;"),
+    ("<", "#lt;"),
+    (">", "#gt;"),
+    ("`", "#96;"),
+)
+#: Edge text is quoted too (``-->|"label"|``), and also ends at a pipe. Quoting is
+#: what Mermaid 8 accepts: it refuses entity codes for brackets in unquoted text.
+_EDGE_ENTITIES = (*_NODE_ENTITIES, ("|", "#124;"))
 
-_FORBIDDEN = str.maketrans(dict.fromkeys("()[]{}|", ""))
+#: Characters per label line before it wraps.
+LABEL_WIDTH = 26
 
 
-def sanitize_identifier(value: str) -> str:
-    """Normalize an identifier for mermaid node ids."""
-    return re.sub(r"[^A-Za-z0-9_]", "_", value).strip("_") or "node"
+def escape(text: str, entities: tuple[tuple[str, str], ...] = _NODE_ENTITIES) -> str:
+    """*text* on one line with Mermaid's reserved characters as entity codes."""
+    escaped = " ".join(text.split())
+    for raw, entity in entities:
+        escaped = escaped.replace(raw, entity)
+    return escaped
 
 
-def sanitize_label(value: str) -> str:
-    """Normalize labels for mermaid display."""
-    cleaned = value.translate(_FORBIDDEN).replace('"', "'").replace("\n", " ").strip()
-    return cleaned or "node"
+def node_label(text: str, *, width: int = LABEL_WIDTH) -> str:
+    """A quoted-label body: escaped, wrapped with ``<br>`` every *width* characters.
+
+    A *width* of 0 keeps the label on one line.
+    """
+    lines = wrap(text, width) if width else [" ".join(text.split())]
+    return "<br>".join(escape(line) for line in lines) or "-"
 
 
-def wrap_label(value: str, limit: int = 24) -> str:
-    """Wrap a mermaid label with ``<br>`` so long names stay readable."""
-    cleaned = sanitize_label(value)
-    words = cleaned.split()
+def edge_label(text: str) -> str:
+    """The body of a quoted edge label (``-->|"label"|``)."""
+    return escape(text, _EDGE_ENTITIES)
+
+
+def wrap(text: str, width: int) -> list[str]:
+    """Greedy word wrap; a single word longer than *width* keeps its own line."""
+    words = text.split()
     if not words:
-        return cleaned
+        return []
     lines: list[str] = []
     current = words[0]
     for word in words[1:]:
-        candidate = f"{current} {word}"
-        if len(candidate) <= limit:
-            current = candidate
-            continue
-        lines.append(current)
-        current = word
+        if len(current) + 1 + len(word) <= width:
+            current = f"{current} {word}"
+        else:
+            lines.append(current)
+            current = word
     lines.append(current)
-    return "<br>".join(lines)
+    return lines

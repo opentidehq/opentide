@@ -411,19 +411,24 @@ def render_diagnostics(
     sources: SourceFiles | None = None,
     mode: OutputMode | None = None,
     quiet: bool = False,
+    notes: bool = True,
     cwd: Path | None = None,
     highlight: bool | None = None,
-) -> None:
+) -> int:
     """Print each diagnostic as a code frame, a blank line after each one.
 
-    ``quiet`` keeps errors only. *highlight* colours the query lines of a
-    frame; by default only in the human mode. JSON and MCP modes never reach
-    this function.
+    ``quiet`` keeps errors only. ``notes=False`` leaves out notes (a missing
+    optional field, say): ``validate``, ``lint`` and ``validate query`` pass
+    it without ``--verbose``. *highlight* colours the query lines of a frame;
+    by default only in the human mode. JSON and MCP modes never reach this
+    function. Returns how many notes ``notes=False`` left out, for
+    :func:`opentide.cli.output.with_hidden_notes_step`.
     """
     mode = mode or get_mode()
     sources = sources or SourceFiles()
     encoding = console.encoding or "utf-8"
-    shown = [item for item in diagnostics if not quiet or item.severity == "error"]
+    shown = [item for item in diagnostics if shows(item.severity, quiet=quiet, notes=notes)]
+    hidden_notes = len(diagnostics) - len(shown) if notes is False and not quiet else 0
     # Only a terminal wraps a long line, and it breaks wherever the edge falls.
     columns = console.width if console.is_terminal else None
     # Colour, so a person at a terminal only: plain output stays plain.
@@ -442,6 +447,14 @@ def render_diagnostics(
         ):
             console.print(line, soft_wrap=True)
         console.print()
+    return hidden_notes
+
+
+def shows(severity: str, *, quiet: bool = False, notes: bool = True) -> bool:
+    """Whether a finding of *severity* prints: ``quiet`` keeps errors, ``notes=False`` no notes."""
+    if quiet:
+        return severity == "error"
+    return notes or severity != "note"
 
 
 # --------------------------------------------------------------------------

@@ -46,7 +46,7 @@ opentide validate --check queries
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
 error[vocab_unknown]: 'clearr' is not a TLP value
@@ -379,7 +379,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.yar`, `.yara`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.yar`, `.yara`, `.yaral`, `.yl2`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -403,6 +403,11 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `harfanglab` | YARA, HarfangLab profile: `yara.signature`, and the rule the decomposed form assembles |
 | `bitdefender` | YARA, Bitdefender profile: `yara.signature`, ASCII only, at most 30,000 characters, the modules GravityZone confirms |
+| `graylog` | Lucene, Graylog dialect: the block's `query`, and `.lucene` query files |
+| `exabeam` | Exabeam Query Language: each `sequences[].query` under the `rule` profile (a filter; the advanced `SELECT` form is `exabeam_advanced_in_rule`), a `system: exabeam` hunt and a `.exabeam` file under `search`. |
+| `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
+
+Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
 SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike is never validated by `validate query`, and Sysdig, HarfangLab and Bitdefender only offline: `--platform sysdig --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because none has a rule preview or a YARA dry run (see [Supported platforms](#supported-platforms)). `--platform bitdefender` checks YARA under the Bitdefender profile: ASCII only (`bitdefender_yara_ascii`), at most 30,000 characters (`bitdefender_yara_size`), and a module GravityZone has not confirmed is a warning (`yara_module_unconfirmed`).
 
@@ -580,7 +585,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on eight, five of them the same:
+Live query validation works on **eight platforms**; the offline engine on ten, seven of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -593,7 +598,14 @@ Live query validation works on **six platforms**; the offline engine on eight, f
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA; criteria by `validate`) | ❌ `supported: false` | ✅ YARA |
+| `graylog` (Lucene, Graylog dialect) | ✅ `/api/search/validate` | ✅ |
+| `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
+| `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
 | `crowdstrike` | ❌ `supported: false` | ❌ |
+
+### Exabeam live validation
+
+`opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
 
 ### Elastic live validation and deploy
 

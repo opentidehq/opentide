@@ -22,6 +22,8 @@ _REF_LEAF_TO_TYPE: dict[str, str] = {
 # names packed into one string). Suggesting a single vocabulary name for these
 # would recommend dropping the other names.
 _VOCAB_SHAPE_ERRORS = frozenset({"vocab_list_type", "vocab_packed_names"})
+#: Errors whose input is not a value of a vocabulary field.
+_NOT_A_VOCAB_VALUE = _VOCAB_SHAPE_ERRORS | {"extra_forbidden"}
 
 
 def _leaf_field_name(field_path: tuple[str, ...]) -> str | None:
@@ -64,8 +66,11 @@ def _cross_object_ref_type(field_path: tuple[str, ...]) -> str | None:
 def _platform_constraint_codes() -> frozenset[str]:
     """Codes a platform block's validator raises as the error's type."""
     from opentide.platforms.bitdefender.catalog import CONSTRAINT_CODES
+    from opentide.platforms.exabeam.constraints import CONSTRAINT_CODES as EXABEAM_CODES
+    from opentide.platforms.google_secops.checks import CONSTRAINT_CODES as SECOPS_CODES
+    from opentide.platforms.graylog.constraints import CONSTRAINT_CODES as GRAYLOG_CODES
 
-    return CONSTRAINT_CODES
+    return CONSTRAINT_CODES | GRAYLOG_CODES | EXABEAM_CODES | SECOPS_CODES
 
 
 def issues_from_pydantic(
@@ -90,12 +95,15 @@ def issues_from_pydantic(
                 if ref_type is not None:
                     suggestion = graph.suggest_ref(ref_type, str(err["input"]))
                     code = "invalid_ref"
-                if suggestion is None and err.get("type") not in _VOCAB_SHAPE_ERRORS:
+                # An unknown key names no field, so no vocabulary: its name
+                # (``rule_id::<tenant>``) is not a vocabulary reference to resolve.
+                if suggestion is None and err.get("type") not in _NOT_A_VOCAB_VALUE:
                     suggestion = graph.enum_resolver.suggest(str(err["input"]), last)
                     if suggestion:
                         code = "vocab_unknown"
         if str(err.get("type")) in _platform_constraint_codes():
-            # A platform constraint (bitdefender-1.0): the error's type is its code.
+            # A platform constraint (bitdefender-1.0, graylog-1.0, exabeam-1.0,
+            # google-secops-1.0): the error's type is its code.
             code = str(err["type"])
         value = err.get("input")
         issues.append(

@@ -3,7 +3,7 @@
   dict({
     'counts': dict({
       'objectives': 1,
-      'rules': 11,
+      'rules': 14,
       'threats': 1,
     }),
     'platforms': list([
@@ -74,6 +74,79 @@
             'variables': list([
               dict({
                 'name': 'ELASTIC_API_KEY',
+                'set': False,
+              }),
+            ]),
+          }),
+        ]),
+      }),
+      dict({
+        'can_deploy': True,
+        'can_query': True,
+        'can_validate': True,
+        'enabled': True,
+        'name': 'exabeam',
+        'tenants': list([
+          dict({
+            'description': '',
+            'manual': False,
+            'name': 'staging',
+            'strategies': list([
+              'PREVIEW',
+            ]),
+            'variables': list([
+              dict({
+                'name': 'EXABEAM_CLIENT_ID',
+                'set': False,
+              }),
+              dict({
+                'name': 'EXABEAM_CLIENT_SECRET',
+                'set': False,
+              }),
+            ]),
+          }),
+        ]),
+      }),
+      dict({
+        'can_deploy': True,
+        'can_query': True,
+        'can_validate': True,
+        'enabled': True,
+        'name': 'google_secops',
+        'tenants': list([
+          dict({
+            'description': '',
+            'manual': False,
+            'name': 'staging',
+            'strategies': list([
+              'PREVIEW',
+            ]),
+            'variables': list([
+              dict({
+                'name': 'GOOGLE_SECOPS_CREDENTIALS',
+                'set': False,
+              }),
+            ]),
+          }),
+        ]),
+      }),
+      dict({
+        'can_deploy': True,
+        'can_query': True,
+        'can_validate': True,
+        'enabled': True,
+        'name': 'graylog',
+        'tenants': list([
+          dict({
+            'description': '',
+            'manual': False,
+            'name': 'staging',
+            'strategies': list([
+              'PREVIEW',
+            ]),
+            'variables': list([
+              dict({
+                'name': 'GRAYLOG_TOKEN',
                 'set': False,
               }),
             ]),

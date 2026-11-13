@@ -123,3 +123,32 @@ def test_a_decomposed_advisory_is_keyed_by_form(
     assert [item["_code"] for item in _query_findings(tmp_path, [record])] == [
         "harfanglab_yara_context"
     ]
+
+
+_EXABEAM_FILE = (
+    "name: x\nconfigurations:\n  exabeam:\n    status: STAGING\n    outcome: none\n"
+    "    sequences:\n      - query: a\n        threshold: {within: 1h}\n      - query: b\n"
+    "    correlation:\n      within: 15m\n"
+)
+
+
+def test_the_exabeam_advisories_are_lint_warnings_at_their_key(tmp_path: Path) -> None:
+    """Reported with no engine: they are opentide's own (exabeam-1.0, Advisories)."""
+    from opentide.cli.services.lint import _exabeam_findings
+
+    path = tmp_path / "rule.yaml"
+    path.write_text(_EXABEAM_FILE, encoding="utf-8")
+    record = _ObjectRecord(path=path, relative="objects/rules/rule.yaml", text=_EXABEAM_FILE)
+    found = _exabeam_findings([record])
+    assert [(item["_code"], item["severity"], item["_field_path"]) for item in found] == [
+        ("exabeam_outcome_silent", "warning", ["configurations", "exabeam", "outcome"]),
+        (
+            "exabeam_correlation_window",
+            "warning",
+            ["configurations", "exabeam", "correlation", "within"],
+        ),
+    ]
+    # A file that does not name the platform, or does not parse, is not read.
+    other = _ObjectRecord(path=path, relative="r.yaml", text="name: x\n")
+    broken = _ObjectRecord(path=path, relative="r.yaml", text="exabeam: [\n")
+    assert _exabeam_findings([other, broken]) == []

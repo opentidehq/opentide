@@ -12,6 +12,9 @@ from opentide.models.platform import (
     CrowdstrikeConfig,
     DefenderConfig,
     ElasticConfig,
+    ExabeamConfig,
+    GoogleSecopsConfig,
+    GraylogConfig,
     HarfangLabConfig,
     PlatformConfigBase,
     SentinelConfig,
@@ -62,6 +65,9 @@ load_carbon_black_config = _loader(CarbonBlackConfig)
 load_elastic_config = _loader(ElasticConfig)
 load_sysdig_config = _loader(SysdigConfig)
 load_bitdefender_config = _loader(BitdefenderConfig)
+load_graylog_config = _loader(GraylogConfig)
+load_exabeam_config = _loader(ExabeamConfig)
+load_google_secops_config = _loader(GoogleSecopsConfig)
 
 
 _PLATFORM_LOADERS = {
@@ -75,6 +81,9 @@ _PLATFORM_LOADERS = {
     "elastic": load_elastic_config,
     "sysdig": load_sysdig_config,
     "bitdefender": load_bitdefender_config,
+    "graylog": load_graylog_config,
+    "exabeam": load_exabeam_config,
+    "google_secops": load_google_secops_config,
 }
 
 

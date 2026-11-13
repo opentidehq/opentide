@@ -58,10 +58,14 @@ def _with_unknown_key(block: dict[str, Any], path: tuple) -> dict[str, Any]:
     return copy
 
 
+#: Tables whose keys the author names: a new key is a new entry, not an unknown key.
+_OPEN_TABLES = {("graylog", ("event_fields",))}
+
 _CASES = [
     pytest.param(platform, block, path, id=f"{name}:{platform}:{'.'.join(map(str, path)) or '.'}")
     for name, platform, block in _blocks()
     for path in _mapping_paths(block)
+    if (platform, path) not in _OPEN_TABLES
 ]
 
 

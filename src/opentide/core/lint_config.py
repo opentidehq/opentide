@@ -14,13 +14,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, cast
 
-#: How much a finding matters. ``--strict`` still fails on any finding.
+#: How much a finding matters. ``--strict`` fails on errors and warnings; ``info``
+#: (a note, such as a missing optional field) never fails a run.
 Severity = Literal["error", "warning", "info"]
 
 SEVERITIES: tuple[Severity, ...] = ("error", "warning", "info")
 
 #: Check names, in the order ``opentide lint`` runs them by default.
-CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata", "placeholders", "queries")
+CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata", "recommended", "placeholders", "queries")
 
 #: How ``[filenames]`` derives the file stem an object should have from its ``name``.
 FilenameStyle = Literal["slug", "name", "none"]
@@ -41,6 +42,7 @@ _COMMON_KEYS = frozenset({"enabled", "severity"})
 _CHECK_KEYS: dict[str, frozenset[str]] = {
     "filenames": _COMMON_KEYS | {"style", "pattern"} | set(FILENAME_KINDS),
     "metadata": _COMMON_KEYS | {"required"},
+    "recommended": _COMMON_KEYS,
     "placeholders": _COMMON_KEYS,
     "queries": _COMMON_KEYS,
 }

@@ -35,7 +35,7 @@ QUERY_PLATFORMS = [
 
 
 def test_the_query_platform_list_is_not_empty() -> None:
-    assert len(QUERY_PLATFORMS) == 5
+    assert len(QUERY_PLATFORMS) == 6
 
 
 @pytest.mark.parametrize("key", QUERY_PLATFORMS)

@@ -479,3 +479,15 @@ def test_a_window_error_names_the_flag_at_fault(
     with pytest.raises(QueryUsageError) as refused:
         run_query("splunk", query="x", tenants=["lab"], runner=FakeRunner(), **kwargs)
     assert refused.value.argument == flag
+
+
+def test_a_google_secops_tenant_is_named_by_its_regional_endpoint() -> None:
+    from types import SimpleNamespace
+
+    from opentide.query.service import _tenant_host
+
+    regional = SimpleNamespace(location="eu", endpoint=None)
+    assert _tenant_host("google_secops", regional) == "https://eu-chronicle.googleapis.com"
+    custom = SimpleNamespace(location="eu", endpoint="https://proxy.example")
+    assert _tenant_host("google_secops", custom) == "https://proxy.example"
+    assert _tenant_host("sentinel", SimpleNamespace()) == "https://api.loganalytics.io"

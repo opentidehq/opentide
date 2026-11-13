@@ -77,7 +77,9 @@ class QueryChecked(ResultModel):
     platform: str | None = Field(
         description="The configurations block the query is in; null in a hunt or a query file"
     )
-    language: Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "yara"]
+    language: Literal[
+        "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "yara", "exabeam", "yaral"
+    ]
     field_path: list[str] = Field(description="YAML path of the query; empty for a query file")
     line: int = Field(description="1-based line where the query starts")
     column: int

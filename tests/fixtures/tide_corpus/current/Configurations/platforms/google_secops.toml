@@ -1,0 +1,13 @@
+[platform]
+enabled = true
+name = "Google Security Operations"
+
+[[tenants]]
+name = "staging"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+project = "corpus-secops"
+location = "eu"
+instance = "3f0ac524-5ae1-4bfd-b86d-53afc953e7e6"
+credentials = "$GOOGLE_SECOPS_CREDENTIALS"

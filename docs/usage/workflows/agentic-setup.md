@@ -28,7 +28,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## Install and configure the server
 
 ```bash
-pip install 'opentide==0.25.0'
+pip install 'opentide==0.28.0'
 opentide setup mcp --cursor --yes
 ```
 

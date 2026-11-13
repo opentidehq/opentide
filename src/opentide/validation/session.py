@@ -286,6 +286,33 @@ def run_validation(
                 _file_of,
             )
         )
+        from opentide.validation.graylog_titles import graylog_title_issues
+
+        warnings.extend(
+            graylog_title_issues(
+                objects.get("rule", {}),
+                (item.uuid for item in work_items if item.object_type == "rule"),
+                _file_of,
+            )
+        )
+        from opentide.validation.exabeam_names import exabeam_name_issues
+
+        issues.extend(
+            exabeam_name_issues(
+                objects.get("rule", {}),
+                (item.uuid for item in work_items if item.object_type == "rule"),
+                _file_of,
+            )
+        )
+        from opentide.validation.google_secops import google_secops_name_issues
+
+        issues.extend(
+            google_secops_name_issues(
+                objects.get("rule", {}),
+                (item.uuid for item in work_items if item.object_type == "rule"),
+                _file_of,
+            )
+        )
 
     if ValidateCheck.schema in checks and scope.mode == "full":
         # Shards outlive their rules: an orphan is still the only handle on a
@@ -670,9 +697,49 @@ def _validate_work_item(
             )
         )
         from opentide.validation.bitdefender_advisories import bitdefender_advisory_issues
+        from opentide.validation.graylog_advisories import graylog_advisory_issues
 
         warnings.extend(
             bitdefender_advisory_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
+        warnings.extend(
+            graylog_advisory_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
+        from opentide.validation.exabeam_advisories import exabeam_advisory_issues
+
+        warnings.extend(
+            exabeam_advisory_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
+        from opentide.validation.google_secops import (
+            google_secops_advisory_issues,
+            section_alias_issues,
+        )
+
+        issues.extend(
+            section_alias_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+            )
+        )
+        warnings.extend(
+            google_secops_advisory_issues(
                 item.body,
                 object_uuid=item.uuid,
                 object_type=item.object_type,

@@ -71,7 +71,8 @@ PLACEHOLDER_MARKER = "# opentide:placeholder"
 #: ``type: query``, the Defender loader reads ``scope`` unconditionally, a
 #: SentinelOne ``Single Event`` condition needs its query, HarfangLab needs a
 #: sigma (or yara) detection, Sysdig needs a Falco ``condition``, Bitdefender a
-#: ``detection`` (or ``yara``) kind, and Sentinel's
+#: ``detection`` (or ``yara``) kind, Google SecOps its ``events`` and
+#: ``condition`` sections, and Sentinel's
 #: compile needs grouping and, unless ``nrt`` is true, a schedule.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
@@ -91,6 +92,7 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
         ("detection", "criteria", "field"),
         ("detection", "criteria", "is"),
     ),
+    "google_secops": (("events",), ("outcome",), ("condition",)),
 }
 
 #: Values for those keys that compile, as ``(value, is_placeholder)``. A
@@ -104,6 +106,10 @@ PLATFORM_VALUES: dict[str, dict[tuple[str, ...], tuple[Any, bool]]] = {
         ("detection", "target"): ("process", True),
         ("detection", "criteria", "field"): ("Process.Name", True),
         ("detection", "criteria", "is"): ("...", True),
+    },
+    "google_secops": {
+        # A rule without $risk_score earns google_secops_risk_score_missing.
+        ("outcome",): ("$risk_score = 40", True),
     },
     "sentinel": {
         ("scheduling", "frequency"): ("1h", True),
@@ -743,6 +749,24 @@ def fill_template(
             else:
                 replacements[entry.index] = f"{lines[entry.index].rstrip()}\n{rendered}"
             continue
+        if given is not None and entry.value == "|" and isinstance(given, str):
+            # A block scalar keeps its ``|``: the given text replaces its lines.
+            text = [
+                other
+                for other in entries
+                if other.role == "text" and other.path == entry.path and other.index > entry.index
+            ]
+            head = lines[text[0].index][: text[0].column] if text else " " * (entry.column + 2)
+            rendered = "\n".join(f"{head}{line}" for line in given.splitlines())
+            if text:
+                replacements[text[0].index] = rendered
+                for extra in text[1:]:
+                    replacements[extra.index] = ""
+            else:
+                replacements[entry.index] = f"{lines[entry.index].rstrip()}\n{rendered}"
+            if entry.path in marked:
+                placeholder(entry)
+            continue
         if given is not None:
             set_value(entry, given)
             if entry.path in marked:
@@ -778,7 +802,7 @@ def fill_template(
 def keep_platform_blocks(text: str, platforms: Iterable[str], pointer: str) -> str:
     """Drop the commented ``configurations`` blocks of every platform not in *platforms*.
 
-    The template lists all ten platforms, about 400 commented lines; a new
+    The template lists every platform, about 650 commented lines; a new
     rule keeps its own blocks and one comment that points at *pointer*, the
     template, for the others.
     """

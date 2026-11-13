@@ -18,6 +18,9 @@ SYSTEM_KEYS = (
     "elastic",
     "sysdig",
     "bitdefender",
+    "graylog",
+    "exabeam",
+    "google_secops",
 )
 
 

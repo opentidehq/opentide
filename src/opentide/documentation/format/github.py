@@ -5,7 +5,8 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 
-from opentide.documentation.format.protocol import BaseFormatter
+from opentide.documentation.diagram.mermaid import MermaidDialect
+from opentide.documentation.format.protocol import BaseFormatter, CalloutKind, blockquote
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,13 @@ class GitHubFormatter(BaseFormatter):
 
     def page_filename(self, slug: str, uuid: str | None) -> str:
         return f"{slug}.md"
+
+    def mermaid_dialect(self) -> MermaidDialect:
+        return MermaidDialect()
+
+    def callout(self, kind: CalloutKind, text: str) -> str:
+        """A GitHub alert (``> [!NOTE]``), rendered as a coloured, titled box."""
+        return blockquote(f"[!{kind.upper()}]\n{text.strip()}")
 
     def heading_anchor(self, title: str) -> str:
         """The id GitHub gives a heading (github-slugger, without duplicate suffixes).

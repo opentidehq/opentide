@@ -29,6 +29,7 @@ them (:mod:`opentide.analysis`).
 
 from __future__ import annotations
 
+import functools
 import json
 import types
 import typing
@@ -244,6 +245,43 @@ def deprecations_catalog(version: str) -> dict[str, Any]:
 
 def _revision_key(revision: str) -> tuple[int, ...]:
     return tuple(int(part) for part in revision.split(".") if part.isdigit())
+
+
+class RecommendedField(typing.NamedTuple):
+    """A field the templates ask for and validation does not require."""
+
+    #: Dotted path from the object's root (``response``).
+    path: str
+    #: Legacy keys in the same mapping that fill it, as the engine accepts them.
+    filled_by: tuple[str, ...] = ()
+
+
+@functools.cache
+def recommended_fields(schema_id: str) -> tuple[RecommendedField, ...]:
+    """The fields of *schema_id* the catalog marks ``recommended``, for ``opentide lint``.
+
+    The rows the engine's ``recommended_field_missing`` reads, so lint and the
+    editor report the same fields. Raises :class:`LookupError` for a schema
+    id that is not registered.
+    """
+    from opentide.generation.pydantic_schemas import generate_schema_for_identifier
+    from opentide.models.schema_registry import resolve_model
+    from opentide.validation.errors import _REF_LEAF_TO_TYPE
+
+    facts = _model_facts(resolve_model(schema_id))
+    schema = generate_schema_for_identifier(schema_id)
+    found: list[RecommendedField] = []
+    for node in _flatten(schema, schema_id, facts, dict(_REF_LEAF_TO_TYPE)):
+        if not node.get("recommended"):
+            continue
+        parent, _, name = str(node["path"]).rpartition(".")
+        legacy = facts.legacy.get(parent, {})
+        found.append(
+            RecommendedField(
+                str(node["path"]), tuple(old for old, fills in legacy.items() if fills == name)
+            )
+        )
+    return tuple(sorted(found))
 
 
 class ModelFacts(typing.NamedTuple):

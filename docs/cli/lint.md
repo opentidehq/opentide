@@ -1,6 +1,6 @@
 ---
 title: opentide lint
-description: Catalogue hygiene — filename convention, recommended metadata, placeholders and query style, distinct from validation.
+description: Catalogue hygiene — filename convention, recommended metadata and fields, placeholders and query style, distinct from validation.
 ---
 
 # opentide lint
@@ -22,11 +22,12 @@ opentide lint --file objects/rules/example.yaml
 | `--check` | What it does | `--fix` |
 |----------|----------------|---------|
 | `filenames` | Object YAML stem must follow the [filename convention](#filename-convention): `slugify(name)` by default | Renames files to the stem `style` expects. On a collision in the same folder, appends `{uuid[:8]}`. A `pattern` finding is not fixed |
-| `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty. By default `author` and `organisation` | Not auto-fixed |
+| `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty, as a note. By default `author` and `organisation` | Not auto-fixed |
+| `recommended` | Reports each field the templates ask for and `validate` does not require that is missing, as a note: a rule's `configurations` and `response`. It reads the catalog the editor reads, so it reports the fields and lines of the editor's `recommended_field_missing`, and it needs no analysis engine | Not auto-fixed |
 | `placeholders` | Reports each value [`opentide new`](./new.md) filled in for you, marked `# opentide:placeholder` | Not auto-fixed |
 | `queries` | Reports the analysis engine's warnings and notes on each query (slow shapes, deprecated commands) and Elastic block settings (see [Queries](#queries)) | Not auto-fixed |
 
-Default (no `--check`) runs every check that [`lint.toml`](#configuration) leaves enabled, which out of the box is all four. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
+Default (no `--check`) runs every check that [`lint.toml`](#configuration) leaves enabled, which out of the box is all five. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
 
 Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives,rules}/` and does not rebuild the object registry. A file in a subfolder is not an object: the `filenames` check reports it once as a `warning` with `code: nested_object_file` and checks nothing else in it. These findings do not depend on the filename convention: a catalogue with `style = "none"` still gets them.
 
@@ -34,11 +35,11 @@ Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives
 
 | Flag | Purpose |
 |------|---------|
-| `--check` | Repeatable. `filenames`, `metadata`, `placeholders` or `queries`. Runs only the named checks, including one `lint.toml` disables |
+| `--check` | Repeatable. `filenames`, `metadata`, `recommended`, `placeholders` or `queries`. Runs only the named checks, including one `lint.toml` disables |
 | `--changed` | Lint only the object files this run changed: the pull or merge request, the push, or outside CI the last commit. See [Linting what changed](#linting-what-changed) |
 | `--file` | Lint only this object file: a repo-relative path, an absolute path or a bare file name, matched as in [`validate`](./validate.md#selecting-a-file). Repeatable. Cannot be combined with `--changed` (exit `2`) |
 | `--fix` | Apply safe filename renames |
-| `--strict` | Exit `1` when any finding exists (CI gate). Default is report-only |
+| `--strict` | Exit `1` when an error or a warning is left (CI gate). Notes never fail it. Default is report-only |
 | `--format` | `text` (code frames, the default), `sarif` or `codequality`: the findings as a SARIF 2.1.0 or GitLab Code Quality report, as for [`validate`](./validate.md#reports-and-ci-annotations) |
 | `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
@@ -88,7 +89,7 @@ note[metadata_recommended]: Recommended metadata missing: author, organisation
 → opentide lint --fix · rename 1 file to match their names
 ```
 
-When more than one severity is left, the count splits them. Notes alone are no warning: the line counts them as notes and takes `✓` (`✓ 6 notes in 6 files`), while the JSON `status` stays `issues`. When a filename finding can be fixed by renaming, the count is followed by the command that does it. A file renamed by `--fix` gets `note: renamed from <old path>`; the count leaves it out and ends with `· 1 fixed`, so a run whose findings were all fixed prints `✓ 3 files clean · 1 fixed`. Under `--strict`, findings fail the run: the count prints as `✗ 2 findings in 1 file` and `failure.code` is `issues_found`. A workspace with no object files passes, and says where it looked.
+When more than one severity is left, the count splits them. Notes alone are no warning: the line counts them as notes and takes `✓` (`✓ 6 notes in 6 files`), while the JSON `status` stays `issues`. A note is something worth knowing that is not wrong, such as a missing optional field. Its frame prints only with the global [`--verbose`](./global-options.md); without it, the count still includes the notes and is followed by the command you ran with `--verbose` (`→ opentide lint --changed --verbose · show 6 notes, such as a missing optional field`). `--json` and the `--format` reports always include them. When a filename finding can be fixed by renaming, the count is followed by the command that does it. A file renamed by `--fix` gets `note: renamed from <old path>`; the count leaves it out and ends with `· 1 fixed`, so a run whose findings were all fixed prints `✓ 3 files clean · 1 fixed`. Under `--strict`, errors and warnings fail the run (notes do not): the count prints as `✗ 2 findings in 1 file` and `failure.code` is `issues_found`. A workspace with no object files passes, and says where it looked.
 
 ### JSON findings
 
@@ -96,7 +97,7 @@ When more than one severity is left, the count splits them. Notes alone are no w
 
 | Key | Value |
 |-----|-------|
-| `check` | `filenames`, `metadata`, `placeholders` or `queries` |
+| `check` | `filenames`, `metadata`, `recommended`, `placeholders` or `queries` |
 | `severity` | `error`, `warning` or `info` (table below) |
 | `path` | Object file, relative to the workspace |
 | `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
@@ -120,11 +121,12 @@ A placeholder's `help` is the step that clears it, and a `filename_pattern` find
 | Filename is not the stem `style` expects (`slugify(name)` by default) | `warning` | `null` |
 | Filename does not match `[filenames].pattern` | `warning` | `null` |
 | A `metadata.required` key missing or empty | `info` | The `metadata:` key, or `null` when there is no `metadata` block |
+| A field the templates ask for missing (`recommended_field_missing`) | `info` | The finding's line |
 | A value marked `# opentide:placeholder` | `warning` | The marked line |
 | An engine warning on a query or an Elastic block | `warning` | The finding's line |
 | An engine note (a hint) on a query | `info` | The finding's line |
 
-These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check. Severity is for sorting and triage only. `--strict` exits `1` on any finding, whatever its severity.
+These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check. `--strict` exits `1` when an error or a warning is left; an `info` finding never fails it. To gate CI on a missing author, raise the check's `severity` to `warning` or `error`.
 
 ## Configuration
 
@@ -140,6 +142,9 @@ style = "slug"
 enabled = true
 required = ["author", "organisation"]
 
+[recommended]
+enabled = true
+
 [placeholders]
 enabled = true
 
@@ -149,8 +154,8 @@ enabled = true
 
 | Key | Tables | Value |
 |-----|--------|-------|
-| `enabled` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
-| `severity` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included |
+| `enabled` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
+| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included. The language server follows `[metadata]` too, so the editor shows the same severity |
 | `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
 | `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
 | `style`, `pattern` | `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` | The same keys for one kind of object, over `[filenames]`. See [A convention per object kind](#a-convention-per-object-kind) |

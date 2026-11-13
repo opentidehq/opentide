@@ -392,3 +392,26 @@ def test_a_clean_object_is_not_parsed_again_for_line_hints(
     yaml_path = tmp_path / "clean.yaml"
     yaml_path.write_text("name: clean\n", encoding="utf-8")
     assert attach_yaml_lines([], {"name": "clean"}, file_path=yaml_path) == []
+
+
+def test_an_unknown_key_gets_no_vocab_suggestion() -> None:
+    """``rule_id::<tenant>`` on a model that forbids extra keys is not a vocabulary value.
+
+    Reading its name as a vocabulary reference crashed ``validate`` with
+    ``invalid literal for int() with base 10: '<tenant>'`` on the Sysdig, Bitdefender
+    and Graylog blocks, whose models refuse an unknown key.
+    """
+    from opentide.models.platform import SysdigConfig
+
+    graph = MagicMock()
+    graph.enum_resolver.suggest.side_effect = ValueError("not a vocabulary reference")
+    try:
+        SysdigConfig.model_validate(
+            {"status": "STAGING", "condition": "proc.name = bash", "rule_id::prod": "12"}
+        )
+    except ValidationError as exc:
+        issues = issues_from_pydantic(exc, object_type="rule", graph=graph)
+    else:  # pragma: no cover - the model must refuse the key
+        raise AssertionError("an unknown key passed")
+    assert [issue.code for issue in issues] == ["schema_validation"]
+    graph.enum_resolver.suggest.assert_not_called()

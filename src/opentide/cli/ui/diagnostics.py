@@ -68,6 +68,8 @@ LINT_CODES = {
     "filename": "filename_mismatch",
     "filename_pattern": "filename_pattern",
     "metadata": "metadata_recommended",
+    # The engine's code: the editor reports the same finding, and dedupes on it.
+    "recommended": "recommended_field_missing",
     "placeholder": "placeholder",
 }
 
@@ -891,6 +893,11 @@ ENGINE_REFERENCES: dict[str, tuple[str, str]] = {
     "ecs_": ("ECS field", "https://www.elastic.co/docs/reference/ecs/ecs-field-reference"),
     "falco_": ("Falco condition", "https://falco.org/docs/concepts/rules/conditions/"),
     "yara_": ("YARA rule", "https://yara.readthedocs.io/en/v4.5.2/writingrules.html"),
+    "exabeam_": (
+        "Exabeam Query Language",
+        "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/"
+        "advanced-search/query-syntax.html",
+    ),
 }
 
 

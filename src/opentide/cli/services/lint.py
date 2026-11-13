@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
@@ -68,6 +68,8 @@ class _ObjectRecord:
     placeholder_lines: list[_Marked] = field(default_factory=list)
     #: The file's text, for the queries check; ``None`` when it was not read.
     text: str | None = None
+    #: The parsed mapping, for the recommended check; ``None`` when it did not parse.
+    body: dict[str, Any] | None = None
 
 
 def _object_files(root: Path) -> tuple[list[Path], list[Path]]:
@@ -237,6 +239,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         # file, found an empty file".
         record.parse_error = problem
         return record
+    record.body = data
     record.name = _as_str(data.get("name"))
     metadata = data.get("metadata")
     if isinstance(metadata, dict):
@@ -588,6 +591,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+    from opentide.platforms.exabeam.advisories import ADVISORY_CODES as EXABEAM_ADVISORY_CODES
     from opentide.platforms.harfanglab.yara import ADVISORY_CODES
 
     # The datasets visibility.toml declares, as validate and the editor see them.
@@ -604,6 +608,8 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
                 continue
             if finding.code in ADVISORY_CODES and _reported_by_opentide(record, finding):
                 continue  # one finding per code, form and rule: opentide's, placed by key
+            if finding.code in EXABEAM_ADVISORY_CODES:
+                continue  # the block advisories are opentide's own (_exabeam_findings)
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
@@ -630,18 +636,95 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     return findings
 
 
+def _recommended_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """One note per field the templates ask for and validation does not require.
+
+    The fields come from the catalog the engine reads (``recommended_fields``),
+    so lint reports what the editor reports as ``recommended_field_missing``,
+    without the engine. A field counts as missing only inside a mapping the
+    object has, as the engine checks it; an unknown schema is validate's.
+    """
+    from opentide.generation.lsp_catalog import recommended_fields
+
+    findings: list[dict[str, object]] = []
+    for record in records:
+        schema_id = _as_str(record.metadata.get("schema"))
+        if record.parse_error or record.body is None or schema_id is None:
+            continue
+        try:
+            fields = recommended_fields(schema_id)
+        except LookupError:
+            continue
+        for item in fields:
+            parent_path, _, key = item.path.rpartition(".")
+            parent = _mapping_at(record.body, parent_path)
+            if parent is None or key in parent or any(old in parent for old in item.filled_by):
+                continue
+            top = item.path.split(".", 1)[0]
+            line = 0 if not parent_path else _key_line(record, top)
+            finding = _finding(
+                LintCheck.recommended,
+                "info",
+                record,
+                f"Recommended field missing: {item.path}",
+                code=LINT_CODES["recommended"],
+                yaml_line=line,
+            )
+            finding["_field_path"] = item.path.split(".")
+            if line is not None:
+                finding["_position"] = (line + 1, 1)
+            findings.append(finding)
+    return findings
+
+
+def _mapping_at(body: dict[str, Any], dotted: str) -> dict[str, Any] | None:
+    """The mapping at *dotted* in *body* (``""`` is *body*), or ``None`` when there is none."""
+    current: object = body
+    for part in dotted.split(".") if dotted else ():
+        current = current.get(part) if isinstance(current, dict) else None
+    return current if isinstance(current, dict) else None
+
+
 def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     """The Bitdefender advisories (bitdefender-1.0), at the value each points at."""
+    from opentide.platforms.bitdefender.advisories import bitdefender_advisories
+
+    return _platform_advisory_findings(records, "bitdefender", bitdefender_advisories)
+
+
+def _exabeam_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Exabeam advisories (exabeam-1.0), at the key each points at."""
+    from opentide.platforms.exabeam.advisories import exabeam_advisories
+
+    return _platform_advisory_findings(records, "exabeam", exabeam_advisories)
+
+
+def _google_secops_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Google SecOps advisories (google-secops-1.0), at the value each points at."""
+    from opentide.platforms.google_secops.advisories import google_secops_advisories
+
+    return _platform_advisory_findings(records, "google_secops", google_secops_advisories)
+
+
+def _platform_advisory_findings(
+    records: list[_ObjectRecord],
+    platform: str,
+    advise: Callable[[dict[str, Any]], Sequence[Any]],
+) -> list[dict[str, object]]:
+    """*platform*'s block advisories, each a ``queries`` warning at its field path.
+
+    *advise* reads a rule body and returns items with ``code``, ``field_path``
+    and ``message``.
+    """
     import yaml
 
     from opentide.core.io import parse_yaml
-    from opentide.platforms.bitdefender.advisories import bitdefender_advisories
     from opentide.validation.errors import attach_yaml_lines
     from opentide.validation.issues import ValidationIssue
 
     findings: list[dict[str, object]] = []
     for record in records:
-        if record.parse_error or not record.text or "bitdefender" not in record.text:
+        if record.parse_error or not record.text or platform not in record.text:
             continue
         try:
             body = parse_yaml(record.text)
@@ -651,7 +734,47 @@ def _bitdefender_findings(records: list[_ObjectRecord]) -> list[dict[str, object
             continue
         issues = [
             ValidationIssue(code=item.code, field_path=item.field_path, message=item.message)
-            for item in bitdefender_advisories(body)
+            for item in advise(body)
+        ]
+        for issue in attach_yaml_lines(issues, body, file_path=record.path):
+            findings.append(
+                {
+                    **_finding(
+                        LintCheck.queries,
+                        "warning",
+                        record,
+                        issue.message,
+                        code=issue.code,
+                        yaml_line=issue.yaml_line,
+                    ),
+                    "_field_path": list(issue.field_path),
+                }
+            )
+    return findings
+
+
+def _graylog_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The Graylog block advisories (graylog-1.0), at the key each points at."""
+    import yaml
+
+    from opentide.core.io import parse_yaml
+    from opentide.platforms.graylog.advisories import graylog_advisories
+    from opentide.validation.errors import attach_yaml_lines
+    from opentide.validation.issues import ValidationIssue
+
+    findings: list[dict[str, object]] = []
+    for record in records:
+        if record.parse_error or not record.text or "graylog" not in record.text:
+            continue
+        try:
+            body = parse_yaml(record.text)
+        except yaml.YAMLError:
+            continue  # the parse error is another check's finding
+        if not isinstance(body, dict):
+            continue
+        issues = [
+            ValidationIssue(code=item.code, field_path=item.field_path, message=item.message)
+            for item in graylog_advisories(body)
         ]
         for issue in attach_yaml_lines(issues, body, file_path=record.path):
             findings.append(
@@ -911,15 +1034,20 @@ def run_lint(
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
         findings.extend(_metadata_findings(shown, config.required_metadata))
+    if LintCheck.recommended in selected:
+        findings.extend(_recommended_findings(shown))
     if LintCheck.placeholders in selected:
         findings.extend(_placeholder_findings(shown))
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
-        # The HarfangLab YARA and Bitdefender advisories need no engine: reported whether
-        # it loads or not.
+        # The HarfangLab YARA, Bitdefender, Graylog, Exabeam and Google SecOps advisories
+        # need no engine: reported whether it loads or not.
         advisories = [finding for record in shown for finding in _harfanglab_yara_findings(record)]
         advisories.extend(_bitdefender_findings(shown))
+        advisories.extend(_graylog_findings(shown))
+        advisories.extend(_exabeam_findings(shown))
+        advisories.extend(_google_secops_findings(shown))
         findings.extend(advisories)
         try:
             findings.extend(_query_findings(target, shown))
@@ -949,7 +1077,8 @@ def run_lint(
     )
     # What --fix just fixed is reported, but no longer counts against the run.
     left = [item for item in findings if item.get("fixed") is not True]
-    if left and strict:
+    # A note (a missing optional field) never fails a run, --strict or not.
+    if strict and any(item.get("severity") != "info" for item in left):
         status = "failed"
     elif left:
         status = "issues"

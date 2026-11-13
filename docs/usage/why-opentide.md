@@ -52,4 +52,4 @@ Being honest about scope:
 
 - [How opentide works](./how-it-works.md) — the end-to-end lifecycle.
 - [Object model](./concepts/object-model.md) — the three object families and chaining.
-- [Installation](./installation.md) — get the CLI on your machine. Latest release: [0.25.0](./releases.md).
+- [Installation](./installation.md) — get the CLI on your machine. Latest release: [0.28.0](./releases.md).

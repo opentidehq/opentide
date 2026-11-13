@@ -166,3 +166,44 @@ def test_generate_docs_and_export_skip_a_nested_object_file(
     assert exports
     for path in exports:
         assert _NESTED_RULE_UUID not in path.read_text(encoding="utf-8", errors="replace"), path
+
+
+def _leaves(value: object, path: tuple[str, ...] = ()) -> list[tuple[tuple[str, ...], object]]:
+    """Every scalar a YAML block holds, with the keys that lead to it."""
+    if isinstance(value, dict):
+        return [leaf for key, item in value.items() for leaf in _leaves(item, (*path, str(key)))]
+    if isinstance(value, list):
+        return [leaf for item in value for leaf in _leaves(item, path)]
+    return [(path, value)]
+
+
+def test_generate_docs_shows_every_platform_setting_of_every_corpus_rule(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """A rule page used to show a hand-picked few block fields; it now shows them all."""
+    from opentide.core.io import load_yaml
+    from opentide.documentation.facts.platforms import platform_label
+    from opentide.documentation.markdown.links import slugify
+
+    assert_json_ok(invoke_cli("generate", "docs", "--flavor", "github"))
+    rules = sorted((tide_corpus_repo / "objects" / "rules").glob("*.yaml"))
+    assert rules
+    missing: dict[str, list[str]] = {}
+    for source in rules:
+        body = load_yaml(source)
+        page = tide_corpus_repo / "docs" / "rules" / f"{slugify(body['name'])}.md"
+        text = page.read_text(encoding="utf-8")
+        for platform, block in (body.get("configurations") or {}).items():
+            assert f"### {platform_label(platform)}" in text, (page.name, platform)
+            for keys, value in _leaves(block):
+                expected = "true" if value is True else "false" if value is False else str(value)
+                if keys == ("enabled",):
+                    # The deployment table's "Block enabled" column.
+                    expected = "| yes |" if value else "| no |"
+                lines = [line.strip() for line in expected.splitlines() if line.strip()]
+                absent = [line for line in lines if line not in text]
+                if keys[0] not in {"enabled", "status", "tenants"}:
+                    absent += [key for key in keys if f"{key}" not in text]
+                if absent:
+                    missing.setdefault(page.name, []).append(f"{'.'.join(keys)}: {absent}")
+    assert missing == {}

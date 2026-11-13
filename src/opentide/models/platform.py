@@ -16,7 +16,7 @@ import re
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -47,6 +47,17 @@ from opentide.models.platform_configs import (
     ElasticSuppression,
     ElasticThreatMatch,
     ElasticThreshold,
+    ExabeamCorrelation,
+    ExabeamEmail,
+    ExabeamRecurrence,
+    ExabeamSequence,
+    ExabeamSuppression,
+    GoogleSecopsMatch,
+    GoogleSecopsOptions,
+    GoogleSecopsSchedule,
+    GraylogAggregation,
+    GraylogEventField,
+    GraylogSchedule,
     HarfangLabSigma,
     HarfangLabYara,
     SentinelAlert,
@@ -878,6 +889,247 @@ class BitdefenderConfig(PlatformConfigBase):
         return raw
 
 
+class GraylogConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::graylog::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    query: str = TideField(
+        schema_extra={
+            "tide.template.multiline": True,
+            "tide.template.spacer": True,
+            "tide.template.required": True,
+        },
+    )
+    """A Graylog search query, in the Graylog dialect"""
+    priority: str | None = None
+    """`Informational`, `Low`, `Medium`, `High`, or `Critical`"""
+    alert: bool = True
+    """`false` makes fired events plain events, not alerts"""
+    tags: str | list[str] | None = None
+    """Extra Graylog tags (Graylog 7.2+). Deploy adds the derived tags."""
+    streams: str | list[str] | None = None
+    """Aliases from the tenant's `stream_ids` table"""
+    stream_categories: str | list[str] | None = None
+    """Graylog stream categories, as written"""
+    schedule: GraylogSchedule | None = None
+    """When the definition runs and the time range it searches"""
+    event_limit: int | None = None
+    """Filters only: the most events one run creates, 1–1,000"""
+    aggregation: GraylogAggregation | None = None
+    """Turns the filter into an aggregation"""
+    event_fields: dict[str, GraylogEventField] | None = None
+    """Event field name → a value"""
+    event_key: str | list[str] | None = None
+    """Event fields that make up the event key"""
+    notifications: str | list[str] | None = None
+    """Aliases from the tenant's `notification_ids` table"""
+    grace_period: str | None = None
+    """No second notification for the same event key within this time"""
+    backlog: Annotated[int, Field(ge=0, strict=True)] | None = None
+    """Messages attached to a notification, 0 or more"""
+    summary: str | None = None
+    """Event summary template (Graylog 7.1+)"""
+    remediation: str | None = None
+    """Remediation steps shown with the event"""
+
+    @field_validator("grace_period")
+    @classmethod
+    def _grace_period_duration(cls, value: str | None) -> str | None:
+        if value is not None:
+            duration_seconds(value, allow_zero=True)
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_graylog_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.graylog.constraints import block_findings
+
+        findings = block_findings(raw)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code), "{message}", {"message": finding.text}
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
+class ExabeamConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::exabeam::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    sequences: list[ExabeamSequence] = TideField(
+        schema_extra={"tide.template.required": True}, min_length=1
+    )
+    """One or more sequences, in the order the events happen. Each is a filter and a condition:
+    any match, or a threshold."""
+    correlation: ExabeamCorrelation | None = None
+    """Required with two or more sequences; not allowed with one."""
+    severity: Literal["none", "low", "medium", "high", "critical"] | None = None
+    """`none`, `low`, `medium`, `high`, or `critical`. Derived from `response.alert_severity`
+    when omitted."""
+    outcome: Literal["alert", "case", "none"] | None = None
+    """`alert` (an alert in Threat Center), `case`, or `none`. Default: `alert`."""
+    email: ExabeamEmail | None = None
+    """Also send an email when the rule triggers."""
+    suppression: ExabeamSuppression | None = None
+    """Suppress repeated triggers."""
+    delay: str | None = None
+    """Evaluation delay, `7m` to `180m` (`3h`). Omitted: Exabeam's default of 7 minutes."""
+    schedule: list[ExabeamRecurrence] | None = None
+    """When the rule is active. Omitted: always."""
+    test_mode: bool | None = None
+    """Run the rule in test mode: it triggers and writes a `rule-trigger-test` event, with no
+    outcome. Default: the tenant `test_mode`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_exabeam_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.exabeam.constraints import block_findings
+
+        findings = block_findings(raw)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code),
+                        "{message}",
+                        {"message": finding.message},
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
+def _without_none(raw: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in raw.items() if value is not None}
+
+
+#: A YARA-L section text, written in the block as a block scalar.
+_YARAL_TEXT = {"tide.template.multiline": True}
+_YARAL_REQUIRED = {"tide.template.multiline": True, "tide.template.required": True}
+
+
+class GoogleSecopsConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::google_secops::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    setup: str | None = TideField(None, schema_extra=_YARAL_TEXT)
+    """YARA-L `setup` section text."""
+    events: str = TideField(schema_extra=_YARAL_REQUIRED)
+    """YARA-L `events` section text."""
+    match: GoogleSecopsMatch | None = None
+    """`group_by`, `window`, and `type` (`hop`, `tumbling`, `sliding` with `pivot` and
+    `direction`). Required with two or more event variables."""
+    outcome: str | None = TideField(None, schema_extra=_YARAL_TEXT)
+    """YARA-L `outcome` section text."""
+    condition: str = TideField(schema_extra=_YARAL_REQUIRED)
+    """YARA-L `condition` section text."""
+    options: GoogleSecopsOptions | None = None
+    """`allow_zero_values`, `suppression_window`."""
+    export: str | None = TideField(None, schema_extra=_YARAL_TEXT)
+    """YARA-L `export` section text."""
+    severity: Literal["Info", "Low", "Medium", "High", "Critical"] | None = None
+    """`Info`, `Low`, `Medium`, `High`, or `Critical`. Written as meta `severity`. Derived from
+    `response.alert_severity` when omitted."""
+    priority: Literal["Info", "Low", "Medium", "High", "Critical"] | None = None
+    """Same values. Written as meta `priority`. Default: the severity."""
+    alerting: bool | None = Field(default=None, strict=True)
+    """Whether detections become alerts (`RuleDeployment.alerting`). Default: `false` under
+    `PREVIEW`, `true` under `RELEASE` and `UNIVERSAL`."""
+    run_frequency: Literal["LIVE", "LIVE_CUSTOMIZABLE", "HOURLY_CUSTOMIZABLE", "DAILY"] | None = (
+        None
+    )
+    """`LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`. Not sent when omitted: a new
+    rule gets Google's default, and an existing rule keeps its own."""
+    schedule: GoogleSecopsSchedule | None = None
+    """Schedule customizations, for `LIVE_CUSTOMIZABLE` and `HOURLY_CUSTOMIZABLE` only."""
+    meta: dict[str, str] | None = None
+    """Extra meta keys, written after the derived meta in the order given."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_google_secops_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        # Nested models (SDK callers) are checked as the mappings YAML would give.
+        raw = {
+            key: value.model_dump(by_alias=True, exclude_none=True)
+            if isinstance(value, BaseModel)
+            else value
+            for key, value in data.items()
+        }
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        from pydantic import ValidationError
+        from pydantic_core import InitErrorDetails, PydanticCustomError
+
+        from opentide.platforms.google_secops.checks import block_findings
+
+        # A block dumped and loaded again (deploy's modifiers, model_dump with or
+        # without aliases) carries every field, unset ones as None: only an
+        # authored null is a section with no text.
+        dumped = all(
+            name in raw or (info.alias is not None and info.alias in raw)
+            for name, info in cls.model_fields.items()
+        )
+        authored = _without_none(raw) if dumped else raw
+        findings = block_findings(authored)
+        if findings:
+            # One error per finding, typed by its code and placed at the path the
+            # spec fixes for it, so validate and the editor name the same finding.
+            errors = [
+                InitErrorDetails(
+                    # The codes are CONSTRAINT_CODES, a fixed set of literals.
+                    type=PydanticCustomError(
+                        cast("LiteralString", finding.code),
+                        "{message}",
+                        {"message": finding.message},
+                    ),
+                    loc=finding.path,
+                    input=raw,
+                )
+                for finding in findings
+            ]
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -889,6 +1141,9 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "elastic": ElasticConfig,
     "sysdig": SysdigConfig,
     "bitdefender": BitdefenderConfig,
+    "graylog": GraylogConfig,
+    "exabeam": ExabeamConfig,
+    "google_secops": GoogleSecopsConfig,
 }
 
 
@@ -922,6 +1177,12 @@ class RuleConfigurations(TideModel):
     """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
     bitdefender: BitdefenderConfig | None = None
     """Bitdefender GravityZone custom detection rule (`platform::bitdefender::1.0`)."""
+    graylog: GraylogConfig | None = None
+    """Graylog event definition (`platform::graylog::1.0`)."""
+    exabeam: ExabeamConfig | None = None
+    """Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."""
+    google_secops: GoogleSecopsConfig | None = None
+    """Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

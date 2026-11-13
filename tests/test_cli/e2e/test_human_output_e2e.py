@@ -278,6 +278,7 @@ _CASES = {
     "lint": Case(("lint",)),
     "lint-findings": Case(("lint",), _drop_author),
     "lint-findings-strict": Case(("lint", "--strict"), _drop_author),
+    "lint-findings-verbose": Case(("lint", "--verbose"), _drop_author),
     "setup-mcp-generic": Case(("setup", "mcp", "--generic", "--yes")),
     "setup-mcp-no-host": Case(("setup", "mcp", "--yes")),
     "setup-skills": Case(("setup", "skills", "--generic", "--yes"), separate_trees=True),
@@ -309,11 +310,13 @@ def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
     return expected
 
 
-def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
+def _load_bearing(payload: dict[str, Any], *, verbose: bool = False) -> list[Expectation]:
     """The strings in a result document that a human reader has to see.
 
     Any top-level prose string counts, not only the fields named here, so a new
     field a renderer does not know about (``setup mcp`` once had ``note``) fails.
+    A note (an ``info`` finding) prints only with *verbose* (``--verbose``);
+    without it the reader sees the step that shows the notes instead.
     """
     # Where findings print as code frames, the outcome line counts them in
     # place of the message, and each warning is a frame, not a warning line.
@@ -340,10 +343,14 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
         expected.append((f"{issue['severity']}[{issue['code']}]: {issue['message']}",))
         if issue.get("line") is not None:
             expected.append((f"{issue['path']}:{issue['line']}",))
+    findings = payload.get("findings") or []
     expected.extend(
         (f"{_SEVERITY_WORD[finding['severity']]}[{finding['code']}]: {finding['message']}",)
-        for finding in payload.get("findings") or []
+        for finding in findings
+        if verbose or finding["severity"] != "info"
     )
+    if not verbose and any(finding["severity"] == "info" for finding in findings):
+        expected.append(("→ opentide", f"{payload['command']} ", "--verbose"))
     if engine:
         for finding in payload["diagnostics"]:
             expected.append((f"{finding['severity']}[{finding['code']}]: {finding['message']}",))
@@ -411,7 +418,7 @@ def test_human_output_carries_the_json_payload(tutorial: Path, case: Case) -> No
         machine = _run(tutorial, *case.argv, json_output=True)
         human = _run(human_repo, *case.argv, json_output=False)
     payload = json.loads(machine.stdout)
-    expected = _load_bearing(payload)
+    expected = _load_bearing(payload, verbose="--verbose" in case.argv)
     assert expected, f"{case.argv} carries nothing to compare"
     assert human.exit_code == machine.exit_code, human.output
     assert not _missing(expected, human.output), human.output

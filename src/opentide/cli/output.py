@@ -299,6 +299,25 @@ def text_mode(ctx: CliContext) -> OutputMode:
     return mode
 
 
+def with_hidden_notes_step(result: CommandResult, hidden: int) -> CommandResult:
+    """*result* with the step that shows the *hidden* notes the code frames left out.
+
+    The step repeats the command as typed, with ``--verbose``. Nothing changes
+    when no note was hidden.
+    """
+    if hidden <= 0:
+        return result
+    from dataclasses import replace
+
+    from opentide.cli.lazy import rerun_command
+
+    noun = "note" if hidden == 1 else "notes"
+    step = NextAction(
+        rerun_command("--verbose"), f"show {hidden} {noun}, such as a missing optional field"
+    )
+    return replace(result, next_actions=(*result.next_actions, step))
+
+
 def emit_result(ctx: CliContext, result: CommandResult) -> None:
     """Render a normalized command result and honor its exit code.
 

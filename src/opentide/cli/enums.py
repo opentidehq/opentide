@@ -24,9 +24,12 @@ class DetectionPlatform(str, Enum):
     elastic = "elastic"
     sysdig = "sysdig"
     bitdefender = "bitdefender"
+    graylog = "graylog"
+    exabeam = "exabeam"
+    google_secops = "google_secops"
 
 
-#: ``--platform`` shows this in help instead of ten values run together.
+#: ``--platform`` shows this in help instead of thirteen values run together.
 PLATFORM_METAVAR = "PLATFORM"
 
 #: The values ``--platform`` takes, for its help text.
@@ -115,6 +118,9 @@ class LintCheck(str, Enum):
 
     filenames = "filenames"
     metadata = "metadata"
+    #: Fields the templates ask for and validation does not require (a rule's
+    #: ``configurations`` and ``response``), as the language server reports them.
+    recommended = "recommended"
     placeholders = "placeholders"
     #: The analysis engine's warnings and notes on rule queries (style, not validity).
     queries = "queries"
@@ -132,20 +138,10 @@ class QueriesMode(str, Enum):
 
 
 def platform_label(platform: DetectionPlatform) -> str:
-    """Human-readable platform label."""
-    labels = {
-        DetectionPlatform.sentinel: "Microsoft Sentinel",
-        DetectionPlatform.splunk: "Splunk Enterprise Security",
-        DetectionPlatform.crowdstrike: "CrowdStrike Falcon",
-        DetectionPlatform.defender: "Microsoft Defender for Endpoint",
-        DetectionPlatform.sentinel_one: "SentinelOne",
-        DetectionPlatform.carbon_black: "Carbon Black Cloud",
-        DetectionPlatform.harfanglab: "HarfangLab",
-        DetectionPlatform.elastic: "Elastic Security",
-        DetectionPlatform.sysdig: "Sysdig Secure",
-        DetectionPlatform.bitdefender: "Bitdefender GravityZone",
-    }
-    return labels.get(platform, platform.value)
+    """Human-readable platform label, the one generated documentation uses too."""
+    from opentide.documentation.facts.platforms import platform_label as label
+
+    return label(platform.value)
 
 
 __all__ = [

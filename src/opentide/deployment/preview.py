@@ -31,6 +31,9 @@ PLATFORM_LABELS: dict[str, str] = {
     "elastic": "Elastic",
     "sysdig": "Sysdig",
     "bitdefender": "Bitdefender GravityZone",
+    "graylog": "Graylog",
+    "exabeam": "Exabeam New-Scale SIEM",
+    "google_secops": "Google SecOps",
 }
 
 
@@ -99,7 +102,9 @@ def _compile_failure(rule: DetectionRule, exc: Exception, platform: str) -> dict
 #: Platforms whose request body opentide builds from the rule alone, with no
 #: tenant: ``validate`` compiles each rule they would deploy, so a rule that
 #: validates compiles.
-OFFLINE_COMPILERS = frozenset({"sentinel", "elastic", "sysdig", "bitdefender"})
+OFFLINE_COMPILERS = frozenset(
+    {"sentinel", "elastic", "sysdig", "bitdefender", "graylog", "exabeam", "google_secops"}
+)
 
 
 def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
@@ -126,6 +131,22 @@ def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
 
         compiled = BitdefenderDeploy().compile_deployment(rule)
         return request_body("createCustomRule", create_params(compiled))
+    if platform == "graylog":
+        from opentide.platforms.graylog.compile import create_request
+        from opentide.platforms.graylog.deployer import GraylogDeploy
+
+        return create_request(GraylogDeploy().compile_deployment(rule))
+    if platform == "exabeam":
+        from opentide.platforms.exabeam.compile import create_request
+        from opentide.platforms.exabeam.deployer import ExabeamDeploy
+
+        return create_request(ExabeamDeploy().compile_deployment(rule))
+
+    if platform == "google_secops":
+        from opentide.platforms.google_secops.compile import assemble
+
+        # The rules.create body; a tenant's data_access_scope adds its scope.
+        return {"text": assemble(rule).text}
     raise ValueError(f"{platform} has no offline compiler")
 
 
@@ -221,13 +242,113 @@ def _bitdefender_compile_preview(rule: DetectionRule, tenant_names: list[str]) -
     return preview
 
 
+def _graylog_tenant(name: str | None) -> Any | None:
+    """The Graylog tenant named *name*, or ``None``."""
+    if name is None:
+        return None
+    try:
+        from opentide.core.registry import Opentide
+
+        tenants = Opentide.Configurations.Systems.Graylog.tenants or []
+    except Exception as exc:
+        logger.debug("graylog_preview_no_tenant", error=str(exc))
+        return None
+    return next((tenant for tenant in tenants if tenant.name == name), None)
+
+
+def _graylog_compile_preview(rule: DetectionRule, tenant_names: list[str]) -> dict[str, Any]:
+    """The ``POST /api/events/definitions`` request the deploy would send.
+
+    A dry run asks no server, so the request is built for Graylog 7.2, the
+    newest supported line; deploy builds it for the version each tenant reports.
+    The rule is compiled for every tenant the run sends it to: one whose tables
+    miss a stream or notification alias fails the dry run, naming that tenant.
+    The request shown is the first tenant's. With no tenant, the request leaves
+    stream and notification ids out and ``unresolved`` lists the aliases.
+    """
+    from opentide.platforms.graylog.compile import PREVIEW_VERSION, create_request, version_text
+    from opentide.platforms.graylog.deployer import GraylogDeploy
+
+    tenants = [tenant for name in tenant_names if (tenant := _graylog_tenant(name))]
+    compiled = []
+    try:
+        for tenant in tenants or [None]:
+            compiled.append(GraylogDeploy().compile_deployment(rule, tenant))
+    except Exception as exc:
+        return _compile_failure(rule, exc, "graylog")
+    preview: dict[str, Any] = {
+        "uuid": rule.metadata.uuid,
+        "name": rule.name,
+        "api_request": create_request(compiled[0]),
+        "server_version": version_text(PREVIEW_VERSION).rsplit(".", 1)[0],
+    }
+    if tenants:
+        preview["tenant"] = tenants[0].name
+    elif compiled[0].unresolved:
+        preview["unresolved"] = {
+            "reason": "this run deploys the rule to no graylog tenant: stream and notification "
+            "aliases are resolved against a tenant at deploy",
+            **compiled[0].unresolved,
+        }
+    return preview
+
+
+def _exabeam_tenant(name: str | None) -> Any | None:
+    """The Exabeam tenant named *name*, or ``None``."""
+    if name is None:
+        return None
+    try:
+        from opentide.core.registry import Opentide
+
+        tenants = Opentide.Configurations.Systems.Exabeam.tenants or []
+    except Exception as exc:
+        logger.debug("exabeam_preview_no_tenant", error=str(exc))
+        return None
+    return next((tenant for tenant in tenants if tenant.name == name), None)
+
+
+def _exabeam_compile_preview(rule: DetectionRule, tenant_names: list[str]) -> dict[str, Any]:
+    """The ``POST /correlation-rules/v2/rules`` request the deploy would send.
+
+    The body depends on the tenant only through its ``test_mode``: the request
+    shown is the first tenant's, and with no tenant ``testMode`` is the
+    block's, else ``false``. A dry run makes no call, so the name check a
+    create starts with is not made.
+    """
+    from opentide.platforms.exabeam.compile import create_request
+    from opentide.platforms.exabeam.deployer import ExabeamDeploy
+
+    tenants = [tenant for name in tenant_names if (tenant := _exabeam_tenant(name))]
+    try:
+        compiled = ExabeamDeploy().compile_deployment(rule, tenants[0] if tenants else None)
+    except Exception as exc:
+        return _compile_failure(rule, exc, "exabeam")
+    preview: dict[str, Any] = {
+        "uuid": rule.metadata.uuid,
+        "name": rule.name,
+        "api_request": create_request(compiled),
+    }
+    if tenants:
+        preview["tenant"] = tenants[0].name
+    return preview
+
+
+def _google_secops_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+    """The Chronicle ``rules.create`` body: the YARA-L text deploy verifies, then creates."""
+    try:
+        payload = compile_offline("google_secops", rule)
+    except Exception as exc:
+        return _compile_failure(rule, exc, "google_secops")
+    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
+
+
 def preview_rule_deployment(
     platform: str, rule: DetectionRule, tenants: list[str] | None = None
 ) -> dict[str, Any]:
     """A serialisable preview of the API payload for one rule on a platform.
 
     *tenants* are the tenants the run sends the rule to, for platforms whose
-    request depends on the tenant (Bitdefender).
+    request depends on the tenant (Bitdefender, Graylog, Exabeam).
     """
     if platform == "sentinel":
         return _sentinel_compile_preview(rule)
@@ -235,6 +356,12 @@ def preview_rule_deployment(
         return _sysdig_compile_preview(rule)
     if platform == "bitdefender":
         return _bitdefender_compile_preview(rule, list(tenants or []))
+    if platform == "graylog":
+        return _graylog_compile_preview(rule, list(tenants or []))
+    if platform == "exabeam":
+        return _exabeam_compile_preview(rule, list(tenants or []))
+    if platform == "google_secops":
+        return _google_secops_compile_preview(rule)
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:
