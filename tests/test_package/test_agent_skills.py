@@ -62,7 +62,7 @@ def test_there_are_bundled_authoring_skills() -> None:
     "path", BUNDLED_SKILL_FILES, ids=lambda p: str(p.parent.relative_to(BUNDLED))
 )
 def test_bundled_skill_has_frontmatter_with_a_name_and_a_description(path: Path) -> None:
-    """Every skill `opentide setup skills` installs is discoverable by a skill-aware agent (#731)."""
+    """Every skill `opentide setup skills` installs is discoverable by agents (#731)."""
     data = _frontmatter(path)
     name = data.get("name")
     assert isinstance(name, str)
