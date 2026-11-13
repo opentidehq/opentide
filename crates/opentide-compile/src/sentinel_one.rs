@@ -7,7 +7,7 @@ use crate::Context;
 use crate::deploy::{self, Action, Write};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
-use crate::strategy::{StatusStrategy, python_repr};
+use crate::strategy::StatusStrategy;
 
 /// The platform's key under `configurations`.
 pub const PLATFORM: &str = "sentinel_one";
@@ -26,8 +26,7 @@ pub fn minutes(timespan: &str) -> Result<i64, CompileError> {
         CompileError::failed(
             DISPLAY,
             &format!(
-                "SentinelOne expects a duration in minutes (30m) or hours (2h), got {}",
-                python_repr(timespan)
+                "SentinelOne expects a duration in minutes (30m) or hours (2h), got {timespan:?}"
             ),
         )
     };
@@ -54,7 +53,7 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
         "Medium" => "Medium",
         "High" => "High",
         "Critical" => "Critical",
-        other => return Err(CompileError::failed(DISPLAY, &python_repr(other))),
+        other => return Err(CompileError::failed(DISPLAY, &format!("{other:?}"))),
     })
 }
 
@@ -253,10 +252,7 @@ fn numeric(id: &str) -> Result<i64, CompileError> {
     id.trim().parse::<i64>().map_err(|_| {
         CompileError::failed(
             DISPLAY,
-            &format!(
-                "invalid literal for int() with base 10: {}",
-                python_repr(id)
-            ),
+            &format!("invalid literal for int() with base 10: {id:?}"),
         )
     })
 }
@@ -308,7 +304,7 @@ mod tests {
         assert_eq!(
             minutes("30s").unwrap_err().reason,
             "SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes \
-             (30m) or hours (2h), got '30s'"
+             (30m) or hours (2h), got \"30s\""
         );
         assert!(minutes("xm").is_err());
     }

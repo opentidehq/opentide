@@ -173,7 +173,7 @@ pub fn inherited_techniques(
     rule: &Rule,
 ) -> Result<Vec<String>, CompileError> {
     crate::attack::techniques(cx.index, &rule.uuid)
-        .map_err(|missing| CompileError::failed(display, &crate::strategy::python_repr(&missing.0)))
+        .map_err(|missing| CompileError::failed(display, &format!("{:?}", missing.0)))
 }
 
 #[cfg(test)]

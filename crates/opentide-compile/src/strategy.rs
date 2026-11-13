@@ -70,11 +70,6 @@ fn not_a_run_strategy(name: &str) -> Option<&'static str> {
     })
 }
 
-/// A string as Python's `repr` writes it (single quotes unless the text
-/// holds one and no double quote; what does not print escaped): the schema's
-/// own quoting, which the configuration messages use.
-pub use opentide_schema::configuration::repr::quote as python_repr;
-
 /// The configured statuses, in `[[statuses]]` order: each name with the
 /// strategy it maps to.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -148,9 +143,8 @@ impl Statuses {
             .ok_or_else(|| {
                 let available: Vec<&str> = self.0.iter().map(|(name, _)| name.as_str()).collect();
                 StatusError::Unknown(format!(
-                    "Status {} is not defined in deployment configuration. Available statuses: \
-                     {}.",
-                    python_repr(status),
+                    "Status {status:?} is not defined in deployment configuration. Available \
+                     statuses: {}.",
                     available.join(", ")
                 ))
             })
@@ -177,12 +171,10 @@ pub enum StatusError {
 }
 
 impl StatusError {
-    /// The text the oracle's exception gives as `str(exc)`: a `KeyError`
-    /// quotes its message.
+    /// The message.
     pub fn exception_text(&self) -> String {
         match self {
-            Self::Invalid(message) => message.clone(),
-            Self::Unknown(message) => python_repr(message),
+            Self::Invalid(message) | Self::Unknown(message) => message.clone(),
         }
     }
 }
@@ -212,8 +204,7 @@ pub fn parse_strategies<S: AsRef<str>>(
             }
             let allowed: Vec<&str> = DEPLOYABLE.iter().map(|s| s.name()).collect();
             let mut hints = vec![format!(
-                "{source} {} is not a deployable strategy. Use {}",
-                python_repr(trimmed),
+                "{source} {trimmed:?} is not a deployable strategy. Use {}",
                 allowed.join(" or ")
             )];
             if name == "STAGING" || name == "PRODUCTION" {
@@ -322,7 +313,7 @@ mod tests {
         let error = parse_strategies(&["STAGING"], &statuses(), "--strategy").unwrap_err();
         assert_eq!(
             error,
-            "--strategy 'STAGING' is not a deployable strategy. Use PREVIEW or RELEASE. STAGING \
+            "--strategy \"STAGING\" is not a deployable strategy. Use PREVIEW or RELEASE. STAGING \
              was a deployment plan, removed in 0.17.0: pass PREVIEW. STAGING is also a \
              configured status name; it maps to PREVIEW, which a PREVIEW run deploys"
         );
@@ -342,7 +333,7 @@ mod tests {
                 .strategy("NOPE")
                 .unwrap_err()
                 .exception_text()
-                .starts_with("\"Status 'NOPE' is not defined")
+                .starts_with("Status \"NOPE\" is not defined")
         );
         let mut invalid = statuses();
         invalid.1 = Some("deployment.toml is invalid: x: unknown key".into());
@@ -367,19 +358,6 @@ mod tests {
     }
 
     #[test]
-    fn repr_quotes_as_python_does() {
-        assert_eq!(python_repr("a"), "'a'");
-        assert_eq!(python_repr("it's"), "\"it's\"");
-        assert_eq!(python_repr("a\nb"), "'a\\nb'");
-        // Both quotes: single quotes, the single one escaped (Python's repr).
-        assert_eq!(python_repr("a'b\""), "'a\\'b\"'");
-        assert_eq!(python_repr("\\\r\t\u{1}\u{7f}é"), "'\\\\\\r\\t\\x01\\x7fé'");
-        // What str.isprintable rejects beyond ASCII: a C1 control, a line
-        // separator.
-        assert_eq!(python_repr("a\u{85}b\u{2028}c"), "'a\\x85b\\u2028c'");
-    }
-
-    #[test]
     fn a_retired_name_says_what_to_pass() {
         let hint = |name: &str| parse_strategies(&[name], &statuses(), "--strategy").unwrap_err();
         for (name, says) in [
@@ -399,8 +377,7 @@ mod tests {
             let error = hint(name);
             assert!(
                 error.starts_with(&format!(
-                    "--strategy {} is not a deployable strategy. Use PREVIEW or RELEASE. ",
-                    python_repr(name)
+                    "--strategy {name:?} is not a deployable strategy. Use PREVIEW or RELEASE. "
                 )),
                 "{error}"
             );
@@ -411,7 +388,7 @@ mod tests {
         assert!(hint("removed").ends_with("it maps to DELETION, which a RELEASE run deploys"));
         assert_eq!(
             hint("nothing"),
-            "--strategy 'nothing' is not a deployable strategy. Use PREVIEW or RELEASE"
+            "--strategy \"nothing\" is not a deployable strategy. Use PREVIEW or RELEASE"
         );
     }
 

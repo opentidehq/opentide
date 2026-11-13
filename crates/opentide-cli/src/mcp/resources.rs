@@ -887,11 +887,14 @@ fn platforms(workspace: &Workspace) -> Json {
                     ("can_deploy", Json::Bool(true)),
                     (
                         "can_validate",
-                        Json::Bool(!["crowdstrike", "harfanglab", "sysdig"].contains(name)),
+                        Json::Bool(
+                            opentide_schema::platforms::get(name)
+                                .is_some_and(|platform| platform.live_check),
+                        ),
                     ),
                     (
                         "can_query",
-                        Json::Bool(super::queries::QUERY_PLATFORMS.contains(name)),
+                        Json::Bool(super::queries::query_platforms().contains(name)),
                     ),
                 ])
             })
