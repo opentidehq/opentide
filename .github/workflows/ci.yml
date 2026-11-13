@@ -1,25 +1,34 @@
 name: CI
+# A push's run names the commit's first line, which for a merge is "Merge pull
+# request #N from ...": a failure in the full set on a base branch names the
+# pull request that brought it.
+run-name: >-
+  ${{ github.event_name == 'push'
+  && format('CI on {0}: {1}', github.ref_name, github.event.head_commit.message)
+  || '' }}
 
 # Two scopes (.github/AGENTS.md, "What runs where"; tests/test_ci/test_ci_scope.py):
 #
-# - The core gates run on every pull request, push, schedule and manual run:
-#   lint, engine lint, engine tests on three OSes, Python 3.10 and 3.14,
-#   E2E, GitLab CI lint, golden compare, corpus and cargo deny. They are the
-#   required checks, and their jobs carry no `if`.
-# - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
-#   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
-#   Windows CLI smoke, the facade crate's every feature and semver checks, the
-#   Node package and its install from a local registry, the installable wheels
-#   and npm tarballs as run artifacts, the cross-SDK conformance suite on three
-#   OSes, the query fault kinds against the Rust engine, LSP clients and
-#   benchmarks. It runs nightly, on every push to development,
-#   integration/unified-core and a catch-up train (train/catchup-*), on Run
-#   workflow, and on a pull
-#   request that carries the `full-ci` label (read at each push: add the label,
-#   then push, or Run workflow on the branch). Each of these jobs has an `if`
-#   on that condition; the release dry run (and crate packaging) also runs on a
-#   pull request that changes the release's inputs, and the grammar checks on
-#   one that changes the grammars (the `changes` job).
+# - A pull request runs the lean set, on Linux: lint (with actionlint), engine
+#   lint, the engine tests in two shards, Python 3.14, E2E, GitLab CI lint,
+#   golden compare and cargo deny, the core gates, whose jobs carry no `if`;
+#   and the path-scoped jobs whose inputs it changes (the `changes` job): the
+#   corpora, the Node package, the facade crate, the release dry run and the
+#   grammar checks. The required checks keep their names: macOS's and
+#   Windows's engine tests are gathered from the Linux shards, the Python 3.10
+#   cell starts and skips its steps, and the corpus check passes when its parts
+#   were not needed.
+# - The full set adds the rest: macOS and Windows engine tests, Python
+#   3.10-3.13, the engine release dry run, WebAssembly, crate packaging,
+#   grammars, the Elastic sweep, fuzz smoke, the Windows CLI smoke, the facade
+#   crate's every feature and semver checks, the Node package and its install
+#   from a local registry, the installable wheels and npm tarballs as run
+#   artifacts, the cross-SDK conformance suite on three OSes, the corpora, the
+#   query fault kinds against the Rust engine, LSP clients and benchmarks. It
+#   runs nightly, on every push to development, integration/unified-core and a
+#   catch-up train (train/catchup-*), on Run workflow, and on a pull request
+#   that carries the `full-ci` label (read at each push: add the label, then
+#   push, or Run workflow on the branch).
 
 on:
   push:
@@ -69,6 +78,9 @@ jobs:
     outputs:
       release: ${{ steps.paths.outputs.release }}
       grammars: ${{ steps.paths.outputs.grammars }}
+      corpus: ${{ steps.paths.outputs.corpus }}
+      node: ${{ steps.paths.outputs.node }}
+      facade: ${{ steps.paths.outputs.facade }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,7 +88,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Detect changes to the release and grammar inputs
+      - name: Detect changes to the path-scoped jobs' inputs
         id: paths
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -87,9 +99,39 @@ jobs:
             grammars/*
             highlights/*
             scripts/engine/check-grammars.sh
+          # The corpora against the oracle and its recordings: the comparisons
+          # (xtask), the crates they hold to the oracle (the models, the
+          # workspace, the compiler, the editor's diagnostics) and their data.
+          # A change to a query engine alone is held by the Rust tests and
+          # golden compare on the pull request, and by the corpora on merge.
+          CORPUS_PATHS: |
+            xtask/*
+            crates/opentide-core/*
+            crates/opentide-schema/*
+            crates/opentide-schema-derive/*
+            crates/opentide-workspace/*
+            crates/opentide-compile/*
+            crates/opentide-lsp/*
+            tests/corpora/*
+            tests/golden/cases*
+            tests/golden/vocab/*
+            src/opentide/data/*
+            Cargo.lock
+            rust-toolchain.toml
+            .github/workflows/ci.yml
+          NODE_PATHS: |
+            bindings/node/*
+            crates/opentide/*
+            scripts/engine/npm-local-registry/*
+            Cargo.lock
+            .github/workflows/ci.yml
+          FACADE_PATHS: |
+            crates/opentide/*
+            Cargo.lock
+            .github/workflows/ci.yml
         run: |
           set -euo pipefail
-          outputs=(release grammars)
+          outputs=(release grammars corpus node facade)
           if [[ "${EVENT_NAME}" != "pull_request" ]] || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
             for output in "${outputs[@]}"; do
               echo "${output}=true" >> "$GITHUB_OUTPUT"
@@ -105,6 +147,7 @@ jobs:
               [[ -n "${file}" ]] || continue
               while IFS= read -r pattern; do
                 # Unquoted on the right: a pattern, not a string.
+                # shellcheck disable=SC2053
                 if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
                   echo "${output} input changed: ${file}"
                   value=true
@@ -179,6 +222,14 @@ jobs:
 
       - name: Ty type check
         run: uv run --no-sync ty check src/opentide --output-format github
+
+      # The workflows themselves, with shellcheck (on the runner) over their
+      # scripts; .github/actionlint.yaml names what this version does not know.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: actionlint@1.7.7
+      - name: actionlint
+        run: actionlint -color
 
       # The wheel is built from the sdist in a directory of its own, so this
       # also proves the sdist carries everything the engine's build reads.
@@ -430,12 +481,10 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
+      # Linux in two shards on every pull request; macOS and Windows join in
+      # the full set (the gathering job keeps their required checks' names).
       matrix:
-        include:
-          - { os: ubuntu-latest, shard: 1, shards: 2 }
-          - { os: ubuntu-latest, shard: 2, shards: 2 }
-          - { os: macos-latest, shard: 1, shards: 1 }
-          - { os: windows-latest, shard: 1, shards: 1 }
+        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":2},{"os":"ubuntu-latest","shard":2,"shards":2},{"os":"macos-latest","shard":1,"shards":1},{"os":"windows-latest","shard":1,"shards":1}]' || '[{"os":"ubuntu-latest","shard":1,"shards":2},{"os":"ubuntu-latest","shard":2,"shards":2}]') }}
     env:
       RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
@@ -549,8 +598,13 @@ jobs:
       - name: Every part passed
         env:
           RESULT: ${{ needs.engine-test-part.result }}
+          OS: ${{ matrix.os }}
+          FULL_SET: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
         run: |
           echo "engine test shards: ${RESULT}"
+          if [[ "${OS}" != ubuntu-latest && "${FULL_SET}" != true ]]; then
+            echo "${OS} runs in the full set (pushes, nightly, Run workflow, the full-ci label)"
+          fi
           test "${RESULT}" = success
 
   # The opentide facade crate (UC-5.1, #836) with every feature: its tests and
@@ -562,7 +616,15 @@ jobs:
   # with the facade's features, so it is in the full set.
   facade:
     name: Facade crate (every feature, docs, semver checks)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: changes
+    # The full set, and a pull request that changes the facade crate.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.facade == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -644,7 +706,15 @@ jobs:
   # time, so it is in the full set.
   node:
     name: Node package (napi-rs build, tests, golden)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: changes
+    # The full set, and a pull request that changes the Node package.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.node == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -759,7 +829,15 @@ jobs:
   # It reads the node job's Rust cache.
   npm-install:
     name: npm install from a local registry (linux-x64-gnu)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: changes
+    # The full set, and a pull request that changes the Node package.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.node == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1473,6 +1551,15 @@ jobs:
   # name. Each step names its part; the setup is every part's.
   corpus-part:
     name: Corpus (${{ matrix.part }})
+    needs: changes
+    # The full set, and a pull request that changes the corpora or what they compare.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.corpus == 'true'
+      )
     runs-on: ubuntu-latest
     # 45: the object models' comparison (UC-1.3) validates every corpus again;
     # 60: the index comparison (UC-2.1) loads every corpus and fault kind again;
@@ -1753,7 +1840,7 @@ jobs:
   # required check passes.
   corpus:
     name: Corpus (generator, faults, coverage) against opentide 0.23.0
-    needs: corpus-part
+    needs: [changes, corpus-part]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1762,9 +1849,21 @@ jobs:
       - name: Every part passed
         env:
           RESULT: ${{ needs.corpus-part.result }}
+          # Whether the parts had to run: the full set, a change to their
+          # inputs, or a filter that failed (it fails open). Otherwise they
+          # are skipped, and this required check passes without them.
+          NEEDED: >-
+            ${{ github.event_name != 'pull_request'
+            || contains(github.event.pull_request.labels.*.name, 'full-ci')
+            || needs.changes.result != 'success'
+            || needs.changes.outputs.corpus == 'true' }}
         run: |
-          echo "corpus parts: ${RESULT}"
-          test "${RESULT}" = success
+          echo "corpus parts: ${RESULT} (needed: ${NEEDED})"
+          if [[ "${NEEDED}" == true ]]; then
+            test "${RESULT}" = success
+          else
+            test "${RESULT}" = skipped
+          fi
 
   # The oldest and newest Python on every pull request; `test-full` adds the
   # ones between in the full set.
@@ -1783,6 +1882,9 @@ jobs:
     # binding is abi3, so it is the same build whatever Python runs the tests,
     # and the jobs share one cache of it (#841).
     env:
+      # The oldest Python (3.10) runs in the full set; on a pull request its
+      # cell starts and skips every step, so its required check reports.
+      RUNS: ${{ matrix.python-version == '3.14' || github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
@@ -1791,6 +1893,10 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: "0"
 
     steps:
+      - name: Python ${{ matrix.python-version }} runs in the full set
+        if: env.RUNS != 'true'
+        run: echo "This cell runs on pushes, nightly, Run workflow and with the full-ci label."
+
       # PR head commit (not merge commit) so coverage line numbers map to the diff.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: matrix.python-version == env.COVERAGE_PYTHON
@@ -1799,16 +1905,18 @@ jobs:
           persist-credentials: false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.python-version != env.COVERAGE_PYTHON
+        if: env.RUNS == 'true' && (matrix.python-version != env.COVERAGE_PYTHON)
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        if: env.RUNS == 'true'
         with:
           enable-cache: true
 
       - name: Set up Python
+        if: env.RUNS == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
@@ -1817,15 +1925,18 @@ jobs:
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
+        if: env.RUNS == 'true'
         run: rustup toolchain install --profile minimal --no-self-update
 
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        if: env.RUNS == 'true'
         with:
           tool: sccache@0.19.0
       - name: Restore the compiler cache
+        if: env.RUNS == 'true'
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -1834,10 +1945,11 @@ jobs:
           restore-keys: sccache-python-engine-
 
       - name: Install dependencies
+        if: env.RUNS == 'true'
         run: uv sync --group dev
 
       - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
+        if: env.RUNS == 'true' && (!cancelled())
         run: sccache --show-stats
 
       - name: Save the compiler cache
@@ -1853,7 +1965,7 @@ jobs:
       # the goldens (`golden-check`) and the crates' tests. `-n 4` is pinned
       # for the same reason as the E2E job -- see the note there.
       - name: Pytest
-        if: matrix.python-version != env.COVERAGE_PYTHON
+        if: env.RUNS == 'true' && (matrix.python-version != env.COVERAGE_PYTHON)
         run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
 
       - name: Pytest with coverage
@@ -1881,6 +1993,7 @@ jobs:
 
       - name: Upload coverage to GitHub Code Quality
         if: >-
+          env.RUNS == 'true' &&
           matrix.python-version == env.COVERAGE_PYTHON &&
           (github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository)
