@@ -51,7 +51,7 @@ fn sequence(value: Option<&Arc<Node>>) -> Option<&[Arc<Node>]> {
 }
 
 /// The queries a YAML loader finds, as `(path, language, platform, text)`.
-fn expected(doc: &Node) -> BTreeSet<Query> {
+fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
     let mut out = BTreeSet::new();
     let mut add = |path: String, language: LanguageId, platform: &str, value: &str| {
         let value = value.trim_matches(['\n', '\r']);
@@ -82,6 +82,24 @@ fn expected(doc: &Node) -> BTreeSet<Query> {
                     value,
                 );
             }
+        }
+    }
+    // A YaraSignature written out in the block; an alias is not analysed
+    // (`yara_signature_alias`), though a loader resolves it.
+    let alias = source.contains("signature: *");
+    for platform in ["harfanglab", "bitdefender"] {
+        let yara = configurations
+            .and_then(|c| c.get(platform))
+            .and_then(|b| b.get("yara"));
+        if let Some(value) = text(yara.and_then(|y| y.get("signature")))
+            && !alias
+        {
+            add(
+                format!("configurations.{platform}.yara.signature"),
+                LanguageId::Yara,
+                platform,
+                value,
+            );
         }
     }
     if let Some(elastic) = configurations.and_then(|c| c.get("elastic")) {
@@ -138,6 +156,20 @@ fn expected(doc: &Node) -> BTreeSet<Query> {
             }
         }
     }
+    // A Google SecOps block's text sections, each its own injection (the
+    // analysis checks them together, as the rule deploy assembles).
+    if let Some(secops) = configurations.and_then(|c| c.get("google_secops")) {
+        for field in ["setup", "events", "outcome", "condition", "export"] {
+            if let Some(value) = text(secops.get(field)) {
+                add(
+                    format!("configurations.google_secops.{field}"),
+                    LanguageId::Yaral,
+                    "google_secops",
+                    value,
+                );
+            }
+        }
+    }
     let searches = sequence(
         doc.get("response")
             .and_then(|r| r.get("procedure"))
@@ -175,9 +207,12 @@ fn every_testdata_query_is_extracted_as_yaml_loads_it() {
         let Some(doc) = document.root() else {
             continue;
         };
-        let want = expected(doc);
+        let want = expected(doc, &source);
+        // A HarfangLab decomposed YARA rule is assembled from several fields,
+        // which no loader does: tests/yara.rs checks it.
         let got: BTreeSet<Query> = extract_injections(&source)
             .into_iter()
+            .filter(|q| q.parts.is_empty())
             .map(|q| {
                 (
                     q.field_path.join("."),

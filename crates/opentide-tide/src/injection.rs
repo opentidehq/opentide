@@ -12,6 +12,8 @@
 //! | `response.procedure.searches.<n>.query` | the entry's `system`, in any key order | the `system` |
 //! | `configurations.sysdig.condition`, `configurations.sysdig.macros.<n>.condition` | Falco | `sysdig` |
 //! | `configurations.sysdig.output` | Falco output template (`%field` checks) | `sysdig` |
+//! | `configurations.{harfanglab,bitdefender}.yara.signature` | YARA, under the platform's profile | the block's key |
+//! | `configurations.harfanglab.yara.{strings,condition,imports}` | YARA: the one rule deploy assembles ([`crate::yara`]) | `harfanglab` |
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
@@ -40,6 +42,7 @@ pub(crate) fn extract_injections(source: &str) -> Vec<InjectedQuery> {
             injected(source, key, language, platform)
         })
         .collect();
+    out.extend(crate::yara::decomposed_injection(source, &keys));
     out.sort_by_key(|query| query.host_span.start);
     out
 }
@@ -50,6 +53,10 @@ pub(crate) fn extract_injections(source: &str) -> Vec<InjectedQuery> {
 pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<LanguageId> {
     if system == "elastic" {
         return elastic_search_language(language);
+    }
+    // Google SecOps searches are YARA-L (a block's `query` is not a key).
+    if system == "google_secops" {
+        return Some(LanguageId::Yaral);
     }
     language_for_field_path(&["configurations", system, "query"])
 }
@@ -83,6 +90,15 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
         }
         ["configurations", "sysdig", "macros", item, "condition"] if is_index(item) => {
             Some((LanguageId::Falco, "sysdig".into()))
+        }
+        [
+            "configurations",
+            platform @ ("harfanglab" | "bitdefender"),
+            "yara",
+            "signature",
+        ] => Some((LanguageId::Yara, (*platform).to_string())),
+        ["configurations", "google_secops", _] => {
+            language_for_field_path(&path).map(|language| (language, "google_secops".into()))
         }
         ["configurations", platform, "query" | "search"] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))
@@ -127,6 +143,7 @@ fn injected(
         inner,
         host_map,
         host_span: ByteSpan::new(start, end),
+        parts: Vec::new(),
     })
 }
 

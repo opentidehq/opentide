@@ -2,8 +2,9 @@
 //! would send, or why it would fail.
 
 use opentide_schema::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, GoogleSecopsConfig,
-    HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
+    GoogleSecopsConfig, HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig,
+    SysdigConfig,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -11,8 +12,8 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, carbon_black, crowdstrike, defender, deploy, elastic, google_secops, harfanglab,
-    sentinel, sentinel_one, splunk, sysdig,
+    Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, google_secops,
+    harfanglab, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -40,9 +41,25 @@ pub fn compile_offline(
         "sentinel" => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
         "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
+        "bitdefender" => Some(bitdefender_request(cx, rule, None)),
         "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         _ => None,
     }
+}
+
+/// The `createCustomRule` request a deploy sends for `rule` on `tenant`;
+/// with none, without the tenant's targets, tags and `companyId`.
+fn bitdefender_request(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: Option<&Json>,
+) -> Result<Json, CompileError> {
+    let strategy = bitdefender::strategy(cx, rule)?;
+    let compiled = bitdefender::compile_rule(cx, rule, strategy, tenant)?;
+    Ok(bitdefender::request_body(
+        bitdefender::CREATE,
+        bitdefender::create_params(&compiled),
+    ))
 }
 
 /// The platforms whose deployer builds the body from the tenant (and, for
@@ -96,6 +113,7 @@ pub fn compile_tenant(
     match platform {
         "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
         "sysdig" => Some(sysdig::compile_body(cx, rule, known)),
+        "bitdefender" => Some(bitdefender_tenant(cx, rule, config, id)),
         // The text is the same on every tenant: the `rules.create` body.
         "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         "elastic" => {
@@ -109,6 +127,22 @@ pub fn compile_tenant(
         "splunk" => writes(splunk::compile(cx, rule, config, inputs.clock)),
         "carbon_black_cloud" => writes(carbon_black::compile(cx, rule, config, inputs.timestamp)),
         _ => None,
+    }
+}
+
+/// The request a deploy sends for `rule` on the GravityZone `tenant`, under
+/// the action its status and the recorded id `known` make (`[]` when there
+/// is nothing to do).
+fn bitdefender_tenant(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: &Json,
+    known: Option<&str>,
+) -> Result<Json, CompileError> {
+    let status = bitdefender::block_of(rule)?.status;
+    match deploy::action(cx, bitdefender::DISPLAY, &status, known)? {
+        Some(action) => bitdefender::request(cx, rule, tenant, &action),
+        None => Ok(Json::Array(Vec::new())),
     }
 }
 
@@ -135,6 +169,7 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
         "carbon_black_cloud" => model_dump::<CarbonBlackConfig>(block),
         "elastic" => model_dump::<ElasticConfig>(block),
         "sysdig" => model_dump::<SysdigConfig>(block),
+        "bitdefender" => model_dump::<BitdefenderConfig>(block),
         "google_secops" => model_dump::<GoogleSecopsConfig>(block),
         _ => None,
     };
@@ -182,6 +217,69 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
         rule.file.clone().map_or(Json::Null, Json::Str),
     );
     entry.insert("api_request".into(), Json::Null);
+    Json::Object(entry)
+}
+
+/// The preview of `rule` on `platform` for a run that sends it to the
+/// tenants named `tenants` (`preview_rule_deployment`): a platform whose
+/// request depends on the tenant (Bitdefender) compiles it for each, and
+/// shows the first; every other platform is [`preview`]'s.
+pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[String]) -> Json {
+    match platform {
+        "bitdefender" => bitdefender_preview(cx, rule, tenants),
+        _ => preview(cx, platform, rule),
+    }
+}
+
+/// The `createCustomRule` request the deploy would send
+/// (`_bitdefender_compile_preview`): compiled for each tenant the run sends
+/// the rule to, as a deploy would, so a tenant that cannot resolve the
+/// block's targets fails the dry run, naming that tenant. The request shown
+/// is the first tenant's. With no tenant, it leaves targets, tenant tags and
+/// `companyId` out, and `unresolved` names the block's target aliases, never
+/// presented as GravityZone ids.
+fn bitdefender_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let configured: Vec<&Json> = tenants
+        .iter()
+        .filter_map(|name| deploy::tenant(cx, bitdefender::PLATFORM, name))
+        .collect();
+    let mut first = None;
+    let attempts: Vec<Option<&Json>> = if configured.is_empty() {
+        vec![None]
+    } else {
+        configured.iter().copied().map(Some).collect()
+    };
+    for tenant in attempts {
+        match bitdefender_request(cx, rule, tenant) {
+            Ok(body) => {
+                first.get_or_insert(body);
+            }
+            Err(error) => return failure(rule, &error),
+        }
+    }
+    let mut entry = Object::new();
+    entry.insert("uuid".into(), rule.uuid.clone().into());
+    entry.insert("name".into(), rule.name.clone().into());
+    entry.insert("api_request".into(), first.unwrap_or(Json::Null));
+    if let Some(tenant) = configured.first() {
+        entry.insert("tenant".into(), deploy::tenant_name(tenant).into());
+    } else {
+        let mut unresolved = Object::new();
+        unresolved.insert(
+            "reason".into(),
+            "this run deploys the rule to no bitdefender tenant: targets, tenant tags and \
+             companyId are resolved against a tenant at deploy"
+                .into(),
+        );
+        unresolved.insert(
+            "targets".into(),
+            bitdefender::unresolved_targets(rule)
+                .ok()
+                .flatten()
+                .unwrap_or(Json::Null),
+        );
+        entry.insert("unresolved".into(), Json::Object(unresolved));
+    }
     Json::Object(entry)
 }
 

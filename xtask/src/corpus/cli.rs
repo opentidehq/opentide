@@ -754,16 +754,16 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
         let document = run_oracle(&bin, &dir, &kind.command, &env)?;
         let lint = queries::is_lint_kind(kind);
-        let (oracle, oracle_count, rust, rust_count, crowdstrike) = if lint {
+        let (oracle, oracle_count, rust, rust_count, crowdstrike, yara) = if lint {
             // lint counts no queries: its findings are compared, every key.
             let oracle = queries::lint_findings(&document);
             let rust = queries::rust_lint(&dir, &kind.command)?;
-            (oracle, json!(null), rust, json!(null), 0)
+            (oracle, json!(null), rust, json!(null), 0, 0)
         } else {
             let (oracle, oracle_count) = queries::engine_findings(&document["report"]);
-            let (rust_report, crowdstrike) = queries::rust_report(&dir, &kind.command)?;
+            let (rust_report, crowdstrike, yara) = queries::rust_report(&dir, &kind.command)?;
             let (rust, rust_count) = queries::engine_findings(&rust_report);
-            (oracle, oracle_count, rust, rust_count, crowdstrike)
+            (oracle, oracle_count, rust, rust_count, crowdstrike, yara)
         };
         let mut problems = Vec::new();
         let mut approved = 0usize;
@@ -784,21 +784,21 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             ));
         }
         if oracle_count != rust_count {
-            let counted = crate::validate::crowdstrike_cql(
-                Some(&json!({"queries_checked": oracle_count})),
-                Some(&json!({
-                    "queries_checked": rust_count,
-                    "crowdstrike": crowdstrike,
-                    "yaml_1_2": 0,
-                })),
-                &[],
-            );
+            let oracle = json!({"queries_checked": oracle_count});
+            let rust = json!({
+                "queries_checked": rust_count,
+                "crowdstrike": crowdstrike,
+                "yara": yara,
+                "yaml_1_2": 0,
+            });
+            let counted = crate::validate::crowdstrike_cql(Some(&oracle), Some(&rust), &[])
+                || crate::validate::harfanglab_yara(Some(&oracle), Some(&rust), &[]);
             if counted {
                 approved += 1;
             } else {
                 problems.push(format!(
                     "queries checked: oracle {oracle_count}, rust {rust_count} \
-                     ({crowdstrike} CrowdStrike)"
+                     ({crowdstrike} CrowdStrike, {yara} YARA)"
                 ));
             }
         }

@@ -16,19 +16,32 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
-| [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target. |
-| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`. |
-| [`bitdefender_criteria_combination`](#bitdefender_criteria_combination) | The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion. |
-| [`bitdefender_criterion_field`](#bitdefender_criterion_field) | The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list). |
-| [`bitdefender_criterion_relation`](#bitdefender_criterion_relation) | The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`. |
-| [`bitdefender_criterion_shape`](#bitdefender_criterion_shape) | A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value. |
-| [`bitdefender_criterion_value`](#bitdefender_criterion_value) | The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535. |
-| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`. |
-| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule). |
-| [`bitdefender_severity`](#bitdefender_severity) | `severity` is not `Low`, `Medium`, or `High`. |
-| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`. |
-| [`bitdefender_target`](#bitdefender_target) | `detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused. |
-| [`bitdefender_targets_shape`](#bitdefender_targets_shape) | `targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias. |
+| [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is not allowed for the rule's kind or target. |
+| [`bitdefender_actions_unsupported`](#bitdefender_actions_unsupported) | The block sets `actions`, and the tenant's subscription has no automatic actions. |
+| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
+| [`bitdefender_create_no_id`](#bitdefender_create_no_id) | A GravityZone create answered something other than a 24-hex rule id. |
+| [`bitdefender_create_unconfirmed`](#bitdefender_create_unconfirmed) | A GravityZone create got no answer, and its retry found the name already taken. |
+| [`bitdefender_criteria_combination`](#bitdefender_criteria_combination) | The criteria combine fields or values GravityZone does not allow together. |
+| [`bitdefender_criterion_field`](#bitdefender_criterion_field) | A criterion's `field` does not belong to the block's `target`. |
+| [`bitdefender_criterion_relation`](#bitdefender_criterion_relation) | A criterion uses a relation its field does not take. |
+| [`bitdefender_criterion_shape`](#bitdefender_criterion_shape) | A criterion does not have `field` and exactly one of `is`, `contains` and `any`. |
+| [`bitdefender_criterion_value`](#bitdefender_criterion_value) | A criterion's value is not one its field accepts. |
+| [`bitdefender_incidents_api_unavailable`](#bitdefender_incidents_api_unavailable) | The tenant has no Incidents API, so it cannot take custom rules. |
+| [`bitdefender_kind_changed`](#bitdefender_kind_changed) | An update was refused because the block's kind differs from the GravityZone rule's. |
+| [`bitdefender_name_conflict`](#bitdefender_name_conflict) | GravityZone refused a create because a rule with the same name exists in the company. |
+| [`bitdefender_name_duplicate`](#bitdefender_name_duplicate) | Two enabled Bitdefender blocks resolve to the same GravityZone rule name. |
+| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches. |
+| [`bitdefender_request_failed`](#bitdefender_request_failed) | GravityZone refused a call for this rule with a JSON-RPC error. |
+| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets both `detection` and `yara`, or neither. |
+| [`bitdefender_rule_missing`](#bitdefender_rule_missing) | A rule to disable is gone from GravityZone, so its recorded id was removed. |
+| [`bitdefender_rule_recreated`](#bitdefender_rule_recreated) | The recorded GravityZone rule was gone, so deploy created it again. |
+| [`bitdefender_severity`](#bitdefender_severity) | The block `severity` is not `Low`, `Medium` or `High`. |
+| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`. |
+| [`bitdefender_target`](#bitdefender_target) | The `detection.target` is not a GravityZone detection target. |
+| [`bitdefender_target_unknown`](#bitdefender_target_unknown) | A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table. |
+| [`bitdefender_targets_shape`](#bitdefender_targets_shape) | `targets` sets both `endpoint_tags` and `companies`, or an empty list. |
+| [`bitdefender_tenant_unauthorized`](#bitdefender_tenant_unauthorized) | GravityZone refused the tenant's API key, so no rule deploys to it. |
+| [`bitdefender_tenant_unreachable`](#bitdefender_tenant_unreachable) | A call to the GravityZone tenant got no answer, so no further rule deploys to it. |
 | [`bitdefender_yara_ascii`](#bitdefender_yara_ascii) | A Bitdefender YARA signature holds a character that is not ASCII. |
 | [`bitdefender_yara_size`](#bitdefender_yara_size) | A Bitdefender YARA signature is longer than 30,000 characters. |
 | [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
@@ -509,243 +522,562 @@ Correct the asset name, or declare the asset under `[[assets]]`.
 
 ## bitdefender_action_scope
 
-An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target.
+An automatic action is not allowed for the rule's kind or target.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). `kill_process` is for Basic rules only. `sandbox`, `kill_process` and `quarantine` need a `process` or `file` target or a `*.CreatedBy.*` criterion; a YARA rule takes `sandbox` and `quarantine`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    actions:
+      kill_process: true
+    yara:
+      signature: |
+        rule A { condition: true }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Remove the action, or use one the kind and target allow (`isolate`, `collect_investigation_package`, `antimalware_scan`, `risk_scan` are allowed everywhere).
+
+## bitdefender_actions_unsupported
+
+The block sets `actions`, and the tenant's subscription has no automatic actions.
+
+Severity: warning. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). With `automatic_actions = false` in the tenant setup, deploy omits `automaticActions` and the rule deploys without them.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    actions:
+      isolate: true   # tenant: automatic_actions = false
+```
+
+### How to fix
+
+Remove the block's `actions`, or set `automatic_actions = true` once the subscription includes them.
 
 ## bitdefender_contains_no_wildcard
 
-A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`.
+A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: GravityZone's `contains` relation compares the whole value with `*` and `?` as wildcards, so a value without one is an exact match, and the author most likely meant a substring.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.CommandLine
+          contains: -enc
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add the wildcards you mean (`contains: "*-enc*"`), or use `is` for an exact match.
+
+## bitdefender_create_no_id
+
+A GravityZone create answered something other than a 24-hex rule id.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). Deploy sends `returnRuleId: true` and records the id it gets back. Without one the rule may exist on the tenant with no binding in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+bitdefender_create_no_id: createCustomRule for 'Encoded PowerShell' answered True
+```
+
+### How to fix
+
+Find the rule by name in the GravityZone console and record its id in the rule's deployment state shard, or delete it and deploy again.
+
+## bitdefender_create_unconfirmed
+
+A GravityZone create got no answer, and its retry found the name already taken.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+
+### Example
+
+```text illustrative
+bitdefender_create_unconfirmed: the first create of 'Office application spawns encoded PowerShell'
+got no answer and the retry found the name taken
+```
+
+### How to fix
+
+Find the rule by its name in the GravityZone console (Incidents, Custom rules). Delete it and deploy again, or record its 24-hex id under `platforms.bitdefender.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
 
 ## bitdefender_criteria_combination
 
-The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion.
+The criteria combine fields or values GravityZone does not allow together.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). EDR-only and XDR-only fields or values are not mixed (`File.CreatedBy.*` with `File.MD5`, `rename` with `downloaded`). `File.Certificate*` needs `File.Name` or `File.FullPathName`. `Connection.Protocol` needs `Connection.Domain`. An XDR detection uses `alert` or an operation criterion, not both.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: connection
+      criteria:
+        - field: Connection.Protocol
+          is: smb
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add the field the pairing needs (`Connection.Domain`), or split EDR and XDR conditions into two rules.
 
 ## bitdefender_criterion_field
 
-The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list).
+A criterion's `field` does not belong to the block's `target`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Each target has its own fields in Bitdefender's criteria catalogue: `process` has `Process.*`, `file` has `File.*`, `connection` has `Connection.*` and `registry` has `Registry.*`. A field the catalogue does not list for any other target is a warning. The alert filter (`detection`) is never a criterion, on any target: write it as the block's `alert`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.Hash
+          is: 44d88612fea8a8f36de82e1278abb02f
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use a field of the target, as the catalogue spells it (`Process.MD5`), or change the target.
 
 ## bitdefender_criterion_relation
 
-The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`.
+A criterion uses a relation its field does not take.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). Enum fields (`File.Operation`, `Registry.Operation`, `Registry.DataType`, `Connection.Protocol`, ...) take `is` or `any` only, and `*.MD5` and `*.SHA2` do not take `contains`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Operation
+          contains: key_*
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `is` with one value or `any` with several: `any: [key_created, key_renamed]`.
 
 ## bitdefender_criterion_shape
 
-A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value.
+A criterion does not have `field` and exactly one of `is`, `contains` and `any`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). `is` takes a string or an integer, `contains` a string, and `any` a non-empty list of strings or integers.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: powershell.exe
+          contains: "*shell*"
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep one relation per criterion. Two conditions on one field are two criteria, which must both match.
 
 ## bitdefender_criterion_value
 
-The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535.
+A criterion's value is not one its field accepts.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). An enum field takes only its catalogue values (`Registry.Operation`: `key_created`, `key_deleted`, ...), and a port is an integer from 0 to 65535.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: connection
+      criteria:
+        - field: Connection.DestinationPort
+          any: [443, 70000]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use a catalogue value, or a port in range written as a number.
+
+## bitdefender_incidents_api_unavailable
+
+The tenant has no Incidents API, so it cannot take custom rules.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). GravityZone answered `-32601` (method not found). On-premises GravityZone has no Incidents API.
+
+### Example
+
+```toml
+url = "https://gravityzone.example.internal/api"   # on-premises
+```
+
+### How to fix
+
+Use a GravityZone cloud or partner console URL, ending in `/api`.
+
+## bitdefender_kind_changed
+
+An update was refused because the block's kind differs from the GravityZone rule's.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). GravityZone cannot turn a YARA rule into a Basic rule or back, and `updateCustomRule` takes no `subtype`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    # deployed as yara, now a detection block
+    detection:
+      target: process
+```
+
+### How to fix
+
+Deploy the rule with a `DELETION` status first, then deploy it again with the new kind.
+
+## bitdefender_name_conflict
+
+GravityZone refused a create because a rule with the same name exists in the company.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. GravityZone names are unique per company, and deploy never adopts a rule it did not create: it has no id for it in `.opentide/states/deployment/`. `opentide validate` reports two opentide rules with one GravityZone name as `bitdefender_name_duplicate`; this code is a rule created outside opentide, or by another workspace.
+
+### Example
+
+```yaml
+name: Office application spawns encoded PowerShell   # a console rule has this name
+configurations:
+  bitdefender:
+    status: PRODUCTION
+```
+
+### How to fix
+
+Set a distinct `configurations.bitdefender.name`, or delete the other rule in the console. To take over a rule opentide created and lost track of, record its id in the rule's deployment state shard.
+
+## bitdefender_name_duplicate
+
+Two enabled Bitdefender blocks resolve to the same GravityZone rule name.
+
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). The GravityZone name is the block's `name`, else the rule's `name`, normalised and cut at 128 characters. GravityZone refuses a second rule with one name in a company, so the second deploy would fail with `bitdefender_name_conflict`.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Office application spawns encoded PowerShell
+configurations:
+  bitdefender:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.bitdefender.name`, or rename one of the rules.
 
 ## bitdefender_registry_full_hive
 
-A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`.
+A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `bitdefender` block (bitdefender-1.0). It is an advisory: the rule validates and deploys, but GravityZone stores registry keys under the short hive names, so `HKEY_LOCAL_MACHINE\…` never triggers.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: registry
+      criteria:
+        - field: Registry.Key
+          contains: HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run*
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the short hive name, as in `HKLM\Software\Microsoft\Windows\CurrentVersion\Run*`: `HKLM`, `HKCU`, `HKCR` or `HKCC`; `HKU` for a user's hive, `HKEY_USERS\<SID>…`; and `HKLU` for any other `HKEY_USERS\…` key. The hive name is compared case-insensitively.
+
+## bitdefender_request_failed
+
+GravityZone refused a call for this rule with a JSON-RPC error.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). A response with an `error` member is a failure even with HTTP 200; the message carries its code and `error.data.details`. Other rules on the tenant carry on.
+
+### Example
+
+```text illustrative
+bitdefender_request_failed: updateCustomRule: error -32602: Invalid params (Invalid value for parameter settings.criteriaList)
+```
+
+### How to fix
+
+Read `error.data.details` in the message, fix the block it points at, and deploy again. `opentide validate` catches most refusals before any call.
 
 ## bitdefender_rule_kind
 
-A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule).
+A Bitdefender block sets both `detection` and `yara`, or neither.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A GravityZone custom rule is one kind: a Basic rule (`detection`, a list of criteria) or a YARA rule (`yara`, a signature). An `exclusion` key is unknown: GravityZone exclusion rules are not opentide rules, and deploy never creates, updates or deletes one.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: mshta.exe
+    yara:
+      signature: |
+        rule A { condition: filesize < 10 }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep one kind per rule. Split a Basic rule and a YARA rule into two opentide rules; manage exclusions in the GravityZone console.
+
+## bitdefender_rule_missing
+
+A rule to disable is gone from GravityZone, so its recorded id was removed.
+
+Severity: warning. Reported by `opentide deploy` under `DISABLEMENT` on a `bitdefender` block (bitdefender-1.0). `updateCustomRule` answered `-32002`. Nothing exists to disable, so deploy creates nothing and forgets the binding.
+
+### Example
+
+```text illustrative
+bitdefender_rule_missing: the recorded rule no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state.
+
+## bitdefender_rule_recreated
+
+The recorded GravityZone rule was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). `updateCustomRule` answered `-32002` (resource not found): someone deleted the rule in the console. Deploy creates it again and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+bitdefender_rule_recreated: the recorded rule no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete rules through a `DELETION` status, not in the console.
 
 ## bitdefender_severity
 
-`severity` is not `Low`, `Medium`, or `High`.
+The block `severity` is not `Low`, `Medium` or `High`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). GravityZone has three severities, spelled with a capital letter. Without `severity`, deploy derives it from `response.alert_severity`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    severity: Critical
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `Low`, `Medium` or `High`, or remove the key.
 
 ## bitdefender_severity_collapsed
 
-`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`.
+`response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a rule with a `bitdefender` block that sets no `severity` (bitdefender-1.0). GravityZone has three severities: deploy sends `Critical` as `High` and `Informational` as `Low`. It is an advisory: the rule validates and deploys.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    status: PRODUCTION
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set `configurations.bitdefender.severity` to `Low`, `Medium` or `High` to choose the GravityZone level, or accept the mapping.
 
 ## bitdefender_target
 
-`detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused.
+The `detection.target` is not a GravityZone detection target.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). The target must be spelled as the API spells it: `process`, `file`, `connection`, `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`, `sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`, `automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`, `jira project` or `confluence page`. The exclusion-only targets `flow` and `bitbucket repository` are refused.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    detection:
+      target: flow
+      criteria:
+        - field: Flow.Source
+          is: 10.0.0.1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use one of the detection targets, in lower case with spaces, such as `process`.
+
+## bitdefender_target_unknown
+
+A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table.
+
+Severity: error. Reported by `opentide deploy`, before any call for the rule on a `bitdefender` block (bitdefender-1.0). A rule file carries aliases, because GravityZone ids differ per tenant; each tenant maps them in `platforms/bitdefender.toml`.
+
+### Example
+
+```yaml
+configurations:
+  bitdefender:
+    targets:
+      endpoint_tags: [tier0-servers]   # the tenant has no tier0-servers
+```
+
+### How to fix
+
+Add the alias to the tenant's `[tenants.setup.endpoint_tags]` (or `companies`) table, or change the block's `targets`.
 
 ## bitdefender_targets_shape
 
-`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias.
+`targets` sets both `endpoint_tags` and `companies`, or an empty list.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block (bitdefender-1.0). A rule applies to endpoint tags or, on a partner tenant, to companies; neither means the whole company. Each list names aliases from the tenant's tables.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    targets:
+      endpoint_tags: [tier0-servers]
+      companies: [acme]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep one of the two lists, with at least one alias, or remove `targets`.
+
+## bitdefender_tenant_unauthorized
+
+GravityZone refused the tenant's API key, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` block (bitdefender-1.0). A `-32001` answer, HTTP 401 or HTTP 403 stops the tenant. The key must be valid and have the Incidents API enabled.
+
+### Example
+
+```text illustrative
+bitdefender_tenant_unauthorized: tenant gravityzone-eu refused the API key: API Key is not allowed to access the selected API: Incidents
+```
+
+### How to fix
+
+Check the variable `api_key` names, and enable the Incidents API for the key in GravityZone (My Account, API keys). `key_type` must match the key: `personal` or `service`.
+
+## bitdefender_tenant_unreachable
+
+A call to the GravityZone tenant got no answer, so no further rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+
+### Example
+
+```text illustrative
+bitdefender_tenant_unreachable: HTTPSConnectionPool(host='cloudgz.gravityzone.bitdefender.com', port=443): Read timed out
+```
+
+### How to fix
+
+Check the tenant `url` (it ends in `/api`), the network path to it, and the tenant's `ssl` setting, then deploy again.
 
 ## bitdefender_yara_ascii
 
 A Bitdefender YARA signature holds a character that is not ASCII.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block's `yara.signature` (bitdefender-1.0): GravityZone takes ASCII only. The analysis engine checks the signature under its Bitdefender profile and places the finding on the character; without the engine, `opentide validate` still reports it on `yara.signature`. `opentide validate query --platform bitdefender` reports it in a `.yar` file. Deploy refuses the rule.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Loader {
+          meta:
+            description = "Stage-1 loader — config blob"
+          condition:
+            true
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Replace the character with ASCII (`-` for `—`), or match it as a hex string (`{ E2 80 94 }`), then run `opentide validate` again.
 
 ## bitdefender_yara_size
 
 A Bitdefender YARA signature is longer than 30,000 characters.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `bitdefender` block's `yara.signature` (bitdefender-1.0): GravityZone takes at most 30,000 characters. The analysis engine checks the signature under its Bitdefender profile; without the engine, `opentide validate` still reports it on `yara.signature`. `opentide validate query --platform bitdefender` reports it in a `.yar` file. Deploy refuses the rule.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Loader {
+          strings:
+            $a01 = "..."   # thousands of strings, 30,001 characters in all
+          condition:
+            any of them
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Shorten the signature: drop comments and unused strings, or split its rules across several Tide rules, then run `opentide validate` again.
 
 ## cbc_unknown_field
 
@@ -6451,926 +6783,926 @@ Open the file at the line and column the diagnostic names. The note says what th
 
 Two YARA rules in one signature have the same name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_string
 
 Two strings of one YARA rule have the same identifier.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_tag
 
 A YARA rule repeats a tag.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_empty_signature
 
 The YARA signature has no rule, or only private or global rules.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_entrypoint_deprecated
 
 entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_hex_string
 
 A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_include
 
 A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_meta_missing
 
 A non-private YARA rule lacks a meta key the platform profile recommends.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_module_not_imported
 
 A YARA module field or function is used without importing its module.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_module_unconfirmed
 
 The YARA module is known but not confirmed on the platform's agents.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_number_out_of_range
 
 A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_parse_error
 
 The YARA signature does not parse as libyara 4.5 reads it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_regexp
 
 A YARA regular expression is invalid.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_rule_identifier_conflict
 
 A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_signature_alias
 
 A YARA signature is a YAML alias instead of text written out in its own block.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_slow_pattern
 
 libyara warns that this YARA string or loop may slow scanning down.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_string_modifier
 
 libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_suspicious_expression
 
 A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_type
 
 A YARA operator or function is applied to a value of the wrong type.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_identifier
 
 A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_string
 
 A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module
 
 A YARA import names a module libyara does not ship.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module_member
 
 The YARA module has no such field or function, or the function takes other arguments.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_unreferenced_string
 
 A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_x_incompatible
 
 libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yaral_condition_shape
 
 The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_deprecated_field
 
 The UDM field is deprecated.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_enum_value
 
 The value is not one of the enumerated UDM field's values.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_export_value
 
 An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_function_unavailable
 
 The function exists, but not in this profile (rules or search).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_leading_wildcard_regex
 
 The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_match_shape
 
 The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_match_variable
 
 A `match` name is not a placeholder bound in `events`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_match_window
 
 The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_meta_duplicate
 
 A meta key appears twice, or a meta value is not a double-quoted string.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_multi_event_match
 
 A rule with two or more event variables has no `match` section.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_nocase_on_enum
 
 `nocase` is applied to a comparison with an enumerated UDM field.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_option
 
 An unknown option, or an option value of the wrong kind.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_outcome_aggregation
 
 With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_outcome_limit
 
 A rule or search assigns more than 20 outcome variables.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_parse_error
 
 The YARA-L text does not parse, or a text holds a second rule.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_reference_list_deprecated
 
 Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_reference_list_limit
 
 More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_regex
 
 The regular expression is not valid RE2.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_reserved_identifier
 
 A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_section_alias
 
 A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_section_empty
 
 A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_section_header
 
 A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_section_missing
 
 A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_section_order
 
 A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_section_unavailable
 
 The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_string_escape
 
 A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_type
 
 An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_undefined_variable
 
 A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_unfiltered_event
 
 An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_unknown_function
 
 The function is not in Google's YARA-L function list, or it takes a different number of arguments.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_unknown_udm_field
 
 The field path is not in the Unified Data Model.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
 
 ## yaral_window_bound
 
 `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.

@@ -2538,6 +2538,23 @@ variant = "typo"
 args = ["explain", "vocab_unknwn"]
 fixtures = ["none"]
 
+# #1015: a YARA code the engine only ever warns about, and a YARA error. The
+# page's text is what they test: human mode is the Markdown renderer's (the
+# example case's ledger entries, #827).
+[[case]]
+command = "explain"
+variant = "yara-warning"
+args = ["explain", "yara_module_unconfirmed"]
+modes = ["plain", "json", "agent"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "yara-error"
+args = ["explain", "yara_unknown_module"]
+modes = ["plain", "json", "agent"]
+fixtures = ["none"]
+
 [[case]]
 command = "commands"
 variant = "default"
