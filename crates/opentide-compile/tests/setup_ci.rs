@@ -82,11 +82,32 @@ fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
 /// underscore or hyphen form, matched case-insensitively, which also catches
 /// its credential variables (`$EXABEAM_CLIENT_ID`). No other platform id is a
 /// substring of these, and 0.23.0 output holds none of them, so a 0.23.0
-/// render is returned unchanged.
+/// render is returned unchanged. A credential variable that does not hold the
+/// id (Bitdefender's `$GRAVITYZONE_API_KEY`) is found in the platform's
+/// bundled `platforms/<id>.toml`.
 fn without_since_oracle_lines(text: &str) -> String {
+    let variables = |id: &str| -> Vec<String> {
+        let file = format!("platforms/{id}.toml");
+        opentide_schema::configuration::bundled::FILES
+            .iter()
+            .filter(|(path, _)| *path == file)
+            .flat_map(|(_, text)| text.split('$').skip(1))
+            .map(|rest| {
+                rest.chars()
+                    .take_while(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
+                    .collect::<String>()
+                    .to_ascii_lowercase()
+            })
+            .filter(|name| !name.is_empty())
+            .collect()
+    };
     let tokens: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
         .iter()
-        .flat_map(|id| [(*id).to_owned(), id.replace('_', "-")])
+        .flat_map(|id| {
+            let mut tokens = vec![(*id).to_owned(), id.replace('_', "-")];
+            tokens.extend(variables(id));
+            tokens
+        })
         .collect();
     text.split_inclusive('\n')
         .filter(|line| {
@@ -101,51 +122,8 @@ fn data(text: &str) -> Option<Json> {
     document.root().map(|root| Json::from_node(root))
 }
 
-/// The platforms the 0.23.0 recordings predate
-/// (`opentide_schema::platforms::SINCE_ORACLE`, emptied at O2).
-fn platforms_after_the_oracle() -> Vec<String> {
-    opentide_schema::platforms::SINCE_ORACLE
-        .iter()
-        .map(|id| (*id).to_owned())
-        .collect()
-}
-
-/// `rendered` without the lines that name one variable the bundled files of
-/// `later` platforms reference: the header's `#   NAME` and a job's
-/// `NAME: ${{ secrets.NAME }}`. 0.28.0 lists and maps them
-/// (`platform_credential_names`); the 0.23.0 recordings could not.
-fn without_later_variables(rendered: &str, later: &[String]) -> String {
-    let texts: Vec<&str> = later
-        .iter()
-        .filter_map(|platform| {
-            opentide_schema::configuration::bundled::text(&format!("platforms/{platform}.toml"))
-        })
-        .collect();
-    let later_variable = |name: &str| {
-        !name.is_empty()
-            && name
-                .chars()
-                .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
-            && texts.iter().any(|text| {
-                text.contains(&format!("${name}")) || text.contains(&format!("${{{name}}}"))
-            })
-    };
-    rendered
-        .split_inclusive('\n')
-        .filter(|line| {
-            let body = line.trim_start().trim_start_matches('#').trim();
-            let name = body.split(':').next().unwrap_or_default().trim();
-            let rest = body.get(name.len()..).unwrap_or_default().trim();
-            let only_names_it = rest.is_empty()
-                || rest.trim_start_matches(':').trim() == format!("${{{{ secrets.{name} }}}}");
-            !(only_names_it && later_variable(name))
-        })
-        .collect()
-}
-
 #[test]
 fn pipelines_are_the_oracles() {
-    let later = platforms_after_the_oracle();
     let mut problems = Vec::new();
     let found = cases();
     assert!(found.len() >= 12, "only {} cases", found.len());
@@ -156,7 +134,7 @@ fn pipelines_are_the_oracles() {
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
         let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
-            Ok(rendered) => without_later_variables(&rendered, &later),
+            Ok(rendered) => rendered,
             Err(error) => {
                 problems.push(format!("{name}: {error}"));
                 continue;

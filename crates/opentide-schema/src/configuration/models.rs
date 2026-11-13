@@ -1081,8 +1081,11 @@ pub struct GoogleSecopsSetup {
     pub location: NonEmptyString,
     /// The SecOps customer id (a UUID).
     pub instance: NonEmptyString,
-    /// The regional service endpoint. Default: https://<location>-chronicle.googleapis.com.
+    /// The regional service endpoint. Default: `https://<location>-chronicle.googleapis.com`.
     #[serde(default)]
+    #[schemars(
+        description = "The regional service endpoint. Default: https://<location>-chronicle.googleapis.com."
+    )]
     pub endpoint: Option<String>,
     /// A $NAME placeholder for a service-account key, as a JSON document or a path to one.
     /// Without it, Application Default Credentials (workload identity, gcloud auth).
