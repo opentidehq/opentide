@@ -1,0 +1,5 @@
+// prod:match_section invalid
+rule r {
+  match:
+    $user over 10m before
+}

@@ -346,10 +346,10 @@ impl RootChecks {
         let cached = self.findings.as_ref().filter(|(at, wanted, _)| {
             *at == generation && files.iter().all(|file| wanted.contains(file))
         });
-        if let Some((_, _, found)) = cached {
-            if self.pending.is_empty() {
-                return Arc::clone(found);
-            }
+        if let Some((_, _, found)) = cached
+            && self.pending.is_empty()
+        {
+            return Arc::clone(found);
         }
         let Some(workspace) = self.workspace(root, buffers) else {
             return Arc::default();
@@ -468,10 +468,11 @@ impl RootChecks {
         buffers: Buffers,
         generation: u64,
     ) -> Findings {
-        if let Some((at, found)) = &self.all {
-            if *at == generation && self.pending.is_empty() {
-                return Arc::clone(found);
-            }
+        if let Some((at, found)) = &self.all
+            && *at == generation
+            && self.pending.is_empty()
+        {
+            return Arc::clone(found);
         }
         let Some(workspace) = self.workspace(root, buffers) else {
             return Arc::default();

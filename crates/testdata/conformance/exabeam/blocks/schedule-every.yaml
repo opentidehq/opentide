@@ -1,0 +1,20 @@
+name: Schedule every
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000122
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case schedule-every.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    schedule:
+      - {every: hour, from: '08:00Z', to: '09:00Z'}
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'

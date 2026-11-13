@@ -1,0 +1,2 @@
+activity_type:"email_rule-create" AND outcome:"success"
+AND * AND (new_value:WLDi("*ForwardTo*") OR new_value:WLDi("*RedirectTo*"))

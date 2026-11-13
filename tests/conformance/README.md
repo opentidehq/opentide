@@ -46,6 +46,7 @@ the divergence flag.
 | `heavy` | `heavy` | The heavy workspace, seed 20261107 (300 threats, 300 objectives, 500 rules) |
 | `faults` | `faults` | The combined fault workspace (`cargo xtask corpus faults --out`) |
 | `configuration` | `configuration_faults` | Each configuration fault kind (`xtask/src/corpus/configuration.rs`) applied alone to the fault catalogue's base workspace: `configuration/<kind>`, one workspace each; some stop `Workspace.open` |
+| `compile` | `compile_faults` | Each compile fault kind (`compile-*` in `tests/corpora/faults.toml`) applied alone to the fault catalogue's base workspace: `compile/<kind>`, one workspace each; validate's compile check reports what the platform compilers refuse |
 
 ## Tenants
 

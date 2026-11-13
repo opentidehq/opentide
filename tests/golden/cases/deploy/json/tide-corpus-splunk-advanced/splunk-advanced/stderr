@@ -1,0 +1,5 @@
+{"detail":"Requested status: ","available":"DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED","event":"status_lookup_failed","logger":"opentide.deployment.utils","level":"critical","timestamp":"0000-00-00 00:00:00"}
+error[internal]: ValidationError: 1 validation error for SplunkConfig
+  note: no crash log written: NotADirectoryError: [Errno 20] Not a directory: '/dev/null/opentide-golden/opentide'
+  help: this is a bug in opentide; report it: https://github.com/opentidehq/opentide/issues/new?title=Crash+in+opentide+deploy&body=%23%23%23+What+happened%0A%0A%3C%21--+What+you+ran+and+what+you+expected.+--%3E%0A%0A%23%23%23+Environment%0A%0A-+opentide%3A+0.23.0%0A-+Python%3A+3.13.14+%28CPython%29%0A-+OS%3A+Linux+<KERNEL>+%28x86_64%29%0A-+Command%3A+%60opentide+deploy%60%0A%0A%23%23%23+Crash+log%0A%0A%3C%21--+Attach+the+crash+log+opentide+printed.+Credentials%2C+tokens+and+tenant+names+are+redacted%3B+read+it+before+you+attach+it.+--%3E
+  help: add --debug to see the traceback

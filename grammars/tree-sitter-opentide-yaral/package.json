@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-yaral",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for YARA-L 2.0, Google Security Operations (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.yaral",
+      "file-types": ["yaral", "yl2"]
+    }
+  ]
+}

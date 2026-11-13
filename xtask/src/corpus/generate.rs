@@ -874,7 +874,7 @@ fn sentinel(
             ]),
         ),
     ]);
-    if variant % 3 == 0 && rng.chance(50) {
+    if variant.is_multiple_of(3) && rng.chance(50) {
         tags.push("sentinel:entities".to_string());
         pairs.push((
             "entities".to_string(),
@@ -899,7 +899,7 @@ fn defender(
     process: &str,
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
-    let query = if variant % 2 == 0 {
+    let query = if variant.is_multiple_of(2) {
         format!(
             "DeviceProcessEvents\n| where FileName =~ \"{process}\"\n| project Timestamp, DeviceId, ReportId, DeviceName, AccountName\n"
         )
@@ -935,7 +935,7 @@ fn splunk(
     name: &str,
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
-    let query = if variant % 2 == 0 {
+    let query = if variant.is_multiple_of(2) {
         format!(
             "index=main sourcetype=\"WinEventLog:Security\" EventCode={number}\n| stats count by host, Account_Name\n"
         )
@@ -981,7 +981,7 @@ fn sentinel_one(
     name: &str,
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
-    let condition = if variant % 2 == 0 {
+    let condition = if variant.is_multiple_of(2) {
         tags.push("sentinel_one:single".to_string());
         Yaml::map(vec![
             ("type", Yaml::s("Single Event")),
@@ -1073,7 +1073,7 @@ fn harfanglab(
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
     let mut pairs = kv(vec![("action", Yaml::s("Alert"))]);
-    if variant % 2 == 0 {
+    if variant.is_multiple_of(2) {
         tags.push("harfanglab:sigma".to_string());
         pairs.push((
             "sigma".to_string(),

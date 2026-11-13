@@ -2903,6 +2903,25 @@
       },
       "type": "object"
     },
+    "SavedSearchValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "int64",
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "description": "A savedsearches.conf value in a Splunk block's advanced table: str | int | float | bool, or null. Splunk stores every value as text, so a list or a table has no meaning there.",
+      "markdownDescription": "A `savedsearches.conf` value in a Splunk block's `advanced` table:\n`str | int | float | bool`, or `null`. Splunk stores every value as text,\nso a list or a table has no meaning there."
+    },
     "SelectionValue": {
       "anyOf": [
         {
@@ -6446,6 +6465,24 @@
             }
           ],
           "description": "Notable, risk, and email actions."
+        },
+        "advanced": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SavedSearchValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": "savedsearches.conf keys no other field sets, sent as written at deploy: a custom alert action's action.<name>.param.*, for instance. A value is a string, number, boolean (1 or 0) or null (empty). A key the block also sets takes this value.",
+          "markdownDescription": "`savedsearches.conf` keys no other field sets, sent as written at deploy: a custom alert\naction's `action.<name>.param.*`, for instance. A value is a string, number, boolean\n(`1` or `0`) or `null` (empty). A key the block also sets takes this value.",
+          "type": [
+            "object",
+            "null"
+          ]
         },
         "contributors": {
           "description": "Platform contributors.",

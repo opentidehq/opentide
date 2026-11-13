@@ -1,0 +1,4 @@
+// prod:limit_section valid
+metadata.event_type = "USER_LOGIN"
+limit:
+  50

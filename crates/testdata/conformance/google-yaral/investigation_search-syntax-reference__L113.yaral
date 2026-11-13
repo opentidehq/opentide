@@ -1,0 +1,1 @@
+additional.fields["pod_name"] = "kube-scheduler-prod" metadata.ingestion_labels["MetadataKeyDeletion"] = "startup-script"

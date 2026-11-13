@@ -1,0 +1,5 @@
+// prod:events_section invalid
+rule r {
+  events
+    $e.metadata.event_type = "A"
+}

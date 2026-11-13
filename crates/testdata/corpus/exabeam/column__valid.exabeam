@@ -1,0 +1,2 @@
+# prod:column valid
+SELECT user AS account, * WHERE vendor:"Microsoft"

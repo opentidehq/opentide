@@ -439,10 +439,11 @@ async fn run(
         }
     }
     client.update_rule(rule_id, &body).await??;
-    if let Some(Json::Str(old_name)) = remote.get("name") {
-        if !policies.is_empty() && *old_name != rule.name {
-            rename_in_policies(client, old_name, &rule.name, policies).await?;
-        }
+    if let Some(Json::Str(old_name)) = remote.get("name")
+        && !policies.is_empty()
+        && *old_name != rule.name
+    {
+        rename_in_policies(client, old_name, &rule.name, policies).await?;
     }
     if rule.disable {
         leave_policies(client, &rule.name, policies).await

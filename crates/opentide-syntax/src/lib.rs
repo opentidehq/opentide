@@ -34,6 +34,9 @@ unsafe extern "C" {
     fn tree_sitter_opentide_lucene() -> *const ();
     fn tree_sitter_opentide_falco() -> *const ();
     fn tree_sitter_opentide_cql() -> *const ();
+    fn tree_sitter_opentide_yara() -> *const ();
+    fn tree_sitter_opentide_exabeam() -> *const ();
+    fn tree_sitter_opentide_yaral() -> *const ();
 }
 
 // `LanguageFn::from_raw` requires a language function generated from a
@@ -68,6 +71,15 @@ const FALCO: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_fal
 #[expect(unsafe_code, reason = "wraps a grammar's C entry point")]
 // SAFETY: a tree-sitter-cli generated language function (see above).
 const CQL: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_cql) };
+#[expect(unsafe_code, reason = "wraps a grammar's C entry point")]
+// SAFETY: a tree-sitter-cli generated language function (see above).
+const YARA: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_yara) };
+#[expect(unsafe_code, reason = "wraps a grammar's C entry point")]
+// SAFETY: a tree-sitter-cli generated language function (see above).
+const EXABEAM: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_exabeam) };
+#[expect(unsafe_code, reason = "wraps a grammar's C entry point")]
+// SAFETY: a tree-sitter-cli generated language function (see above).
+const YARAL: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_opentide_yaral) };
 
 /// The tree-sitter language of a query language, or `None` for Tide YAML and
 /// configuration TOML, which are not parsed by tree-sitter.
@@ -81,6 +93,14 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Lucene => LUCENE,
         LanguageId::Falco => FALCO,
         LanguageId::Cql => CQL,
+        // Highlighting and structure only: YARA's verdict parser is
+        // yara-x-parser (opentide-yara).
+        LanguageId::Yara => YARA,
+        // Highlighting and structure only: the verdicts are opentide-exabeam's
+        // port of the specification's reference checker.
+        LanguageId::Exabeam => EXABEAM,
+        // YARA-L 2.0 (Google SecOps): the verdict parser too.
+        LanguageId::Yaral => YARAL,
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => return None,
     };

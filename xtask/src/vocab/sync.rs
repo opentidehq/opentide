@@ -335,10 +335,10 @@ fn vocabulary_drift(
         changed: BTreeMap::new(),
     };
     for (name, path) in source {
-        if let Some(bundled) = target.get(name) {
-            if fs::read(path)? != fs::read(bundled)? {
-                drift.changed.insert(name.clone(), Vec::new());
-            }
+        if let Some(bundled) = target.get(name)
+            && fs::read(path)? != fs::read(bundled)?
+        {
+            drift.changed.insert(name.clone(), Vec::new());
         }
     }
     Ok(drift)

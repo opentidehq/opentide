@@ -1,0 +1,12 @@
+// prod:outcome_section valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  outcome:
+    $risk_score = 40
+    $host = $e.principal.hostname
+  condition:
+    $e
+}

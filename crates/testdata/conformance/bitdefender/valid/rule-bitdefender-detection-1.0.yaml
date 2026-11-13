@@ -1,0 +1,37 @@
+name: Office application spawns encoded PowerShell
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000051
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Detects an Office application starting PowerShell with an
+  "-enc" (encoded) command line, a common <macro> dropper pattern.
+techniques:
+- T1059.001
+- T1566.001
+response:
+  alert_severity: High
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    tags: [office, initial-access]
+    targets:
+      endpoint_tags: [tier0-servers]
+    actions:
+      kill_process: {include_children: true}
+      collect_investigation_package: true
+    detection:
+      target: process
+      criteria:
+        - field: Process.Parent.Name
+          any: [winword.exe, excel.exe, powerpnt.exe]
+        - field: Process.Name
+          is: powershell.exe
+        - field: Process.CommandLine
+          contains: "*-enc*"
