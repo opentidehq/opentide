@@ -43,7 +43,7 @@
 | MCP server tools, resources, stdio | [`.agents/skills/mcp-server/SKILL.md`](.agents/skills/mcp-server/SKILL.md) |
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
-| Releases (the release train, `publish.yml`: PyPI, crates.io, npm, binaries), release candidates, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
+| Releases (the release train, `publish.yml`: PyPI, crates.io, npm, binaries), release candidates, `v*` tag, install pins, post-release skills review | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 | Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
 | Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
@@ -183,6 +183,10 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `c
    `docs/` ([docs-maintenance](.agents/skills/docs-maintenance/SKILL.md)).
 4. Mechanical refactors are proven behaviour-preserving with
    `uv run python scripts/ast_equivalence.py <base-rev>`.
+5. A platform added or removed, a platform's capabilities (deploy, `--live`, `opentide query`),
+   rule types or query languages changed, or a CLI/MCP name that skills use renamed → a
+   companion PR on [opentidehq/skills](https://github.com/opentidehq/skills) (platform skill,
+   `coverage.json`), linked from this one ([review-checklist](.agents/skills/review-checklist/SKILL.md) item 7).
 
 ## Docs
 
