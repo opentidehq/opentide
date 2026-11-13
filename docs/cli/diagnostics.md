@@ -6451,401 +6451,401 @@ Open the file at the line and column the diagnostic names. The note says what th
 
 Two YARA rules in one signature have the same name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_string
 
 Two strings of one YARA rule have the same identifier.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_tag
 
 A YARA rule repeats a tag.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_empty_signature
 
 The YARA signature has no rule, or only private or global rules.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_entrypoint_deprecated
 
 entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_hex_string
 
 A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_include
 
 A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_meta_missing
 
 A non-private YARA rule lacks a meta key the platform profile recommends.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_module_not_imported
 
 A YARA module field or function is used without importing its module.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_module_unconfirmed
 
 The YARA module is known but not confirmed on the platform's agents.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_number_out_of_range
 
 A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_parse_error
 
 The YARA signature does not parse as libyara 4.5 reads it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_regexp
 
 A YARA regular expression is invalid.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_rule_identifier_conflict
 
 A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_signature_alias
 
 A YARA signature is a YAML alias instead of text written out in its own block.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_slow_pattern
 
 libyara warns that this YARA string or loop may slow scanning down.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_string_modifier
 
 libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_suspicious_expression
 
 A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check queries
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_type
 
 A YARA operator or function is applied to a value of the wrong type.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_identifier
 
 A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_string
 
 A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module
 
 A YARA import names a module libyara does not ship.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module_member
 
 The YARA module has no such field or function, or the function takes other arguments.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_unreferenced_string
 
 A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yara_x_incompatible
 
 libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
 
 ## yaral_condition_shape
 
