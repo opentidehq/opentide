@@ -754,9 +754,14 @@ fn seconds(node: Option<&Node>) -> Option<u128> {
         .and_then(|text| duration_seconds(text, false).ok())
 }
 
-/// `graylog_overlapping_window`: a filter that searches a longer window than
-/// its interval alerts once per run on each message the runs share.
-pub fn overlapping_window(block: &Node) -> Option<Advisory> {
+/// How long a filter searches and how often it runs, in seconds, when the
+/// window is the longer: runs overlap, and each message the runs share alerts
+/// once per run. A block with an aggregation, a cron schedule, or a window or
+/// interval that is not a duration has none.
+///
+/// [`overlapping_window`] (validate's advisory) and the engine's block check
+/// in `opentide lint` (`opentide_tide::block_diagnostics`) both read it.
+pub fn overlapping_runs(block: &Node) -> Option<(u128, u128)> {
     let schedule = get(block, "schedule")?;
     if get(block, "aggregation").is_some() || !matches!(schedule.value, Value::Map(_)) {
         return None;
@@ -764,21 +769,30 @@ pub fn overlapping_window(block: &Node) -> Option<Advisory> {
     if get(schedule, "cron").is_some() {
         return None;
     }
-    let window_node = get(schedule, "window")?;
-    // `schedule.get("every") or "5m"`: a falsy interval is the default.
-    let every_node = schedule
-        .get("every")
-        .map(AsRef::as_ref)
-        .filter(|node| super::truthy(Some(node)));
-    let window = seconds(Some(window_node))?;
-    let every = match every_node {
+    let window = seconds(Some(get(schedule, "window")?))?;
+    let every = match every_node(schedule) {
         Some(node) => seconds(Some(node))?,
         None => 300,
     };
-    if window <= every {
-        return None;
-    }
-    let every_text = every_node.map_or_else(|| DEFAULT_EVERY.to_owned(), py_str);
+    (window > every).then_some((window, every))
+}
+
+/// `schedule.every`, unless it is falsy (`schedule.get("every") or "5m"`:
+/// a falsy interval is the default).
+fn every_node(schedule: &Node) -> Option<&Node> {
+    schedule
+        .get("every")
+        .map(AsRef::as_ref)
+        .filter(|node| super::truthy(Some(node)))
+}
+
+/// `graylog_overlapping_window`: a filter that searches a longer window than
+/// its interval alerts once per run on each message the runs share.
+pub fn overlapping_window(block: &Node) -> Option<Advisory> {
+    overlapping_runs(block)?;
+    let schedule = get(block, "schedule")?;
+    let window_node = get(schedule, "window")?;
+    let every_text = every_node(schedule).map_or_else(|| DEFAULT_EVERY.to_owned(), py_str);
     Some(Advisory {
         code: "graylog_overlapping_window",
         field_path: block_path(&["schedule"]),

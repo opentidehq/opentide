@@ -540,7 +540,8 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 /// What a rule's platform blocks say that no query of theirs carries: the
 /// Elastic block's advisories, the Sysdig block's tuning and list
 /// advisories, the HarfangLab `yara` block's constraints on what deploy
-/// assembles (`yara::constraint_diagnostics`), and, when the block has no query to carry them (none, or a
+/// assembles (`yara::constraint_diagnostics`), the Graylog filter whose runs
+/// overlap (`graylog_overlapping_window`, as the engine words it), and, when the block has no query to carry them (none, or a
 /// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
@@ -585,6 +586,22 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
             source,
             &yaml_scalar::mapping_keys(source),
         ));
+    }
+    if let Some(block) = configurations.and_then(|c| c.get("graylog"))
+        && let Some((window, every)) =
+            opentide_schema::objects::platform::graylog::overlapping_runs(block)
+    {
+        let path = ["configurations", "graylog", "schedule"];
+        out.push(
+            Diagnostic::warning(
+                opentide_core::codes::GRAYLOG_OVERLAPPING_WINDOW,
+                format!(
+                    "this filter searches {window}s every {every}s, so runs overlap and each message alerts once per run that sees it; set `window` to `every`, or aggregate"
+                ),
+                elastic::path_range(source, &path),
+            )
+            .with_field_path(path.iter().map(ToString::to_string).collect()),
+        );
     }
     out
 }

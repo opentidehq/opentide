@@ -631,7 +631,7 @@ fn lint_reports_the_graylog_block_advisories() {
     fs.create_dir("/ws/.opentide/configurations/platforms");
     fs.write(GRAYLOG_CONFIGURATION, graylog_tenant(""));
     let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
-    let found: Vec<(String, String)> = check
+    let found: Vec<(String, String, String)> = check
         .check(
             std::path::Path::new(FILE),
             "objects/rules/a.yaml",
@@ -645,21 +645,33 @@ fn lint_reports_the_graylog_block_advisories() {
             (
                 finding.diagnostic.code.clone(),
                 finding.diagnostic.field_path.join("."),
+                finding.diagnostic.message.clone(),
             )
         })
         .collect();
+    // The engine's block check first, in its words, then the block's
+    // advisories, as 0.28.1's lint reports them.
+    let schedule = "configurations.graylog.schedule";
     assert_eq!(
-        found,
+        found
+            .iter()
+            .map(|(code, path, _)| (code.as_str(), path.as_str()))
+            .collect::<Vec<_>>(),
         [
-            (
-                "graylog_overlapping_window".to_owned(),
-                "configurations.graylog.schedule".to_owned()
-            ),
-            (
-                "graylog_all_streams".to_owned(),
-                "configurations.graylog".to_owned()
-            ),
+            ("graylog_overlapping_window", schedule),
+            ("graylog_overlapping_window", schedule),
+            ("graylog_all_streams", "configurations.graylog"),
         ]
+    );
+    assert_eq!(
+        found[0].2,
+        "this filter searches 900s every 300s, so runs overlap and each message alerts \
+         once per run that sees it; set `window` to `every`, or aggregate"
+    );
+    assert!(
+        found[1]
+            .2
+            .starts_with("the window (15m) is longer than the interval (5m)")
     );
 }
 

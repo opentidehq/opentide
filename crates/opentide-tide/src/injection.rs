@@ -400,7 +400,7 @@ response:
         // The block's query is checked in Graylog's dialect, not Elastic's.
         let codes: Vec<String> = diagnostics(&source)
             .into_iter()
-            .map(|d| d.code.to_string())
+            .map(|d| d.code.clone())
             .collect();
         assert_eq!(codes, ["graylog_regex_unsupported"]);
     }

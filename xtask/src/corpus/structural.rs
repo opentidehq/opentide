@@ -73,7 +73,7 @@ pub const OBJECTS: &[(&str, &str)] = &[
 /// are each reported as one `schema_validation` on `configurations.sysdig`
 /// naming its code; Bitdefender's (bitdefender-1.0, the named check
 /// `bitdefender_rule_shape`) under their own code, at the path the
-/// specification fixes ([`MODEL_CONSTRAINT_CODES`]), as Graylog's are
+/// specification fixes (`MODEL_CONSTRAINT_CODES`), as Graylog's are
 /// (graylog-1.0, `graylog_constraints`). Bitdefender's advisories and YARA
 /// codes, and Graylog's advisories and query codes, are validate's and the
 /// engine's, not the model's.
@@ -332,7 +332,7 @@ const MODEL_CONSTRAINT_CODES: &[&str] = {
 
 /// The oracle's findings for `path` that the Rust conversion owns
 /// (`schema_validation`, a platform model's constraint codes
-/// ([`MODEL_CONSTRAINT_CODES`]) and `yaml_parse`), in
+/// (`MODEL_CONSTRAINT_CODES`) and `yaml_parse`), in
 /// the fields [`check_object`] gives (a `yaml_parse` by its code alone: its message is the loader's,
 /// UC-2.x).
 pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
