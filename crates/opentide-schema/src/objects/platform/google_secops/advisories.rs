@@ -143,6 +143,70 @@ pub fn advisories(rule: &Node) -> Vec<Advisory> {
     found
 }
 
+/// A section key of the block is a YAML alias (`yaral_section_alias`).
+pub const SECTION_ALIAS: &str = "yaral_section_alias";
+
+/// `yaral_section_alias` on one section key of a rule's block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SectionAlias {
+    /// The section key.
+    pub key: &'static str,
+    /// The 0-based line of the node the alias names, where its anchor is
+    /// (`attach_yaml_lines` places the issue there).
+    pub yaml_line: usize,
+}
+
+impl SectionAlias {
+    /// Where, from the rule's root.
+    pub fn field_path(&self) -> Vec<String> {
+        at(&[self.key])
+    }
+
+    /// The issue's message.
+    pub fn message(&self) -> String {
+        format!(
+            "configurations.google_secops.{} is a YAML alias; a YARA-L section is written in the \
+             block, so what the rule deploys is readable there",
+            self.key
+        )
+    }
+
+    /// The issue's suggestion.
+    pub fn suggestion(&self) -> String {
+        format!(
+            "Write the {key} text under configurations.google_secops.{key}",
+            key = self.key
+        )
+    }
+}
+
+/// The section keys of a rule's `google_secops` block whose value is a YAML
+/// alias, in the block's order (`aliased_sections`). The loaded tree cannot
+/// tell an alias from text written in place, but its marks can: an alias
+/// resolves to the node its anchor names, which starts before the key that
+/// refers to it ends.
+pub fn aliased_sections(rule: &Node) -> Vec<SectionAlias> {
+    let Some(Value::Map(entries)) = block_of(rule).map(|block| &block.value) else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter(|entry| entry.value.start.index < entry.key.end.index)
+        .filter_map(|entry| {
+            let Value::Str(key) = &entry.key.value else {
+                return None;
+            };
+            super::yaral::SECTION_KEYS
+                .iter()
+                .find(|section| **section == key)
+                .map(|key| SectionAlias {
+                    key,
+                    yaml_line: entry.value.start.line.saturating_sub(1),
+                })
+        })
+        .collect()
+}
+
 /// The YARA-L rule name of an enabled `google_secops` block, as deploy
 /// writes it (`_rule_name`); `None` for a rule without one.
 pub fn enabled_rule_name(rule: &Node) -> Option<String> {
@@ -300,6 +364,45 @@ mod tests {
         ));
         assert!(commented.is_empty(), "{commented:?}");
         assert!(advisories(&rule("configurations: {}\n")).is_empty());
+    }
+
+    #[test]
+    fn a_section_written_as_an_alias_is_reported() {
+        let found = aliased_sections(&rule(
+            "x: &text \"$e\"\nconfigurations:\n  google_secops:\n    events: &own |\n      \
+             $e.metadata.event_type = \"X\"\n    condition: *text\n    outcome: *own\n    \
+             name: *text\n",
+        ));
+        assert_eq!(
+            found,
+            [
+                SectionAlias {
+                    key: "condition",
+                    yaml_line: 0
+                },
+                SectionAlias {
+                    key: "outcome",
+                    yaml_line: 3
+                }
+            ]
+        );
+        assert_eq!(
+            found[0].field_path(),
+            ["configurations", "google_secops", "condition"]
+        );
+        assert!(found[0].message().starts_with(
+            "configurations.google_secops.condition is a YAML alias; a YARA-L section"
+        ));
+        assert_eq!(
+            found[0].suggestion(),
+            "Write the condition text under configurations.google_secops.condition"
+        );
+        assert!(
+            aliased_sections(&rule(
+                "configurations:\n  google_secops:\n    events: &own |\n      $e\n"
+            ))
+            .is_empty()
+        );
     }
 
     #[test]
