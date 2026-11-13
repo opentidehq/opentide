@@ -1,0 +1,8 @@
+[?25l<LIVE>  [1;31m✗[0m  [1mMicrosoft Defender for Endpoint queries[0m  [2m1 rule[0m [2m<SECONDS>[0m</LIVE>[?25h[1A[2K  [1;31m✗[0m  [1mMicrosoft Defender for Endpoint queries[0m  [2m1 rule[0m [2m<SECONDS>[0m
+[1;31merror:[0m Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com:
+       HTTPSConnectionPool(host='login.microsoftonline.com', port=443): Max retries exceeded with
+       url: /00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token (Caused by ProxyError('Unable to
+       connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to
+       establish a new connection: [Errno 111] Connection refused")))
+  [1;36mhelp:[0m check the 'lab' tenant in .opentide/configurations/platforms/defender_for_endpoint.toml and
+        the network path to https://login.microsoftonline.com; behind a proxy, pass opentide --proxy

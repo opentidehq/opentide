@@ -1,0 +1,23 @@
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mElastic Security queries[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mLookback zero · code: lookback_zero · legacy_event: elastic_lookback_zero_warning · rule: 
+Elastic parse error rule · lookback: 0m · advice: scheduling.lookback is 0m; Elastic recommends at 
+least 1m overlap
+[1;33mwarning: [0mEsql metadata id · code: esql_metadata_id · legacy_event: elastic_esql_metadata_id_warning 
+· rule: Elastic parse error rule · advice: Non-aggregating ES|QL query lacks METADATA _id; alerts 
+will not be deduplicated
+[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': /_query
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': /_query
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': /_query
+[?25h[1A[2K  [1;31m✗[0m  [1mElastic Security queries[0m  [2m1 rule[0m [2m<SECONDS>[0m
+[1;31merror:[0m Cannot reach elastic tenant 'soc' at https://es.elastic.invalid:
+       HTTPSConnectionPool(host='es.elastic.invalid', port=443): Max retries exceeded with url:
+       /_query (Caused by ProxyError('Unable to connect to proxy',
+       NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new
+       connection: [Errno 111] Connection refused")))
+  [1;36mhelp:[0m check the 'soc' tenant in .opentide/configurations/platforms/elastic.toml and the network
+        path to https://es.elastic.invalid; behind a proxy, pass opentide --proxy

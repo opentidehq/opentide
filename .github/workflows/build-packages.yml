@@ -139,19 +139,29 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The other images carry Rust; this one may not.
+      # The other images carry rustup; this one may not. The release itself
+      # comes from `Set up Rust` below.
       - name: Rust on Windows on Arm
         if: matrix.os == 'windows-11-arm'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
             $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
             Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
-            & $installer -y --profile minimal
+            & $installer -y --profile minimal --default-toolchain none
             Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           }
+
+      # macOS and Windows build on the runner: rust-toolchain.toml's release,
+      # minimal, named in RUSTUP_TOOLCHAIN for cibuildwheel's build, so that
+      # rustup installs nothing mid-build (scripts/build/install-rust.sh).
+      # The Linux containers install it in [tool.cibuildwheel.linux] before-all.
+      - name: Set up Rust
+        if: runner.os != 'Linux'
+        shell: bash
+        run: scripts/build/install-rust.sh
 
       - name: Build wheels
         run: |
@@ -246,12 +256,12 @@ jobs:
             & $installer -y --profile minimal --default-toolchain none
             Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           }
-      # Installing the file's toolchain (no name) ignores `--target`: add it after.
+      # rust-toolchain.toml's release, minimal, with the target, named in
+      # RUSTUP_TOOLCHAIN for the build (scripts/build/install-rust.sh): rustup
+      # installs nothing mid-build.
       - name: Set up Rust
         shell: bash
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add ${{ matrix.target }}
+        run: scripts/build/install-rust.sh "${TARGET}"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"

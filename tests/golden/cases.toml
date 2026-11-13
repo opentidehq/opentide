@@ -98,7 +98,7 @@ about = "a repository with its own agent files, which `setup skills` installs ov
 [fixtures.tenants]
 kind = "copy"
 source = "tests/golden/fixtures/tenants"
-about = "a workspace whose Defender, SentinelOne, CrowdStrike, Elastic and HarfangLab tenants are the stand-in tenants of tests/cassettes/<platform>/tenant.py, their credentials `$NAME`s the cases set: only the cassette cases use it (UC-4.2c)"
+about = "a workspace whose Defender, SentinelOne, CrowdStrike, Elastic and HarfangLab tenants are the stand-in tenants of tests/cassettes/<platform>/tenant.py, their credentials `$NAME`s the cases set: the cassette cases, and the `unreachable` cases, which set a credential and get no cassette (UC-4.2c, #832, #834)"
 
 [fixtures.live-tenants]
 kind = "copy"
@@ -918,15 +918,15 @@ fixtures = ["tide-corpus"]
 # `golden/validate-live-*` scenarios); a check's window ends now, so the
 # platforms that search the last minute (Defender, SentinelOne, Sentinel) are
 # recorded here without credentials, and their checks proven by their
-# connectors' cassettes. Not in human mode: a check's live region is drawn as
-# often as the network allows.
+# connectors' cassettes. In human mode the check's live region is one
+# `<LIVE>` block whatever its frames (UC-4.4, #834).
 
 [[case]]
 command = "validate query"
 variant = "live-splunk-parsed"
 args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-splunk-parsed"
 
@@ -944,7 +944,7 @@ command = "validate query"
 variant = "live-splunk"
 args = ["validate", "query", "--live", "--platform", "splunk"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-splunk"
 
@@ -953,7 +953,7 @@ command = "validate query"
 variant = "live-carbon-black-valid"
 args = ["validate", "query", "--live", "--platform", "carbon_black_cloud", "--uuid", "00000000-0000-4000-8046-000000000004"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-carbon-black-valid"
 
@@ -962,7 +962,7 @@ command = "validate query"
 variant = "live-carbon-black"
 args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/validate-live-carbon-black"
 
@@ -971,7 +971,7 @@ command = "validate query"
 variant = "live-elastic-rejected"
 args = ["validate", "query", "--live", "--platform", "elastic"]
 fixtures = ["live-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/validate-live-elastic"
 
@@ -1037,6 +1037,32 @@ variant = "live-wide-unset-elastic"
 args = ["validate", "query", "--live", "--platform", "elastic", "--wide"]
 fixtures = ["live-tenants"]
 modes = ["plain", "json"]
+
+# UC-4.2 (#832), UC-4.4 (#834): a requests-based platform's tenant whose
+# credential is set but which cannot be reached: no cassette, so the request
+# goes to the proxy on 127.0.0.1:9, which refuses it, and the tenant is
+# reported unreachable. In every mode, human included.
+
+[[case]]
+command = "validate query"
+variant = "live-unreachable-defender-for-endpoint"
+args = ["validate", "query", "--live", "--platform", "defender_for_endpoint"]
+fixtures = ["live-tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "validate query"
+variant = "live-unreachable-sentinel-one"
+args = ["validate", "query", "--live", "--platform", "sentinel_one"]
+fixtures = ["live-tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+
+[[case]]
+command = "validate query"
+variant = "live-unreachable-elastic"
+args = ["validate", "query", "--live", "--platform", "elastic"]
+fixtures = ["live-tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 
 # ---- query ----
 
@@ -1273,6 +1299,38 @@ variant = "unset-sentinel"
 args = ["query", "--platform", "sentinel", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "SecurityEvent | take 1"]
 fixtures = ["tenants"]
 modes = ["plain", "json"]
+
+# UC-4.2 (#832), UC-4.4 (#834): each requests-based platform's tenant with its
+# credential set, unreachable: no cassette, so the request goes to the
+# refusing proxy on 127.0.0.1:9.
+
+[[case]]
+command = "query"
+variant = "unreachable-defender-for-endpoint"
+args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "query"
+variant = "unreachable-sentinel-one"
+args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+fixtures = ["tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+
+[[case]]
+command = "query"
+variant = "unreachable-crowdstrike"
+args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+fixtures = ["tenants"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "query"
+variant = "unreachable-elastic"
+args = ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-* | WHERE process.name == \"cmd.exe\""]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 
 # ---- lint ----
 
@@ -1724,15 +1782,15 @@ fixtures = ["tide-corpus"]
 # `deploy-tenants` fixture, each platform served from a cassette recorded
 # from the oracle (tests/cassettes/golden/, the `golden/deploy-*` scenarios):
 # creates whose ids are recorded in deployment state, updates, deletes whose
-# ids are forgotten, skips and refusals. Not in human mode: a deploy's live
-# region is drawn as often as the network allows.
+# ids are forgotten, skips and refusals. In human mode the deploy's live
+# region is one `<LIVE>` block whatever its frames (UC-4.4, #834).
 
 [[case]]
 command = "deploy"
 variant = "send-defender"
 args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-defender"
 
@@ -1741,7 +1799,7 @@ command = "deploy"
 variant = "send-sentinel-one"
 args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { S1_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sentinel-one"
 
@@ -1750,7 +1808,7 @@ command = "deploy"
 variant = "send-crowdstrike"
 args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-crowdstrike"
 
@@ -1759,7 +1817,7 @@ command = "deploy"
 variant = "send-sysdig"
 args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sysdig"
 
@@ -1768,7 +1826,7 @@ command = "deploy"
 variant = "send-elastic"
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/deploy-elastic"
 
@@ -1777,7 +1835,7 @@ command = "deploy"
 variant = "send-splunk"
 args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-splunk"
 
@@ -1786,7 +1844,7 @@ command = "deploy"
 variant = "send-carbon-black"
 args = ["deploy", "--platform", "carbon_black_cloud", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-carbon-black"
 
@@ -1834,6 +1892,45 @@ fixtures = ["deploy-tenants-sysdig"]
 modes = ["plain", "json", "agent"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sysdig"
+
+# UC-4.2 (#832): a deploy that sends, to each requests-based platform's
+# tenant with its credential set, unreachable: no cassette, so the first
+# request goes to the refusing proxy on 127.0.0.1:9 and the run fails.
+
+[[case]]
+command = "deploy"
+variant = "unreachable-defender-for-endpoint"
+args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-sentinel-one"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-crowdstrike"
+args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-elastic"
+args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-sysdig"
+args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 
 [[case]]
 command = "deploy"
@@ -2722,12 +2819,29 @@ fixtures = ["share-misp"]
 modes = ["plain", "json"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 
+# UC-4.4 (#834): MISP instances that cannot be reached, the key set: no
+# cassette, so every call goes to the refusing proxy on 127.0.0.1:9.
+
+[[case]]
+command = "share push"
+variant = "misp-unreachable"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share retract"
+variant = "misp-unreachable"
+args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
 [[case]]
 command = "share push"
 variant = "misp"
 args = ["share", "push"]
 fixtures = ["share-misp"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/share-push"
 
@@ -2736,7 +2850,7 @@ command = "share retract"
 variant = "misp"
 args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012", "--uuid", "00000000-0000-4000-8048-000000000020"]
 fixtures = ["share-misp"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { MISP_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/share-retract"
 
@@ -2749,7 +2863,7 @@ command = "generate extract defender"
 variant = "tenant"
 args = ["generate", "extract", "defender"]
 fixtures = ["tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/extract-defender"
 
@@ -2758,7 +2872,7 @@ command = "generate extract elastic"
 variant = "tenant"
 args = ["generate", "extract", "elastic", "--space", "soc"]
 fixtures = ["tenants"]
-modes = ["plain", "json", "agent"]
+modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/extract-elastic"
 
@@ -2768,6 +2882,23 @@ variant = "no-space"
 args = ["generate", "extract", "elastic", "--space", "default"]
 fixtures = ["tenants"]
 modes = ["plain", "json"]
+
+# UC-4.4 (#834): the import from a tenant whose credential is set but which
+# cannot be reached: no cassette, the refusing proxy on 127.0.0.1:9.
+
+[[case]]
+command = "generate extract defender"
+variant = "unreachable"
+args = ["generate", "extract", "defender"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "generate extract elastic"
+variant = "unreachable"
+args = ["generate", "extract", "elastic", "--space", "soc"]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 
 # ---- UC-4.4e (#834): share push --changed on a git diff ----
 # `share-misp-push` is a checkout whose last commit, a push, changed rule-b;

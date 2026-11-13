@@ -8,7 +8,7 @@
 //! The engine reports LSP positions (0-based, UTF-16 code units); every
 //! position is converted here, against the text it points into.
 
-use opentide_analysis::{LanguageId, LineStarts, QueryRequest, codes};
+use opentide::analysis::{self, LanguageId, LineStarts, QueryRequest, codes};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -69,7 +69,7 @@ fn analyze_query(
             stack,
             text: text.clone(),
         };
-        convert_all(&text, opentide_analysis::analyze_query(&request))
+        convert_all(&text, analysis::analyze_query(&request))
     }))
 }
 
@@ -80,7 +80,7 @@ fn analyze_query(
 #[pyfunction]
 fn cli_main(py: Python<'_>, argv: Vec<String>, version: String) -> i32 {
     py.detach(|| {
-        let code = opentide_cli::main(&argv, &version);
+        let code = opentide::cli::main_with_version(&argv, &version);
         // The process may end in Python's exit, which never flushes Rust's
         // stdout: a last line without its newline would be lost. A reader
         // that has gone (a closed pipe) has nothing left to read.
@@ -102,7 +102,7 @@ fn highlight(py: Python<'_>, text: String, language: &str) -> PyResult<Vec<Token
     let language = parse_language(language)?;
     Ok(py.detach(|| {
         let lines = LineStarts::new(&text);
-        opentide_analysis::highlight(language, &text)
+        analysis::highlight(language, &text)
             .tokens
             .into_iter()
             .map(|token| {
@@ -152,7 +152,7 @@ fn languages() -> Vec<&'static str> {
         .collect()
 }
 
-fn convert_all(text: &str, diagnostics: Vec<opentide_analysis::Diagnostic>) -> Vec<Diagnostic> {
+fn convert_all(text: &str, diagnostics: Vec<analysis::Diagnostic>) -> Vec<Diagnostic> {
     let lines = LineStarts::new(text);
     diagnostics
         .into_iter()
@@ -192,18 +192,18 @@ mod _native {
 
     /// The Tide models (UC-1.9, #815): `opentide._native.models`.
     #[pymodule_export]
-    use opentide_schema::python::models;
+    use opentide::python::models;
 
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         // Every run of the command line in this process reaches the
         // platforms the Python packages register (UC-4.5, #835).
-        opentide_cli::plugins::set_host(Box::new(super::plugins::PythonPlugins::default()));
-        module.add("ENGINE_VERSION", opentide_analysis::VERSION)?;
+        opentide::plugins::set_host(Box::new(super::plugins::PythonPlugins::default()));
+        module.add("ENGINE_VERSION", opentide::analysis::VERSION)?;
         module.add("CODES", codes::ALL.to_vec())?;
         module.add("LANGUAGES", languages())?;
         // Importable by name, as pickling needs for the classes it rebuilds.
-        opentide_schema::python::register(&module.getattr("models")?.cast_into()?)?;
+        opentide::python::register(&module.getattr("models")?.cast_into()?)?;
         let sdk = module.getattr("sdk")?;
         sdk.setattr("__name__", "opentide._native.sdk")?;
         module

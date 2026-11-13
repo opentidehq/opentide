@@ -162,7 +162,6 @@ mod tests {
         analyze(AnalyzeInput {
             path: "objects/rules/rule.yaml",
             source,
-            workspace: &[],
             elastic_tenants: &[],
         })
         .diagnostics

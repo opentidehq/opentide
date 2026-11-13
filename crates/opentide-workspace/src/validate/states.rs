@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::IdShape;
 use opentide_schema::vocab::quote;
 use serde_json::Value as Json;
 
@@ -378,16 +379,18 @@ fn external_id_problem(platform: &str, value: &str) -> Option<String> {
     if value.trim().is_empty() {
         return Some(format!("{platform} external id is empty"));
     }
-    let canonical_decimal = value == "0"
-        || (value.starts_with(|c: char| ('1'..='9').contains(&c))
-            && value.chars().all(|c| c.is_ascii_digit()));
-    (opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal).then(|| {
-        format!(
+    match opentide_schema::platforms::external_id_problem(platform, value)? {
+        IdShape::CanonicalDecimal => Some(format!(
             "{platform} external id {} is not a canonical decimal integer (no sign, no leading \
              zeroes)",
             quote(value)
-        )
-    })
+        )),
+        IdShape::Pattern(pattern) => Some(format!(
+            "{platform} external id {} does not match {}",
+            quote(value),
+            quote(pattern)
+        )),
+    }
 }
 
 #[cfg(test)]

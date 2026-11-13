@@ -3,8 +3,12 @@
 //!
 //! - **Committed artifacts**: every platform block's template,
 //!   `src/opentide/schemas/data/platform_templates/<platform>.template.yaml`,
-//!   which the package ships and `generate snippets` falls back to. Without
-//!   `--check` they are written; with it, a difference fails.
+//!   which the package ships and `generate snippets` falls back to, and the
+//!   object templates the language server offers as snippets,
+//!   `data/catalogs/tide/templates/<family>.1.0.template.yaml`: what
+//!   `generate templates` writes for the bundled configuration (#814; a file
+//!   there no snippet reads is stale). Without `--check` they are written;
+//!   with it, a difference fails.
 //! - **Golden parity** (`--check` only): each recording in
 //!   `tests/golden/cases` of an `opentide generate` that exited 0 and ran
 //!   the `schemas`, `templates` and `snippets` phases (a bare `generate`,
@@ -106,6 +110,19 @@ pub const COMMITTED_CATALOGS: &str = "data/catalogs/tide/generated";
 /// Where the committed platform templates live, relative to the repository.
 pub const PLATFORM_TEMPLATES: &str = "src/opentide/schemas/data/platform_templates";
 
+/// Where the object templates the language server offers as snippets live,
+/// relative to the repository (`opentide_tide::snippet`).
+pub const EDITOR_TEMPLATES: &str = "data/catalogs/tide/templates";
+
+/// The object templates the language server compiles in: what `opentide
+/// generate templates` writes for the bundled configuration, by file name
+/// (#814).
+pub const EDITOR_TEMPLATE_NAMES: [&str; 3] = [
+    "objective.1.0.template.yaml",
+    "rule.1.0.template.yaml",
+    "threat.1.0.template.yaml",
+];
+
 /// Runs `codegen`: `Ok(0)` passed, `Ok(1)` a difference.
 pub fn run(args: &[String]) -> Result<u8> {
     let mut check = false;
@@ -172,6 +189,16 @@ pub fn committed_artifacts() -> Result<Vec<(String, String)>> {
         ));
     }
     let sources = bundled_sources()?;
+    // The editor's snippets: the templates `generate templates` writes for
+    // the bundled configuration, one source with the command (#814).
+    let generated = templates(&sources.config).map_err(|error| anyhow::anyhow!("{error}"))?;
+    for name in EDITOR_TEMPLATE_NAMES {
+        let artifact = generated
+            .iter()
+            .find(|artifact| Path::new(&artifact.path).file_name() == Some(name.as_ref()))
+            .with_context(|| format!("`generate templates` writes no {name}"))?;
+        out.push((format!("{EDITOR_TEMPLATES}/{name}"), artifact.text.clone()));
+    }
     for id in identifiers_for_families(&CORE_OBJECT_TYPES) {
         let identifier = id.to_string();
         let schema = revision_schema(&identifier, &sources)
@@ -310,6 +337,12 @@ fn committed(root: &Path, check: bool) -> Result<Vec<String>> {
         names.push(entry?.file_name().to_string_lossy().into_owned());
     }
     problems.extend(stale_editor_schemas(&names, &artifacts));
+    let dir = root.join(EDITOR_TEMPLATES);
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
+        names.push(entry?.file_name().to_string_lossy().into_owned());
+    }
+    problems.extend(stale_editor_templates(&names));
     Ok(problems)
 }
 
@@ -530,6 +563,18 @@ fn stale_templates(names: &[String], artifacts: &[(String, String)]) -> Vec<Stri
         .map(|name| format!("{PLATFORM_TEMPLATES}/{name}"))
         .filter(|path| !artifacts.iter().any(|(known, _)| known == path))
         .map(|path| format!("{path}: no platform model generates it"))
+        .collect();
+    stale.sort();
+    stale
+}
+
+/// Of the file names in the editor's templates folder, each the language
+/// server does not compile in (#814).
+fn stale_editor_templates(names: &[String]) -> Vec<String> {
+    let mut stale: Vec<String> = names
+        .iter()
+        .filter(|name| !EDITOR_TEMPLATE_NAMES.contains(&name.as_str()))
+        .map(|name| format!("{EDITOR_TEMPLATES}/{name}: no snippet reads it; remove it"))
         .collect();
     stale.sort();
     stale
@@ -1192,6 +1237,7 @@ mod tests {
         let artifacts = committed_artifacts().unwrap();
         let mut names: Vec<String> = artifacts
             .iter()
+            .filter(|(path, _)| path.starts_with(PLATFORM_TEMPLATES))
             .map(|(path, _)| path.rsplit('/').next().unwrap().to_owned())
             .collect();
         assert!(stale_templates(&names, &artifacts).is_empty());
@@ -1201,6 +1247,27 @@ mod tests {
             stale_templates(&names, &artifacts),
             [format!(
                 "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
+            )]
+        );
+    }
+
+    /// #814: the editor's snippets are the three generated templates; any
+    /// other file in their folder is stale.
+    #[test]
+    fn the_editor_templates_are_generated_and_an_extra_one_is_stale() {
+        let artifacts = committed_artifacts().unwrap();
+        let mut names: Vec<String> = artifacts
+            .iter()
+            .filter_map(|(path, _)| path.strip_prefix(&format!("{EDITOR_TEMPLATES}/")))
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(names, EDITOR_TEMPLATE_NAMES);
+        assert!(stale_editor_templates(&names).is_empty());
+        names.push("rule.1.1.template.yaml".to_owned());
+        assert_eq!(
+            stale_editor_templates(&names),
+            [format!(
+                "{EDITOR_TEMPLATES}/rule.1.1.template.yaml: no snippet reads it; remove it"
             )]
         );
     }
@@ -1495,6 +1562,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         for dir in [
             PLATFORM_TEMPLATES,
+            EDITOR_TEMPLATES,
             EDITOR_SCHEMAS,
             COMMITTED_CATALOGS,
             "highlights/queries/tide",

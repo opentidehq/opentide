@@ -12,9 +12,16 @@ opentide-analysis and opentide-lsp. The plan folds it into `opentide-workspace` 
 ## Invariants
 
 - Pydantic (`src/opentide`) remains the authority for Tide objects: the engine reports the same `{code, field_path, severity}` with real source ranges. `opentide-analysis`'s `tide_corpus` test holds it to that.
-- The catalog and templates are generated from the Rust models (`cargo xtask codegen`); regenerate them with the model change.
+- The catalog and templates are generated from the Rust models (`cargo xtask codegen`); regenerate them with the model change. The snippets (`data/catalogs/tide/templates/`) are what `opentide generate templates` writes for the bundled configuration: never edit them by hand (`tests/snippets.rs`, #814).
 - No `std::fs` in `src/`; YAML through `opentide_core::node` only (the `yaml` module), the reader `validate` uses: never a second YAML library (#850).
 - `is_uuidv4` (`uuid::Uuid::parse_str` plus version 4) is the one object-id check.
+- `analyze` is what the editor publishes on top of `validate`'s findings: the queries a block
+  carries, the highlighting and the symbols. The blocks themselves are `block_diagnostics`,
+  which `opentide lint` reads and the editor does not (UC-2.6, [#821]): a check here that
+  `validate` already makes would show the fault twice. `cargo xtask lsp parity --corpus faults`
+  compares the two and reports a block finding the server published.
+
+[#821]: https://github.com/opentidehq/opentide/issues/821
 
 ## Test
 

@@ -2931,6 +2931,7 @@ dependencies = [
  "opentide-kql",
  "opentide-kuery",
  "opentide-lucene",
+ "opentide-schema",
  "opentide-spl",
  "regex",
  "ryu",
