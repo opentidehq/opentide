@@ -136,13 +136,15 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 # stdio, on a current-thread tokio runtime (stdin, and the duplicate of stdout
 # the frames go to).
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
-tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs"] }
+tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs", "sync", "time", "macros"] }
 # `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
 # the connectors' HTTP client, through the proxy and CA bundle the
 # environment names.
 opentide-connectors.workspace = true
 reqwest.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
+# `opentide serve`'s `opentide/fetch` (src/serve/fetch.rs): request and answer bodies.
+base64.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 # `mcp start` points descriptor 1 at stderr while it serves, so nothing but a

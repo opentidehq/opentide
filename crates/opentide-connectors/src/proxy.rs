@@ -66,6 +66,25 @@ impl ProxySettings {
         Some(crate::error::origin(&parsed))
     }
 
+    /// The proxy *url* goes through, as configured (its credentials
+    /// included), for a transport that hands the route to its host; `None`
+    /// when it goes direct.
+    pub fn proxy_for(&self, url: &url::Url) -> Option<String> {
+        let proxy = match url.scheme() {
+            "https" => self.https.as_deref(),
+            "http" => self.http.as_deref(),
+            _ => None,
+        }?;
+        if self.bypassed(url) {
+            return None;
+        }
+        Some(if proxy.contains("://") {
+            proxy.to_owned()
+        } else {
+            format!("http://{proxy}")
+        })
+    }
+
     /// Whether `no_proxy` sends *url* direct.
     fn bypassed(&self, url: &url::Url) -> bool {
         let Some(list) = self.no_proxy.as_deref() else {

@@ -191,7 +191,7 @@ impl Sentinel {
         let discovery = cx
             .http
             .request(
-                reqwest::Method::GET,
+                crate::transport::Method::GET,
                 &format!("{authority}/v2.0/.well-known/openid-configuration"),
             )
             .header("x-ms-client-request-id", (self.ids)());
@@ -215,7 +215,7 @@ impl Sentinel {
         let request = cx
             .http
             .request(
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 &format!("{authority}/oauth2/v2.0/token"),
             )
             .header("Accept", "application/json")
@@ -284,7 +284,7 @@ impl Sentinel {
     async fn arm(
         &self,
         cx: TenantContext<'_>,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         url: &str,
         body: Option<&Json>,
     ) -> Result<Result<Answer, ArmError>, ConnectorError> {
@@ -334,7 +334,7 @@ impl Sentinel {
     ) -> Result<Result<Json, ArmError>, ConnectorError> {
         let url = Self::rules_url(cx, Some(rule_id))?;
         Ok(self
-            .arm(cx, reqwest::Method::PUT, &url, Some(rule))
+            .arm(cx, crate::transport::Method::PUT, &url, Some(rule))
             .await?
             .map(|answer| {
                 if answer.body.is_empty() {
@@ -353,7 +353,7 @@ impl Sentinel {
     ) -> Result<Result<(), ArmError>, ConnectorError> {
         let url = Self::rules_url(cx, Some(rule_id))?;
         Ok(self
-            .arm(cx, reqwest::Method::DELETE, &url, None)
+            .arm(cx, crate::transport::Method::DELETE, &url, None)
             .await?
             .map(|_| ()))
     }
@@ -367,7 +367,10 @@ impl Sentinel {
         let mut url = Some(Self::rules_url(cx, None)?);
         let mut rules = Vec::new();
         while let Some(current) = url.take() {
-            let page = match self.arm(cx, reqwest::Method::GET, &current, None).await? {
+            let page = match self
+                .arm(cx, crate::transport::Method::GET, &current, None)
+                .await?
+            {
                 Ok(answer) => answer.json().unwrap_or(Json::Null),
                 Err(error) => return Ok(Err(error)),
             };
@@ -421,7 +424,7 @@ impl Sentinel {
         let builder = cx
             .http
             .request(
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 &format!("{LOGS_ENDPOINT}/workspaces/{}/query", segment(&workspace)),
             )
             .header("Accept", "application/json")
@@ -557,7 +560,7 @@ fn inner_message(answer: &Answer) -> String {
             text
         }
         None => {
-            let reason = reqwest::StatusCode::from_u16(answer.status)
+            let reason = crate::transport::StatusCode::from_u16(answer.status)
                 .ok()
                 .and_then(|status| status.canonical_reason())
                 .unwrap_or("");

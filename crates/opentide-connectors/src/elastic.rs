@@ -183,7 +183,7 @@ impl Elastic {
             ])
         );
         let answer = client
-            .call(cx, reqwest::Method::GET, &url, None, false)
+            .call(cx, crate::transport::Method::GET, &url, None, false)
             .await?;
         if answer.status >= 400 {
             return Err(FindError::Status(http_error_text(&answer, &url)));
@@ -233,7 +233,7 @@ impl Client {
     async fn call(
         &self,
         cx: TenantContext<'_>,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         url: &str,
         body: Option<&Json>,
         xsrf: bool,
@@ -283,7 +283,7 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         self.call(
             cx,
-            reqwest::Method::GET,
+            crate::transport::Method::GET,
             &self.rule_query(rule_id),
             None,
             false,
@@ -299,7 +299,7 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         self.call(
             cx,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &self.rules(),
             Some(payload),
             true,
@@ -317,7 +317,7 @@ impl Client {
             Some(id) => self.rule_query(&json_text(id)),
             None => self.rules(),
         };
-        self.call(cx, reqwest::Method::PUT, &url, Some(payload), true)
+        self.call(cx, crate::transport::Method::PUT, &url, Some(payload), true)
             .await
     }
 
@@ -329,7 +329,7 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         self.call(
             cx,
-            reqwest::Method::DELETE,
+            crate::transport::Method::DELETE,
             &self.rule_query(rule_id),
             None,
             true,
@@ -351,7 +351,7 @@ impl Client {
         let url = format!("{}/api/detection_engine/rules/preview", self.kibana_base);
         self.call(
             cx,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &url,
             Some(&Json::Object(body)),
             true,
@@ -362,7 +362,8 @@ impl Client {
     /// `get_data_view_response`.
     async fn data_view(&self, cx: TenantContext<'_>, id: &str) -> Result<Answer, ConnectorError> {
         let url = format!("{}/api/data_views/data_view/{id}", self.kibana_base);
-        self.call(cx, reqwest::Method::GET, &url, None, false).await
+        self.call(cx, crate::transport::Method::GET, &url, None, false)
+            .await
     }
 
     fn es(&self, endpoint: &str) -> String {
@@ -379,7 +380,7 @@ impl Client {
         body.insert("query".into(), Json::Str(query.to_owned()));
         self.call(
             cx,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &self.es("/_query"),
             Some(&Json::Object(body)),
             false,
@@ -397,7 +398,8 @@ impl Client {
             "/_resolve/index/{}?ignore_unavailable=true&allow_no_indices=true",
             crate::encode::quote(pattern, "")
         ));
-        self.call(cx, reqwest::Method::GET, &url, None, false).await
+        self.call(cx, crate::transport::Method::GET, &url, None, false)
+            .await
     }
 
     /// `field_caps`.
@@ -412,7 +414,8 @@ impl Client {
             crate::encode::quote(sources, ",*-_"),
             crate::encode::quote(&fields.join(","), ",*-_.")
         ));
-        self.call(cx, reqwest::Method::GET, &url, None, false).await
+        self.call(cx, crate::transport::Method::GET, &url, None, false)
+            .await
     }
 }
 
@@ -1277,7 +1280,7 @@ fn http_error_text(answer: &Answer, url: &str) -> String {
     } else {
         "Server"
     };
-    let reason = reqwest::StatusCode::from_u16(answer.status)
+    let reason = crate::transport::StatusCode::from_u16(answer.status)
         .ok()
         .and_then(|status| status.canonical_reason())
         .unwrap_or_default();
@@ -1533,7 +1536,7 @@ async fn esql(
     let answer = client
         .call(
             cx,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &client.es("/_query"),
             Some(&payload),
             false,
@@ -1591,7 +1594,13 @@ async fn eql(
         crate::encode::quote(indices, ",*-_.")
     ));
     let answer = client
-        .call(cx, reqwest::Method::POST, &url, Some(&payload), false)
+        .call(
+            cx,
+            crate::transport::Method::POST,
+            &url,
+            Some(&payload),
+            false,
+        )
         .await?;
     let body = body(&answer, tenant, "EQL")?;
     let hits = hits(&body);
@@ -1654,7 +1663,13 @@ async fn lucene(
         crate::encode::quote(indices, ",*-_.")
     ));
     let answer = client
-        .call(cx, reqwest::Method::POST, &url, Some(&payload), false)
+        .call(
+            cx,
+            crate::transport::Method::POST,
+            &url,
+            Some(&payload),
+            false,
+        )
         .await?;
     let body = body(&answer, tenant, "Lucene")?;
     let hits = hits(&body);
@@ -1765,7 +1780,13 @@ async fn kuery_preview(
         crate::encode::quote(&client.space, "")
     ));
     let found = client
-        .call(cx, reqwest::Method::POST, &url, Some(&search), false)
+        .call(
+            cx,
+            crate::transport::Method::POST,
+            &url,
+            Some(&search),
+            false,
+        )
         .await?;
     let body = body(&found, tenant, "preview alerts")?;
     let rows: Vec<Json> = list(hits(&body).get("hits"))

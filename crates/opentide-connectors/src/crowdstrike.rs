@@ -74,13 +74,13 @@ fn refused(cx: TenantContext<'_>, message: String, detail: Option<String>) -> Co
 }
 
 fn build(
-    builder: reqwest::RequestBuilder,
+    builder: crate::transport::RequestBuilder,
     cx: TenantContext<'_>,
-) -> Result<reqwest::Request, ConnectorError> {
+) -> Result<crate::transport::Request, ConnectorError> {
     builder.build().map_err(|error| ConnectorError::Setup {
         platform: PLATFORM.to_owned(),
         tenant: cx.tenant.label.tenant.clone(),
-        message: crate::error::describe(error),
+        message: error.describe(),
     })
 }
 
@@ -106,7 +106,10 @@ impl<'a> Session<'a> {
         ]);
         let request = build(
             cx.http
-                .request(reqwest::Method::POST, &format!("{base}/oauth2/token"))
+                .request(
+                    crate::transport::Method::POST,
+                    &format!("{base}/oauth2/token"),
+                )
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body(form),
             cx,
@@ -152,7 +155,11 @@ impl<'a> Session<'a> {
     }
 
     /// A request with the session's headers.
-    fn request(&self, method: reqwest::Method, url: &str) -> reqwest::RequestBuilder {
+    fn request(
+        &self,
+        method: crate::transport::Method,
+        url: &str,
+    ) -> crate::transport::RequestBuilder {
         self.cx
             .http
             .request(method, url)
@@ -163,7 +170,7 @@ impl<'a> Session<'a> {
 
     async fn send(
         &self,
-        builder: reqwest::RequestBuilder,
+        builder: crate::transport::RequestBuilder,
         cancel: &CancellationToken,
     ) -> Result<Answer, ConnectorError> {
         Answer::fetch(self.cx.http, build(builder, self.cx)?, cancel).await
@@ -175,7 +182,7 @@ impl<'a> Session<'a> {
         let url = format!("{}{RULES}", self.base);
         let answer = self
             .send(
-                self.request(reqwest::Method::POST, &url)
+                self.request(crate::transport::Method::POST, &url)
                     .body(body.to_vec()),
                 self.cx.cancel,
             )
@@ -222,7 +229,7 @@ impl<'a> Session<'a> {
         let url = format!("{}{RULES}", self.base);
         let answer = self
             .send(
-                self.request(reqwest::Method::PATCH, &url)
+                self.request(crate::transport::Method::PATCH, &url)
                     .body(body.to_vec()),
                 self.cx.cancel,
             )
@@ -249,7 +256,10 @@ impl<'a> Session<'a> {
             encode::urlencode([("ids", rule_id)])
         );
         let answer = self
-            .send(self.request(reqwest::Method::DELETE, &url), self.cx.cancel)
+            .send(
+                self.request(crate::transport::Method::DELETE, &url),
+                self.cx.cancel,
+            )
             .await?;
         if answer.status == 200 {
             return Ok(());
@@ -293,7 +303,8 @@ impl<'a> Session<'a> {
             .map_err(|error| refused(self.cx, error.to_string(), None))?;
         let started = self
             .send(
-                self.request(reqwest::Method::POST, &jobs).body(body),
+                self.request(crate::transport::Method::POST, &jobs)
+                    .body(body),
                 self.cx.cancel,
             )
             .await?;
@@ -360,7 +371,10 @@ impl<'a> Session<'a> {
         let tenant = &self.cx.tenant.label.tenant;
         loop {
             let answer = self
-                .send(self.request(reqwest::Method::GET, url), self.cx.cancel)
+                .send(
+                    self.request(crate::transport::Method::GET, url),
+                    self.cx.cancel,
+                )
                 .await?;
             let status = self.object(&answer, "read the search")?;
             if status.get("cancelled").is_some_and(Json::truthy) {
@@ -399,7 +413,7 @@ impl<'a> Session<'a> {
     /// even when the run was cancelled, so its own token is fresh.
     async fn stop(&self, url: &str) {
         let cancel = CancellationToken::new();
-        let stopping = self.send(self.request(reqwest::Method::DELETE, url), &cancel);
+        let stopping = self.send(self.request(crate::transport::Method::DELETE, url), &cancel);
         let _ = tokio::time::timeout(STOP_TIMEOUT, stopping).await;
     }
 

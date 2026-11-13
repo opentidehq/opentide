@@ -131,7 +131,7 @@ impl<'a> Client<'a> {
     /// tenant (`_send`).
     async fn send(
         &self,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         path: &str,
         body: Option<Vec<u8>>,
     ) -> Result<Answer, ConnectorError> {
@@ -156,7 +156,7 @@ impl<'a> Client<'a> {
         let request = builder.build().map_err(|error| ConnectorError::Setup {
             platform: PLATFORM.to_owned(),
             tenant: self.tenant().to_owned(),
-            message: crate::error::describe(error),
+            message: error.describe(),
         })?;
         let answer = Answer::fetch(self.cx.http, request, self.cx.cancel).await?;
         if matches!(answer.status, 401 | 403) {
@@ -194,7 +194,7 @@ impl<'a> Client<'a> {
     /// Creates a rule from its *body* (`create_rule`).
     async fn create_rule(&self, body: &[u8]) -> Result<Result<Json, ApiError>, ConnectorError> {
         let answer = self
-            .send(reqwest::Method::POST, RULES, Some(body.to_vec()))
+            .send(crate::transport::Method::POST, RULES, Some(body.to_vec()))
             .await?;
         Ok(Self::json(&answer, "create rule"))
     }
@@ -205,7 +205,11 @@ impl<'a> Client<'a> {
         rule_id: &str,
     ) -> Result<Result<Option<Json>, ApiError>, ConnectorError> {
         let answer = self
-            .send(reqwest::Method::GET, &format!("{RULES}/{rule_id}"), None)
+            .send(
+                crate::transport::Method::GET,
+                &format!("{RULES}/{rule_id}"),
+                None,
+            )
             .await?;
         if answer.status == 404 {
             return Ok(Ok(None));
@@ -222,7 +226,7 @@ impl<'a> Client<'a> {
         let bytes = self.serialise(body)?;
         let answer = self
             .send(
-                reqwest::Method::PUT,
+                crate::transport::Method::PUT,
                 &format!("{RULES}/{rule_id}"),
                 Some(bytes),
             )
@@ -234,7 +238,11 @@ impl<'a> Client<'a> {
     /// (`delete_rule`).
     async fn delete_rule(&self, rule_id: &str) -> Result<Result<(), ApiError>, ConnectorError> {
         let answer = self
-            .send(reqwest::Method::DELETE, &format!("{RULES}/{rule_id}"), None)
+            .send(
+                crate::transport::Method::DELETE,
+                &format!("{RULES}/{rule_id}"),
+                None,
+            )
             .await?;
         if answer.status != 404 && answer.status >= 300 {
             return Ok(Err(http_failure(
@@ -249,7 +257,9 @@ impl<'a> Client<'a> {
     /// wrapped in `policies` or `data`.
     async fn list_policies(&self) -> Result<Result<Vec<Object>, ApiError>, ConnectorError> {
         let action = "list policies";
-        let answer = self.send(reqwest::Method::GET, POLICIES, None).await?;
+        let answer = self
+            .send(crate::transport::Method::GET, POLICIES, None)
+            .await?;
         let body = match Self::json(&answer, action) {
             Ok(body) => body,
             Err(error) => return Ok(Err(error)),
@@ -294,7 +304,7 @@ impl<'a> Client<'a> {
         let bytes = self.serialise(&Json::Object(policy.clone()))?;
         let answer = self
             .send(
-                reqwest::Method::PUT,
+                crate::transport::Method::PUT,
                 &format!("{POLICIES}/{id}"),
                 Some(bytes),
             )

@@ -14,6 +14,14 @@ readme = "README.md"
 [lints]
 workspace = true
 
+[features]
+default = ["native"]
+# The native transport (src/transport.rs, `ReqwestTransport`): reqwest on
+# rustls, the system's certificates. Without it a tenant is reached only
+# through a transport the run installs (`opentide serve` and its client's
+# `opentide/fetch`, the WASI build).
+native = []
+
 [dependencies]
 # The log events a client writes as the Python one does (Splunk's urllib handler):
 # the CLI's log layer prints them.
@@ -24,6 +32,8 @@ opentide-workspace.workspace = true
 opentide-core.workspace = true
 opentide-schema.workspace = true
 reqwest.workspace = true
+# The request and answer types under the transport (src/transport.rs): reqwest's own.
+http = "1"
 rustls.workspace = true
 rustls-native-certs.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync", "macros"] }

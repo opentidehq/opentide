@@ -66,7 +66,7 @@ impl Reply {
 
     /// The status's reason phrase (`response.msg`).
     fn reason(&self) -> &'static str {
-        reqwest::StatusCode::from_u16(self.answer.status)
+        crate::transport::StatusCode::from_u16(self.answer.status)
             .ok()
             .and_then(|status| status.canonical_reason())
             .unwrap_or("")
@@ -375,7 +375,7 @@ impl Splunk {
     /// HTML page in its place is (`request_handler`).
     async fn send(
         cx: TenantContext<'_>,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         path: &str,
         body: Option<String>,
     ) -> Result<Reply, ConnectorError> {
@@ -435,9 +435,21 @@ impl Splunk {
                 .next()
                 .unwrap_or_default())
         };
-        let first = Self::send(cx, reqwest::Method::GET, "/services/server/info", None).await?;
+        let first = Self::send(
+            cx,
+            crate::transport::Method::GET,
+            "/services/server/info",
+            None,
+        )
+        .await?;
         let instance = content_key(&info(&first)?, "instance_type").unwrap_or_default();
-        let second = Self::send(cx, reqwest::Method::GET, "/services/server/info", None).await?;
+        let second = Self::send(
+            cx,
+            crate::transport::Method::GET,
+            "/services/server/info",
+            None,
+        )
+        .await?;
         let version = content_key(&info(&second)?, "version").unwrap_or_default();
         let parsed: Option<Vec<u64>> = version.split('.').map(|part| part.parse().ok()).collect();
         let Some(parsed) = parsed else {
@@ -476,7 +488,7 @@ impl Splunk {
             Self::namespace(cx)?,
             quote_plus(name)
         );
-        let reply = Self::send(cx, reqwest::Method::GET, &path, None).await?;
+        let reply = Self::send(cx, crate::transport::Method::GET, &path, None).await?;
         reply.log_failure();
         if reply.answer.status == 404 {
             return Ok(None);
@@ -511,7 +523,7 @@ impl Splunk {
     ) -> Result<SavedSearch, ConnectorError> {
         let path = format!("{}saved/searches/", Self::namespace(cx)?);
         let body = urlencode([("name", name), ("search", search)]);
-        let reply = Self::send(cx, reqwest::Method::POST, &path, Some(body)).await?;
+        let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
@@ -554,7 +566,13 @@ impl Splunk {
                 .map(|(key, value)| (key.clone(), value.clone())),
         );
         let path = format!("{}{}", Self::namespace(cx)?, quote(&saved.path, "/"));
-        let reply = Self::send(cx, reqwest::Method::POST, &path, Some(form(&pairs))).await?;
+        let reply = Self::send(
+            cx,
+            crate::transport::Method::POST,
+            &path,
+            Some(form(&pairs)),
+        )
+        .await?;
         reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
@@ -573,7 +591,7 @@ impl Splunk {
             Self::namespace(cx)?,
             quote_plus(name)
         );
-        let reply = Self::send(cx, reqwest::Method::DELETE, &path, None).await?;
+        let reply = Self::send(cx, crate::transport::Method::DELETE, &path, None).await?;
         reply.log_failure();
         if reply.failed() {
             return Err(refused_call(cx, &reply));
@@ -650,7 +668,7 @@ impl Splunk {
             ("output_mode", "json"),
             ("segmentation", "none"),
         ]);
-        let reply = Self::send(cx, reqwest::Method::POST, &path, Some(body)).await?;
+        let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         if reply.failed() {
             let found = messages(&parse(&reply.answer.body), &["ERROR", "FATAL"]);
             let detail = if found.is_empty() {
@@ -738,10 +756,10 @@ impl Splunk {
         let namespace = Self::namespace(cx)?;
         let reply = if v2 {
             let path = format!("{namespace}search/v2/parser");
-            Self::send(cx, reqwest::Method::POST, &path, Some(form)).await?
+            Self::send(cx, crate::transport::Method::POST, &path, Some(form)).await?
         } else {
             let path = format!("{namespace}search/parser?{form}");
-            Self::send(cx, reqwest::Method::GET, &path, None).await?
+            Self::send(cx, crate::transport::Method::GET, &path, None).await?
         };
         let status = reply.answer.status;
         if reply.failed() {

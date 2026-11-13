@@ -145,7 +145,7 @@ impl Defender {
     async fn graph(
         &self,
         cx: TenantContext<'_>,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         url: &str,
         body: Option<&Json>,
     ) -> Result<Answer, DefenderError> {
@@ -174,7 +174,7 @@ impl Defender {
         let answer = self
             .graph(
                 cx,
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 DETECTION_RULES_ENDPOINT,
                 Some(body),
             )
@@ -189,7 +189,7 @@ impl Defender {
         let answer = self
             .graph(
                 cx,
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 DETECTION_RULES_ENDPOINT,
                 Some(&safer),
             )
@@ -216,9 +216,11 @@ impl Defender {
         let mut rules = Vec::new();
         let mut next = Some(DETECTION_RULES_ENDPOINT.to_owned());
         while let Some(url) = next.take() {
-            let answer = self.graph(cx, reqwest::Method::GET, &url, None).await?;
+            let answer = self
+                .graph(cx, crate::transport::Method::GET, &url, None)
+                .await?;
             if !(200..300).contains(&answer.status) {
-                let reason = reqwest::StatusCode::from_u16(answer.status)
+                let reason = crate::transport::StatusCode::from_u16(answer.status)
                     .ok()
                     .and_then(|status| status.canonical_reason())
                     .unwrap_or_default();
@@ -253,7 +255,7 @@ impl Defender {
     ) -> Result<(), DefenderError> {
         let url = format!("{DETECTION_RULES_ENDPOINT}/{rule_id}");
         let answer = self
-            .graph(cx, reqwest::Method::PATCH, &url, Some(body))
+            .graph(cx, crate::transport::Method::PATCH, &url, Some(body))
             .await?;
         if answer.status == 200 {
             return Ok(());
@@ -274,7 +276,9 @@ impl Defender {
         rule_id: &str,
     ) -> Result<(), DefenderError> {
         let url = format!("{DETECTION_RULES_ENDPOINT}/{rule_id}");
-        let answer = self.graph(cx, reqwest::Method::DELETE, &url, None).await?;
+        let answer = self
+            .graph(cx, crate::transport::Method::DELETE, &url, None)
+            .await?;
         if answer.status == 204 {
             return Ok(());
         }
@@ -328,7 +332,7 @@ impl Defender {
         let answer = self
             .graph(
                 cx,
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 HUNTING_QUERY_ENDPOINT,
                 Some(&Json::Object(body)),
             )
@@ -437,7 +441,7 @@ async fn sign_in(cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
     let url = TOKEN_ENDPOINT.replace("{tenant_id}", &tenant_id);
     let builder = cx
         .http
-        .request(reqwest::Method::POST, &url)
+        .request(crate::transport::Method::POST, &url)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(form);
     let answer = crate::answer::exchange(cx, builder).await?;

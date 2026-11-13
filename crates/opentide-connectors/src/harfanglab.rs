@@ -139,9 +139,9 @@ impl<'a> Client<'a> {
     /// A request with the service's headers.
     fn request(
         &self,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         url: &str,
-    ) -> Result<reqwest::RequestBuilder, ConnectorError> {
+    ) -> Result<crate::transport::RequestBuilder, ConnectorError> {
         let token = self.cx.tenant.secret("api_token")?;
         Ok(self
             .cx
@@ -151,10 +151,13 @@ impl<'a> Client<'a> {
             .header("Content-Type", "application/json"))
     }
 
-    async fn send(&self, builder: reqwest::RequestBuilder) -> Result<Answer, ConnectorError> {
+    async fn send(
+        &self,
+        builder: crate::transport::RequestBuilder,
+    ) -> Result<Answer, ConnectorError> {
         let request = builder
             .build()
-            .map_err(|error| setup(self.cx, crate::error::describe(error)))?;
+            .map_err(|error| setup(self.cx, error.describe()))?;
         Answer::fetch(self.cx.http, request, self.cx.cancel).await
     }
 
@@ -189,8 +192,11 @@ impl<'a> Client<'a> {
         let endpoint = self.endpoint(Kind::Sigma)?;
         let put = self
             .send(
-                self.request(reqwest::Method::PUT, &format!("{endpoint}{rule_id}/"))?
-                    .body(body.to_vec()),
+                self.request(
+                    crate::transport::Method::PUT,
+                    &format!("{endpoint}{rule_id}/"),
+                )?
+                .body(body.to_vec()),
             )
             .await?;
         if put.status == 200 {
@@ -199,7 +205,7 @@ impl<'a> Client<'a> {
         let answer = if put.status == 404 {
             let posted = self
                 .send(
-                    self.request(reqwest::Method::POST, &endpoint)?
+                    self.request(crate::transport::Method::POST, &endpoint)?
                         .body(body.to_vec()),
                 )
                 .await?;
@@ -219,7 +225,7 @@ impl<'a> Client<'a> {
         let endpoint = self.endpoint(Kind::Yara)?;
         let answer = self
             .send(
-                self.request(reqwest::Method::POST, &endpoint)?
+                self.request(crate::transport::Method::POST, &endpoint)?
                     .body(body.to_vec()),
             )
             .await?;
@@ -234,7 +240,7 @@ impl<'a> Client<'a> {
     pub async fn delete_rule(&self, kind: Kind, rule_id: &str) -> Result<(), ConnectorError> {
         let url = format!("{}{rule_id}/", self.endpoint(kind)?);
         let answer = self
-            .send(self.request(reqwest::Method::DELETE, &url)?)
+            .send(self.request(crate::transport::Method::DELETE, &url)?)
             .await?;
         if matches!(answer.status, 200 | 204) {
             return Ok(());
@@ -273,7 +279,7 @@ impl<'a> Client<'a> {
         let url = format!("{}{path}?{}", self.base()?, encode::urlencode(params));
         let answer = self
             .send(
-                self.request(reqwest::Method::GET, &url)?
+                self.request(crate::transport::Method::GET, &url)?
                     .timeout(request.timeout),
             )
             .await?;

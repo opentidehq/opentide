@@ -3226,6 +3226,7 @@ version = "0.12.0"
 dependencies = [
  "ansi-to-tui",
  "anyhow",
+ "base64 0.22.1",
  "clap",
  "clap_complete",
  "comfy-table",
@@ -3344,6 +3345,7 @@ name = "opentide-connectors"
 version = "0.12.0"
 dependencies = [
  "backon",
+ "http",
  "jiff",
  "opentide-cassette",
  "opentide-compile",

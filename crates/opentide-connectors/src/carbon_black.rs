@@ -194,7 +194,7 @@ impl CarbonBlack {
     async fn call(
         cx: TenantContext<'_>,
         org: &Org,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         path: &str,
         body: Option<&Value>,
     ) -> Result<Result<Answer, SdkError>, ConnectorError> {
@@ -225,7 +225,7 @@ impl CarbonBlack {
     async fn json(
         cx: TenantContext<'_>,
         org: &Org,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         path: &str,
         body: Option<&Value>,
     ) -> Result<Result<Option<Value>, SdkError>, ConnectorError> {
@@ -248,7 +248,7 @@ impl CarbonBlack {
 
     /// `get_object` in a deploy: the JSON, or the SDK's exception raised.
     async fn get(cx: TenantContext<'_>, org: &Org, path: &str) -> Result<Value, ConnectorError> {
-        match Self::json(cx, org, reqwest::Method::GET, path, None).await? {
+        match Self::json(cx, org, crate::transport::Method::GET, path, None).await? {
             Ok(value) => Ok(value.unwrap_or(Value::Null)),
             Err(error) => Err(Self::refused(cx, &error)),
         }
@@ -351,7 +351,7 @@ impl CarbonBlack {
             let created = match Self::json(
                 cx,
                 &org,
-                reqwest::Method::POST,
+                crate::transport::Method::POST,
                 &reports_path,
                 Some(&Value::Object(body)),
             )
@@ -376,7 +376,7 @@ impl CarbonBlack {
             if let Err(error) = Self::json(
                 cx,
                 &org,
-                reqwest::Method::PUT,
+                crate::transport::Method::PUT,
                 &format!("{watchlists_path}/{id}"),
                 Some(&Value::Object(watchlist)),
             )
@@ -419,16 +419,28 @@ impl CarbonBlack {
         };
         if !plan.deployment {
             if own_report {
-                return match Self::call(cx, &org, reqwest::Method::DELETE, &report_path, None)
-                    .await?
+                return match Self::call(
+                    cx,
+                    &org,
+                    crate::transport::Method::DELETE,
+                    &report_path,
+                    None,
+                )
+                .await?
                 {
                     Ok(_) => Ok(ReportChange::Deleted),
                     Err(error) => Err(Self::refused(cx, &error)),
                 };
             }
             if iocs.is_empty() {
-                return match Self::call(cx, &org, reqwest::Method::DELETE, &report_path, None)
-                    .await?
+                return match Self::call(
+                    cx,
+                    &org,
+                    crate::transport::Method::DELETE,
+                    &report_path,
+                    None,
+                )
+                .await?
                 {
                     Ok(_) => Ok(ReportChange::Deleted),
                     Err(error) => Err(Self::refused(cx, &error)),
@@ -438,7 +450,7 @@ impl CarbonBlack {
             if let Err(error) = Self::json(
                 cx,
                 &org,
-                reqwest::Method::PUT,
+                crate::transport::Method::PUT,
                 &report_path,
                 Some(&Value::Object(existing)),
             )
@@ -475,7 +487,7 @@ impl CarbonBlack {
         if let Err(error) = Self::json(
             cx,
             &org,
-            reqwest::Method::PUT,
+            crate::transport::Method::PUT,
             &report_path,
             Some(&Value::Object(existing)),
         )
@@ -518,7 +530,7 @@ impl CarbonBlack {
         let validated = Self::json(
             cx,
             &org,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &format!("{processes}/search_validation"),
             Some(&Value::Object(validation)),
         )
@@ -550,7 +562,7 @@ impl CarbonBlack {
         let started = Self::json(
             cx,
             &org,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &format!("{processes}/search_jobs"),
             Some(&Value::Object(job)),
         )
@@ -564,7 +576,7 @@ impl CarbonBlack {
             let status = Self::json(
                 cx,
                 &org,
-                reqwest::Method::GET,
+                crate::transport::Method::GET,
                 &format!("{results}?start=0&rows=0"),
                 None,
             )
@@ -605,7 +617,7 @@ impl CarbonBlack {
             let page = Self::call(
                 cx,
                 &org,
-                reqwest::Method::GET,
+                crate::transport::Method::GET,
                 &format!("{results}?start={current}&rows={wanted}"),
                 None,
             )
@@ -664,7 +676,7 @@ impl CarbonBlack {
         let answer = Self::json(
             cx,
             &org,
-            reqwest::Method::POST,
+            crate::transport::Method::POST,
             &format!(
                 "/api/investigate/v2/orgs/{}/processes/search_validation",
                 org.key
