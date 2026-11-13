@@ -125,15 +125,31 @@ pub fn run(args: &[String]) -> Result<u8> {
     let mut compared = 0;
     let mut judged = 0;
     if check {
+        // What the oracle's recordings say: on the catch-up train
+        // (`tests/golden/REPORT_ONLY`) a ported platform differs from the
+        // 0.23.0 recordings by design, so these are reported, and only the
+        // committed artifacts above gate.
+        let mut oracle = Vec::new();
         let (count, golden) = golden_parity(&root)?;
         compared = count;
-        problems.extend(golden);
+        oracle.extend(golden);
         let (count, verdicts) = schema_verdicts(&root)?;
         judged = count;
-        problems.extend(verdicts);
+        oracle.extend(verdicts);
         let (count, catalogs) = catalog_parity(&root)?;
         compared += count;
-        problems.extend(catalogs);
+        oracle.extend(catalogs);
+        if !oracle.is_empty() && crate::golden::report_only::enabled(&root) {
+            for difference in &oracle {
+                println!("report: {difference}");
+            }
+            println!(
+                "{}",
+                crate::golden::report_only::verdict(oracle.len(), None)
+            );
+        } else {
+            problems.extend(oracle);
+        }
     }
     for problem in &problems {
         eprintln!("error: {problem}");
