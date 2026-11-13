@@ -1,0 +1,341 @@
+---
+title: Catch-up 0.28 manifest
+description: Every path development changed between 0.23.0 and 0.28.0 that the M0 merge kept at integration's version, with the work unit that brings it.
+---
+
+# Catch-up 0.28 manifest
+
+The M0 merge (`chore/merge-development-0.28`) made `v0.28.0` (`3acbea603`) an ancestor of
+`integration/unified-core` without changing what integration does. It deleted the old Python
+implementation and its tests, and took only history and process files from development (the
+allowlist in [the plan, §3.1](./catchup-0.28-plan.md#31-recommendation-one-early-merge-commit-m0-features-ported-after)).
+Every other path development changed is still at integration's version. This page lists them,
+with the unit of [the plan](./catchup-0.28-plan.md) that brings each one.
+
+A port PR takes its paths with `git checkout 3acbea603 -- <path>` (or edits them into shape) and
+deletes its rows here. O2 deletes this page when only the last two tables are left.
+
+## Check
+
+The paths that still differ from `v0.28.0`:
+
+```bash
+git diff --name-only f41fe5e5c 3acbea603 -- . ':!*.py' ':!analysis' ':!tests/test_*' \
+  | while read -r p; do git diff --quiet 3acbea603 HEAD -- "$p" || echo "$p"; done
+```
+
+The train is mergeable when it prints only the paths under [Superseded](#superseded) and
+[Merged in M0](#merged-in-m0). `.py` paths and `tests/test_*` are outside the check; `tests/corpus_support.py`,
+`scripts/build/check_docs_mdx.py` and `tests/test_docs/test_docs_mdx.py` have rows below all the same.
+
+## Deferred
+
+268 paths.
+
+| Path | Unit | Note |
+|---|---|---|
+| `.agents/skills/uv/SKILL.md` | E1 | Rust 1.95 |
+| `AGENTS.md` | X1 | the platform matrix goes to `crates/opentide-connectors/AGENTS.md` |
+| `README.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/cli/deploy.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/cli/diagnostics.md` | F3 | generated, after the P-units and H1 add their codes |
+| `docs/cli/explain.md` | F3 | code list, widened by the new codes |
+| `docs/cli/generate.md` | D1, D2, D3 | pages, diagrams, CVE details |
+| `docs/cli/index.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/cli/info.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/cli/lsp.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/cli/new.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/cli/query.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/cli/setup.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/cli/validate.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; F1 the `advanced` table |  |
+| `docs/index.md` | X1 | platform count and version claims |
+| `docs/internal/cli-experience.md` | F3 | MDX escaping (`< 120 ms`) |
+| `docs/mcp/configuration.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/mcp/index.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/mcp/installation.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/mcp/tools.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/sdk/installation.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/sdk/models.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/sdk/platforms.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/usage/concepts/deployment-state.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
+| `docs/usage/concepts/platforms.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; F1 the `advanced` table |  |
+| `docs/usage/index.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/usage/installation.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest | and version claims |
+| `docs/usage/quickstart.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/usage/troubleshooting.md` | X1 | the Typer section (no Typer on integration) and version claims |
+| `docs/usage/why-opentide.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/usage/workflows/agentic-setup.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/usage/workflows/ci-cd.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `scripts/build/check_docs_mdx.py` | F3 | the MDX check; a `.py` path: the check command does not list it |
+| `scripts/validate-docs.sh` | F3 | the MDX check's hook; integration's docs fail the check today (9 errors) |
+| `src/opentide/data/bitdefender/NOTICE` | P-BD | with `criteria.toml` |
+| `src/opentide/data/bitdefender/criteria.toml` | P-BD | one copy with `data/catalogs/bitdefender/` |
+| `src/opentide/data/configurations/platforms/bitdefender.toml` | P-BD | bundled tenant template |
+| `src/opentide/data/configurations/platforms/exabeam.toml` | P-EX | bundled tenant template |
+| `src/opentide/data/configurations/platforms/google_secops.toml` | P-GS | bundled tenant template |
+| `src/opentide/data/configurations/platforms/graylog.toml` | P-GL | bundled tenant template |
+| `src/opentide/data/diagnostics/bitdefender_action_scope.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_actions_unsupported.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_contains_no_wildcard.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_create_no_id.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_create_unconfirmed.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_criteria_combination.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_criterion_field.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_criterion_relation.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_criterion_shape.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_criterion_value.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_incidents_api_unavailable.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_kind_changed.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_name_conflict.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_name_duplicate.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_registry_full_hive.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_request_failed.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_rule_kind.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_rule_missing.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_rule_recreated.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_severity.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_severity_collapsed.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_target.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_target_unknown.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_targets_shape.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_tenant_unauthorized.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_tenant_unreachable.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_yara_ascii.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/bitdefender_yara_size.md` | P-BD | explain page |
+| `src/opentide/data/diagnostics/exabeam_context_table_trigger.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_correlation.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_correlation_window.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_create_no_id.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_create_unconfirmed.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_duration.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_email.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_feature_unavailable.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_group_by.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_name_conflict.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_name_duplicate.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_name_length.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_outcome.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_outcome_silent.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_request_failed.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_request_rejected.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_rule_auto_disabled.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_rule_missing.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_rule_recreated.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_schedule.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_schedule_retained.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_sequences.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_severity.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_tenant_unauthorized.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_tenant_unreachable.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_threshold_function.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_threshold_operator.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/exabeam_threshold_value.md` | P-EX | explain page |
+| `src/opentide/data/diagnostics/google_secops_compile_error.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_compile_warning.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_create_no_id.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_create_unconfirmed.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_credentials_missing.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_delete_refused.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_deployment_failed.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_live_frequency_unavailable.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_meta_key.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_name_duplicate.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_request_failed.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_risk_score_missing.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_compilation_failed.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_conflict.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_execution_limited.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_id_literal.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_missing.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_name.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_rule_recreated.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_run_frequency.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_run_frequency_not_allowed.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_schedule.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_severity.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_tenant_unauthorized.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_tenant_unreachable.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/google_secops_verify_failed.md` | P-GS | explain page |
+| `src/opentide/data/diagnostics/graylog_aggregation.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_alias_unknown.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_all_streams.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_analyzed_field.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_create_unconfirmed.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_definition_immutable.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_definition_in_use.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_definition_invalid.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_definition_missing.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_definition_recreated.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_double_backslash.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_event_field.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_event_key.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_event_limit.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_field_name.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_field_unsupported_version.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_forbidden.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_leading_wildcard.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_list_shape.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_open_range.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_overlapping_window.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_priority.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_priority_collapsed.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_query_blank.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_query_invalid.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_query_warning.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_regex_operator.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_regex_quote.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_regex_unsupported.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_request_failed.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_schedule.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_tenant_unauthorized.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_tenant_unreachable.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_title_duplicate.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_unknown_field.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_value_type.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_version_unsupported.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/graylog_version_vulnerable.md` | P-GL | explain page |
+| `src/opentide/data/diagnostics/harfanglab_yara_context.md` | H1 | explain page |
+| `src/opentide/data/diagnostics/yara_meta_missing.md` | H1 | YARA signature pages |
+| `src/opentide/data/diagnostics/yara_signature_alias.md` | H1 | YARA signature pages |
+| `src/opentide/data/diagnostics/yaral_match_shape.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/diagnostics/yaral_match_window.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/diagnostics/yaral_option.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/diagnostics/yaral_section_alias.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/diagnostics/yaral_section_empty.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/diagnostics/yaral_section_header.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/diagnostics/yaral_section_missing.md` | E2-L | YARA-L section and match pages |
+| `src/opentide/data/setup/skills/detection-workflow/SKILL.md` | P-BD, P-GL, P-EX, P-GS | one line per platform; installed by `setup skills` |
+| `src/opentide/schemas/data/platform_templates/bitdefender.template.yaml` | P-BD | written by `cargo xtask codegen` |
+| `src/opentide/schemas/data/platform_templates/exabeam.template.yaml` | P-EX | written by `cargo xtask codegen` |
+| `src/opentide/schemas/data/platform_templates/google_secops.template.yaml` | P-GS | written by `cargo xtask codegen` |
+| `src/opentide/schemas/data/platform_templates/graylog.template.yaml` | P-GL | written by `cargo xtask codegen` |
+| `src/opentide/schemas/data/platform_templates/harfanglab.template.yaml` | H1 | written by `cargo xtask codegen` |
+| `tests/corpus_support.py` | P-BD, P-GL, P-EX, P-GS | `CORPUS_RULE_UUIDS`; on the train. A `.py` path: the check command does not list it |
+| `tests/fixtures/bitdefender/block-bitdefender.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/invalid/rule-bitdefender-criterion-field.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/invalid/rule-bitdefender-exclusion.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/invalid/rule-bitdefender-kill-on-yara.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/invalid/rule-bitdefender-two-kinds.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/rule-bitdefender-detection-1.0.create.api.json` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/rule-bitdefender-detection-1.0.disable.api.json` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/rule-bitdefender-detection-1.0.update.api.json` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/rule-bitdefender-detection-1.0.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/rule-bitdefender-yara-1.0.create.api.json` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/rule-bitdefender-yara-1.0.yaml` | P-BD | Rust test input |
+| `tests/fixtures/bitdefender/tenant.toml` | P-BD | Rust test input |
+| `tests/fixtures/configuration_schemas/configurations.router.json` | P-BD, P-GL, P-EX, P-GS | one router entry per platform |
+| `tests/fixtures/configuration_schemas/platforms.bitdefender.schema.json` | P-BD | configuration schema |
+| `tests/fixtures/configuration_schemas/platforms.exabeam.schema.json` | P-EX | configuration schema |
+| `tests/fixtures/configuration_schemas/platforms.google_secops.schema.json` | P-GS | configuration schema |
+| `tests/fixtures/configuration_schemas/platforms.graylog.schema.json` | P-GL | configuration schema |
+| `tests/fixtures/deployment/modifier_flatten_expected.json` | F1 | Splunk `advanced` |
+| `tests/fixtures/exabeam/block-exabeam.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/invalid/rule-exabeam-advanced-query.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/invalid/rule-exabeam-context-table-threshold.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/invalid/rule-exabeam-correlation-single.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/invalid/rule-exabeam-delay.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/invalid/rule-exabeam-threshold-operator.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-sequence-1.0.create.api.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-sequence-1.0.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-threshold-1.0.create.api.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-threshold-1.0.disable.api.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-threshold-1.0.update.api.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-threshold-1.0.validate.api.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/rule-exabeam-threshold-1.0.yaml` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/state/exabeam-bad-id.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/state/exabeam-uppercase-id.json` | P-EX | Rust test input |
+| `tests/fixtures/exabeam/tenant.toml` | P-EX | Rust test input |
+| `tests/fixtures/generation/tide_workspace/.opentide/templates/rule.1.0.template.yaml` | P-BD, P-GL, P-EX, P-GS, H1 | regenerated rule template |
+| `tests/fixtures/google_secops/block-google-secops.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/invalid/rule-google-secops-condition-comment.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/invalid/rule-google-secops-hourly.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/invalid/rule-google-secops-meta-reserved.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/invalid/rule-google-secops-missing-condition.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/invalid/rule-google-secops-section-header.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/invalid/rule-google-secops-sliding-no-pivot.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.archive.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.create.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.deployment.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.disable.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.verify.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-process-1.0.yaral` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.archive.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.create.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.deployment.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.disable.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.verify.api.json` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.yaml` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/rule-google-secops-spray-1.0.yaral` | P-GS | Rust test input |
+| `tests/fixtures/google_secops/tenant.toml` | P-GS | Rust test input |
+| `tests/fixtures/graylog/block-graylog.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/invalid/rule-graylog-condition.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/invalid/rule-graylog-event-field.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/invalid/rule-graylog-event-key.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/invalid/rule-graylog-schedule.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-aggregation-1.0.6.3.create.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-aggregation-1.0.7.0.create.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-aggregation-1.0.7.2.create.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-aggregation-1.0.7.2.disable.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-aggregation-1.0.7.2.update.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-aggregation-1.0.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-filter-1.1.6.3.create.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-filter-1.1.7.1.create.api.json` | P-GL | Rust test input |
+| `tests/fixtures/graylog/rule-graylog-filter-1.1.yaml` | P-GL | Rust test input |
+| `tests/fixtures/graylog/tenant.toml` | P-GL | Rust test input |
+| `tests/fixtures/harfanglab/harfanglab-sigma.yaml` | H1 | Rust test input |
+| `tests/fixtures/harfanglab/harfanglab-yara-signature.yaml` | H1 | Rust test input |
+| `tests/fixtures/harfanglab/harfanglab-yara.yaml` | H1 | Rust test input |
+| `tests/fixtures/harfanglab/invalid/rule-harfanglab-sigma-and-yara.yaml` | H1 | Rust test input |
+| `tests/fixtures/harfanglab/invalid/rule-harfanglab-yara-both-forms.yaml` | H1 | Rust test input |
+| `tests/fixtures/harfanglab/invalid/rule-harfanglab-yara-include.yaml` | H1 | Rust test input |
+| `tests/fixtures/harfanglab/invalid/rule-yara-signature-alias.yaml` | H1 | Rust test input |
+| `tests/fixtures/tide_corpus/current/Configurations/platforms/bitdefender.toml` | P-BD | corpus tenant, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Configurations/platforms/exabeam.toml` | P-EX | corpus tenant, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Configurations/platforms/google_secops.toml` | P-GS | corpus tenant, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Configurations/platforms/graylog.toml` | P-GL | corpus tenant, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0014-bitdefender-gravityzone.yaml` | P-BD | corpus rule, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0015-exabeam-correlation.yaml` | P-EX | corpus rule, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0015-graylog-event-definition.yaml` | P-GL | corpus rule, on the train (§4) |
+| `tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0016-google-secops-yaral.yaml` | P-GS | corpus rule, on the train (§4) |
+| `tests/fixtures/vulnerability_lookup/cve-2023-4966.json` | D3 | CVE details |
+| `tests/fixtures/vulnerability_lookup/cve-2024-3094.json` | D3 | CVE details |
+| `tests/fixtures/vulnerability_lookup/epss-cve-2023-4966.json` | D3 | CVE details |
+| `tests/test_docs/test_docs_mdx.py` | F3 | its test; outside the check command |
+
+## Superseded
+
+No unit brings these: integration replaces what they did.
+
+| Path | Why |
+|---|---|
+| `.github/workflows/ci.yml` | the Bitdefender catalogue step: one catalogue, `data/catalogs/bitdefender/criteria.toml`, after E1 |
+| `pyproject.toml` | integration depends on `pydantic` alone: no Typer cap, no `google-auth`, no platform entry points |
+| `scripts/ci-local.sh` | the Bitdefender catalogue parity check, as `ci.yml` |
+| `src/opentide/_native.pyi` | deleted on integration (UC-6.2); the stubs come from `cargo xtask stubs` |
+| `uv.lock` | follows integration's `pyproject.toml` |
+| `scripts/build/check_bitdefender_catalogue.py`, `tests/test_scripts/test_check_bitdefender_catalogue.py` | not added: the catalogue parity check, as `ci.yml` |
+| `tests/test_package/test_typer_compat.py` | not added: no Typer on integration |
+
+## Merged in M0
+
+Taken from development and merged with integration's own changes, so they keep differing from `v0.28.0`.
+
+| Path | Resolution |
+|---|---|
+| `.agents/skills/docs-maintenance/SKILL.md` | development's link-depth fix merged into integration's text |
+| `.agents/skills/release-management/SKILL.md` | development's headline wording merged into integration's release-train text |
+| `.github/workflows/docs.yml` | integration's triggers already run on every pull request, so development's path filter has nothing to add |
+| `CHANGELOG.md` | development's 0.24.0–0.28.0 sections merged below integration's `[Unreleased]` |
+| `docs/internal/meta.json` | integration's pages plus `unified-core` and the two catch-up pages |
+
+The other allowlist paths are byte-identical to `v0.28.0`: `.github/release-notes/v0.23.0.md` to `v0.28.0.md`,
+`docs/usage/releases.md`, `docs/internal/unified-core.md` and `.agents/skills/release-notes/SKILL.md`.
+The MDX check (`scripts/build/check_docs_mdx.py`, its `scripts/validate-docs.sh` hook and its test) was
+on the allowlist only if integration's docs pass it; they do not yet, so F3 takes it.
+
+## Dropped
+
+The Python implementation's modules and tests that development changed or added, deleted as
+integration deleted them (98 modify/delete conflicts, 54 added modules, 38 added test modules).
+Each unit reads its behaviour from `git show 3acbea603:<path>`.
