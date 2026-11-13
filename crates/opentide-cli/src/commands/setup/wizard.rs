@@ -68,17 +68,12 @@ pub trait Prompter {
 
 /// The detection platforms, as `--platform` names them and the wizard shows
 /// them (`DetectionPlatform`, `platform_label`), in their order.
-pub const PLATFORMS: [(&str, &str); 9] = [
-    ("sentinel", "Microsoft Sentinel"),
-    ("splunk", "Splunk Enterprise Security"),
-    ("crowdstrike", "CrowdStrike Falcon"),
-    ("defender_for_endpoint", "Microsoft Defender for Endpoint"),
-    ("sentinel_one", "SentinelOne"),
-    ("carbon_black_cloud", "Carbon Black Cloud"),
-    ("harfanglab", "HarfangLab"),
-    ("elastic", "Elastic Security"),
-    ("sysdig", "Sysdig Secure"),
-];
+pub fn platforms() -> Vec<(&'static str, &'static str)> {
+    opentide_schema::platforms::select(opentide_schema::platforms::Order::Cli, |_| true)
+        .into_iter()
+        .map(|platform| (platform.id, platform.label))
+        .collect()
+}
 
 /// The CI choices (`CI_LABELS`), after "Configure later".
 pub const CI: [(&str, &str); 3] = [
@@ -292,7 +287,7 @@ pub fn setup(
     let rows = plan_rows(
         shown,
         root,
-        &shown_labels(&PLATFORMS, &answers.repo.platforms),
+        &shown_labels(&platforms(), &answers.repo.platforms),
         answers
             .ci
             .as_deref()
@@ -320,13 +315,13 @@ fn repo_questions(prompter: &mut dyn Prompter, root: &Path) -> Answer<RepoOption
     let name = prompter.text("Repository name", &folder, Some("a name"))?;
     let org = prompter.text("Organisation / team for the README (optional)", "", None)?;
     let description = prompter.text("Description (optional)", "", None)?;
-    let picked = prompter.checkbox("Detection platforms", &labels(&PLATFORMS), &[], true)?;
+    let picked = prompter.checkbox("Detection platforms", &labels(&platforms()), &[], true)?;
     let given = |text: String| (!text.is_empty()).then_some(text);
     Ok(RepoOptions {
         name: given(name),
         org: given(org),
         description: given(description),
-        platforms: keys(&PLATFORMS, &picked),
+        platforms: keys(&platforms(), &picked),
     })
 }
 

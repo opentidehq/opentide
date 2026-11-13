@@ -33,32 +33,22 @@ use crate::render::outcome::OutcomeKind;
 /// The command's name in the envelope.
 pub const COMMAND: &str = "validate query";
 
-/// The platforms the engine checks offline, each with the languages it
-/// parses for it (`OFFLINE_QUERY_LANGUAGES`).
-pub const OFFLINE_QUERY_LANGUAGES: [(&str, &[&str]); 7] = [
-    ("carbon_black_cloud", &["lucene"]),
-    ("crowdstrike", &["cql"]),
-    ("defender_for_endpoint", &["kql"]),
-    ("elastic", &["esql", "eql", "kuery", "lucene"]),
-    ("sentinel", &["kql"]),
-    ("splunk", &["spl"]),
-    ("sysdig", &["falco"]),
-];
+/// The platforms the engine checks offline, by name, each with the
+/// languages it parses for it (`OFFLINE_QUERY_LANGUAGES`).
+pub fn offline_query_languages() -> Vec<(&'static str, &'static [&'static str])> {
+    use opentide_schema::platforms::{Order, select};
+    select(Order::Name, |_| true)
+        .into_iter()
+        .filter_map(|platform| Some((platform.id, platform.offline()?)))
+        .collect()
+}
 
-/// The platforms whose queries a tenant checks (`QUERY_VALIDATION_PLATFORMS`).
-pub const LIVE_QUERY_PLATFORMS: [&str; 6] = [
-    "carbon_black_cloud",
-    "defender_for_endpoint",
-    "elastic",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-];
-
-/// The extensions of a query file, each one query in the language it names.
-pub const QUERY_FILE_SUFFIXES: [&str; 8] = [
-    "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql",
-];
+/// The platforms whose queries a tenant checks (`QUERY_VALIDATION_PLATFORMS`),
+/// by name.
+pub fn live_query_platforms() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Name, |platform| platform.live_check)
+}
 
 /// The help of a rule file whose queries could not be read.
 const UNREADABLE_HELP: &str =
@@ -159,10 +149,7 @@ pub fn plugin_live(args: &Args, platform: &str, cx: &Context<'_>) -> Report {
 /// The languages the engine parses for `platform` offline; `None` when it
 /// parses none of its queries.
 pub fn offline_languages(platform: &str) -> Option<&'static [&'static str]> {
-    OFFLINE_QUERY_LANGUAGES
-        .iter()
-        .find(|(name, _)| *name == platform)
-        .map(|(_, languages)| *languages)
+    opentide_schema::platforms::get(platform)?.offline()
 }
 
 /// Whether `target` names a query file, by its extension (any case).
@@ -176,7 +163,7 @@ pub fn query_file_language(target: &str) -> Option<LanguageId> {
         .extension()?
         .to_str()?
         .to_ascii_lowercase();
-    QUERY_FILE_SUFFIXES
+    opentide_schema::platforms::query_file_suffixes()
         .contains(&extension.as_str())
         .then(|| LanguageId::from_extension(&extension))
         .flatten()
@@ -260,13 +247,16 @@ pub fn refuse(args: &Args) -> Option<Report> {
 /// The platforms whose tenants cannot check a query: a `--live` run on one
 /// is answered `supported: false` before any request; the others check on
 /// their tenants (`validate_live`).
-pub const LIVE_RUST_PLATFORMS: [&str; 3] = ["crowdstrike", "harfanglab", "sysdig"];
+pub fn live_rust_platforms() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Name, |platform| !platform.live_check)
+}
 
 /// The answer of a platform whose tenants check no query (`supported:
 /// false`), or `None` for any other `--platform`.
 pub fn unsupported(args: &Args) -> Option<Report> {
     let platform = args.platform.as_deref()?;
-    if !LIVE_RUST_PLATFORMS.contains(&platform) {
+    if !live_rust_platforms().contains(&platform) {
         return None;
     }
     let message = format!("query validation not supported for {platform}");
@@ -609,7 +599,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(name) = platform
         && offline_languages(name).is_none()
     {
-        if !LIVE_QUERY_PLATFORMS.contains(&name) {
+        if !live_query_platforms().contains(&name) {
             let mut report = Report::failed(
                 COMMAND,
                 1,
@@ -709,9 +699,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let fs = ws.fs().as_ref();
     let wanted: Vec<&str> = match platform {
         Some(name) => vec![name],
-        None => OFFLINE_QUERY_LANGUAGES
-            .iter()
-            .map(|(name, _)| *name)
+        None => offline_query_languages()
+            .into_iter()
+            .map(|(name, _)| name)
             .collect(),
     };
     // The scope: every rule file directly in the rules folder, or those the
