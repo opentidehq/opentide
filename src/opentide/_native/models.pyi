@@ -10,7 +10,7 @@
 
 from typing import Any, Final, SupportsIndex, final
 
-__all__ = ["ValidationError", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExternalDetector", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
+__all__ = ["ValidationError", "BitdefenderActions", "BitdefenderConfig", "BitdefenderCriterion", "BitdefenderDetection", "BitdefenderProcessScope", "BitdefenderTargets", "BitdefenderYara", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExternalDetector", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
 
 ValidationError: Final[type[ValueError]]
 """
@@ -18,6 +18,692 @@ The error `model_validate` raises: a `ValueError` whose instances
 have `errors()` (each error's `type`, `loc`, `msg`, and `input` and
 `ctx` when it records them), `error_count()` and `title`.
 """
+
+@final
+class BitdefenderActions:
+    """
+    Automatic actions (`BitdefenderActions`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def antimalware_scan(self, /) -> str | None:
+        """
+        Run an antimalware scan (type 5): `quick` or `full`.
+        """
+    @property
+    def collect_investigation_package(self, /) -> bool | None:
+        """
+        Collect an investigation package (type 2).
+        """
+    @property
+    def isolate(self, /) -> bool | None:
+        """
+        Isolate the endpoint (type 1).
+        """
+    @property
+    def kill_process(self, /) -> bool | BitdefenderProcessScope | None:
+        """
+        Kill the process (type 4): `true`, or `{include_parent, include_children}`. Basic rules
+        only.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderActions:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderActions:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderActions:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def quarantine(self, /) -> bool | BitdefenderProcessScope | None:
+        """
+        Quarantine the file (type 6): `true`, or `{include_parent, include_children}`.
+        """
+    @property
+    def risk_scan(self, /) -> bool | None:
+        """
+        Run a risk scan (type 7).
+        """
+    @property
+    def sandbox(self, /) -> bool | None:
+        """
+        Submit to the Sandbox Analyzer (type 3).
+        """
+
+@final
+class BitdefenderConfig:
+    """
+    Bitdefender GravityZone custom detection rule (`BitdefenderConfig`).
+    """
+    __schema_identifier__: Final[str]
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def actions(self, /) -> BitdefenderActions | None:
+        """
+        Automatic actions.
+        """
+    @property
+    def contributors(self, /) -> list[str] | None:
+        """
+        Platform contributors.
+        """
+    @property
+    def detection(self, /) -> BitdefenderDetection | None:
+        """
+        A Basic detection rule (`type: 1`, `subtype: 0`). Exactly one of `detection` and `yara`.
+        """
+    @property
+    def enabled(self, /) -> bool:
+        """
+        Whether this platform block is active.
+        """
+    @property
+    def flags(self, /) -> list[str] | None:
+        """
+        Platform flags.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderConfig:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderConfig:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderConfig:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str:
+        """
+        Platform-specific rule name.
+        """
+    @property
+    def platform_schema(self, /) -> str | None:
+        """
+        Platform schema identifier, for example `platform::sentinel::1.0`.
+        """
+    @property
+    def schema(self, /) -> str | None:
+        """
+        The serialised name of the schema identifier field,
+        read-only (`metadata.schema`, `block.schema`).
+        """
+    @classmethod
+    def schema_identifier(cls, /) -> str:
+        """
+        The canonical schema identifier (`rule::1.0`).
+        """
+    @property
+    def severity(self, /) -> str | None:
+        """
+        `Low`, `Medium`, or `High`. Derived from `response.alert_severity` when omitted.
+        """
+    @property
+    def status(self, /) -> str:
+        """
+        Deployment status of this platform block, from the statuses in `deployment.toml`. Required:
+        the deploy planner selects on it.
+        """
+    @property
+    def tags(self, /) -> list[str] | None:
+        """
+        Extra GravityZone tags. Deploy adds the derived tags.
+        """
+    @property
+    def targets(self, /) -> BitdefenderTargets | None:
+        """
+        Endpoint tags, or companies on a partner tenant, the rule applies to. Neither means the
+        whole company. Default: the tenant `targets`.
+        """
+    @property
+    def tenants(self, /) -> list[str] | None:
+        """
+        Target tenant identifiers.
+        """
+    @property
+    def yara(self, /) -> BitdefenderYara | None:
+        """
+        A YARA detection rule (`type: 1`, `subtype: 1`). Exactly one of `detection` and `yara`.
+        """
+
+@final
+class BitdefenderCriterion:
+    """
+    One criterion (`BitdefenderCriterion`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def any_(self, /) -> list[str | int] | None:
+        """
+        Any of the values. Sent as `relation: "any"`.
+        """
+    @property
+    def contains(self, /) -> str | None:
+        """
+        Substring, with `*` and `?` wildcards. Sent as `relation: "contains"`.
+        """
+    @property
+    def field(self, /) -> str:
+        """
+        API field name (`Process.CommandLine`) from the criteria catalogue for the `target`.
+        """
+    @property
+    def is_(self, /) -> str | int | None:
+        """
+        Exact match. Sent as `relation: "is"`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderCriterion:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderCriterion:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderCriterion:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderCriterion:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class BitdefenderDetection:
+    """
+    A Basic detection rule's criteria (`BitdefenderDetection`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def alert(self, /) -> str | None:
+        """
+        A GravityZone alert (detection) name. Sent as
+        `filters: [{"field": "detection", "value": <alert>}]`.
+        """
+    @property
+    def criteria(self, /) -> list[BitdefenderCriterion]:
+        """
+        At least one. All criteria must match (AND).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderDetection:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderDetection:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderDetection:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderDetection:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def target(self, /) -> str:
+        """
+        A GravityZone detection target, as the API spells it: `process`, `file`, `connection`,
+        `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`,
+        `sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`,
+        `automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`,
+        `jira project`, or `confluence page`.
+        """
+
+@final
+class BitdefenderProcessScope:
+    """
+    `{include_parent, include_children}` of a process action
+    (`BitdefenderProcessScope`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def include_children(self, /) -> bool:
+        """
+        Also act on the child processes.
+        """
+    @property
+    def include_parent(self, /) -> bool:
+        """
+        Also act on the parent process.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderProcessScope:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderProcessScope:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderProcessScope:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderProcessScope:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class BitdefenderTargets:
+    """
+    Endpoint tags or companies a rule applies to (`BitdefenderTargets`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def companies(self, /) -> list[str] | None:
+        """
+        Partner tenants: aliases from the tenant's `companies` table. Each resolves to a company
+        id.
+        """
+    @property
+    def endpoint_tags(self, /) -> list[str] | None:
+        """
+        Aliases from the tenant's `endpoint_tags` table. Each resolves to `{tagId, companyId}`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderTargets:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderTargets:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderTargets:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderTargets:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class BitdefenderYara:
+    """
+    A YARA detection rule (`BitdefenderYara`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> BitdefenderYara:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> BitdefenderYara:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> BitdefenderYara:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> BitdefenderYara:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def on_access(self, /) -> bool:
+        """
+        On-access scanning with this rule (`settings.status`). With `false`, the rule serves
+        on-demand scans only.
+        """
+    @property
+    def signature(self, /) -> str:
+        """
+        The YARA signature: imports, then one or more YARA rules, written out in the block. Sent as
+        `settings.yaraQuery`, verbatim.
+        """
 
 @final
 class CarbonBlackConfig:

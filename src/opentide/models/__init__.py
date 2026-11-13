@@ -15,6 +15,13 @@ models and the submodules this package does not define
 from __future__ import annotations
 
 from opentide._native.models import (
+    BitdefenderActions,
+    BitdefenderConfig,
+    BitdefenderCriterion,
+    BitdefenderDetection,
+    BitdefenderProcessScope,
+    BitdefenderTargets,
+    BitdefenderYara,
     CarbonBlackConfig,
     CrowdstrikeConfig,
     CrowdstrikeDetails,
@@ -122,6 +129,13 @@ from opentide._native.models import (
 )
 
 __all__ = [
+    "BitdefenderActions",
+    "BitdefenderConfig",
+    "BitdefenderCriterion",
+    "BitdefenderDetection",
+    "BitdefenderProcessScope",
+    "BitdefenderTargets",
+    "BitdefenderYara",
     "CarbonBlackConfig",
     "CrowdstrikeConfig",
     "CrowdstrikeDetails",

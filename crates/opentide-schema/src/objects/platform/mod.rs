@@ -24,6 +24,7 @@
 //! each one's message is the oracle's (`ElasticConfig validation failed with
 //! code(s): …`), the codes sorted and joined as Python joins them.
 
+pub mod bitdefender;
 pub mod carbon_black;
 pub mod crowdstrike;
 pub mod defender;
@@ -53,6 +54,7 @@ use crate::from_node::{Context, FromNode};
 use crate::node::{Node, Value};
 use crate::objects::checks::Violation;
 
+pub use bitdefender::BitdefenderConfig;
 pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;

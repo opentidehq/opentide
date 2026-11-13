@@ -73,6 +73,11 @@ pub enum ErrorKind {
     /// rejects, with Pydantic's exact type: `value_error`, `literal_error`,
     /// `greater_than_equal`, …
     InvalidValue(&'static str),
+    /// A platform block's constraint (bitdefender-1.0's `bitdefender_*`
+    /// codes): the oracle raises it as a `PydanticCustomError` whose type is
+    /// the code, and `issues_from_pydantic` reports the code itself, not
+    /// `schema_validation`.
+    Constraint(&'static str),
     /// The conversion stopped: the document produced more work than
     /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to
     /// billions of nodes). Not a Pydantic error; the oracle would keep going.
@@ -89,7 +94,9 @@ impl ErrorKind {
             Self::Syntax | Self::Limit => None,
             Self::Missing => Some("missing"),
             Self::UnknownKey => Some("extra_forbidden"),
-            Self::InvalidType(pydantic) | Self::InvalidValue(pydantic) => Some(pydantic),
+            Self::InvalidType(pydantic)
+            | Self::InvalidValue(pydantic)
+            | Self::Constraint(pydantic) => Some(pydantic),
         }
     }
 }
@@ -161,6 +168,7 @@ impl SchemaError {
             (ErrorKind::Syntax, Surface::Configuration) => codes::CONFIG_PARSE,
             (ErrorKind::Missing, Surface::Configuration) => codes::MISSING_FIELD,
             (ErrorKind::UnknownKey, Surface::Configuration) => codes::UNKNOWN_KEY,
+            (ErrorKind::Constraint(code), _) => code,
             _ => codes::SCHEMA_VALIDATION,
         }
     }
@@ -240,6 +248,13 @@ mod tests {
             ErrorKind::InvalidValue("value_error").pydantic_type(),
             Some("value_error")
         );
+    }
+
+    #[test]
+    fn a_platform_constraint_is_reported_as_its_code() {
+        let error = at(ErrorKind::Constraint("bitdefender_target"));
+        assert_eq!(error.code(Surface::Object), "bitdefender_target");
+        assert_eq!(error.kind.pydantic_type(), Some("bitdefender_target"));
     }
 
     #[test]
