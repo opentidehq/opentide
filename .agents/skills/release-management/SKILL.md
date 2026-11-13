@@ -3,8 +3,9 @@ name: release-management
 description: >-
   Cut opentide releases with the release train (publish.yml): changelog, install pins, the
   lockstep version, release candidates, then one Run workflow that tags and publishes the
-  wheels, crates, npm packages and binaries with OIDC. Use when releasing, tagging v*, publishing
-  to PyPI, crates.io or npm, or preparing 0.x.y notes.
+  wheels, crates, npm packages and binaries with OIDC, and the follow-up review of the
+  opentidehq/skills agent skills. Use when releasing, tagging v*, publishing to PyPI, crates.io
+  or npm, or preparing 0.x.y notes.
 ---
 
 # Release management — opentide
@@ -66,7 +67,7 @@ Precedents:
 - **0.4.0**: fixes changed output that scripts depend on, and a security fix required users to regenerate CI (#244).
 - **0.5.0**: `threat.impact` and `threat.leverage` became lists (#189).
 
-State the rationale in the version's summary or in the GitHub Release body ("It is a minor because …").
+State the rationale in the GitHub Release body ("It is a minor because …"), never in the headline.
 
 ## Required two-step flow
 
@@ -115,7 +116,7 @@ Create a `docs:` (or `chore:`) PR against `development`.
 - **Local agents:** branch `docs/prepare-0.x.y` from `origin/development`, `gh pr create --base development`.
 
 What the three notes files say, and how, is the [`release-notes`](../release-notes/SKILL.md) skill:
-the parts of a version (summary, Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed,
+the parts of a version (headline, Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed,
 Security, in that order) and how to write each entry. This step is where they go.
 
 #### 1. `CHANGELOG.md` (Keep a Changelog)
@@ -123,7 +124,7 @@ Security, in that order) and how to write each entry. This step is where they go
 Move `[Unreleased]` into a dated version section. Keep an empty `[Unreleased]` heading above it.
 
 - Keep a blank `## [Unreleased]` above the new version
-- `## [0.x.y] — YYYY-MM-DD`, then its summary paragraph
+- `## [0.x.y] — YYYY-MM-DD`, then its headline paragraph (at most 25 words)
 - The entries the pull requests added, in their parts (`### Upgrade`, `### Breaking`, `### Added`, …), in the order of the release-notes skill. No `### Install`: the install commands are in the other two files
 
 Footer compare links (bottom of `CHANGELOG.md`):
@@ -137,13 +138,13 @@ Keep existing `[0.x.(y-1)]:` (etc.) rows.
 
 #### 2. `docs/usage/releases.md`
 
-Add a **new top section**: the page [opentide.org/releases](https://opentide.org/releases/) renders. Its shape is in the release-notes skill: heading, summary, **Install** (three lines), **Upgrade**, the change parts as bold lines, the CHANGELOG line with the version's anchor, **Links** (PyPI / GitHub Release / CHANGELOG).
+Add a **new top section**: the page [opentide.org/releases](https://opentide.org/releases/) renders. Its shape is in the release-notes skill: heading, headline, **Install** (three lines), **Upgrade**, the change parts as bold lines, the CHANGELOG line with the version's anchor, **Links** (PyPI / GitHub Release / CHANGELOG).
 
 #### 3. `.github/release-notes/v0.x.y.md`
 
 GitHub Release body, in the order of the release-notes skill:
 
-- Title + date + "Minor release on …" / "Patch release on …", then the summary
+- Title + date + "Minor release on …" / "Patch release on …", then the headline
 - `## Upgrade`: a fence with the install and upgrade commands, and a Before/Now table where behaviour changed
 - `## Breaking`, `## Added`, `## Changed`, … (with issue links)
 - Verify (commands; expect `0.x.y`)
@@ -310,6 +311,20 @@ Every release gets a tracking issue. Examples: [#285](https://github.com/opentid
 
 Milestones are optional; `setup-cli-v1` is the only precedent. The Cursor GitHub App token gets 403 on milestone creation, so a maintainer must create `0.x.y` first; agents can then assign issues to it.
 
+---
+
+### Step 5 — Bring the agent skills up to date
+
+[opentidehq/skills](https://github.com/opentidehq/skills) is what `opentide setup skills` and the opentide Agent Plugin install, so a release the skills do not describe teaches agents the previous one. Its `coverage.json` maps every platform key to a skill and records the capabilities (`can_deploy`, `can_validate`, `can_query`) and the last release reviewed (`reviewed_against`); its daily CI check compares that with the latest PyPI release's `opentide --json info` and opens a *Review skills against opentide 0.x.y* issue when they differ.
+
+After Step 3, read this release's `CHANGELOG.md` section and, in opentidehq/skills, follow [Keeping skills in step with opentide](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide):
+
+1. A new platform needs a platform skill naming `configurations.<key>` before the release is announced as supported by the plugin.
+2. Update the platform skills whose capabilities, rule types, languages or deploy behaviour changed, and any skill naming a renamed CLI command, flag or MCP tool.
+3. Bump `reviewed_against` to `0.x.y` in `coverage.json`, even when nothing else changed, and run `./scripts/check-opentide-coverage.sh --engine` with this release installed.
+
+Link that pull request from the tracking issue in Step 4.
+
 ## Failure table
 
 | Symptom | Cause / fix |
@@ -343,4 +358,5 @@ The registry jobs need `id-token: write` (already set on `pypi`, `crates`, `npm`
 - [`release-notes`](../release-notes/SKILL.md) — what the notes say, and the shape of each file
 - [`.github/release-notes/v0.22.0.md`](../../../.github/release-notes/v0.22.0.md) — a GitHub Release body
 - [`docs-maintenance`](../docs-maintenance/SKILL.md) — Fumadocs pages in Step 1
+- [opentidehq/skills `AGENTS.md`](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide) — Step 5
 - `AGENTS.md` — trunk, Conventional Commits, branch and PR workflow
