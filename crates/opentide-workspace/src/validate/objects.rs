@@ -332,7 +332,7 @@ pub fn check_object(
                 .and_then(|m| m.get("uuid"))
         });
         if !raw.is_some_and(|node| is_uuid_v4(node)) {
-            let shown = raw.map_or_else(|| "None".to_owned(), |node| python_repr(node));
+            let shown = raw.map_or_else(|| "null".to_owned(), |node| scalar_shown(node));
             let name = root
                 .get("name")
                 .map_or_else(String::new, |name| name.value.to_string());
@@ -478,12 +478,11 @@ fn is_uuid_v4(node: &Node) -> bool {
     })
 }
 
-/// Python's `repr` of a scalar, as the messages that quote a value show it.
-fn python_repr(node: &Node) -> String {
+/// A scalar as the messages that quote a value show it: a string quoted as
+/// every message quotes one, anything else as YAML writes it (`null`,
+/// `true`, `1.5`).
+fn scalar_shown(node: &Node) -> String {
     match &node.value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
         Value::Str(text) | Value::Datetime(text) => quote(text),
         other => other.to_string(),
     }

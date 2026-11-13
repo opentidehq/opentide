@@ -299,10 +299,7 @@ pub fn live_usage(args: &Args, env: &Env) -> Option<Report> {
         let seconds = raw.trim().parse::<f64>().unwrap_or(f64::NAN);
         if !seconds.is_finite() || seconds <= 0.0 {
             return Some(usage(
-                format!(
-                    "{source} must be a positive number of seconds, got {}",
-                    opentide_connectors::python::python_string_repr(raw)
-                ),
+                format!("{source} must be a positive number of seconds, got {raw:?}"),
                 source,
                 code::USAGE_INVALID_VALUE,
             ));

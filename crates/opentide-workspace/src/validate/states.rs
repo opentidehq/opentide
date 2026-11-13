@@ -243,12 +243,10 @@ fn type_name(value: &Json) -> &'static str {
     }
 }
 
-/// Python's `repr` of a JSON value, for the messages that quote one.
-fn repr(value: &Json) -> String {
+/// A JSON value as the messages that quote one show it: a string quoted
+/// as every message quotes one, anything else as its JSON (`null`, `true`).
+fn shown(value: &Json) -> String {
     match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
         Json::String(text) => quote(text),
         other => other.to_string(),
     }
@@ -293,7 +291,11 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
     if schema.as_str() != Some(SCHEMA_ID) {
         return Err(StateError::shape(
             path,
-            &format!("has schema {}, expected {}", repr(schema), quote(SCHEMA_ID)),
+            &format!(
+                "has schema {}, expected {}",
+                shown(schema),
+                quote(SCHEMA_ID)
+            ),
         ));
     }
     let Some(object_uuid) = payload.get("object_uuid").and_then(Json::as_str) else {

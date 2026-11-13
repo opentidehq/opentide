@@ -113,16 +113,6 @@ pub fn nested_warning(nested: &[String], folder: &str) -> String {
     )
 }
 
-/// Python's `repr` of a list of strings (`['a', 'b']`), as a log field
-/// prints it.
-fn python_list(items: &[String]) -> String {
-    let quoted: Vec<String> = items
-        .iter()
-        .map(|item| crate::strategy::python_repr(item))
-        .collect();
-    format!("[{}]", quoted.join(", "))
-}
-
 /// The platforms the configuration enables, in [`PLATFORMS`] order
 /// (`enabled_systems`).
 pub fn enabled(config: &Json) -> Vec<String> {
@@ -322,7 +312,7 @@ pub fn select(
         if options.log {
             tracing::warn!(
                 count = scope.nested.len(),
-                files = python_list(&scope.nested).as_str(),
+                files = format!("{:?}", scope.nested).as_str(),
                 issue = NESTED_RULES_ISSUE,
                 logger = "opentide.deployment.utils",
                 "deploy_nested_rules_skipped"
@@ -366,10 +356,9 @@ pub fn select(
                     .ok_or_else(|| {
                         // The oracle's `get_platform_status` logs it, then raises.
                         let detail = format!(
-                            "Rule {} ({uuid}) has no 'status' in its {platform} configuration \
-                             block. Add a status, e.g. 'status: STAGING', then re-run 'opentide \
-                             validate'.",
-                            crate::strategy::python_repr(&name)
+                            "Rule {name:?} ({uuid}) has no 'status' in its {platform} \
+                             configuration block. Add a status, e.g. 'status: STAGING', then \
+                             re-run 'opentide validate'."
                         );
                         tracing::error!(
                             detail = detail.as_str(),
@@ -378,11 +367,10 @@ pub fn select(
                             uuid = uuid.as_str(),
                             "platform_status_missing"
                         );
-                        PlanError::Failed(crate::strategy::python_repr(&format!(
-                            "{} ({uuid}): configurations.{platform}.status is required for \
-                             deployment",
-                            crate::strategy::python_repr(&name)
-                        )))
+                        PlanError::Failed(format!(
+                            "{name:?} ({uuid}): configurations.{platform}.status is required for \
+                             deployment"
+                        ))
                     })?;
                 if !options.enabled.iter().any(|known| known == platform) {
                     // Logged whatever `log` says: `make_deploy_plan` logs it
@@ -402,8 +390,7 @@ pub fn select(
                 }
                 let strategy = statuses.strategy(&status).map_err(|error| {
                     PlanError::Failed(match error {
-                        StatusError::Invalid(message) => message,
-                        StatusError::Unknown(_) => error.exception_text(),
+                        StatusError::Invalid(message) | StatusError::Unknown(message) => message,
                     })
                 })?;
                 if !options.keep_deprecated
