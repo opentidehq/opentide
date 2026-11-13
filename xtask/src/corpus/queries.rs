@@ -519,7 +519,7 @@ mod tests {
             .count();
         // Every lint kind whose code the queries check reports, none of the
         // file-name, metadata, placeholder or YAML kinds.
-        assert_eq!(lint, 66);
+        assert_eq!(lint, 71);
         assert!(ids.iter().any(|id| id == "kql-deprecated-function"));
         assert!(!ids.iter().any(|id| id == "lint-filename-mismatch"));
     }
