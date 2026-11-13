@@ -237,11 +237,15 @@ removed from the rule too, or every pull request that does not run it waits for 
   workflow that `publish.yml` and ci.yml's `packages` job call.
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target for ten minutes a night with
   the corpus it keeps, and uploads what crashed; a schedule of its own, so not part of ci.yml.
-- [`bench.yml`](workflows/bench.yml), nightly on `development`, on demand and on a pull request
-  labelled `perf`: `cargo xtask bench` for the `python` (the oracle, opentide 0.23.0 from PyPI)
-  and `rust` engines on `ubuntu-24.04`, then `cargo xtask bench --check --require-reference`
-  against `tests/bench/budgets.toml` and the last successful `development` run's
-  `bench-<engine>` artifact on the same CPU (a command compared with nothing fails). The rules
+- [`bench.yml`](workflows/bench.yml), on every push to `integration/unified-core`, nightly on
+  `development`, on demand and on a pull request labelled `perf`: `cargo xtask bench` for the
+  `python` (the oracle, opentide 0.23.0 from PyPI) and `rust` (the `opentide` binary, the
+  language server, the workspace load) engines on `ubuntu-24.04`, a strace proof that
+  `deploy --dry-run` and `generate docs` open no network connection, then `cargo xtask bench
+  --check --require-reference` against `tests/bench/budgets.toml` and the `bench-<engine>`
+  artifact of the last successful run on the comparison base, `BASE_BRANCH`
+  (`integration/unified-core` until the Unified Core merges into development), on the same CPU
+  (a command compared with nothing fails). The rules
   (10% over the last development result or the oracle baseline of the runner's CPU, the absolute
   plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
   waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job

@@ -2661,6 +2661,7 @@ dependencies = [
  "percent-encoding",
  "pulldown-cmark",
  "ratatui",
+ "rayon",
  "regex",
  "reqwest",
  "rmcp",
