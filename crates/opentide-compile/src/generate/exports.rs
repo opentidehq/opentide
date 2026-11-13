@@ -330,27 +330,24 @@ fn actor_names(actors: &Node, vocabularies: &Vocabularies) -> Vec<String> {
         .collect()
 }
 
-/// `{'relation': ['vector', ...]}`, as Python writes the dict.
+/// `{"relation":["vector",...]}`: each relation's vectors, as JSON.
 fn chaining_text(chains: &Node) -> Result<String, Cause> {
     let Value::Seq(items) = &chains.value else {
         return Ok(String::new());
     };
-    let mut flat: IndexMap<String, Vec<String>> = IndexMap::new();
+    let mut flat: IndexMap<String, Vec<crate::json::Json>> = IndexMap::new();
     for chain in items {
         let relation = node_text(required(chain, "relation")?);
         let vector = required(chain, "vector")?;
         flat.entry(relation)
             .or_default()
-            .push(opentide_schema::configuration::repr::node(vector));
+            .push(crate::json::Json::from_node(vector));
     }
-    let quote = opentide_schema::configuration::repr::quote;
-    Ok(format!(
-        "{{{}}}",
-        flat.iter()
-            .map(|(relation, vectors)| format!("{}: [{}]", quote(relation), vectors.join(", ")))
-            .collect::<Vec<_>>()
-            .join(", ")
-    ))
+    let object: crate::json::Object = flat
+        .into_iter()
+        .map(|(relation, vectors)| (relation, crate::json::Json::Array(vectors)))
+        .collect();
+    Ok(crate::json::Json::Object(object).to_compact())
 }
 
 fn joined(node: &Node) -> String {
@@ -562,7 +559,7 @@ mod tests {
         );
         assert_eq!(
             chaining_text(&chains).unwrap(),
-            "{'leads_to': ['a', 'b'], 'x': ['c']}"
+            "{\"leads_to\": [\"a\", \"b\"], \"x\": [\"c\"]}"
         );
         let broken = node("- {vector: a}\n");
         assert_eq!(

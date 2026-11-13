@@ -27,10 +27,10 @@ use crate::revisions::{Revision, SchemaId, TideObject, lookup, revisions_of};
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MigrationError {
     /// The identifier names no registered revision.
-    #[error("unknown schema identifier: '{0}'")]
+    #[error("unknown schema identifier: {0:?}")]
     Unregistered(String),
     /// Source and target are of different families.
-    #[error("cannot migrate across families: '{source_id}' -> '{target}'")]
+    #[error("cannot migrate across families: {source_id:?} -> {target:?}")]
     CrossFamily {
         /// The source revision.
         source_id: String,
@@ -38,7 +38,7 @@ pub enum MigrationError {
         target: String,
     },
     /// The target is older than the source.
-    #[error("cannot migrate backwards: '{source_id}' -> '{target}'")]
+    #[error("cannot migrate backwards: {source_id:?} -> {target:?}")]
     Backwards {
         /// The source revision.
         source_id: String,

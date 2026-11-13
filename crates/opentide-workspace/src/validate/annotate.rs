@@ -587,7 +587,7 @@ mod tests {
         for (name, noun) in [("tlp", "TLP"), ("pap", "PAP"), ("rsit", "RSIT")] {
             assert_eq!(
                 value_message(&vocab(&format!("{name}::1.0")), "x").as_deref(),
-                Some(format!("'x' is not a {noun} value").as_str())
+                Some(format!("\"x\" is not a {noun} value").as_str())
             );
         }
         assert_eq!(
@@ -631,7 +631,7 @@ mod tests {
         assert_eq!(
             duplicate_message(&duplicate(serde_json::json!({"name": "First"})), Some(uuid))
                 .as_deref(),
-            Some(format!("UUID {uuid} is also used by 'First'").as_str())
+            Some(format!("UUID {uuid} is also used by \"First\"").as_str())
         );
         for original in [serde_json::json!({"name": ""}), serde_json::json!({})] {
             assert_eq!(

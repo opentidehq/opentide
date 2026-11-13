@@ -277,7 +277,7 @@ fn setup_ci_refuses_then_writes() {
     assert_eq!(failure(&stdout)["argument"], "--default-branch");
     assert_eq!(
         failure(&stdout)["message"],
-        "Invalid value for '--default-branch': 'a b' cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'"
+        "Invalid value for '--default-branch': \"a b\" cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'"
     );
     let (code, stdout) = run_json(&ws, &["setup", "--name", "x", "ci", "github", "--yes"]);
     assert_eq!(code, 2, "{stdout}");
@@ -625,7 +625,7 @@ fn setup_ci_detects_the_default_branch() {
     assert_eq!(
         written["warnings"],
         serde_json::json!([
-            "origin/HEAD is not set, so the pipeline targets the checked-out branch 'feature'. Re-run with --default-branch <branch> if another branch deploys."
+            "origin/HEAD is not set, so the pipeline targets the checked-out branch \"feature\". Re-run with --default-branch <branch> if another branch deploys."
         ])
     );
 }

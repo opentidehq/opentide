@@ -1040,7 +1040,7 @@ mod tests {
         let unknown = po(root, &args(None, Some("NOPE")), statuses).unwrap_err();
         assert_eq!(
             unknown.outcome.message,
-            "Invalid value for '--promotion-target': 'NOPE' is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
+            "Invalid value for '--promotion-target': \"NOPE\" is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
         );
         assert_eq!(unknown.outcome.exit_code, 2);
     }

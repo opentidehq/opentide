@@ -99,7 +99,7 @@ pub enum Rejection {
     #[error("{}", .0.message)]
     MetadataNotAMapping(Box<SchemaError>),
     /// A registered object revision of another family.
-    #[error("'{identifier}' is not a {family} schema identifier")]
+    #[error("{identifier:?} is not a {family} schema identifier")]
     OtherFamily {
         /// The identifier as written.
         identifier: String,
@@ -111,13 +111,13 @@ pub enum Rejection {
     /// string as written, a boolean or number as YAML 1.2 reads it, a list as
     /// `[...]` and a mapping as `{...}` (`identifier-quoting` in
     /// `tests/oracle/objects_cases.toml`; the oracle used Python's `repr`).
-    #[error("unknown schema identifier: '{identifier}'")]
+    #[error("unknown schema identifier: {identifier:?}")]
     Unknown {
         /// The identifier as written.
         identifier: String,
     },
     /// The expected family has no object model.
-    #[error("no registered schema for family '{family}'")]
+    #[error("no registered schema for family {family:?}")]
     NoModel {
         /// The family asked for.
         family: String,
@@ -233,7 +233,7 @@ pub fn read(document: &Document, family: &str) -> Result<Read, Rejection> {
                 && error.field_path() == ["metadata", "schema"]
             {
                 let text = format!(
-                    "unknown schema identifier: '{written}'; checked against {}, the newest {} \
+                    "unknown schema identifier: {written:?}; checked against {}, the newest {} \
                      revision, without the unknown-key check",
                     newest.identifier,
                     newest.id().family()

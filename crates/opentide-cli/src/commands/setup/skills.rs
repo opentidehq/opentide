@@ -903,7 +903,7 @@ mod tests {
             ("[1]", "is not a JSON object"),
             (
                 "{\"enabledPlugins\": null}",
-                "has a 'enabledPlugins' that is not a JSON object",
+                "has a \"enabledPlugins\" that is not a JSON object",
             ),
             (
                 "{\"extraKnownMarketplaces\": []}",

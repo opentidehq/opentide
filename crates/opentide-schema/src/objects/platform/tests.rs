@@ -61,7 +61,7 @@ fn the_registry_is_closed_and_in_the_containers_order() {
     assert_eq!(
         parse_platform_config("sentinal", &json_node(&json!({}))),
         Err(ParseError::UnknownPlatform(
-            "Unknown platform 'sentinal'".to_owned()
+            "Unknown platform \"sentinal\"".to_owned()
         ))
     );
 }
@@ -73,11 +73,11 @@ fn a_block_names_its_own_schema_or_none() {
     let wrong = merged(&block, &json!({"schema": "splunk::2.1"}));
     assert_eq!(
         errors("splunk", &wrong),
-        "schema: Value error, unknown platform schema 'splunk::2.1': this block's schema is \
-         'platform::splunk::1.0'"
+        "schema: Value error, unknown platform schema \"splunk::2.1\": this block's schema is \
+         \"platform::splunk::1.0\""
     );
     let other = merged(&block, &json!({"schema": "platform::sentinel::1.0"}));
-    assert!(errors("splunk", &other).contains("this block's schema is 'platform::splunk::1.0'"));
+    assert!(errors("splunk", &other).contains("this block's schema is \"platform::splunk::1.0\""));
     let PlatformConfig::Splunk(splunk) = valid("splunk", &merged(&block, &json!({"schema": null})))
     else {
         unreachable!()
@@ -817,7 +817,7 @@ fn garde_runs_the_named_checks_and_the_field_checks() {
         report.contains("is not an ATT&CK v18 technique"),
         "{report}"
     );
-    assert!(report.contains("Duration 'hourly'"), "{report}");
+    assert!(report.contains("Duration \"hourly\""), "{report}");
 }
 
 // ---------------------------------------------------------------------------
@@ -843,7 +843,7 @@ fn sentinel_techniques_are_attack_v18_ids() {
     );
     assert_eq!(
         found,
-        "alert.techniques.0: 'T9999' is not an ATT&CK v18 technique or sub-technique id, which \
+        "alert.techniques.0: \"T9999\" is not an ATT&CK v18 technique or sub-technique id, which \
          is what Sentinel is aligned to"
     );
     let found = errors(
@@ -870,7 +870,7 @@ fn sentinel_frequency_must_be_a_duration_deploy_converts() {
     );
     assert_eq!(
         found,
-        "scheduling.frequency: Value error, Duration 'hourly' is not an ISO 8601 duration \
+        "scheduling.frequency: Value error, Duration \"hourly\" is not an ISO 8601 duration \
          (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
     );
     assert!(
@@ -878,7 +878,7 @@ fn sentinel_frequency_must_be_a_duration_deploy_converts() {
             "sentinel",
             &sentinel_with(&json!({"suppression": "soon"}), &json!({}))
         )
-        .starts_with("alert.suppression: Value error, Duration 'soon'")
+        .starts_with("alert.suppression: Value error, Duration \"soon\"")
     );
     valid(
         "sentinel",

@@ -156,7 +156,7 @@ fn an_unknown_schema_identifier_is_rejected() {
         [(
             "metadata.schema".to_owned(),
             Some("value_error"),
-            "Value error, unknown schema identifier: 'rule:1.0'".to_owned()
+            "Value error, unknown schema identifier: \"rule:1.0\"".to_owned()
         )]
     );
 }
@@ -272,7 +272,7 @@ fn a_single_string_a_packed_string_an_empty_list_and_a_packed_item() {
             errors[0].message,
             format!(
                 "must be a YAML list of {field} vocabulary names, not a single string; list each \
-                 name in 'Data Breach; Identity Theft' as its own item"
+                 name in \"Data Breach; Identity Theft\" as its own item"
             )
         );
         let errors = read::<ThreatVector>(&threat_with(field, "[]")).unwrap_err();
@@ -294,7 +294,7 @@ fn a_single_string_a_packed_string_an_empty_list_and_a_packed_item() {
                 format!("threat.{field}.1"),
                 Some("vocab_packed_names"),
                 format!(
-                    "'{packed}' packs several vocabulary names into one string; list each name \
+                    "{packed:?} packs several vocabulary names into one string; list each name \
                      as its own item"
                 )
             )]
@@ -457,7 +457,7 @@ fn garde_runs_the_same_validators() {
     bad.metadata.schema_id = "rule::9.9".to_owned();
     let report = bad.validate_with(&pins).unwrap_err().to_string();
     assert!(
-        report.contains("unknown schema identifier: 'rule::9.9'"),
+        report.contains("unknown schema identifier: \"rule::9.9\""),
         "{report}"
     );
     assert!(report.contains("not a valid date or time"), "{report}");

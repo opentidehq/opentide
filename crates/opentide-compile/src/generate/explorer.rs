@@ -642,7 +642,7 @@ mod tests {
         )]);
         assert_eq!(
             bundle(&index, "now").unwrap_err().detail,
-            "KeyError: 'objective' while rendering o1"
+            "KeyError: \"objective\" while rendering o1"
         );
     }
 

@@ -670,7 +670,7 @@ mod tests {
     fn help_names_the_replacement_the_step_the_reference_or_the_page() {
         assert_eq!(
             engine_help("kql_unknown_table", "unknown table 'X'", Some("Y")),
-            "did you mean 'Y'?"
+            "did you mean \"Y\"?"
         );
         assert_eq!(
             engine_help("spl_x", "is Not A Command here", Some("stats")),

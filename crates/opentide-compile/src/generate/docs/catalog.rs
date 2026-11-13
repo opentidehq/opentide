@@ -1139,7 +1139,7 @@ mod tests {
         let error = typed::<RuleV1_1>(&document).unwrap_err().detail;
         assert_eq!(
             error,
-            "'R' does not validate: description: field required; opentide validate shows each finding"
+            "\"R\" does not validate: description: field required; opentide validate shows each finding"
         );
     }
 
