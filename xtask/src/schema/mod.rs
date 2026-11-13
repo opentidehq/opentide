@@ -232,10 +232,28 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
         let a = normalise(pydantic, Side::Pydantic, &[]);
+        let mut rust = rust;
+        drop_since_oracle_properties(&mut rust);
         let b = normalise(&rust, Side::Schemars, &[]);
         out.push((name.to_owned(), differences(&a, &b)));
     }
     Ok(out)
+}
+
+/// Removes, at any depth, each `properties` member named after a platform
+/// the recorded oracle lacks (`SINCE_ORACLE`): `RuleConfigurations` and the
+/// rule models carry their blocks, which the 0.23.0 probe's schemas cannot.
+fn drop_since_oracle_properties(schema: &mut Value) {
+    match schema {
+        Value::Object(members) => {
+            if let Some(Value::Object(properties)) = members.get_mut("properties") {
+                properties.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
+            }
+            members.values_mut().for_each(drop_since_oracle_properties);
+        }
+        Value::Array(items) => items.iter_mut().for_each(drop_since_oracle_properties),
+        _ => {}
+    }
 }
 
 fn python(options: &Options, repo: &Path, target: &Path) -> Result<PathBuf> {
@@ -464,6 +482,19 @@ mod tests {
         let options = parse(&args(&["--against", "python", "--only", "schemas"])).unwrap();
         assert_eq!(options.only, Some(Only::Schemas));
         assert!(parse(&args(&["--against", "python", "--only", "x"])).is_err());
+    }
+
+    #[test]
+    fn properties_of_platforms_the_oracle_lacks_are_dropped() {
+        let mut schema = serde_json::json!({"properties": {
+            "configurations": {"properties": {"google_secops": {}, "sentinel": {}}},
+            "google_secops": {"type": "object"}
+        }});
+        drop_since_oracle_properties(&mut schema);
+        assert_eq!(
+            schema,
+            serde_json::json!({"properties": {"configurations": {"properties": {"sentinel": {}}}}})
+        );
     }
 
     #[test]
