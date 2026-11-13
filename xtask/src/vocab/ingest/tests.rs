@@ -71,7 +71,8 @@ fn layout(root: &Path) {
     fs::write(
         repo.join("src/opentide/data/configurations/resources.toml"),
         format!(
-            "[misp.galaxies]\nthreat_actors = \"file://{}\"\n",
+            // A literal string: a Windows path's backslashes are not escapes.
+            "[misp.galaxies]\nthreat_actors = 'file://{}'\n",
             root.join("galaxy.json").display()
         ),
     )
