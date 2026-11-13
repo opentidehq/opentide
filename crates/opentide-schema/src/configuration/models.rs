@@ -1089,9 +1089,9 @@ pub struct GraylogSetup {
     /// Verify the tenant's TLS certificate.
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
-    /// The Graylog web interface's base URL. Calls go to <url>/api/....
+    /// The Graylog web interface's base URL. Calls go to `<url>/api/...`.
     pub url: String,
-    /// A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME placeholder.
+    /// A Graylog access token, sent as HTTP Basic `<token>:token`. Must be a $NAME placeholder.
     pub token: EnvPlaceholder,
     /// Mirrors the server's allow_leading_wildcard_searches.
     #[serde(default)]
