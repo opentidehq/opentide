@@ -145,7 +145,9 @@ pub struct Report {
     pub unreachable: BTreeMap<String, String>,
     /// Code → the groups it is in.
     pub groups: BTreeMap<String, Vec<&'static str>>,
-    /// Codes with neither a kind nor an unreachable entry.
+    /// Code → the unit that owes its fault kind (`[[pending]]`).
+    pub pending: BTreeMap<String, String>,
+    /// Codes with neither a kind, nor an unreachable entry, nor a pending one.
     pub missing: Vec<String>,
     /// Inconsistencies: an unreachable code a kind also produces, a code
     /// out of scope, the inventory recorded from another oracle.
@@ -163,13 +165,14 @@ impl Report {
             .collect();
         let extra = self.groups.len() - in_scope.len();
         format!(
-            "corpus coverage: {} codes in scope, {} with a fault kind, {} with no fault kind (evidence in faults.toml), {} missing, {} problems; {extra} more codes outside the scope have kinds",
+            "corpus coverage: {} codes in scope, {} with a fault kind, {} with no fault kind (evidence in faults.toml), {} pending a fault kind, {} missing, {} problems; {extra} more codes outside the scope have kinds",
             in_scope.len(),
             in_scope
                 .iter()
                 .filter(|c| self.kinds.contains_key(**c))
                 .count(),
             self.unreachable.len(),
+            self.pending.len(),
             self.missing.len(),
             self.problems.len()
         )
@@ -227,6 +230,44 @@ pub fn report(codes: &Codes, catalogue: &Catalogue) -> Report {
                 .push(format!("`{}` is declared unreachable twice", entry.code));
         }
     }
+    for entry in &catalogue.pending {
+        if report.kinds.contains_key(&entry.code) {
+            report.problems.push(format!(
+                "`{}` is pending ({}) but fault kinds produce it: remove its [[pending]] entry",
+                entry.code, entry.owner
+            ));
+        }
+        if report.unreachable.contains_key(&entry.code) {
+            report.problems.push(format!(
+                "`{}` is both pending and declared unreachable",
+                entry.code
+            ));
+        }
+        if !report
+            .groups
+            .get(&entry.code)
+            .is_some_and(|groups| !groups.is_empty())
+        {
+            report.problems.push(format!(
+                "`{}` is pending ({}) but is not in scope",
+                entry.code, entry.owner
+            ));
+        }
+        if entry.owner.trim().is_empty() {
+            report
+                .problems
+                .push(format!("`{}` is pending with no owner", entry.code));
+        }
+        if report
+            .pending
+            .insert(entry.code.clone(), entry.owner.clone())
+            .is_some()
+        {
+            report
+                .problems
+                .push(format!("`{}` is pending twice", entry.code));
+        }
+    }
     report.missing = report
         .groups
         .iter()
@@ -234,6 +275,7 @@ pub fn report(codes: &Codes, catalogue: &Catalogue) -> Report {
             !groups.is_empty()
                 && !report.kinds.contains_key(*code)
                 && !report.unreachable.contains_key(*code)
+                && !report.pending.contains_key(*code)
         })
         .map(|(code, _)| code.clone())
         .collect();
@@ -276,6 +318,30 @@ pub fn render(report: &Report, catalogue: &Catalogue) -> String {
         }
         out.push('\n');
     }
+    if !report.pending.is_empty() {
+        let mut by_owner: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (code, owner) in &report.pending {
+            by_owner.entry(owner).or_default().push(code);
+        }
+        let _ = writeln!(
+            out,
+            "## Pending\n\nCodes in scope whose fault kind the unit named owes (`[[pending]]` in \
+             `faults.toml`). The list must be empty before the catch-up train merges.\n"
+        );
+        for (owner, codes) in &by_owner {
+            let _ = writeln!(
+                out,
+                "- {owner} ({}): {}",
+                codes.len(),
+                codes
+                    .iter()
+                    .map(|c| format!("`{c}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        out.push('\n');
+    }
     if !report.problems.is_empty() {
         let _ = writeln!(out, "## Problems\n");
         for problem in &report.problems {
@@ -309,9 +375,10 @@ pub fn render(report: &Report, catalogue: &Catalogue) -> String {
                     files.to_string(),
                 )
             }
-            None => match report.unreachable.get(code) {
-                Some(reason) => (format!("no fault kind: {reason}"), "-".to_string()),
-                None => ("**missing**".to_string(), "-".to_string()),
+            None => match (report.unreachable.get(code), report.pending.get(code)) {
+                (Some(reason), _) => (format!("no fault kind: {reason}"), "-".to_string()),
+                (None, Some(owner)) => (format!("pending: {owner}"), "-".to_string()),
+                (None, None) => ("**missing**".to_string(), "-".to_string()),
             },
         };
         let _ = writeln!(out, "| `{code}` | {groups} | {kinds} | {files} |");
@@ -374,5 +441,94 @@ reason = "the engine is compiled in"
         assert_eq!(report.problems.len(), 1, "{:?}", report.problems);
         let rendered = super::render(&report, &catalogue);
         assert!(rendered.contains("## Missing\n\n- `yaml_parse`"));
+    }
+
+    /// `[[pending]]` belongs to the catch-up train alone: wherever the
+    /// report-only marker (`tests/golden/REPORT_ONLY`) is absent, the goldens
+    /// gate and every code in scope must have its fault kind, so the list is
+    /// empty. O2's last commit proves it.
+    #[test]
+    fn nothing_is_pending_without_the_report_only_marker() {
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        if crate::golden::report_only::enabled(&repo) {
+            return;
+        }
+        let catalogue =
+            crate::corpus::cli::load_catalogue(&repo.join("tests/corpora/faults.toml")).unwrap();
+        assert!(
+            catalogue.pending.is_empty(),
+            "tests/golden/REPORT_ONLY is gone, so the goldens gate: every code in scope needs \
+             its fault kind, and [[pending]] in tests/corpora/faults.toml must be empty. It \
+             still lists {:?}",
+            catalogue
+                .pending
+                .iter()
+                .map(|entry| format!("{} ({})", entry.code, entry.owner))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// A pending code is neither covered nor missing; the list only
+    /// shrinks: a pending code that has a kind, is out of scope, is also
+    /// unreachable or is listed twice is a problem.
+    #[test]
+    fn pending_codes() {
+        let pending = |entries: &str| Catalogue::parse(&format!("{CATALOGUE}{entries}")).unwrap();
+        let catalogue = pending(
+            r#"
+[[pending]]
+code = "yaml_parse"
+owner = "P-EX"
+"#,
+        );
+        let covered = report(
+            &codes(&["invalid_uuid", "yaml_parse", "engine_unavailable"]),
+            &catalogue,
+        );
+        assert!(covered.missing.is_empty(), "{:?}", covered.missing);
+        assert!(covered.problems.is_empty(), "{:?}", covered.problems);
+        assert_eq!(covered.pending["yaml_parse"], "P-EX");
+        assert!(covered.summary().contains("1 pending a fault kind"));
+        let rendered = super::render(&covered, &catalogue);
+        assert!(rendered.contains("## Pending"), "{rendered}");
+        assert!(rendered.contains("- P-EX (1): `yaml_parse`"), "{rendered}");
+        assert!(rendered.contains("| `yaml_parse` | validation | pending: P-EX | - |"));
+        for (entries, problem) in [
+            // It has a kind now: stale.
+            (
+                "[[pending]]\ncode = \"invalid_uuid\"\nowner = \"P-EX\"\n",
+                "fault kinds produce it",
+            ),
+            // Out of scope.
+            (
+                "[[pending]]\ncode = \"usage_error\"\nowner = \"P-EX\"\n",
+                "not in scope",
+            ),
+            // Twice.
+            (
+                "[[pending]]\ncode = \"yaml_parse\"\nowner = \"P-EX\"\n[[pending]]\ncode = \"yaml_parse\"\nowner = \"P-GL\"\n",
+                "pending twice",
+            ),
+            // Pending and unreachable.
+            (
+                "[[pending]]\ncode = \"engine_unavailable\"\nowner = \"P-EX\"\n",
+                "both pending",
+            ),
+            // No owner.
+            (
+                "[[pending]]\ncode = \"yaml_parse\"\nowner = \" \"\n",
+                "no owner",
+            ),
+        ] {
+            let found = report(
+                &codes(&["invalid_uuid", "yaml_parse", "engine_unavailable"]),
+                &pending(&format!("\n{entries}")),
+            );
+            assert!(
+                found.problems.iter().any(|p| p.contains(problem)),
+                "{problem}: {:?}",
+                found.problems
+            );
+        }
     }
 }

@@ -28,6 +28,21 @@ pub struct Catalogue {
     /// Codes no fault can produce through the CLI, each with its evidence.
     #[serde(rename = "unreachable", default)]
     pub unreachable: Vec<Unreachable>,
+    /// In-scope codes whose fault kinds a unit of a catch-up train still
+    /// owes (`[[pending]]`). The list only shrinks: a pending code that has
+    /// a kind is a problem, and it must be empty outside the train.
+    #[serde(rename = "pending", default)]
+    pub pending: Vec<Pending>,
+}
+
+/// A code in scope whose fault kind is owed, and who owes it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Pending {
+    /// The code.
+    pub code: String,
+    /// The unit that adds its fault kind (`P-EX`, `E2-Y/H1`, ...).
+    pub owner: String,
 }
 
 /// `[base]`: the generator options of the clean workspace.

@@ -1,13 +1,13 @@
 # The fault catalogue (UC-0.6, #804; plan §5.3). Each kind mutates its own
 # copy of the clean base workspace and names exactly the codes, with their
 # severity, that the oracle reports; the expectations are adjusted to what
-# opentide 0.23.0 reports, and what surprises is in KNOWN_GAPS.md.
+# opentide 0.28.1 reports, and what surprises is in KNOWN_GAPS.md.
 #
 #   cargo xtask corpus faults --check --engine python
 #   cargo xtask corpus coverage --check
 #
 # Format and process: README.md. COVERAGE.md maps every code to its kinds.
-oracle = "0.23.0"
+oracle = "0.28.1"
 
 # The clean workspace: zero findings under every command the kinds use.
 [base]
@@ -2122,10 +2122,6 @@ code = "config_check_failed"
 reason = "the language server's code for a configuration checker that raised; no CLI path emits it"
 
 [[unreachable]]
-code = "crowdstrike_unsupported"
-reason = "an engine warning on every CrowdStrike block that lint's query filter drops (cli/services/lint.py _query_findings) and validate never keeps (errors only); language server only"
-
-[[unreachable]]
 code = "defender_output_columns"
 reason = "declared in opentide-core's codes but emitted by no crate"
 
@@ -2160,3 +2156,727 @@ reason = "emitted only by validation.configuration.configuration_file_issues, wh
 [[unreachable]]
 code = "recommended_field_missing"
 reason = "an engine warning lint's query filter drops; language server only (KG-05)"
+
+# Codes in scope whose fault kind a unit of the 0.28 catch-up train still
+# owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them
+# and no kind above produces them yet. Each names its owner. The list only
+# shrinks: `cargo xtask corpus coverage --check` fails on a pending code that
+# a kind now produces, and on any code in scope that is neither covered nor
+# pending; it must be empty before the train merges into integration (xtask's
+# `nothing_is_pending_without_the_report_only_marker`).
+
+[[pending]]
+code = "bitdefender_action_scope"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_contains_no_wildcard"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_criteria_combination"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_criterion_field"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_criterion_relation"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_criterion_shape"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_criterion_value"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_name_duplicate"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_registry_full_hive"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_rule_kind"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_severity"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_severity_collapsed"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_target"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_targets_shape"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_yara_ascii"
+owner = "P-BD"
+
+[[pending]]
+code = "bitdefender_yara_size"
+owner = "P-BD"
+
+[[pending]]
+code = "cql_assignment_as"
+owner = "C1"
+
+[[pending]]
+code = "cql_correlate_aggregate"
+owner = "C1"
+
+[[pending]]
+code = "cql_correlate_placement"
+owner = "C1"
+
+[[pending]]
+code = "cql_deprecated_function"
+owner = "C1"
+
+[[pending]]
+code = "cql_duplicate_parameter"
+owner = "C1"
+
+[[pending]]
+code = "cql_event_function_after_aggregate"
+owner = "C1"
+
+[[pending]]
+code = "cql_free_text_after_aggregate"
+owner = "C1"
+
+[[pending]]
+code = "cql_link_outside_correlate"
+owner = "C1"
+
+[[pending]]
+code = "cql_match_guard"
+owner = "C1"
+
+[[pending]]
+code = "cql_missing_parameter"
+owner = "C1"
+
+[[pending]]
+code = "cql_parameter_value"
+owner = "C1"
+
+[[pending]]
+code = "cql_parse_error"
+owner = "C1"
+
+[[pending]]
+code = "cql_regex_flag"
+owner = "C1"
+
+[[pending]]
+code = "cql_regex_group_under_or"
+owner = "C1"
+
+[[pending]]
+code = "cql_removed_function"
+owner = "C1"
+
+[[pending]]
+code = "cql_string_escape"
+owner = "C1"
+
+[[pending]]
+code = "cql_unknown_event"
+owner = "C1"
+
+[[pending]]
+code = "cql_unknown_function"
+owner = "C1"
+
+[[pending]]
+code = "cql_unknown_parameter"
+owner = "C1"
+
+[[pending]]
+code = "cql_unnamed_argument"
+owner = "C1"
+
+[[pending]]
+code = "exabeam_advanced_in_rule"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_bare_wildcard"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_clause_order"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_context_table_limit"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_context_table_or"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_context_table_trigger"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_correlation"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_correlation_window"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_duration"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_email"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_foreach_clause"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_foreach_position"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_foreach_reference"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_free_text_special"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_function_arity"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_group_by"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_group_by_column"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_group_by_select_star"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_implicit_and"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_implicit_operator"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_ipv6_range"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_keyword_case"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_leading_slash"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_legacy_regex"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_mixed_boolean"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_name_duplicate"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_name_length"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_not_equal"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_outcome"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_outcome_silent"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_parse_error"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_pipe_limit"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_pipe_misuse"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_range"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_regex"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_reserved_alias"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_rgx_extract_limit"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_schedule"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_sequences"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_severity"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_single_group"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_string_field_number"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_threshold_function"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_threshold_operator"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_threshold_value"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_time_exact"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_unknown_field"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_unknown_function"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_unknown_value"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_unquoted_value"
+owner = "P-EX"
+
+[[pending]]
+code = "exabeam_wildcard_in_phrase"
+owner = "P-EX"
+
+[[pending]]
+code = "google_secops_live_frequency_unavailable"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_meta_key"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_name_duplicate"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_risk_score_missing"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_rule_id_literal"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_rule_name"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_run_frequency"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_schedule"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "google_secops_severity"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "graylog_aggregation"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_all_streams"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_analyzed_field"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_double_backslash"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_event_field"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_event_key"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_event_limit"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_field_name"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_leading_wildcard"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_list_shape"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_open_range"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_overlapping_window"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_priority"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_query_blank"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_regex_operator"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_regex_quote"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_regex_unsupported"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_schedule"
+owner = "P-GL"
+
+[[pending]]
+code = "graylog_title_duplicate"
+owner = "P-GL"
+
+[[pending]]
+code = "harfanglab_rule_kind"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "harfanglab_yara_context"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "harfanglab_yara_form"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "harfanglab_yara_import"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "harfanglab_yara_rule_name"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "harfanglab_yara_section_header"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_duplicate_rule"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_duplicate_string"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_duplicate_tag"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_empty_signature"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_entrypoint_deprecated"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_hex_string"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_include"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_meta_missing"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_module_not_imported"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_module_unconfirmed"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_number_out_of_range"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_parse_error"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_regexp"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_rule_identifier_conflict"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_signature_alias"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_slow_pattern"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_string_modifier"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_suspicious_expression"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_type"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_undefined_identifier"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_undefined_string"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_unknown_module"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_unknown_module_member"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_unreferenced_string"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yara_x_incompatible"
+owner = "E2-Y/H1"
+
+[[pending]]
+code = "yaral_condition_shape"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_deprecated_field"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_enum_value"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_export_value"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_function_unavailable"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_leading_wildcard_regex"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_match_shape"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_match_variable"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_match_window"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_meta_duplicate"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_multi_event_match"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_nocase_on_enum"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_option"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_outcome_aggregation"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_outcome_limit"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_parse_error"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_reference_list_deprecated"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_reference_list_limit"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_regex"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_reserved_identifier"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_section_alias"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_section_empty"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_section_header"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_section_missing"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_section_order"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_section_unavailable"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_string_escape"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_type"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_undefined_variable"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_unfiltered_event"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_unknown_function"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_unknown_udm_field"
+owner = "P-GS/E2-L"
+
+[[pending]]
+code = "yaral_window_bound"
+owner = "P-GS/E2-L"

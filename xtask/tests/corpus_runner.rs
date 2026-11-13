@@ -1,5 +1,5 @@
 //! The corpus runner's pass/fail guards, driven through a fake oracle: a
-//! shell script that prints `opentide 0.23.0` for `--version` and canned
+//! shell script that prints `opentide 0.28.1` for `--version` and canned
 //! JSON documents otherwise (the clean base's from `base-<command>.json`,
 //! every other workspace's from `kind-<command>.json`). Each test fails if
 //! its guard in `xtask/src/corpus/cli.rs` is removed.
@@ -16,7 +16,7 @@ mod runner {
     use xtask::corpus::workspace::Family;
 
     const SCRIPT: &str = r#"#!/bin/sh
-if [ "$1" = "--version" ]; then echo "opentide 0.23.0"; exit 0; fi
+if [ "$1" = "--version" ]; then echo "opentide 0.28.1"; exit 0; fi
 dir=$(dirname "$0")
 case "$3" in
   */_base) cat "$dir/base-$4.json" ;;
@@ -25,7 +25,7 @@ esac
 "#;
 
     const CATALOGUE: &str = r#"
-oracle = "0.23.0"
+oracle = "0.28.1"
 [base]
 seed = 1
 threats = 6
@@ -224,7 +224,7 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         lab.catalogue(EXPECTS_UUID);
         let codes = |extra: &str| {
             format!(
-                "oracle = \"0.23.0\"\nout_of_scope = []\n\n[groups]\nvalidation = [\"invalid_uuid\"{extra}]\n\
+                "oracle = \"0.28.1\"\nout_of_scope = []\n\n[groups]\nvalidation = [\"invalid_uuid\"{extra}]\n\
              lint = []\nconfiguration = []\nquery = []\ncompile = []\n"
             )
         };
@@ -240,7 +240,7 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         assert_eq!(coverage("--check"), 1);
         assert!(Path::new(&lab.path("COVERAGE.md")).exists());
         // A problem fails it too: codes recorded from another oracle.
-        lab.write("codes.toml", &codes("").replace("0.23.0", "0.22.0"));
+        lab.write("codes.toml", &codes("").replace("0.28.1", "0.22.0"));
         assert_eq!(coverage("--write"), 1, "codes.toml is from another oracle");
         assert_eq!(coverage("--check"), 1);
     }
@@ -369,7 +369,7 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         ];
         let error = run(&args.map(str::to_string)).unwrap_err();
         assert!(
-            format!("{error:#}").contains("not opentide 0.23.0"),
+            format!("{error:#}").contains("not opentide 0.28.1"),
             "{error:#}"
         );
     }
