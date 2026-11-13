@@ -24,6 +24,33 @@ reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-3
 issue = "https://github.com/opentidehq/opentide/issues/808"
 changelog = "**Tide objects are read as YAML 1.2**"
 
+[[plan]]
+case = "deploy/json/tide-corpus/typo-choice"
+key = "message"
+oracle = "\"--strategy 'PREVEW' is not a deployable strategy. Use PREVIEW or RELEASE\""
+candidate = "\"--strategy \\\"PREVEW\\\" is not a deployable strategy. Use PREVIEW or RELEASE\""
+reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[plan]]
+case = "deploy/json/vscode/dry-run"
+key = "message"
+oracle = "\"\\\"'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\\\"\""
+candidate = "\"\\\"Suspicious LSASS Access\\\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\""
+reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
+[[plan]]
+case = "deploy/json/vscode/uuid"
+key = "message"
+oracle = "\"\\\"'Suspicious LSASS Access' (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\\\"\""
+candidate = "\"\\\"Suspicious LSASS Access\\\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment\""
+reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**Messages quote values the same way everywhere**"
+
 [[diff]]
 corpus = "payloads"
 uuid = "00000000-0000-4000-8005-000000000106"
