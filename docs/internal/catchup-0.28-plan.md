@@ -435,6 +435,7 @@ Four platforms add cases, and the redesigned docs add bytes to every `generate` 
 | D3 | CVE details: CVSS, EPSS, KEV, CWE | M | D1 | train |
 | X1 | Agent-facing docs: AGENTS.md matrix, skills, README, docs pages left in the manifest | S | all P-*, H1 | train |
 | X2 | #1015 ports (packaged skills, YARA warning pages, docs) | S | #1015 merged on development; E1 | train (or integration after O2) |
+| U-0.28.1 | development after v0.28.0: #1029 (notes, `--strict`, `--verbose`) and #1015's packaged skills | M | — | train (`feat/port-0.28.1`) |
 | X3 | #993 port (MCP annotations, MCP Apps views) | M | — | integration after O2 |
 | O2 | Oracle move, recording, reconciliation, train merge | L | every unit above but X3 | train |
 
@@ -448,7 +449,7 @@ train:            └──────┴──────┴── E1 ──�
                                          │          └─ P-EX
                                          ├── E2-L ── P-GS
                                          └── C1
-              F1, F2, F3, F4 (any time) ; D1 ── D2, D3 (from R0) ; X1 (after P-*) ; O2 last
+              F1, F2, F3, F4, U-0.28.1 (any time) ; D1 ── D2, D3 (from R0) ; X1 (after P-*) ; O2 last
 after O2:     X3 (and X2 if #1015 lands late)
 ```
 
@@ -466,12 +467,13 @@ Every brief uses the same base:
   against that branch.
 - Use a worktree with its own Cargo target pool (root `AGENTS.md`, "Parallel agents").
 - Read `.agents/skills/{rust,rust-engine,golden,review-checklist}/SKILL.md`.
-- Python behaviour comes from `git show 3acbea603:<path>`. Port the data, not the formatting: use
+- Python behaviour comes from `git show 3acbea603:<path>`, and for U-0.28.1 from development's
+  tip that M0 merged (`a15c78c73`). Port the data, not the formatting: use
   crates (clap, minijinja, serde_json, jiff, reqwest, regex) and never reproduce a Python library's
   layout byte for byte. Where only layout differs from 0.28.0, the difference is approved in the
   ledger at O2.
 - Take your rows of `docs/internal/catchup-0.28.md`: the data, fixtures, explain pages and docs pages
-  development added for your feature, from `3acbea603`.
+  development added for your feature, from `3acbea603` (U-0.28.1: `a15c78c73`).
 - Definition of done: `scripts/ci-local.sh --full` passes, plus `cargo xtask check-layers`,
   `cargo xtask codegen --check` and `cargo xtask stubs --check` where models changed. Every fix has a
   regression test. `CHANGELOG.md` `[Unreleased]` names only deliberate differences from 0.28.0.
@@ -723,6 +725,38 @@ Every brief uses the same base:
   - (c) Explain wording from the engine's severity for warning-only YARA codes.
   - (d) Docs.
 - **Done.** If the oracle is 0.28.1, there are no ledger entries for these; otherwise each one is ledgered.
+
+#### U-0.28.1: development after v0.28.0 (train, `feat/port-0.28.1`)
+
+- **Goal.** What development merged after `v0.28.0` for 0.28.1: #1029 and the packaged-skills part
+  of #1015. M0 merged both commits (`072fccb07`, `a15c78c73`) for history and left their files at
+  integration's version; this unit ports them.
+- **Do.**
+  - **#1029** (`072fccb07`, optional fields are notes): a third severity, a note, that `--strict`
+    never fails on and that `validate`, `lint` and `validate query` hide unless `--verbose`
+    (`crates/opentide-cli`: the root options, the code frame and the diagnostics UI; the `--json`
+    output keeps every finding, as 0.28.1 does). `metadata_recommended` becomes a note by default,
+    and `lint` gains a `recommended` check (a rule's `configurations` and `response`) with a
+    `[recommended]` table in `lint.toml`. Data: `src/opentide/data/configurations/lint.toml`,
+    `data/diagnostics/{metadata_recommended,recommended_field_missing}.md`.
+  - **#1015's packaged skills** (`a15c78c73`): frontmatter on the packaged authoring skills, and a
+    packaged slug the catalogue lists installs the catalogue's copy (`setup skills`, partly
+    reversing #405). This changes the `skills/*` cassettes, which fetch the catalogue's
+    `detection-engineering`.
+  - Take the manifest's U-0.28.1 rows (`docs/cli/{global-options,lint}.md`,
+    `docs/usage/{repository-setup,workflows/agentic-setup}.md`, the skills paragraphs of
+    `docs/cli/setup.md` and `docs/usage/troubleshooting.md`, the notes and `--verbose` part of
+    `docs/cli/validate.md`, the two explain pages, `lint.toml`, the four packaged `SKILL.md`).
+  - #1015's other fixes stay where the manifest puts them: `exabeam_unknown_value` with P-EX, the
+    YARA warning wording and the Graylog and YARA-L lint warnings in `docs/cli/diagnostics.md`
+    with F3, the YARA lane and P-GS. X2 keeps the agent-facing docs.
+- **Tests.** A note never fails `--strict` and is hidden without `--verbose` (CLI E2E, both
+  renderers); the `recommended` check reports a rule missing `configurations`; `setup skills`
+  installs the catalogue's copy of a packaged slug (cassette).
+- **Golden.** Case definitions for `--verbose` and `lint --check recommended`; the preview check
+  runs against development's tip, not 0.28.0, so expect differences until the oracle moves (§4.1).
+- **Done.** The preview summary for `validate*`, `lint*` and `setup skills` is clean or explained,
+  and the manifest's U-0.28.1 rows are gone.
 
 #### X3: #993 port (integration, after O2)
 
