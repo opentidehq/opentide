@@ -816,6 +816,7 @@ fn platform_block(
         "harfanglab" => pairs.extend(harfanglab(rng, variant, process, name, &mut tags)),
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
+        "bitdefender" => pairs.extend(bitdefender(process)),
         _ => {}
     }
     (Yaml::Map(pairs), tags)
@@ -1252,6 +1253,30 @@ fn sysdig(rng: &mut Rng, variant: usize, tags: &mut Vec<String>) -> Vec<(String,
         ));
     }
     pairs
+}
+
+/// A Bitdefender GravityZone Basic rule on the process target, which
+/// bitdefender-1.0's checks accept.
+fn bitdefender(process: &str) -> Vec<(String, Yaml)> {
+    kv(vec![(
+        "detection",
+        Yaml::map(vec![
+            ("target", Yaml::s("process")),
+            (
+                "criteria",
+                Yaml::Seq(vec![
+                    Yaml::map(vec![
+                        ("field", Yaml::s("Process.Name")),
+                        ("is", Yaml::s(process)),
+                    ]),
+                    Yaml::map(vec![
+                        ("field", Yaml::s("Process.CommandLine")),
+                        ("contains", Yaml::s("*-enc*")),
+                    ]),
+                ]),
+            ),
+        ]),
+    )])
 }
 
 /// A tenant's `[tenants.setup]`: endpoints on reserved example domains and

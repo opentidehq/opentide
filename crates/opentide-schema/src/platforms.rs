@@ -256,6 +256,27 @@ pub const PLATFORMS: &[Platform] = &[
         connector_rank: 8,
         configuration_rank: 8,
     },
+    Platform {
+        id: "bitdefender",
+        label: "Bitdefender GravityZone",
+        configuration_name: "Bitdefender GravityZone",
+        config_class: "BitdefenderConfig",
+        external_id: ExternalId::Text {
+            pattern: Some("^[0-9a-f]{24}$"),
+        },
+        deploys: true,
+        compiles_offline: false,
+        live_check: false,
+        query_runner: false,
+        runner_languages: &[],
+        // `yara` (the Bitdefender profile), and `.yar`/`.yara` files, come
+        // with the YARA lane.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 9,
+        connector_rank: 9,
+        configuration_rank: 9,
+    },
 ];
 
 /// How many platforms are built in.
@@ -430,7 +451,8 @@ mod tests {
                 "harfanglab",
                 "carbon_black_cloud",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender"
             ]
         );
         assert_eq!(
@@ -444,7 +466,8 @@ mod tests {
                 "carbon_black_cloud",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender"
             ]
         );
         assert_eq!(
@@ -458,7 +481,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender"
             ]
         );
         assert_eq!(
@@ -472,7 +496,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender"
             ]
         );
     }
@@ -482,6 +507,7 @@ mod tests {
         assert_eq!(
             state_platforms(),
             [
+                "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
                 "sentinel_one",
@@ -505,7 +531,7 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Name, |p| p.query_runner).len(),
-            PLATFORMS.len() - 1
+            PLATFORMS.len() - 2
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),

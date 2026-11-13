@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn platform_root_extras_follow_the_oracle() {
         let extras = all_root_extras();
-        assert_eq!(extras.len(), 9);
+        assert_eq!(extras.len(), crate::platforms::COUNT);
         let sentinel = &extras[0].1;
         assert_eq!(
             sentinel["required"],

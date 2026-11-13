@@ -247,10 +247,10 @@ pub struct Registered {
     pub schema: &'static str,
 }
 
-/// `PLATFORM_CONFIG_MODELS`: the nine blocks, in the container's order. It is
+/// `PLATFORM_CONFIG_MODELS`: the blocks, in the container's order. It is
 /// closed: a key not listed is not a platform (`RuleConfigurations` refuses it
 /// as an extra key).
-pub const PLATFORM_CONFIG_MODELS: [Registered; 9] = [
+pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<SentinelConfig>("sentinel", "SentinelConfig"),
     registered::<DefenderConfig>("defender_for_endpoint", "DefenderConfig"),
     registered::<SplunkConfig>("splunk", "SplunkConfig"),
@@ -260,6 +260,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; 9] = [
     registered::<CarbonBlackConfig>("carbon_black_cloud", "CarbonBlackConfig"),
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
+    registered::<BitdefenderConfig>("bitdefender", "BitdefenderConfig"),
 ];
 
 const fn registered<T: PlatformBlock>(key: &'static str, model: &'static str) -> Registered {
@@ -287,7 +288,11 @@ pub type LegacyKeys = &'static [(&'static str, Option<&'static str>)];
 /// declare it empty: their before-validators report constraint codes and
 /// accept no extra key. So no block tolerates a key, and the pre-pass
 /// ([`fill_legacy_keys`]) has nothing to move.
-pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[("ElasticConfig", &[]), ("SysdigConfig", &[])];
+pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
+    ("ElasticConfig", &[]),
+    ("SysdigConfig", &[]),
+    ("BitdefenderConfig", &[]),
+];
 
 /// The legacy keys of `model` ([`LEGACY_KEYS`]); a model that declares none
 /// has none.
@@ -374,8 +379,10 @@ pub struct NamedCheck {
 /// The named checks, by name: `elastic_rule_shape` (rule types, removed flat
 /// keys, and every other constraint of `ElasticConfig`'s before-validator)
 /// and `sysdig_rule_shape` (a condition or `append_to_rule`, and every other
-/// constraint of `SysdigConfig`'s).
-pub const NAMED_CHECKS: [NamedCheck; 2] = [
+/// constraint of `SysdigConfig`'s), and `bitdefender_rule_shape` (the
+/// bitdefender-1.0 constraint codes, which `BitdefenderConfig` reports one
+/// per finding at its path, [`bitdefender::block_findings`]).
+pub const NAMED_CHECKS: [NamedCheck; 3] = [
     NamedCheck {
         name: "elastic_rule_shape",
         model: "ElasticConfig",
@@ -385,6 +392,11 @@ pub const NAMED_CHECKS: [NamedCheck; 2] = [
         name: "sysdig_rule_shape",
         model: "SysdigConfig",
         run: sysdig::block_codes,
+    },
+    NamedCheck {
+        name: "bitdefender_rule_shape",
+        model: "BitdefenderConfig",
+        run: bitdefender::block_codes,
     },
 ];
 
@@ -587,6 +599,8 @@ pub enum PlatformConfig {
     Elastic(ElasticConfig),
     /// `sysdig`.
     Sysdig(SysdigConfig),
+    /// `bitdefender`.
+    Bitdefender(BitdefenderConfig),
 }
 
 /// Why [`parse_platform_config`] refused a block.
@@ -623,6 +637,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "carbon_black_cloud" => read(node, PlatformConfig::CarbonBlack),
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
+        "bitdefender" => read(node, PlatformConfig::Bitdefender),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",
             repr::quote(other)

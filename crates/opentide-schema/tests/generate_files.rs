@@ -30,6 +30,50 @@ fn every_platform_template_is_the_committed_one() {
     assert_eq!(platform_template("plugin").unwrap(), None);
 }
 
+/// The platforms ported on the catch-up train: built in here, with no
+/// committed block in the oracle's (0.23.0) recordings. Their blocks are
+/// left out of a template compared with those recordings until the oracle
+/// moves (O2).
+fn ported(recorded: &str) -> Vec<&'static str> {
+    opentide_schema::platforms::PLATFORMS
+        .iter()
+        .map(|platform| platform.id)
+        .filter(|id| !recorded.contains(&format!("\n  #{id}:\n")))
+        .collect()
+}
+
+/// `template` without the commented block of each platform in `platforms`:
+/// its `  #<id>:` line and the deeper lines under it.
+fn without_blocks(template: &str, platforms: &[&str]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut skipping = false;
+    for line in template.split_inclusive('\n') {
+        if platforms
+            .iter()
+            .any(|id| line.trim_end() == format!("  #{id}:"))
+        {
+            skipping = true;
+            continue;
+        }
+        if skipping && line.starts_with("    ") {
+            continue;
+        }
+        skipping = false;
+        out.push_str(line);
+    }
+    out
+}
+
+#[test]
+fn without_blocks_drops_a_platform_block_only() {
+    let text =
+        "configurations:\n  #sysdig:\n    #a: 1\n  #bitdefender:\n    #b: 2\n      #- \nnext:\n";
+    assert_eq!(
+        without_blocks(text, &["bitdefender"]),
+        "configurations:\n  #sysdig:\n    #a: 1\nnext:\n"
+    );
+}
+
 #[test]
 fn every_object_template_is_the_oracles_on_the_tide_corpus() {
     // tide-corpus requires lint's default metadata keys.
@@ -41,6 +85,11 @@ fn every_object_template_is_the_oracles_on_the_tide_corpus() {
         let rendered = object_template(identifier, &Options::default())
             .unwrap()
             .unwrap();
+        let rendered = if identifier.starts_with("rule::") {
+            without_blocks(&rendered, &ported(&expected))
+        } else {
+            rendered
+        };
         assert_eq!(rendered, expected, "{identifier}");
     }
     assert_eq!(

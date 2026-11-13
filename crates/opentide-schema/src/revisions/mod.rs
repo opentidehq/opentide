@@ -86,6 +86,11 @@ const fn revision(identifier: &'static str, kind: Kind, model: &'static str) -> 
 pub const REVISIONS: &[Revision] = &[
     revision("objective::1.0", Kind::Object, "DetectionObjective"),
     revision(
+        "platform::bitdefender::1.0",
+        Kind::Platform,
+        "BitdefenderConfig",
+    ),
+    revision(
         "platform::carbon_black_cloud::1.0",
         Kind::Platform,
         "CarbonBlackConfig",
