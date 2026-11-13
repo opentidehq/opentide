@@ -4,8 +4,7 @@
 //! `explorer.search.json` (one search document per summary), and, when asked
 //! for, `explorer.visibility.json` ([`super::visibility`]).
 //!
-//! The explorer reads them as data: each is one line of JSON with a space
-//! after every `,` and `:`, non-ASCII escaped ([`super::json_text::line`]).
+//! The explorer reads them as data: each is serde_json's compact line.
 
 use std::path::Path;
 
@@ -491,8 +490,8 @@ pub fn outputs(index: &Index, dir: &Path, generated_at: &str) -> Result<Vec<Outp
     let bundle = bundle(index, generated_at)?;
     let search = search(&bundle);
     Ok(vec![
-        Output::text(dir.join(BUNDLE), line(&bundle)),
-        Output::text(dir.join(SEARCH), line(&search)),
+        Output::text(dir.join(BUNDLE), bundle.to_compact()),
+        Output::text(dir.join(SEARCH), search.to_compact()),
     ])
 }
 
@@ -618,7 +617,7 @@ mod tests {
         assert_eq!(rule.get("id"), Some(&Json::from("r1")));
         let content = rule.get("content").unwrap().as_str().unwrap();
         assert!(
-            content.starts_with("{\"name\": \"Rule \\u00e9\", \"metadata\": "),
+            content.starts_with("{\"name\": \"Rule \u{e9}\", \"metadata\": "),
             "{content}"
         );
         let long = "x".repeat(5000);
