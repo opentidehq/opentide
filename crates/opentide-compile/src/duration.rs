@@ -64,9 +64,8 @@ pub fn sentinel_seconds(duration: &str) -> Result<u64, String> {
         }
     }
     Err(format!(
-        "Duration {} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration \
-         (30m, 1h, 1d, 1h10m)",
-        crate::strategy::python_repr(duration)
+        "Duration {duration:?} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
+         duration (30m, 1h, 1d, 1h10m)"
     ))
 }
 
@@ -111,14 +110,12 @@ pub fn sentinel(duration: &str) -> Result<String, String> {
 /// message.
 pub fn elastic_seconds(value: &str, allow_zero: bool) -> Result<u128, String> {
     opentide_core::duration::duration_seconds(value, allow_zero).map_err(|error| match error {
-        opentide_core::duration::DurationError::Format => format!(
-            "Invalid duration format: {}",
-            crate::strategy::python_repr(value)
-        ),
-        opentide_core::duration::DurationError::NotPositive => format!(
-            "Duration must be positive (or zero if allowed): {}",
-            crate::strategy::python_repr(value)
-        ),
+        opentide_core::duration::DurationError::Format => {
+            format!("Invalid duration format: {value:?}")
+        }
+        opentide_core::duration::DurationError::NotPositive => {
+            format!("Duration must be positive (or zero if allowed): {value:?}")
+        }
     })
 }
 
@@ -155,9 +152,7 @@ pub fn elastic_amount(value: &str, units: &str) -> Result<(u128, char), String> 
         }
     }
     Err(format!(
-        "Duration {} cannot be represented in units {}",
-        crate::strategy::python_repr(value),
-        crate::strategy::python_repr(units)
+        "Duration {value:?} cannot be represented in units {units:?}"
     ))
 }
 
@@ -197,7 +192,7 @@ mod tests {
         }
         assert_eq!(
             sentinel("soon").unwrap_err(),
-            "Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
+            "Duration \"soon\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
              duration (30m, 1h, 1d, 1h10m)"
         );
     }

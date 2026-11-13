@@ -4,7 +4,7 @@
 
 **Entry point:** this file is the map; people start at [`CONTRIBUTING.md`](CONTRIBUTING.md). Read the guide of the area you change (below), then the skill that matches the task.
 
-**Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development`. The plan that is moving every implementation into one Rust workspace: [`docs/internal/unified-core.md`](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md) (epic [#790](https://github.com/opentidehq/opentide/issues/790)).
+**Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development`. The plan that is moving every implementation into one Rust workspace: [`docs/internal/unified-core.md`](docs/internal/unified-core.md) (epic [#790](https://github.com/opentidehq/opentide/issues/790)).
 
 ## Map
 

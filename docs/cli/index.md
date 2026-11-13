@@ -9,7 +9,7 @@ icon: Terminal
 The `opentide` command is opentide's Rust core, compiled into the package and run in process by its console script:
 
 ```bash
-pip install 'opentide==0.23.0'
+pip install 'opentide==0.28.1'
 ```
 
 Run `opentide --help` for the live command tree.
