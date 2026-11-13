@@ -123,7 +123,7 @@ pub fn name_error(root: Option<&Node>) -> Result<(), String> {
     };
     match &root.value {
         Value::Map(_) if root.get("name").is_some() => Ok(()),
-        Value::Map(_) => Err(crate::strategy::python_repr("name")),
+        Value::Map(_) => Err(format!("{:?}", "name")),
         Value::Null => Err(not_subscriptable("NoneType")),
         Value::Seq(_) => Err("list indices must be integers or slices, not str".to_owned()),
         Value::Str(_) | Value::Datetime(_) => {
@@ -683,7 +683,7 @@ mod tests {
         let nameless = node::load("a: 1\n").unwrap();
         assert_eq!(
             name_error(nameless.root().map(AsRef::as_ref)),
-            Err("'name'".into())
+            Err("\"name\"".into())
         );
         // A root that is no mapping: `data["name"]`'s TypeError, as Python
         // words it for the type YAML 1.2 reads.

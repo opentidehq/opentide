@@ -219,8 +219,8 @@ impl HostRunner {
         let directory = normalised(&rust.cwd);
         if !directory.is_dir() {
             let message = format!(
-                "[Errno 2] No such file or directory: {}",
-                python_repr(&directory.display().to_string())
+                "[Errno 2] No such file or directory: {:?}",
+                directory.display().to_string()
             );
             return failure(&plan.words, &message, 1);
         }
@@ -353,34 +353,6 @@ fn normalised(path: &str) -> PathBuf {
     if out.as_os_str().is_empty() {
         out.push(".");
     }
-    out
-}
-
-/// `text` as Python's `repr` quotes a string.
-pub fn python_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::from(quote);
-    for c in text.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if u32::from(c) < 0x20 || u32::from(c) == 0x7f => {
-                out.push_str(&format!("\\x{:02x}", u32::from(c)));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
     out
 }
 
@@ -654,14 +626,6 @@ mod tests {
             silent.get("message"),
             Some(&Json::str("The command printed no document"))
         );
-    }
-
-    #[test]
-    fn repr_quotes_as_python_does() {
-        assert_eq!(python_repr("/tmp/a"), "'/tmp/a'");
-        assert_eq!(python_repr("it's"), "\"it's\"");
-        assert_eq!(python_repr("a'\"b"), "'a\\'\"b'");
-        assert_eq!(python_repr("a\\b\n"), "'a\\\\b\\n'");
     }
 
     #[test]

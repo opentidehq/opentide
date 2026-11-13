@@ -533,35 +533,31 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         .map(|(key, _)| key)
         .collect();
     let mut chosen = args.platforms.clone();
-    if family == "rule"
-        && args.platforms.is_empty()
-        && !enabled.is_empty()
-        && let Some(prompter) = cx.prompter.filter(|_| cx.can_prompt)
-    {
-        let labels: Vec<&str> = enabled
-            .iter()
-            .map(|key| {
-                super::setup::wizard::PLATFORMS
-                    .iter()
-                    .find(|(name, _)| name == key)
-                    .map_or(key.as_str(), |(_, label)| *label)
-            })
-            .collect();
-        let asked = prompter.borrow_mut().checkbox_hinted(
-            "Platform blocks",
-            &labels,
-            &[],
-            false,
-            PLATFORMS_HINT,
-        );
-        match asked {
-            Ok(picked) => {
-                chosen = picked
-                    .iter()
-                    .filter_map(|&index| enabled.get(index).cloned())
-                    .collect();
+    if family == "rule" && args.platforms.is_empty() && !enabled.is_empty() {
+        if let Some(prompter) = cx.prompter.filter(|_| cx.can_prompt) {
+            let labels: Vec<&str> = enabled
+                .iter()
+                .map(|key| {
+                    opentide_schema::platforms::get(key)
+                        .map_or(key.as_str(), |platform| platform.label)
+                })
+                .collect();
+            let asked = prompter.borrow_mut().checkbox_hinted(
+                "Platform blocks",
+                &labels,
+                &[],
+                false,
+                PLATFORMS_HINT,
+            );
+            match asked {
+                Ok(picked) => {
+                    chosen = picked
+                        .iter()
+                        .filter_map(|&index| enabled.get(index).cloned())
+                        .collect();
+                }
+                Err(stop) => return stopped(&command, stop, cx),
             }
-            Err(stop) => return stopped(&command, stop, cx),
         }
     }
     let mut platforms: Vec<String> = Vec::new();
