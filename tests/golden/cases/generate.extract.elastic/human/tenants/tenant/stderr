@@ -1,0 +1,14 @@
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mimport from elastic[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mElastic import required field dropped · rule: Encoded PowerShell: "-enc" flag · field: 
+process.args · type: unknown
+[1;33mwarning: [0mSkipping unsupported endpoint response action · rule: Encoded PowerShell: "-enc" flag · 
+command: get-file
+[1;33mwarning: [0mSkipping unsupported osquery response action · rule: Encoded PowerShell: "-enc" flag · 
+reason: osquery response action has no inline query (pack/saved query)
+[1;33mwarning: [0mElastic import window widened · rule: Encoded PowerShell: "-enc" flag · interval: 5m · 
+from: now-3m
+[1;33mwarning: [0mElastic import schedule defaulted · rule: New service name · interval: bogus · from: now-6m
+[1;33mwarning: [0mElastic import rule skipped · rule: New service name · reason: does not validate as 
+platform::elastic::1.0: 1 validation error for ElasticConfig
+[1;33mwarning: [0mElastic import rule skipped · rule: Rule with a legacy id · reason: Kibana rule_id 
+'legacy-rule-7' is not a UUID
+[?25h[1A[2K  [1;32m✓[0m  [1mimport from elastic[0m  [2m4 rules[0m [2m<SECONDS>[0m

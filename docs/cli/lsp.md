@@ -5,7 +5,7 @@ description: The opentide language server, for editors.
 
 # opentide lsp
 
-`pip install opentide` installs the opentide language server: the analysis engine from [opentidehq/language-server](https://github.com/opentidehq/language-server), compiled into the opentide package. There is no second package and no extra. It understands KQL (Sentinel and Defender), SPL, ES|QL, EQL, Kibana KQL (`kuery`), Lucene, Falco (Sysdig Secure) and Tide YAML objects, including the queries inside a rule, and opentide's configuration files.
+`pip install opentide` installs the opentide language server: the analysis engine and the server, built from this repository's Rust workspace ([`crates/opentide-lsp`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-lsp)) and compiled into the opentide package. There is no second package and no extra. The same server ships on its own as the `opentide-lsp` binary ([opentide lsp start and opentide-lsp](#opentide-lsp-start-and-opentide-lsp)). It used to come from opentidehq/language-server; if your editor runs a binary from there, see [Moving from the language-server distribution](../usage/migration/language-server.md). It understands KQL (Sentinel and Defender), SPL, ES|QL, EQL, Kibana KQL (`kuery`), Lucene, Falco (Sysdig Secure) and Tide YAML objects, including the queries inside a rule, and opentide's configuration files.
 
 ```bash
 opentide lsp start
@@ -70,7 +70,7 @@ The server publishes diagnostics as documents change (`textDocument/publishDiagn
 
 `textDocument/codeAction` offers `quickfix` actions for the diagnostics in `context.diagnostics`, or, when the client sends none, for those on the requested lines. Each names its diagnostic and is preferred.
 
-- **Apply a suggestion.** A diagnostic with a `suggestion` gets `Apply suggestion: <suggestion>`, an edit that replaces the diagnostic's range: the bad name in a query, the key in a Tide object. Which codes carry one is in the language server's [`docs/EDITORS.md`](https://github.com/opentidehq/language-server/blob/main/docs/EDITORS.md).
+- **Apply a suggestion.** A diagnostic with a `suggestion` gets `Apply suggestion: <suggestion>`, an edit that replaces the diagnostic's range: the bad name in a query, the key in a Tide object. Which codes carry one is in the engine's [editor notes](https://github.com/opentidehq/opentide/blob/development/docs/engine/EDITORS.md).
 - **Declare a dataset.** In a workspace folder, `kql_table_not_declared`, a `kql_unknown_table` that names `visibility.toml`, `spl_dataset_not_declared` and `elastic_dataset_not_declared` get `Add a [[logsources]] entry declaring '<name>' to visibility.toml`. The edit appends a log source (`name`, an empty `description` to fill in, and `system`) to `.opentide/configurations/visibility.toml` and never edits an existing one. When the file is missing, the edit creates it for a client that can create files (`workspaceEdit.documentChanges` and `resourceOperations: ["create"]`); other clients get no action then. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 - **Fix all.** `source.fixAll.opentide`, only when `context.only` asks for it (`source`, `source.fixAll`): every suggestion of the document as one edit. Editors run it on save when you enable fix-all for the source.
 
@@ -154,7 +154,7 @@ command = "opentide"
 args = ["lsp", "start"]
 ```
 
-Then add `opentide` to the `language-servers` of the languages you edit. Zed takes the same command; the language server repository has [samples for Helix, Neovim and Zed](https://github.com/opentidehq/language-server/tree/main/editors). In VS Code, install the opentide extension (`opentidehq.opentide`), which brings the language server.
+Then add `opentide` to the `language-servers` of the languages you edit. Zed takes the same command; this repository has [samples for Helix, Neovim and Zed](https://github.com/opentidehq/opentide/tree/development/editors), which run `opentide-lsp`. In VS Code, install the opentide extension (`opentidehq.opentide`), which brings the language server.
 
 ## Supported languages and platforms
 
@@ -172,7 +172,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 
 ## opentide lsp start and opentide-lsp
 
-The engine is also published on its own, as the `opentide-lsp` binary ([releases](https://github.com/opentidehq/language-server/releases) and crates.io). `opentide lsp start` runs the same server, with what only opentide can add:
+The engine is also published on its own, as the `opentide-lsp` binary: each opentide [GitHub Release](https://github.com/opentidehq/opentide/releases) carries it for glibc Linux, macOS and Windows (`opentide-installer.sh` and `opentide-installer.ps1` install it with `opentide`), and crates.io has it (`cargo binstall opentide-lsp`, or `cargo install opentide-lsp`). It has the version of the opentide release it ships with. `opentide lsp start` runs the same server, with what only opentide can add:
 
 | | `opentide lsp start` | `opentide-lsp --stdio` |
 |---|---|---|
@@ -180,7 +180,7 @@ The engine is also published on its own, as the `opentide-lsp` binary ([releases
 | Configuration files | Checked, with hover and completion | Checked, with hover and completion |
 | `capabilities.experimental.opentide.host` | `opentide` and its version | `null` |
 
-Use `opentide lsp start` when opentide is installed; the binary on its own suits an editor without Python. Its own command line (`--listen` for TCP, `--version --json`, `analyze`, `highlight`) is documented in the language server repository.
+Use `opentide lsp start` when opentide is installed; the binary on its own suits an editor without Python. Its own command line (`--listen` for TCP, `--version --json`, `analyze`, `highlight`) is documented in [`crates/opentide-lsp`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-lsp#command-line).
 
 ## Source
 

@@ -1,28 +1,42 @@
 name: CI
+# A push's run names the commit's first line, which for a merge is "Merge pull
+# request #N from ...": a failure in the full set on a base branch names the
+# pull request that brought it.
+run-name: >-
+  ${{ github.event_name == 'push'
+  && format('CI on {0}: {1}', github.ref_name, github.event.head_commit.message)
+  || '' }}
 
 # Two scopes (.github/AGENTS.md, "What runs where"; tests/test_ci/test_ci_scope.py):
 #
-# - The core gates run on every pull request, push, schedule and manual run:
-#   lint, engine lint, engine tests on three OSes, Python 3.10 and 3.14,
-#   E2E, GitLab CI lint, golden compare, corpus and cargo deny. They are the
-#   required checks, and their jobs carry no `if`.
-# - The full set adds the rest: Python 3.11-3.13, the engine release dry run,
-#   WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke, the
-#   Windows CLI smoke, the facade crate's every feature and semver checks, the
-#   Node package and its install from a local registry, the installable wheels
-#   and npm tarballs as run artifacts, the cross-SDK conformance suite on three
-#   OSes, LSP clients and benchmarks. It runs nightly, on every push to
-#   development and integration/unified-core, on Run workflow, and on a pull
-#   request that carries the `full-ci` label (read at each push: add the label,
-#   then push, or Run workflow on the branch). Each of these jobs has an `if`
-#   on that condition; the release dry run (and crate packaging) also runs on a
-#   pull request that changes the release's inputs, and the grammar checks on
-#   one that changes the grammars (the `changes` job).
+# - A pull request runs the lean set, on Linux: lint (with actionlint), engine
+#   lint, the engine tests in two shards, Python 3.14, E2E, GitLab CI lint,
+#   golden compare and cargo deny, the core gates, whose jobs carry no `if`;
+#   and the path-scoped jobs whose inputs it changes (the `changes` job): the
+#   corpora, the Node package, the facade crate, the release dry run and the
+#   grammar checks. The required checks keep their names: macOS's and
+#   Windows's engine tests are gathered from the Linux shards, the Python 3.10
+#   cell starts and skips its steps, and the corpus check passes when its parts
+#   were not needed.
+# - The full set adds the rest: macOS and Windows engine tests, Python
+#   3.10-3.13, the engine release dry run, WebAssembly, crate packaging,
+#   grammars, the Elastic sweep, fuzz smoke, the Windows CLI smoke, the facade
+#   crate's every feature and semver checks, the Node package and its install
+#   from a local registry, the installable wheels and npm tarballs as run
+#   artifacts, the cross-SDK conformance suite on three OSes, the corpora, the
+#   query fault kinds against the Rust engine, LSP clients and benchmarks. It
+#   runs nightly, on every push to development, integration/unified-core and a
+#   catch-up train (train/catchup-*), on Run workflow, and on a pull request
+#   that carries the `full-ci` label (read at each push: add the label, then
+#   push, or Run workflow on the branch).
 
 on:
   push:
     # integration/unified-core: the Unified Core PRs merge there before development.
-    branches: [main, development, integration/unified-core]
+    # train/catchup-*: a release train that pull requests target; its pushes save
+    # the caches those pull requests restore (a pull request reads only its base
+    # branch's caches and the default branch's).
+    branches: [main, development, integration/unified-core, "train/catchup-*"]
   # Run workflow, as language-server's engine CI had: the full set.
   workflow_dispatch:
   pull_request:
@@ -32,10 +46,12 @@ on:
     - cron: "11 1 * * *"
 
 concurrency:
-  # The event in the group, so that the nightly run and a push to development
-  # do not cancel each other.
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to development, integration/unified-core or main, the nightly, Run
+  # workflow) has a group of its own, its run id, so none cancels another and
+  # each push to a base branch gets a complete run (tests/test_ci/test_concurrency.py).
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -62,6 +78,9 @@ jobs:
     outputs:
       release: ${{ steps.paths.outputs.release }}
       grammars: ${{ steps.paths.outputs.grammars }}
+      corpus: ${{ steps.paths.outputs.corpus }}
+      node: ${{ steps.paths.outputs.node }}
+      facade: ${{ steps.paths.outputs.facade }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,7 +88,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Detect changes to the release and grammar inputs
+      - name: Detect changes to the path-scoped jobs' inputs
         id: paths
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -80,9 +99,39 @@ jobs:
             grammars/*
             highlights/*
             scripts/engine/check-grammars.sh
+          # The corpora against the oracle and its recordings: the comparisons
+          # (xtask), the crates they hold to the oracle (the models, the
+          # workspace, the compiler, the editor's diagnostics) and their data.
+          # A change to a query engine alone is held by the Rust tests and
+          # golden compare on the pull request, and by the corpora on merge.
+          CORPUS_PATHS: |
+            xtask/*
+            crates/opentide-core/*
+            crates/opentide-schema/*
+            crates/opentide-schema-derive/*
+            crates/opentide-workspace/*
+            crates/opentide-compile/*
+            crates/opentide-lsp/*
+            tests/corpora/*
+            tests/golden/cases*
+            tests/golden/vocab/*
+            src/opentide/data/*
+            Cargo.lock
+            rust-toolchain.toml
+            .github/workflows/ci.yml
+          NODE_PATHS: |
+            bindings/node/*
+            crates/opentide/*
+            scripts/engine/npm-local-registry/*
+            Cargo.lock
+            .github/workflows/ci.yml
+          FACADE_PATHS: |
+            crates/opentide/*
+            Cargo.lock
+            .github/workflows/ci.yml
         run: |
           set -euo pipefail
-          outputs=(release grammars)
+          outputs=(release grammars corpus node facade)
           if [[ "${EVENT_NAME}" != "pull_request" ]] || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
             for output in "${outputs[@]}"; do
               echo "${output}=true" >> "$GITHUB_OUTPUT"
@@ -98,6 +147,7 @@ jobs:
               [[ -n "${file}" ]] || continue
               while IFS= read -r pattern; do
                 # Unquoted on the right: a pattern, not a string.
+                # shellcheck disable=SC2053
                 if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
                   echo "${output} input changed: ${file}"
                   value=true
@@ -141,11 +191,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # The binding `uv sync` builds: the `test` job's cache (3.14), read here.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: python-engine
-          save-if: false
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -156,7 +201,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-lint-
 
       # The tools and the dependencies, not opentide itself: ruff and ty read
@@ -177,6 +222,15 @@ jobs:
 
       - name: Ty type check
         run: uv run --no-sync ty check src/opentide --output-format github
+
+      # The workflows themselves, with shellcheck (on the runner) over their
+      # scripts; .github/actionlint.yaml names what this version does not know.
+      # Built by the runner's Go from the pinned module, which Go's checksum
+      # database verifies (install-action has no build of this version).
+      - name: actionlint
+        run: |
+          GOBIN="${RUNNER_TEMP}/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "${RUNNER_TEMP}/bin/actionlint" -color
 
       # The wheel is built from the sdist in a directory of its own, so this
       # also proves the sdist carries everything the engine's build reads.
@@ -208,7 +262,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
       - name: Detect vocabulary bundle, pin, lockfile or model changes
         id: vocab_changes
@@ -282,24 +336,34 @@ jobs:
   # The Cargo workspace: the engine crates (crates/, imported from
   # opentidehq/language-server) and their PyO3 binding (bindings/python/).
   #
-  # Rust caches (Swatinem/rust-cache), one strategy for the whole file
-  # (tests/test_ci/test_rust_caches.py): every cache names a `shared-key`, and
-  # each shared-key/key pair has exactly one job that saves it, whose
-  # CARGO*/RUST* environment and runner its readers repeat (rust-cache hashes
-  # both into the key).
+  # Compiler caches, one strategy for the whole file
+  # (tests/test_ci/test_rust_caches.py, #841, #1047): sccache (RUSTC_WRAPPER)
+  # in .sccache/, kept by actions/cache under
+  # `sccache-<family>-<hash of Cargo.lock and rust-toolchain.toml>`, restored
+  # with the family as restore-keys and saved by exactly one job, from a push,
+  # only when the key missed. The key does not hash the sources: sccache is
+  # content-addressed, so a copy made a few merges ago still serves every crate
+  # that did not change, and a push to a base branch saves nothing new until the
+  # lockfile or the toolchain does (a key per source tree saved ~4 GB a push and
+  # evicted what pull requests restore). No job with a compiler cache restores
+  # a rust-cache target tree as well.
   #
-  #   engine-check    `engine`: clippy, rustdoc and the invariants (check builds)
-  #   engine-dev      `engine-test` per OS (nextest's debug tree); `clients` and
-  #                   `elastic-sweep` read the Linux one
-  #   engine-package  `engine-package`
-  #   engine-bench    `bench`
-  #   engine-wasm     `engine-wasm`
-  #   fuzz            `fuzz-smoke` (fuzz/NIGHTLY's nightly, fuzz/target)
-  #   python-engine   the Python jobs' `uv sync` build of the binding: `test`
-  #                   (3.14) saves it, the other Linux Python jobs read it
-  #   golden-compare  `golden-compare` (the binding and xtask, -Dwarnings)
-  #   node            `node` (the Node addon, the Python binding and xtask)
-  #   engine-release  the release dry run (engine-release-build.yml), per target
+  #   lint                `lint`
+  #   engine-check        `engine`: clippy, rustdoc and the invariants
+  #   engine-dev-<os>     `engine-test` per OS (its first shard); `clients` and
+  #                       `elastic-sweep` restore the Linux one
+  #   corpus              `corpus-part` (generator); the other parts and
+  #                       `corpus-queries` restore it
+  #   python-engine       the binding `uv sync` builds: `test` (3.14) saves it,
+  #                       the other Linux Python jobs restore it
+  #   golden-compare      `golden-compare`
+  #   full-set-<OS>       the full set's other Rust jobs (facade, node,
+  #                       npm-install, engine-wasm, engine-package, bench,
+  #                       cli-windows-smoke): `conformance` saves it on each OS
+  #
+  # The one rust-cache left: `fuzz` (fuzz-smoke, the fuzz/NIGHTLY nightly,
+  # fuzz/target and cargo-fuzz in ~/.cargo/bin). The release dry run
+  # (engine-release-build.yml) keeps its own per target.
   # ---------------------------------------------------------------------------
 
   # rustfmt, clippy, rustdoc, the crate layers and the engine's invariants.
@@ -333,11 +397,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: engine-check
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
@@ -349,7 +408,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-check-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-engine-check-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-engine-check-
 
       - name: rustfmt
@@ -362,6 +421,12 @@ jobs:
       # (xtask/layers.toml, plan §4).
       - name: crate layers
         run: cargo xtask check-layers
+
+      # The deploy cassettes (tests/cassettes, #831): one per scenario of
+      # scenarios.toml, each recorded from the oracle and redacted, none
+      # edited by hand. It reads the files only.
+      - name: deploy cassettes
+        run: cargo xtask cassettes check
 
       # The artifacts generated from the Rust model (opentide-schema's
       # `generate`): the committed platform templates are current, and the
@@ -399,7 +464,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-check-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-engine-check-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
   # Every test of the workspace with nextest (.config/nextest.toml, profile
   # `ci`) on Linux, macOS and Windows; the doctests (which nextest does not
@@ -417,15 +482,11 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
+      # Linux in two shards on every pull request; macOS and Windows join in
+      # the full set (the gathering job keeps their required checks' names).
       matrix:
-        include:
-          - { os: ubuntu-latest, shard: 1, shards: 2 }
-          - { os: ubuntu-latest, shard: 2, shards: 2 }
-          - { os: macos-latest, shard: 1, shards: 1 }
-          - { os: windows-latest, shard: 1, shards: 1 }
+        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":2},{"os":"ubuntu-latest","shard":2,"shards":2},{"os":"macos-latest","shard":1,"shards":1},{"os":"windows-latest","shard":1,"shards":1}]' || '[{"os":"ubuntu-latest","shard":1,"shards":2},{"os":"ubuntu-latest","shard":2,"shards":2}]') }}
     env:
-      # The first shard of each OS saves its caches; the others read them.
-      ENGINE_CACHE_SHARD: "1"
       RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
       # backtraces keep file:line, and target/ stays a few GB on the runner.
@@ -455,12 +516,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # Dependencies only: rust-cache drops the workspace crates before saving.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: engine-dev
-          key: ${{ matrix.os }}
-          save-if: ${{ github.event_name == 'push' && matrix.shard == env.ENGINE_CACHE_SHARD }}
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
@@ -472,7 +527,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-${{ matrix.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-engine-dev-${{ matrix.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-engine-dev-${{ matrix.os }}-
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -514,7 +569,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-${{ matrix.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-engine-dev-${{ matrix.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
       - name: Upload the JUnit report
         if: failure()
@@ -544,8 +599,13 @@ jobs:
       - name: Every part passed
         env:
           RESULT: ${{ needs.engine-test-part.result }}
+          OS: ${{ matrix.os }}
+          FULL_SET: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
         run: |
           echo "engine test shards: ${RESULT}"
+          if [[ "${OS}" != ubuntu-latest && "${FULL_SET}" != true ]]; then
+            echo "${OS} runs in the full set (pushes, nightly, Run workflow, the full-ci label)"
+          fi
           test "${RESULT}" = success
 
   # The opentide facade crate (UC-5.1, #836) with every feature: its tests and
@@ -557,7 +617,15 @@ jobs:
   # with the facade's features, so it is in the full set.
   facade:
     name: Facade crate (every feature, docs, semver checks)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: changes
+    # The full set, and a pull request that changes the facade crate.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.facade == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -565,6 +633,11 @@ jobs:
       RUSTFLAGS: "-Dwarnings"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -576,11 +649,18 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: engine-facade
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
@@ -627,7 +707,15 @@ jobs:
   # time, so it is in the full set.
   node:
     name: Node package (napi-rs build, tests, golden)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: changes
+    # The full set, and a pull request that changes the Node package.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.node == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -636,6 +724,11 @@ jobs:
       RUSTFLAGS: "-Dwarnings"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -654,11 +747,18 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: node
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -730,7 +830,15 @@ jobs:
   # It reads the node job's Rust cache.
   npm-install:
     name: npm install from a local registry (linux-x64-gnu)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    needs: changes
+    # The full set, and a pull request that changes the Node package.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.node == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -739,6 +847,11 @@ jobs:
       RUSTFLAGS: "-Dwarnings"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -751,10 +864,18 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          shared-key: node
-          save-if: false
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -824,6 +945,11 @@ jobs:
       RUSTFLAGS: "-Dwarnings"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -842,12 +968,18 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: conformance
-          key: ${{ matrix.os }}
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -897,6 +1029,19 @@ jobs:
           path: target/conformance/report.json
           if-no-files-found: ignore
 
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
+
+      # The full set's compiler cache for this OS, which the other full-set
+      # jobs restore: saved from a push, once per Cargo.lock and toolchain.
+      - name: Save the compiler cache
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
   # what they publish; the TypeScript client runs against the native, worker
@@ -912,6 +1057,11 @@ jobs:
     env:
       # build-wasm.sh adds its link arguments to these flags.
       RUSTFLAGS: "-Dwarnings"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -925,11 +1075,18 @@ jobs:
           rustup toolchain install --profile minimal --no-self-update
           rustup target add wasm32-unknown-unknown wasm32-wasip1
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: engine-wasm
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -990,17 +1147,29 @@ jobs:
     env:
       # A compiler warning fails the build, as in engine-ci.yml (workflow-wide there).
       RUSTFLAGS: "-Dwarnings"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: engine-package
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -1148,12 +1317,6 @@ jobs:
             hunting
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
-      # A subset of engine-test's Linux debug tree: read its cache, never save one.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: engine-dev
-          key: ubuntu-latest
-          save-if: false
       # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
@@ -1162,7 +1325,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-ubuntu-latest-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-engine-dev-ubuntu-latest-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-engine-dev-ubuntu-latest-
       - name: detection-rules sweep
         env:
@@ -1315,12 +1478,6 @@ jobs:
           persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
-      # A subset of engine-test's Linux debug tree: read its cache, never save one.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: engine-dev
-          key: ubuntu-latest
-          save-if: false
       # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
@@ -1329,7 +1486,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-ubuntu-latest-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-engine-dev-ubuntu-latest-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-engine-dev-ubuntu-latest-
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -1358,17 +1515,29 @@ jobs:
       contents: read
     env:
       RUSTFLAGS: "-Dwarnings"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: engine-bench
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
       - name: cargo bench (opentide-analysis)
         run: |
           cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
@@ -1383,6 +1552,15 @@ jobs:
   # name. Each step names its part; the setup is every part's.
   corpus-part:
     name: Corpus (${{ matrix.part }})
+    needs: changes
+    # The full set, and a pull request that changes the corpora or what they compare.
+    if: >-
+      !cancelled() && (
+        github.event_name != 'pull_request'
+        || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        || needs.changes.result != 'success'
+        || needs.changes.outputs.corpus == 'true'
+      )
     runs-on: ubuntu-latest
     # 45: the object models' comparison (UC-1.3) validates every corpus again;
     # 60: the index comparison (UC-2.1) loads every corpus and fault kind again;
@@ -1414,10 +1592,6 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: corpus
-          save-if: ${{ github.event_name == 'push' && matrix.part == env.CORPUS_CACHE_PART }}
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -1428,7 +1602,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-corpus-
       - name: Detect vocabulary resolution changes
         if: matrix.part == 'vocabulary'
@@ -1474,6 +1648,15 @@ jobs:
       - name: Fault catalogue against the oracle
         if: matrix.part == 'faults'
         run: cargo xtask corpus faults --check --engine python --report "$RUNNER_TEMP/faults.json"
+      # The platform-block and configuration fault kinds through the Rust
+      # validate, finding for finding against the oracle (UC-1.4 #810, UC-1.5
+      # #811); `corpus-queries` compares the query kinds in the full set.
+      - name: Platform fault kinds against the Rust engine
+        if: matrix.part == 'faults'
+        run: cargo xtask corpus faults --check --engine rust --only platforms
+      - name: Configuration fault kinds against the Rust engine
+        if: matrix.part == 'faults'
+        run: cargo xtask corpus faults --check --engine rust --only configuration
       - name: Upload the fault report
         if: ${{ matrix.part == 'faults' && !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1514,11 +1697,20 @@ jobs:
       - name: Workspace index against the oracle (registry diff)
         if: matrix.part == 'diffs'
         run: cargo xtask registry diff --against python --corpus all
+      # opentide_schema::configuration::resolve against the oracle's (UC-1.5,
+      # #811): every fixture and generated workspace's resolved configuration
+      # and its `validate --check configuration` findings.
+      - name: Configuration resolution against the oracle (config diff)
+        if: matrix.part == 'diffs'
+        run: cargo xtask config diff --against python
       # opentide-compile's request bodies against the oracle's (UC-3.1, #823):
-      # every Sentinel, Elastic and Sysdig block of every rule of every corpus,
-      # the dry run's body, each tenant's and the dry run's payload entry, byte
-      # for byte. The blocks of the platforms opentide-compile does not compile
-      # yet are listed as "not compared", per corpus.
+      # every platform block of every rule of every corpus, all nine platforms,
+      # byte for byte: the dry run's body (Sentinel, Elastic, Sysdig), each
+      # configured tenant's body or, for Defender, Splunk, SentinelOne,
+      # CrowdStrike, HarfangLab and Carbon Black, the writes their deployer
+      # sends, and the dry run's payload entry. Only a rule the oracle's data
+      # model refuses, or one the Rust index does not hold, is listed as "not
+      # compared", per corpus.
       - name: Deploy compile against the oracle (payloads diff)
         if: matrix.part == 'diffs'
         run: >-
@@ -1595,8 +1787,56 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
+
+  # The query fault kinds through the Rust validate and lint with the query
+  # engines, finding for finding against the oracle (UC-2.5, #820; UC-3.5b):
+  # about eight minutes on four cores, so in the full set, not a corpus part.
+  # It reads the corpus parts' caches and saves none.
+  corpus-queries:
+    name: Corpus (query fault kinds) against opentide 0.23.0
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    # corpus-part's, which rust-cache hashes into the key it reads.
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_INCREMENTAL: "0"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-corpus-
+      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/oracle"
+          uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
+            -r tests/corpora/oracle-requirements.txt
+          echo "OPENTIDE_ORACLE=$RUNNER_TEMP/oracle/bin/opentide" >> "$GITHUB_ENV"
+      - name: Query fault kinds against the Rust engine
+        run: cargo xtask corpus faults --check --engine rust --only queries
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
 
   # The required check `Corpus (generator, faults, coverage) against opentide
   # 0.23.0`: it passes only when every part did. `!cancelled()`, not the
@@ -1604,7 +1844,7 @@ jobs:
   # required check passes.
   corpus:
     name: Corpus (generator, faults, coverage) against opentide 0.23.0
-    needs: corpus-part
+    needs: [changes, corpus-part]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1613,9 +1853,21 @@ jobs:
       - name: Every part passed
         env:
           RESULT: ${{ needs.corpus-part.result }}
+          # Whether the parts had to run: the full set, a change to their
+          # inputs, or a filter that failed (it fails open). Otherwise they
+          # are skipped, and this required check passes without them.
+          NEEDED: >-
+            ${{ github.event_name != 'pull_request'
+            || contains(github.event.pull_request.labels.*.name, 'full-ci')
+            || needs.changes.result != 'success'
+            || needs.changes.outputs.corpus == 'true' }}
         run: |
-          echo "corpus parts: ${RESULT}"
-          test "${RESULT}" = success
+          echo "corpus parts: ${RESULT} (needed: ${NEEDED})"
+          if [[ "${NEEDED}" == true ]]; then
+            test "${RESULT}" = success
+          else
+            test "${RESULT}" = skipped
+          fi
 
   # The oldest and newest Python on every pull request; `test-full` adds the
   # ones between in the full set.
@@ -1634,6 +1886,9 @@ jobs:
     # binding is abi3, so it is the same build whatever Python runs the tests,
     # and the jobs share one cache of it (#841).
     env:
+      # The oldest Python (3.10) runs in the full set; on a pull request its
+      # cell starts and skips every step, so its required check reports.
+      RUNS: ${{ matrix.python-version == '3.14' || github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
@@ -1642,6 +1897,10 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: "0"
 
     steps:
+      - name: Python ${{ matrix.python-version }} runs in the full set
+        if: env.RUNS != 'true'
+        run: echo "This cell runs on pushes, nightly, Run workflow and with the full-ci label."
+
       # PR head commit (not merge commit) so coverage line numbers map to the diff.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: matrix.python-version == env.COVERAGE_PYTHON
@@ -1650,16 +1909,18 @@ jobs:
           persist-credentials: false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.python-version != env.COVERAGE_PYTHON
+        if: env.RUNS == 'true' && (matrix.python-version != env.COVERAGE_PYTHON)
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        if: env.RUNS == 'true'
         with:
           enable-cache: true
 
       - name: Set up Python
+        if: env.RUNS == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
@@ -1668,34 +1929,31 @@ jobs:
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
+        if: env.RUNS == 'true'
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # The binding `uv sync` builds (abi3: one build serves every Python).
-      # This job saves it, from its coverage cell; the other Python jobs on
-      # Linux read it.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: python-engine
-          save-if: ${{ github.event_name == 'push' && matrix.python-version == env.COVERAGE_PYTHON }}
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        if: env.RUNS == 'true'
         with:
           tool: sccache@0.19.0
       - name: Restore the compiler cache
+        if: env.RUNS == 'true'
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-python-engine-
 
       - name: Install dependencies
+        if: env.RUNS == 'true'
         run: uv sync --group dev
 
       - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
+        if: env.RUNS == 'true' && (!cancelled())
         run: sccache --show-stats
 
       - name: Save the compiler cache
@@ -1703,7 +1961,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
       # What the Python package holds since UC-6.2 (#841): the SDK, the
       # models, the plugin API, the console script, the docs' snippets and
@@ -1711,7 +1969,7 @@ jobs:
       # the goldens (`golden-check`) and the crates' tests. `-n 4` is pinned
       # for the same reason as the E2E job -- see the note there.
       - name: Pytest
-        if: matrix.python-version != env.COVERAGE_PYTHON
+        if: env.RUNS == 'true' && (matrix.python-version != env.COVERAGE_PYTHON)
         run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
 
       - name: Pytest with coverage
@@ -1739,6 +1997,7 @@ jobs:
 
       - name: Upload coverage to GitHub Code Quality
         if: >-
+          env.RUNS == 'true' &&
           matrix.python-version == env.COVERAGE_PYTHON &&
           (github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository)
@@ -1809,11 +2068,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # The `test` job's cache of the binding `uv sync` builds.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: python-engine
-          save-if: false
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -1824,7 +2078,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-python-engine-
 
       - name: Install dependencies
@@ -1880,11 +2134,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # The `test` job's cache of the binding `uv sync` builds.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: python-engine
-          save-if: false
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -1895,7 +2144,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-python-engine-
 
       - name: Install dependencies
@@ -1964,11 +2213,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # The `test` job's cache of the binding `uv sync` builds.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: python-engine
-          save-if: false
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -1979,7 +2223,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-python-engine-
 
       - name: Install dependencies
@@ -2024,11 +2268,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # The `test` job's cache of the binding `uv sync` builds.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: python-engine
-          save-if: false
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -2039,7 +2278,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-python-engine-
 
       - name: Install dependencies
@@ -2095,13 +2334,6 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      # Its own cache: RUSTFLAGS is part of rust-cache's key, so this job
-      # cannot read `test`'s `python-engine` (built without it).
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: golden-compare
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -2112,7 +2344,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-golden-compare-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-golden-compare-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: sccache-golden-compare-
 
       # The candidate is this repository's CLI, with the engine compiled in.
@@ -2141,7 +2373,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-golden-compare-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          key: sccache-golden-compare-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
 
       - name: Upload the report
         if: always()
@@ -2163,6 +2395,12 @@ jobs:
     # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
     # shares nothing with. Left serial — two small test files, so workers would
     # only add startup cost.
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2183,11 +2421,18 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
-          shared-key: python-engine-windows
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: sccache-full-set-${{ runner.os }}-
 
       - name: Install dependencies
         run: uv sync --group dev

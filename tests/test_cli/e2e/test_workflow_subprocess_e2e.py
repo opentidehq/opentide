@@ -17,9 +17,13 @@ import pytest
 from pytest_console_scripts import RunResult, ScriptRunner
 from tests.test_cli.e2e.helpers import write_tutorial_objects
 
+# The full set only (cli-e2e-full): every command of this chain is a golden case
+# that golden compare runs through the same console script on every pull
+# request, its output byte for byte (tests/golden/cases.toml).
 pytestmark = [
     pytest.mark.cli_smoke,
     pytest.mark.script_launch_mode("subprocess"),
+    pytest.mark.full_set,
 ]
 
 _HAPPY_PATH: tuple[tuple[str, ...], ...] = (
