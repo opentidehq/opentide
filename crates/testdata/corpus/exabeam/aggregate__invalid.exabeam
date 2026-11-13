@@ -1,0 +1,2 @@
+# prod:aggregate invalid
+SELECT COUNT(* AS n WHERE vendor:"Microsoft"

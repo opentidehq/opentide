@@ -35,7 +35,7 @@ use crate::{Failure, throw};
 
 /// How far back `query` searches when it is given no `start`: the Python
 /// SDK's default (`DEFAULT_SINCE`), 24 hours.
-const QUERY_SINCE: Duration = Duration::from_secs(24 * 60 * 60);
+const QUERY_SINCE: Duration = Duration::from_hours(24);
 
 /// A tenant as the workspace configures it (`Workspace.tenants`), or as code
 /// configures it: its platform, its name and its `setup`, whose `$NAME`

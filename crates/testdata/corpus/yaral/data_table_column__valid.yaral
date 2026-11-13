@@ -1,0 +1,2 @@
+// prod:data_table_column valid
+$e.target.user.userid = %admins.userid

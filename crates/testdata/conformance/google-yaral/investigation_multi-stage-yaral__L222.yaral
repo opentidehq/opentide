@@ -1,0 +1,33 @@
+// Calculate the total bytes exchanged per day by source and target
+
+stage daily_stats {
+  metadata.event_type = "NETWORK_CONNECTION"
+  $source = principal.hostname
+  $target = target.ip
+  $source != ""
+  $target != ""
+
+  match:
+    $source, $target by day
+
+  outcome:
+    $exchanged_bytes = sum(network.sent_bytes + network.received_bytes)
+}
+
+// Calculate the average per day over the time window and compare with the bytes exchanged today
+
+$source = $daily_stats.source
+$target = $daily_stats.target
+$date = timestamp.get_date($daily_stats.window_start)
+
+match:
+  $source, $target
+
+outcome:
+  $today_bytes = sum(if($date = timestamp.get_date(timestamp.current_seconds()), cast.as_int($daily_stats.exchanged_bytes), 0))
+  $average_bytes = window.avg($daily_stats.exchanged_bytes)
+  $stddev_bytes = window.stddev($daily_stats.exchanged_bytes)
+  $zscore = ($today_bytes - $average_bytes) / $stddev_bytes
+
+order:
+  $zscore desc

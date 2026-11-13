@@ -1,0 +1,19 @@
+name: Value in list
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000144
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case threshold-in-list.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'
+        threshold: {function: value, field: src_ip, operator: in, value: ['0.0.0.0', 5], within: 1d}

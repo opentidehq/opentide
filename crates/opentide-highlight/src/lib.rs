@@ -64,6 +64,18 @@ pub const CQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/cql/highlights.scm"
 ));
+pub const YARA_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/yara/highlights.scm"
+));
+pub const EXABEAM_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/exabeam/highlights.scm"
+));
+pub const YARAL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/yaral/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language. Configuration TOML has
 /// none: the editor's TOML grammar highlights it.
@@ -79,6 +91,9 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Config => "",
         LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
         LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
+        LanguageId::Yara => YARA_HIGHLIGHTS_SCM,
+        LanguageId::Exabeam => EXABEAM_HIGHLIGHTS_SCM,
+        LanguageId::Yaral => YARAL_HIGHLIGHTS_SCM,
     }
 }
 
@@ -800,12 +815,16 @@ pub fn tokens_from_spans(
 /// `source.<id>`: no known extension owns those scopes (`docs/engine/EDITORS.md`).
 /// CQL is `source.opentide.cql` for the same reason: Cassandra's CQL
 /// extensions own `source.cql`.
+/// YARA is `source.opentide.yara`: the YARA extensions own `source.yara`.
+/// YARA-L is `source.yaral` (yara-l-1.0): Google's own grammar is
+/// `source.yara-l`, so both can be installed.
 /// This is not a HighlightSpec capture, so the rename does not bump
 /// `highlights/spec.toml`.
 pub fn tm_scope_name(language: LanguageId) -> String {
     match language {
         LanguageId::Esql => "source.opentide.esql".to_string(),
         LanguageId::Cql => "source.opentide.cql".to_string(),
+        LanguageId::Yara => "source.opentide.yara".to_string(),
         other => format!("source.{}", other.as_str()),
     }
 }
@@ -835,12 +854,17 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         .unwrap_or("constant.numeric");
     let comment_match = match language {
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
-        LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
+        LanguageId::Kql
+        | LanguageId::Esql
+        | LanguageId::Eql
+        | LanguageId::Yara
+        | LanguageId::Yaral => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
         LanguageId::Spl => Some("```[^`]*```"),
         // A CQL comment starts only where a token may: `https://x` is one pattern.
         LanguageId::Cql => Some("(?:^|(?<=[\\s|(\\[{,;]))//.*$|/\\*[\\s\\S]*?\\*/"),
-        // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
+        // Kibana KQL, Lucene, Falco conditions and the Exabeam Query
+        // Language have no comment syntax.
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco | LanguageId::Exabeam => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
     };
     if let Some(comment_match) = comment_match {
@@ -850,14 +874,14 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
             "comment": "capture:comment",
         }));
     }
-    if language == LanguageId::Spl {
-        if let Some(maps) = spec.captures.get("macro") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
-                "comment": "capture:macro",
-            }));
-        }
+    if language == LanguageId::Spl
+        && let Some(maps) = spec.captures.get("macro")
+    {
+        patterns.push(serde_json::json!({
+            "name": maps.tm,
+            "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
+            "comment": "capture:macro",
+        }));
     }
     patterns.push(serde_json::json!({
         "name": string_tm,
@@ -995,11 +1019,22 @@ pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
         LanguageId::Kql,
     ),
     (&["splunk"], &["query", "search"], LanguageId::Spl),
-    (&["carbon_black_cloud"], &["query"], LanguageId::Lucene),
+    (
+        &["carbon_black_cloud", "graylog"],
+        &["query"],
+        LanguageId::Lucene,
+    ),
     // The rule's condition; a macro's (`macros[].condition`) is a level
     // deeper and is left to semantic tokens.
     (&["sysdig"], &["condition"], LanguageId::Falco),
     (&["crowdstrike"], &["query"], LanguageId::Cql),
+    // The section texts of a Google SecOps block; `match` and `options` are
+    // YAML.
+    (
+        &["google_secops"],
+        &["setup", "events", "outcome", "condition", "export"],
+        LanguageId::Yaral,
+    ),
 ];
 
 /// The embedded region a query of `language` gets: `meta.embedded.block.<id>`.
@@ -1260,6 +1295,27 @@ mod tests {
                 include_str!(concat!(
                     env!("OPENTIDE_ASSETS"),
                     "/grammars/tree-sitter-opentide-cql/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Yara,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-yara/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Exabeam,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-exabeam/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Yaral,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-yaral/queries/highlights.scm"
                 )),
             ),
         ];

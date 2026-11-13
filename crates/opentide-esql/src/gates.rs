@@ -201,20 +201,20 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
             out.push(Gate::new("a `??` identifier parameter", NOT_9_0, span));
         }
         "qualified_interval" => {
-            if let Some(unit) = node.child_by_field_name("unit") {
-                if text(unit, source).eq_ignore_ascii_case("m") {
-                    // EsqlDataTypeConverter.INTERVALS gains `M` on 9.3; earlier
-                    // lines reject `5 m` and `5m` ("Unexpected temporal unit").
-                    out.push(
-                        Gate::new(
-                            "the minute unit `m`",
-                            Availability::since_9(3),
-                            node_span(unit),
-                        )
-                        .note("`min` or `minute` works everywhere")
-                        .suggest("min"),
-                    );
-                }
+            if let Some(unit) = node.child_by_field_name("unit")
+                && text(unit, source).eq_ignore_ascii_case("m")
+            {
+                // EsqlDataTypeConverter.INTERVALS gains `M` on 9.3; earlier
+                // lines reject `5 m` and `5m` ("Unexpected temporal unit").
+                out.push(
+                    Gate::new(
+                        "the minute unit `m`",
+                        Availability::since_9(3),
+                        node_span(unit),
+                    )
+                    .note("`min` or `minute` works everywhere")
+                    .suggest("min"),
+                );
             }
         }
         "source_subquery" => out.extend(subquery_gate(node)),

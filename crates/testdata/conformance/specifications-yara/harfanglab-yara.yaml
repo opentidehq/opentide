@@ -1,0 +1,35 @@
+name: HarfangLab YARA platform block
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000018
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  HarfangLab YARA scan rule.
+status: STAGING
+severity: High
+response:
+  alert_severity: High
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    action: "Alert & Block"
+    yara:
+      meta:
+        context:
+          - file
+        os: Windows
+        arch:
+          - x86
+          - x64
+        classification: trojan
+      imports:
+        - pe
+      strings: |
+        $a = "cmd.exe" ascii
+      condition: |
+        $a

@@ -49,8 +49,8 @@ enum Command {
         #[arg(long)]
         language: Option<String>,
         /// The detection platform a query file is for, as a `configurations`
-        /// key: `carbon_black_cloud` checks Lucene in the Carbon Black
-        /// dialect, `defender_for_endpoint` KQL against the Defender schema.
+        /// key: `carbon_black_cloud` and `graylog` check Lucene in their
+        /// dialects, `defender_for_endpoint` KQL against the Defender schema.
         #[arg(long)]
         platform: Option<String>,
         /// Add a Tide object's platform-block findings, which `opentide lint`
@@ -248,6 +248,18 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
         (
             root.join("cql.tmLanguage.json"),
             serde_json::to_string_pretty(&generate_tm_language(LanguageId::Cql, &spec))?,
+        ),
+        (
+            root.join("yara.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Yara, &spec))?,
+        ),
+        (
+            root.join("exabeam.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Exabeam, &spec))?,
+        ),
+        (
+            root.join("yaral.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Yaral, &spec))?,
         ),
         (
             root.join("monaco.json"),

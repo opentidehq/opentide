@@ -133,7 +133,7 @@ pub fn elastic_format(total: u128) -> String {
         return "0s".to_owned();
     }
     for (unit, size) in ELASTIC_UNITS {
-        if total % size == 0 {
+        if total.is_multiple_of(size) {
             return format!("{}{unit}", total / size);
         }
     }

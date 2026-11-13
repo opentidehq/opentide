@@ -1,0 +1,2 @@
+# prod:list valid
+user:("joe", "jane") AND dest_port:(139, 445) AND src_ip:(0.0.0.0, null)
