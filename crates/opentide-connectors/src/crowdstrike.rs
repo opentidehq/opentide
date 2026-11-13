@@ -386,6 +386,7 @@ impl<'a> Session<'a> {
                 });
             }
             tokio::select! {
+                biased;
                 () = self.cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }
