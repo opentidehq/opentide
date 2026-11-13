@@ -534,3 +534,72 @@ fn a_uri_removed_and_added_in_one_change_is_there_with_its_new_text() {
     );
     assert!(hover.to_string().contains("After"), "{hover}");
 }
+
+/// A Bitdefender block in the editor: `validate`'s findings (the model's
+/// `yara_empty_signature`, the advisories), and completion and hover from
+/// the criteria catalogue.
+#[test]
+fn a_bitdefender_block_is_checked_completed_and_hovered() {
+    let mut session = start(Value::Null);
+    let head = "name: GravityZone rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000098
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A GravityZone rule.
+response:
+  alert_severity: Critical
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+";
+    let yara = format!("{head}    yara:\n      signature: \"  \"\n");
+    let found = open(
+        &mut session,
+        "objects/rules/yara.yaml",
+        "opentide-yaml",
+        &yara,
+    );
+    let found = codes(&found);
+    assert!(found.contains(&"yara_empty_signature"), "{found:?}");
+    assert!(
+        found.contains(&"bitdefender_severity_collapsed"),
+        "{found:?}"
+    );
+
+    let detection = format!(
+        "{head}    detection:\n      target: registry\n      criteria:\n      - field: \
+         Registry.DataType\n        is: dword\n"
+    );
+    let uri = "objects/rules/detection.yaml";
+    open(&mut session, uri, "opentide-yaml", &detection);
+    let line = |needle: &str| {
+        u32::try_from(detection.lines().position(|l| l.contains(needle)).unwrap()).unwrap()
+    };
+    let hover = request(
+        &mut session,
+        2,
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line("Registry.DataType"), "character": 17 } }),
+    );
+    assert!(hover.to_string().contains("Registry type"), "{hover}");
+    let items = request(
+        &mut session,
+        3,
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line("target: registry"), "character": 22 } }),
+    );
+    let labels: Vec<&str> = items
+        .as_array()
+        .or_else(|| items["items"].as_array())
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["label"].as_str())
+        .collect();
+    assert!(labels.contains(&"registry"), "{labels:?}");
+}

@@ -514,6 +514,47 @@ fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
 }
 
 #[test]
+fn bitdefender_signatures_and_yar_files_are_checked_offline_as_yara() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("broken.yar"), "rule A { condition: \n").unwrap();
+    let broken = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "bitdefender",
+            "--file",
+            "broken.yar",
+        ],
+        &[],
+    );
+    let document = broken.json();
+    assert_eq!(broken.code, 1, "{}", broken.stdout);
+    assert_eq!(document["supported"], true);
+    assert_eq!(document["mode"], "offline");
+    assert_eq!(document["queries"][0]["language"], "yara");
+    assert_eq!(document["diagnostics"][0]["code"], "yara_parse_error");
+    std::fs::write(ws.join("ok.yara"), "rule A { condition: true }\n").unwrap();
+    let valid = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "bitdefender",
+            "--file",
+            "ok.yara",
+        ],
+        &[],
+    );
+    assert_eq!(valid.code, 0, "{}", valid.stdout);
+    assert_eq!(valid.json()["queries_validated"], 1);
+}
+
+#[test]
 fn platforms_the_engine_cannot_parse_are_refused() {
     let (_scratch, ws) = corpus();
     let tenant_only = opentide(
