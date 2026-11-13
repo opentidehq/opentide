@@ -18,32 +18,27 @@ cargo install opentide-lsp          # or build it from crates.io
 opentide-lsp --version
 ```
 
-Each engine [GitHub Release](https://github.com/opentidehq/opentide/releases) (tagged `engine-vX.Y.Z`; releases up to 0.12.0 are [language-server's](https://github.com/opentidehq/language-server/releases)) also carries a prebuilt binary per target (`opentide-lsp-vX.Y.Z-<target>`), the browser WASM build, and the highlights zip. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
+Each opentide [GitHub Release](https://github.com/opentidehq/opentide/releases) (tagged `vX.Y.Z` since the release train; the engine's own `engine-vX.Y.Z` releases came before it, and releases up to 0.12.0 are [language-server's](https://github.com/opentidehq/language-server/releases)) also carries a prebuilt binary per target (`opentide-lsp-vX.Y.Z-<target>`, glibc Linux, macOS and Windows; no musl build), the browser WASM build, and the highlights zip. `opentide-installer.sh` and `opentide-installer.ps1` on the same release install it with the `opentide` command line. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
 
 ## Releases
 
-Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](../CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. The procedure is [`.agents/skills/engine-release/SKILL.md`](../../.agents/skills/engine-release/SKILL.md). The crates moved into [opentidehq/opentide](https://github.com/opentidehq/opentide) with their history and release from there with the Engine release workflow (`.github/workflows/engine-release.yml`). Its tags are `engine-vX.Y.Z`: `vX.Y.Z` tags are opentide's own releases.
+Versions follow [Semantic Versioning](https://semver.org/). Every crate shares the workspace version, which is opentide's product version: the wheel, the crates, the npm packages and the binaries carry one version, and one tag releases them all. The procedure is [`.agents/skills/release-management/SKILL.md`](../../.agents/skills/release-management/SKILL.md): `python3 scripts/engine/release.py bump X.Y.Z` (workspace version, internal pins, `Cargo.lock`) in the release's pull request, then **Publish** (`.github/workflows/publish.yml`) on `development`. The changes are listed in opentide's [CHANGELOG.md](../../CHANGELOG.md); [crates/CHANGELOG.md](../CHANGELOG.md) holds the engine's releases before the release train.
 
-1. In a pull request, run `python3 scripts/engine/release.py bump X.Y.Z` (workspace version, internal pins, `Cargo.lock`) and write the `X.Y.Z` section of `crates/CHANGELOG.md`; its first paragraph is the summary. `python3 scripts/engine/release.py check engine-vX.Y.Z` confirms they agree.
-2. Merge it, then run the **Engine release** workflow on `development` (or push the tag `engine-vX.Y.Z`).
+The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release, creating the tag. Then it publishes the crates to crates.io in dependency order (a resumed run, `checkout_ref=vX.Y.Z`, picks up where it stopped). Assets are never uploaded over: once a GitHub Release has them, a re-run fails, so each asset keeps the digest consumers pinned.
 
-A release candidate is a pushed `engine-vX.Y.Z-rc.N` tag with the workspace at `X.Y.Z`: a GitHub pre-release with every asset, `SHA256SUMS` and provenance, and nothing on crates.io or npm.
-
-The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (re-running the failed `crates` job resumes where it stopped). Assets are never uploaded over: once a GitHub Release has them, a re-run of its tag push or of the release job fails, so each asset keeps the digest consumers pinned. To finish publishing a released version, run the workflow on `development` with `publish_only`.
-
-Every asset of a GitHub Release is listed in its `SHA256SUMS` (`scripts/engine/release.py sums`) and carries a [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) signed by the Engine release workflow. To check a download:
+Every asset of a GitHub Release is listed in its `SHA256SUMS` (`scripts/engine/release.py sums`) and carries a [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) signed by the release workflow. To check a download:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS        # only the assets you downloaded
 gh attestation verify highlights-vX.Y.Z.zip --repo opentidehq/opentide \
-  --cert-identity-regex '^https://github\.com/opentidehq/opentide/\.github/workflows/engine-release\.yml@refs/(heads/development|tags/engine-vX\.Y\.Z)$'
+  --cert-identity-regex '^https://github\.com/opentidehq/opentide/\.github/workflows/publish\.yml@refs/heads/development$'
 ```
 
-`--repo` alone accepts an attestation that any workflow of the repository signed, from any branch; `--cert-identity-regex` requires the Engine release workflow, run from `development` or from the version's tag. language-server's releases (0.12.0 and earlier) verify with `--repo opentidehq/language-server` and its `release.yml` on `main` or `vX.Y.Z`.
+`--repo` alone accepts an attestation that any workflow of the repository signed, from any branch; `--cert-identity-regex` requires the release workflow, run from `development`. The engine's own releases (`engine-vX.Y.Z`) verify with `engine-release\.yml@refs/(heads/development|tags/engine-vX\.Y\.Z)`; language-server's (0.12.0 and earlier) with `--repo opentidehq/language-server` and its `release.yml` on `main` or `vX.Y.Z`.
 
 The workflow runs both on the published assets before it publishes the crates.
 
-crates.io publishing uses [trusted publishing](https://crates.io/docs/trusted-publishing): the first release publishes with the `CARGO_REGISTRY_TOKEN` secret (scopes `publish-new`, `publish-update`, `trusted-publishing`) and registers `engine-release.yml` as each crate's trusted publisher; later releases log in with the workflow's OIDC identity. The token is then needed only to publish a crate that does not exist yet.
+crates.io publishing uses [trusted publishing](https://crates.io/docs/trusted-publishing): a crate's first version publishes with the `CARGO_REGISTRY_TOKEN` secret (scopes `publish-new`, `publish-update`, `trusted-publishing`), which also registers `publish.yml` as each crate's trusted publisher; later releases log in with the workflow's OIDC identity.
 
 The crates embed catalogs and grammars from the repository root; `scripts/engine/release.py vendor` copies them into each crate first, and CI packages every crate (nightly, on every push, and on a pull request that changes the Cargo manifests or carries the `full-ci` label) so a missing file fails there.
 

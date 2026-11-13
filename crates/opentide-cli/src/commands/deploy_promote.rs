@@ -10,10 +10,16 @@
 //! half-promoted; a status the promotion cannot rewrite safely (an anchor, an
 //! alias, a merge key) leaves its file as it is, with a warning. The text
 //! edit is [`opentide_compile::promotion`].
+//!
+//! A target that is not a configured status (none set, or not a string) ends
+//! the run as the oracle's `sys.exit(1)` does; a promoted block whose key is
+//! not a string, and promoted text that does not read back, fail it with the
+//! exception the oracle raises.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use opentide_compile::Json as Setting;
 use opentide_compile::promotion::{self, Error, LOGGER, NOT_PROMOTED_ADVICE, Settings};
 use opentide_schema::node;
 
@@ -60,28 +66,18 @@ pub enum Stop {
     Failed(String),
     /// The oracle exits 1 without a result (an invalid target).
     Exit,
-    /// The promotion cannot rewrite this push (no promotion target, a rule
-    /// file whose platform keys or promoted text it cannot read back): the run
-    /// fails before anything is printed, and `--skip-promotion` deploys
-    /// without it.
-    Unsupported(String),
 }
 
 /// One thing the promotion logs, in the order the oracle logs it.
 enum Event {
     Info(&'static str, Vec<(&'static str, String)>),
     NotPromoted { path: String, detail: String },
-    InvalidTarget { target: String, detail: String },
+    InvalidTarget { target: Setting, detail: String },
 }
 
 fn emit(event: &Event) {
     match event {
-        Event::InvalidTarget { target, detail } => tracing::error!(
-            target = target.as_str(),
-            detail = detail.as_str(),
-            logger = LOGGER,
-            "invalid_promotion_target"
-        ),
+        Event::InvalidTarget { target, detail } => invalid_target(target, detail),
         Event::NotPromoted { path, detail } => tracing::warn!(
             path = path.as_str(),
             detail = detail.as_str(),
@@ -113,6 +109,68 @@ fn emit(event: &Event) {
     }
 }
 
+/// Logs `invalid_promotion_target` with the target as the oracle's
+/// structlog line holds it: a number as one, anything else as Python's `str`
+/// writes it (`None` when no target is set, `True`). A JSON log line holds
+/// a boolean, an array or a table as that text where the oracle's holds the
+/// value.
+fn invalid_target(target: &Setting, detail: &str) {
+    let event = "invalid_promotion_target";
+    match target {
+        Setting::Int(number) => {
+            tracing::error!(target = number, detail, logger = LOGGER, "{event}");
+        }
+        Setting::Float(number) => {
+            tracing::error!(target = number, detail, logger = LOGGER, "{event}");
+        }
+        other => {
+            let text = python_str(other);
+            tracing::error!(target = text.as_str(), detail, logger = LOGGER, "{event}");
+        }
+    }
+}
+
+/// A TOML value as Python's `str` writes what `tomllib` reads it as.
+fn python_str(value: &Setting) -> String {
+    match value {
+        Setting::Null => "None".to_owned(),
+        Setting::Str(text) => text.clone(),
+        other => python_repr_of(other),
+    }
+}
+
+/// A TOML value as Python's `repr` writes what `tomllib` reads it as.
+fn python_repr_of(value: &Setting) -> String {
+    match value {
+        Setting::Null => "None".to_owned(),
+        Setting::Bool(true) => "True".to_owned(),
+        Setting::Bool(false) => "False".to_owned(),
+        Setting::Int(number) => number.to_string(),
+        Setting::Float(number) => format!("{number:?}"),
+        Setting::Str(text) => crate::serve::runner::python_repr(text),
+        Setting::Array(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(python_repr_of)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Setting::Object(entries) => format!(
+            "{{{}}}",
+            entries
+                .iter()
+                .map(|(key, value)| format!(
+                    "{}: {}",
+                    crate::serve::runner::python_repr(key),
+                    python_repr_of(value)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
 /// Runs the promotion: plans every file, then logs, writes and draws the
 /// step. `Ok` when the run goes on to plan.
 ///
@@ -121,7 +179,7 @@ fn emit(event: &Event) {
 /// [`Stop`]: how the run ends instead.
 pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
     let started = Instant::now();
-    let (events, planned, mut ended) = plan(promotion)?;
+    let (events, planned, mut ended) = plan(promotion);
     for event in &events {
         emit(event);
     }
@@ -163,8 +221,7 @@ type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>)>, Option<Stop>);
 
 /// Every file read and planned (`PromoteMDR.promote` up to its writes): the
 /// events to log, the bytes to write, and how the run stops, if it does.
-/// `Err` only for [`Stop::Unsupported`], before anything is shown.
-fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
+fn plan(promotion: &Promotion<'_>) -> Planned {
     let settings = promotion.settings;
     let mut events = vec![Event::Info(
         "rule_promotion_started",
@@ -181,17 +238,16 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
                 "Enable status promotion under [promotion] in deployment.toml".into(),
             )],
         ));
-        return Ok((events, Vec::new(), None));
+        return (events, Vec::new(), None);
     }
+    // `PROMOTION_TARGET not in VALID_STATUSES`: a target that is not set, or
+    // not a string, names no status either.
     let Some(target) = settings.valid_target() else {
-        let Some(target) = settings.target.as_deref() else {
-            return Err(Stop::Unsupported("no promotion target".into()));
-        };
         events.push(Event::InvalidTarget {
-            target: target.to_owned(),
+            target: settings.target_value.clone(),
             detail: format!("Valid statuses: {}", settings.valid.join(", ")),
         });
-        return Ok((events, Vec::new(), Some(Stop::Exit)));
+        return (events, Vec::new(), Some(Stop::Exit));
     };
     let files = if promotion.debug {
         promotion.local
@@ -201,18 +257,17 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
                 "found_nothing_to_deploy_in_pre_deployment_environment_variable",
                 Vec::new(),
             ));
-            return Ok((events, Vec::new(), None));
+            return (events, Vec::new(), None);
         }
         promotion.changed
     };
     let mut planned = Vec::new();
     for path in files {
-        let unsupported = |why: &str| Stop::Unsupported(format!("{}: {why}", path.display()));
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(error) => {
                 let failed = Stop::Failed(os_error(&error, path));
-                return Ok((events, Vec::new(), Some(failed)));
+                return (events, Vec::new(), Some(failed));
             }
         };
         // A file that does not read as YAML fails the run, as the oracle's
@@ -221,12 +276,12 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
             Ok(document) => document,
             Err(error) => {
                 let failed = Stop::Failed(unreadable(path, &error));
-                return Ok((events, Vec::new(), Some(failed)));
+                return (events, Vec::new(), Some(failed));
             }
         };
         let root = document.root().map(AsRef::as_ref);
         if let Err(message) = promotion::name_error(root) {
-            return Ok((events, Vec::new(), Some(Stop::Failed(message))));
+            return (events, Vec::new(), Some(Stop::Failed(message)));
         }
         let name = root
             .and_then(|root| root.get("name"))
@@ -272,10 +327,20 @@ fn plan(promotion: &Promotion<'_>) -> Result<Planned, Stop> {
                 path: path.display().to_string(),
                 detail,
             }),
-            Err(Error::Unported(why)) => return Err(unsupported(&why)),
+            // `planned_statuses`' `ValueError`, the parser's words this
+            // loader's.
+            Err(Error::Unreadable(words)) => {
+                let message = format!("{}: cannot promote its statuses: {words}", path.display());
+                return (events, Vec::new(), Some(Stop::Failed(message)));
+            }
+            // `expected["configurations"][platform]`'s `KeyError`.
+            Err(Error::KeyError(key)) => {
+                let message = crate::serve::runner::python_repr(&key);
+                return (events, Vec::new(), Some(Stop::Failed(message)));
+            }
         }
     }
-    Ok((events, planned, None))
+    (events, planned, None)
 }
 
 /// The message of a rule file this loader cannot read as YAML: the oracle
@@ -358,20 +423,6 @@ pub fn stopped(stop: &Stop) -> Vec<(String, Json)> {
             ("_exit_code".to_owned(), Json::Int(1)),
             (BARE_EXIT.to_owned(), Json::Bool(true)),
         ],
-        Stop::Unsupported(why) => {
-            tracing::debug!(detail = why.as_str(), "promotion_unsupported");
-            vec![
-                ("status".to_owned(), Json::str("failed")),
-                (
-                    "message".to_owned(),
-                    Json::str(format!(
-                        "opentide deploy's status promotion cannot rewrite this push ({why}): \
-                         pass --skip-promotion to deploy without it."
-                    )),
-                ),
-                ("_exit_code".to_owned(), Json::Int(1)),
-            ]
-        }
     }
 }
 
@@ -414,6 +465,7 @@ mod tests {
         Settings {
             enabled,
             target: Some(target.to_owned()),
+            target_value: Setting::Str(target.to_owned()),
             valid: vec!["STAGING".into(), "PRODUCTION".into(), "REMOVED".into()],
             non_promotable: vec!["PRODUCTION".into(), "REMOVED".into()],
         }
@@ -593,15 +645,72 @@ mod tests {
             assert!(drawn.contains("status promotion"), "{drawn}");
             assert_eq!(after, [RULE.as_bytes(), bytes]);
         }
-        let result = stopped(&Stop::Unsupported("why".into()));
-        assert!(result.contains(&("_exit_code".to_owned(), Json::Int(1))));
-        assert!(result.contains(&(
-            "message".to_owned(),
-            Json::str(
-                "opentide deploy's status promotion cannot rewrite this push (why): pass \
-                 --skip-promotion to deploy without it."
-            )
-        )));
+    }
+
+    /// No target, or one that is not a string, names no status: the
+    /// oracle's `PROMOTION_TARGET not in VALID_STATUSES` exits 1 as an
+    /// invalid target does, nothing written.
+    #[test]
+    fn a_target_unset_or_not_a_string_is_an_invalid_target() {
+        for target in [Setting::Null, Setting::Int(1), Setting::Bool(true)] {
+            let settings = Settings {
+                target: None,
+                target_value: target.clone(),
+                ..settings(true, "PRODUCTION")
+            };
+            let (outcome, drawn, after) =
+                promote(&settings, &[("a.yaml", RULE.as_bytes())], false, false);
+            assert_eq!(outcome, Err(Stop::Exit), "{target:?}");
+            assert_eq!(after[0], RULE.as_bytes());
+            assert!(drawn.contains("✗ status promotion · 1 rule"), "{drawn}");
+        }
+        assert_eq!(python_str(&Setting::Null), "None");
+        assert_eq!(
+            python_str(&Setting::Array(vec![
+                Setting::Str("A".into()),
+                Setting::Float(1.5),
+                Setting::Bool(false),
+            ])),
+            "['A', 1.5, False]"
+        );
+    }
+
+    /// A promoted block whose key is not a string fails the run with the
+    /// oracle's `KeyError`, nothing written; the other file is not promoted.
+    #[test]
+    fn a_promoted_block_whose_key_is_not_a_string_fails_the_run() {
+        let keyed = RULE.replace("  splunk:\n", "  1:\n");
+        let (outcome, _, after) = promote(
+            &settings(true, "PRODUCTION"),
+            &[("a.yaml", RULE.as_bytes()), ("b.yaml", keyed.as_bytes())],
+            false,
+            false,
+        );
+        assert_eq!(outcome, Err(Stop::Failed("'1'".into())));
+        assert_eq!(after, [RULE.as_bytes(), keyed.as_bytes()]);
+    }
+
+    /// Promoted text that does not read back fails the run with the
+    /// oracle's `ValueError`, naming the file; nothing is written.
+    #[test]
+    fn promoted_text_that_does_not_read_back_fails_the_run() {
+        let flow = "name: R\nconfigurations:\n  splunk: {status: STAGING, query: x}\n";
+        let settings = Settings {
+            target: Some("LIVE}".into()),
+            target_value: Setting::Str("LIVE}".into()),
+            valid: vec!["STAGING".into(), "LIVE}".into()],
+            non_promotable: vec!["LIVE}".into()],
+            enabled: true,
+        };
+        let (outcome, _, after) = promote(&settings, &[("a.yaml", flow.as_bytes())], false, false);
+        let Err(Stop::Failed(message)) = outcome else {
+            panic!("{outcome:?}");
+        };
+        assert!(
+            message.contains("a.yaml: cannot promote its statuses: "),
+            "{message}"
+        );
+        assert_eq!(after[0], flow.as_bytes());
     }
 
     #[test]

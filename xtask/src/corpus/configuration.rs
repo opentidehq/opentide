@@ -109,13 +109,13 @@ pub const APPROVED: &[Approved] = &[
         kind: "config-parse-visibility",
         reason: "a file that is not TOML is refused by the toml_edit crate, with its own \
                  words and position",
-        changelog: "**Configuration files are read by the Rust engine**",
+        changelog: "**Configuration files are read as TOML 1.0**",
     },
     Approved {
         kind: "sharing-config-parse",
         reason: "a file that is not TOML is refused by the toml_edit crate, with its own \
                  words",
-        changelog: "**Configuration files are read by the Rust engine**",
+        changelog: "**Configuration files are read as TOML 1.0**",
     },
 ];
 

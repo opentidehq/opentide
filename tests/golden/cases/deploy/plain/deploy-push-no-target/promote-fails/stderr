@@ -1,0 +1,2 @@
+error: Invalid promotion target · target: 1 · detail: Valid statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
+✗ status promotion · 1 rule · <SECONDS>

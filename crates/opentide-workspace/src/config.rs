@@ -21,6 +21,9 @@ use crate::root::{OPENTIDE_DIR, Roots};
 /// Families the registry never scans (`RegistryBuilder.SKIPS`).
 pub const SKIPPED_FAMILIES: [&str; 2] = ["ram", "mdrv2"];
 
+/// The configuration file the layering never reads (`_SKIPPED_CONFIG_FILES`).
+const SHARING_FILE: &str = "sharing.toml";
+
 /// The families a `[paths.objects]` folder can name.
 const FOLDER_FAMILIES: [&str; 3] = ["threat", "objective", "rule"];
 
@@ -164,8 +167,11 @@ fn read_folder(
             }
             EntryKind::File => {
                 // Every top-level file name counts (a retired `global.toml`),
-                // but only TOML files are read.
-                let text = if is_toml(&entry.name) {
+                // but only TOML files are read, and never `sharing.toml`:
+                // sharing has a loader of its own (`_SKIPPED_CONFIG_FILES`),
+                // so a sharing.toml that is not UTF-8 is `sharing-config`'s
+                // finding, not a configuration every command stops on.
+                let text = if is_toml(&entry.name) && entry.name != SHARING_FILE {
                     read(&path)?
                 } else {
                     String::new()

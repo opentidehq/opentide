@@ -8,7 +8,9 @@
 //! through the node tree, never by line, so comments, quoting, key order and
 //! line endings survive. The result is read back and must differ from the
 //! original by exactly those values. A status written as an anchor, an alias
-//! or under a merge key is not rewritten ([`Error::Refused`]).
+//! or under a merge key is not rewritten ([`Error::Refused`]); a rewrite the
+//! oracle's promotion raises on ([`Error::Unreadable`], [`Error::KeyError`])
+//! fails the run.
 //!
 //! This module reads no file: the host reads the rule files, logs, and
 //! writes what [`promote_block_statuses`] returns.
@@ -31,12 +33,15 @@ pub const NOT_PROMOTED_ADVICE: &str =
     "Write each platform block's status as a plain value, then deploy again";
 
 /// `[promotion]` of `deployment.toml`, with the statuses it is checked against.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     /// `enabled`, read as Python reads its truth.
     pub enabled: bool,
-    /// `promotion_target`.
+    /// `promotion_target`, when it is a string.
     pub target: Option<String>,
+    /// `promotion_target` as the oracle's log writes it, whatever its type:
+    /// `None` when it is not set (`invalid_promotion_target`).
+    pub target_value: Json,
     /// Every configured status name, in order (`VALID_STATUSES`).
     pub valid: Vec<String>,
     /// The statuses a promotion never moves: those whose strategy is
@@ -57,6 +62,10 @@ impl Settings {
                 .and_then(|p| p.get("promotion_target"))
                 .and_then(Json::as_str)
                 .map(str::to_owned),
+            target_value: promotion
+                .and_then(|p| p.get("promotion_target"))
+                .cloned()
+                .unwrap_or(Json::Null),
             valid: statuses.0.iter().map(|(name, _)| name.clone()).collect(),
             non_promotable: statuses
                 .0
@@ -88,10 +97,16 @@ pub enum Error {
     /// The promotion cannot rewrite it without changing what else it says
     /// (`PromotionRefused`): the file is left as it is, with a warning.
     Refused(String),
-    /// A case the promotion does not rewrite (a value YAML 1.1 and 1.2 read
-    /// differently, promoted text that does not read back): the host fails
-    /// the run and names `--skip-promotion`.
-    Unported(String),
+    /// The target, or the promoted text, does not read as YAML: the oracle
+    /// raises `ValueError("<file>: cannot promote its statuses: <the
+    /// parser's words>")` and the run fails. This holds the words, this
+    /// loader's rather than PyYAML's.
+    Unreadable(String),
+    /// A promoted platform block's key is not a string (`1:`, `null:`): the
+    /// oracle's `expected["configurations"][platform]` looks it up by the
+    /// text it was written as and raises `KeyError`, which fails the run.
+    /// This holds that text; the run's message is its `repr`.
+    KeyError(String),
 }
 
 /// What `data["name"]` gives for a rule file read as `root`: `Ok` when the
@@ -139,11 +154,30 @@ pub fn promotable(root: &Node, non_promotable: &[String]) -> Vec<(String, String
         .collect()
 }
 
+/// A key as Python's `str` writes the value PyYAML reads it as
+/// (`f"{key} : {value}"`).
 fn key_text(key: &Node) -> String {
     match &key.value {
         Value::Str(text) => text.clone(),
+        Value::Null => "None".to_owned(),
+        Value::Bool(true) => "True".to_owned(),
+        Value::Bool(false) => "False".to_owned(),
         other => other.to_string(),
     }
+}
+
+/// The text a scalar `node` is written as, without a tag before it: the
+/// value of PyYAML's `ScalarNode` for a plain scalar.
+fn written(source: &str, offsets: &[usize], node: &Node) -> String {
+    let text = span(source, offsets, node).trim();
+    let text = match text.strip_prefix('!') {
+        Some(rest) => rest
+            .split_once([' ', '\t'])
+            .map_or("", |(_, value)| value)
+            .trim_start(),
+        None => text,
+    };
+    text.to_owned()
 }
 
 /// Whether `key` is YAML 1.1's merge key: `<<`, written plain.
@@ -227,7 +261,9 @@ fn scalar_end(source: &str, start: usize, end: usize) -> usize {
 ///
 /// [`Error::Refused`] when a status is an anchor or an alias, a merge key
 /// reaches a platform block, or the rewrite would change anything else;
-/// [`Error::Unported`] where the oracle fails the run with its parser's words.
+/// [`Error::Unreadable`] and [`Error::KeyError`] where the oracle raises, in
+/// the order it would: the target, a promoted block's key, the promoted
+/// text.
 pub fn promote_block_statuses(
     document: &Document,
     statuses: &[String],
@@ -235,7 +271,9 @@ pub fn promote_block_statuses(
 ) -> Result<Option<String>, Error> {
     let source = document.source();
     let offsets = char_offsets(source);
-    let mut spans: Vec<(usize, usize, String)> = Vec::new();
+    // Each status to rewrite: its bytes, its platform's name as written, and
+    // whether that key is a string.
+    let mut spans: Vec<(usize, usize, String, bool)> = Vec::new();
     let mut seen: HashSet<*const Node> = HashSet::new();
     if let Some(Value::Map(entries)) = document.root().map(|root| &root.value) {
         for entry in entries {
@@ -254,13 +292,14 @@ pub fn promote_block_statuses(
                 let Value::Map(fields) = &platform.value.value else {
                     continue;
                 };
-                let name = match &platform.key.value {
-                    Value::Str(name) => name.clone(),
-                    _ => {
-                        return Err(Error::Unported(
-                            "a platform key that is not a string".to_owned(),
-                        ));
-                    }
+                // A plain key YAML 1.1 reads as another type (`yes`, `1_0`)
+                // is no string to the oracle either.
+                let plain = !span(source, &offsets, &platform.key)
+                    .trim_start()
+                    .starts_with(['"', '\'', '!']);
+                let (name, string_key) = match &platform.key.value {
+                    Value::Str(name) if !(plain && yaml11_non_string(name)) => (name.clone(), true),
+                    _ => (written(source, &offsets, &platform.key), false),
                 };
                 if fields
                     .iter()
@@ -293,7 +332,7 @@ pub fn promote_block_statuses(
                     }
                     let start = byte(&offsets, value.start.index);
                     let end = scalar_end(source, start, byte(&offsets, value.end.index));
-                    spans.push((start, end, name.clone()));
+                    spans.push((start, end, name.clone(), string_key));
                 }
             }
         }
@@ -305,13 +344,16 @@ pub fn promote_block_statuses(
     let mut promoted = source.to_owned();
     let mut ordered = spans.clone();
     ordered.sort_by_key(|span| std::cmp::Reverse(span.0));
-    for (start, end, _) in &ordered {
+    for (start, end, _, _) in &ordered {
         promoted.replace_range(*start..*end, &replacement);
     }
     let mut expected = document
         .root()
         .map_or(serde_json::Value::Null, |root| to_json(root));
-    for (_, _, platform) in &spans {
+    for (_, _, platform, string_key) in &spans {
+        if !string_key {
+            return Err(Error::KeyError(platform.clone()));
+        }
         if let Some(block) = expected
             .get_mut("configurations")
             .and_then(|configurations| configurations.get_mut(platform))
@@ -323,7 +365,7 @@ pub fn promote_block_statuses(
             );
         }
     }
-    let after = node::load(&promoted).map_err(|error| Error::Unported(error.to_string()))?;
+    let after = node::load(&promoted).map_err(|error| Error::Unreadable(words(&error)))?;
     let actual = after
         .root()
         .map_or(serde_json::Value::Null, |root| to_json(root));
@@ -340,9 +382,9 @@ pub fn promote_block_statuses(
 ///
 /// # Errors
 ///
-/// [`Error::Unported`] for a target the oracle's parser refuses outright.
+/// [`Error::Unreadable`] for a target that does not read as YAML.
 pub fn replacement(target: &str) -> Result<String, Error> {
-    let document = node::load(target).map_err(|error| Error::Unported(error.to_string()))?;
+    let document = node::load(target).map_err(|error| Error::Unreadable(words(&error)))?;
     let plain = document.root().is_some_and(|root| match &root.value {
         Value::Seq(_) | Value::Map(_) => false,
         Value::Str(text) => text == target,
@@ -354,6 +396,18 @@ pub fn replacement(target: &str) -> Result<String, Error> {
     } else {
         json_string(target)
     })
+}
+
+/// A load error as PyYAML's message places it: the problem, then where, in
+/// the text it read (`in "<unicode string>", line 13, column 27`).
+fn words(error: &node::LoadError) -> String {
+    match &error.mark {
+        Some(mark) => format!(
+            "{}\n  in \"<unicode string>\", line {}, column {}",
+            error.problem, mark.line, mark.column
+        ),
+        None => error.problem.clone(),
+    }
 }
 
 /// Whether YAML 1.1's implicit resolvers (PyYAML's) read the plain scalar
@@ -527,6 +581,77 @@ mod tests {
         );
     }
 
+    /// A promoted block whose key is no string fails as the oracle's
+    /// `KeyError` does, named as written; one left as it is does not.
+    #[test]
+    fn a_promoted_block_whose_key_is_no_string_is_a_key_error() {
+        for (key, written) in [
+            ("1", "1"),
+            ("01", "01"),
+            ("~", "~"),
+            ("null", "null"),
+            ("true", "true"),
+            ("1.5", "1.5"),
+            ("!!int 2", "2"),
+            ("yes", "yes"),
+            ("On", "On"),
+        ] {
+            let text = format!(
+                "name: R\nconfigurations:\n  splunk:\n    status: STAGING\n  {key}:\n    status: STAGING\n"
+            );
+            assert_eq!(
+                promote(&text, &["STAGING"], "PRODUCTION"),
+                Err(Error::KeyError(written.to_owned())),
+                "{key}"
+            );
+            // Not promoted: nothing looks it up.
+            let kept = text.replace(
+                &format!("  {key}:\n    status: STAGING\n"),
+                &format!("  {key}:\n    status: PRODUCTION\n"),
+            );
+            assert!(
+                promote(&kept, &["STAGING"], "PRODUCTION")
+                    .unwrap()
+                    .is_some()
+            );
+        }
+        // A quoted or tagged key is a string, whatever it reads as.
+        for key in ["'1'", "\"yes\"", "!!str 1"] {
+            let text = format!("name: R\nconfigurations:\n  {key}:\n    status: STAGING\n");
+            assert!(
+                promote(&text, &["STAGING"], "PRODUCTION")
+                    .unwrap()
+                    .is_some(),
+                "{key}"
+            );
+        }
+        // A refusal is found first, as the oracle composes every block
+        // before it looks one up.
+        let refused =
+            "name: R\nconfigurations:\n  1:\n    status: STAGING\n  s:\n    status: &a STAGING\n";
+        assert!(matches!(
+            promote(refused, &["STAGING"], "PRODUCTION"),
+            Err(Error::Refused(_))
+        ));
+    }
+
+    /// Promoted text that does not read back fails the run with the
+    /// loader's words, placed as PyYAML places its own (a target that
+    /// closes a flow mapping).
+    #[test]
+    fn promoted_text_that_does_not_read_back_is_unreadable() {
+        let flow = "name: R\nconfigurations:\n  splunk: {status: STAGING, query: x}\n";
+        let Err(Error::Unreadable(words)) = promote(flow, &["STAGING"], "LIVE}") else {
+            panic!("read back");
+        };
+        assert!(
+            words.contains("\n  in \"<unicode string>\", line 3, column "),
+            "{words}"
+        );
+        // The same target in a block mapping reads back.
+        assert!(promote(RULE, &["STAGING"], "LIVE}").unwrap().is_some());
+    }
+
     #[test]
     fn a_target_yaml_reads_otherwise_is_json_quoted() {
         assert_eq!(replacement("PRODUCTION").unwrap(), "PRODUCTION");
@@ -560,7 +685,7 @@ mod tests {
             json_string("a\"\\\n\u{1f980}"),
             "\"a\\\"\\\\\\n\\ud83e\\udd80\""
         );
-        assert!(matches!(replacement("@x"), Err(Error::Unported(_))));
+        assert!(matches!(replacement("@x"), Err(Error::Unreadable(_))));
     }
 
     #[test]

@@ -193,10 +193,11 @@ def _publish_dry_run_rules() -> ModuleType:
     return module
 
 
-def test_only_the_engine_release_publishes_the_engine() -> None:
-    """The engine's crates and npm packages publish from engine-release.yml, which
-    runs on `engine-v*` tags (and Run workflow) only: `v*` tags are opentide's own
-    releases (tests/test_ci/test_one_ci.py checks every workflow's triggers).
+def test_only_the_release_train_publishes() -> None:
+    """The crates, the npm packages and the wheels publish from publish.yml, the
+    release train (#840), which runs from Run workflow (and the resume
+    dispatch) only: no tag starts it (tests/test_ci/test_one_ci.py checks every
+    workflow's triggers). The engine's own engine-release.yml retired into it.
 
     Any other `cargo publish` or `npm publish` (in any spelling npm accepts) in an
     active workflow is a dry run: publish-dry-run.yml rehearses the publishes, and
@@ -205,7 +206,7 @@ def test_only_the_engine_release_publishes_the_engine() -> None:
     rules = _publish_dry_run_rules()
     seen = 0
     for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
-        if workflow.name == "engine-release.yml":
+        if workflow.name == "publish.yml":
             continue
         data = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
         for job in (data.get("jobs") or {}).values():
@@ -214,9 +215,12 @@ def test_only_the_engine_release_publishes_the_engine() -> None:
                     seen += 1
                     assert rules._is_dry_run(command), (workflow.name, " ".join(command))
     assert seen, "the dry-run workflow's rehearsals are found, so the check reads the commands"
-    release = (ROOT / ".github" / "workflows" / "engine-release.yml").read_text(encoding="utf-8")
-    assert re.search(r"release\.py publish|npm publish", release)
-    assert '  push:\n    tags:\n      - "engine-v*"\n  workflow_dispatch:' in release
+    assert not (ROOT / ".github" / "workflows" / "engine-release.yml").exists()
+    release = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+    assert re.search(r"release\.py publish", release)
+    assert re.search(r"npm publish", release)
+    assert "\non:\n  workflow_dispatch:\n" in release
+    assert "\n  push:" not in release.split("\njobs:\n", 1)[0]
 
 
 # Cargo's explicit target tables, with the folder and file name a target takes

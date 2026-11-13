@@ -972,6 +972,78 @@ fn the_configuration_tab_shows_no_credential_in_any_view() {
     assert!(rows.last().unwrap().contains("Raw TOML"), "{rows:?}");
 }
 
+/// A `sharing.toml` that is not valid TOML (`hostile_repo`), or not UTF-8:
+/// sharing has a loader of its own, so the catalogue still loads, as the
+/// Python UI's did, and the Configuration tab lists the file with its
+/// problem as a finding, as `validate --check sharing-config` reports it,
+/// never its content. A `sharing.toml` that parses but is wrong is a
+/// finding too.
+#[test]
+fn an_invalid_sharing_toml_is_a_finding_and_the_catalogue_loads() {
+    let not_toml =
+        format!("[[blocks]]\nname = \"x\"\n[blocks.setup]\nclient_secret: \"{LITERAL}\"\n");
+    for (bytes, problem) in [
+        (
+            not_toml.as_bytes(),
+            "sharing.toml: not valid TOML: line 4, column 14",
+        ),
+        (
+            &b"\xff\xfe[x]\n"[..],
+            "sharing.toml: the file could not be read (UnicodeDecodeError)",
+        ),
+    ] {
+        let (_base, repo) = configured();
+        std::fs::write(repo.join(".opentide/configurations/sharing.toml"), bytes).unwrap();
+        let mut app = open_configured(&repo);
+        let catalogue = app.catalogue.as_ref().unwrap();
+        assert_eq!(catalogue.count(Kind::Rule), 1);
+        let view = catalogue.configuration.clone();
+        assert!(view.problem.is_none(), "{:?}", view.problem);
+        let sharing = view.file("sharing.toml").unwrap();
+        assert!(sharing.raw.is_none());
+        let finding = sharing
+            .findings
+            .iter()
+            .find(|finding| finding.code == "config_parse")
+            .unwrap_or_else(|| panic!("{:?}", sharing.findings));
+        assert_eq!(finding.severity, "error");
+        assert_eq!(finding.message, problem);
+        // The tree, and the tab: the file listed, its finding shown, no secret.
+        let (rows, _) = screen(&mut app, 180, 50);
+        assert!(
+            rows.join("\n").contains("1 threat · 1 objective · 1 rule"),
+            "{rows:?}"
+        );
+        press(&mut app, "5");
+        app.select_configuration("sharing.toml");
+        let (rows, _) = screen(&mut app, 180, 50);
+        let shown = rows.join("\n");
+        no_secret(&shown);
+        assert!(shown.contains("error[config_parse]"), "{shown}");
+        assert!(shown.contains(problem), "{shown}");
+        press(&mut app, "t");
+        no_secret(&screen(&mut app, 180, 50).0.join("\n"));
+    }
+    // A MISP block whose `max_tlp` is no TLP name: `sharing-config`'s finding.
+    let (_base, repo) = configured();
+    std::fs::write(
+        repo.join(".opentide/configurations/sharing.toml"),
+        "[[misp]]\nname = \"x\"\nurl = \"https://misp.invalid\"\nmax_tlp = \"purple\"\n",
+    )
+    .unwrap();
+    let app = open_configured(&repo);
+    let view = &app.catalogue.as_ref().unwrap().configuration;
+    let sharing = view.file("sharing.toml").unwrap();
+    assert!(
+        sharing
+            .findings
+            .iter()
+            .any(|finding| finding.severity == "error" && finding.code != "config_parse"),
+        "{:?}",
+        sharing.findings
+    );
+}
+
 #[test]
 fn without_a_workspace_file_the_defaults_are_shown() {
     let (_base, repo) = tutorial();

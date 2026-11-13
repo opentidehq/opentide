@@ -1,23 +1,32 @@
 name: Engine release build
 
-# Builds every asset of an engine GitHub Release into one artifact,
-# `release-assets`: opentide-lsp per target, the WASI module, the browser build
+# Builds every asset of opentide's GitHub Release into one artifact,
+# `release-assets`: the `opentide` and `opentide-lsp` binaries per target, their
+# installers (publishing/installers/), the WASI module, the browser build
 # (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE, the
-# CycloneDX SBOMs (scripts/engine/sbom.py), and SHA256SUMS last. It publishes, attests and uploads to no release: the caller
-# does. Two callers:
+# CycloneDX SBOMs (scripts/engine/sbom.py), and SHA256SUMS last. It publishes,
+# attests and uploads to no release: the caller does. Two callers:
 #
-# - engine-release.yml, for an `engine-v*` tag or Run workflow, with the tag;
-# - ci.yml on every pull request and push, with no tag (dry-run): the workspace
-#   version's tag, so every PR proves the asset set a release would publish
+# - publish.yml, the release train (UC-5.5), with the release's tag (`vX.Y.Z`
+#   or `vX.Y.Z-rc.N`) and the wheel's version;
+# - ci.yml in its full set, with no tag (dry-run): the workspace version's tag,
+#   so the asset set a release would publish is proven before one does
 #   (`release.py check-assets`: language-server's last release's names with the
-#   version substituted).
+#   version substituted, the `opentide` binaries, installers and SBOMs added).
+#
+# No musl target: the maintainer decided against musl builds (docs/internal/
+# publishing.md, "The release train"); scripts/engine/release.py TARGETS.
 #
 # Only the dry run restores a Rust cache: a release builds from nothing.
 on:
   workflow_call:
     inputs:
       tag:
-        description: "engine-vX.Y.Z or engine-vX.Y.Z-rc.N; empty for the dry run (the workspace version)"
+        description: "vX.Y.Z or vX.Y.Z-rc.N; empty for the dry run (the workspace version)"
+        type: string
+        default: ""
+      wheel-version:
+        description: "The PyPI wheel's version, for its SBOM (0.24.0, 0.24.0rc1); empty: hatch-vcs's"
         type: string
         default: ""
       dry-run:
@@ -29,13 +38,15 @@ permissions:
   contents: read
 
 jobs:
-  # The tag and the version the asset names carry (`v0.11.0`, `v0.11.1-rc.1`).
+  # The tag, the version the asset names carry (`v0.24.0`, `v0.24.0-rc.1`), and
+  # the one the binaries report (`0.24.0-rc.1`, OPENTIDE_VERSION).
   meta:
     name: Release tag
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
+      semver: ${{ steps.tag.outputs.semver }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,29 +62,33 @@ jobs:
             tag="$(python3 scripts/engine/release.py tag)"
           fi
           version="$(python3 scripts/engine/release.py asset-version "${tag}")"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "semver=${version#v}"
+          } >> "$GITHUB_OUTPUT"
           echo "Assets of ${tag}, named ${version}"
 
+  # `opentide-lsp` and `opentide` (the facade with `cli`, as `cargo install
+  # opentide --features cli` builds it) for each target, two cargo builds so
+  # that neither takes the other's features. `opentide` reports the release's
+  # version (OPENTIDE_VERSION, which a release candidate's crates cannot carry).
   native:
-    name: opentide-lsp ${{ matrix.target }}
+    name: Binaries ${{ matrix.target }}
     needs: meta
     env:
       VERSION: ${{ needs.meta.outputs.version }}
+      OPENTIDE_VERSION: ${{ needs.meta.outputs.semver }}
     strategy:
       fail-fast: false
       matrix:
         # scripts/engine/release.py TARGETS lists the same targets
-        # (scripts/engine/test_release.py).
+        # (scripts/engine/test_release.py). No musl (the header).
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
           - os: macos-latest
             target: aarch64-apple-darwin
           # GitHub retired the Intel macOS runners; cross-compile on Apple silicon.
@@ -90,8 +105,8 @@ jobs:
           persist-credentials: false
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
       # (`rustup toolchain install` with no name), and the target the job builds.
-      # windows-11-arm's image may lack rustup (publish-pypi.yml installs it there).
-      # The other images carry rustup; this one may not (as in publish-pypi.yml).
+      # windows-11-arm's image may lack rustup (build-packages.yml installs it there
+      # too). The other images carry rustup; this one may not.
       - name: Rust on Windows on Arm
         if: matrix.os == 'windows-11-arm'
         shell: pwsh
@@ -119,39 +134,52 @@ jobs:
           save-if: ${{ github.event_name == 'push' }}
           shared-key: engine-release
           key: ${{ matrix.target }}
-      - name: musl linker
-        if: contains(matrix.target, 'musl')
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: build
+      - name: build opentide-lsp
         shell: bash
-        env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --locked --release -p opentide-lsp --target ${{ matrix.target }}
+      - name: build opentide
+        shell: bash
+        run: cargo build --locked --release -p opentide --features cli --bin opentide --target ${{ matrix.target }}
+      # opentide-lsp keeps language-server's budget (30 MiB); opentide, which
+      # also carries the connectors' HTTP and TLS stack, gets 80 MiB.
       - name: size budget
         shell: bash
         run: |
           set -euo pipefail
-          bin=$(find "target/${{ matrix.target }}/release" -maxdepth 1 -type f -name 'opentide-lsp*' ! -name '*.d' ! -name '*.pdb' | head -n 1)
-          test -n "$bin"
-          size=$(wc -c < "$bin")
-          echo "$bin is $size bytes"
-          test "$size" -lt 31457280
-      # Every target's binary is named opentide-lsp: name each by its target, or
-      # the assets job's merged download keeps only one.
+          for budget in opentide-lsp:31457280 opentide:83886080; do
+            name="${budget%%:*}"
+            ext=""
+            case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac
+            bin="target/${{ matrix.target }}/release/${name}${ext}"
+            test -f "$bin"
+            size=$(wc -c < "$bin")
+            echo "$bin is $size bytes"
+            test "$size" -lt "${budget#*:}"
+          done
+      # Every target's binaries have one name: name each by its target, or the
+      # assets job's merged download keeps only one.
       - name: rename
         shell: bash
         run: |
           set -euo pipefail
           ext=""
           case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac
-          mkdir -p dist
+          mkdir -p dist product
           cp "target/${{ matrix.target }}/release/opentide-lsp${ext}" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}${ext}"
-      - name: upload
+          cp "target/${{ matrix.target }}/release/opentide${ext}" "product/opentide-${VERSION}-${{ matrix.target }}${ext}"
+      - name: upload opentide-lsp
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: engine-asset-opentide-lsp-${{ matrix.target }}
           path: dist/*
+          if-no-files-found: error
+      # The command line carries opentide's own package data, which the
+      # assets job scans as a product (license-scan.sh --product).
+      - name: upload opentide
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: product-asset-opentide-${{ matrix.target }}
+          path: product/*
           if-no-files-found: error
 
   wasm:
@@ -277,17 +305,18 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # A CycloneDX SBOM for each artifact (#843): the opentide-lsp binaries and
-  # WASI build, the browser build with the wasi-libc it links, and the npm
-  # packages, each a release asset; and the PyPI wheel built from the same
-  # commit (its Python dependencies and the crates in opentide._native), which
-  # is not an engine asset: it ships as the `sbom-wheel` artifact. The wheel
-  # depends on splunk-sdk (the Splunk platform client), a name the oracle
-  # licence scan rightly refuses in engine assets. Each SBOM is checked
-  # against the CycloneDX 1.5 schema. SOURCE_DATE_EPOCH (the commit's time)
-  # fixes their timestamps.
+  # A CycloneDX SBOM for each artifact (#843), each a release asset: the
+  # opentide-lsp binaries and WASI build, the browser build with the wasi-libc
+  # it links, the lsp npm packages (engine assets); the `opentide` binaries and
+  # crate, @opentide/opentide, and the PyPI wheel built from the same commit
+  # (its Python dependencies and the crates in opentide._native), which are the
+  # product's. Since UC-6.2 the wheel depends on pydantic alone, so its SBOM
+  # is scanned like the rest of the product's. Each SBOM is checked against the
+  # CycloneDX 1.5 schema. SOURCE_DATE_EPOCH (the commit's time) fixes their
+  # timestamps.
   sbom:
     name: SBOMs
+    needs: meta
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -320,19 +349,26 @@ jobs:
       - name: cargo-cyclonedx
         run: cargo install --locked cargo-cyclonedx --version 0.5.10
       - name: generate and validate
+        env:
+          WHEEL_VERSION: ${{ inputs.wheel-version }}
+          NPM_VERSION: ${{ needs.meta.outputs.semver }}
         run: |
           set -euo pipefail
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
-          # The version the wheel built from this commit carries. hatch-vcs
-          # reads any tag ending in a version, `engine-v*` too: drop those from
-          # this job's own clone so only opentide's `v*` tags count.
-          git tag --list 'engine-v*' | xargs -r git tag -d >/dev/null
-          wheel_version="$(uvx --quiet --from hatch==1.18.2 --with hatch-vcs==0.5.0 hatch version)"
-          python3 scripts/engine/sbom.py generate dist --wheel-version "${wheel_version}"
+          # The version the wheel carries: the release's, or for the dry run
+          # the one hatch-vcs gives this commit. hatch-vcs reads any tag ending
+          # in a version, the old `engine-v*` too: drop those from this job's
+          # own clone so only opentide's `v*` tags count.
+          wheel_version="${WHEEL_VERSION}"
+          if [ -z "${wheel_version}" ]; then
+            git tag --list 'engine-v*' | xargs -r git tag -d >/dev/null
+            wheel_version="$(uvx --quiet --from hatch==1.18.2 --with hatch-vcs==0.5.0 hatch version)"
+          fi
+          python3 scripts/engine/sbom.py generate dist --wheel-version "${wheel_version}" --npm-version "${NPM_VERSION}"
           python3 scripts/engine/sbom.py validate dist/*.cdx.json
-          mkdir -p wheel
-          mv dist/opentide-wheel.cdx.json wheel/
+          mkdir -p product
+          mv dist/opentide.cdx.json dist/opentide-node.cdx.json dist/opentide-wheel.cdx.json product/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: engine-asset-sbom
@@ -340,11 +376,12 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: sbom-wheel
-          path: wheel/opentide-wheel.cdx.json
+          name: product-asset-sbom
+          path: product/*
           if-no-files-found: error
 
-  # Every asset, the licence scan over all of them, and SHA256SUMS last.
+  # Every asset, the licence scan over all of them, the installers with the
+  # tag written in, and SHA256SUMS last.
   assets:
     name: Release assets
     needs: [meta, native, wasm, highlights, licences, sbom]
@@ -360,8 +397,31 @@ jobs:
           path: dist
           pattern: engine-asset-*
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: product
+          pattern: product-asset-*
+          merge-multiple: true
+      # The engine's assets carry no oracle reference at all. The `opentide`
+      # binaries carry opentide's package data, as the wheel does: its
+      # `platform_sdk` explain page names the Splunk client's Python module
+      # (license-scan.sh --product). Every product asset is scanned, the
+      # wheel's SBOM included: the wheel depends on pydantic alone (UC-6.2).
       - name: license scan (no oracle references)
-        run: bash scripts/engine/license-scan.sh dist
+        run: |
+          set -euo pipefail
+          bash scripts/engine/license-scan.sh dist
+          bash scripts/engine/license-scan.sh --product product
+      # The repository's installers name no release: each published copy
+      # installs its own tag by default.
+      - name: installers
+        run: |
+          set -euo pipefail
+          for installer in opentide-installer.sh opentide-installer.ps1; do
+            sed "s/__OPENTIDE_TAG__/${TAG}/" "publishing/installers/${installer}" > "product/${installer}"
+            grep -qF "${TAG}" "product/${installer}"
+          done
+          mv product/* dist/
       - name: every asset is there
         run: |
           set -euo pipefail

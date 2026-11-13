@@ -357,7 +357,7 @@ impl Run<'_> {
                 return self.emit(&outcome, &notes, &[], out, err);
             }
         };
-        let script = completion::script(&self.root, shell);
+        let script = completion::script(shell);
         if !install {
             out.write_all(script.as_bytes())?;
             out.flush()?;
@@ -2902,17 +2902,23 @@ fn release_when<T>(value: T, process_ends: bool) {
 /// `opentide` in this process: the process's environment and streams.
 pub fn main(argv: &[String], version: &str) -> i32 {
     use std::io::IsTerminal;
+    let env = Env::from_process();
+    let cwd = std::env::current_dir().ok();
+    // A Tab press (`_OPENTIDE_COMPLETE`): its candidates, before anything
+    // else can write to stdout.
+    if let Some(code) = crate::commands::completion::answer(argv, &env, cwd.as_deref()) {
+        return code;
+    }
     install_panic_hook();
     let interrupt = Interrupt::default();
     install_interrupt_handler(interrupt.clone());
-    let env = Env::from_process();
     let stderr_sink: Sink = std::sync::Arc::new(std::sync::Mutex::new(std::io::stderr()));
     let host = Host {
         version: version.to_owned(),
         stdout_tty: std::io::stdout().is_terminal(),
         stderr_tty: std::io::stderr().is_terminal(),
         log_sink: stderr_sink,
-        cwd: std::env::current_dir().ok(),
+        cwd,
         width: terminal_size::terminal_size_of(std::io::stderr())
             .or_else(|| terminal_size::terminal_size_of(std::io::stdout()))
             .map(|(width, _)| usize::from(width.0)),
@@ -4057,7 +4063,13 @@ mod tests {
             "{}",
             installed.stdout
         );
-        assert!(home.path().join(".bash_completions/opentide.sh").is_file());
+        // The script asks opentide for each Tab press's candidates.
+        let installed_script =
+            std::fs::read_to_string(home.path().join(".bash_completions/opentide.sh")).unwrap();
+        assert!(
+            installed_script.contains("_OPENTIDE_COMPLETE=\"bash\""),
+            "{installed_script}"
+        );
         let homeless = dispatched("--install-completion fish", &[(home_variable, "")], false);
         assert_eq!(homeless.code, 1, "{}", homeless.stderr);
         assert!(

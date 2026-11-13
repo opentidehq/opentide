@@ -1196,6 +1196,53 @@ fn findings(resolved: &Node) -> BTreeMap<String, Vec<ConfigFinding>> {
     found
 }
 
+/// `validate --check sharing-config`'s findings (`load_sharing`), shown on
+/// `sharing.toml`: the bundled file, then each configuration folder's in
+/// `folders`, read as they are. `sharing.toml` has a loader of its own, so
+/// the merged configuration does not hold it, and a file that does not
+/// parse, or is not UTF-8, is a finding here rather than a catalogue that
+/// does not load.
+fn sharing_findings(folders: &[PathBuf], resolved: &Node) -> Vec<ConfigFinding> {
+    use opentide_schema::configuration::{bundled, checks};
+    let mut layers = vec![(
+        "<bundled>".to_owned(),
+        bundled::text("sharing.toml").map(str::to_owned),
+        false,
+    )];
+    for folder in folders.iter().filter(|folder| folder.is_dir()) {
+        let file = folder.join("sharing.toml");
+        let text = file
+            .is_file()
+            .then(|| std::fs::read(&file).ok())
+            .flatten()
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
+        layers.push((
+            folder.to_string_lossy().into_owned(),
+            text,
+            folder.join("sharing").is_dir(),
+        ));
+    }
+    let statuses = resolved
+        .get("deployment")
+        .map_or_else(checks::bundled_status_names, |deployment| {
+            checks::status_names(deployment)
+        });
+    let checked = std::panic::catch_unwind(|| checks::sharing_config_issues(&layers, &statuses));
+    // The checks are validate's: the tab shows what it can.
+    let Ok(issues) = checked else {
+        return Vec::new();
+    };
+    issues
+        .into_iter()
+        .map(|issue| ConfigFinding {
+            code: issue.code.clone(),
+            severity: issue.severity.as_str().to_owned(),
+            message: issue.message.clone(),
+            field_path: issue.field_path.clone(),
+        })
+        .collect()
+}
+
 /// Python's truth value of a configuration value.
 fn truthy(node: Option<&Node>) -> bool {
     node.is_some_and(|node| match &node.value {
@@ -1373,16 +1420,21 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
 }
 
 /// The tab's content for the workspace at `root`, whose configuration
-/// resolved to `resolved`; `rules` are its rule bodies by UUID
-/// (`load_configuration_view`).
+/// resolved to `resolved` from the configuration folders `folders`; `rules`
+/// are its rule bodies by UUID (`load_configuration_view`).
 pub fn load(
     root: Option<&Path>,
     resolved: &Node,
+    folders: &[PathBuf],
     rules: &[(String, &Node)],
     env: &Env,
 ) -> ConfigurationView {
     let workspace_dir = root.map(|root| root.join(".opentide").join("configurations"));
     let mut found = findings(resolved);
+    found
+        .entry("sharing.toml".to_owned())
+        .or_default()
+        .extend(sharing_findings(folders, resolved));
     let mut files: Vec<ConfigFile> = FILES
         .iter()
         .map(|key| {
@@ -1409,6 +1461,19 @@ pub fn load(
                 findings,
                 env,
             ));
+        }
+    }
+    // Where, never what: a parser's message may quote the file, so a
+    // `sharing.toml` that does not parse says what its raw view says.
+    if let Some(sharing) = files.iter_mut().find(|item| item.key == "sharing.toml") {
+        let problem = sharing
+            .raw_problem
+            .clone()
+            .unwrap_or_else(|| "not valid TOML".to_owned());
+        for finding in &mut sharing.findings {
+            if finding.code == opentide_schema::configuration::codes::CONFIG_PARSE {
+                finding.message = format!("sharing.toml: {problem}");
+            }
         }
     }
     ConfigurationView {

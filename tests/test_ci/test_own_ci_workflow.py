@@ -20,8 +20,9 @@ GitHub-hosted runners do not ship; inside ``if`` the missing command read as
 ``--check`` must see a specifications checkout: without one it only compares the
 lockfile with the bundle, and hand-edited pins pass once relocked.
 
-The same checkout feeds the model field description check, which must fail
-rather than skip when the checkout is missing.
+The same checkout feeds the model field description check
+(``cargo xtask spec-fields``, ``xtask/src/spec_fields.rs``), which fails rather
+than skips when the checkout is missing.
 
 Also holds the engine crates' licence scan to what the package step leaves
 out: a workspace crate under ``crates/`` excluded from ``cargo package`` is not
@@ -197,6 +198,51 @@ def _conditions(step: dict[str, Any]) -> list[str]:
     return [part.strip() for part in str(step.get("if", "")).split("||")]
 
 
+def _field_gate_pattern(workflow: dict[str, Any]) -> str:
+    """The ERE that sets ``fields=true`` in the ``vocab_changes`` step."""
+    steps = workflow["jobs"]["lint"]["steps"]
+    run = next(str(step["run"]) for step in steps if step.get("id") == "vocab_changes")
+    match = re.search(r'grep -qE "([^"]+)"[^\n]*\n\s*echo "fields=true"', run)
+    assert match is not None, "vocab_changes must set fields=true from a grep -qE path filter"
+    return match.group(1).replace("\\\\", "\\")
+
+
+@pytest.mark.parametrize(
+    ("path", "gated"),
+    [
+        ("crates/opentide-schema/src/objects/platform/sentinel.rs", True),
+        ("crates/opentide-schema/src/objects/rule.rs", True),
+        ("xtask/src/spec_fields.rs", True),
+        (".github/workflows/ci.yml", True),
+        ("crates/opentide-schema/src/generate/schema.rs", False),
+        ("xtask/src/spec_fieldsXrs", False),
+        ("tests/test_ci/test_own_ci_workflow.py", False),
+    ],
+)
+def test_field_description_gate_watches_the_models_and_the_check(
+    workflow: dict[str, Any], path: str, gated: bool
+) -> None:
+    assert bool(re.search(_field_gate_pattern(workflow), path)) is gated
+
+
+def test_field_description_check_requires_a_specifications_checkout(
+    workflow: dict[str, Any],
+) -> None:
+    steps = workflow["jobs"]["lint"]["steps"]
+    checks = [step for step in steps if "cargo xtask spec-fields" in str(step.get("run", ""))]
+    assert len(checks) == 1, "expected exactly one spec field description step in lint"
+    env = checks[0].get("env", {})
+    # The command exits 2 without a checkout, so the guard cannot pass by not running.
+    assert env.get("OPENTIDE_SPECIFICATIONS_ROOT") == "${{ github.workspace }}/specifications"
+    checkouts = [
+        step
+        for step in steps[: steps.index(checks[0])]
+        if step.get("with", {}).get("repository") == "opentidehq/specifications"
+    ]
+    assert len(checkouts) == 1
+    assert checks[0].get("if") in _conditions(checkouts[0])
+
+
 LOCAL_CI = ROOT / "scripts" / "ci-local.sh"
 
 
@@ -278,14 +324,18 @@ def _check_packaged_crates_avoid_excluded(text: str, root: Path = ROOT) -> None:
 
 def test_engine_package_scans_the_crates_it_does_not_package(workflow: dict[str, Any]) -> None:
     text = _engine_package_text(workflow)
-    assert "opentide-schema" in _package_and_scan(text)[0]
+    # The test harnesses are never published; the facade and its crates are.
+    assert "opentide-compare" in _package_and_scan(text)[0]
+    assert "opentide" not in _package_and_scan(text)[0]
     _check_excluded_crates_are_scanned(text)
     _check_packaged_crates_avoid_excluded(text)
 
 
 def test_local_ci_scans_the_crates_it_does_not_package() -> None:
     text = LOCAL_CI.read_text(encoding="utf-8")
-    assert "opentide-schema" in _package_and_scan(text)[0]
+    # The test harnesses are never published; the facade and its crates are.
+    assert "opentide-compare" in _package_and_scan(text)[0]
+    assert "opentide" not in _package_and_scan(text)[0]
     _check_excluded_crates_are_scanned(text)
     _check_packaged_crates_avoid_excluded(text)
 
@@ -331,7 +381,7 @@ def test_the_dependency_check_reads_the_bindings_too(tmp_path: Path) -> None:
 
 
 _EXCLUDED_UNSCANNED = (
-    "cargo package --workspace --exclude opentide-schema\n"
+    "cargo package --workspace --exclude opentide-compare\n"
     "bash scripts/engine/license-scan.sh target/package/*.crate\n"
 )
 _EXCLUDED_SCANNED = (
@@ -341,8 +391,15 @@ _EXCLUDED_SCANNED = (
 
 
 def test_the_scan_check_fails_for_an_excluded_crate_it_does_not_scan() -> None:
-    with pytest.raises(AssertionError, match="licence scan must read crates/opentide-schema"):
+    with pytest.raises(AssertionError, match="licence scan must read crates/opentide-compare"):
         _check_excluded_crates_are_scanned(_EXCLUDED_UNSCANNED)
+
+
+def test_the_published_crates_are_packaged_not_excluded() -> None:
+    """The release train publishes opentide-schema: leaving it out of the
+    package step would ship a crate CI never built from its package."""
+    with pytest.raises(AssertionError, match="opentide-schema is left out of `cargo package`"):
+        _check_excluded_crates_are_scanned(_EXCLUDED_SCANNED)
 
 
 @pytest.mark.parametrize("publish", ["", 'publish = ["crates-io"]\n'])

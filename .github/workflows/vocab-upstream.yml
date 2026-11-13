@@ -24,15 +24,12 @@ permissions:
   pull-requests: write
 
 env:
-  PYTHON_VERSION: "3.12"
   UPSTREAM_BRANCH: chore/vocab-upstream
   OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
-  # The ingest (ATT&CK STIX and MISP into specifications' vocabularies) is the
-  # Python package's opentide.vocabulary, removed with the Python implementation
-  # (UC-6.2, #841) and not yet ported to `cargo xtask vocab`: it runs from the
-  # last commit that has it, in a worktree of its own. It writes only into
-  # specifications; this checkout then syncs the bundle from there.
-  INGEST_REV: ca32f5558d95fd77d5550084ee0f9d0681397fdc
+  # The ingest is `cargo xtask vocab ingest` (xtask/src/vocab/ingest/), the
+  # Rust port of the Python package's opentide.vocabulary (UC-6.3): it writes
+  # specifications' vocabularies, then syncs this checkout's bundle and
+  # lockfile from them (`cargo xtask vocab sync`).
 
 jobs:
   ingest:
@@ -94,17 +91,13 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app.outputs.token || secrets.GITHUB_TOKEN }}
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
+      # The release rust-toolchain.toml pins. No cache: the job runs weekly, and
+      # a cache it alone saved would hold a share of the repository's 10 GB.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Build xtask
+        run: cargo build --locked --package xtask
 
       - name: Skip when an ingest PR is already open
         id: skip
@@ -136,10 +129,7 @@ jobs:
           OPENTIDE_ATTACK_STIX_DIR: ${{ runner.temp }}/attack-stix
         run: |
           set -euo pipefail
-          git worktree add --detach "$RUNNER_TEMP/ingest" "$INGEST_REV"
-          cd "$RUNNER_TEMP/ingest"
-          uv sync --group dev
-          uv run python scripts/vocabulary/sync_upstream.py --apply | tee "$RUNNER_TEMP/ingest-summary.txt"
+          cargo xtask vocab ingest --apply | tee "$RUNNER_TEMP/ingest-summary.txt"
 
       - name: Open specifications PR
         if: steps.skip.outputs.skip != 'true' && steps.app.outputs.token != ''
@@ -185,7 +175,7 @@ jobs:
 
       - name: Refresh lockfile against specifications HEAD
         if: steps.skip.outputs.skip != 'true'
-        run: uv run python scripts/build/sync_vocabularies.py
+        run: cargo xtask vocab sync
 
       - name: Open opentide PR
         # Same guard as the specifications PR above. The `|| secrets.GITHUB_TOKEN`

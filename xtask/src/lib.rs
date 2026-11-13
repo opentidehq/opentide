@@ -22,6 +22,7 @@ pub mod parallel;
 pub mod payloads;
 pub mod registry;
 pub mod schema;
+pub mod spec_fields;
 pub mod stubs;
 pub mod validate;
 pub mod verdict;

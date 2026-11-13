@@ -12,6 +12,8 @@ description: "Decision D-1 of the unified core: schema, workspace, validation, c
 | Decision | D-1 |
 | Issues | Epic [#790](https://github.com/opentidehq/opentide/issues/790), plan PR [#789](https://github.com/opentidehq/opentide/pull/789) |
 
+> History: `OPENTIDE_ENGINE`, named below, chose a command's implementation while the commands moved to Rust; it was removed with the Python implementation (UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841)).
+
 ## Context
 
 opentide is implemented twice. Python makes the decisions in the CLI, the SDK and MCP. The Rust engine imported from `opentidehq/language-server` makes them in the editor, fed a catalog generated from the Pydantic models. Two implementations disagree:

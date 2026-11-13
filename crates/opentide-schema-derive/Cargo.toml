@@ -9,8 +9,7 @@ homepage.workspace = true
 authors.workspace = true
 description = "opentide engine component: #[derive(FromNode)], the structural conversion of opentide-schema's models from the YAML node tree. Internal: depend on the opentide facade."
 readme = "../COMPONENT.md"
-# Not published while opentide-schema is not (its Cargo.toml says when).
-publish = false
+# Published by the release train (publish.yml, UC-5.5), with opentide-schema.
 
 [lib]
 proc-macro = true

@@ -8,8 +8,9 @@ gates; the rest is the full set (``tests/test_ci/test_ci_scope.py``). The
 checks branch protection requires are the core gates that run on every pull
 request, the list ``.github/AGENTS.md`` gives.
 
-Releases: ``v*`` tags are opentide's (publish-pypi.yml); the engine releases
-from ``engine-v*`` tags (engine-release.yml). No other workflow may run on a
+Releases: the release train (publish.yml, #840) publishes everything from Run
+workflow on development and creates its ``v*`` tag itself; the engine's own
+``engine-v*`` series (engine-release.yml) ended there. No workflow runs on a
 ``v*`` tag, and nothing publishes from a trigger that is not a release.
 """
 
@@ -37,7 +38,7 @@ PUBLISHING_ACTIONS = re.compile(
     r"pypa/gh-action-pypi-publish|actions/attest-build-provenance|crates-io-auth-action"
 )
 PUBLISHING_COMMANDS = re.compile(r"release\.py publish|gh release (?:create|upload)")
-PUBLISHERS = {"publish-pypi.yml", "engine-release.yml"}
+PUBLISHERS = {"publish.yml"}
 # Triggers a release may start from: a tag, a GitHub Release, or a person.
 RELEASE_TRIGGERS = {"push", "release", "workflow_dispatch", "repository_dispatch"}
 # Expressions an outsider controls: never interpolated into a shell.
@@ -47,7 +48,7 @@ SHA_PIN = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 NO_CREDENTIALS = [
     "ci.yml",
     "codeql.yml",
-    "engine-release.yml",
+    "publish.yml",
     "engine-release-build.yml",
     "engine-fuzz.yml",
     "oracle.yml",
@@ -90,11 +91,13 @@ def _runs_on_tag(triggers: dict[str, Any], tag: str) -> bool:
 
 
 @pytest.mark.parametrize("tag", ["v0.24.0", "v1.0.0-rc.1", "v10.2.3"])
-def test_only_publish_pypi_runs_on_an_opentide_tag(tag: str) -> None:
+def test_no_workflow_runs_on_an_opentide_tag(tag: str) -> None:
+    """publish.yml creates the tag with GITHUB_TOKEN, which starts no workflow;
+    a tag pushed or a Release published by hand publishes nothing."""
     starting = sorted(
         path.name for path in _workflows() if _runs_on_tag(_triggers(_load(path)), tag)
     )
-    assert starting == ["publish-pypi.yml"], starting
+    assert starting == [], starting
 
 
 def test_the_tag_check_reads_triggers() -> None:
@@ -106,12 +109,12 @@ def test_the_tag_check_reads_triggers() -> None:
     assert _runs_on_tag({"push": {"tags-ignore": ["engine-v*"]}}, "v1.0.0")
 
 
-def test_the_engine_releases_from_engine_tags_and_run_workflow_only() -> None:
-    triggers = _triggers(_load(WORKFLOWS / "engine-release.yml"))
-    assert set(triggers) == {"push", "workflow_dispatch"}
-    assert triggers["push"] == {"tags": ["engine-v*"]}
-    for tag in ["engine-v0.11.0", "engine-v0.11.1-rc.1"]:
-        assert _runs_on_tag(triggers, tag)
+def test_the_release_train_runs_from_run_workflow_only() -> None:
+    # The engine's release workflow retired into it (#840).
+    assert not (WORKFLOWS / "engine-release.yml").exists()
+    assert not (WORKFLOWS / "publish-pypi.yml").exists()
+    triggers = _triggers(_load(WORKFLOWS / "publish.yml"))
+    assert set(triggers) == {"workflow_dispatch", "repository_dispatch"}
 
 
 def _publish_rules() -> Any:
@@ -164,18 +167,14 @@ def test_the_asset_build_publishes_nothing_and_writes_nothing() -> None:
     assert "id-token" not in path.read_text(encoding="utf-8")
 
 
-def test_publish_pypi_does_nothing_for_an_engine_release() -> None:
-    """An engine release published by hand starts `release: published`: the guard,
-    which every other job needs, is skipped for a tag that is not opentide's."""
-    jobs = _load(WORKFLOWS / "publish-pypi.yml")["jobs"]
-    assert jobs["guard"]["if"] == (
-        "github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')"
-    )
+def test_every_release_job_waits_for_the_guard() -> None:
+    """Nothing is built, let alone published, before the guard approved the run."""
+    jobs = _load(WORKFLOWS / "publish.yml")["jobs"]
     for job_id, job in jobs.items():
         if job_id != "guard":
             needs = job.get("needs")
             assert "guard" in ([needs] if isinstance(needs, str) else needs or []), job_id
-        # A status function would run a job past a skipped guard unless the job
+        # A status function would run a job past a failed one unless the job
         # still requires a needed job's success.
         condition = str(job.get("if", ""))
         if re.search(r"always\(\)|!cancelled\(\)|failure\(\)", condition):
@@ -191,7 +190,7 @@ def test_the_pull_request_dry_run_is_read_only() -> None:
     assert job["uses"] == "./.github/workflows/engine-release-build.yml"
     assert job["with"] == {"dry-run": True}
     assert job["permissions"] == {"contents": "read"}
-    release = _load(WORKFLOWS / "engine-release.yml")["jobs"]["build"]
+    release = _load(WORKFLOWS / "publish.yml")["jobs"]["release-assets"]
     assert release["uses"] == job["uses"]
     assert "dry-run" not in (release.get("with") or {})
 
@@ -287,7 +286,10 @@ def _runs_command(line: str, command: str) -> bool:
         ("engine-test-part", TREE_AFTER),
         ("engine-wasm", "bash scripts/engine/build-wasm.sh"),
         ("engine-wasm", "node scripts/engine/check-npm-packs.mjs"),
-        ("engine-package", "bash scripts/engine/license-scan.sh target/package/*.crate"),
+        (
+            "engine-package",
+            "bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate",
+        ),
         ("grammars", "bash scripts/engine/check-grammars.sh"),
         ("fuzz-smoke", 'bash scripts/engine/fuzz.sh "${target}" 60'),
         (
