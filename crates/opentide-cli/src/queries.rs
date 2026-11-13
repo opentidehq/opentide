@@ -64,7 +64,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 12] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -115,6 +115,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 12] = [
         "graylog_",
         "Graylog search query",
         "https://go2docs.graylog.org/current/making_sense_of_your_log_data/writing_search_queries.html",
+    ),
+    (
+        "exabeam_",
+        "Exabeam Query Language",
+        "https://docs.exabeam.com/en/search/all/search-guide/",
     ),
     (
         "yaral_",

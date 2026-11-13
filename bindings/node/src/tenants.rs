@@ -1181,7 +1181,7 @@ mod tests {
 
     #[test]
     fn the_platforms_and_what_each_can_do() {
-        assert_eq!(platforms().len(), 12);
+        assert_eq!(platforms().len(), 13);
         assert!(platforms().contains(&"sentinel_one".to_owned()));
         assert!(platforms().contains(&"graylog".to_owned()));
         assert_eq!(
@@ -1198,6 +1198,14 @@ mod tests {
                 deploy: true,
                 live_validation: false,
                 query: false,
+            })
+        );
+        assert_eq!(
+            capabilities("exabeam".into()),
+            Some(Capabilities {
+                deploy: true,
+                live_validation: true,
+                query: true,
             })
         );
         assert_eq!(capabilities("nowhere".into()), None);

@@ -1,0 +1,9 @@
+{
+  "object_uuid": "00000000-0000-4000-8003-000000000010",
+  "platforms": {
+    "exabeam": {
+      "exabeam-eu": "016dbc1da72743dfa1439546dcc81a5a"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

@@ -14,8 +14,8 @@ use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
 use crate::objects::platform::{
     BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, PlatformBlock, SentinelConfig,
-    SentinelOneConfig, SplunkConfig, SysdigConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, PlatformBlock,
+    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
@@ -89,6 +89,10 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub graylog: Option<GraylogConfig>,
+    /// Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub exabeam: Option<ExabeamConfig>,
     /// Google Security Operations YARA-L 2.0 detection rule (`platform::google_secops::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
@@ -118,6 +122,7 @@ impl RuleConfigurations {
             self.sysdig.as_ref().map(PlatformBlock::status),
             self.bitdefender.as_ref().map(PlatformBlock::status),
             self.graylog.as_ref().map(PlatformBlock::status),
+            self.exabeam.as_ref().map(PlatformBlock::status),
             self.google_secops.as_ref().map(PlatformBlock::status),
         ];
         Self::PLATFORMS

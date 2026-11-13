@@ -34,6 +34,7 @@ pub mod deprecation;
 /// language server's advisories share.
 pub use opentide_core::duration as durations;
 pub mod elastic;
+pub mod exabeam;
 pub mod falco_text;
 pub mod google_secops;
 pub mod graylog;
@@ -62,6 +63,7 @@ pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
+pub use exabeam::ExabeamConfig;
 pub use google_secops::GoogleSecopsConfig;
 pub use google_secops::advisories::Advisory;
 pub use graylog::GraylogConfig;
@@ -268,6 +270,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
     registered::<BitdefenderConfig>("bitdefender", "BitdefenderConfig"),
     registered::<GraylogConfig>("graylog", "GraylogConfig"),
+    registered::<ExabeamConfig>("exabeam", "ExabeamConfig"),
     registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
 ];
 
@@ -300,6 +303,7 @@ pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("ElasticConfig", &[]),
     ("SysdigConfig", &[]),
     ("BitdefenderConfig", &[]),
+    ("ExabeamConfig", &[]),
     ("GoogleSecopsConfig", &[]),
 ];
 
@@ -439,10 +443,13 @@ pub const NAMED_CHECKS: [NamedCheck; 4] = [
 
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
-/// and `lint`'s `queries` check report at its field path. Google SecOps'
+/// and `lint`'s `queries` check report at its field path. Exabeam's
+/// ([`exabeam::advisories`]), then Google SecOps'
 /// ([`google_secops::advisories::advisories`]).
 pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
-    google_secops::advisories::advisories(rule)
+    let mut found = exabeam::advisories(rule);
+    found.extend(google_secops::advisories::advisories(rule));
+    found
 }
 
 /// The named check called `name`.
@@ -682,6 +689,8 @@ pub enum PlatformConfig {
     Sysdig(SysdigConfig),
     /// `bitdefender`.
     Bitdefender(BitdefenderConfig),
+    /// `exabeam`.
+    Exabeam(ExabeamConfig),
     /// `google_secops`.
     GoogleSecops(GoogleSecopsConfig),
     /// `graylog`.
@@ -723,6 +732,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
         "bitdefender" => read(node, PlatformConfig::Bitdefender),
+        "exabeam" => read(node, PlatformConfig::Exabeam),
         "google_secops" => read(node, PlatformConfig::GoogleSecops),
         "graylog" => read(node, PlatformConfig::Graylog),
         other => Err(ParseError::UnknownPlatform(format!(
