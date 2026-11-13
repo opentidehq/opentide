@@ -1,6 +1,6 @@
 {
  "command": "validate",
- "version": "0.23.0",
+ "version": "0.28.1",
  "diagnostics": [
   {
    "code": "unknown_key",
@@ -195,7 +195,7 @@
   {
    "code": "deployment_state_platform",
    "severity": "error",
-   "message": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external ids",
+   "message": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids",
    "path": ".opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json",
    "file_path": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json",
    "line": null,
