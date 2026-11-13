@@ -727,3 +727,43 @@ fn leading_wildcard_allowed_on_every_targeted_tenant() {
         &[allowed, lab]
     ));
 }
+
+#[test]
+fn one_definition_title_per_enabled_block() {
+    use opentide_schema::objects::platform::graylog::{
+        definition_title, title_duplicate_message, title_duplicates,
+    };
+    let rule_with = |name: &str, block: &str| {
+        yaml(&format!(
+            "name: {name}\nconfigurations:\n  graylog:\n    status: STAGING\n    \
+             query: EventID:1\n{block}"
+        ))
+    };
+    let a = rule_with("Encoded PowerShell", "    enabled: true\n");
+    let b = rule_with("Encoded PowerShell", "    enabled: true\n");
+    let c = rule_with(
+        "Own title",
+        "    enabled: true\n    name: Encoded PowerShell\n",
+    );
+    let off = rule_with("Encoded PowerShell", "    enabled: false\n");
+    assert_eq!(definition_title(&a), Some("Encoded PowerShell"));
+    assert_eq!(definition_title(&c), Some("Encoded PowerShell"));
+    assert_eq!(definition_title(&off), None);
+    assert_eq!(definition_title(&yaml("name: x")), None);
+    let rules: Vec<(&str, &Node)> = vec![("a", &a), ("b", &b), ("c", &c), ("d", &off)];
+    assert_eq!(
+        title_duplicates("a", "Encoded PowerShell", &rules),
+        ["b", "c"]
+    );
+    assert!(title_duplicates("d", "Encoded PowerShell", &rules).contains(&"a"));
+    let (message, suggestion) = title_duplicate_message("Encoded PowerShell", &["b", "c"]);
+    assert_eq!(
+        message,
+        "Graylog event definition title 'Encoded PowerShell' is also the title of rule(s) b, c; \
+         Graylog's alert list cannot tell them apart"
+    );
+    assert_eq!(
+        suggestion,
+        "Set a distinct configurations.graylog.name on one of the rules"
+    );
+}

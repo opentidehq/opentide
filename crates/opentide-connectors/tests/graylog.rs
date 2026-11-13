@@ -3,11 +3,7 @@
 //! delete), the failure table, the live check and the message search. The
 //! cases are 0.28.0's `tests/test_platforms/test_graylog_{deployer,runner}.py`;
 //! the recorded cassette comes with the golden cases.
-#![expect(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "a test: a failed set-up is a failure"
-)]
+#![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

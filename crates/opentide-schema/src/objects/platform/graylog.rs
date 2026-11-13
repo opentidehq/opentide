@@ -141,6 +141,17 @@ macro_rules! model {
         #[garde(allow_unvalidated)]
         #[schemars(rename = $model, description = "")]
         #[from_node(model = $model)]
+        #[cfg_attr(
+            feature = "python",
+            pyo3::pyclass(frozen, get_all, eq, name = $model, module = "opentide._native.models")
+        )]
+        #[cfg_attr(
+            feature = "python",
+            expect(
+                clippy::unsafe_derive_deserialize,
+                reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+            )
+        )]
         pub struct $name { $($body)* }
     };
 }
@@ -271,6 +282,8 @@ platform_block! {
     #[garde(custom(garde_block))]
     #[schemars(rename = "GraylogConfig", description = "")]
     #[from_node(model = "GraylogConfig", before = "raw_block")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "GraylogConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
     pub struct GraylogConfig ["platform::graylog::1.0"] {
         /// A Graylog search query, in the Graylog dialect
         #[schemars(extend(
@@ -846,4 +859,56 @@ pub fn advisories(rule: &Node, tenants: &[TenantView<'_>]) -> Vec<Advisory> {
 pub fn leading_wildcard_allowed(block: &Node, tenants: &[TenantView<'_>]) -> bool {
     let reached = targeted(block, tenants);
     !reached.is_empty() && reached.iter().all(|tenant| tenant.allow_leading_wildcard)
+}
+
+/// The event definition title of a rule's enabled Graylog block (the block's
+/// `name`, else the rule's), or `None` when the rule has no enabled block
+/// (`graylog_titles._title`).
+pub fn definition_title(rule: &Node) -> Option<&str> {
+    let block = rule
+        .get("configurations")
+        .and_then(|configurations| configurations.get("graylog"))
+        .filter(|block| matches!(block.value, Value::Map(_)))?;
+    if !matches!(
+        block.get("enabled").map(|node| &node.value),
+        Some(Value::Bool(true))
+    ) {
+        return None;
+    }
+    block
+        .get("name")
+        .and_then(|name| name.value.as_str())
+        .filter(|name| !name.is_empty())
+        .or_else(|| {
+            rule.get("name")
+                .and_then(|name| name.value.as_str())
+                .filter(|name| !name.is_empty())
+        })
+}
+
+/// `graylog_title_duplicate`: the other rules whose enabled Graylog block
+/// resolves to the same event definition title, sorted
+/// (`graylog_title_issues`). Graylog allows two definitions with one title,
+/// and its alert list cannot tell them apart.
+pub fn title_duplicates<'r>(uuid: &str, title: &str, rules: &[(&'r str, &Node)]) -> Vec<&'r str> {
+    let mut others: Vec<&str> = rules
+        .iter()
+        .filter(|(other, rule)| *other != uuid && definition_title(rule) == Some(title))
+        .map(|(other, _)| *other)
+        .collect();
+    others.sort_unstable();
+    others
+}
+
+/// What `graylog_title_duplicate` says, and what to do.
+pub fn title_duplicate_message(title: &str, others: &[&str]) -> (String, String) {
+    (
+        format!(
+            "Graylog event definition title {} is also the title of rule(s) {}; Graylog's alert \
+             list cannot tell them apart",
+            repr::quote(title),
+            others.join(", ")
+        ),
+        "Set a distinct configurations.graylog.name on one of the rules".to_owned(),
+    )
 }

@@ -947,6 +947,10 @@ use crate::objects::platform::elastic::{
     ElasticThreatEntry, ElasticThreatGroup, ElasticThreatMatch, ElasticThreshold, ElasticTimeline,
 };
 use crate::objects::platform::elastic::{IntegrationChoice, JobId, RiskChoice, SeverityChoice};
+use crate::objects::platform::graylog::{
+    GraylogAggregation, GraylogConfig, GraylogEventField, GraylogEventLookup, GraylogEventTemplate,
+    GraylogLookupTable, GraylogSchedule, StringOrList,
+};
 use crate::objects::platform::harfanglab::SelectionValue;
 use crate::objects::platform::harfanglab::{
     HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
@@ -997,6 +1001,7 @@ py_value! {
     Version => type_hint_union!(hint::STR, hint::INT),
     Killchain => type_hint_union!(hint::STR, hint::STRS),
     OneOrMany => type_hint_union!(hint::STR, hint::STRS),
+    StringOrList => type_hint_union!(hint::STR, hint::STRS),
     JobId => type_hint_union!(hint::STR, hint::STRS),
     ListItem => type_hint_union!(hint::STR, hint::INT, hint::FLOAT),
     SelectionValue => type_hint_union!(hint::STR, hint::STRS, hint::BOOL, hint::INT, hint::FLOAT),
@@ -1032,6 +1037,29 @@ py_union! {
     SeverityChoice { Level, Mapped } => type_hint_union!(hint::STR, <ElasticSeverity as pyo3::PyTypeInfo>::TYPE_HINT),
     RiskChoice { Score, Mapped } => type_hint_union!(hint::INT, <ElasticRisk as pyo3::PyTypeInfo>::TYPE_HINT),
     IntegrationChoice { Package, Detailed } => type_hint_union!(hint::STR, <ElasticIntegration as pyo3::PyTypeInfo>::TYPE_HINT),
+}
+
+/// `GraylogEventField`: a field name or template string, or one of its two
+/// models' instances, as Pydantic holds them.
+impl<'py> IntoPyObject<'py> for &GraylogEventField {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        hint::STR,
+        <GraylogEventTemplate as pyo3::PyTypeInfo>::TYPE_HINT,
+        <GraylogEventLookup as pyo3::PyTypeInfo>::TYPE_HINT
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        match self {
+            GraylogEventField::Text(text) => Ok(text.into_pyobject(py)?.into_any()),
+            GraylogEventField::Template(model) => Ok(Bound::new(py, model.clone())?.into_any()),
+            GraylogEventField::Lookup(model) => Ok(Bound::new(py, model.clone())?.into_any()),
+        }
+    }
 }
 
 py_models! {
@@ -1138,6 +1166,12 @@ py_models! {
     SysdigMacro,
     SysdigList,
     SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    GraylogSchedule,
+    GraylogAggregation,
+    GraylogEventTemplate,
+    GraylogLookupTable,
+    GraylogEventLookup,
+    GraylogConfig [<GraylogConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
 }
 
 /// Names the exported `models` submodule [`MODULE`] and puts it in
@@ -1184,6 +1218,12 @@ pub mod models {
         SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange,
         SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor,
         ThreatBody, ThreatVectorV1_0,
+    };
+
+    #[pymodule_export]
+    use super::{
+        GraylogAggregation, GraylogConfig, GraylogEventLookup, GraylogEventTemplate,
+        GraylogLookupTable, GraylogSchedule,
     };
 
     /// The error `model_validate` raises: a `ValueError` whose instances
