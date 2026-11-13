@@ -375,7 +375,8 @@ def test_the_query_checks_read_visibility_and_keep_the_fields(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
     """validate's and lint's query checks see what the editor sees."""
-    from opentide.cli.services.lint import _query_findings
+    from opentide.cli.enums import LintCheck
+    from opentide.cli.services.lint import _engine_findings
 
     catalogs = tmp_path / CATALOG_DIR
     catalogs.mkdir(parents=True)
@@ -393,7 +394,7 @@ def test_the_query_checks_read_visibility_and_keep_the_fields(
 
     analysis.install_workspace_visibility(None)
     assert _table("Other") == "unchecked"
-    assert _query_findings(tmp_path, []) == []
+    assert _engine_findings(tmp_path, [], [LintCheck.queries]) == []
     assert _table("Other") == "undeclared"
 
 
