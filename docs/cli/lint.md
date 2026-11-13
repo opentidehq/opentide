@@ -155,7 +155,7 @@ enabled = true
 | Key | Tables | Value |
 |-----|--------|-------|
 | `enabled` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
-| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included. The language server follows `[metadata]` too, so the editor shows the same severity |
+| `severity` | `[filenames]`, `[metadata]`, `[recommended]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included. The language server follows `[metadata]` and `[recommended]` too, so the editor shows the same severity |
 | `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
 | `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
 | `style`, `pattern` | `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` | The same keys for one kind of object, over `[filenames]`. See [A convention per object kind](#a-convention-per-object-kind) |

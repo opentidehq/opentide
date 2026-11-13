@@ -333,9 +333,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
 | [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
-| [`missing_author`](#missing_author) | The recommended metadata.author field is missing. |
+| [`missing_author`](#missing_author) | The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
-| [`missing_organisation`](#missing_organisation) | The recommended metadata.organisation field is missing. |
+| [`missing_organisation`](#missing_organisation) | The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it. |
 | [`missing_uuid`](#missing_uuid) | An object file has no UUID, so it cannot be indexed. |
 | [`name_invalid`](#name_invalid) | A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`. |
 | [`name_missing`](#name_missing) | An object has no `name`, so lint cannot derive its file name. |
@@ -5974,7 +5974,7 @@ Add the missing keys under `metadata`. They are optional, so the note never fail
 
 ## missing_author
 
-The recommended metadata.author field is missing.
+The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it.
 
 Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
@@ -6008,7 +6008,7 @@ Add the key the message names. `context.file` names the file and `field_path` th
 
 ## missing_organisation
 
-The recommended metadata.organisation field is missing.
+The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it.
 
 Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
@@ -6435,7 +6435,7 @@ Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOU
 
 A field the templates ask for is missing; `opentide validate` accepts the object without it.
 
-Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor and `opentide tui` report the same finding from the analysis engine; the engine this opentide bundles still shows it as a warning and does not read `[recommended]`.
+Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor and `opentide tui` report the same finding from the analysis engine, as information, and follow `[recommended]` too.
 
 ### Example
 
@@ -6450,7 +6450,7 @@ metadata:
 
 ### How to fix
 
-Add the field when the rule is ready for it: `configurations` with a block per platform to deploy to, `response` with the alert guidance. The note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them in `opentide lint`, set `severity = "warning"` or `"error"` under `[recommended]` in `.opentide/configurations/lint.toml`; to stop reporting them, set `enabled = false`.
+Add the field when the rule is ready for it: `configurations` with a block per platform to deploy to, `response` with the alert guidance. The note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them, set `severity = "warning"` or `"error"` under `[recommended]` in `.opentide/configurations/lint.toml`; to stop reporting them, set `enabled = false`.
 
 ## reference_not_found
 
