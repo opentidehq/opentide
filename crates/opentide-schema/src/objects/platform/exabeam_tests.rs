@@ -12,8 +12,26 @@ use crate::objects::platform::json_node;
 
 const QUERY: &str = "activity_type:\"app-login\"";
 
-fn fixtures() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/exabeam")
+/// A fixture of `tests/fixtures/exabeam/`, compiled in (the crate does no I/O).
+fn fixture(name: &str) -> &'static str {
+    macro_rules! fixtures {
+        ($($file:literal),* $(,)?) => {
+            match name {
+                $($file => include_str!(concat!("../../../../../tests/fixtures/exabeam/", $file)),)*
+                other => panic!("no fixture {other}"),
+            }
+        };
+    }
+    fixtures!(
+        "block-exabeam.yaml",
+        "rule-exabeam-threshold-1.0.yaml",
+        "rule-exabeam-sequence-1.0.yaml",
+        "invalid/rule-exabeam-correlation-single.yaml",
+        "invalid/rule-exabeam-threshold-operator.yaml",
+        "invalid/rule-exabeam-context-table-threshold.yaml",
+        "invalid/rule-exabeam-delay.yaml",
+        "invalid/rule-exabeam-advanced-query.yaml",
+    )
 }
 
 fn base() -> Json {
@@ -74,9 +92,8 @@ fn pair(code: &str, path: &[&str]) -> (String, Vec<String>) {
     )
 }
 
-fn yaml_block(path: &std::path::Path) -> std::sync::Arc<Node> {
-    let text = std::fs::read_to_string(path).unwrap();
-    let document = crate::node::load(&text).unwrap();
+fn yaml_block(name: &str) -> std::sync::Arc<Node> {
+    let document = crate::node::load(fixture(name)).unwrap();
     let root = document.root().unwrap().clone();
     root.get("configurations")
         .and_then(|configurations| configurations.get("exabeam"))
@@ -91,7 +108,7 @@ fn the_specification_fixtures_validate() {
         "rule-exabeam-threshold-1.0.yaml",
         "rule-exabeam-sequence-1.0.yaml",
     ] {
-        let node = yaml_block(&fixtures().join(name));
+        let node = yaml_block(name);
         assert_eq!(block_findings(&node), Vec::new(), "{name}");
         let mut cx = Context::new();
         let value = ExabeamConfig::from_node(&node, &mut cx);
@@ -117,7 +134,7 @@ fn each_invalid_fixture_fails_with_its_code() {
         ),
         ("rule-exabeam-delay.yaml", "exabeam_duration"),
     ] {
-        let node = yaml_block(&fixtures().join("invalid").join(name));
+        let node = yaml_block(&format!("invalid/{name}"));
         let mut cx = Context::new();
         assert!(ExabeamConfig::from_node(&node, &mut cx).is_none());
         let found: BTreeSet<String> = cx
@@ -131,11 +148,7 @@ fn each_invalid_fixture_fails_with_its_code() {
 
 #[test]
 fn the_advanced_query_fixture_is_the_engines() {
-    let node = yaml_block(
-        &fixtures()
-            .join("invalid")
-            .join("rule-exabeam-advanced-query.yaml"),
-    );
+    let node = yaml_block("invalid/rule-exabeam-advanced-query.yaml");
     assert_eq!(block_findings(&node), Vec::new());
 }
 
@@ -462,7 +475,7 @@ fn threshold_and_window_paths() {
 
 #[test]
 fn a_model_dump_validates_again() {
-    let node = yaml_block(&fixtures().join("rule-exabeam-sequence-1.0.yaml"));
+    let node = yaml_block("rule-exabeam-sequence-1.0.yaml");
     let mut cx = Context::new();
     let first = ExabeamConfig::from_node(&node, &mut cx).unwrap();
     let dumped = serde_json::to_value(&first).unwrap();
@@ -496,7 +509,7 @@ fn status_is_required() {
 #[test]
 fn the_garde_check_runs_the_constraints() {
     use garde::Validate;
-    let node = yaml_block(&fixtures().join("rule-exabeam-threshold-1.0.yaml"));
+    let node = yaml_block("rule-exabeam-threshold-1.0.yaml");
     let mut cx = Context::new();
     let mut config = ExabeamConfig::from_node(&node, &mut cx).unwrap();
     assert!(config.validate_with(&crate::Pins::default()).is_ok());
