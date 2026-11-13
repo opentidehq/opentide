@@ -466,9 +466,26 @@ pub fn golden(
             return Ok(false);
         }
     };
+    // The catch-up train adds case definitions without recordings, which O2
+    // records from the new oracle (`golden::report_only`): there a case with
+    // no recording is listed, not compared. Elsewhere it is an error.
+    let report_only = crate::golden::report_only::enabled(repo);
+    let recorded = |result: &&Result<crate::golden::recording::Recording>| match result {
+        Ok(actual) => cases.join(&actual.case.id).join("case.toml").is_file(),
+        Err(_) => true,
+    };
+    let (results, unrecorded): (Vec<_>, Vec<_>) = results
+        .iter()
+        .partition(|result| !report_only || recorded(result));
+    for actual in unrecorded.iter().filter_map(|result| result.as_ref().ok()) {
+        println!(
+            "{}: not recorded yet (a definition only; O2 records it)",
+            actual.case.id
+        );
+    }
     // Each case is read and compared on its own, on every core (#841); the
     // messages, the reports and the ledger's usage follow the cases' order.
-    let compared = crate::parallel::in_order(results, |result| {
+    let compared = crate::parallel::in_order(&results, |result| {
         let actual = match result {
             Ok(actual) => actual,
             Err(error) => return Ok(Err(format!("error: {error:#}"))),
@@ -566,7 +583,6 @@ pub fn golden(
     let different = report.cases.iter().filter(|case| !case.equal).count();
     // The catch-up train reports its differences instead of failing on them
     // (`golden::report_only`); a case that could not run still fails.
-    let report_only = crate::golden::report_only::enabled(repo);
     let passed = if report_only {
         failed == 0
     } else {

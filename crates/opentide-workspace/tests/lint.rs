@@ -24,9 +24,11 @@ mod lint {
     const U1: &str = "11111111-1111-4111-8111-111111111111";
     const U2: &str = "22222222-2222-4222-8222-222222222222";
 
+    /// A rule with every field lint asks for: the recommended
+    /// `configurations` and `response` included.
     fn rule(uuid: &str, name: &str) -> String {
         format!(
-            "name: {name}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: me\n  organisation: us\n"
+            "name: {name}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: me\n  organisation: us\nconfigurations: {{}}\nresponse: {{}}\n"
         )
     }
 
@@ -82,6 +84,7 @@ mod lint {
             [
                 LintCheck::Filenames,
                 LintCheck::Metadata,
+                LintCheck::Recommended,
                 LintCheck::Placeholders,
                 LintCheck::Queries
             ]
@@ -288,7 +291,7 @@ mod lint {
         let fs = workspace();
         fs.write(
             "/ws/objects/rules/a.yaml",
-            format!("name: A\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n  organisation:\n    name: us\n"),
+            format!("name: A\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n  organisation:\n    name: us\nconfigurations: {{}}\nresponse: {{}}\n"),
         );
         // A threat's schema has no `reviewed`: it is not recommended there.
         fs.write(
@@ -318,6 +321,99 @@ mod lint {
     }
 
     #[test]
+    fn a_rule_without_configurations_or_response_gets_a_recommended_note() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n  author: me\n  organisation: us\nresponse: null\n"),
+        );
+        // A threat has no recommended field; an unknown schema is validate's.
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!("name: T\nmetadata:\n  uuid: {U2}\n  schema: threat::1.0\n  author: me\n  organisation: us\n"),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            "name: B\nmetadata:\n  uuid: 33333333-3333-4333-8333-333333333333\n  schema: rule::9.9\n  author: me\n  organisation: us\n",
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        // `response: null` is there: only `configurations` is missing.
+        assert_eq!(
+            codes(&report),
+            [("recommended_field_missing", "objects/rules/a.yaml")]
+        );
+        let finding = &report.findings[0];
+        assert_eq!(finding.check, LintCheck::Recommended);
+        assert_eq!(
+            json(finding),
+            format!(
+                r#"{{"check":"recommended","severity":"info","path":"objects/rules/a.yaml","yaml_line":0,"uuid":"{U1}","message":"Recommended field missing: configurations","code":"recommended_field_missing","field_path":["configurations"],"line":1,"column":1,"end_line":1,"end_column":2,"help":null,"fix":null,"explain":"opentide explain recommended_field_missing"}}"#
+            )
+        );
+        assert_eq!(finding.diagnostic.severity, Severity::Info);
+        assert_eq!(report.status, LintStatus::Issues);
+        assert!(report.outcome_ok);
+        // `[recommended]` turns it off, or raises it.
+        let off = run(&fs, &config("[recommended]\nenabled = false\n"), &options());
+        assert!(off.findings.is_empty(), "{:?}", codes(&off));
+        assert!(!off.checks.contains(&LintCheck::Recommended));
+        let raised = run(
+            &fs,
+            &config("[recommended]\nseverity = \"warning\"\n"),
+            &options(),
+        );
+        assert_eq!(raised.findings[0].severity(), "warning");
+        assert_eq!(raised.findings[0].diagnostic.severity, Severity::Warning);
+        // `--check recommended` runs it alone, even when lint.toml disables it.
+        let only = run(
+            &fs,
+            &config("[recommended]\nenabled = false\n"),
+            &LintOptions {
+                checks: vec![LintCheck::Recommended],
+                ..options()
+            },
+        );
+        assert_eq!(codes(&only), codes(&report));
+        assert_eq!(
+            LintCheck::parse("recommended"),
+            Some(LintCheck::Recommended)
+        );
+    }
+
+    #[test]
+    fn strict_fails_on_errors_and_warnings_but_never_on_notes() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a-rule.yaml",
+            format!("name: A rule\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n"),
+        );
+        let strict = LintOptions {
+            strict: true,
+            ..options()
+        };
+        let notes = run(&fs, &LintConfig::default(), &strict);
+        assert_eq!(notes.summary.unwrap().notes, 3, "{:?}", codes(&notes));
+        assert_eq!(notes.status, LintStatus::Issues);
+        assert_eq!(notes.exit_code, 0);
+        assert!(notes.outcome_ok);
+        // lint.toml raises a check to gate on it.
+        let gated = run(
+            &fs,
+            &config("[metadata]\nseverity = \"warning\"\n"),
+            &strict,
+        );
+        assert_eq!(gated.status, LintStatus::Failed);
+        assert_eq!(gated.exit_code, 1);
+        assert_eq!(gated.failure_code, Some("issues_found"));
+        // A warning fails it whatever the notes.
+        fs.write("/ws/objects/rules/misnamed.yaml", rule(U2, "Another rule"));
+        assert_eq!(
+            run(&fs, &LintConfig::default(), &strict).status,
+            LintStatus::Failed
+        );
+    }
+
+    #[test]
     fn blank_or_empty_metadata_counts_as_missing() {
         let fs = workspace();
         for (file, uuid, author) in [
@@ -328,7 +424,7 @@ mod lint {
             fs.write(
                 format!("/ws/objects/rules/{file}.yaml"),
                 format!(
-                    "name: {file}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: {author}\n  organisation: us\n"
+                    "name: {file}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: {author}\n  organisation: us\nconfigurations: {{}}\nresponse: {{}}\n"
                 ),
             );
         }
@@ -670,6 +766,36 @@ mod lint {
             ]
         );
         assert_eq!(found[0].diagnostic.severity, Severity::Info);
+        // A rule without `response`: the editor shows lint's note, as
+        // `opentide lint` reports it (language-server #250).
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            "name: B\nmetadata:\n  uuid: 33333333-3333-4333-8333-333333333333\n  schema: rule::1.1\n  author: me\n  organisation: us\nconfigurations: {}\n",
+        );
+        let recommended = lint_file(
+            &fs,
+            Path::new(ROOT),
+            &LintConfig::default(),
+            Path::new("/ws/objects/rules/b.yaml"),
+        );
+        assert_eq!(
+            recommended
+                .iter()
+                .map(LintFinding::code)
+                .collect::<Vec<_>>(),
+            ["recommended_field_missing"]
+        );
+        assert_eq!(recommended[0].diagnostic.severity, Severity::Info);
+        assert_eq!(recommended[0].diagnostic.field_path, ["response"]);
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &config("[recommended]\nenabled = false\n"),
+                Path::new("/ws/objects/rules/b.yaml"),
+            )
+            .is_empty()
+        );
         assert!(
             lint_file(
                 &fs,

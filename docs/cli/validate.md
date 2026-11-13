@@ -46,7 +46,7 @@ opentide validate --check queries
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
 error[vocab_unknown]: 'clearr' is not a TLP value
@@ -612,7 +612,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 
   The three look-back codes are independent, so a threshold rule with a look-back over `1h` raises `lookback_long` and `threshold_lookback`. Each log record also carries `legacy_event`, the event name the code replaced (`elastic_lookback_zero_warning`, `elastic_lookback_long_warning`, `elastic_esql_metadata_id_warning`, `elastic_risk_score_band_warning`, `elastic_eql_maxspan_window_warning`, `skipping_non_enterprise_technique`). It is removed in the release after next. The tenant `setup.suppression = false` with a rule that configures `suppression` is a separate warning, `suppression_omitted_basic_license`.
 - It runs the Elasticsearch and Kibana checks below.
-- It posts the compiled rule to Kibana `rules/preview` with `invocationCount: 1` and a UTC `timeframeEnd`. Entries in `logs[].errors` fail the rule. `logs[].warnings`, including a missing index, are warnings. HTTP 400 is a schema error, and any other non-200 response fails that rule. HTTP 401 or 403, or a missing preview-index privilege, fails that tenant and the remaining rules on it are skipped.
+- It posts the compiled rule to Kibana `rules/preview` with `invocationCount: 1` and a UTC `timeframeEnd`. The preview creates no rule, but it writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself. Entries in `logs[].errors` fail the rule. `logs[].warnings`, including a missing index, are warnings. HTTP 400 is a schema error, and any other non-200 response fails that rule. HTTP 401 or 403, or a missing preview-index privilege, fails that tenant and the remaining rules on it are skipped.
 
 The same Elasticsearch and Kibana checks run before every `opentide deploy` to Elastic, against `elasticsearch_url` and Kibana with the tenant API key:
 
