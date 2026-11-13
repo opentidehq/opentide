@@ -372,6 +372,87 @@ mod validate {
     }
 
     #[test]
+    fn bitdefender_yara_signatures_and_advisories() {
+        let fs = workspace();
+        let block = |signature: &str| {
+            format!(
+                "response:\n  alert_severity: Critical\nconfigurations:\n  bitdefender:\n    \
+                 enabled: true\n    schema: platform::bitdefender::1.0\n    status: STAGING\n    \
+                 yara:\n      signature: {signature}\n"
+            )
+        };
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("{}{}", rule(U1, "A"), block("\"  \"")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            format!(
+                "{}description: &sig |\n  rule A {{ condition: true }}\n{}",
+                rule(U2, "B"),
+                block("*sig")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let empty = with_code(&validation, "yara_empty_signature");
+        assert_eq!(empty.len(), 1, "{empty:?}");
+        assert_eq!(empty[0].object_uuid, U1);
+        assert_eq!(
+            empty[0].field_path,
+            ["configurations", "bitdefender", "yara", "signature"]
+        );
+        let aliased = with_code(&validation, "yara_signature_alias");
+        assert_eq!(aliased.len(), 1, "{aliased:?}");
+        assert_eq!(aliased[0].object_uuid, U2);
+        assert_eq!(aliased[0].severity, Severity::Error);
+        assert_eq!(
+            aliased[0].message,
+            "configurations.bitdefender.yara.signature is a YAML alias; write the YARA \
+             signature out in the block"
+        );
+        // On the anchor's line, as the oracle's reader places an alias.
+        let anchor = rule(U2, "B").lines().count();
+        assert_eq!(aliased[0].yaml_line, Some(anchor));
+        // The aliased text, `&sig |`, as the oracle spans it.
+        assert_eq!(
+            (aliased[0].line, aliased[0].column, aliased[0].end_column),
+            (Some(anchor + 1), Some(14), Some(20))
+        );
+        let collapsed = with_code(&validation, "bitdefender_severity_collapsed");
+        assert_eq!(collapsed.len(), 2, "{collapsed:?}");
+        assert!(collapsed.iter().all(|d| d.severity == Severity::Warning));
+    }
+
+    #[test]
+    fn a_google_secops_section_written_as_an_alias_is_an_error() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  google_secops:\n    status: X\n    meta:\n      note: &c \
+                 \"$e\"\n    events: $e.metadata.event_type = \"X\"\n    outcome: \
+                 $risk_score = 1\n    condition: *c\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let aliased = with_code(&validation, "yaral_section_alias");
+        assert_eq!(aliased.len(), 1, "{aliased:?}");
+        let issue = aliased[0];
+        assert_eq!(issue.severity, Severity::Error);
+        assert_eq!(
+            issue.field_path,
+            ["configurations", "google_secops", "condition"]
+        );
+        assert_eq!(
+            issue.help.as_deref(),
+            Some("Write the condition text under configurations.google_secops.condition")
+        );
+        // Placed where the alias's anchor is, as opentide 0.28.1 places it.
+        assert_eq!(issue.yaml_line, Some(8));
+    }
+
+    #[test]
     fn a_misspelled_enabled_key_is_named() {
         let fs = workspace();
         fs.write(

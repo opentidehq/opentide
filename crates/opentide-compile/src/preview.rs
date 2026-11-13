@@ -3,8 +3,8 @@
 
 use opentide_schema::objects::platform::{
     BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    GoogleSecopsConfig, HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig,
-    SysdigConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, SentinelConfig,
+    SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -12,8 +12,8 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, google_secops,
-    harfanglab, sentinel, sentinel_one, splunk, sysdig,
+    Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, exabeam,
+    google_secops, graylog, harfanglab, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -42,9 +42,28 @@ pub fn compile_offline(
         "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
         "bitdefender" => Some(bitdefender_request(cx, rule, None)),
+        "exabeam" => Some(
+            exabeam::compile_deployment(cx, rule, None)
+                .map(|compiled| exabeam::create_request(&compiled)),
+        ),
         "google_secops" => Some(google_secops::compile_offline(cx, rule)),
+        "graylog" => Some(graylog_request(cx, rule, None)),
         _ => None,
     }
+}
+
+/// The `POST /api/events/definitions` request a deploy would send for
+/// `rule` on `tenant` (none: aliases left out), built for
+/// [`graylog::PREVIEW_VERSION`]: a preview asks no server.
+fn graylog_request(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: Option<&Json>,
+) -> Result<Json, CompileError> {
+    let setup = tenant.and_then(graylog::tenant_setup);
+    let name = tenant.map(deploy::tenant_name);
+    graylog::compile_definition(cx, rule, graylog::PREVIEW_VERSION, setup, name)
+        .map(|compiled| graylog::create_request(&compiled))
 }
 
 /// The `createCustomRule` request a deploy sends for `rule` on `tenant`;
@@ -114,8 +133,13 @@ pub fn compile_tenant(
         "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
         "sysdig" => Some(sysdig::compile_body(cx, rule, known)),
         "bitdefender" => Some(bitdefender_tenant(cx, rule, config, id)),
+        "exabeam" => Some(
+            exabeam::compile_deployment(cx, rule, known)
+                .map(|compiled| exabeam::create_request(&compiled)),
+        ),
         // The text is the same on every tenant: the `rules.create` body.
         "google_secops" => Some(google_secops::compile_offline(cx, rule)),
+        "graylog" => Some(graylog_request(cx, rule, known)),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             Some(elastic::compile(cx, rule, &setup))
@@ -170,7 +194,9 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
         "elastic" => model_dump::<ElasticConfig>(block),
         "sysdig" => model_dump::<SysdigConfig>(block),
         "bitdefender" => model_dump::<BitdefenderConfig>(block),
+        "exabeam" => model_dump::<ExabeamConfig>(block),
         "google_secops" => model_dump::<GoogleSecopsConfig>(block),
+        "graylog" => model_dump::<GraylogConfig>(block),
         _ => None,
     };
     dumped.unwrap_or_else(|| block.clone())
@@ -222,11 +248,13 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 
 /// The preview of `rule` on `platform` for a run that sends it to the
 /// tenants named `tenants` (`preview_rule_deployment`): a platform whose
-/// request depends on the tenant (Bitdefender) compiles it for each, and
-/// shows the first; every other platform is [`preview`]'s.
+/// request depends on the tenant (Bitdefender, Graylog, Exabeam) compiles it
+/// for each, and shows the first; every other platform is [`preview`]'s.
 pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[String]) -> Json {
     match platform {
         "bitdefender" => bitdefender_preview(cx, rule, tenants),
+        "graylog" => graylog_preview(cx, rule, tenants),
+        "exabeam" => exabeam_preview(cx, rule, tenants),
         _ => preview(cx, platform, rule),
     }
 }
@@ -283,12 +311,39 @@ fn bitdefender_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Jso
     Json::Object(entry)
 }
 
+/// The `POST /correlation-rules/v2/rules` request an Exabeam deploy would
+/// send (`_exabeam_compile_preview`). The body depends on the tenant only
+/// through its `test_mode`: the request shown is the first tenant's, and with
+/// no tenant `testMode` is the block's, else `false`. A dry run makes no
+/// call, so the name check a create starts with is not made.
+fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let first = tenants.iter().find_map(|name| {
+        deploy::tenant(cx, exabeam::PLATFORM, name).map(|table| (name.as_str(), table))
+    });
+    match exabeam::compile_deployment(cx, rule, first.map(|(_, table)| table)) {
+        Ok(compiled) => {
+            let mut entry = Object::new();
+            entry.insert("uuid".into(), rule.uuid.clone().into());
+            entry.insert("name".into(), rule.name.clone().into());
+            entry.insert("api_request".into(), exabeam::create_request(&compiled));
+            if let Some((name, _)) = first {
+                entry.insert("tenant".into(), name.into());
+            }
+            Json::Object(entry)
+        }
+        Err(error) => failure(rule, &error),
+    }
+}
+
 /// The preview of `rule` on `platform` (`preview_rule_deployment`), the
-/// entry the dry run's `payloads` lists. Sentinel and Sysdig report a rule
-/// they cannot compile as a failure; Elastic falls back to the block's dump,
-/// and every other platform shows it ([`config_dump`]).
+/// entry the dry run's `payloads` lists. Sentinel, Sysdig, Graylog and Exabeam report
+/// a rule they cannot compile as a failure; Elastic falls back to the
+/// block's dump, and every other platform shows it ([`config_dump`]).
+/// `tenants` are the tenants the run sends the rule to, which Graylog's
+/// and Exabeam's requests depend on.
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
     match platform {
+        "graylog" => graylog_preview(cx, rule, &[]),
         // A compile error the oracle reports with the platform's display
         // name: compile_diagnostic(exc) names Sentinel.
         "sentinel" => match sentinel::compile(cx, rule, PREVIEW_TENANT) {
@@ -302,6 +357,7 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
+        "exabeam" => exabeam_preview(cx, rule, &[]),
         // `_google_secops_compile_preview`: the `rules.create` body, or the
         // failure, named for Google SecOps.
         "google_secops" => match google_secops::compile_offline(cx, rule) {
@@ -314,6 +370,63 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
         },
         _ => dump_entry(platform, rule),
     }
+}
+
+/// Graylog's preview (`_graylog_compile_preview`): the create request for
+/// [`graylog::PREVIEW_VERSION`], compiled for every tenant the run sends the
+/// rule to, so one whose tables miss an alias fails the dry run and is
+/// named. The request shown is the first tenant's; with no tenant, stream
+/// and notification ids are left out and `unresolved` lists the aliases.
+fn graylog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let found: Vec<&Json> = tenants
+        .iter()
+        .filter_map(|name| deploy::tenant(cx, graylog::PLATFORM, name))
+        .collect();
+    let mut compiled = Vec::new();
+    let reached: Vec<Option<&Json>> = if found.is_empty() {
+        vec![None]
+    } else {
+        found.iter().copied().map(Some).collect()
+    };
+    for tenant in reached {
+        let setup = tenant.and_then(graylog::tenant_setup);
+        let name = tenant.map(deploy::tenant_name);
+        match graylog::compile_definition(cx, rule, graylog::PREVIEW_VERSION, setup, name) {
+            Ok(definition) => compiled.push(definition),
+            Err(error) => return failure(rule, &error),
+        }
+    }
+    let Some(first) = compiled.first() else {
+        return dump_entry(graylog::PLATFORM, rule);
+    };
+    let mut entry = Object::new();
+    entry.insert("uuid".into(), rule.uuid.clone().into());
+    entry.insert("name".into(), rule.name.clone().into());
+    entry.insert("api_request".into(), graylog::create_request(first));
+    let version = graylog::PREVIEW_VERSION;
+    entry.insert(
+        "server_version".into(),
+        format!("{}.{}", version.0, version.1).into(),
+    );
+    if let Some(tenant) = found.first() {
+        entry.insert("tenant".into(), deploy::tenant_name(tenant).into());
+    } else if !first.unresolved.is_empty() {
+        let mut unresolved = Object::new();
+        unresolved.insert(
+            "reason".into(),
+            "this run deploys the rule to no graylog tenant: stream and notification aliases \
+             are resolved against a tenant at deploy"
+                .into(),
+        );
+        for (field, aliases) in &first.unresolved {
+            unresolved.insert(
+                (*field).to_owned(),
+                Json::Array(aliases.iter().cloned().map(Json::Str).collect()),
+            );
+        }
+        entry.insert("unresolved".into(), Json::Object(unresolved));
+    }
+    Json::Object(entry)
 }
 
 #[cfg(test)]

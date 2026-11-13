@@ -126,17 +126,20 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`exabeam_clause_order`](#exabeam_clause_order) | Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT. |
 | [`exabeam_context_table_limit`](#exabeam_context_table_limit) | An Exabeam query has more than two context table lookups. |
 | [`exabeam_context_table_or`](#exabeam_context_table_or) | An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only. |
-| [`exabeam_context_table_trigger`](#exabeam_context_table_trigger) | An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match. |
-| [`exabeam_correlation`](#exabeam_correlation) | An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by. |
-| [`exabeam_correlation_window`](#exabeam_correlation_window) | An Exabeam correlation window is shorter than the longest sequence threshold window. |
-| [`exabeam_duration`](#exabeam_duration) | An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes. |
-| [`exabeam_email`](#exabeam_email) | An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank. |
+| [`exabeam_context_table_trigger`](#exabeam_context_table_trigger) | A sequence whose query looks a value up in a context table has a threshold. |
+| [`exabeam_correlation`](#exabeam_correlation) | An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one. |
+| [`exabeam_correlation_window`](#exabeam_correlation_window) | `correlation.within` is not more than the time the ordered sequences need. |
+| [`exabeam_create_no_id`](#exabeam_create_no_id) | Exabeam answered a create without a rule UUID. |
+| [`exabeam_create_unconfirmed`](#exabeam_create_unconfirmed) | An Exabeam create got no answer, or a server error, so it may or may not have happened. |
+| [`exabeam_duration`](#exabeam_duration) | A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes. |
+| [`exabeam_email`](#exabeam_email) | The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject. |
+| [`exabeam_feature_unavailable`](#exabeam_feature_unavailable) | The Exabeam tenant's subscription does not include the feature, so no rule deploys to it. |
 | [`exabeam_foreach_clause`](#exabeam_foreach_clause) | An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY. |
 | [`exabeam_foreach_position`](#exabeam_foreach_position) | An Exabeam FOREACH is the first statement; it runs on the result of a preceding query. |
 | [`exabeam_foreach_reference`](#exabeam_foreach_reference) | An Exabeam @field reference is outside a FOREACH sub-query. |
 | [`exabeam_free_text_special`](#exabeam_free_text_special) | Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes. |
 | [`exabeam_function_arity`](#exabeam_function_arity) | An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern. |
-| [`exabeam_group_by`](#exabeam_group_by) | An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty). |
+| [`exabeam_group_by`](#exabeam_group_by) | A `group_by` is not a list of one to three distinct field names. |
 | [`exabeam_group_by_column`](#exabeam_group_by_column) | An Exabeam selected column is neither in GROUP-BY nor aggregated. |
 | [`exabeam_group_by_select_star`](#exabeam_group_by_select_star) | An Exabeam GROUP-BY is combined with SELECT *. |
 | [`exabeam_implicit_and`](#exabeam_implicit_and) | Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND. |
@@ -146,30 +149,39 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`exabeam_leading_slash`](#exabeam_leading_slash) | An Exabeam query cannot start with /. |
 | [`exabeam_legacy_regex`](#exabeam_legacy_regex) | An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path. |
 | [`exabeam_mixed_boolean`](#exabeam_mixed_boolean) | Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence. |
-| [`exabeam_name_duplicate`](#exabeam_name_duplicate) | Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case. |
+| [`exabeam_name_conflict`](#exabeam_name_conflict) | An Exabeam rule with the block's name already exists, so deploy did not create a second one. |
+| [`exabeam_name_duplicate`](#exabeam_name_duplicate) | Two enabled Exabeam blocks resolve to the same Exabeam rule name. |
 | [`exabeam_name_length`](#exabeam_name_length) | The Exabeam rule name is longer than 128 characters. |
 | [`exabeam_not_equal`](#exabeam_not_equal) | Exabeam filters have no != operator; write NOT field:value. |
-| [`exabeam_outcome`](#exabeam_outcome) | An Exabeam outcome is not alert, case or none. |
-| [`exabeam_outcome_silent`](#exabeam_outcome_silent) | An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event. |
+| [`exabeam_outcome`](#exabeam_outcome) | The block `outcome` is not `alert`, `case` or `none`. |
+| [`exabeam_outcome_silent`](#exabeam_outcome_silent) | An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers. |
 | [`exabeam_parse_error`](#exabeam_parse_error) | The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number. |
 | [`exabeam_pipe_limit`](#exabeam_pipe_limit) | An Exabeam query has more than five pipes. |
 | [`exabeam_pipe_misuse`](#exabeam_pipe_misuse) | An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE. |
 | [`exabeam_range`](#exabeam_range) | The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network. |
 | [`exabeam_regex`](#exabeam_regex) | The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier. |
+| [`exabeam_request_failed`](#exabeam_request_failed) | An Exabeam call for one rule failed. |
+| [`exabeam_request_rejected`](#exabeam_request_rejected) | Exabeam refused the rule with HTTP 400. |
 | [`exabeam_reserved_alias`](#exabeam_reserved_alias) | An Exabeam AS name is one of the Search guide's reserved words. |
 | [`exabeam_rgx_extract_limit`](#exabeam_rgx_extract_limit) | An Exabeam query has more than three RGX_EXTRACT calls. |
-| [`exabeam_schedule`](#exabeam_schedule) | An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take. |
-| [`exabeam_sequences`](#exabeam_sequences) | An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query. |
-| [`exabeam_severity`](#exabeam_severity) | An Exabeam severity is not none, low, medium, high or critical. |
+| [`exabeam_rule_auto_disabled`](#exabeam_rule_auto_disabled) | Exabeam has stopped the rule on its own. |
+| [`exabeam_rule_missing`](#exabeam_rule_missing) | A rule to disable was already gone from Exabeam, so its id was removed. |
+| [`exabeam_rule_recreated`](#exabeam_rule_recreated) | The recorded Exabeam rule was gone, so deploy created it again. |
+| [`exabeam_schedule`](#exabeam_schedule) | A `schedule` recurrence is not one Exabeam takes. |
+| [`exabeam_schedule_retained`](#exabeam_schedule_retained) | The Exabeam rule keeps a schedule the block no longer sets. |
+| [`exabeam_sequences`](#exabeam_sequences) | An Exabeam block has no sequences, or a sequence has no query. |
+| [`exabeam_severity`](#exabeam_severity) | The block `severity` is not `none`, `low`, `medium`, `high` or `critical`. |
 | [`exabeam_single_group`](#exabeam_single_group) | Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them. |
 | [`exabeam_string_field_number`](#exabeam_string_field_number) | An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes. |
-| [`exabeam_threshold_function`](#exabeam_threshold_function) | An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing. |
-| [`exabeam_threshold_operator`](#exabeam_threshold_operator) | An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value. |
-| [`exabeam_threshold_value`](#exabeam_threshold_value) | An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer. |
+| [`exabeam_tenant_unauthorized`](#exabeam_tenant_unauthorized) | Exabeam refused the tenant's API key, so nothing more is sent to it. |
+| [`exabeam_tenant_unreachable`](#exabeam_tenant_unreachable) | An Exabeam tenant did not answer, so no rule deploys to it. |
+| [`exabeam_threshold_function`](#exabeam_threshold_function) | A threshold's `function` is not an Exabeam function, or its `field` is missing or blank. |
+| [`exabeam_threshold_operator`](#exabeam_threshold_operator) | A threshold's `operator` is not one its function takes. |
+| [`exabeam_threshold_value`](#exabeam_threshold_value) | A threshold's `value` does not have the shape its operator takes. |
 | [`exabeam_time_exact`](#exabeam_time_exact) | An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only. |
 | [`exabeam_unknown_field`](#exabeam_unknown_field) | The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it. |
 | [`exabeam_unknown_function`](#exabeam_unknown_function) | The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT. |
-| [`exabeam_unknown_value`](#exabeam_unknown_value) | An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it. |
+| [`exabeam_unknown_value`](#exabeam_unknown_value) | An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists. |
 | [`exabeam_unquoted_value`](#exabeam_unquoted_value) | An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes. |
 | [`exabeam_wildcard_in_phrase`](#exabeam_wildcard_in_phrase) | A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
@@ -229,23 +241,44 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`google_secops_tenant_unauthorized`](#google_secops_tenant_unauthorized) | A Google SecOps instance refused opentide's credentials. |
 | [`google_secops_tenant_unreachable`](#google_secops_tenant_unreachable) | A Google SecOps instance did not answer, so no rule was deployed to it. |
 | [`google_secops_verify_failed`](#google_secops_verify_failed) | Google SecOps does not compile a rule, so deploy neither creates nor updates it. |
-| [`graylog_aggregation`](#graylog_aggregation) | A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments. |
-| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value. |
-| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row: `\\` is already one literal backslash, so `\\\\` matches two. |
-| [`graylog_event_field`](#graylog_event_field) | A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`. |
-| [`graylog_event_key`](#graylog_event_key) | A Graylog `event_key` item is not an `event_fields` name. |
-| [`graylog_event_limit`](#graylog_event_limit) | A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation. |
-| [`graylog_field_name`](#graylog_field_name) | A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`). |
-| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form. |
-| [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not one string or a list of distinct non-blank strings. |
-| [`graylog_open_range`](#graylog_open_range) | A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`. |
-| [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run. |
-| [`graylog_priority`](#graylog_priority) | A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`. |
-| [`graylog_query_blank`](#graylog_query_blank) | A Graylog block's `query` is missing or blank. |
-| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character. |
-| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped `"`, which Lucene reads as a quoted literal, not the character: escape it as `\"`. |
-| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses an inline flag, a `(?…)` group, `\b`, `\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query. |
-| [`graylog_schedule`](#graylog_schedule) | A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`. |
+| [`graylog_aggregation`](#graylog_aggregation) | A Graylog aggregation condition does not parse, or a call has the wrong arguments. |
+| [`graylog_alias_unknown`](#graylog_alias_unknown) | A Graylog block names a stream or notification alias the tenant does not define. |
+| [`graylog_all_streams`](#graylog_all_streams) | A Graylog definition names no stream, so it searches every stream. |
+| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard or range applies to Graylog's analysed message field. |
+| [`graylog_create_unconfirmed`](#graylog_create_unconfirmed) | A Graylog create got no answer, so the definition may exist without a binding. |
+| [`graylog_definition_immutable`](#graylog_definition_immutable) | Graylog refuses to change or delete an event definition outside the default scope. |
+| [`graylog_definition_in_use`](#graylog_definition_in_use) | Graylog refuses to delete an event definition another one depends on. |
+| [`graylog_definition_invalid`](#graylog_definition_invalid) | Graylog refused an event definition, naming the fields at fault. |
+| [`graylog_definition_missing`](#graylog_definition_missing) | The recorded Graylog event definition was gone when deploy came to disable it. |
+| [`graylog_definition_recreated`](#graylog_definition_recreated) | The recorded Graylog event definition was gone, so deploy created it again. |
+| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row. |
+| [`graylog_event_field`](#graylog_event_field) | A Graylog event field has an invalid name or value. |
+| [`graylog_event_key`](#graylog_event_key) | A Graylog event_key item is not an event field of the block. |
+| [`graylog_event_limit`](#graylog_event_limit) | A Graylog block's event_limit is out of range, or set on an aggregation. |
+| [`graylog_field_name`](#graylog_field_name) | A Graylog aggregation groups by a name that is not a field name. |
+| [`graylog_field_unsupported_version`](#graylog_field_unsupported_version) | A Graylog block sets a field the tenant's version cannot take. |
+| [`graylog_forbidden`](#graylog_forbidden) | Graylog refused a request for want of a permission. |
+| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`. |
+| [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not a string or a list of distinct, non-blank strings. |
+| [`graylog_open_range`](#graylog_open_range) | A Graylog range has an open end, which Graylog's validator refuses. |
+| [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a window longer than its interval. |
+| [`graylog_priority`](#graylog_priority) | A Graylog block's priority is not one of Graylog's priorities. |
+| [`graylog_priority_collapsed`](#graylog_priority_collapsed) | Graylog before 7.1 has no Informational priority: the definition is sent as Low. |
+| [`graylog_query_blank`](#graylog_query_blank) | A Graylog block has no query, or an empty one. |
+| [`graylog_query_invalid`](#graylog_query_invalid) | Graylog refused a query, so deploy saved nothing. |
+| [`graylog_query_warning`](#graylog_query_warning) | Graylog has a reservation about a query. |
+| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds a character Lucene reads as a regex operator. |
+| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped double quote. |
+| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses syntax Lucene's regex engine does not have. |
+| [`graylog_request_failed`](#graylog_request_failed) | A Graylog request failed for a reason the failure table does not name. |
+| [`graylog_schedule`](#graylog_schedule) | A Graylog block's schedule is invalid. |
+| [`graylog_tenant_unauthorized`](#graylog_tenant_unauthorized) | A Graylog tenant refused the access token. |
+| [`graylog_tenant_unreachable`](#graylog_tenant_unreachable) | A Graylog tenant did not answer. |
+| [`graylog_title_duplicate`](#graylog_title_duplicate) | Two enabled Graylog blocks resolve to one event definition title. |
+| [`graylog_unknown_field`](#graylog_unknown_field) | Graylog does not know a field the query names, on the streams it searches. |
+| [`graylog_value_type`](#graylog_value_type) | A query compares a Graylog field with a value of the wrong type. |
+| [`graylog_version_unsupported`](#graylog_version_unsupported) | A Graylog tenant runs a version opentide does not deploy to. |
+| [`graylog_version_vulnerable`](#graylog_version_vulnerable) | A Graylog tenant runs a version affected by the access-token revocation flaw. |
 | [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
 | [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses. |
 | [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
@@ -2356,817 +2389,1069 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_bare_wildcard
 
 A * alone is not an Exabeam query term.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_clause_order
 
 Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_context_table_limit
 
 An Exabeam query has more than two context table lookups.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_context_table_or
 
 An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_context_table_trigger
 
-An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match.
+A sequence whose query looks a value up in a context table has a threshold.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Exabeam requires "Trigger on first match" for a sequence with a context table lookup (`user IN "Privileged Accounts"`), so the sequence takes no `threshold`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+sequences:
+  - query: activity_type:"app-login" AND user IN "Privileged Accounts"
+    threshold:
+      function: count
+      operator: more_than
+      value: 5
+      within: 1h
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Remove the `threshold`, or move the lookup to a sequence of its own that triggers on any match and correlate the two.
 
 ## exabeam_correlation
 
-An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by.
+An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Two or more sequences correlate within a common window, `correlation.within`; one sequence has nothing to correlate with.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    sequences:
+      - query: activity_type:"process-create" AND process_name:"mshta.exe"
+    correlation:
+      within: 10m
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+With one sequence, remove `correlation`. With two or more, set `correlation.within` (`15m`) and, optionally, `correlation.group_by`.
 
 ## exabeam_correlation_window
 
-An Exabeam correlation window is shorter than the longest sequence threshold window.
+`correlation.within` is not more than the time the ordered sequences need.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block with two or more sequences (exabeam-1.0). Exabeam evaluates the sequences in order: it waits one minute before it evaluates the next one, and an any-match sequence evaluates events for one minute. Its guide asks for a correlation window of more than the sum of the sequence windows (`threshold.within`, one minute for an any-match sequence) plus one minute for each sequence after the first: "more than nine minutes" for a 3-minute and a 5-minute sequence. A shorter window may never see every condition met. It is an advisory: the rule validates and deploys.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+sequences:
+  - query: activity_type:"app-login" AND outcome:"fail"
+    threshold: {function: count, operator: more_than, value: 10, within: 1h}
+  - query: activity_type:"app-login" AND outcome:"success"
+correlation:
+  within: 15m
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Make `correlation.within` more than the minutes the sequences need: 60 + 1 + 1 = 62 here, so `63m` or `2h`.
+
+## exabeam_create_no_id
+
+Exabeam answered a create without a rule UUID.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The create returned `201`, but its `id` is not a UUID, so nothing was recorded in `.opentide/states/deployment/`. The rule may exist on the tenant with no binding.
+
+### Example
+
+```text illustrative
+exabeam_create_no_id: the create of 'Password spraying from outside the network' answered no rule UUID (id None)
+```
+
+### How to fix
+
+Find the rule by its name in the Exabeam console. Delete it and deploy again, or record its id under `platforms.exabeam.<tenant>` and commit it.
+
+## exabeam_create_unconfirmed
+
+An Exabeam create got no answer, or a server error, so it may or may not have happened.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The create timed out, the connection was reset, or Exabeam answered `5xx`. Exabeam may have created the rule, but its id never reached opentide. Deploy never sends a create again, because it may not list rules to find the first one.
+
+### Example
+
+```text illustrative
+exabeam_create_unconfirmed: the create of 'Password spraying from outside the network' got no answer, so Exabeam may have created it with an id opentide does not know
+```
+
+### How to fix
+
+Look for the rule by its name in the Exabeam console. Delete it and deploy again, or record its id under `platforms.exabeam.<tenant>` in `.opentide/states/deployment/<uuid>.json` and commit it. If there is none, deploy again.
 
 ## exabeam_duration
 
-An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes.
+A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). A duration is a positive whole number and one unit, no space: `m`, `h`, `d`, and `w` for `suppression.for` only. Compound (`1h30m`) and ISO 8601 durations are not durations. `delay` is 7 to 180 minutes (`7m` to `180m`, `1h` to `3h`).
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    delay: 5m
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the duration in one unit (`90m`, not `1h30m`), and keep `delay` between `7m` and `3h`.
 
 ## exabeam_email
 
-An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank.
+The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `email.recipients` is a non-empty list of distinct addresses (`local@domain`); `subject`, when set, is non-blank; `attach_csv` is `true` or `false`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    email:
+      recipients: []
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+List at least one address, each once, or remove `email`.
+
+## exabeam_feature_unavailable
+
+The Exabeam tenant's subscription does not include the feature, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). Exabeam answered `409` ("Feature is not enabled for subscription"). Deploy stops the tenant.
+
+### Example
+
+```text illustrative
+exabeam_feature_unavailable: tenant exabeam-eu answered POST /correlation-rules/v2/rules with HTTP 409: Feature is not enabled for subscription
+```
+
+### How to fix
+
+Ask Exabeam to enable correlation rules (Threat Detection Management) for the tenant, or remove the tenant from `exabeam.toml`.
 
 ## exabeam_foreach_clause
 
 An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_foreach_position
 
 An Exabeam FOREACH is the first statement; it runs on the result of a preceding query.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_foreach_reference
 
 An Exabeam @field reference is outside a FOREACH sub-query.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_free_text_special
 
 Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_function_arity
 
 An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_group_by
 
-An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty).
+A `group_by` is not a list of one to three distinct field names.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). A sequence's and the suppression's `group_by` hold one to three distinct non-blank field names; `correlation.group_by` holds up to three and may be empty. Field names are not checked against a list: they come from the tenant's data.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+sequences:
+  - query: activity_type:"app-login"
+    group_by: [user, src_ip, host, dest_ip]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Keep at most three fields, each once, or remove `group_by`.
 
 ## exabeam_group_by_column
 
 An Exabeam selected column is neither in GROUP-BY nor aggregated.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_group_by_select_star
 
 An Exabeam GROUP-BY is combined with SELECT *.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_implicit_and
 
 Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_implicit_operator
 
 An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_ipv6_range
 
 An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_keyword_case
 
 An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_leading_slash
 
 An Exabeam query cannot start with /.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_legacy_regex
 
 An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_mixed_boolean
 
 Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+
+## exabeam_name_conflict
+
+An Exabeam rule with the block's name already exists, so deploy did not create a second one.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). Before a create, deploy lists the rules whose name holds the block's name (`nameContains`) and compares the names case-insensitively. A match fails the rule, naming the existing rule's id. Deploy never adopts it or records its id.
+
+### Example
+
+```text illustrative
+exabeam_name_conflict: an Exabeam rule named 'Password spraying from outside the network' already exists (id 016dbc1d-a727-43df-a143-9546dcc81a5a); deploy does not adopt it
+```
+
+### How to fix
+
+Rename the block (`configurations.exabeam.name`), or delete the old rule in the console. If it is this rule's own earlier create, record its id under `platforms.exabeam.<tenant>` in `.opentide/states/deployment/<uuid>.json` and commit it.
 
 ## exabeam_name_duplicate
 
-Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case.
+Two enabled Exabeam blocks resolve to the same Exabeam rule name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared case-insensitively. Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Password spraying from outside the network
+configurations:
+  exabeam:
+    enabled: true
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Give one of the blocks its own `configurations.exabeam.name`, or rename one of the rules.
 
 ## exabeam_name_length
 
 The Exabeam rule name is longer than 128 characters.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` and `opentide deploy` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`; Exabeam takes at most 128 characters, and deploy never sends a longer one.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+name: A very long rule name that keeps going well past the one hundred and twenty-eight characters an Exabeam rule name may hold, and more
+configurations:
+  exabeam:
+    enabled: true
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set a shorter `configurations.exabeam.name`, or shorten the rule's `name`.
 
 ## exabeam_not_equal
 
 Exabeam filters have no != operator; write NOT field:value.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_outcome
 
-An Exabeam outcome is not alert, case or none.
+The block `outcome` is not `alert`, `case` or `none`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `alert` sends an alert to Threat Center (the default), `case` creates a case, and `none` only writes a `rule-trigger` event. An email is the separate `email` table.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    outcome: webhook
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `alert`, `case` or `none`. Webhooks are set in the Exabeam console, not through the API.
 
 ## exabeam_outcome_silent
 
-An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event.
+An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on an `exabeam` block (exabeam-1.0). The rule only writes a `rule-trigger` event. It is an advisory: the rule validates and deploys.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    outcome: none
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `outcome: alert` or `case`, add an `email`, or keep it if the trigger events are all you want.
 
 ## exabeam_parse_error
 
 The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_pipe_limit
 
 An Exabeam query has more than five pipes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_pipe_misuse
 
 An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_range
 
 The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_regex
 
 The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+
+## exabeam_request_failed
+
+An Exabeam call for one rule failed.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). A call answered an error other than the ones deploy handles itself: not `400` (`exabeam_request_rejected`), not a `404` deploy recovers from, and not a refusal that stops the tenant. The other rules still deploy.
+
+### Example
+
+```text illustrative
+exabeam_request_failed: PUT /correlation-rules/v2/rules/016dbc1d-a727-43df-a143-9546dcc81a5a: HTTP 502: Bad Gateway
+```
+
+### How to fix
+
+Deploy again later. If it keeps failing, check the tenant's status page and the message's details.
+
+## exabeam_request_rejected
+
+Exabeam refused the rule with HTTP 400.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The answer's `errors[]` name what Exabeam refused (`code`, `message`, `fields`), and its `traceId` identifies the request for Exabeam support.
+
+### Example
+
+```text illustrative
+exabeam_request_rejected: POST /correlation-rules/v2/rules: HTTP 400: INVALID_QUERY: query is invalid (fields: sequencesConfig.sequences[0].query) (traceId 5f1c…)
+```
+
+### How to fix
+
+Fix the field the error names, run `opentide validate`, and deploy again. Send the `traceId` to Exabeam support if the rule looks right.
 
 ## exabeam_reserved_alias
 
 An Exabeam AS name is one of the Search guide's reserved words.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_rgx_extract_limit
 
 An Exabeam query has more than three RGX_EXTRACT calls.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+
+## exabeam_rule_auto_disabled
+
+Exabeam has stopped the rule on its own.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The rule a `PUT` returned has `autoDisabled: true`. Exabeam stops a rule that matches more than 500 times or triggers more than 50 times in five minutes, or whose query or context table is broken.
+
+### Example
+
+```text illustrative
+exabeam_rule_auto_disabled: Exabeam stopped rule 016dbc1d-a727-43df-a143-9546dcc81a5a (autoDisabled)
+```
+
+### How to fix
+
+Narrow the query or raise the threshold, check the context tables it reads, then re-enable the rule in the console.
+
+## exabeam_rule_missing
+
+A rule to disable was already gone from Exabeam, so its id was removed.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). Under `DISABLEMENT`, the `PUT` answered `404`. Deploy creates nothing and removes the binding from `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+exabeam_rule_missing: the recorded rule no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state. Nothing else is needed: the rule is not on the tenant.
+
+## exabeam_rule_recreated
+
+The recorded Exabeam rule was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The `PUT` answered `404`: someone deleted the rule in the console. Deploy creates it again (after the name check) and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+exabeam_rule_recreated: the recorded rule no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete rules through a `DELETION` status, not in the console.
 
 ## exabeam_schedule
 
-An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take.
+A `schedule` recurrence is not one Exabeam takes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Each recurrence has `every` (`day`, `week`, `month` or `days`), `from` and `to` as UTC `HH:MMZ`, and exactly the day keys its `every` takes: `week` takes `days` (weekday names), `month` takes `days` (1 to 31) and `last_day`, `days` takes `first` and `last` (weekday names).
 
 ### Example
 
-```text
-opentide validate
+```yaml
+schedule:
+  - every: week
+    days: [mon]
+    from: "08:00Z"
+    to: "18:00Z"
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write weekday names in full and lower case (`monday`), times as `H:MMZ` or `HH:MMZ` in quotes, and only the keys the recurrence takes.
+
+## exabeam_schedule_retained
+
+The Exabeam rule keeps a schedule the block no longer sets.
+
+Severity: warning. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The rule a `PUT` returned still has a `scheduleConfig`. Exabeam does not document whether a `PUT` without one clears it, so the rule may still run only at the old times.
+
+### Example
+
+```text illustrative
+exabeam_schedule_retained: Exabeam rule 016dbc1d-a727-43df-a143-9546dcc81a5a keeps a schedule the block no longer sets; clear it in the console
+```
+
+### How to fix
+
+Clear the schedule in the Exabeam console, or set `schedule` in the block again.
 
 ## exabeam_sequences
 
-An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query.
+An Exabeam block has no sequences, or a sequence has no query.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `sequences` is a non-empty list, and every sequence has a non-blank `query`: a filter in the Exabeam Query Language.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    sequences:
+      - name: Failed logins
+        query: ""
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the filter in `query`, such as `activity_type:"app-login" AND outcome:"fail"`, or remove the empty sequence.
 
 ## exabeam_severity
 
-An Exabeam severity is not none, low, medium, high or critical.
+The block `severity` is not `none`, `low`, `medium`, `high` or `critical`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). Exabeam's severities are lower case. Without `severity`, deploy derives it from `response.alert_severity` (`Informational` is `none`).
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  exabeam:
+    severity: High
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `none`, `low`, `medium`, `high` or `critical`, or remove the key.
 
 ## exabeam_single_group
 
 Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_string_field_number
 
 An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+
+## exabeam_tenant_unauthorized
+
+Exabeam refused the tenant's API key, so nothing more is sent to it.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). The token request was refused, or a call answered `401` after one new token, or `403`. Deploy stops the tenant. The key needs Correlation Rules at Read Write Delete; `validate query --live` and `opentide query` also need Search, Analyze and Export.
+
+### Example
+
+```text illustrative
+exabeam_tenant_unauthorized: tenant exabeam-eu refused the API key: HTTP 401
+```
+
+### How to fix
+
+Check the variables `client_id` and `client_secret` name, the tenant's `region` (or `api_url`), and the key's role in the Exabeam console (Settings, API Keys).
+
+## exabeam_tenant_unreachable
+
+An Exabeam tenant did not answer, so no rule deploys to it.
+
+Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.0). A request other than a create got no answer (a timeout, a refused connection, a TLS failure), or the token could not be had. Deploy stops the tenant.
+
+### Example
+
+```text illustrative
+exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=HTTPSConnectionPool(host='api.eu.exabeam.cloud', port=443): Read timed out
+```
+
+### How to fix
+
+Check the network path to `https://api.<region>.exabeam.cloud`, the tenant's `region` or `api_url`, and the proxy settings, then deploy again.
 
 ## exabeam_threshold_function
 
-An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing.
+A threshold's `function` is not an Exabeam function, or its `field` is missing or blank.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `function` is `count`, `unique_count`, `value`, `max`, `min`, `sum` or `average`. Every function but `count` reads a field, so `field` is required; `count` without a field counts events.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+threshold:
+  function: sum
+  operator: more_than
+  value: 1000000
+  within: 1h
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set `field` to the field the function reads (`bytes_out`), or use another function.
 
 ## exabeam_threshold_operator
 
-An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value.
+A threshold's `operator` is not one its function takes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `value` takes `in` or `not_in`; every other function takes `more_than` or `less_than`. Exabeam's `between` and `changed` are not supported in this revision: no published rule shows how their value is written.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+threshold:
+  function: count
+  operator: in
+  value: [5, 10]
+  within: 10m
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use `more_than` or `less_than` with a number, or the `value` function with `in` or `not_in`.
 
 ## exabeam_threshold_value
 
-An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer.
+A threshold's `value` does not have the shape its operator takes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). `more_than` and `less_than` compare with a number (`count` and `unique_count`: a non-negative integer); `in` and `not_in` with a non-empty list of strings or numbers. A list item holds no comma, because Exabeam joins the list with commas.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+threshold:
+  function: count
+  operator: more_than
+  value: 2.5
+  within: 10m
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write a whole number for `count` and `unique_count`, a number for the other numeric functions, and a list for `in` and `not_in`.
 
 ## exabeam_time_exact
 
 An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_unknown_field
 
 The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_unknown_function
 
 The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_unknown_value
 
-An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it.
+An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine in an Exabeam Query Language query (`exabeam`, language-exabeam 1.1), at the value: `opentide lint` (its `queries` check), `opentide validate query` and an editor running `opentide lsp start` show it, and `opentide validate` does not fail on it. A tenant's parsers may emit values the CIM lacks, so it is never an error, but a value no event carries makes the filter match nothing. Values compare without regard to case. Wildcards, `WLD`/`RGX` calls, values between slashes, `null`, an empty value, an unquoted number or IP address, a `@field` and an `AS` name defined earlier are not checked. Engines before language-server 0.16.1 do not report it.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+activity_type:"network-connection" AND process_name:"powershell.exe"
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use the CIM's value, which the message suggests when one is close (`process_create` → `process-create`) and the editor completes: here `network-session` or `network-traffic`. An `activity_type` is `<subject>-<activity>`. If the tenant really emits the value, confirm it with `opentide query --platform exabeam` and keep it. Then run `opentide lint --check queries` again.
+
+```text illustrative
+activity_type:"network-session" AND process_name:"powershell.exe"
+```
 
 ## exabeam_unquoted_value
 
 An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## exabeam_wildcard_in_phrase
 
 A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in an Exabeam Query Language query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
 
 ## external_id_in_rule
 
@@ -4133,275 +4418,660 @@ Fix the section the diagnostic names and run `opentide validate query --platform
 
 ## graylog_aggregation
 
-A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments.
+A Graylog aggregation condition does not parse, or a call has the wrong arguments.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `aggregation.condition` (or `aggregation` when it has no condition). The condition compares series with numbers: `count() >= 3 OR card(parent_image_lc) >= 2`. The functions are `avg`, `card`, `count`, `latest`, `max`, `min`, `percentage`, `percentile`, `stddev`, `sum`, `sumofsquares` and `variance`; `count` takes no field or one, `percentile` a field and a percentile from above 0 to 100, every other function one field. Operators `AND`, `OR` and `NOT` are upper case. Arguments are separated by one comma (`percentile(bytes, 95)`), and parentheses and `NOT` nest at most 32 deep.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    aggregation:
+      condition: count() >= 3 or avg() > 1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the condition in the grammar: `count() >= 3 OR avg(bytes) > 1`.
+
+## graylog_alias_unknown
+
+A Graylog block names a stream or notification alias the tenant does not define.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0), before any call for that rule, and by `opentide deploy --dry-run`. Blocks name streams and notifications by alias; each tenant maps the aliases to ids in `stream_ids` and `notification_ids`.
+
+### Example
+
+```text illustrative
+graylog_alias_unknown: tenant 'graylog-prod': stream alias(es) sysmon are not in the tenant's stream_ids table
+```
+
+### How to fix
+
+Add the alias to the tenant's table in `platforms/graylog.toml`, or change the block.
+
+## graylog_all_streams
+
+A Graylog definition names no stream, so it searches every stream.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0); never fails a rule. The block sets no `streams` and no `stream_categories`, and a tenant it deploys to sets no default `streams`: Graylog then searches every stream the token's user can read.
+
+### Example
+
+```yaml
+configurations:
+  graylog:
+    query: EventID:1
+```
+
+### How to fix
+
+Set `streams` on the block, or default `streams` on the tenant's `[tenants.setup]`.
 
 ## graylog_analyzed_field
 
-A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value.
+A regex, wildcard or range applies to Graylog's analysed message field.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `message` and `full_message` are tokenised and lower-cased, so a regex or wildcard matches single tokens, never the whole value.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: message:/.*powershell -enc.*/
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Match a keyword field the pipeline extracts, or search the words as a phrase (`message:"powershell -enc"`).
+
+## graylog_create_unconfirmed
+
+A Graylog create got no answer, so the definition may exist without a binding.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `POST /api/events/definitions` got no answer (a timeout, a reset), or answered no id. The create may have succeeded, but its id never reached opentide, so nothing was recorded. Titles are not unique, so deploy does not retry, which could create a second definition, and never lists definitions to find it.
+
+### Example
+
+```text illustrative
+graylog_create_unconfirmed: the create got no answer, so it may have succeeded with an id opentide
+does not know. Find the definition by the title 'mshta remote script' or the tag
+'opentide.00000000-0000-4000-8003-000000000061' in Graylog
+```
+
+### How to fix
+
+Find the definition by its title (on 7.2, by the `opentide.<uuid>` tag). Delete it and deploy again, or record its 24-hex id under `platforms.graylog.<tenant>` in the rule's `.opentide/states/deployment/<uuid>.json` and commit it.
+
+## graylog_definition_immutable
+
+Graylog refuses to change or delete an event definition outside the default scope.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered "Immutable entity cannot be modified" or "Non-deletable entity cannot be deleted": the definition's `_scope` is not `DEFAULT` (a content pack or Illuminate installed it). Deploy always sends `_scope: DEFAULT` and never changes a scope.
+
+### Example
+
+```text illustrative
+graylog_definition_immutable: Immutable entity cannot be modified; deploy never changes a definition's scope
+```
+
+### How to fix
+
+Point the rule's binding in `.opentide/states/deployment/<uuid>.json` at a definition opentide created, or remove it so deploy creates one.
+
+## graylog_definition_in_use
+
+Graylog refuses to delete an event definition another one depends on.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) under `DELETION`. Another definition (a correlation) depends on this one, so Graylog keeps it, and the binding stays.
+
+### Example
+
+```text illustrative
+graylog_definition_in_use: another definition depends on this one: ...
+```
+
+### How to fix
+
+Remove or change the dependent definitions named in the message, then deploy again.
+
+## graylog_definition_invalid
+
+Graylog refused an event definition, naming the fields at fault.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered 400 with `{"errors": {<field>: [<message>]}}`: a value it does not accept, such as a stream or notification id that does not exist.
+
+### Example
+
+```text illustrative
+graylog_definition_invalid: notifications: Notification 65f0c0ffee0123456789abcf doesn't exist
+```
+
+### How to fix
+
+Fix the field Graylog names: for an id, the tenant's `stream_ids` or `notification_ids` table.
+
+## graylog_definition_missing
+
+The recorded Graylog event definition was gone when deploy came to disable it.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) under `DISABLEMENT`. `PUT` answered 404; there is nothing to disable, so deploy creates nothing and removes the id from `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+graylog_definition_missing: the recorded definition no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Commit the updated deployment state.
+
+## graylog_definition_recreated
+
+The recorded Graylog event definition was gone, so deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `PUT /api/events/definitions/{id}` answered 404: someone deleted the definition in Graylog. Deploy creates it again and replaces the id in `.opentide/states/deployment/`.
+
+### Example
+
+```text illustrative
+graylog_definition_recreated: the recorded definition no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated deployment state. Delete definitions through a `DELETION` status, not in Graylog.
 
 ## graylog_double_backslash
 
-A Graylog query holds four backslashes in a row: `\\` is already one literal backslash, so `\\\\` matches two.
+A Graylog query holds four backslashes in a row.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. In a Graylog query, `\\` is one literal backslash, so `\\\\` matches two, which a Windows path does not have.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: 'image_lc:/.*\\\\\\\\mshta\.exe/'
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write one literal backslash as `\\` in the query text (in single-quoted YAML, as written).
 
 ## graylog_event_field
 
-A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`.
+A Graylog event field has an invalid name or value.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_fields.<name>`. A name matches `[A-Za-z0-9_.@-]+`. A value is a bare message field name (copied from the message that fired the event), a string containing `${` (a Graylog template), `{template: ...}`, or `{lookup: {table, key_field}}`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    event_fields:
+      family: two words
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write constant text as `{template: "two words"}`, or name a message field.
 
 ## graylog_event_key
 
-A Graylog `event_key` item is not an `event_fields` name.
+A Graylog event_key item is not an event field of the block.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_key`. Graylog builds the event key from event fields, and refuses a key field `event_fields` does not define.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    event_fields: {host: source}
+    event_key: user
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add the field to `event_fields`, or key on one that is there.
 
 ## graylog_event_limit
 
-A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation.
+A Graylog block's event_limit is out of range, or set on an aggregation.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `event_limit`. `event_limit` caps the events one run of a filter creates: an integer from 1 to 1,000. An aggregation creates one event per group and takes none.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    event_limit: 5000
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set a value from 1 to 1,000, or remove `event_limit` from an aggregation.
 
 ## graylog_field_name
 
-A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`).
+A Graylog aggregation groups by a name that is not a field name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `aggregation.group_by`. A Graylog field name matches `[A-Za-z0-9_.@-]+`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    aggregation:
+      group_by: [src ip]
+      condition: count() > 1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Group by the field's real name (`src_ip`).
+
+## graylog_field_unsupported_version
+
+A Graylog block sets a field the tenant's version cannot take.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). `summary` (the event summary template) needs Graylog 7.1, and block `tags` need 7.2. Deploy leaves the field out of the request rather than let Graylog 6.3 drop it silently or 7.x refuse it.
+
+### Example
+
+```text illustrative
+graylog_field_unsupported_version: summary is left out: Graylog 6.3.5 has no event summary template (7.1 and later)
+```
+
+### How to fix
+
+Upgrade the tenant, or remove the field from the block.
+
+## graylog_forbidden
+
+Graylog refused a request for want of a permission.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Graylog answered 403; the rule fails and the next one is sent. The token's user needs `eventdefinitions:create`, `eventdefinitions:read`, `eventdefinitions:edit` and `eventdefinitions:delete`, and `streams:read` on every stream a definition names.
+
+### Example
+
+```text illustrative
+graylog_forbidden: POST /api/events/definitions?schedule=true was refused (HTTP 403)
+```
+
+### How to fix
+
+Grant the token's user the permissions, most often `streams:read` on the definition's streams.
 
 ## graylog_leading_wildcard
 
-A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form.
+A Graylog query term starts with `*` or `?`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. Graylog passes the query to `query_string` with `allow_leading_wildcard` from the server's `allow_leading_wildcard_searches`, `false` by default, and refuses the query ("'*' or '?' not allowed as first character"). opentide drops the finding when every tenant the block deploys to sets `allow_leading_wildcard = true`; offline, with no tenant, it is an error.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: image_lc:*\\mshta.exe
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write a regex with a leading `.*` (`image_lc:/.*\\mshta\.exe/`), or set `allow_leading_wildcard = true` on every tenant whose server allows leading wildcards.
 
 ## graylog_list_shape
 
-A Graylog list field is not one string or a list of distinct non-blank strings.
+A Graylog list field is not a string or a list of distinct, non-blank strings.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at the list field: `tags`, `streams`, `stream_categories`, `event_key`, `notifications` or `aggregation.group_by`. Each takes one string or a list of strings; a string is a one-item list.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    streams: [sysmon, sysmon]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write one string, or a list whose items are non-blank and not repeated.
 
 ## graylog_open_range
 
-A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`.
+A Graylog range has an open end, which Graylog's validator refuses.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. `[1 TO *]` and `{* TO 5}` are refused by `POST /api/search/validate`, so deploy would never save the definition.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: EventID:[4624 TO *]
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the bound as a comparison (`EventID:>=4624`), or give both ends.
 
 ## graylog_overlapping_window
 
-A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run.
+A Graylog filter searches a window longer than its interval.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `schedule`; never fails a rule. With `window` longer than `every`, consecutive runs search overlapping time ranges, and a filter (no `aggregation`) creates an event for each message once per run that sees it.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    schedule: {every: 5m, window: 15m}
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Make `window` equal to `every` (the default), or turn the filter into an aggregation.
 
 ## graylog_priority
 
-A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`.
+A Graylog block's priority is not one of Graylog's priorities.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `priority`. The priorities are `Informational`, `Low`, `Medium`, `High` and `Critical`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    priority: Urgent
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write one of the five, or leave `priority` out to derive it from `response.alert_severity`.
+
+## graylog_priority_collapsed
+
+Graylog before 7.1 has no Informational priority: the definition is sent as Low.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). The priority comes from the block's `priority`, else `response.alert_severity`. Graylog 7.1 added priority 0 (Informational); before it, deploy sends 1 (Low).
+
+### Example
+
+```text illustrative
+graylog_priority_collapsed: Graylog 7.0.16 has no Informational priority: sent as Low (1)
+```
+
+### How to fix
+
+Upgrade the tenant to 7.1 or later, or set `priority: Low` on the block.
 
 ## graylog_query_blank
 
-A Graylog block's `query` is missing or blank.
+A Graylog block has no query, or an empty one.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `query`. Every event definition searches with a query; an empty one would search every message.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    status: STAGING
+    query: ""
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the Graylog search query, for example `query: EventID:1 AND image_lc:/.*mshta\.exe/`.
+
+## graylog_query_invalid
+
+Graylog refused a query, so deploy saved nothing.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0). Before every create and every update but a `DISABLEMENT`, deploy sends the query to `POST /api/search/validate`; Graylog stores a query it cannot parse without complaint, so an `ERROR` verdict fails the rule and no request saves it.
+
+### Example
+
+```text illustrative
+graylog_query_invalid: Graylog refuses the query, so nothing is saved: Query parsing error:
+Cannot parse query, cause: incomplete query, query ended unexpectedly (line 1, column 0)
+```
+
+### How to fix
+
+Fix the query at the line and column Graylog names, and check it with `opentide validate query --platform graylog --live`.
+
+## graylog_query_warning
+
+Graylog has a reservation about a query.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`: a `WARNING` or `INFO` explanation of `POST /api/search/validate` that is neither an unknown field nor a value type, such as `INVALID_OPERATOR`.
+
+### Example
+
+```text illustrative
+graylog_query_warning: Invalid operator: Query contains invalid operator "and" (line 1, column 10)
+```
+
+### How to fix
+
+Read Graylog's explanation and change the query; an operator is upper case (`AND`).
 
 ## graylog_regex_operator
 
-A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character.
+A Graylog regex holds a character Lucene reads as a regex operator.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An unescaped `#`, `&`, `@`, `<`, `>` or `~`, other than a numeric interval `<n-m>`, is an operator in Lucene's regex syntax, and Graylog's validator still says OK. `@` is "any string": `/.*@contoso\.com/` also matches `alicecontoso.com`; write `\@`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: url_lc:/.*#section.*/
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Escape the character (`\#`) when you mean it literally.
 
 ## graylog_regex_quote
 
-A Graylog regex holds an unescaped `"`, which Lucene reads as a quoted literal, not the character: escape it as `\"`.
+A Graylog regex holds an unescaped double quote.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. The regex then matches nothing.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: 'command_line_lc:/.*"c:.*/'
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Escape the quote (`\"`), or match without it.
 
 ## graylog_regex_unsupported
 
-A Graylog regex uses an inline flag, a `(?…)` group, `\b`, `\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query.
+A Graylog regex uses syntax Lucene's regex engine does not have.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Graylog query (graylog-1.0, Query diagnostics): the `query` of a `graylog` block and `.lucene` files under `--platform graylog`, in `opentide validate`, `opentide validate query`, `opentide lint`, the editor and `opentide tui`. An inline flag such as `(?i)`, `\b`, `\B`, lookahead or lookbehind, or a backreference: Lucene's regex engine accepts none of them, and Graylog matches nothing without saying so.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    query: command_line:/(?i).*mimikatz.*/
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Match a lower-cased copy of the field instead (`command_line_lc:/.*mimikatz.*/`), written by a tenant pipeline; see the case section of the Graylog platform spec.
+
+## graylog_request_failed
+
+A Graylog request failed for a reason the failure table does not name.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` block (graylog-1.0): an answer that is not 2xx and none of 400 with field errors, 401, 403, 404 on update, an immutable entity or a definition in use, such as a 500.
+
+### Example
+
+```text illustrative
+graylog_request_failed: PUT /api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=true: HTTP 500: ...
+```
+
+### How to fix
+
+Read Graylog's message and server log, then deploy again.
 
 ## graylog_schedule
 
-A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`.
+A Graylog block's schedule is invalid.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` on a `graylog` block (graylog-1.0), at `schedule` or the offending `schedule.<key>`. Exactly one of `every` and `cron` is set (or neither); `every` and `window` are durations greater than zero (`5m`, `1h10m`, `PT15M`); `cron` is a Quartz expression of 6 or 7 fields with `?` in day of month or day of week; `timezone` is an IANA zone name; `window` is set when `cron` is.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  graylog:
+    schedule: {cron: "0 */5 * * * ?"}
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Fix the key the finding names: with `cron`, also set `window` (`schedule: {cron: "0 */5 * * * ?", window: 5m}`).
+
+## graylog_tenant_unauthorized
+
+A Graylog tenant refused the access token.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0). Graylog answered 401; no rule on the tenant deploys. The token is sent as HTTP Basic, the token as user name and `token` as password.
+
+### Example
+
+```text illustrative
+graylog_tenant_unauthorized: tenant graylog-prod refused the access token: HTTP 401
+```
+
+### How to fix
+
+Set the token's environment variable (`token = "$GRAYLOG_TOKEN"`) to a valid access token; access tokens expire after 30 days by default.
+
+## graylog_tenant_unreachable
+
+A Graylog tenant did not answer.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0): DNS, a refused or reset connection, TLS or a timeout on a request other than a create. No further rule on the tenant deploys.
+
+### Example
+
+```text illustrative
+graylog_tenant_unreachable: HTTPSConnectionPool(host='graylog.example.com', port=443): Max retries exceeded
+```
+
+### How to fix
+
+Check the tenant's `url`, the network path, and `ssl`.
+
+## graylog_title_duplicate
+
+Two enabled Graylog blocks resolve to one event definition title.
+
+Severity: warning. Reported by `opentide validate` on a `graylog` block (graylog-1.0); never fails a rule. The title is the block's `name`, else the rule's `name`. Graylog allows two definitions with one title, and its alert list cannot tell them apart.
+
+### Example
+
+```yaml
+# rule-a.yaml and rule-b.yaml, both:
+name: Office application spawns PowerShell
+configurations:
+  graylog:
+    enabled: true
+```
+
+### How to fix
+
+Give one of the blocks its own `configurations.graylog.name`, or rename one of the rules.
+
+## graylog_unknown_field
+
+Graylog does not know a field the query names, on the streams it searches.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`. Graylog's `UNKNOWN_FIELD`: no index of the definition's streams maps the field, so the query matches nothing until messages carry it. Field names are case-sensitive.
+
+### Example
+
+```text illustrative
+graylog_unknown_field: Unknown field: Query contains unknown field: command_line_lc (line 1, column 12)
+```
+
+### How to fix
+
+Check the field's spelling and case, the streams the definition searches, and the pipeline that writes the field.
+
+## graylog_value_type
+
+A query compares a Graylog field with a value of the wrong type.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` block (graylog-1.0) and `opentide validate query --live`. Graylog's `INVALID_VALUE_TYPE`: the field is mapped as a number or a date, and the value is not one.
+
+### Example
+
+```text illustrative
+graylog_value_type: Invalid value type: Type of EventID is long, cannot use value abc (line 1, column 30)
+```
+
+### How to fix
+
+Compare the field with a value of its type.
+
+## graylog_version_unsupported
+
+A Graylog tenant runs a version opentide does not deploy to.
+
+Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0). Deploy reads `GET /api/system` once per tenant, before any write, and builds every request for that version. Graylog below 6.3, or a server that reports no version, stops the tenant.
+
+### Example
+
+```text illustrative
+graylog_version_unsupported: tenant graylog-prod runs Graylog '6.2.4+1a2b3c4'; opentide deploys to Graylog 6.3 and later
+```
+
+### How to fix
+
+Upgrade the server to Graylog 6.3 or later, or remove the tenant from `platforms/graylog.toml`.
+
+## graylog_version_vulnerable
+
+A Graylog tenant runs a version affected by the access-token revocation flaw.
+
+Severity: warning. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.0), once per run. Graylog below 6.3.12, 7.0.16 or 7.1.12 is affected by GHSA-j769-9gv9-65gr: a revoked access token may keep working. Deploy goes on.
+
+### Example
+
+```text illustrative
+graylog_version_vulnerable: Graylog 6.3.5 does not revoke access tokens reliably (GHSA-j769-9gv9-65gr)
+```
+
+### How to fix
+
+Upgrade the server to 6.3.12, 7.0.16, 7.1.12 or later.
 
 ## harfanglab_rule_kind
 

@@ -64,7 +64,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 11] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -112,11 +112,36 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 11] = [
         "https://yara.readthedocs.io/en/v4.5.2/writingrules.html",
     ),
     (
+        "graylog_",
+        "Graylog search query",
+        "https://go2docs.graylog.org/current/making_sense_of_your_log_data/writing_search_queries.html",
+    ),
+    (
+        "exabeam_",
+        "Exabeam Query Language",
+        "https://docs.exabeam.com/en/search/all/search-guide/",
+    ),
+    (
         "yaral_",
         "YARA-L 2.0",
         "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax",
     ),
 ];
+
+/// Whether `opentide lint` reports an engine warning of `code`: a query
+/// language's (one with a reference), an Elastic advisory, Sysdig's list
+/// self-reference, or an undeclared dataset. 0.28.1 added Graylog's dialect:
+/// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
+/// editor alone.
+pub fn lint_owned(code: &str) -> bool {
+    opentide_schema::objects::platform::harfanglab::yara::ADVISORY_CODES.contains(&code)
+        || ENGINE_REFERENCES
+            .iter()
+            .any(|(prefix, _, _)| code.starts_with(prefix))
+        || ELASTIC_ADVISORIES.contains(&code)
+        || code == "sysdig_list_self_reference"
+        || DECLARED_DATASET_CODES.contains(&code)
+}
 
 /// Words in an engine message that make its `suggestion` a replacement name.
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
@@ -409,14 +434,7 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             if harfanglab.reports(&item) {
                 continue;
             }
-            let lint_owned = HARFANGLAB_ADVISORIES.contains(&item.code.as_str())
-                || ENGINE_REFERENCES
-                    .iter()
-                    .any(|(prefix, _, _)| item.code.starts_with(prefix))
-                || ELASTIC_ADVISORIES.contains(&item.code.as_str())
-                || item.code == "sysdig_list_self_reference"
-                || DECLARED_DATASET_CODES.contains(&item.code.as_str());
-            if !lint_owned {
+            if !lint_owned(&item.code) {
                 continue;
             }
             let severity = if item.severity == EngineSeverity::Warning {
@@ -628,6 +646,8 @@ fn block_advisories(
             diagnostic.yaml_line = locator.yaml_line(&diagnostic.field_path);
             diagnostic.path = Some(relative.to_owned());
             diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
+            // One line, as `_finding` places a finding with a `yaml_line`.
+            diagnostic.end_line = diagnostic.line;
             opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
         })
         .collect()
@@ -776,6 +796,20 @@ fn number(value: usize) -> ContextValue {
     ContextValue::Number(serde_json::Number::from(value))
 }
 
+/// Whether `query` counts as one of `validate`'s queries checked: a Google
+/// SecOps block's sections are one rule, the one deploy assembles, counted
+/// at its `events` (a block without `events` is not checked).
+fn counts(query: &CheckedQuery) -> bool {
+    match query.field_path.as_slice() {
+        [configurations, platform, section]
+            if configurations == "configurations" && platform == "google_secops" =>
+        {
+            section == "events"
+        }
+        _ => true,
+    }
+}
+
 /// The queries check of `validate` on the query engines.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EngineQueries;
@@ -803,7 +837,9 @@ impl QueryCheck for EngineQueries {
                 if query.placeholder {
                     continue;
                 }
-                found.queries += 1;
+                if counts(&query) {
+                    found.queries += 1;
+                }
                 for item in &query.findings {
                     if item.severity != EngineSeverity::Error {
                         // Style: lint's queries check.
@@ -848,6 +884,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_google_secops_block_is_one_query_counted_at_its_events() {
+        let text = "name: A\nconfigurations:\n  google_secops:\n    events: |\n      \
+                    $e.metadata.event_type = \"USER_LOGIN\"\n    outcome: |\n      \
+                    $risk_score = 10\n    condition: |\n      $e\n  sentinel:\n    query: |\n      \
+                    SecurityEvent\n";
+        let profiles = Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            visibility_problem: None,
+        };
+        let queries = profiles.check_object(text);
+        assert_eq!(queries.len(), 4, "{queries:?}");
+        assert_eq!(queries.iter().filter(|query| counts(query)).count(), 2);
+        // A block with a section label in a text is not checked: no queries.
+        let header = text.replace("$risk_score = 10", "condition:");
+        let queries = profiles.check_object(&header);
+        assert!(
+            queries
+                .iter()
+                .all(|query| query.platform != "google_secops"),
+            "{queries:?}"
+        );
+    }
+
+    #[test]
     fn a_span_ending_after_a_newline_ends_on_its_own_line() {
         let text = "a\n| where (\nnext\n";
         // From line 2 column 9 to the start of line 3: the `(` and its newline.
@@ -860,6 +920,28 @@ mod tests {
         // Past the text: one character, where the line is.
         assert_eq!(span_end(9, 2, 10, 1, text), (9, 3));
         assert_eq!(span_end(1, 1, 12, 1, text), (12, 1));
+    }
+
+    #[test]
+    fn lint_keeps_the_graylog_dialects_warnings() {
+        // 0.28.1 (#1015): lint dropped them for want of a reference.
+        for code in [
+            "graylog_analyzed_field",
+            "graylog_regex_operator",
+            "graylog_regex_quote",
+            "graylog_double_backslash",
+        ] {
+            assert!(lint_owned(code), "{code}");
+        }
+        assert!(lint_owned("sysdig_list_self_reference"));
+        assert!(!lint_owned("vocab_unknown"));
+        // A Graylog finding names Graylog's search syntax page.
+        assert!(
+            ENGINE_REFERENCES
+                .iter()
+                .any(|(prefix, language, _)| *prefix == "graylog_"
+                    && *language == "Graylog search query")
+        );
     }
 
     #[test]

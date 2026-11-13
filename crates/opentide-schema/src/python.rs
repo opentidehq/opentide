@@ -951,8 +951,16 @@ use crate::objects::platform::elastic::{
     ElasticThreatEntry, ElasticThreatGroup, ElasticThreatMatch, ElasticThreshold, ElasticTimeline,
 };
 use crate::objects::platform::elastic::{IntegrationChoice, JobId, RiskChoice, SeverityChoice};
+use crate::objects::platform::exabeam::{
+    ExabeamConfig, ExabeamCorrelation, ExabeamDays, ExabeamEmail, ExabeamRecurrence,
+    ExabeamSequence, ExabeamSuppression, ExabeamThreshold, ExabeamValue,
+};
 use crate::objects::platform::google_secops::{
     GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
+};
+use crate::objects::platform::graylog::{
+    GraylogAggregation, GraylogConfig, GraylogEventField, GraylogEventLookup, GraylogEventTemplate,
+    GraylogLookupTable, GraylogSchedule, StringOrList,
 };
 use crate::objects::platform::harfanglab::SelectionValue;
 use crate::objects::platform::harfanglab::{
@@ -991,7 +999,7 @@ use pyo3::type_hint_union;
 #[cfg(feature = "stubs")]
 mod hint {
     use pyo3::inspect::PyStaticExpr;
-    use pyo3::{type_hint_identifier, type_hint_subscript};
+    use pyo3::{type_hint_identifier, type_hint_subscript, type_hint_union};
 
     pub const STR: PyStaticExpr = type_hint_identifier!("builtins", "str");
     pub const INT: PyStaticExpr = type_hint_identifier!("builtins", "int");
@@ -999,12 +1007,19 @@ mod hint {
     pub const FLOAT: PyStaticExpr = type_hint_identifier!("builtins", "float");
     pub const STRS: PyStaticExpr =
         type_hint_subscript!(type_hint_identifier!("builtins", "list"), STR);
+    pub const INTS: PyStaticExpr =
+        type_hint_subscript!(type_hint_identifier!("builtins", "list"), INT);
+    pub const SCALARS: PyStaticExpr = type_hint_subscript!(
+        type_hint_identifier!("builtins", "list"),
+        type_hint_union!(STR, INT, FLOAT)
+    );
 }
 
 py_value! {
     Version => type_hint_union!(hint::STR, hint::INT),
     Killchain => type_hint_union!(hint::STR, hint::STRS),
     OneOrMany => type_hint_union!(hint::STR, hint::STRS),
+    StringOrList => type_hint_union!(hint::STR, hint::STRS),
     JobId => type_hint_union!(hint::STR, hint::STRS),
     ListItem => type_hint_union!(hint::STR, hint::INT, hint::FLOAT),
     SelectionValue => type_hint_union!(hint::STR, hint::STRS, hint::BOOL, hint::INT, hint::FLOAT),
@@ -1013,6 +1028,8 @@ py_value! {
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
     CriterionValue => type_hint_union!(hint::STR, hint::INT),
     SavedSearchValue => type_hint_union!(hint::STR, hint::INT, hint::FLOAT, hint::BOOL),
+    ExabeamValue => type_hint_union!(hint::INT, hint::FLOAT, hint::SCALARS),
+    ExabeamDays => type_hint_union!(hint::STRS, hint::INTS),
 }
 
 /// A union with a model member: the member's class instance, as Pydantic
@@ -1061,6 +1078,29 @@ impl<'py> IntoPyObject<'py> for &ProcessAction {
         match self {
             ProcessAction::On(flag) => Ok(PyBool::new(py, *flag).to_owned().into_any()),
             ProcessAction::Scoped(scope) => Ok(Bound::new(py, scope.clone())?.into_any()),
+        }
+    }
+}
+
+/// `GraylogEventField`: a field name or template string, or one of its two
+/// models' instances, as Pydantic holds them.
+impl<'py> IntoPyObject<'py> for &GraylogEventField {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+
+    #[cfg(feature = "stubs")]
+    const OUTPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        hint::STR,
+        <GraylogEventTemplate as pyo3::PyTypeInfo>::TYPE_HINT,
+        <GraylogEventLookup as pyo3::PyTypeInfo>::TYPE_HINT
+    );
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        match self {
+            GraylogEventField::Text(text) => Ok(text.into_pyobject(py)?.into_any()),
+            GraylogEventField::Template(model) => Ok(Bound::new(py, model.clone())?.into_any()),
+            GraylogEventField::Lookup(model) => Ok(Bound::new(py, model.clone())?.into_any()),
         }
     }
 }
@@ -1176,6 +1216,19 @@ py_models! {
     SysdigMacro,
     SysdigList,
     SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    GraylogSchedule,
+    GraylogAggregation,
+    GraylogEventTemplate,
+    GraylogLookupTable,
+    GraylogEventLookup,
+    GraylogConfig [<GraylogConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    ExabeamThreshold,
+    ExabeamSequence,
+    ExabeamCorrelation,
+    ExabeamSuppression,
+    ExabeamEmail,
+    ExabeamRecurrence,
+    ExabeamConfig [<ExabeamConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     GoogleSecopsMatch,
     GoogleSecopsOptions,
     GoogleSecopsSchedule,
@@ -1214,21 +1267,29 @@ pub mod models {
         ElasticMachineLearning, ElasticNewTerms, ElasticOverrides, ElasticRequiredField,
         ElasticRisk, ElasticRiskScoreMapping, ElasticScheduling, ElasticSeverity,
         ElasticSeverityMapping, ElasticSuppression, ElasticThreatEntry, ElasticThreatGroup,
-        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExternalDetector,
-        GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
-        HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
-        HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata, ObjectReferences, ObjectiveBody,
-        ObjectiveComposition, ObjectiveV1_0, Organisation, ResponseProcedure, ResponseSearch,
-        RuleConfigurations, RuleMetadata, RuleResponse, RuleV1_0, RuleV1_1, SentinelAlert,
-        SentinelAlertGrouping, SentinelConfig, SentinelCustomDetails, SentinelDynamicProperties,
-        SentinelEntityMapping, SentinelExclusion, SentinelGrouping, SentinelMappingEntry,
-        SentinelOneCondition, SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails,
-        SentinelOneResponse, SentinelOneSingleEvent, SentinelOneSubQuery, SentinelScheduling,
-        SentinelTemplate, SentinelTrigger, SignalData, SplunkActions, SplunkConfig, SplunkEmail,
-        SplunkEmailInclude, SplunkNotable, SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk,
-        SplunkRiskObject, SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling,
-        SplunkTimerange, SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro,
-        ThreatActor, ThreatBody, ThreatVectorV1_0,
+        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExabeamConfig, ExabeamCorrelation,
+        ExabeamEmail, ExabeamRecurrence, ExabeamSequence, ExabeamSuppression, ExabeamThreshold,
+        ExternalDetector, GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions,
+        GoogleSecopsSchedule, HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource,
+        HarfangLabSigmaSelection, HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata,
+        ObjectReferences, ObjectiveBody, ObjectiveComposition, ObjectiveV1_0, Organisation,
+        ResponseProcedure, ResponseSearch, RuleConfigurations, RuleMetadata, RuleResponse,
+        RuleV1_0, RuleV1_1, SentinelAlert, SentinelAlertGrouping, SentinelConfig,
+        SentinelCustomDetails, SentinelDynamicProperties, SentinelEntityMapping, SentinelExclusion,
+        SentinelGrouping, SentinelMappingEntry, SentinelOneCondition, SentinelOneConfig,
+        SentinelOneCorrelation, SentinelOneDetails, SentinelOneResponse, SentinelOneSingleEvent,
+        SentinelOneSubQuery, SentinelScheduling, SentinelTemplate, SentinelTrigger, SignalData,
+        SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude, SplunkNotable,
+        SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject, SplunkSchedule,
+        SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange, SplunkTrigger,
+        SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor, ThreatBody,
+        ThreatVectorV1_0,
+    };
+
+    #[pymodule_export]
+    use super::{
+        GraylogAggregation, GraylogConfig, GraylogEventLookup, GraylogEventTemplate,
+        GraylogLookupTable, GraylogSchedule,
     };
 
     /// The error `model_validate` raises: a `ValueError` whose instances

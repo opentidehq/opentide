@@ -14,6 +14,7 @@
 //! | `ElasticConfig._validate_raw_elastic_block` (before) | [`elastic::block_codes`], the named check `elastic_rule_shape` |
 //! | `SysdigConfig._validate_raw_sysdig_block` (before) | [`sysdig::block_codes`], the named check `sysdig_rule_shape` |
 //! | `HarfangLabConfig._validate_raw_harfanglab_block` (before) | [`harfanglab::yara::block_codes`], the named check `harfanglab_rule_shape` |
+//! | `GraylogConfig._validate_raw_graylog_block` (before) | [`graylog::findings`], the named check `graylog_constraints`: one [`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint) per finding |
 //! | `SentinelTechnique` (`check_sentinel_technique`, after) | [`sentinel::check_technique`], [`sentinel::check_duration`] |
 //! | `minimum_engine_version` (`ge=0`, strict) | [`sysdig::minimum_engine_version`] |
 //! | `__legacy_keys__` | [`LEGACY_KEYS`] (none in the oracle: Elastic's and Sysdig's are declared empty) |
@@ -34,8 +35,10 @@ pub mod deprecation;
 /// language server's advisories share.
 pub use opentide_core::duration as durations;
 pub mod elastic;
+pub mod exabeam;
 pub mod falco_text;
 pub mod google_secops;
+pub mod graylog;
 pub mod harfanglab;
 pub mod schema;
 pub mod sentinel;
@@ -61,8 +64,10 @@ pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
+pub use exabeam::ExabeamConfig;
 pub use google_secops::GoogleSecopsConfig;
 pub use google_secops::advisories::Advisory;
+pub use graylog::GraylogConfig;
 pub use harfanglab::HarfangLabConfig;
 pub use sentinel::SentinelConfig;
 pub use sentinel_one::SentinelOneConfig;
@@ -265,6 +270,8 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
     registered::<BitdefenderConfig>("bitdefender", "BitdefenderConfig"),
+    registered::<GraylogConfig>("graylog", "GraylogConfig"),
+    registered::<ExabeamConfig>("exabeam", "ExabeamConfig"),
     registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
 ];
 
@@ -297,6 +304,7 @@ pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("ElasticConfig", &[]),
     ("SysdigConfig", &[]),
     ("BitdefenderConfig", &[]),
+    ("ExabeamConfig", &[]),
     ("GoogleSecopsConfig", &[]),
 ];
 
@@ -370,6 +378,18 @@ pub fn is_superseded(field_path: &[String]) -> bool {
         && is_legacy_external_id_key(&field_path[2])
 }
 
+/// One finding of a named check that places each code: the code, its path
+/// relative to the block, and what is wrong.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    /// The constraint code (`graylog_schedule`).
+    pub code: &'static str,
+    /// The keys from the block to the value the finding is about.
+    pub path: Vec<String>,
+    /// The message.
+    pub message: String,
+}
+
 /// A named check: a Rust function registered by name, run on a block's raw
 /// node before its fields, giving the oracle's constraint codes.
 #[derive(Debug, Clone, Copy)]
@@ -380,6 +400,10 @@ pub struct NamedCheck {
     pub model: &'static str,
     /// The codes it finds on a block (sorted), empty when it passes.
     pub run: fn(&Node) -> BTreeSet<&'static str>,
+    /// For a check that places each code (graylog-1.0 and the platforms after
+    /// it): its findings, each reported as its own error typed by its code at
+    /// its path. `None` reports the codes as one `value_error` on the block.
+    pub findings: Option<fn(&Node) -> Vec<Finding>>,
 }
 
 /// The named checks, by name: `elastic_rule_shape` (rule types, removed flat
@@ -388,37 +412,62 @@ pub struct NamedCheck {
 /// constraint of `SysdigConfig`'s), and `bitdefender_rule_shape` (the
 /// bitdefender-1.0 constraint codes, which `BitdefenderConfig` reports one
 /// per finding at its path, [`bitdefender::block_findings`]), and
+/// `graylog_constraints` (every `graylog_*` constraint code, each at its key), and
 /// `harfanglab_rule_shape` (harfanglab-1.0 1.2's one kind per block and the
 /// YARA forms' codes, [`harfanglab::yara::block_codes`]).
-pub const NAMED_CHECKS: [NamedCheck; 4] = [
+pub const NAMED_CHECKS: [NamedCheck; 5] = [
     NamedCheck {
         name: "elastic_rule_shape",
         model: "ElasticConfig",
         run: elastic::block_codes,
+        findings: None,
     },
     NamedCheck {
         name: "sysdig_rule_shape",
         model: "SysdigConfig",
         run: sysdig::block_codes,
+        findings: None,
+    },
+    NamedCheck {
+        name: "graylog_constraints",
+        model: "GraylogConfig",
+        run: graylog::block_codes,
+        findings: Some(graylog::findings),
     },
     NamedCheck {
         name: "bitdefender_rule_shape",
         model: "BitdefenderConfig",
         run: bitdefender::block_codes,
+        // Its model reports each finding at its path itself
+        // (`bitdefender::block_findings`).
+        findings: None,
     },
     NamedCheck {
         name: "harfanglab_rule_shape",
         model: "HarfangLabConfig",
         run: harfanglab::yara::block_codes,
+        findings: None,
     },
 ];
 
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
-/// and `lint`'s `queries` check report at its field path. Google SecOps'
+/// and `lint`'s `queries` check report at its field path. Bitdefender's
+/// ([`bitdefender::advisories::advisories`]), Exabeam's
+/// ([`exabeam::advisories`]), then Google SecOps'
 /// ([`google_secops::advisories::advisories`]).
 pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
-    google_secops::advisories::advisories(rule)
+    let mut found: Vec<Advisory> = bitdefender::advisories::advisories(rule)
+        .into_iter()
+        .map(|advisory| Advisory {
+            code: advisory.code,
+            field_path: advisory.field_path,
+            message: advisory.message,
+        })
+        .collect();
+    found.extend(exabeam::advisories(rule));
+    found.extend(google_secops::advisories::advisories(rule));
+    found
 }
 
 /// The named check called `name`.
@@ -444,12 +493,35 @@ pub(crate) fn before(model: &'static str, node: &Node, cx: &mut Context) -> bool
     let Some(check) = NAMED_CHECKS.iter().find(|check| check.model == model) else {
         return true;
     };
+    if let Some(findings) = check.findings {
+        let findings = findings(node);
+        for finding in &findings {
+            report_finding(finding, node, cx);
+        }
+        return findings.is_empty();
+    }
     let codes = (check.run)(node);
     if codes.is_empty() {
         return true;
     }
     Violation::value_error(codes_message(model, &codes)).report(node, cx);
     false
+}
+
+/// One finding as an error typed by its code, at its path under the block.
+/// Its input is the block, as the oracle's `InitErrorDetails` gives it.
+fn report_finding(finding: &Finding, block: &Node, cx: &mut Context) {
+    fn at(path: &[String], finding: &Finding, block: &Node, cx: &mut Context) {
+        match path.split_first() {
+            None => cx.error(
+                crate::error::ErrorKind::Constraint(finding.code),
+                finding.message.clone(),
+                block,
+            ),
+            Some((key, rest)) => cx.at_key(key, |cx| at(rest, finding, block, cx)),
+        }
+    }
+    at(&finding.path, finding, block, cx);
 }
 
 /// garde: a named check on a block built in memory, through its serialised
@@ -460,7 +532,20 @@ pub(crate) fn garde_named<T: serde::Serialize>(model: &'static str, block: &T) -
     };
     let value = serde_json::to_value(block)
         .map_err(|error| garde::Error::new(format!("{model} does not serialise: {error}")))?;
-    let codes = (check.run)(&json_node(&value));
+    let node = json_node(&value);
+    if let Some(findings) = check.findings {
+        let findings = findings(&node);
+        return match findings.first() {
+            None => Ok(()),
+            Some(first) => Err(garde::Error::new(format!(
+                "{}: {}: {}",
+                first.code,
+                first.path.join("."),
+                first.message
+            ))),
+        };
+    }
+    let codes = (check.run)(&node);
     if codes.is_empty() {
         Ok(())
     } else {
@@ -622,8 +707,12 @@ pub enum PlatformConfig {
     Sysdig(SysdigConfig),
     /// `bitdefender`.
     Bitdefender(BitdefenderConfig),
+    /// `exabeam`.
+    Exabeam(ExabeamConfig),
     /// `google_secops`.
     GoogleSecops(GoogleSecopsConfig),
+    /// `graylog`.
+    Graylog(GraylogConfig),
 }
 
 /// Why [`parse_platform_config`] refused a block.
@@ -661,7 +750,9 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
         "bitdefender" => read(node, PlatformConfig::Bitdefender),
+        "exabeam" => read(node, PlatformConfig::Exabeam),
         "google_secops" => read(node, PlatformConfig::GoogleSecops),
+        "graylog" => read(node, PlatformConfig::Graylog),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",
             repr::quote(other)

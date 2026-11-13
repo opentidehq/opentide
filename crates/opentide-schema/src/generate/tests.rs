@@ -76,6 +76,14 @@ fn object_schemas() -> Vec<(String, Value)> {
             schemars::schema_for!(platform::SysdigConfig),
         ),
         (
+            "GraylogConfig",
+            schemars::schema_for!(platform::GraylogConfig),
+        ),
+        (
+            "ExabeamConfig",
+            schemars::schema_for!(platform::ExabeamConfig),
+        ),
+        (
             "GoogleSecopsConfig",
             schemars::schema_for!(platform::GoogleSecopsConfig),
         ),

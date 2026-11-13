@@ -551,6 +551,73 @@ fn lint_reports_the_google_secops_block_advisories() {
     );
 }
 
+#[test]
+fn lint_reports_the_bitdefender_block_advisories_on_one_line() {
+    let text = rule(
+        "  bitdefender:\n    enabled: true\n    schema: platform::bitdefender::1.0\n    \
+         status: PRODUCTION\n    detection:\n      target: registry\n      criteria:\n      - \
+         field: Registry.Key\n        contains: HKEY_LOCAL_MACHINE\\Software\\Run\n",
+    );
+    let document = lint_run(&text, &["--check", "queries"]);
+    let found: Vec<(String, Value, Value)> = document["findings"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{document}"))
+        .iter()
+        .filter(|finding| {
+            finding["code"]
+                .as_str()
+                .is_some_and(|code| code.starts_with("bitdefender_"))
+        })
+        .map(|finding| {
+            (
+                finding["code"].as_str().unwrap().to_owned(),
+                finding["line"].clone(),
+                finding["end_line"].clone(),
+            )
+        })
+        .collect();
+    let codes: Vec<&str> = found.iter().map(|(code, _, _)| code.as_str()).collect();
+    assert_eq!(
+        codes,
+        [
+            "bitdefender_registry_full_hive",
+            "bitdefender_contains_no_wildcard"
+        ],
+        "{document}"
+    );
+    assert!(
+        found
+            .iter()
+            .all(|(_, line, end_line)| line.is_u64() && line == end_line),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn lint_reports_the_exabeam_block_advisories() {
+    let text = rule(
+        "  exabeam:\n    status: PREVIEW\n    outcome: none\n    sequences:\n      - query: \
+         activity_type = \"a\"\n      - query: activity_type = \"b\"\n        threshold:\n          \
+         within: 10m\n    correlation:\n      within: 12m\n",
+    );
+    let found = lint_check(&text);
+    let advisories: Vec<(String, String, usize)> = found
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("exabeam_"))
+        .collect();
+    assert_eq!(
+        advisories,
+        [
+            ("exabeam_outcome_silent".to_owned(), "warning".to_owned(), 8),
+            (
+                "exabeam_correlation_window".to_owned(),
+                "warning".to_owned(),
+                15
+            ),
+        ]
+    );
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {

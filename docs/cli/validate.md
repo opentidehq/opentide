@@ -402,11 +402,12 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. Sysdig, CrowdStrike and HarfangLab are validated only offline: `--platform sysdig --live`, `--platform crowdstrike --live` and `--platform harfanglab --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check and HarfangLab has no YARA dry run (see [Supported platforms](#supported-platforms)). `--platform harfanglab` checks YARA as libyara 4.5 compiles it, under the HarfangLab profile: `yara.signature`, the rule the decomposed form assembles, and a `.yar` or `.yara` file. The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. Sysdig, CrowdStrike, HarfangLab and Bitdefender are validated only offline: `--platform sysdig --live`, `--platform crowdstrike --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check, HarfangLab has no YARA dry run and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). `--platform harfanglab` checks YARA as libyara 4.5 compiles it, under the HarfangLab profile: `yara.signature`, the rule the decomposed form assembles, and a `.yar` or `.yara` file. The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -582,7 +583,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on seven, five of them the same:
+Live query validation works on **eight platforms**; the offline engine on nine, six of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -595,7 +596,13 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
+| `bitdefender` (YARA) | ❌ `supported: false` | ✅ YARA |
+| `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ❌ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
+
+### Exabeam live validation
+
+`opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
 
 ### Elastic live validation and deploy
 
@@ -628,23 +635,23 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-Bitdefender returns unsupported until its YARA is checked, and so does `--live` for HarfangLab (YARA, checked offline only), CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+HarfangLab (YARA, checked offline only), Bitdefender (GravityZone has no dry run; its YARA is checked offline), CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
-supported and unsupported platforms:
+supported and unsupported platforms (an illustration: the docs check never runs `--live`):
 
 ```bash
-opentide --json validate query --platform bitdefender
+opentide --json validate query --platform harfanglab --live
 ```
 
-```json output-of="opentide --json validate query --platform bitdefender" exit=1
+```json illustrative
 {
-  "platform": "bitdefender",
+  "platform": "harfanglab",
   "valid": null,
   "supported": false,
   "ok": false,
   "status": "failed",
-  "message": "query validation not supported for bitdefender"
+  "message": "query validation not supported for harfanglab"
 }
 ```
 

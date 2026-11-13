@@ -80,6 +80,7 @@ pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'stat
             "Azure",
             &["azure_tenant_id", "azure_client_id", "azure_client_secret"],
         ),
+        "graylog" => ("Graylog", &["url", "token"]),
         _ => ("", &[]),
     }
 }
@@ -628,6 +629,7 @@ pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
+        "graylog" => opentide_connectors::graylog::http_defaults(),
         // azure-core reads for 300 s; the server holds the query up to its
         // own timeout (`Prefer: wait`).
         "sentinel" => sentinel::http_settings(timeout.max(Duration::from_secs(300))),
@@ -2231,7 +2233,7 @@ mod tests {
         let refused = no_runner("sysdig");
         assert_eq!(
             compact_of(&Json::Object(refused.outcome.data.clone())),
-            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","google_secops","harfanglab","sentinel","sentinel_one","splunk"]}"#
+            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","exabeam","google_secops","graylog","harfanglab","sentinel","sentinel_one","splunk"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();
@@ -2275,6 +2277,10 @@ mod tests {
         assert_eq!(credential_keys("carbon_black_cloud").0, "CBC");
         assert_eq!(credential_keys("sentinel").1.len(), 3);
         assert_eq!(credential_keys("sysdig"), ("", &[][..]));
+        assert_eq!(
+            credential_keys("graylog"),
+            ("Graylog", &["url", "token"][..])
+        );
         let tenant = |url: Option<&str>| Configured {
             name: "lab".into(),
             setup: url

@@ -129,6 +129,7 @@ pub const TENANTS: &[(&str, &[&str])] = &[
     ("splunk", &["splunk-es"]),
     ("elastic", &["elastic-staging", "elastic-production"]),
     ("sysdig", &["sysdig-production"]),
+    ("exabeam", &["exabeam-production"]),
 ];
 
 fn tenants_of(platform: &str) -> &'static [&'static str] {
@@ -818,7 +819,9 @@ fn platform_block(
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
         "bitdefender" => pairs.extend(bitdefender(process)),
+        "exabeam" => pairs.extend(exabeam(rng, variant, process, &mut tags)),
         "google_secops" => pairs.extend(google_secops(variant, process, &mut tags)),
+        "graylog" => pairs.extend(graylog(rng, variant, process, &mut tags)),
         _ => {}
     }
     (Yaml::Map(pairs), tags)
@@ -1281,6 +1284,64 @@ fn bitdefender(process: &str) -> Vec<(String, Yaml)> {
     )])
 }
 
+/// An Exabeam block: one or two sequences of filter queries, the second with
+/// a threshold and grouping (exabeam-1.0, Sequences).
+fn exabeam(
+    rng: &mut Rng,
+    variant: usize,
+    process: &str,
+    tags: &mut Vec<String>,
+) -> Vec<(String, Yaml)> {
+    let mut sequences = vec![Yaml::map(vec![
+        ("name", Yaml::s("Suspicious process start")),
+        (
+            "query",
+            Yaml::s(format!(
+                "activity_type:\"process-create\" AND process_name:\"{process}\"\n"
+            )),
+        ),
+        ("group_by", Yaml::strs(&["host"])),
+    ])];
+    if variant % 2 == 1 {
+        tags.push("exabeam:correlation".to_string());
+        sequences.push(Yaml::map(vec![
+            ("name", Yaml::s("Then connects out")),
+            (
+                "query",
+                Yaml::s("activity_type:\"network-session\" AND NOT dest_ip:[10.0.0.0/8]\n"),
+            ),
+            (
+                "threshold",
+                Yaml::map(vec![
+                    ("function", Yaml::s("count")),
+                    ("operator", Yaml::s("more_than")),
+                    (
+                        "value",
+                        Yaml::Seq(vec![Yaml::raw(format!("{}", 2 + rng.below(5)))]),
+                    ),
+                    ("within", Yaml::s("10m")),
+                ]),
+            ),
+            ("group_by", Yaml::strs(&["host"])),
+        ]));
+    }
+    let mut pairs = kv(vec![("sequences", Yaml::Seq(sequences))]);
+    if variant % 2 == 1 {
+        pairs.push((
+            "correlation".to_string(),
+            Yaml::map(vec![
+                ("within", Yaml::s("30m")),
+                ("group_by", Yaml::strs(&["host"])),
+            ]),
+        ));
+    }
+    pairs.push((
+        "severity".to_string(),
+        Yaml::s(rng.pick(&["low", "medium", "high"])),
+    ));
+    pairs
+}
+
 /// A valid `google_secops` block (google-secops-1.0): a single-event rule,
 /// or every other variant a multi-event rule with a `match` window (which
 /// `LIVE` does not run, so it is `LIVE_CUSTOMIZABLE`). It draws nothing from
@@ -1326,6 +1387,44 @@ fn google_secops(variant: usize, process: &str, tags: &mut Vec<String>) -> Vec<(
     ])
 }
 
+/// A Graylog event definition: a Lucene query over one stream, by id (no
+/// tenant alias to resolve), scheduled by interval; every other variant
+/// aggregates instead of filtering.
+fn graylog(
+    rng: &mut Rng,
+    variant: usize,
+    process: &str,
+    tags: &mut Vec<String>,
+) -> Vec<(String, Yaml)> {
+    let stream = format!("65f0c0ffee0123456789{:04x}", rng.below(0x1_0000));
+    let every = rng.pick(&["5m", "10m", "15m"]);
+    let mut pairs = kv(vec![
+        (
+            "query",
+            Yaml::s(format!(
+                "EventID:1 AND image_lc:/.*\\\\{}/",
+                process.to_ascii_lowercase().replace('.', "\\.")
+            )),
+        ),
+        ("streams", Yaml::s(stream)),
+        (
+            "schedule",
+            Yaml::map(vec![("every", Yaml::s(every)), ("window", Yaml::s("15m"))]),
+        ),
+    ]);
+    if variant % 2 == 1 {
+        tags.push("graylog:aggregation".to_string());
+        pairs.push((
+            "aggregation".to_string(),
+            Yaml::map(vec![
+                ("group_by", Yaml::s("source")),
+                ("condition", Yaml::s("count() >= 3")),
+            ]),
+        ));
+    }
+    pairs
+}
+
 /// A tenant's `[tenants.setup]`: endpoints on reserved example domains and
 /// `$VARIABLE` references, never a literal secret.
 fn tenant_setup(platform: &str, tenant: &str) -> String {
@@ -1354,6 +1453,10 @@ fn tenant_setup(platform: &str, tenant: &str) -> String {
             "ssl = true\nurl = \"https://kibana.{tenant}.example\"\n\
              elasticsearch_url = \"https://es.{tenant}.example\"\n\
              api_key = \"${var}_API_KEY\"\nspace = \"{tenant}\"\n"
+        ),
+        "exabeam" => format!(
+            "ssl = true\nregion = \"us-east\"\n\
+             client_id = \"${var}_CLIENT_ID\"\nclient_secret = \"${var}_CLIENT_SECRET\"\n"
         ),
         _ => String::new(),
     }

@@ -469,6 +469,47 @@ fn google_secops_sections_and_yaral_files_are_checked_offline() {
 }
 
 #[test]
+fn bitdefender_signatures_and_yar_files_are_checked_offline_as_yara() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("broken.yar"), "rule A { condition: \n").unwrap();
+    let broken = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "bitdefender",
+            "--file",
+            "broken.yar",
+        ],
+        &[],
+    );
+    let document = broken.json();
+    assert_eq!(broken.code, 1, "{}", broken.stdout);
+    assert_eq!(document["supported"], true);
+    assert_eq!(document["mode"], "offline");
+    assert_eq!(document["queries"][0]["language"], "yara");
+    assert_eq!(document["diagnostics"][0]["code"], "yara_parse_error");
+    std::fs::write(ws.join("ok.yara"), "rule A { condition: true }\n").unwrap();
+    let valid = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "bitdefender",
+            "--file",
+            "ok.yara",
+        ],
+        &[],
+    );
+    assert_eq!(valid.code, 0, "{}", valid.stdout);
+    assert_eq!(valid.json()["queries_validated"], 1);
+}
+
+#[test]
 fn platforms_the_engine_cannot_parse_are_refused() {
     let (_scratch, ws) = corpus();
     let tenant_only = opentide(
@@ -480,11 +521,18 @@ fn platforms_the_engine_cannot_parse_are_refused() {
     assert_eq!(tenant_only.code, 2);
     assert_eq!(failure_code(&document), "usage_missing_option");
     assert_eq!(document["failure"]["argument"], "--live");
-    // Bitdefender's YARA comes with its platform's YARA arm: until then
-    // neither the engine nor a tenant checks its queries.
+    // Every platform's queries are checked offline, on a tenant, or both
+    // (as in 0.28.1); `--live` on one checked offline only is unsupported.
     let neither = opentide(
         &ws,
-        &["--json", "validate", "query", "--platform", "bitdefender"],
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "harfanglab",
+            "--live",
+        ],
         &[],
     );
     let document = neither.json();
@@ -493,7 +541,7 @@ fn platforms_the_engine_cannot_parse_are_refused() {
     assert_eq!(document["valid"], Value::Null);
     assert_eq!(
         document["message"],
-        "query validation not supported for bitdefender"
+        "query validation not supported for harfanglab"
     );
 }
 

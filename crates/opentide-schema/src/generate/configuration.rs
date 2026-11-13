@@ -23,9 +23,10 @@ use crate::configuration::checks::{FILE_MODELS, GENERIC_PLATFORM_FILE};
 use crate::configuration::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
     DefenderForEndpointConfiguration, DeploymentConfiguration, DocumentationConfiguration,
-    ElasticConfiguration, GoogleSecopsConfiguration, HarfangLabConfiguration, PLATFORMS,
-    PathsConfiguration, PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration,
-    SharingConfiguration, SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
+    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
+    HarfangLabConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
+    SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration, SplunkConfiguration,
+    SysdigConfiguration, VisibilityConfig,
 };
 
 use super::schema::StripFrameworkKeywords;
@@ -94,7 +95,9 @@ fn raw(file_key: &str) -> Option<Schema> {
         "platforms/elastic.toml" => model_schema::<ElasticConfiguration>(),
         "platforms/sysdig.toml" => model_schema::<SysdigConfiguration>(),
         "platforms/bitdefender.toml" => model_schema::<BitdefenderConfiguration>(),
+        "platforms/exabeam.toml" => model_schema::<ExabeamConfiguration>(),
         "platforms/google_secops.toml" => model_schema::<GoogleSecopsConfiguration>(),
+        "platforms/graylog.toml" => model_schema::<GraylogConfiguration>(),
         GENERIC_PLATFORM_FILE => model_schema::<PlatformConfiguration>(),
         _ => return None,
     })
@@ -187,7 +190,7 @@ mod tests {
     #[test]
     fn every_router_key_has_a_schema_and_a_file_name() {
         let keys = file_keys();
-        assert_eq!(keys.len(), 17);
+        assert_eq!(keys.len(), FILE_MODELS.len() + PLATFORMS.len() + 1);
         for key in &keys {
             let schema = configuration_schema(key).unwrap();
             assert_eq!(schema["$schema"], JSON_SCHEMA_DIALECT, "{key}");
@@ -212,7 +215,7 @@ mod tests {
     fn the_router_names_each_file_its_schema_and_merge() {
         let router = configuration_router();
         let files = router["files"].as_object().unwrap();
-        assert_eq!(files.len(), 17);
+        assert_eq!(files.len(), FILE_MODELS.len() + PLATFORMS.len() + 1);
         assert_eq!(files["sharing.toml"]["merge"], "by-name");
         assert_eq!(files["sharing.toml"]["connectors"]["misp"], MISP_SCHEMA_ID);
         assert_eq!(files["visibility.toml"]["schema_id"], VISIBILITY_SCHEMA_ID);
@@ -223,7 +226,7 @@ mod tests {
             .into_iter()
             .map(|(n, _)| n)
             .collect();
-        assert_eq!(names.len(), 18);
+        assert_eq!(names.len(), FILE_MODELS.len() + PLATFORMS.len() + 2);
         assert_eq!(names.last().map(String::as_str), Some(ROUTER_NAME));
     }
 

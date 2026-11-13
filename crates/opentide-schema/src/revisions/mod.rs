@@ -106,11 +106,13 @@ pub const REVISIONS: &[Revision] = &[
         "DefenderConfig",
     ),
     revision("platform::elastic::1.0", Kind::Platform, "ElasticConfig"),
+    revision("platform::exabeam::1.0", Kind::Platform, "ExabeamConfig"),
     revision(
         "platform::google_secops::1.0",
         Kind::Platform,
         "GoogleSecopsConfig",
     ),
+    revision("platform::graylog::1.0", Kind::Platform, "GraylogConfig"),
     revision(
         "platform::harfanglab::1.0",
         Kind::Platform,

@@ -21,10 +21,11 @@ pub fn query_platforms() -> Vec<&'static str> {
 fn default_language(platform: &str) -> &'static str {
     match platform {
         "splunk" => "spl",
-        "carbon_black_cloud" => "lucene",
+        "carbon_black_cloud" | "graylog" => "lucene",
         "elastic" => "kuery",
         "sysdig" => "falco",
         "crowdstrike" => "cql",
+        "exabeam" => "exabeam",
         // A whole YARA-L rule (a `.yaral` file's text), checked as a rule.
         "google_secops" => "yaral",
         // A whole YARA text, under the HarfangLab profile (harfanglab-1.0 1.2).
@@ -540,10 +541,6 @@ mod tests {
         );
         let tenant_only = check("x", "sentinel_one", "");
         assert!(tenant_only.get("next_actions").is_some());
-        // Bitdefender's YARA comes with its platform's YARA arm: until then
-        // neither the engine nor a tenant checks its queries.
-        let unsupported = check("x", "bitdefender", "");
-        assert_eq!(unsupported.get("supported"), Some(&Json::Bool(false)));
         // harfanglab-1.0 1.2: HarfangLab's YARA is checked offline.
         let yara = check("rule a {\n  condition:\n    $b\n}\n", "harfanglab", "");
         assert_eq!(yara.get("valid"), Some(&Json::Bool(false)));

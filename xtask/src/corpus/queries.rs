@@ -105,8 +105,8 @@ impl QueryCheck for CountingQueries {
 pub const GROUP: &str = "queries";
 
 /// Code prefixes of the query engines' findings.
-const ENGINE_PREFIXES: [&str; 9] = [
-    "kql_", "spl_", "esql_", "eql_", "kuery_", "lucene_", "ecs_", "falco_", "cql_",
+const ENGINE_PREFIXES: [&str; 10] = [
+    "kql_", "spl_", "esql_", "eql_", "kuery_", "lucene_", "ecs_", "falco_", "cql_", "yaral_",
 ];
 
 /// The codes lint's queries check reports beside the engines' own: the
@@ -130,11 +130,29 @@ pub fn is_query_kind(kind: &Kind) -> bool {
     is_validate_kind(kind) || is_lint_kind(kind)
 }
 
+/// The YARA-L codes a Google SecOps block's own checks report on its YAML
+/// (the section keys, `match` and `options`), which the queries check
+/// leaves to them: a kind that writes a block and expects only these has no
+/// engine finding to compare. A search (a hunt) reports `yaral_match_window`
+/// and `yaral_option` from the engine.
+const SECOPS_BLOCK_CODES: [&str; 7] = [
+    "yaral_section_missing",
+    "yaral_section_empty",
+    "yaral_section_header",
+    "yaral_section_alias",
+    "yaral_match_shape",
+    "yaral_match_window",
+    "yaral_option",
+];
+
 /// A kind `validate` reports an engine code for.
 pub fn is_validate_kind(kind: &Kind) -> bool {
+    let hunt = kind.target.tags.iter().any(|tag| tag == "hunt");
     kind.command.first().map(String::as_str) == Some("validate")
         && kind.command.get(1).is_none_or(|word| word.starts_with('-'))
-        && kind.codes.iter().any(|code| is_engine_code(code))
+        && kind.codes.iter().any(|code| {
+            is_engine_code(code) && (hunt || !SECOPS_BLOCK_CODES.contains(&code.as_str()))
+        })
 }
 
 /// A kind `lint` reports from its queries check.
@@ -414,6 +432,23 @@ mod tests {
             &["validate", "query"],
             &["kql_parse_error"]
         )));
+    }
+
+    #[test]
+    fn yara_l_kinds_are_in_the_group_but_a_block_s_own_checks_are_not() {
+        assert!(is_query_kind(&kind(
+            &["validate"],
+            &["yaral_undefined_variable"]
+        )));
+        assert!(is_query_kind(&kind(&["lint"], &["yaral_string_escape"])));
+        // The block's checks report these on its YAML, not the engine.
+        for code in SECOPS_BLOCK_CODES {
+            assert!(!is_query_kind(&kind(&["validate"], &[code])), "{code}");
+        }
+        // A search's window is the engine's.
+        let mut hunt = kind(&["validate"], &["yaral_match_window"]);
+        hunt.target.tags.push("hunt".to_owned());
+        assert!(is_query_kind(&hunt));
     }
 
     #[test]

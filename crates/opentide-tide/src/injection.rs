@@ -43,6 +43,12 @@ pub(crate) fn extract_injections(source: &str) -> Vec<InjectedQuery> {
         })
         .collect();
     out.extend(crate::yara::decomposed_injection(source, &keys));
+    // A Google SecOps block the engine does not check (no `events` text, or
+    // a section text with a label or a header) has no queries: its sections
+    // are not one rule.
+    if out.iter().any(crate::is_secops_section) && !crate::google_secops::checked(source) {
+        out.retain(|query| !crate::is_secops_section(query));
+    }
     out.sort_by_key(|query| query.host_span.start);
     out
 }
