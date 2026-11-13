@@ -1,0 +1,8 @@
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mSplunk Enterprise queries[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mQuery validation warning · detail: Splunk gateway rule 
+(00000000-0000-4000-8046-000000000003) on lab · warning: Splunk's parser timed out behind a gateway;
+the query is assumed valid
+[1;31merror: [0mQuery rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) 
+on splunk tenant lab · reason: Splunk refused the query on lab: Unknown search command 'badcommand'.
+[?25h[1A[2K  [1;32m✓[0m  [1mSplunk Enterprise queries[0m  [2m3 rules[0m [2m<SECONDS>[0m
+[1;33mwarning:[0m Query validation reported warnings for splunk
+[1;31merror:[0m Queries rejected on splunk · 3 checked on 1 tenant

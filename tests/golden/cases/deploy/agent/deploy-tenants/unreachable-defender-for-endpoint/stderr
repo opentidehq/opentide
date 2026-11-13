@@ -1,0 +1,11 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 0 to disable, 1 to delete
+
+Deploying to defender_for_endpoint / lab · 3 rules
+  [1/3] · skipped   Defender create rule  not attempted after a failure
+  [2/3] · skipped   Defender update rule  not attempted after a failure
+  [3/3] · skipped   Defender retire rule  not attempted after a failure
+✗ defender_for_endpoint · 0 deployed, 0 failed, 3 not attempted · <SECONDS>
+error: Platform deployment failed · system: defender_for_endpoint · detail: ProxyError: HTTPSConnectionPool(host='login.microsoftonline.com', port=443): Max retries exceeded with url: /00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+error: Deployment to defender_for_endpoint failed: ProxyError: HTTPSConnectionPool(host='login.microsoftonline.com', port=443): Max retries exceeded with url: /00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+tip: add --json for machine-readable output

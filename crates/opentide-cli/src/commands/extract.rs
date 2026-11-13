@@ -675,6 +675,33 @@ fn connector_message(error: &ConnectorError) -> String {
 mod tests {
     use super::*;
 
+    /// A tenant that answers nothing within the import's 60 s (too long for
+    /// a test to wait out) fails as the importer's `ReadTimeout`; one that
+    /// cannot be reached, as its `ConnectionError` (the `unreachable`
+    /// golden cases, UC-4.4, #834).
+    #[test]
+    fn a_timeout_and_an_unreachable_tenant_read_as_the_importers_exceptions() {
+        let timeout = ConnectorError::Timeout {
+            platform: DEFENDER.into(),
+            tenant: "lab".into(),
+            address: "https://graph.microsoft.com".into(),
+            seconds: 60,
+        };
+        let message = connector_message(&timeout);
+        assert!(message.starts_with("ReadTimeout: "), "{message}");
+        assert!(message.ends_with(&timeout.to_string()), "{message}");
+        let refused = ConnectorError::Unreachable {
+            platform: ELASTIC.into(),
+            tenant: "soc".into(),
+            address: "https://kibana.elastic.invalid".into(),
+            reason: "tcp connect error: Connection refused (os error 111)".into(),
+        };
+        assert_eq!(
+            connector_message(&refused),
+            format!("ConnectionError: {refused}")
+        );
+    }
+
     #[test]
     fn templates_fill_in_one_pass() {
         assert_eq!(

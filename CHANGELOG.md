@@ -157,6 +157,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 #### Deploy, query and sharing
 - **Tenants are reached through opentide's own connectors, not the vendor SDKs** ([#832](https://github.com/opentidehq/opentide/issues/832), [#833](https://github.com/opentidehq/opentide/issues/833), [#834](https://github.com/opentidehq/opentide/issues/834), [#979](https://github.com/opentidehq/opentide/issues/979)). `deploy`, `query`, `validate query --live`, `share`, `generate extract`, `setup skills` and `doctor` make the requests `azure-identity`, `azure-monitor-query`, `splunk-sdk`, `carbon-black-cloud-sdk`, PyMISP and `requests` made, through the proxy and CA bundles the environment names, and trust the system's certificate store too. A tenant that cannot be reached is described in the HTTP client's words. Beside that:
+  - a tenant that refuses the connection is reported without urllib3's `Retrying (Retry(total=…))` warnings before it, and its error names the exception as `ConnectionError`, not `ProxyError`;
   - a CrowdStrike update the tenant refuses says "Was not able to update rule";
   - a Sysdig error whose `message` is not a string is quoted as JSON;
   - a `#` inside a word of a HarfangLab telemetry query is part of the word;
