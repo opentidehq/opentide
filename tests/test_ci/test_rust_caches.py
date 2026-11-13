@@ -39,7 +39,7 @@ SAVE_IF_CELL = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*==\s*env\.([A-Za
 
 # The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
 # that build a subset of it read it.
-ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test", "ubuntu-latest")
+ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test-part", "ubuntu-latest")
 ENGINE_DEBUG_READERS = (("ci.yml", "clients"), ("ci.yml", "elastic-sweep"))
 # The Python jobs' `uv sync` build of the binding: test's 3.14 cell saves it.
 PYTHON_PRODUCER = ("ci.yml", "test")
@@ -283,7 +283,7 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
     """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
     jobs = _ci()["jobs"]
     wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
-    assert {"engine-test", "test", "cli-e2e", "golden-compare", "corpus-part"} <= set(wrapped)
+    assert {"engine-test-part", "test", "cli-e2e", "golden-compare", "corpus-part"} <= set(wrapped)
     for job_id in wrapped:
         steps = jobs[job_id]["steps"]
         installs = [

@@ -424,7 +424,7 @@ def _runs(job: dict[str, Any]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
 
 
-@pytest.mark.parametrize("job", ["engine", "engine-test"])
+@pytest.mark.parametrize("job", ["engine", "engine-test-part"])
 def test_the_engine_jobs_compile_no_python_binding(workflow: dict[str, Any], job: str) -> None:
     """`uv sync` compiled the binding for minutes before the engine's own work
     (#841): the engine jobs run Python from setup-python, with nothing synced."""
@@ -435,7 +435,7 @@ def test_the_engine_jobs_compile_no_python_binding(workflow: dict[str, Any], job
 def test_the_difflib_comparison_reads_setup_pythons_interpreter(workflow: dict[str, Any]) -> None:
     """crates/opentide-workspace/tests/external_difflib.rs needs a Python: with
     no .venv, OPENTIDE_PYTHON names it, or the test fails."""
-    steps = workflow["jobs"]["engine-test"]["steps"]
+    steps = workflow["jobs"]["engine-test-part"]["steps"]
     (nextest,) = [s for s in steps if "cargo nextest run" in str(s.get("run", ""))]
     assert (nextest.get("env") or {}).get("OPENTIDE_PYTHON") == "python"
     assert any(str(s.get("uses", "")).startswith("actions/setup-python@") for s in steps)

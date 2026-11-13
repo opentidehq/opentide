@@ -37,7 +37,7 @@ starts on every pull request and can be required.
 |-----|----------------|
 | `lint` | ruff, ty (the dependencies installed without the project), `uv build` (the wheel from the sdist, the `develop` profile, into the cached target directory) and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
+| `engine-test` | (`engine-test-part`: Linux in two shards, `nextest --partition hash:N/2`, macOS and Windows whole; `engine-test` gathers them under each OS's required check, as `corpus` does, #841) `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `test` | Python **3.10** and **3.14**, the coverage gate on 3.14 (`test-full` adds 3.11–3.13 in the full set) |
 | `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test` |
@@ -83,7 +83,7 @@ ci.yml names its cache (`shared-key`, plus `key` per OS or target), and each nam
 saves it; readers use `save-if: false` and repeat its runner and `CARGO*`/`RUST*` environment,
 which rust-cache hashes into the key. The names are split by what is built, because a check
 build, a debug test tree, a release binary and the binding `uv sync` builds share no artifacts and
-one key would hold only one of them: `engine-dev` (`engine-test` per OS; `clients` and
+one key would hold only one of them: `engine-dev` (`engine-test-part` per OS, its first shard; `clients` and
 `elastic-sweep` read Linux's), `python-engine` (the abi3 binding, saved by `test`'s 3.14 cell, read
 by the other Python jobs), `engine-check`, `engine-wasm`, `engine-package`, `engine-bench`, `fuzz`,
 `python-engine-windows`, and `engine-release` per target for the dry run. A release restores none.
@@ -94,8 +94,8 @@ the most on every pull request also wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19
 taiki-e/install-action), whose directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path with `..`) actions/cache keeps
 under `sccache-<name>-<hash of the Rust sources>`: by content, so only what a change touches
 compiles again. Each name has one job that saves it (`actions/cache/save`, only when the key
-missed), as rust-cache's: `python-engine` (`test`'s 3.14 cell; the other Python jobs restore it),
-`engine-dev-<os>` (`engine-test`), `golden-compare` and `corpus`. Every Python job names the same
+missed), as rust-cache's: `python-engine` (`test`'s 3.14 cell; the other Python jobs restore it), `engine-check` (`engine`),
+`engine-dev-<os>` (`engine-test-part`), `golden-compare` and `corpus`. Every Python job names the same
 interpreter for PyO3 (`PYO3_PYTHON: /usr/bin/python3`): the binding is abi3, and a different
 interpreter reruns PyO3's build script and rebuilds every crate above it.
 `tests/test_ci/test_rust_caches.py` holds both.

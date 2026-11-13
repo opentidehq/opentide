@@ -62,7 +62,7 @@ CI_CORE = {
     "changes",
     "lint",
     "engine",
-    "engine-test",
+    "engine-test-part",
     "deny",
     "test",
     "cli-e2e",
@@ -75,7 +75,7 @@ CI_CORE = {
 # skipping it (a skipped required check passes), and it fails unless the job
 # it needs succeeded.
 GATHER = "${{ !cancelled() }}"
-CI_GATHER = {"corpus": "corpus-part"}
+CI_GATHER = {"corpus": "corpus-part", "engine-test": "engine-test-part"}
 # ci.yml's jobs in the full set only.
 CI_FULL = {
     "test-full",
