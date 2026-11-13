@@ -11,6 +11,7 @@
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
 
+mod bitdefender;
 mod elastic;
 mod falco;
 mod google_secops;

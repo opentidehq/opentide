@@ -346,10 +346,9 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: false,
         query_runner: false,
         runner_languages: &[],
-        // `yara` (the Bitdefender profile), and `.yar`/`.yara` files, come
-        // with the YARA lane.
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // A YARA signature, under the Bitdefender profile.
+        offline_languages: &["yara"],
+        query_file_suffixes: &["yar", "yara"],
         cli_rank: 9,
         connector_rank: 9,
         configuration_rank: 9,
@@ -753,7 +752,8 @@ mod tests {
         assert_eq!(
             query_file_suffixes(),
             [
-                "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco", "yaral"
+                "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco", "yar", "yara",
+                "yaral"
             ]
         );
     }

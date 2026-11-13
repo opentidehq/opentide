@@ -215,6 +215,46 @@ impl<'a> Sources<'a> {
         document.span(&target, at_key)
     }
 
+    /// Where a `yara_signature_alias` on `field_path` is written, as the
+    /// oracle's YAML reader places it: the aliased text, from its anchor to
+    /// the end of that line (a block scalar's `&name |`), found at the path
+    /// the anchor's node first appears at (`checks::signature_aliases`).
+    fn alias_anchor(&mut self, path: &Path, field_path: &[String]) -> Option<Span> {
+        let document = self.document(path)?;
+        let platform = field_path.get(1)?;
+        let (_, anchor) =
+            opentide_schema::objects::platform::bitdefender::checks::signature_aliases(
+                document.root()?,
+            )
+            .into_iter()
+            .find(|(aliased, _)| aliased == platform)?;
+        let node = walk(&document, &anchor)?;
+        let start = node.start;
+        let line = document.source().lines().nth(start.line.checked_sub(1)?)?;
+        let chars: Vec<char> = line.chars().collect();
+        let end = if node.end.line == start.line {
+            node.end.column
+        } else {
+            chars
+                .iter()
+                .rposition(|c| !c.is_whitespace())
+                .map_or(start.column, |at| at + 2)
+        };
+        let from = start.column.checked_sub(1)?;
+        let text: String = chars
+            .get(from..end.checked_sub(1)?.max(from))?
+            .iter()
+            .collect();
+        Some(Span {
+            line: start.line,
+            column: start.column,
+            end_line: start.line,
+            end_column: end.max(start.column + 1),
+            text,
+            found: true,
+        })
+    }
+
     /// The problem of a file that does not parse, with its position.
     pub(crate) fn yaml_problem(&mut self, path: &Path) -> Option<Problem> {
         let text = self.text(path)?;
@@ -340,13 +380,20 @@ fn annotate_one(
                 && diagnostic
                     .message
                     .starts_with("Extra inputs are not permitted");
-            span = sources.span(
-                &file,
-                &diagnostic.field_path,
-                value.as_deref(),
-                occurrence,
-                at_key,
-            );
+            span = if diagnostic.code == opentide_core::codes::YARA_SIGNATURE_ALIAS {
+                sources.alias_anchor(&file, &diagnostic.field_path)
+            } else {
+                None
+            }
+            .or_else(|| {
+                sources.span(
+                    &file,
+                    &diagnostic.field_path,
+                    value.as_deref(),
+                    occurrence,
+                    at_key,
+                )
+            });
         }
     }
     if diagnostic.code == "schema_validation"

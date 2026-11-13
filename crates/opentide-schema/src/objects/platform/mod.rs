@@ -445,11 +445,20 @@ pub const NAMED_CHECKS: [NamedCheck; 4] = [
 
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
-/// and `lint`'s `queries` check report at its field path. Exabeam's
+/// and `lint`'s `queries` check report at its field path. Bitdefender's
+/// ([`bitdefender::advisories::advisories`]), Exabeam's
 /// ([`exabeam::advisories`]), then Google SecOps'
 /// ([`google_secops::advisories::advisories`]).
 pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
-    let mut found = exabeam::advisories(rule);
+    let mut found: Vec<Advisory> = bitdefender::advisories::advisories(rule)
+        .into_iter()
+        .map(|advisory| Advisory {
+            code: advisory.code,
+            field_path: advisory.field_path,
+            message: advisory.message,
+        })
+        .collect();
+    found.extend(exabeam::advisories(rule));
     found.extend(google_secops::advisories::advisories(rule));
     found
 }
