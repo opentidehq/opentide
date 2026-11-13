@@ -550,6 +550,17 @@ pub fn main(args: &[String]) -> ExitCode {
             }
         };
     }
+    if let [flag, result, program, rest @ ..] = args
+        && flag == measure::INTERNAL_MEASURE
+    {
+        return match measure::measure_here(Path::new(result), program, rest) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("xtask bench {}: {err:#}", measure::INTERNAL_MEASURE);
+                ExitCode::from(2)
+            }
+        };
+    }
     let mode = match parse_args(args) {
         Ok(mode) => mode,
         Err(err) => {
@@ -647,6 +658,10 @@ enum Program {
     Launcher(PathBuf, Vec<OsString>),
     Missing(String),
 }
+
+/// The scenarios the oracle does not run: `startup` measures the console
+/// script of this repository, `opentide._cli:main`, not the oracle's start.
+pub const ORACLE_UNMEASURED: &[&str] = &["startup"];
 
 /// The scenarios `--engine rust` measures through the console script,
 /// `opentide._cli:main` (UC-3.8b, #960; UC-6.2, #841): the plan's startup budgets,
@@ -1086,7 +1101,7 @@ fn measure_scenario(
                 if launch == Launch::Launcher && !measured_run {
                     command.env_remove("PYTHONDONTWRITEBYTECODE");
                 }
-                let measured = measure::run(&mut command, sleep)?;
+                let measured = measure::run_isolated(&command, &run_dir, sleep)?;
                 if scenario.kind == Kind::Version {
                     verify_version(&run_dir, measured.exit_code)?;
                 } else {

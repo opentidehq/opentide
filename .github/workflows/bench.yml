@@ -85,15 +85,8 @@ jobs:
           version: "0.11.32"
           enable-cache: false
 
-      # Optimised (the develop profile: release without LTO), not the dev profile: a
-      # measured child's peak RSS is at least xtask's own at the spawn (exec keeps the
-      # high-water mark of the memory it shared), and a dev-profile xtask (about 32 MiB
-      # resident) sits above the smallest Rust commands (rules unreviewed peaks near
-      # 14 MiB), which the bench then refuses as possibly xtask's.
       - name: Build xtask
-        run: |
-          cargo build --locked --profile develop --package xtask
-          echo "XTASK=$GITHUB_WORKSPACE/target/develop/xtask" >> "$GITHUB_ENV"
+        run: cargo build --locked --package xtask
 
       # The rust engine measures startup (`opentide --version`) and `explain` through
       # the console script, opentide._cli:main (UC-3.8b, #960): `uv sync` installs it
@@ -105,8 +98,7 @@ jobs:
       - name: Run the benchmarks
         env:
           ENGINE: ${{ matrix.engine }}
-        run: |
-          "$XTASK" bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
+        run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
 
       # `deploy --dry-run` and `generate docs` on the heavy workspace (which declares
       # tenants for five platforms) under strace, with the engine's own opentide (the
@@ -121,7 +113,7 @@ jobs:
         run: |
           command -v strace >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q strace; }
           heavy="$RUNNER_TEMP/heavy"
-          "$XTASK" corpus generate --seed 20261107 --out "$heavy"
+          cargo xtask corpus generate --seed 20261107 --out "$heavy"
           if [ "$ENGINE" = python ]; then
             opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
           else
@@ -190,7 +182,7 @@ jobs:
           # --require-reference: a command no baseline, target or previous result
           # applies to fails, so an oracle bump or a changed default cannot turn the
           # gate off silently (and that run never becomes the reference).
-          "$XTASK" bench --check tests/bench/budgets.toml bench.json "${previous[@]}" \
+          cargo xtask bench --check tests/bench/budgets.toml bench.json "${previous[@]}" \
             --require-reference \
             --summary "$GITHUB_STEP_SUMMARY"
 

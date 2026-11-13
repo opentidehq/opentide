@@ -334,7 +334,12 @@ pub fn parse_report(text: &str) -> Result<Report> {
                 bail!("{id}: measured, but without a median time and RSS");
             }
             Status::Measured => {}
-            Status::NotImplemented if report.engine != "rust" => {
+            // The oracle's start is not measured (`startup` measures the
+            // console script, under the rust engine): nothing else may be missing.
+            Status::NotImplemented
+                if report.engine != "rust"
+                    && !crate::bench::ORACLE_UNMEASURED.contains(&id.as_str()) =>
+            {
                 bail!("{id}: not implemented in the {} engine", report.engine);
             }
             Status::NotImplemented => {}
@@ -1489,6 +1494,14 @@ target_s = 0.03
             parse_report(&text(&r)).is_err(),
             "python cannot be not_implemented"
         );
+        // ...but for the oracle's start, which no run of it measures.
+        let mut r = good.clone();
+        r.results.push(CommandResult::not_implemented(
+            "startup",
+            "--version",
+            "not held",
+        ));
+        assert!(parse_report(&text(&r)).is_ok());
         let mut r = good.clone();
         r.results[0].median_s = Some(-1.0);
         assert!(parse_report(&text(&r)).is_err());

@@ -101,6 +101,12 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   pass for the command's now and then (more often under load and coverage instrumentation).
   What xtask touches after the exec (the language server's reader thread and messages) is not
   in the child's floor, so the read does not wait for the reap.
+- A command-line scenario runs through a fresh xtask process (`bench --internal-measure`,
+  `measure::run_isolated`) that spawns the command, waits for it and writes its time and
+  `wait4` numbers to a file: the floor is that small process's memory (a few MiB), not the
+  benchmark's (18 to 32 MiB by profile), which the smallest Rust commands (`rules unreviewed`,
+  about 14 MiB) peak under. The language server is spawned directly: its time ends at its first
+  diagnostics, and it peaks far above the floor.
 - The `memory_*` tests of `measure` and `lsp` measure this process's own mark, which the other
   tests of a plain `cargo test` (threads of one process) move: each runs itself again in a child
   process of the test binary, alone (`bench::measured_alone`), under `cargo test` and nextest alike.

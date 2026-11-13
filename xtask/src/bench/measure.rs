@@ -233,6 +233,127 @@ fn run_with(
     })
 }
 
+/// The hidden mode in which xtask measures one command for its parent
+/// ([`run_isolated`], [`measure_here`]).
+pub const INTERNAL_MEASURE: &str = "--internal-measure";
+
+/// [`run`], through a fresh xtask process that spawns `command`, waits for
+/// it and writes what it measured to a file in `run`: the command's floor
+/// ([`own_peak_rss`]) is that small process's memory, not the benchmark's.
+/// A Rust command can peak below a running xtask (`rules unreviewed`, about
+/// 14 MiB, against 18 to 32 MiB by xtask's profile) and would be refused
+/// ([`distinct_from_own`]). The command keeps `command`'s program,
+/// arguments, directory and environment (`command` clears the inherited
+/// one, as [`command`] does); its output goes to `run`'s files. The time is
+/// the trampoline's, spawn to reap, so its own start is not counted.
+pub fn run_isolated(command: &Command, run: &RunDir, inject: Option<Duration>) -> Result<Measured> {
+    let result = run.root.join("measured.txt");
+    let xtask = std::env::current_exe().context("find xtask's own executable")?;
+    let mut trampoline = Command::new(xtask);
+    trampoline
+        .arg("bench")
+        .arg(INTERNAL_MEASURE)
+        .arg(&result)
+        .arg(command.get_program())
+        .args(command.get_args())
+        .env_clear();
+    if let Some(dir) = command.get_current_dir() {
+        trampoline.current_dir(dir);
+    }
+    for (key, value) in command.get_envs() {
+        if let Some(value) = value {
+            trampoline.env(key, value);
+        }
+    }
+    trampoline.stdin(Stdio::null());
+    trampoline.stdout(
+        std::fs::File::create(&run.stdout)
+            .with_context(|| format!("create {}", run.stdout.display()))?,
+    );
+    trampoline.stderr(
+        std::fs::File::create(&run.stderr)
+            .with_context(|| format!("create {}", run.stderr.display()))?,
+    );
+    let status = trampoline
+        .status()
+        .context("run xtask's measuring process")?;
+    if !status.success() {
+        bail!(
+            "xtask's measuring process failed ({status}): {}",
+            run.stderr_tail()
+        );
+    }
+    let text =
+        std::fs::read_to_string(&result).with_context(|| format!("read {}", result.display()))?;
+    let mut measured = parse_measured(&text).with_context(|| {
+        format!(
+            "{}: not what {INTERNAL_MEASURE} writes: {text:?}",
+            result.display()
+        )
+    })?;
+    // After the wait, as in `run`.
+    if let Some(sleep) = inject {
+        std::thread::sleep(sleep);
+        measured.sample.wall_s += sleep.as_secs_f64();
+    }
+    Ok(measured)
+}
+
+/// What [`measure_here`] writes: `wall_s peak_rss_bytes exit_code
+/// own_peak_rss`, `-` for a value it has not.
+fn format_measured(measured: &Measured) -> String {
+    let or_dash = |value: Option<String>| value.unwrap_or_else(|| "-".to_owned());
+    format!(
+        "{} {} {} {}\n",
+        measured.sample.wall_s,
+        measured.sample.peak_rss_bytes,
+        or_dash(measured.exit_code.map(|code| code.to_string())),
+        or_dash(measured.own_peak_rss.map(|rss| rss.to_string())),
+    )
+}
+
+fn parse_measured(text: &str) -> Option<Measured> {
+    let fields: Vec<&str> = text.split_whitespace().collect();
+    let [wall, rss, code, own] = fields.as_slice() else {
+        return None;
+    };
+    Some(Measured {
+        sample: Sample {
+            wall_s: wall
+                .parse()
+                .ok()
+                .filter(|s: &f64| s.is_finite() && *s >= 0.0)?,
+            peak_rss_bytes: rss.parse().ok()?,
+        },
+        exit_code: optional(code).ok()?,
+        own_peak_rss: optional(own).ok()?,
+    })
+}
+
+/// A field of [`format_measured`]: `-` for none.
+fn optional<T: std::str::FromStr>(field: &str) -> Result<Option<T>, T::Err> {
+    if field == "-" {
+        Ok(None)
+    } else {
+        field.parse().map(Some)
+    }
+}
+
+/// `xtask bench --internal-measure RESULT PROGRAM ARGS...`: runs PROGRAM in
+/// this process's directory, environment and standard streams, measures it
+/// as [`run`] does, and writes the result to RESULT ([`run_isolated`]).
+///
+/// # Errors
+///
+/// The command cannot be spawned or waited for, or RESULT not written.
+pub fn measure_here(result: &Path, program: &str, args: &[String]) -> Result<()> {
+    let mut command = Command::new(program);
+    command.args(args);
+    let measured = run(&mut command, None)?;
+    std::fs::write(result, format_measured(&measured))
+        .with_context(|| format!("write {}", result.display()))
+}
+
 /// A child [`spawn`] started for measuring.
 #[derive(Debug)]
 pub struct Spawned {
@@ -352,6 +473,44 @@ mod tests {
 
     fn scratch(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("xtask-bench-measure-{name}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn what_the_measuring_process_writes_reads_back() {
+        for measured in [
+            Measured {
+                sample: Sample {
+                    wall_s: 0.012_345_678_9,
+                    peak_rss_bytes: 14 << 20,
+                },
+                exit_code: Some(0),
+                own_peak_rss: Some(3 << 20),
+            },
+            Measured {
+                sample: Sample {
+                    wall_s: 1.5,
+                    peak_rss_bytes: 1,
+                },
+                exit_code: None,
+                own_peak_rss: None,
+            },
+        ] {
+            let read = parse_measured(&format_measured(&measured)).unwrap();
+            assert_eq!(read.sample.wall_s, measured.sample.wall_s);
+            assert_eq!(read.sample.peak_rss_bytes, measured.sample.peak_rss_bytes);
+            assert_eq!(read.exit_code, measured.exit_code);
+            assert_eq!(read.own_peak_rss, measured.own_peak_rss);
+        }
+        for bad in [
+            "",
+            "1 2 3",
+            "x 1 0 1",
+            "-1 1 0 1",
+            "1 1 zero 1",
+            "1 1 0 1 extra",
+        ] {
+            assert!(parse_measured(bad).is_none(), "{bad:?}");
+        }
     }
 
     #[test]
