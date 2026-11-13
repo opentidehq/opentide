@@ -99,28 +99,9 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
         .with_context(|| format!("run case {}", case.id))?;
     if let (Some(proxy), Some(name)) = (&proxy, &case.cassette) {
         let mismatches = proxy.verify();
-        if !mismatches.is_empty() {
-            let listed: Vec<String> = mismatches.iter().map(ToString::to_string).collect();
-            // On the catch-up train (`report_only`) a cassette recorded from
-            // the 0.23.0 oracle may not hold the requests a port sends now
-            // (0.28.1's `setup skills` downloads the catalogue's
-            // detection-engineering): the case is reported and compared,
-            // and O2 records the cassette again from the new oracle.
-            if super::report_only::enabled(&ctx.repo) {
-                eprintln!(
-                    "case {}: the requests are not cassette {name}'s; reported, not failed \
-                     ({} is present):\n{}",
-                    case.id,
-                    super::report_only::MARKER,
-                    listed.join("\n")
-                );
-            } else {
-                bail!(
-                    "case {}: the requests are not cassette {name}'s (record it again, or fix the client):\n{}",
-                    case.id,
-                    listed.join("\n")
-                );
-            }
+        let listed: Vec<String> = mismatches.iter().map(ToString::to_string).collect();
+        if let Some(report) = cassette_mismatch(&ctx.repo, &case.id, name, &listed)? {
+            eprintln!("{report}");
         }
     }
     let finished = SystemTime::now();
@@ -482,9 +463,98 @@ pub fn git_version() -> Option<String> {
     text.split_whitespace().nth(2).map(str::to_owned)
 }
 
+/// What a case whose requests are not its cassette's (`listed`, one line
+/// each) does to the run. With none, nothing. Otherwise the run stops with
+/// an error, except on the catch-up train (`report_only`): a cassette
+/// recorded from the 0.23.0 oracle may not hold the requests a port sends
+/// now (0.28.1's `setup skills` downloads the catalogue's
+/// detection-engineering), so the case is compared, and the returned report
+/// names the cassette O2 must record again from the new oracle.
+///
+/// # Errors
+///
+/// `listed` is not empty and `repo` is not report-only.
+fn cassette_mismatch(
+    repo: &Path,
+    case: &str,
+    cassette: &str,
+    listed: &[String],
+) -> Result<Option<String>> {
+    if listed.is_empty() {
+        return Ok(None);
+    }
+    if !super::report_only::enabled(repo) {
+        bail!(
+            "case {case}: the requests are not cassette {cassette}'s (record it again, or fix the client):\n{}",
+            listed.join("\n")
+        );
+    }
+    Ok(Some(format!(
+        "case {case}: request mismatch with cassette {cassette}: reported, not failed ({} is \
+         present); O2 records {cassette} again from the new oracle:\n{}",
+        super::report_only::MARKER,
+        listed.join("\n")
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A case whose requests are not its cassette's stops the run, unless
+    /// the repository carries the report-only marker: then it is reported
+    /// as a request mismatch naming the cassette O2 records again.
+    #[test]
+    fn a_cassette_request_mismatch_fails_unless_the_train_is_report_only() {
+        let repo = tempfile::tempdir().unwrap();
+        let listed = vec!["request 2: URL a was recorded, b sent".to_owned()];
+        assert_eq!(
+            cassette_mismatch(
+                repo.path(),
+                "setup/json/none/skills",
+                "skills/manifest",
+                &[]
+            )
+            .unwrap(),
+            None
+        );
+        let error = cassette_mismatch(
+            repo.path(),
+            "setup/json/none/skills",
+            "skills/manifest",
+            &listed,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.starts_with(
+                "case setup/json/none/skills: the requests are not cassette skills/manifest's"
+            ),
+            "{error}"
+        );
+        let marker = super::super::report_only::marker_path(repo.path());
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        std::fs::write(&marker, "train\n").unwrap();
+        let report = cassette_mismatch(
+            repo.path(),
+            "setup/json/none/skills",
+            "skills/manifest",
+            &listed,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            report.starts_with(
+                "case setup/json/none/skills: request mismatch with cassette skills/manifest"
+            ),
+            "{report}"
+        );
+        assert!(
+            report.contains("O2 records skills/manifest again"),
+            "{report}"
+        );
+        assert!(report.ends_with("URL a was recorded, b sent"), "{report}");
+    }
 
     #[test]
     fn kernel_release_only_in_its_context() {
