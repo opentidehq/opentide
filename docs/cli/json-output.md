@@ -210,7 +210,7 @@ In JSON, every `validate`, `validate query` and `lint` finding carries `path`, `
 | `error: …` | Failed (stderr), followed by indented `note:` and `help:` lines |
 | `→ …` | A next step: the command to run, and why |
 
-A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHONIOENCODING=ascii`) gets `ok`, `x` and `->`.
+opentide writes UTF-8 on every stream (the Windows console through its wide API): the glyphs print as shown whatever the console's code page.
 
 ## The command tree
 
