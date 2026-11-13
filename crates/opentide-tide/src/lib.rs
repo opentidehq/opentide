@@ -80,7 +80,9 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
         ["configurations", "defender_for_endpoint", "query"] => Some(LanguageId::Kql),
         ["configurations", "splunk", "query" | "search"] => Some(LanguageId::Spl),
-        ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
+        // Lucene in each platform's dialect: the injection's platform
+        // selects it (graylog-1.0, "Query dialect").
+        ["configurations", "carbon_black_cloud" | "graylog", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
         // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
@@ -756,11 +758,9 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Lucene => {
-                let dialect = if inj.platform == "carbon_black_cloud" {
-                    opentide_lucene::Dialect::CarbonBlack
-                } else {
-                    opentide_lucene::Dialect::Elastic
-                };
+                // Carbon Black's and Graylog's dialects by their block or
+                // hunt `system`; Elastic's otherwise.
+                let dialect = opentide_lucene::Dialect::for_platform(&inj.platform);
                 let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
                 let indices = (dialect == opentide_lucene::Dialect::Elastic)
                     .then(|| elastic::ecs_indices(configurations, &inj.field_path))

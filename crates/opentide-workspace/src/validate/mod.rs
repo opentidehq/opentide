@@ -553,6 +553,42 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// `graylog_title_duplicate`: each rule in scope whose enabled Graylog block
+/// resolves to the event definition title of another rule's
+/// (`graylog_title_issues`): Graylog's alert list cannot tell them apart.
+fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
+    use opentide_schema::objects::platform::graylog::{
+        definition_title, title_duplicate_message, title_duplicates,
+    };
+    let Some(rules) = index.objects.get("rule") else {
+        return Vec::new();
+    };
+    let all: Vec<(&str, &Node)> = rules
+        .iter()
+        .filter_map(|(uuid, object)| Some((uuid.as_str(), object.root()?)))
+        .collect();
+    work.iter()
+        .filter(|subject| subject.family == "rule")
+        .filter_map(|subject| {
+            let (_, root) = all.iter().find(|(uuid, _)| *uuid == subject.uuid)?;
+            let title = definition_title(root)?;
+            let others = title_duplicates(subject.uuid, title, &all);
+            if others.is_empty() {
+                return None;
+            }
+            let (message, suggestion) = title_duplicate_message(title, &others);
+            let mut diagnostic = Diagnostic::warning("graylog_title_duplicate", message)
+                .object(subject.uuid, "rule")
+                .file(subject.path)
+                .at(["configurations".to_owned(), "graylog".to_owned()])
+                .suggest(Some(suggestion))
+                .with("value", title);
+            diagnostic.yaml_line = subject.document.locator().yaml_line(&diagnostic.field_path);
+            Some(diagnostic)
+        })
+        .collect()
+}
+
 /// `google_secops_name_duplicate`: each rule in scope whose enabled Google
 /// SecOps block resolves to the YARA-L rule name of another rule's, compared
 /// case-insensitively (`google_secops_name_issues`).
@@ -1005,6 +1041,8 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
     let resolved = &ws.configuration().resolved;
 
     let mut graph = Graph::new(index, Vocabularies::bundled(), resolved.get("deployment"));
+    graph.graylog_tenants =
+        opentide_schema::objects::platform::graylog::configured_tenants(resolved.get("platforms"));
     let listed = ListedPaths::new(fs, ws.links());
     let work: Vec<Subject<'_>> = index
         .objects
@@ -1195,6 +1233,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             plugin_blocks(plugins, &work, &mut issues, &mut warnings);
         }
         if checks.schema {
+            warnings.extend(title_duplicates(index, &work));
             issues.extend(name_duplicates(index, &work));
         }
         // Every file that writes an invalid UUID is reported, also one whose

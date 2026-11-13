@@ -439,10 +439,21 @@ pub const NAMED_CHECKS: [NamedCheck; 4] = [
 
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
-/// and `lint`'s `queries` check report at its field path. Google SecOps'
+/// and `lint`'s `queries` check report at its field path. Graylog's
+/// ([`graylog::advisories`], which read the workspace's Graylog tenants:
+/// `graylog_tenants`), then Google SecOps'
 /// ([`google_secops::advisories::advisories`]).
-pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
-    google_secops::advisories::advisories(rule)
+pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]) -> Vec<Advisory> {
+    let mut found: Vec<Advisory> = graylog::advisories(rule, graylog_tenants)
+        .into_iter()
+        .map(|advisory| Advisory {
+            code: advisory.code,
+            field_path: advisory.field_path,
+            message: advisory.message,
+        })
+        .collect();
+    found.extend(google_secops::advisories::advisories(rule));
+    found
 }
 
 /// The named check called `name`.

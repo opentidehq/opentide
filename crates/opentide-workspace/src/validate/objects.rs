@@ -54,6 +54,8 @@ pub struct Graph<'a> {
     pub misspelled_enabled: HashMap<String, String>,
     /// Where each platform's configuration lives, for the messages.
     pub platform_files: HashMap<String, String>,
+    /// The configuration's Graylog tenants, which the Graylog advisories read.
+    pub graylog_tenants: Vec<opentide_schema::objects::platform::graylog::ConfiguredTenant>,
 }
 
 fn object_name(object: &Object) -> String {
@@ -104,6 +106,7 @@ impl<'a> Graph<'a> {
             enabled: None,
             misspelled_enabled: HashMap::new(),
             platform_files: HashMap::new(),
+            graylog_tenants: Vec::new(),
         }
     }
 
@@ -414,8 +417,13 @@ pub fn check_object(
             );
         }
         if subject.family == "rule" {
+            let graylog_tenants: Vec<_> = graph
+                .graylog_tenants
+                .iter()
+                .map(opentide_schema::objects::platform::graylog::ConfiguredTenant::view)
+                .collect();
             warnings.extend(
-                opentide_schema::objects::platform::block_advisories(root)
+                opentide_schema::objects::platform::block_advisories(root, &graylog_tenants)
                     .into_iter()
                     .map(|advisory| {
                         Diagnostic::warning(advisory.code, advisory.message)

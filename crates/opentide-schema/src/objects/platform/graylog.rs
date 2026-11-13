@@ -861,6 +861,73 @@ pub fn leading_wildcard_allowed(block: &Node, tenants: &[TenantView<'_>]) -> boo
     !reached.is_empty() && reached.iter().all(|tenant| tenant.allow_leading_wildcard)
 }
 
+/// A Graylog tenant of the workspace's configuration, as the advisories and
+/// the leading-wildcard filter read it (`configured_tenants`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfiguredTenant {
+    /// The tenant's name.
+    pub name: String,
+    /// Whether its `streams` names any stream.
+    pub has_streams: bool,
+    /// Its `allow_leading_wildcard`.
+    pub allow_leading_wildcard: bool,
+}
+
+impl ConfiguredTenant {
+    /// The tenant as [`advisories`] and [`leading_wildcard_allowed`] read it.
+    pub fn view(&self) -> TenantView<'_> {
+        TenantView {
+            name: &self.name,
+            has_streams: self.has_streams,
+            allow_leading_wildcard: self.allow_leading_wildcard,
+        }
+    }
+}
+
+/// The `[[tenants]]` of the resolved `platforms/graylog.toml`, in order
+/// (`configured_tenants`); `platforms` is the resolved configuration's
+/// `platforms` table.
+pub fn configured_tenants(platforms: Option<&Node>) -> Vec<ConfiguredTenant> {
+    tenants_of(
+        platforms
+            .and_then(|platforms| platforms.get("graylog"))
+            .map(AsRef::as_ref),
+    )
+}
+
+/// The `[[tenants]]` of a Graylog configuration (`platforms/graylog.toml`'s
+/// table), in order. A tenant without a name is not one.
+pub fn tenants_of(graylog: Option<&Node>) -> Vec<ConfiguredTenant> {
+    let Some(Value::Seq(tenants)) = graylog
+        .and_then(|graylog| graylog.get("tenants"))
+        .map(|tenants| &tenants.value)
+    else {
+        return Vec::new();
+    };
+    tenants
+        .iter()
+        .filter_map(|tenant| {
+            let name = tenant.get("name")?.value.as_str()?.to_owned();
+            let setup = tenant.get("setup");
+            Some(ConfiguredTenant {
+                name,
+                has_streams: !list_items(
+                    setup
+                        .and_then(|setup| setup.get("streams"))
+                        .map(AsRef::as_ref),
+                )
+                .is_empty(),
+                allow_leading_wildcard: matches!(
+                    setup
+                        .and_then(|setup| setup.get("allow_leading_wildcard"))
+                        .map(|flag| &flag.value),
+                    Some(Value::Bool(true))
+                ),
+            })
+        })
+        .collect()
+}
+
 /// The event definition title of a rule's enabled Graylog block (the block's
 /// `name`, else the rule's), or `None` when the rule has no enabled block
 /// (`graylog_titles._title`).

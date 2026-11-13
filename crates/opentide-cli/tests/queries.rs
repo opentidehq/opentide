@@ -551,6 +551,118 @@ fn lint_reports_the_google_secops_block_advisories() {
     );
 }
 
+const GRAYLOG_CONFIGURATION: &str = "/ws/.opentide/configurations/platforms/graylog.toml";
+
+/// A Graylog configuration with one tenant, `lab`, and its setup's `extra`.
+fn graylog_tenant(extra: &str) -> String {
+    format!(
+        "[platform]\nenabled = true\nname = \"Graylog\"\n\n[[tenants]]\nname = \"lab\"\n\n\
+         [tenants.setup]\nurl = \"https://graylog.example\"\ntoken = \"$GRAYLOG_TOKEN\"\n{extra}"
+    )
+}
+
+fn graylog_block(query: &str) -> String {
+    format!(
+        "  graylog:\n    enabled: true\n    status: STAGING\n    streams: sysmon\n    \
+         schedule: {{every: 10m, window: 10m}}\n    query: '{query}'\n"
+    )
+}
+
+/// Each code the queries check reports on `text`, as a rule of a workspace
+/// that also holds `files`, with the errors first.
+fn checked_codes(text: &str, files: &[(&str, &str)]) -> (Vec<String>, Vec<String>) {
+    let mut all = vec![(FILE, text)];
+    all.extend_from_slice(files);
+    let ws = workspace(&all);
+    let path = PathBuf::from(FILE);
+    let objects = [QueryObject {
+        path: &path,
+        uuid: UUID,
+        family: "rule",
+        source: text,
+    }];
+    let found = EngineQueries.check(&ws, &objects, false);
+    let codes = |items: Vec<Diagnostic>| items.into_iter().map(|d| d.code).collect();
+    (codes(found.errors), codes(found.warnings))
+}
+
+#[test]
+fn a_graylog_query_is_checked_in_the_graylog_dialect() {
+    // Graylog's own refusal, not Elastic's Lucene warning.
+    let (errors, warnings) = checked_codes(&rule(&graylog_block("image_lc:/(?i)mshta/")), &[]);
+    assert_eq!(errors, ["graylog_regex_unsupported"]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
+#[test]
+fn a_leading_wildcard_is_refused_unless_every_reached_tenant_allows_it() {
+    let text = rule(&graylog_block("image_lc:*mshta.exe"));
+    // Offline, with no tenant, it stays an error.
+    assert_eq!(checked_codes(&text, &[]).0, ["graylog_leading_wildcard"]);
+    let refused = graylog_tenant("allow_leading_wildcard = false\n");
+    assert_eq!(
+        checked_codes(&text, &[(GRAYLOG_CONFIGURATION, &refused)]).0,
+        ["graylog_leading_wildcard"]
+    );
+    let allowed = graylog_tenant("allow_leading_wildcard = true\n");
+    assert_eq!(
+        checked_codes(&text, &[(GRAYLOG_CONFIGURATION, &allowed)]),
+        (Vec::new(), Vec::new())
+    );
+    // A block that reaches no tenant keeps it.
+    let elsewhere = text.replace(
+        "    streams: sysmon\n",
+        "    streams: sysmon\n    tenants: [prod]\n",
+    );
+    assert_eq!(
+        checked_codes(&elsewhere, &[(GRAYLOG_CONFIGURATION, &allowed)]).0,
+        ["graylog_leading_wildcard"]
+    );
+}
+
+#[test]
+fn lint_reports_the_graylog_block_advisories() {
+    use opentide_workspace::lint::LintQueryCheck;
+    let block = "  graylog:\n    enabled: true\n    status: STAGING\n    \
+                 schedule: {every: 5m, window: 15m}\n    query: 'EventID:1'\n";
+    let text = rule(block);
+    let _engine = opentide_cli::queries::ENGINE.lock().unwrap();
+    let fs = MemoryFs::new();
+    fs.create_dir("/ws/.opentide/configurations/platforms");
+    fs.write(GRAYLOG_CONFIGURATION, graylog_tenant(""));
+    let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
+    let found: Vec<(String, String)> = check
+        .check(
+            std::path::Path::new(FILE),
+            "objects/rules/a.yaml",
+            Some(UUID),
+            &text,
+        )
+        .unwrap()
+        .into_iter()
+        .filter(|finding| finding.diagnostic.code.starts_with("graylog_"))
+        .map(|finding| {
+            (
+                finding.diagnostic.code.clone(),
+                finding.diagnostic.field_path.join("."),
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (
+                "graylog_overlapping_window".to_owned(),
+                "configurations.graylog.schedule".to_owned()
+            ),
+            (
+                "graylog_all_streams".to_owned(),
+                "configurations.graylog".to_owned()
+            ),
+        ]
+    );
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {
