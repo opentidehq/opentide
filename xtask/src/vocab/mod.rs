@@ -9,9 +9,12 @@
 //!   oracle, on every corpus.
 //! - `ingest [--check|--apply]` ([`ingest`]): the weekly ATT&CK and MISP
 //!   ingest into the specifications' vocabularies.
+//! - `malapi [--check|--apply]` ([`malapi`]): the MalAPI vocabulary scraped
+//!   from malapi.io, by hand.
 
 pub mod diff;
 pub mod ingest;
+pub mod malapi;
 pub mod sentinel;
 pub mod sync;
 
@@ -52,6 +55,17 @@ commands:
                  versions; --apply writes them and syncs the bundle, otherwise
                  it exits 1 when they would change. Schema pins never move.
                  --now fixes the timestamps it writes, for a reproducible run
+  malapi [--check|--apply] [--specifications DIR] [--html-dir DIR]
+         [--delay SECS] [--now TIMESTAMP]
+                 scrape malapi.io's attack categories and API pages (or read
+                 saved pages: DIR/index.html, DIR/winapi/<API>.html) and merge
+                 them into the specifications checkout's malapi vocabulary
+                 with per-key versions; --apply writes it and syncs the bundle,
+                 otherwise it exits 1 when it would change. Pages are fetched
+                 one at a time, SECS apart (default 60: the site serves about
+                 a page a minute). A run the site stops part-way keeps the
+                 keys it did not reach; --apply writes it, unsynced, and exits 1.
+                 --now fixes source_fetched_at, for a reproducible run
   help           print this message
 
 exit status: 0 passed, 1 a check failed, 2 usage error or the check could not run
@@ -67,6 +81,7 @@ pub fn main(args: &[String]) -> ExitCode {
         "sync" => run_sync(rest),
         "sentinel-attack" => run_sentinel(rest),
         "ingest" => ingest::parse(rest).and_then(|options| ingest::run(&repo_root()?, &options)),
+        "malapi" => malapi::parse(rest).and_then(|options| malapi::run(&repo_root()?, &options)),
         "diff" => diff::parse(rest).and_then(|options| diff::run(&options)),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
@@ -172,6 +187,9 @@ mod tests {
             &["ingest", "--check", "--apply"],
             &["ingest", "--frobnicate"],
             &["ingest", "--misp-url"],
+            &["malapi", "--check", "--apply"],
+            &["malapi", "--delay", "soon"],
+            &["malapi", "--html-dir"],
         ] {
             assert_eq!(main(&words(args)), usage, "{args:?}");
         }

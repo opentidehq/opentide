@@ -206,7 +206,7 @@ fn python_str(item: &Json) -> String {
         Json::Bool(true) => "True".to_owned(),
         Json::Bool(false) => "False".to_owned(),
         Json::Number(number) => number.to_string(),
-        other => other.to_python_text().trim_end().to_owned(),
+        other => other.to_text().trim_end().to_owned(),
     }
 }
 

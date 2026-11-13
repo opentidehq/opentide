@@ -20,7 +20,6 @@ use std::time::{Duration, Instant};
 use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
@@ -302,7 +301,7 @@ impl Sentinel {
             .header("Accept", "application/json")
             .header("Authorization", format!("Bearer {}", token.expose()));
         if let Some(body) = body {
-            let bytes = python_json(body).map_err(|error| ConnectorError::Setup {
+            let bytes = serde_json::to_vec(body).map_err(|error| ConnectorError::Setup {
                 platform: PLATFORM.into(),
                 tenant: cx.tenant.label.tenant.clone(),
                 message: format!("the request body cannot be written: {error}"),
@@ -412,11 +411,12 @@ impl Sentinel {
             )),
         );
         body.insert("workspaces".into(), Json::Null);
-        let bytes = python_json(&Json::Object(body)).map_err(|error| ConnectorError::Setup {
-            platform: PLATFORM.into(),
-            tenant: tenant.clone(),
-            message: format!("the request body cannot be written: {error}"),
-        })?;
+        let bytes =
+            serde_json::to_vec(&Json::Object(body)).map_err(|error| ConnectorError::Setup {
+                platform: PLATFORM.into(),
+                tenant: tenant.clone(),
+                message: format!("the request body cannot be written: {error}"),
+            })?;
         let wait = request.timeout.min(MAX_SERVER_TIMEOUT).as_secs();
         let builder = cx
             .http

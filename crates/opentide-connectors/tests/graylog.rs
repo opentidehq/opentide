@@ -836,7 +836,7 @@ fn the_platform_deploys_from_a_compiled_body() {
     let request = DeployRequest {
         rule_id: compiled.uuid.clone(),
         operation: Operation::Create,
-        body: opentide_connectors::body::python_json(&compile::create_body(&compiled)).unwrap(),
+        body: serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
     };
     let outcome = runtime.block_on(Graylog.deploy(cx, &request)).unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(DEFINITION_ID));

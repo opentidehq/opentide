@@ -6,7 +6,6 @@
 use std::fmt::Write as _;
 
 use indexmap::IndexMap;
-use opentide_schema::configuration::repr::float_text;
 use opentide_schema::node::{Node, Value};
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
@@ -109,7 +108,7 @@ fn key_text(node: &Node) -> String {
     match &node.value {
         Value::Str(text) | Value::Datetime(text) => text.clone(),
         Value::Int(integer) => integer.to_string(),
-        Value::Float(float) => python_float(*float),
+        Value::Float(float) => float_key(*float),
         Value::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
         Value::Null => "null".to_owned(),
         // A collection cannot key a Python dict; the oracle could not load it.
@@ -121,16 +120,11 @@ fn key_text(node: &Node) -> String {
     }
 }
 
-/// A float as `json.dumps` writes a dict key: `NaN`, `Infinity` and
-/// `-Infinity` for what JSON has no number for, otherwise Python's `repr`.
-fn python_float(value: f64) -> String {
-    if value.is_nan() {
-        "NaN".to_owned()
-    } else if value.is_infinite() {
-        if value > 0.0 { "Infinity" } else { "-Infinity" }.to_owned()
-    } else {
-        float_text(value)
-    }
+/// A float key as JSON writes the number (`1.0`, `1e+16`), and NaN and the
+/// infinities, which JSON has no number for, as Rust prints them.
+fn float_key(value: f64) -> String {
+    serde_json::Number::from_f64(value)
+        .map_or_else(|| value.to_string(), |number| number.to_string())
 }
 
 impl Serialize for Json {
@@ -338,12 +332,12 @@ mod tests {
     }
 
     #[test]
-    fn float_keys_are_written_as_python_writes_them() {
-        assert_eq!(python_float(1.0), "1.0");
-        assert_eq!(python_float(2.5), "2.5");
-        assert_eq!(python_float(1e16), "1e+16");
-        assert_eq!(python_float(1e-5), "1e-05");
-        assert_eq!(python_float(f64::NAN), "NaN");
-        assert_eq!(python_float(f64::NEG_INFINITY), "-Infinity");
+    fn float_keys_are_written_as_json_writes_the_number() {
+        assert_eq!(float_key(1.0), "1.0");
+        assert_eq!(float_key(2.5), "2.5");
+        assert_eq!(float_key(1e16), "1e+16");
+        assert_eq!(float_key(1e-5), "0.00001");
+        assert_eq!(float_key(f64::NAN), "NaN");
+        assert_eq!(float_key(f64::NEG_INFINITY), "-inf");
     }
 }

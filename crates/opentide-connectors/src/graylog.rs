@@ -29,7 +29,6 @@ use opentide_compile::graylog::{
 use regex::Regex;
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
@@ -413,8 +412,9 @@ impl<'a> Client<'a> {
             builder = builder.timeout(timeout);
         }
         if let Some(body) = body {
-            builder = builder
-                .body(python_json(body).map_err(|error| self.setup_error(error.to_string()))?);
+            builder = builder.body(
+                serde_json::to_vec(body).map_err(|error| self.setup_error(error.to_string()))?,
+            );
         }
         let request = builder
             .build()
