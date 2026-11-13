@@ -14,7 +14,7 @@ name: Schema
 
 on:
   push:
-    branches: [main, development, integration/unified-core]
+    branches: [main, development, integration/unified-core, "train/catchup-*"]
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
     paths:
@@ -35,10 +35,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # The event in the group, so that the nightly run and a push to development
-  # do not cancel each other.
-  group: schema-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to development, integration/unified-core or main, the nightly, Run
+  # workflow) has a group of its own, its run id, so none cancels another and
+  # each push to a base branch gets a complete run (tests/test_ci/test_concurrency.py).
+  group: schema-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
