@@ -41,7 +41,7 @@ regression = 0.10
 # ...and only when the difference is also above these. The medians of 5 runs of the
 # shortest command (explain, about 0.2 s) differ by up to about 15 ms between runs on one
 # machine (single samples by up to 35 ms: process start, page cache, scheduling); 20 ms
-# lets explain regress 15% at most on the fastest CPU (0.136 s) before it fails. The RSS
+# lets explain regress 13% at most on the fastest CPU (0.154 s) before it fails. The RSS
 # of one Python process moves by about 1 MiB (allocator arenas).
 noise_floor_s = 0.02
 noise_floor_rss_mib = 2.0
@@ -71,14 +71,16 @@ runner = "ubuntu-24.04 (GitHub-hosted, 4 vCPU, image 20261101.360.1)"
 cpu_model = "AMD EPYC 9V45 96-Core Processor"
 rust_cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
 # Run 42510209388 (commit 078ca8d, heavy workspace digest 5978a2ab7c093587): the
-# python job for baseline_*, the rust job for rust_baseline_s.
-source = "https://github.com/opentidehq/opentide/actions/runs/42510209388"
+# python job for baseline_*, the rust job for rust_baseline_s. baseline_s is the slower
+# median of two python runs on the 9V45, 42510209388 and 43462750631 (attempt 1), as the
+# [[cpu_baseline]] entries keep two runs' (load: 43462750631 alone, the first there).
+source = "https://github.com/opentidehq/opentide/actions/runs/42510209388 and https://github.com/opentidehq/opentide/actions/runs/43462750631"
 
 [commands.validate_clean]
 label = "validate, clean"
 plan_s = 3.18
 plan_rss_mib = 171.0
-baseline_s = 2.443
+baseline_s = 2.731
 baseline_rss_mib = 190.1
 target_s = 0.7
 # Plan section 11: <= 100 MB, enforced as MiB (100e6 bytes).
@@ -92,78 +94,79 @@ waived_rss_mib = 140.3
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
 plan_s = 12.76
-baseline_s = 9.869
+baseline_s = 10.946
 baseline_rss_mib = 184.7
 target_s = 0.7
 
 [commands.validate_file]
 label = "validate --file"
 plan_s = 1.77
-baseline_s = 1.484
+baseline_s = 1.490
 baseline_rss_mib = 115.7
 target_s = 0.1
 
 [commands.lint]
 label = "lint"
-baseline_s = 2.91
+baseline_s = 2.912
 baseline_rss_mib = 133.6
 
 [commands.lint_file]
 label = "lint --file"
 plan_s = 0.73
-baseline_s = 0.645
+baseline_s = 0.682
 baseline_rss_mib = 78.6
 
 [commands.info]
 label = "info"
-baseline_s = 0.947
+baseline_s = 0.972
 baseline_rss_mib = 89.9
 
 [commands.info_catalog]
 label = "info catalog"
 plan_s = 1.36
-baseline_s = 1.133
+baseline_s = 1.266
 baseline_rss_mib = 105.7
 target_s = 0.15
 
 [commands.deploy_dry_run]
 label = "deploy --dry-run --all --strategy PREVIEW"
 plan_s = 2.20
-baseline_s = 2.158
+baseline_s = 2.223
 baseline_rss_mib = 120.6
 target_s = 0.3
 
 [commands.generate_docs]
 label = "generate docs"
 plan_s = 11.61
-baseline_s = 11.738
+baseline_s = 12.304
 baseline_rss_mib = 131.9
 target_s = 1.5
 
 [commands.generate_exports_navigator]
 label = "generate exports navigator"
-baseline_s = 0.889
+baseline_s = 0.939
 baseline_rss_mib = 76.3
 
 [commands.load]
 label = "load and index the workspace (SDK: Opentide.initialise())"
 # UC-2.1 (#816): heavy workspace load and index in 80 ms or less on 4 cores.
 # The oracle side is the SDK's registry load (`Opentide.initialise()`). Its
-# time is recorded only on the EPYC 9V74 ([[cpu_baseline]] below, run
-# 42758665925, the first that measured it), so on another CPU it is held to
-# that median + cross_cpu_regression until a run there records its own.
+# time is recorded on the EPYC 9V45 (baseline_s, run 43462750631), the 9V74
+# ([[cpu_baseline]] below, run 42758665925, the first that measured it) and
+# the 8573C; on another CPU it is held to the slowest + cross_cpu_regression.
+baseline_s = 0.890
 baseline_rss_mib = 70.2
 target_s = 0.08
 
 [commands.rules_unreviewed]
 label = "rules unreviewed"
-baseline_s = 0.359
+baseline_s = 0.401
 baseline_rss_mib = 52.9
 
 [commands.explain]
 label = "explain vocab_unknown"
 plan_s = 0.18
-baseline_s = 0.136
+baseline_s = 0.154
 baseline_rss_mib = 36.3
 target_s = 0.03
 
@@ -182,7 +185,7 @@ waived_s = 0.021
 [commands.lsp_first_diagnostics]
 label = "language server, first diagnostics"
 # Plan section 2: 0.7 to 3.0 s in the editor (vscode-extension, Python backend).
-baseline_s = 1.515
+baseline_s = 1.635
 baseline_rss_mib = 163.2
 target_s = 0.1
 # The language server misses the target. UC-2.6 (#821) rebuilt it on
