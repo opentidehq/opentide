@@ -60,14 +60,16 @@ const ANSWER_TIMEOUT: Duration = Duration::from_secs(300);
 
 const USAGE: &str = "\
 usage: cargo xtask mcp record --python PATH [--only NAME]
-       cargo xtask mcp replay --engine rust [--python PATH] [--show-approved] FILE...
+       cargo xtask mcp replay --engine rust [--python PATH] [--show-approved] [--gate] FILE...
 
 record   sends each session of tests/golden/mcp/sessions.toml to the Python
          server of the opentide release PATH runs (one before the Python
          implementation was removed) and writes tests/golden/mcp/<session>.jsonl
 replay   sends each recording's messages to this repository's server and
          compares the answers; differences only through
-         tests/golden/APPROVED_DIFFS.toml (command `mcp start`)
+         tests/golden/APPROVED_DIFFS.toml (command `mcp start`). While
+         tests/golden/REPORT_ONLY is present (the catch-up train), a difference
+         is reported and the replay passes; --gate fails on it all the same
 
 --python names the interpreter of the package (replay's default: the
 repository's .venv, or OPENTIDE_PYTHON).
@@ -253,6 +255,7 @@ pub fn run(args: &[String]) -> Result<u8> {
     let mut only: Option<String> = None;
     let mut engine: Option<String> = None;
     let mut show_approved = false;
+    let mut gate = false;
     let mut files = Vec::new();
     let mut iter = rest.iter();
     while let Some(arg) = iter.next() {
@@ -261,6 +264,7 @@ pub fn run(args: &[String]) -> Result<u8> {
             "--only" => only = Some(iter.next().context("--only NAME")?.clone()),
             "--engine" => engine = Some(iter.next().context("--engine NAME")?.clone()),
             "--show-approved" => show_approved = true,
+            "--gate" => gate = true,
             "help" | "--help" | "-h" => {
                 print!("{USAGE}");
                 return Ok(0);
@@ -289,7 +293,7 @@ pub fn run(args: &[String]) -> Result<u8> {
                  the recordings are the Python server's"
             );
             ensure!(!files.is_empty(), "replay needs recordings\n{USAGE}");
-            let passed = replay(&repo, &python, &sessions, &files, show_approved)?;
+            let passed = replay(&repo, &python, &sessions, &files, show_approved, gate)?;
             Ok(u8::from(!passed))
         }
         "help" | "--help" | "-h" => {
@@ -447,6 +451,7 @@ fn replay(
     sessions: &Sessions,
     files: &[PathBuf],
     show_approved: bool,
+    gate: bool,
 ) -> Result<bool> {
     let ledger_path = repo.join("tests/golden/APPROVED_DIFFS.toml");
     let ledger = Ledger::parse(
@@ -488,7 +493,7 @@ fn replay(
     }
     // The catch-up train reports its differences instead of failing on them
     // (`golden::report_only`).
-    if !passed && crate::golden::report_only::enabled(repo) {
+    if !passed && !gate && crate::golden::report_only::enabled(repo) {
         println!("{}", crate::golden::report_only::verdict(1, None));
         return Ok(true);
     }
