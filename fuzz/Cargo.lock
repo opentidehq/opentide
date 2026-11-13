@@ -2692,6 +2692,7 @@ dependencies = [
  "opentide-lsp",
  "opentide-schema",
  "opentide-workspace",
+ "opentide-yara",
  "pathdiff",
  "pep440_rs",
  "percent-encoding",
