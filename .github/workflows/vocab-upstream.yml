@@ -27,6 +27,12 @@ env:
   PYTHON_VERSION: "3.12"
   UPSTREAM_BRANCH: chore/vocab-upstream
   OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
+  # The ingest (ATT&CK STIX and MISP into specifications' vocabularies) is the
+  # Python package's opentide.vocabulary, removed with the Python implementation
+  # (UC-6.2, #841) and not yet ported to `cargo xtask vocab`: it runs from the
+  # last commit that has it, in a worktree of its own. It writes only into
+  # specifications; this checkout then syncs the bundle from there.
+  INGEST_REV: ca32f5558d95fd77d5550084ee0f9d0681397fdc
 
 jobs:
   ingest:
@@ -130,6 +136,9 @@ jobs:
           OPENTIDE_ATTACK_STIX_DIR: ${{ runner.temp }}/attack-stix
         run: |
           set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/ingest" "$INGEST_REV"
+          cd "$RUNNER_TEMP/ingest"
+          uv sync --group dev
           uv run python scripts/vocabulary/sync_upstream.py --apply | tee "$RUNNER_TEMP/ingest-summary.txt"
 
       - name: Open specifications PR

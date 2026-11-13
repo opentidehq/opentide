@@ -559,9 +559,12 @@ def test_wheels_are_built_on_windows_on_arm() -> None:
 
 def test_the_windows_on_arm_wheel_is_installed_and_doctor_runs() -> None:
     """cibuildwheel skips testing it, so the workflow installs it itself (#748)."""
-    from opentide.core.io import load_toml
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover - Python 3.10
+        import tomli as tomllib
 
-    pyproject = load_toml(ROOT / "pyproject.toml")
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["tool"]["cibuildwheel"]["test-skip"] == "*-win_arm64"
     names = [step.get("name") for step in _wheel_steps()]
     build = names.index("Build wheels")
