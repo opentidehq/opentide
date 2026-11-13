@@ -17,7 +17,8 @@ only is kept with the other flag false: ``yara_unknown_module_member`` under
 libyara, ``yara_x_incompatible`` for what only libyara has.
 
 Usage:
-    cargo run --release --manifest-path scripts/engine/yara-modules/Cargo.toml > /tmp/yara-x-modules.json
+    cargo run --release --manifest-path scripts/engine/yara-modules/Cargo.toml \
+        > /tmp/yara-x-modules.json
     python scripts/engine/sync_yara_modules.py --libyara ../yara \
         --yara-x-json /tmp/yara-x-modules.json [--check]
 """
