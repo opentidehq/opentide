@@ -134,6 +134,26 @@ source = "tests/golden/fixtures/deploy-tenants"
 about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING rule's status as an anchor: a status promotion leaves alone, with a warning (UC-4.6c)"
 pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "    status: STAGING\n", replace = "    status: &status STAGING\n" }]
 
+[fixtures.deploy-push-no-target]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-push` with a `deployment.toml` whose promotion_target is a number, not a status name: the promotion ends the run as an invalid target does (UC-6.2e)"
+edits = [{ path = ".opentide/configurations/deployment.toml", find = "", replace = "[promotion]\nenabled = true\npromotion_target = 1\n" }]
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "description: A rule the splunk", replace = "description: A changed rule the splunk" }]
+
+[fixtures.deploy-push-key]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, gave a STAGING rule a platform block whose key is a number: the promotion fails the run with the oracle's KeyError (UC-6.2e)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "configurations:\n  splunk:\n", replace = "configurations:\n  1:\n    status: STAGING\n  splunk:\n" }]
+
+[fixtures.deploy-push-unreadable]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING block as a flow mapping, promoted to a status whose name closes one (`LIVE}`): the promoted text does not read back, which fails the run (UC-6.2e)"
+edits = [{ path = ".opentide/configurations/deployment.toml", find = "", replace = "[promotion]\nenabled = true\npromotion_target = \"LIVE}\"\n\n[[statuses]]\nname = \"STAGING\"\ndescription = \"Staging\"\nstrategy = \"PREVIEW\"\n\n[[statuses]]\nname = \"PRODUCTION\"\ndescription = \"Production\"\nstrategy = \"RELEASE\"\n\n[[statuses]]\nname = \"LIVE}\"\ndescription = \"Live\"\nstrategy = \"RELEASE\"\n\n[[statuses]]\nname = \"DISABLED\"\ndescription = \"Disabled\"\nstrategy = \"DISABLEMENT\"\n\n[[statuses]]\nname = \"REMOVED\"\ndescription = \"Removed\"\nstrategy = \"DELETION\"\n" }]
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "configurations:\n  splunk:\n", replace = "configurations:\n  sentinel: {status: STAGING}\n  splunk:\n" }]
+
 [fixtures.share-misp]
 kind = "copy"
 source = "tests/golden/fixtures/share-misp"
@@ -1801,6 +1821,18 @@ variant = "promote-push"
 args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
 fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
 modes = ["plain", "json", "agent"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# UC-6.2e: a promotion target that is not a status name (a number), a
+# promoted block whose key is not a string, and promoted text that does not
+# read back: each ends the run as the oracle's promotion does.
+
+[[case]]
+command = "deploy"
+variant = "promote-fails"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push-no-target", "deploy-push-key", "deploy-push-unreadable"]
+modes = ["plain", "json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
 [[case]]

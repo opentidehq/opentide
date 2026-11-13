@@ -246,6 +246,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - an object `validate` cannot load (a tag outside YAML 1.2's core schema such as `!Ref`, a key written twice, a key that is a list or a mapping, an integer past 64 bits) shows its `yaml_parse` error and no query findings, outline symbol or query highlighting, as an object with a YAML syntax error always did;
   - an object nested more than 128 levels deep (and at most 512) gets its query findings, where the editor showed none;
   - an unsaved object whose YAML does not load is checked as an object of the family its `schema:` line names, so it shows its `yaml_parse` error as it does in a workspace, where it showed nothing.
+- **Status promotion names promoted text it cannot read back in the Rust loader's words** ([#790](https://github.com/opentidehq/opentide/issues/790)). When `opentide deploy` promotes a rule's statuses and the rewritten file does not parse (a target such as `LIVE}` written into a flow mapping), the run still fails with `<file>: cannot promote its statuses: ...`, but the reason is one line and its place (`misplaced bracket` and `in "<unicode string>", line 13, column 27`) where PyYAML quoted the line with a caret under it.
 
 ### Fixed
 

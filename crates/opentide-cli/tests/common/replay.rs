@@ -93,6 +93,9 @@ pub const FIXTURES: &[&str] = &[
     "deploy-push",
     "deploy-push-production",
     "deploy-push-anchor",
+    "deploy-push-no-target",
+    "deploy-push-key",
+    "deploy-push-unreadable",
     "share-misp",
     "share-misp-broken",
     "share-misp-push",
@@ -227,6 +230,10 @@ pub fn fixture(name: &str, ws: &Path) {
         }
         // UC-4.4e (#834): `share-misp` as a checkout whose last commit is a push.
         "share-misp-push" | "share-misp-push-config" => pushed_from_cases(name, ws),
+        // UC-6.2e: pushes the status promotion fails the run on.
+        "deploy-push-no-target" | "deploy-push-key" | "deploy-push-unreadable" => {
+            pushed_from_cases(name, ws);
+        }
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -251,17 +258,28 @@ pub fn fixture(name: &str, ws: &Path) {
 }
 
 /// The `edits` of fixture `name` in `tests/golden/cases.toml`, each `find`
-/// found once and replaced (`xtask/src/golden/fixture.rs`).
+/// found once and replaced, or, with an empty `find`, a new file written
+/// (`xtask/src/golden/fixture.rs`).
 fn apply_edits(name: &str, ws: &Path) {
     let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
     let spec: toml::Table = toml::from_str(&text).unwrap();
-    let edits = spec["fixtures"][name]["edits"].as_array().unwrap();
+    let edits = spec["fixtures"][name]
+        .get("edits")
+        .and_then(toml::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     for edit in edits {
         let path = ws.join(edit["path"].as_str().unwrap());
         let (find, replace) = (
             edit["find"].as_str().unwrap(),
             edit["replace"].as_str().unwrap(),
         );
+        if find.is_empty() {
+            assert!(!path.exists(), "{name}: {}", path.display());
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, replace).unwrap();
+            continue;
+        }
         let text = std::fs::read_to_string(&path).unwrap();
         assert_eq!(text.matches(find).count(), 1, "{name}: {}", path.display());
         std::fs::write(&path, text.replacen(find, replace, 1)).unwrap();
@@ -280,12 +298,13 @@ fn pushed(ws: &Path, path: &str, find: &str, replace: &str) {
 }
 
 /// The copy fixture `name` of `tests/golden/cases.toml` as a git checkout of
-/// two commits: its `source`, then its `pushed` edits.
+/// two commits: its `source` with its `edits`, then its `pushed` edits.
 fn pushed_from_cases(name: &str, ws: &Path) {
     let text = std::fs::read_to_string(repo().join("tests/golden/cases.toml")).unwrap();
     let spec: toml::Table = toml::from_str(&text).unwrap();
     let fixture = &spec["fixtures"][name];
     copy_tree(&repo().join(fixture["source"].as_str().unwrap()), ws);
+    apply_edits(name, ws);
     fix_modes(ws);
     let edits: Vec<(String, String, String)> = fixture["pushed"]
         .as_array()
