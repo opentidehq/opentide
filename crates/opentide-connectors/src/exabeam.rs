@@ -505,14 +505,14 @@ impl<'a> Session<'a> {
         if !query.is_empty() {
             url.query_pairs_mut().extend_pairs(query);
         }
-        let bytes = body
-            .map(crate::body::python_json)
-            .transpose()
-            .map_err(|error| ConnectorError::Setup {
-                platform: PLATFORM.to_owned(),
-                tenant: self.tenant().to_owned(),
-                message: error.to_string(),
-            })?;
+        let bytes =
+            body.map(serde_json::to_vec)
+                .transpose()
+                .map_err(|error| ConnectorError::Setup {
+                    platform: PLATFORM.to_owned(),
+                    tenant: self.tenant().to_owned(),
+                    message: error.to_string(),
+                })?;
         for _ in 0..=MAX_RATE_LIMITED {
             tokio::select! {
                 () = self.cx.cancel.cancelled() => return Err(ConnectorError::Cancelled.into()),
