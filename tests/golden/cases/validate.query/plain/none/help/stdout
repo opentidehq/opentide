@@ -10,11 +10,13 @@
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --platform             PLATFORM    Check this platform's queries. Offline,   │
 │                                    default every platform the engine parses: │
-│                                    carbon_black_cloud,                       │
-│                                    defender_for_endpoint, elastic, sentinel, │
-│                                    splunk, sysdig. --live needs one of:      │
-│                                    carbon_black_cloud,                       │
-│                                    defender_for_endpoint, elastic, sentinel, │
+│                                    bitdefender, carbon_black_cloud,          │
+│                                    defender_for_endpoint, elastic, exabeam,  │
+│                                    google_secops, graylog, harfanglab,       │
+│                                    sentinel, splunk, sysdig. --live needs    │
+│                                    one of: carbon_black_cloud,               │
+│                                    defender_for_endpoint, elastic, exabeam,  │
+│                                    google_secops, graylog, sentinel,         │
 │                                    sentinel_one, splunk                      │
 │ --strategy             <str>       Check only rules a run with this strategy │
 │                                    deploys (repeatable), on the tenants that │
@@ -29,7 +31,8 @@
 │                                    files deploy reads)                       │
 │ --file                 <str>       Check only this rule file, or this query  │
 │                                    file (.kql, .spl, .esql, .eql, .kuery,    │
-│                                    .lucene, .falco) offline (repeatable)     │
+│                                    .lucene, .falco, .yar, .yara, .yaral,     │
+│                                    .yl2) offline (repeatable)                │
 │ --uuid                 <str>       Check only the rule with this UUID        │
 │                                    (repeatable)                              │
 │ --strict                           Fail on warnings too                      │

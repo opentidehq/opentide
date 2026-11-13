@@ -4,7 +4,7 @@ error[deployment_state_uuid_mismatch]: <WS>/.opentide/states/deployment/1fe3b71b
 error[deployment_state_shape]: <WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object
   ╰─▶ .opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json
 
-error[deployment_state_platform]: <WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external ids
+error[deployment_state_platform]: <WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids
   ╰─▶ .opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json
 
 error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000beef'

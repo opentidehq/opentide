@@ -1,4 +1,4 @@
-  version  0.23.0
+  version  0.28.1
 platforms  Carbon Black Cloud               enabled · deploy, validate, query
            CrowdStrike Falcon               enabled · deploy, query
            Microsoft Defender for Endpoint  enabled · deploy, validate, query
@@ -8,4 +8,8 @@ platforms  Carbon Black Cloud               enabled · deploy, validate, query
            SentinelOne                      enabled · deploy, validate, query
            Splunk Enterprise Security       enabled · deploy, validate, query
            Sysdig Secure                    enabled · deploy
+           Bitdefender GravityZone          disabled · deploy
+           Exabeam New-Scale SIEM           disabled · deploy, validate, query
+           Google Security Operations       disabled · deploy, validate, query
+           Graylog                          disabled · deploy, validate, query
 ✓ 50 rules · 30 threats · 30 objectives · 0 load errors

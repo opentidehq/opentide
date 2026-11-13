@@ -11,6 +11,9 @@
 │ --debug                              Enable debug logging. Also              │
 │                                      OPENTIDE_DEBUG=1                        │
 │ --quiet                              Print only the outcome line and errors  │
+│ --verbose                            Also print notes, such as a missing     │
+│                                      optional field. --json always includes  │
+│                                      them                                    │
 │ --no-color                           Disable colour                          │
 │ --json                               Machine-readable output: one JSON       │
 │                                      object on stdout                        │

@@ -26,4 +26,4 @@ opentide --json lint --strict
 
 Apply each finding's `fix.edits`, run `opentide explain <code>` for a finding without one, and repeat until the exit code is `0`.
 
-For signals, methodology and data contracts, install the full authoring skill: `opentide setup skills --install opentide-objective`.
+For signals, methodology and data contracts, install the full authoring skill: `opentide setup skills --install opentide-objective --generic --yes`.

@@ -161,7 +161,10 @@ jobs:
       - name: The renderer snapshots are the oracle's
         run: |
           set -euo pipefail
-          python="$(echo target/golden/oracle-*/bin/python)"
+          # The ORACLE's own environment: a restored cache may hold another
+          # release's beside it (oracle-<version>-<wheel sha>).
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' tests/golden/ORACLE)"
+          python="$(echo target/golden/oracle-"${version}"-*/bin/python)"
           work="$(mktemp -d)"
           cargo xtask corpus faults --out "${work}/fault"
           mkdir "${work}/scratch"

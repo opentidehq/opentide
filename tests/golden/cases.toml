@@ -133,6 +133,12 @@ kind = "generated"
 argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
 about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
 
+[fixtures.fault-lint]
+kind = "generated"
+argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
+about = "`fault` with lint's recommended check off (`.opentide/configurations/lint.toml`). opentide 0.28.1's recommended check (#1028) builds the editor schemas from the workspace's configuration and crashes on the fault workspace's invalid configuration files (#1081); with it off, every other lint check runs on the fault workspace and compares. `lint/json/fault/recommended-crash` records the crash"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[recommended]\nenabled = false\n" }]
+
 [fixtures.setup-merge]
 kind = "copy"
 source = "tests/golden/fixtures/setup-merge"
@@ -1397,33 +1403,33 @@ env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 command = "lint"
 variant = "default"
 args = ["lint"]
-fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault-lint", "empty", "none"]
 
 [[case]]
 command = "lint"
 variant = "strict"
 args = ["lint", "--strict"]
-fixtures = ["tide-corpus", "vscode", "fault"]
+fixtures = ["tide-corpus", "vscode", "fault-lint"]
 
 # UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
 [[case]]
 command = "lint"
 variant = "sarif-fault"
 args = ["lint", "--format", "sarif", "--output", "opentide-reports/lint.sarif"]
-fixtures = ["fault"]
+fixtures = ["fault-lint"]
 
 [[case]]
 command = "lint"
 variant = "codequality-fault"
 args = ["lint", "--format", "codequality", "--output", "opentide-reports/lint.codequality.json"]
-fixtures = ["fault"]
+fixtures = ["fault-lint"]
 
 [[case]]
 command = "lint"
 variant = "ci-sink-github"
 args = ["lint"]
 modes = ["plain", "agent"]
-fixtures = ["fault"]
+fixtures = ["fault-lint"]
 env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
 
 [[case]]
@@ -1431,24 +1437,37 @@ command = "lint"
 variant = "ci-sink-azure"
 args = ["lint"]
 modes = ["plain"]
-fixtures = ["fault"]
+fixtures = ["fault-lint"]
 env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
 
 # opentide 0.28.1 (#1028, #1029): optional fields are notes. lint hides
 # them without --verbose (and suggests it), --strict does not fail on them,
 # the recommended check reports a rule without configurations or response,
-# and --quiet refuses --verbose. Definitions only until O2 records them.
+# and --quiet refuses --verbose.
 [[case]]
 command = "lint"
 variant = "verbose"
 args = ["lint", "--verbose"]
-fixtures = ["tide-corpus", "fault"]
+fixtures = ["tide-corpus", "fault-lint"]
 
 [[case]]
 command = "lint"
 variant = "check-recommended"
 args = ["lint", "--check", "recommended"]
-fixtures = ["tide-corpus", "fault"]
+fixtures = ["tide-corpus"]
+
+# opentide 0.28.1's recommended check crashes on the fault workspace's
+# invalid configuration files (#1081): the oracle's crash, recorded as
+# validate's splunk-advanced and legacy-text-id crashes are (no crash log
+# written, XDG_STATE_HOME), json mode alone. The other lint cases run on
+# `fault-lint`, with the check off.
+[[case]]
+command = "lint"
+variant = "recommended-crash"
+args = ["lint", "--check", "recommended"]
+modes = ["json"]
+fixtures = ["fault"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
 
 [[case]]
 command = "lint"
@@ -2319,8 +2338,10 @@ args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["none"]
 cassette = "skills/manifest"
 
-# Installing skills (UC-4.4d, #834): the starter skills ship with opentide, so
-# a fresh install reads only the catalogue (skills/manifest); --install of a
+# Installing skills (UC-4.4d, #834): the starter skills ship with opentide;
+# since opentide 0.28.1 (#1015) an install or a plan of them reads the
+# catalogue, then the tree and files of each starter skill it lists, so those
+# cases replay the stand-in repository (skills/catalogue-first); --install of a
 # remote skill reads the stand-in repository of tests/cassettes/skills/tenant.py
 # (skills/install, skills/broken); --plugin with Claude Code alone reads
 # nothing. A case without a cassette has the network refused.
@@ -2330,21 +2351,21 @@ command = "setup skills"
 variant = "fresh"
 args = ["setup", "skills", "--cursor", "--claude-code", "--github-copilot", "--name", "Detections", "--yes"]
 fixtures = ["none"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup skills"
 variant = "merge"
 args = ["setup", "skills", "--cursor", "--claude-code", "--generic", "--github-copilot", "--yes"]
 fixtures = ["skills-merge"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup skills"
 variant = "merge-plan"
 args = ["setup", "skills", "--cursor", "--claude-code", "--plan"]
 fixtures = ["skills-merge"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup skills"
@@ -2382,7 +2403,7 @@ cassette = "skills/broken"
 # opentide 0.28.1 (#1015): the catalogue lists detection-engineering, so the
 # starter skills install its copy; when a file of it cannot be downloaded,
 # the package's copy is written, or an installed copy (skills-merge) kept,
-# with a warning. Definitions only until O2 records them from 0.28.1.
+# with a warning.
 [[case]]
 command = "setup skills"
 variant = "catalogue-first"
@@ -2422,14 +2443,14 @@ command = "setup"
 variant = "skills"
 args = ["setup", "--skills", "generic", "--skills", "cursor", "--yes"]
 fixtures = ["none"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup"
 variant = "skills-plan"
 args = ["setup", "--skills", "claude-code", "--plan"]
 fixtures = ["skills-merge"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup"

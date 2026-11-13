@@ -4,6 +4,6 @@ error: Malformed object yaml · path: objects/rules/encoded-spray-rule-0023.yaml
 error: Malformed object yaml · path: objects/rules/lateral-injection-rule-0024.yaml · error: found character that cannot start any token at line 68, column 1 (while scanning for the next token)
 error: Malformed object yaml · path: objects/rules/rogue-relay-rule-0035.yaml · error: did not find expected ',' or ']' at line 59, column 1 (while parsing a flow sequence that starts at line 58, column 9)
 error: Missing identifier from model · file: <WS>/objects/rules/staged-implant-rule-0006.yaml
-✗ 47 errors in 47 files · 819 queries checked
+✗ 47 errors in 47 files · 888 queries checked
 → opentide explain ecs_type_mismatch · how to fix it
 → opentide validate query · check again

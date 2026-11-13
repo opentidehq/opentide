@@ -1,0 +1,15 @@
+# yara_unknown_module
+
+A YARA import names a module libyara does not ship.
+
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+## Example
+
+```text
+opentide validate query
+```
+
+## How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
