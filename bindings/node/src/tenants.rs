@@ -1181,10 +1181,18 @@ mod tests {
 
     #[test]
     fn the_platforms_and_what_each_can_do() {
-        assert_eq!(platforms().len(), 10);
+        assert_eq!(platforms().len(), 11);
         assert!(platforms().contains(&"sentinel_one".to_owned()));
         assert_eq!(
             capabilities("sysdig".into()),
+            Some(Capabilities {
+                deploy: true,
+                live_validation: false,
+                query: false,
+            })
+        );
+        assert_eq!(
+            capabilities("bitdefender".into()),
             Some(Capabilities {
                 deploy: true,
                 live_validation: false,

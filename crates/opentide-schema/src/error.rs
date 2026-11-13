@@ -253,6 +253,13 @@ mod tests {
     }
 
     #[test]
+    fn a_platform_constraint_is_reported_as_its_code() {
+        let error = at(ErrorKind::Constraint("bitdefender_target"));
+        assert_eq!(error.code(Surface::Object), "bitdefender_target");
+        assert_eq!(error.kind.pydantic_type(), Some("bitdefender_target"));
+    }
+
+    #[test]
     fn field_path_and_display() {
         let error = at(ErrorKind::Missing);
         assert_eq!(error.field_path(), ["examples", "0"]);
