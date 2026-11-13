@@ -35,6 +35,19 @@ pub fn main(argv: &[String]) -> i32 {
     opentide_cli::main(argv, VERSION)
 }
 
+/// [`main`], but with the version the command line reports supplied by the
+/// caller instead of [`VERSION`]: a host whose own version differs from the
+/// crate's (the Python and npm packages, whose version is the package's and
+/// is passed in at the call) runs the command line through this.
+///
+/// ```no_run
+/// let argv: Vec<String> = std::env::args().skip(1).collect();
+/// std::process::exit(opentide::cli::main_with_version(&argv, "1.2.3"));
+/// ```
+pub fn main_with_version(argv: &[String], version: &str) -> i32 {
+    opentide_cli::main(argv, version)
+}
+
 /// [`main`] as the whole process: runs `opentide` with `argv`, then exits
 /// with its status. The run leaves what it built (a workspace's index, a
 /// large document) to the exit to reclaim, which is faster than freeing it;

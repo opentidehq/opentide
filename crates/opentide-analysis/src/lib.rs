@@ -478,10 +478,16 @@ pub fn catalog_is_workspace() -> bool {
     opentide_highlight::tide_catalog_is_workspace()
 }
 
+/// The semantic token legend: the HighlightSpec capture names, in the order
+/// the semantic tokens' type indices refer to.
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
+pub fn legend() -> Vec<String> {
+    HighlightSpec::load().expect("spec").legend
+}
+
 pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
     let host = MemoryWorkspace {
         files: vec![("memory".into(), text.to_string())],
@@ -494,11 +500,10 @@ pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
             text: text.to_string(),
         },
     );
-    let spec = HighlightSpec::load().expect("spec");
     HighlightResult {
         language_id: language.as_str().to_string(),
         tokens: response.tokens,
-        legend: spec.legend,
+        legend: legend(),
     }
 }
 
