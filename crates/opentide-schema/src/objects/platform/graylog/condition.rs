@@ -558,16 +558,16 @@ mod tests {
     fn errors_name_what_the_oracle_names() {
         assert_eq!(error(""), "the condition is empty");
         assert_eq!(error("   "), "the condition is empty");
-        assert_eq!(error("count() >= 3 $x"), "unexpected '$x'");
+        assert_eq!(error("count() >= 3 $x"), "unexpected \"$x\"");
         assert_eq!(
             error("total() > 1"),
-            "'total' is not an aggregation function"
+            "\"total\" is not an aggregation function"
         );
-        assert_eq!(error("count > 1"), "expected (, got '>'");
+        assert_eq!(error("count > 1"), "expected (, got \">\"");
         assert_eq!(error("count() > "), "expected more, got None");
-        assert_eq!(error("count() ~ 1"), "unexpected '~ 1'");
-        assert_eq!(error("count() AND 1"), "'AND' is not a comparison");
-        assert_eq!(error("count() > x"), "'x' is not a number");
+        assert_eq!(error("count() ~ 1"), "unexpected \"~ 1\"");
+        assert_eq!(error("count() AND 1"), "\"AND\" is not a comparison");
+        assert_eq!(error("count() > x"), "\"x\" is not a number");
         assert_eq!(
             error("count(a, b) > 1"),
             "count takes no field or one field"
@@ -580,13 +580,13 @@ mod tests {
             error("percentile(a, 101) > 1"),
             "percentile is greater than 0 and at most 100"
         );
-        assert_eq!(error("percentile(a, x) > 1"), "'x' is not a number");
+        assert_eq!(error("percentile(a, x) > 1"), "\"x\" is not a number");
         assert_eq!(error("avg() > 1"), "avg takes one field");
         assert_eq!(error("avg(a, 1) > 1"), "avg takes one field");
-        assert_eq!(error("avg(() > 1"), "'(' is not a field name");
-        assert_eq!(error("count() > 1 count() > 2"), "unexpected 'count'");
+        assert_eq!(error("avg(() > 1"), "\"(\" is not a field name");
+        assert_eq!(error("count() > 1 count() > 2"), "unexpected \"count\"");
         assert_eq!(error("(count() > 1"), "expected ), got None");
-        assert_eq!(error("count() > 1 and count() > 2"), "unexpected 'and'");
+        assert_eq!(error("count() > 1 and count() > 2"), "unexpected \"and\"");
     }
 
     #[test]

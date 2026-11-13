@@ -240,7 +240,7 @@ fn an_unknown_alias_is_graylog_alias_unknown() {
     assert_eq!(code, "graylog_alias_unknown");
     assert_eq!(
         reason,
-        "tenant 'graylog-prod': notification alias(es) pager are not in the tenant's \
+        "tenant \"graylog-prod\": notification alias(es) pager are not in the tenant's \
          notification_ids table"
     );
     let rule = fixture("rule-graylog-aggregation-1.0.yaml")
@@ -588,7 +588,7 @@ fn a_dry_run_fails_on_an_alias_a_tenant_does_not_define() {
         entry["error"]
             .as_str()
             .unwrap()
-            .starts_with("tenant 'graylog-prod': notification alias(es) pager"),
+            .starts_with("tenant \"graylog-prod\": notification alias(es) pager"),
         "{entry}"
     );
     assert_eq!(entry["api_request"], serde_json::Value::Null);

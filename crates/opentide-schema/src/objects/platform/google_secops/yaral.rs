@@ -829,7 +829,7 @@ mod tests {
         );
         assert_eq!(
             found[2].message,
-            "type 'hopping' is not hop, tumbling or sliding"
+            "type \"hopping\" is not hop, tumbling or sliding"
         );
         assert_eq!(
             found[4].message,
@@ -873,11 +873,11 @@ mod tests {
         );
         assert_eq!(
             found[0].message,
-            "options.allow_zero_values is true or false, not 'yes'"
+            "options.allow_zero_values is true or false, not \"yes\""
         );
         assert_eq!(
             found[2].message,
-            "'other' is not an option: options takes allow_zero_values and suppression_window"
+            "\"other\" is not an option: options takes allow_zero_values and suppression_window"
         );
         assert_eq!(
             codes(&options_findings(&yaml("[1]"))),

@@ -351,7 +351,7 @@ mod tests {
         }}}});
         assert_eq!(
             found(&open)[0].message,
-            "the criteria catalogue lists no such field for target 'email'; GravityZone may \
+            "the criteria catalogue lists no such field for target \"email\"; GravityZone may \
              refuse it"
         );
     }

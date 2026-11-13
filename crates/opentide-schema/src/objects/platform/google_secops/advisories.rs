@@ -327,7 +327,7 @@ mod tests {
             }]
         );
         assert!(found[0].message().starts_with(
-            "Google SecOps rule name 'encoded_powershell' is also the rule name of rule(s) b"
+            "Google SecOps rule name \"encoded_powershell\" is also the rule name of rule(s) b"
         ));
         assert!(name_duplicates([("a", &a)], ["a"]).is_empty());
     }

@@ -1177,7 +1177,7 @@ fn a_crowdstrike_query_is_checked_coloured_and_named_cql() {
         (unknown.code.as_str(), unknown.line, unknown.column),
         ("cql_unknown_function", Some(25), Some(9))
     );
-    assert_eq!(unknown.help.as_deref(), Some("did you mean 'groupBy'?"));
+    assert_eq!(unknown.help.as_deref(), Some("did you mean \"groupBy\"?"));
     assert!(
         live.iter()
             .all(|item| item.code != "crowdstrike_unsupported"),

@@ -252,7 +252,7 @@ fn a_block_without_condition_is_not_assembled() {
     let error = assemble(&facts, document.root().unwrap()).unwrap_err();
     assert_eq!(
         error.to_string(),
-        "rule 'T': configurations.google_secops has no condition"
+        "rule \"T\": configurations.google_secops has no condition"
     );
 }
 

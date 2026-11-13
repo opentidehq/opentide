@@ -194,6 +194,7 @@ fn checked_block(block: &Node) -> Option<Node> {
         value: Value::Map(kept),
         start: block.start,
         end: block.end,
+        text: None,
     };
     let events = block.get("events").and_then(|events| events.as_str());
     events
