@@ -413,6 +413,11 @@ mod validate {
         // On the anchor's line, as the oracle's reader places an alias.
         let anchor = rule(U2, "B").lines().count();
         assert_eq!(aliased[0].yaml_line, Some(anchor));
+        // The aliased text, `&sig |`, as the oracle spans it.
+        assert_eq!(
+            (aliased[0].line, aliased[0].column, aliased[0].end_column),
+            (Some(anchor + 1), Some(14), Some(20))
+        );
         let collapsed = with_code(&validation, "bitdefender_severity_collapsed");
         assert_eq!(collapsed.len(), 2, "{collapsed:?}");
         assert!(collapsed.iter().all(|d| d.severity == Severity::Warning));
