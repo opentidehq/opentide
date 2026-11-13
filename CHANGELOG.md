@@ -247,6 +247,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - an object nested more than 128 levels deep (and at most 512) gets its query findings, where the editor showed none;
   - an unsaved object whose YAML does not load is checked as an object of the family its `schema:` line names, so it shows its `yaml_parse` error as it does in a workspace, where it showed nothing.
 - **Status promotion names promoted text it cannot read back in the Rust loader's words** ([#790](https://github.com/opentidehq/opentide/issues/790)). When `opentide deploy` promotes a rule's statuses and the rewritten file does not parse (a target such as `LIVE}` written into a flow mapping), the run still fails with `<file>: cannot promote its statuses: ...`, but the reason is one line and its place (`misplaced bracket` and `in "<unicode string>", line 13, column 27`) where PyYAML quoted the line with a caret under it.
+- **`opentide tui` shows `sharing.toml`'s problems on its Configuration tab** ([#790](https://github.com/opentidehq/opentide/issues/790)). The file lists what `opentide validate --check sharing-config` reports, so a `sharing.toml` that is not valid TOML, not UTF-8 text, or names an unknown TLP shows an error there. A parse error says where (`line 4, column 14`), never what the line holds.
 
 ### Fixed
 
