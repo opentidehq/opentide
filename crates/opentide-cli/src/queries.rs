@@ -64,7 +64,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -106,7 +106,26 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
     ),
+    (
+        "graylog_",
+        "Graylog search query",
+        "https://go2docs.graylog.org/current/making_sense_of_your_log_data/writing_search_queries.html",
+    ),
 ];
+
+/// Whether `opentide lint` reports an engine warning of `code`: a query
+/// language's (one with a reference), an Elastic advisory, Sysdig's list
+/// self-reference, or an undeclared dataset. 0.28.1 added Graylog's dialect:
+/// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
+/// editor alone.
+pub fn lint_owned(code: &str) -> bool {
+    ENGINE_REFERENCES
+        .iter()
+        .any(|(prefix, _, _)| code.starts_with(prefix))
+        || ELASTIC_ADVISORIES.contains(&code)
+        || code == "sysdig_list_self_reference"
+        || DECLARED_DATASET_CODES.contains(&code)
+}
 
 /// Words in an engine message that make its `suggestion` a replacement name.
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
@@ -391,13 +410,7 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
                 continue;
             }
-            let lint_owned = ENGINE_REFERENCES
-                .iter()
-                .any(|(prefix, _, _)| item.code.starts_with(prefix))
-                || ELASTIC_ADVISORIES.contains(&item.code.as_str())
-                || item.code == "sysdig_list_self_reference"
-                || DECLARED_DATASET_CODES.contains(&item.code.as_str());
-            if !lint_owned {
+            if !lint_owned(&item.code) {
                 continue;
             }
             let severity = if item.severity == EngineSeverity::Warning {
@@ -641,6 +654,26 @@ mod tests {
         // Past the text: one character, where the line is.
         assert_eq!(span_end(9, 2, 10, 1, text), (9, 3));
         assert_eq!(span_end(1, 1, 12, 1, text), (12, 1));
+    }
+
+    #[test]
+    fn lint_keeps_the_graylog_dialects_warnings() {
+        // 0.28.1 (#1015): lint dropped them for want of a reference.
+        for code in [
+            "graylog_analyzed_field",
+            "graylog_regex_operator",
+            "graylog_regex_quote",
+            "graylog_double_backslash",
+        ] {
+            assert!(lint_owned(code), "{code}");
+        }
+        assert!(lint_owned("sysdig_list_self_reference"));
+        assert!(!lint_owned("vocab_unknown"));
+        // The two tables of references are one list.
+        assert_eq!(
+            ENGINE_REFERENCES,
+            crate::render::codeframe::ENGINE_REFERENCES
+        );
     }
 
     #[test]

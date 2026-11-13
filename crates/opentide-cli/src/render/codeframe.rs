@@ -54,7 +54,7 @@ pub struct Frames {
 pub const LINK_SCHEMES: [&str; 4] = ["file", "vscode", "cursor", "none"];
 
 /// The query languages' reference pages, by the code prefix of their findings.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -95,6 +95,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
         "cql_",
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
+    ),
+    (
+        "graylog_",
+        "Graylog search query",
+        "https://go2docs.graylog.org/current/making_sense_of_your_log_data/writing_search_queries.html",
     ),
 ];
 
@@ -935,6 +940,12 @@ mod tests {
                 "CQL",
                 "https://library.humio.com/crowdstrike-query-language/"
             ))
+        );
+        // 0.28.1: the Graylog dialect's warnings have their reference, so
+        // `lint` keeps them (`graylog_analyzed_field`, `graylog_regex_operator`).
+        assert_eq!(
+            engine_reference("graylog_analyzed_field").map(|(language, _)| language),
+            Some("Graylog search query")
         );
         assert_eq!(engine_reference("vocab_unknown"), None);
         assert_eq!(position("ab\ncd", 4), (2, 2));
