@@ -538,7 +538,8 @@ pub fn parse_rust_commands(source: &str) -> BTreeMap<String, Coverage> {
     let body = &body[..body
         .find("\n}")
         .unwrap_or_else(|| panic!("RUST_COMMANDS: unterminated"))];
-    let key = regex::Regex::new(r#"\(((?:\s*"[^"]*"\s*,?)+)\)\s*:\s*RustCommand\("#).unwrap();
+    // `()` is the root's path.
+    let key = regex::Regex::new(r#"\(((?:\s*"[^"]*"\s*,?)*)\)\s*:\s*RustCommand\("#).unwrap();
     let word = regex::Regex::new(r#""([^"]*)""#).unwrap();
     let words = |text: &str| -> Vec<String> {
         word.captures_iter(text)
@@ -617,6 +618,10 @@ pub fn covers(command: &str, argv: &[String]) -> bool {
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    // `--help` is the command tree's, whatever the run requires (#841).
+    if options.iter().any(|arg| arg == "--help") {
+        return true;
+    }
     let named = || {
         let mut named = Vec::new();
         for (index, token) in options.iter().enumerate() {
@@ -801,8 +806,9 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     let exit_code = run(&argv, &env, &host, &mut out, &mut err);
     if refusal.exists() {
         // Python runs alone only where `RUST_COMMANDS` does not cover the run
-        // (a bare `generate`): a refusal of a run it covers is a failure, as
-        // `cargo xtask golden check --engine compare` counts it.
+        // (none since UC-6.0 ported the last, a bare `generate`): a refusal of a
+        // run it covers is a failure, as `cargo xtask golden check --engine compare`
+        // counts it.
         let command = case["command"].as_str().unwrap();
         if covers(command, &argv) {
             return vec![format!(
@@ -982,9 +988,9 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
     problems
 }
 
-/// Replays every recorded case of `commands` on the fixtures this module lays
-/// out, but `--help` (the Python launcher's, until UC-3.8) and `validate query
-/// --live` (the tenants' check, Python's until UC-4.1); the problems, and
+/// Replays every recorded case of `commands` (`_root` for the root's) on the
+/// fixtures this module lays out, `--help` included (clap's help, held to
+/// the oracle's by content: the ledger's `help` entries); the problems, and
 /// how many cases ran. A ledger entry of these commands that applied to
 /// nothing is a problem when `complete`.
 pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize) {
@@ -1013,8 +1019,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                         "{command}/{mode}/{fixture}/{}",
                         dir.file_name().unwrap().to_string_lossy()
                     );
-                    let case = std::fs::read_to_string(dir.join("case.toml")).unwrap();
-                    if case.contains("\"--help\"") || !id.contains(&filter) {
+                    if !id.contains(&filter) {
                         continue;
                     }
                     problems.extend(replay(&id, &dir, &ledger, &mut usage));
@@ -1025,17 +1030,18 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     }
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
-            // `--help` cases are not replayed here (the Python launcher's help):
-            // `cargo xtask golden check --engine compare` applies their entries.
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
-            }) || entry.case.ends_with("/help")
+            })
                 // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
                 || entry.case.starts_with("cassette:");
-            if commands.contains(&entry.command.replace(' ', ".").as_str())
-                && !elsewhere
-                && !usage.is_used(index)
-            {
+            // The root's cases are recorded under `_root`.
+            let dir = if entry.command.is_empty() {
+                "_root".to_owned()
+            } else {
+                entry.command.replace(' ', ".")
+            };
+            if commands.contains(&dir.as_str()) && !elsewhere && !usage.is_used(index) {
                 problems.push(format!(
                     "APPROVED_DIFFS.toml entry {} ({} {}) applied to no case: it is stale",
                     index + 1,
@@ -1043,6 +1049,50 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                     entry.case
                 ));
             }
+        }
+    }
+    (problems, ran)
+}
+
+/// Replays the `variant` case (`help`) of every command path in every mode
+/// and fixture; the problems, and how many cases ran. A ledger entry for
+/// those cases that applied to nothing is a problem.
+pub fn replay_variant(variant: &str) -> (Vec<String>, usize) {
+    let cases = repo().join("tests/golden/cases");
+    let ledger = ledger();
+    let mut usage = Usage::default();
+    let mut problems = Vec::new();
+    let mut ran = 0;
+    let mut commands: Vec<PathBuf> = std::fs::read_dir(&cases)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    commands.sort();
+    for command in commands {
+        for mode in ["human", "plain", "json", "agent"] {
+            for fixture in FIXTURES {
+                let dir = command.join(mode).join(fixture).join(variant);
+                if !dir.is_dir() {
+                    continue;
+                }
+                let id = format!(
+                    "{}/{mode}/{fixture}/{variant}",
+                    command.file_name().unwrap().to_string_lossy()
+                );
+                problems.extend(replay(&id, &dir, &ledger, &mut usage));
+                ran += 1;
+            }
+        }
+    }
+    let suffix = format!("/{variant}");
+    for (index, entry) in ledger.entries.iter().enumerate() {
+        if entry.case.ends_with(&suffix) && !usage.is_used(index) {
+            problems.push(format!(
+                "APPROVED_DIFFS.toml entry {} ({} {}) applied to no case: it is stale",
+                index + 1,
+                entry.command,
+                entry.case
+            ));
         }
     }
     (problems, ran)

@@ -470,11 +470,45 @@ pub fn opentide_version(text: &str, version: &str) -> String {
     out
 }
 
-/// [`opentide_version`] over a run's streams and the UTF-8 files it wrote.
+/// [`opentide_version`] for a line padded to a width: a line that holds
+/// the version and ends in spaces keeps the width it was printed at, its
+/// trailing spaces lengthened or shortened by what the token's length takes
+/// from the version's (`0.23.0` against `0.23.1.dev7+g1f90` in the home
+/// screen's padded title row, where the screen's width is the same on both
+/// sides). Every other line is [`opentide_version`]'s.
+pub fn opentide_version_padded(text: &str, version: &str) -> String {
+    if version.is_empty() || !text.contains(version) {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let (body, ending) = match line.strip_suffix('\n') {
+            Some(body) => (body, "\n"),
+            None => (line, ""),
+        };
+        let replaced = opentide_version(body, version);
+        let count = |text: &str| text.chars().count();
+        let trailing = count(body) - count(body.trim_end_matches(' '));
+        if replaced == body || trailing == 0 {
+            out.push_str(&replaced);
+        } else {
+            let printed = count(body);
+            let kept = replaced.trim_end_matches(' ');
+            let width = printed.max(count(kept) + 1);
+            out.push_str(kept);
+            out.push_str(&" ".repeat(width - count(kept)));
+        }
+        out.push_str(ending);
+    }
+    out
+}
+
+/// [`opentide_version_padded`] over a run's streams and the UTF-8 files it
+/// wrote.
 pub fn opentide_version_in_run(run: &mut Run, version: &str) {
     let replace = |bytes: &mut Vec<u8>| {
         if let Ok(text) = std::str::from_utf8(bytes) {
-            *bytes = opentide_version(text, version).into_bytes();
+            *bytes = opentide_version_padded(text, version).into_bytes();
         }
     };
     replace(&mut run.stdout);
@@ -509,6 +543,30 @@ pub fn utc_date(time: std::time::SystemTime) -> String {
 mod tests {
     use super::*;
     use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn a_padded_line_keeps_its_width_whatever_the_version() {
+        // The home screen's title row: the version, then the padding.
+        assert_eq!(
+            opentide_version_padded("pill  0.23.0\u{1b}[0m              \nnext\n", "0.23.0"),
+            "pill  <OPENTIDE_VERSION>\u{1b}[0m  \nnext\n"
+        );
+        // Both printed 30 columns wide: the same line after normalisation.
+        let wide = |version: &str| format!("ab {version}{}", " ".repeat(30 - 3 - version.len()));
+        assert_eq!(
+            opentide_version_padded(&wide("0.23.0"), "0.23.0"),
+            opentide_version_padded(
+                &wide("0.23.1.dev1203+gfb19974d1"),
+                "0.23.1.dev1203+gfb19974d1"
+            )
+        );
+        // A line without trailing spaces, or without the version, is as before.
+        assert_eq!(
+            opentide_version_padded("opentide 0.23.0\n", "0.23.0"),
+            "opentide <OPENTIDE_VERSION>\n"
+        );
+        assert_eq!(opentide_version_padded("x   \n", "0.23.0"), "x   \n");
+    }
 
     fn volatile() -> Volatile {
         Volatile {

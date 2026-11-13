@@ -175,8 +175,14 @@ class RustCommand:
         )
 
     def covers(self, args: Sequence[str]) -> bool:
-        """Whether the Rust implementation runs the command with *args*."""
+        """Whether the Rust implementation runs the command with *args*.
+
+        ``--help`` is the command tree's, whatever the run's other options:
+        the Rust command line prints it for every command it has (#841).
+        """
         options = args[: args.index("--")] if "--" in args else args
+        if "--help" in options:
+            return True
         if any(flag in options for flag in self.refuses):
             return False
         if self.plugin_run(options):
@@ -264,6 +270,22 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
     "splunk",
 )
 
+#: The platforms whose ``query`` runs on Rust (*platforms* of ``query``'s
+#: entry): :data:`RUST_QUERY_PLATFORMS`, and Sysdig, which has no runner and
+#: is refused as Python refuses it (``sysdig has no query runner``, UC-6.0d,
+#: #841).
+RUST_QUERY_ROUTED: tuple[str, ...] = (
+    "carbon_black_cloud",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "elastic",
+    "harfanglab",
+    "sentinel",
+    "sentinel_one",
+    "splunk",
+    "sysdig",
+)
+
 #: Commands that host others and apply ``OPENTIDE_ENGINE`` to what they run
 #: rather than to themselves: ``serve`` runs each request on the engine its
 #: command selects (#822), and the MCP server's read tools do the same. They
@@ -274,11 +296,16 @@ RUST_QUERY_PLATFORMS: tuple[str, ...] = (
 #: start`` (UC-3.6b, #947) is one too: an editor's session has one server on
 #: stdio, so ``compare`` runs the Python host and ``rust`` the Rust one. So is
 #: ``tui``: a full-screen UI cannot run twice to be compared, so ``compare``
-#: opens the Python one; under ``rust`` its refusals and its UI (on ratatui,
-#: UC-3.6d, #951) run on Rust.
+#: opens the Rust one (:data:`UNCOMPARED_RUST`), the default since its
+#: Configuration tab was ported (UC-6.0d); its refusals and its UI (on
+#: ratatui, UC-3.6d, #951) run on Rust.
 ENGINE_HOSTS: frozenset[tuple[str, ...]] = frozenset(
     {("serve",), ("mcp", "start"), ("lsp", "start"), ("tui",)}
 )
+
+#: Hosts that ``compare`` runs on Rust alone: ``tui``, whose Rust UI is the
+#: default (UC-6.0d, #841) and which cannot run twice to be compared.
+UNCOMPARED_RUST: frozenset[tuple[str, ...]] = frozenset({("tui",)})
 
 #: The Rust command line compiled into ``opentide._native`` (:mod:`opentide.cli.rust`).
 #: ``rust`` runs it in this process (:func:`opentide.cli.rust.run_in_process`);
@@ -296,21 +323,19 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: UC-3.5 (#827); offline ``validate query`` with UC-3.5b (#927): ``--live`` stays
 #: Python's; ``migrate vocab-scope`` and ``doctor --offline`` with UC-3.5c (#928): a
 #: doctor that reaches PyPI and the proxy stays Python's; ``mcp start`` with UC-3.7
-#: (#829): the Rust server, which hands the tools and resources it has no
-#: implementation of to the Python server's handlers in its own process
-#: (``opentide.mcp_server.bridge``); ``setup skills discover`` and ``setup skills
-#: show`` with UC-4.1 (#831): the opentidehq/skills catalogue through the connectors'
-#: HTTP client; ``setup`` (scripted runs and ``--plan``) and its ``env``, ``hooks``,
-#: ``mcp``, ``platforms`` and ``repo`` with UC-3.6 (#828); ``setup vscode``,
-#: ``setup --vscode-setup`` and the wizards at a terminal with UC-3.6c (#951);
-#: ``setup skills`` (the install), ``setup --skills`` and ``--plugin`` with
-#: UC-4.4d (#834): the skill trees through the connectors' HTTP client.
+#: (#829): the Rust server, which answers every tool and resource itself since
+#: UC-6.0c (#841), and is the default (``engine_defaults``); ``setup skills
+#: discover`` and ``setup skills show`` with UC-4.1 (#831): the opentidehq/skills
+#: catalogue through the connectors' HTTP client; ``setup`` (scripted runs and
+#: ``--plan``) and its ``env``, ``hooks``, ``mcp``, ``platforms`` and ``repo`` with
+#: UC-3.6 (#828); ``setup vscode``, ``setup --vscode-setup`` and the wizards at a
+#: terminal with UC-3.6c (#951); ``setup skills`` (the install), ``setup --skills``
+#: and ``--plugin`` with UC-4.4d (#834): the skill trees through the connectors' HTTP client.
 #: ``new threat|objective|rule`` and ``generate`` with phases named
-#: (``generate schemas templates``) with UC-3.5d (#933): its *requires* are
-#: the phase words, so a bare ``generate`` (the full pipeline) stays Python's.
-#: ``serve`` with UC-3.8 (#830): the Rust host, which runs each command with a
-#: Rust implementation itself and hands every other run to this package's
-#: runner in its own process (``opentide.cli.services.serve_bridge``).
+#: (``generate schemas templates``) with UC-3.5d (#933); a bare ``generate``,
+#: the full pipeline, with UC-6.0 (#841).
+#: ``serve`` with UC-3.8 (#830): the Rust host, which runs every request on
+#: Rust in its own process, whatever engine the request names (UC-6.0d, #841).
 #: ``lsp start`` with UC-3.6b (#947): the language server hosted by the Rust
 #: command line, and ``tui``'s refusals (``usage_tui_needs_tty``); ``tui``'s
 #: terminal UI with UC-3.6d (#951), on ratatui.
@@ -337,7 +362,19 @@ RUST_CLI: tuple[str, ...] = (sys.executable, "-m", "opentide.cli.rust")
 #: plugin's platform run on Rust, the one engine with the plugin hook
 #: (*plugins*, UC-4.5, #835), under the default engine too (UC-4.5b:
 #: :func:`plugin_default`).
+#: The root, ``()``, and the bare groups (``generate extract``, ``lsp``,
+#: ``mcp``, ``migrate``, ``new``, ``rules``) with UC-6.0b (#841): ``--version``,
+#: a mistyped command or root option, a ``--repo`` that is not a folder, the
+#: help a bare group prints, shell completion and the home screen; and
+#: ``--help`` on every path here (:meth:`RustCommand.covers`).
 RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
+    (): RustCommand(launch=RUST_CLI),
+    ("generate", "extract"): RustCommand(launch=RUST_CLI),
+    ("lsp",): RustCommand(launch=RUST_CLI),
+    ("mcp",): RustCommand(launch=RUST_CLI),
+    ("migrate",): RustCommand(launch=RUST_CLI),
+    ("new",): RustCommand(launch=RUST_CLI),
+    ("rules",): RustCommand(launch=RUST_CLI),
     ("commands",): RustCommand(launch=RUST_CLI),
     ("explain",): RustCommand(launch=RUST_CLI),
     ("info",): RustCommand(launch=RUST_CLI),
@@ -375,9 +412,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("setup", "repo"): RustCommand(launch=RUST_CLI),
     ("setup", "vscode"): RustCommand(launch=RUST_CLI),
     ("mcp", "start"): RustCommand(launch=RUST_CLI),
-    ("generate",): RustCommand(
-        launch=RUST_CLI, requires=("schemas", "templates", "vocabs", "snippets")
-    ),
+    ("generate",): RustCommand(launch=RUST_CLI),
     ("new", "threat"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "objective"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
     ("new", "rule"): RustCommand(launch=RUST_CLI, rules=("fresh-uuids",)),
@@ -385,7 +420,7 @@ RUST_COMMANDS: dict[tuple[str, ...], RustCommand] = {
     ("lsp", "start"): RustCommand(launch=RUST_CLI),
     ("tui",): RustCommand(launch=RUST_CLI),
     ("query",): RustCommand(
-        launch=RUST_CLI, side_effects=True, platforms=RUST_QUERY_PLATFORMS, plugins=True
+        launch=RUST_CLI, side_effects=True, platforms=RUST_QUERY_ROUTED, plugins=True
     ),
     ("share",): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
     ("share", "push"): RustCommand(launch=RUST_CLI, side_effects=True, offline=("--dry-run",)),
@@ -489,6 +524,9 @@ def dispatch(cli_ctx: CliContext, click_ctx: _click.Context) -> None:
         return
     words = command_words(click_ctx.command, args)
     engine = selected(words)
+    if engine == COMPARE and words in UNCOMPARED_RUST:
+        # A full-screen UI cannot run twice to be compared: the Rust one opens.
+        engine = RUST
     if engine == PYTHON:
         if not plugin_default(words, args):
             return

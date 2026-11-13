@@ -10,12 +10,15 @@
 //!   dry runs only), each the command line itself run in this process, its
 //!   output printed by the CLI's renderers.
 //! - [`app`]: the UI's state, its keys and its drawing.
+//! - [`configuration`]: the Configuration tab's content, every credential
+//!   redacted.
 //! - [`text`], [`detail`], [`panes`]: what it lays out.
 //!
 //! [`commands::tui`](crate::commands::tui) decides whether it can open.
 
 pub mod actions;
 pub mod app;
+pub mod configuration;
 pub mod detail;
 pub mod model;
 pub mod panes;

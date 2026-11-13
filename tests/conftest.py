@@ -139,11 +139,16 @@ def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     ``CliRunner`` runs the root callback in the test's own context, so the
     ``CliContext`` it activates (``--debug`` included) would otherwise outlive
-    the test and reach code that reads it, such as the crash handler.
+    the test and reach code that reads it, such as the crash handler. So would
+    the environment :func:`opentide.cli.main` records at launch: a later
+    ``CliRunner`` run that hands a command to Rust (``tui``, whose default is
+    Rust) would start it from that test's environment, not its own.
     """
+    import opentide.cli as cli_package
     from opentide.cli.context import _cli_context
     from opentide.cli.ui.mode import AGENT_VARIABLES, reset_mode
 
+    monkeypatch.setattr(cli_package, "_launch_environment", None)
     for name in (*AGENT_VARIABLES, *_OUTPUT_MODE_ENV):
         monkeypatch.delenv(name, raising=False)
     reset_mode()

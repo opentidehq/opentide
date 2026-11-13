@@ -222,42 +222,17 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
     })
 }
 
-/// The fixtures whose workspace enables a platform: `doctor` checks each
-/// enabled platform's Python modules there (`platform_sdk`). A fixture that
-/// enables one and is missing here is compared under the Node runner, and
-/// its `doctor` runs fail there: add it.
-pub const PLATFORM_FIXTURES: [&str; 3] = ["fault", "heavy-small", "tide-corpus"];
-
 /// Why the Node runner leaves `case` out, if it does: a run the PyPI CLI
 /// still answers in Python although its command has a Rust implementation,
 /// which the npm bin (the Rust command line alone, with no Python) answers
 /// differently. `golden check --runner node` counts these cases and says why;
 /// `--engine compare` compares them.
 ///
-/// - `--help`: the PyPI launcher prints Typer's help (Rich panels), the npm
-///   bin the Rust command line's (clap) (#977).
-/// - `doctor` on a workspace that enables a platform: for each one,
-///   `platform_sdk` reports which Python modules the platform's live calls
-///   import, which the Python launcher reads and hands to the Rust command
-///   line (`OPENTIDE_PYTHON_MODULES`); the npm bin has no Python
-///   environment, and reports the check not run. `doctor` on a workspace
-///   without one checks nothing in Python beyond `python_version`, which the
-///   ledger approves for every candidate, and is compared.
-pub fn node_leaves_out(case: &crate::golden::case::Case) -> Option<&'static str> {
-    let mut options = case.argv.iter().skip(1).take_while(|arg| *arg != "--");
-    if options.any(|arg| arg == "--help" || arg == "-h") {
-        return Some(
-            "`--help`: the PyPI CLI prints Typer's help (Rich panels), the npm bin the Rust \
-             command line's (clap)",
-        );
-    }
-    if case.command == "doctor" && PLATFORM_FIXTURES.contains(&case.fixture.as_str()) {
-        return Some(
-            "`doctor` on a workspace that enables a platform: platform_sdk reports which Python \
-             modules each platform imports, read from the Python that started the PyPI CLI; \
-             the npm bin has no Python environment",
-        );
-    }
+/// Nothing is left out since UC-6.0b and UC-6.0d (#841, #977): `--help` is
+/// the Rust command line's under both runners, and `doctor` checks nothing in
+/// Python, so the npm bin answers both as the PyPI CLI does and every case is
+/// compared. The hook stays for the next run that answers in Python.
+pub fn node_leaves_out(_case: &crate::golden::case::Case) -> Option<&'static str> {
     None
 }
 
@@ -398,7 +373,8 @@ pub fn rust_commands(repo: &Path) -> Result<BTreeMap<String, Coverage>> {
 
 /// Whether the Rust implementation covers a case of `command` run with
 /// `argv`: its command is in `table`, and the arguments before `--` carry
-/// one of the flags it requires, if it requires any, and none it refuses.
+/// `--help` (the command tree's, whatever else they carry: #841), or one of
+/// the flags it requires, if it requires any, and none it refuses.
 pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]) -> bool {
     let Some(coverage) = table.get(command) else {
         return false;
@@ -407,6 +383,9 @@ pub fn covers(table: &BTreeMap<String, Coverage>, command: &str, argv: &[String]
         .iter()
         .position(|arg| arg == "--")
         .map_or(argv, |end| &argv[..end]);
+    if options.iter().any(|arg| arg == "--help") {
+        return true;
+    }
     if coverage.refuses.iter().any(|flag| options.contains(flag)) {
         return false;
     }
@@ -670,19 +649,23 @@ changelog = "**c**"
         };
         let left_out =
             |command: &str, argv: &[&str]| super::node_leaves_out(&on("none", command, argv));
-        assert!(left_out("validate", &["opentide", "validate", "--help"]).is_some());
-        assert!(left_out("info", &["opentide", "-h", "info"]).is_some());
-        assert!(left_out("doctor", &["opentide", "doctor", "--help"]).is_some());
-        // doctor's platform_sdk checks read Python's modules only where a
-        // platform is enabled; elsewhere the npm bin's doctor is compared.
+        // `--help` is the Rust command line's under both runners (#841).
+        assert_eq!(
+            left_out("validate", &["opentide", "validate", "--help"]),
+            None
+        );
+        assert_eq!(left_out("info", &["opentide", "-h", "info"]), None);
+        assert_eq!(left_out("doctor", &["opentide", "doctor", "--help"]), None);
+        // doctor checks nothing in Python (UC-6.0d): compared on every fixture.
         let doctor = ["opentide", "doctor", "--offline"];
-        for fixture in super::PLATFORM_FIXTURES {
-            assert!(
-                super::node_leaves_out(&on(fixture, "doctor", &doctor)).is_some(),
-                "{fixture}"
-            );
-        }
-        for fixture in ["none", "empty", "vscode"] {
+        for fixture in [
+            "none",
+            "empty",
+            "vscode",
+            "fault",
+            "heavy-small",
+            "tide-corpus",
+        ] {
             assert_eq!(
                 super::node_leaves_out(&on(fixture, "doctor", &doctor)),
                 None,
@@ -690,40 +673,6 @@ changelog = "**c**"
             );
         }
         assert_eq!(left_out("validate", &["opentide", "validate"]), None);
-        // After `--`, `--help` is an argument, not the option.
-        assert_eq!(
-            left_out("new rule", &["opentide", "new", "rule", "--", "--help"]),
-            None
-        );
-    }
-
-    /// `PLATFORM_FIXTURES` names exactly the fixtures on which the oracle's
-    /// `doctor` reports a `platform_sdk` check: the recordings say which.
-    #[test]
-    fn the_platform_fixtures_are_those_doctor_checks_platform_modules_on() {
-        let plain = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/golden/cases/doctor/plain");
-        let mut seen = 0;
-        for fixture in std::fs::read_dir(&plain).unwrap() {
-            let fixture = fixture.unwrap();
-            let name = fixture.file_name().to_string_lossy().into_owned();
-            for variant in std::fs::read_dir(fixture.path()).unwrap() {
-                let variant = variant.unwrap();
-                if variant.file_name() == "help" {
-                    continue;
-                }
-                let stdout = std::fs::read(variant.path().join("stdout")).unwrap();
-                let checks_modules = String::from_utf8_lossy(&stdout).contains("· platform_sdk");
-                assert_eq!(
-                    checks_modules,
-                    super::PLATFORM_FIXTURES.contains(&name.as_str()),
-                    "doctor on {name} ({:?})",
-                    variant.file_name()
-                );
-                seen += 1;
-            }
-        }
-        assert!(seen >= 6, "{seen} doctor recordings");
     }
 
     #[test]
@@ -898,6 +847,28 @@ changelog = "**c**"
             &argv(&["opentide", "deploy", "--platform", "elastic", "--all"])
         ));
         assert!(!super::covers(&table, "lint", &argv(&["opentide", "lint"])));
+        // `--help` is the command tree's, whatever the run requires (#841);
+        // after `--` it is an argument.
+        assert!(super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--help"])
+        ));
+        assert!(super::covers(
+            &table,
+            "deploy",
+            &argv(&["opentide", "deploy", "--all", "--help"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "query",
+            &argv(&["opentide", "query", "--", "--help"])
+        ));
+        assert!(!super::covers(
+            &table,
+            "lint",
+            &argv(&["opentide", "lint", "--help"])
+        ));
     }
 
     #[test]

@@ -14,6 +14,7 @@ use std::path::Path;
 
 use super::files::RepoOptions;
 use crate::mode::Mode;
+use crate::render::brand::pill;
 use crate::render::outcome::Console;
 use crate::render::table::columns;
 use crate::render::text::{Colour, Style, Text};
@@ -48,6 +49,19 @@ pub trait Prompter {
         checked: &[usize],
         required: bool,
     ) -> Answer<Vec<usize>>;
+    /// [`Prompter::checkbox`], with `hint` in place of the prompt's own
+    /// key help (`ask_checkbox`'s `instruction`).
+    fn checkbox_hinted(
+        &mut self,
+        message: &str,
+        choices: &[&str],
+        checked: &[usize],
+        required: bool,
+        hint: &str,
+    ) -> Answer<Vec<usize>> {
+        let _ = hint;
+        self.checkbox(message, choices, checked, required)
+    }
 }
 
 // ---------------------------------------------------------------- the choices
@@ -90,7 +104,7 @@ pub const SKILLS: [(&str, &str); 4] = [
 ];
 
 /// Said under the logo.
-pub const TAGLINE: &str = "Spec-driven development for agentic detection engineering";
+pub use crate::render::brand::TAGLINE;
 /// What the wizard does, under the tagline.
 pub const WELCOME_LINE: &str =
     "A few questions, then a detection repository with CI, schemas and editor support.";
@@ -474,75 +488,17 @@ const LOGO: [&str; 20] = [
 /// Terminal columns the logo needs, with its two-column indent.
 const LOGO_MIN_WIDTH: usize = 82;
 
-/// A pixel's 256-colour code: Reflex Blue (`#001489`) as the terminal's
-/// 256 colours give it, and white.
-fn pixel(cell: char) -> Option<u8> {
-    match cell {
-        'B' => Some(18),
-        'W' => Some(231),
-        _ => None,
-    }
-}
-
 /// The logo's rows, two pixel rows to a line in upper half-blocks
-/// (`brand.render`); without colour, the blue drawn in the terminal's own
-/// foreground and the rest left blank.
+/// (`brand.render`), two columns in.
 fn logo(colour: Colour) -> Vec<Text> {
-    LOGO.chunks(2)
-        .map(|pair| {
-            let (top, bottom) = (pair[0], pair.get(1).copied().unwrap_or(""));
+    crate::render::brand::grid(&LOGO, colour)
+        .into_iter()
+        .map(|row| {
             let mut line = Text::plain("  ");
-            for (index, upper) in top.chars().enumerate() {
-                let lower = bottom.chars().nth(index).unwrap_or('.');
-                if colour != Colour::Full {
-                    let cell = match (upper == 'B', lower == 'B') {
-                        (true, true) => "█",
-                        (true, false) => "▀",
-                        (false, true) => "▄",
-                        (false, false) => " ",
-                    };
-                    line.push_str(cell);
-                    continue;
-                }
-                match (pixel(upper), pixel(lower)) {
-                    (None, None) => {
-                        line.push_str(" ");
-                    }
-                    (None, Some(lower)) => {
-                        line.append("▄", &Style::new(&format!("color({lower})")));
-                    }
-                    (Some(upper), None) => {
-                        line.append("▀", &Style::new(&format!("color({upper})")));
-                    }
-                    (Some(upper), Some(lower)) if upper == lower => {
-                        line.append("█", &Style::new(&format!("color({upper})")));
-                    }
-                    (Some(upper), Some(lower)) => {
-                        line.append(
-                            "▀",
-                            &Style::new(&format!("color({upper}) on_color({lower})")),
-                        );
-                    }
-                }
-            }
+            line.append_text(&row);
             line
         })
         .collect()
-}
-
-/// `▐ ≋ opentide ▌`, the one-line mark (`brand.pill`).
-fn pill(colour: Colour) -> Text {
-    let mut text = Text::default();
-    if colour == Colour::Full {
-        text.append("▐", &Style::new("color(18)"));
-        text.append(" ≋ opentide ", &Style::new("bold color(231) on_color(18)"));
-        text.append("▌", &Style::new("color(18)"));
-    } else {
-        text.push_str("▐");
-        text.append(" ≋ opentide ", &Style::new("bold reverse"));
-        text.push_str("▌");
-    }
-    text
 }
 
 /// The wizard's first screen (`welcome`): the logo (the pill on a narrow
@@ -672,10 +628,38 @@ impl Prompter for Inquire {
         checked: &[usize],
         required: bool,
     ) -> Answer<Vec<usize>> {
+        self.multi_select(message, choices, checked, required, None)
+    }
+
+    fn checkbox_hinted(
+        &mut self,
+        message: &str,
+        choices: &[&str],
+        checked: &[usize],
+        required: bool,
+        hint: &str,
+    ) -> Answer<Vec<usize>> {
+        self.multi_select(message, choices, checked, required, Some(hint))
+    }
+}
+
+impl Inquire {
+    /// A checkbox question, with `hint` as its help line when given.
+    fn multi_select(
+        &self,
+        message: &str,
+        choices: &[&str],
+        checked: &[usize],
+        required: bool,
+        hint: Option<&str>,
+    ) -> Answer<Vec<usize>> {
         let mut prompt = inquire::MultiSelect::new(message, choices.to_vec())
             .with_default(checked)
             .without_filtering()
             .with_render_config(self.config);
+        if let Some(hint) = hint {
+            prompt = prompt.with_help_message(hint);
+        }
         if required {
             prompt =
                 prompt.with_validator(|picked: &[inquire::list_option::ListOption<&&str>]| {

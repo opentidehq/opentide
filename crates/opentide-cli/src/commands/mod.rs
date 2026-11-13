@@ -8,6 +8,7 @@
 //! before the outcome line. `app::Run::emit_report` writes it in the run's
 //! mode.
 
+pub mod completion;
 pub mod cve;
 pub mod deploy;
 pub mod deploy_promote;
@@ -19,6 +20,7 @@ pub mod explain;
 pub mod extract;
 pub mod findings;
 pub mod generate;
+pub mod home;
 pub mod info;
 pub mod lint;
 pub mod lsp;
@@ -73,6 +75,13 @@ pub struct Report {
     pub body: Vec<Block>,
     /// The checklist's steps, printed on stderr before anything else.
     pub steps: Vec<crate::render::progress::Step>,
+    /// The checklist's total when each finished step writes its
+    /// `OPENTIDE_PROGRESS=json` event (`Checklist._finished`, in every mode):
+    /// `generate`, with its phases named or none.
+    pub step_events: Option<usize>,
+    /// Log lines the run writes once its checklist rows are printed, where
+    /// the oracle logs them after its last step.
+    pub after_steps: Vec<AfterSteps>,
     /// The whole of stdout in the text modes, instead of the body and the
     /// outcome (a `--format` report printed without `--output`).
     pub whole_stdout: Option<String>,
@@ -97,6 +106,44 @@ pub struct Report {
     /// and `help:` notes under it, as for a parse error.
     pub usage_notes: bool,
 }
+
+/// A log line written after the checklist's rows ([`Report::after_steps`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AfterSteps {
+    /// `report_nested_object_files`: the object files in subfolders of an
+    /// object folder, skipped (#584).
+    NestedObjectFiles {
+        /// The warning's text.
+        detail: String,
+        /// The files, as shown.
+        files: Vec<String>,
+    },
+}
+
+impl AfterSteps {
+    /// Logs the line.
+    pub fn log(&self) {
+        match self {
+            AfterSteps::NestedObjectFiles { detail, files } => {
+                // structlog prints the list as Python's `repr` writes it.
+                let listed: Vec<String> = files
+                    .iter()
+                    .map(|file| opentide_schema::configuration::repr::quote(file))
+                    .collect();
+                tracing::warn!(
+                    detail = detail.as_str(),
+                    count = files.len(),
+                    files = format!("[{}]", listed.join(", ")).as_str(),
+                    issue = NESTED_OBJECTS_ISSUE,
+                    "nested_object_file"
+                );
+            }
+        }
+    }
+}
+
+/// Where the nested-file warning points (`NESTED_OBJECTS_ISSUE`).
+pub const NESTED_OBJECTS_ISSUE: &str = "https://github.com/opentidehq/opentide/issues/584";
 
 /// One part of a body.
 #[derive(Clone, Debug)]
@@ -187,6 +234,8 @@ impl Report {
             outcome_kind: None,
             body: Vec::new(),
             steps: Vec::new(),
+            step_events: None,
+            after_steps: Vec::new(),
             whole_stdout: None,
             body_only: false,
             stderr_first: String::new(),
@@ -206,6 +255,8 @@ impl Report {
             outcome_kind: None,
             body: Vec::new(),
             steps: Vec::new(),
+            step_events: None,
+            after_steps: Vec::new(),
             whole_stdout: None,
             body_only: false,
             stderr_first: String::new(),

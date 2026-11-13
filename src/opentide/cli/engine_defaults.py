@@ -12,7 +12,8 @@ The rollout of a command's Rust implementation, one command at a time:
 A command flips only when it is in :data:`opentide.cli.engines.RUST_COMMANDS`
 (the CLI), or, for the SDK and MCP surfaces that return its result
 (``run_validation``, ``validation_report``), when the library has its Rust
-implementation. No command has flipped yet.
+implementation. ``tui`` is the first to flip (UC-6.0d, #841), and ``mcp start``
+flipped with UC-6.0c (#841): the Rust server answers every tool and resource.
 
 One kind of run goes to Rust whatever the defaults say: a ``query``,
 ``validate query`` or ``deploy`` on an installed platform plugin's platform
@@ -35,7 +36,12 @@ RUST = "rust"
 
 #: A command path's default engine when ``OPENTIDE_ENGINE`` is unset or blank;
 #: a path that is not here runs Python. Only ``python`` or ``rust``.
-DEFAULT_ENGINES: dict[tuple[str, ...], str] = {}
+#: ``tui`` opens the Rust UI (ratatui) since its Configuration tab was ported
+#: (UC-6.0d, #841); ``OPENTIDE_ENGINE=python`` opens the Textual one until the
+#: Python implementation is removed (UC-6.2).
+#: ``mcp start`` runs the Rust server, which answers every tool and resource
+#: (UC-6.0c, #841).
+DEFAULT_ENGINES: dict[tuple[str, ...], str] = {("tui",): RUST, ("mcp", "start"): RUST}
 
 #: The built-in platforms (``opentide.plugins.BUILTIN_PLATFORMS``, kept here
 #: so the console script imports nothing more): any other ``--platform`` may

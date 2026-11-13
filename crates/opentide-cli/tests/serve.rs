@@ -273,7 +273,7 @@ fn shutdown_then_exit_ends_the_loop() {
 
 #[test]
 fn protocol_commands_are_refused_as_usage_errors() {
-    let runner = HostRunner::new(Vec::new(), PathBuf::from("."), "0.23.0", None);
+    let runner = HostRunner::new(Vec::new(), PathBuf::from("."), "0.23.0");
     let mut client = Client::new(Arc::new(runner)).start();
     for argv in [
         "[\"serve\"]",
@@ -499,13 +499,7 @@ fn host(ws: &Path) -> Client {
             ws.join(".state").display().to_string(),
         ),
     ];
-    Client::new(Arc::new(HostRunner::new(
-        base,
-        ws.to_path_buf(),
-        "0.23.0",
-        None,
-    )))
-    .start()
+    Client::new(Arc::new(HostRunner::new(base, ws.to_path_buf(), "0.23.0"))).start()
 }
 
 #[test]
@@ -594,7 +588,7 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
     let _session = session();
     opentide_cli::embed::clear_workspaces();
     let (_root, ws) = workspace("tide-corpus");
-    let runner = HostRunner::new(Vec::new(), ws.clone(), "0.23.0", None);
+    let runner = HostRunner::new(Vec::new(), ws.clone(), "0.23.0");
     let request = RunRequest {
         argv: vec!["info".into()],
         ..RunRequest::default()
@@ -632,7 +626,7 @@ fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
             Ok(())
         });
         let base = vec![("HOME".to_owned(), ws.display().to_string())];
-        let runner = HostRunner::new(base, ws.clone(), "0.23.0", None);
+        let runner = HostRunner::new(base, ws.clone(), "0.23.0");
         let server = Server::new(write, Arc::new(runner), "0.23.0");
         // The reading thread takes every line before the first run starts.
         opentide_cli::serve::read_lines(input.as_bytes(), &server);

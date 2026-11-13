@@ -12,15 +12,14 @@
 //!
 //! What the Rust command line reports differently, and why:
 //!
-//! - `python_version` is skipped: this command line does not run on Python.
-//! - `platform_sdk` reads which Python modules import from the launcher that
-//!   started it ([`PYTHON_MODULES_ENV`]); without one, it is skipped.
+//! - It has no `python_version` and no `platform_sdk` check (UC-6.0d, #841,
+//!   #977): it does not run on Python, and the platforms are its own
+//!   connectors, which import no Python SDK.
 //! - `analysis_engine` passes: the engine is compiled into this program.
 //! - `lsp_catalog` reports the catalog compiled in (the field catalog is not
 //!   generated from Rust yet, UC-2.6), and still warns about a committed one
 //!   from another opentide.
 
-use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
@@ -48,22 +47,6 @@ const COMMAND: &str = "doctor";
 
 /// `failure.code` when at least one check failed.
 pub const CHECKS_FAILED: &str = "doctor_checks_failed";
-
-/// The variable a launcher sets to tell `platform_sdk` which Python modules
-/// import in its environment: a JSON object mapping each platform to the
-/// modules its live calls import, in order, each a `[module, status]` pair
-/// whose status is `null` when it imports, else why not
-/// (`ModuleNotFoundError: No module named 'cbc_sdk'`). A platform it does not
-/// name needs no module. The Python launcher (`opentide.cli.rust`) sets it
-/// for `doctor`: the modules are the Python package's to name, so this
-/// program lists none of its own.
-pub const PYTHON_MODULES_ENV: &str = "OPENTIDE_PYTHON_MODULES";
-
-/// [`PYTHON_MODULES_ENV`] read: each platform's `(module, why it does not
-/// import)` pairs, in the order the launcher checked them.
-type PlatformModules = BTreeMap<String, Vec<(String, Option<String>)>>;
-
-const REINSTALL_COMMAND: &str = "pip install --force-reinstall opentide";
 
 /// The platforms, in the order the checklist names them (`SYSTEM_KEYS`).
 const SYSTEM_KEYS: [&str; 9] = [
@@ -184,11 +167,6 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     let loaded = config::load(&OsFs, &roots);
     let mut checks: Vec<Check> = Vec::new();
     checks.push(Check::new(
-        "python_version",
-        "skip",
-        "Not checked: opentide's Rust command line does not run on Python",
-    ));
-    checks.push(Check::new(
         "opentide_version",
         "pass",
         format!("opentide {}", cx.version),
@@ -215,10 +193,8 @@ pub fn run(offline: bool, cx: &Context<'_>) -> Report {
     checks.push(doctor.lsp_catalog());
     if configuration_failed {
         checks.push(skipped("platforms_enabled"));
-        checks.push(skipped("platform_sdk"));
     } else {
         checks.push(doctor.platforms());
-        checks.extend(doctor.platform_sdks());
     }
     checks.push(Check::new(
         "analysis_engine",
@@ -755,62 +731,6 @@ impl Doctor<'_> {
             "pass",
             format!("Enabled: {}", enabled.join(", ")),
         )
-    }
-
-    fn platform_sdks(&self) -> Vec<Check> {
-        let platforms: Option<PlatformModules> = self
-            .cx
-            .env
-            .get(PYTHON_MODULES_ENV)
-            .and_then(|text| serde_json::from_str(text).ok());
-        let mut checks = Vec::new();
-        for platform in self.enabled_platforms() {
-            let Some(platforms) = &platforms else {
-                checks.push(
-                    Check::new(
-                        "platform_sdk",
-                        "skip",
-                        format!("{platform}: not checked: no Python environment started opentide"),
-                    )
-                    .subject(platform),
-                );
-                continue;
-            };
-            let needed = platforms.get(platform).map_or(&[][..], Vec::as_slice);
-            let failure = needed
-                .iter()
-                .find_map(|(module, reason)| Some((module, reason.as_ref()?)));
-            if let Some((module, reason)) = failure {
-                checks.push(
-                    Check::new(
-                        "platform_sdk",
-                        "fail",
-                        format!("{platform}: cannot import {module} ({reason})"),
-                    )
-                    .fix(REINSTALL_COMMAND)
-                    .subject(platform),
-                );
-            } else {
-                let names = if needed.is_empty() {
-                    "no SDK needed".to_owned()
-                } else {
-                    needed
-                        .iter()
-                        .map(|(module, _)| module.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                };
-                checks.push(
-                    Check::new(
-                        "platform_sdk",
-                        "pass",
-                        format!("{platform}: {names} import"),
-                    )
-                    .subject(platform),
-                );
-            }
-        }
-        checks
     }
 
     fn credentials(&self) -> Vec<Check> {
@@ -1611,15 +1531,13 @@ mod tests {
         assert_eq!(report.outcome.failure.unwrap().code, CHECKS_FAILED);
         let codes: Vec<&str> = found.iter().map(|(code, ..)| code.as_str()).collect();
         assert_eq!(
-            codes[..4],
-            [
-                "python_version",
-                "opentide_version",
-                "opentide_latest",
-                "workspace"
-            ]
+            codes[..3],
+            ["opentide_version", "opentide_latest", "workspace"]
         );
         assert!(codes.contains(&"mcp_config"));
+        // Neither Python check is run (UC-6.0d, #841).
+        assert!(!codes.contains(&"python_version"));
+        assert!(!codes.contains(&"platform_sdk"));
     }
 
     #[test]
@@ -1632,7 +1550,7 @@ mod tests {
             "[platform]\nenabled = true\n\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\napi_key = \"$ELASTIC_KEY\"\nurl = \"https://example\"\n",
         )
         .unwrap();
-        let env = Env::from_pairs([(PYTHON_MODULES_ENV, r#"{"elastic": [["requests", null]]}"#)]);
+        let env = Env::from_pairs(Vec::<(String, String)>::new());
         let report = run(true, &context(&env, dir.path()));
         let found = checks(&report);
         let get = |code: &str| {
@@ -1648,7 +1566,7 @@ mod tests {
             [("pass", "1 configuration file loads")]
         );
         assert_eq!(get("platforms_enabled"), [("pass", "Enabled: elastic")]);
-        assert_eq!(get("platform_sdk"), [("pass", "elastic: requests import")]);
+        assert!(get("platform_sdk").is_empty());
         assert_eq!(
             get("credentials"),
             [("warn", "elastic/prod: 1 of 1 variables unset: ELASTIC_KEY")]
@@ -1662,65 +1580,6 @@ mod tests {
         assert_eq!(get("schemas_fresh")[0].0, "warn");
         assert_eq!(report.outcome.status, "issues");
         assert_eq!(report.outcome.exit_code, 0);
-    }
-
-    /// `platform_sdk` reports what the launcher found for each enabled
-    /// platform: the first module that does not import fails it, the modules
-    /// that do are named, a platform the launcher names no module for needs
-    /// none, and without a launcher every platform is skipped.
-    #[test]
-    fn platform_sdk_reports_the_launchers_modules() {
-        let dir = tempfile::tempdir().unwrap();
-        let config = dir.path().join(".opentide/configurations/platforms");
-        std::fs::create_dir_all(&config).unwrap();
-        for platform in ["elastic", "sentinel", "splunk"] {
-            std::fs::write(
-                config.join(format!("{platform}.toml")),
-                "[platform]\nenabled = true\n",
-            )
-            .unwrap();
-        }
-        let sdk = |env: &Env| {
-            checks(&run(true, &context(env, dir.path())))
-                .into_iter()
-                .filter(|(code, ..)| code == "platform_sdk")
-                .map(|(_, status, message)| (status, message))
-                .collect::<Vec<_>>()
-        };
-        let modules = r#"{
-            "sentinel": [["a.b", null], ["c", "ImportError: no c"], ["d", "ImportError: no d"]],
-            "splunk": [["s.client", null], ["t", null]]
-        }"#;
-        let pairs = |rows: &[(&str, &str)]| {
-            rows.iter()
-                .map(|(status, message)| ((*status).to_owned(), (*message).to_owned()))
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            sdk(&Env::from_pairs([(PYTHON_MODULES_ENV, modules)])),
-            pairs(&[
-                ("fail", "sentinel: cannot import c (ImportError: no c)"),
-                ("pass", "splunk: s.client, t import"),
-                ("pass", "elastic: no SDK needed import"),
-            ])
-        );
-        assert_eq!(
-            sdk(&Env::from_pairs(Vec::<(String, String)>::new())),
-            pairs(&[
-                (
-                    "skip",
-                    "sentinel: not checked: no Python environment started opentide"
-                ),
-                (
-                    "skip",
-                    "splunk: not checked: no Python environment started opentide"
-                ),
-                (
-                    "skip",
-                    "elastic: not checked: no Python environment started opentide"
-                ),
-            ])
-        );
     }
 
     #[test]

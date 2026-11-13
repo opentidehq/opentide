@@ -42,6 +42,9 @@ doc = false
 
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }
+# `--show-completion` and `--install-completion` (#841): each shell's script
+# from the command tree, as clap's own crate writes it.
+clap_complete = "4.6"
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
 comfy-table = { version = "7.2", default-features = false }
 ctrlc = "3.4"

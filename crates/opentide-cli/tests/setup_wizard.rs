@@ -60,7 +60,6 @@ fn spawn_with(cwd: &Path, args: &[&str], env: &[(String, String)]) -> Session {
     for name in [
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",
-        "OPENTIDE_MCP_SERVER",
         "NO_PROXY",
         "no_proxy",
     ] {
@@ -350,4 +349,56 @@ fn the_skills_wizard_fails_without_the_catalogue() {
         "{printed}"
     );
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+/// A workspace that enables Sentinel and Splunk.
+fn enabled_workspace(dir: &Path) {
+    let platforms = dir.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    for platform in ["sentinel", "splunk"] {
+        std::fs::write(
+            platforms.join(format!("{platform}.toml")),
+            "[platform]\nenabled = true\n",
+        )
+        .unwrap();
+    }
+    std::fs::create_dir_all(dir.join("objects")).unwrap();
+}
+
+/// `new rule` at a terminal (UC-6.0d): the name and the platform blocks
+/// are asked for, as `_ask_name` and `_ask_platforms` ask, and the rule has
+/// the blocks picked.
+#[test]
+fn new_asks_for_the_name_and_the_platform_blocks() {
+    let dir = tempfile::tempdir().unwrap();
+    enabled_workspace(dir.path());
+    let mut session = spawn(dir.path(), &["new", "rule"]);
+    answer(&mut session, "Rule name", &["Served Rule", ENTER]);
+    session.expect("Platform blocks");
+    session.expect("Splunk Enterprise Security");
+    session.expect("(space selects, enter for none, arrows move)");
+    for key in [DOWN, SPACE, ENTER] {
+        session.send(key);
+    }
+    let (printed, code) = finish(session, "opentide validate --file");
+    assert_eq!(code, 0, "{printed}");
+    let rules = dir.path().join("objects/rules");
+    let written: Vec<_> = std::fs::read_dir(&rules).unwrap().collect();
+    assert_eq!(written.len(), 1, "{printed}");
+    let text = std::fs::read_to_string(written[0].as_ref().unwrap().path()).unwrap();
+    assert!(text.contains("name: Served Rule"), "{text}");
+    assert!(text.contains("  splunk:"), "{text}");
+    assert!(!text.contains("  sentinel:"), "{text}");
+}
+
+/// Ctrl-C at `new`'s question is an interruption: exit 130, nothing written.
+#[test]
+fn ctrl_c_at_news_question_is_an_interruption() {
+    let dir = tempfile::tempdir().unwrap();
+    enabled_workspace(dir.path());
+    let mut session = spawn(dir.path(), &["new", "threat"]);
+    answer(&mut session, "Threat name", &[CTRL_C]);
+    let (printed, code) = finish(session, "interrupted");
+    assert_eq!(code, 130, "{printed}");
+    assert!(!dir.path().join("objects/threats").exists(), "{printed}");
 }

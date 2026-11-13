@@ -6,11 +6,12 @@
 //! ([`crate::queries`]). The engine's errors are the run's, as `validate`'s
 //! queries check reports them; its warnings and notes are `lint`'s.
 //!
-//! `--live` on a platform whose tenants cannot check a query (CrowdStrike,
-//! HarfangLab, Sysdig) answers `supported: false` here ([`live`], UC-4.2c,
-//! #832); a `--live` run that sends queries to tenants stays on the Python
-//! CLI, refused as `engine_not_ported` ([`LIVE_NOT_PORTED`]), which
-//! `OPENTIDE_ENGINE=compare` hands to Python.
+//! `--live` is the command line's (`App::validate_query_live`): its usage
+//! errors ([`live_usage`]), then a platform whose tenants cannot check a
+//! query (CrowdStrike, HarfangLab, Sysdig) answers `supported: false`
+//! ([`unsupported`], UC-4.2c, #832), and the others check on their tenants
+//! ([`super::validate_live`], UC-4.6, #979). A platform plugin's live check
+//! is [`plugin_live`]'s (UC-4.5, #835).
 
 use std::path::{Path, PathBuf};
 use std::sync::PoisonError;
@@ -31,11 +32,6 @@ use crate::render::outcome::OutcomeKind;
 
 /// The command's name in the envelope.
 pub const COMMAND: &str = "validate query";
-
-/// What a run with `--live` answers: the tenant check is Python's until
-/// UC-4.1.
-pub const LIVE_NOT_PORTED: &str = "opentide validate query with --live has no Rust \
-     implementation yet: unset OPENTIDE_ENGINE, or set it to python or compare.";
 
 /// The platforms the engine checks offline, each with the languages it
 /// parses for it (`OFFLINE_QUERY_LANGUAGES`).
@@ -123,16 +119,11 @@ pub struct Context<'a> {
 /// nor [`CHECK_TIMEOUT_ENV`] sets it (`CHECK_TIMEOUT`).
 pub const CHECK_TIMEOUT_SECONDS: f64 = 120.0;
 
-/// `validate query --live` on a platform plugin (UC-4.5, #835): the
-/// refusals every `--live` run makes, then the plugin's live check.
-fn plugin_live(args: &Args, platform: &str, cx: &Context<'_>) -> Report {
-    let refusal = live(args, cx.env);
-    if refusal
-        .outcome
-        .failure
-        .as_ref()
-        .is_none_or(|failure| failure.code != code::ENGINE_NOT_PORTED)
-    {
+/// `validate query --live` on a platform plugin (UC-4.5, #835): the usage
+/// errors every `--live` run checks first ([`live_usage`]), then the
+/// plugin's live check.
+pub fn plugin_live(args: &Args, platform: &str, cx: &Context<'_>) -> Report {
+    if let Some(refusal) = live_usage(args, cx.env) {
         return refusal;
     }
     let seconds = args
@@ -271,17 +262,6 @@ pub fn refuse(args: &Args) -> Option<Report> {
 /// their tenants (`validate_live`).
 pub const LIVE_RUST_PLATFORMS: [&str; 3] = ["crowdstrike", "harfanglab", "sysdig"];
 
-/// `validate query --live` (`validate_query_cmd`'s `--live` branch, then
-/// `_validate_query_platform`): the usage errors, then a platform whose
-/// tenants check no query answers `supported: false`. A run that sends
-/// queries to tenants is refused as `engine_not_ported`.
-pub fn live(args: &Args, env: &Env) -> Report {
-    if let Some(report) = live_usage(args, env) {
-        return report;
-    }
-    unsupported(args).unwrap_or_else(live_not_ported)
-}
-
 /// The answer of a platform whose tenants check no query (`supported:
 /// false`), or `None` for any other `--platform`.
 pub fn unsupported(args: &Args) -> Option<Report> {
@@ -388,13 +368,6 @@ pub fn live_without_platform() -> Vec<(String, Json)> {
         ),
         ("_failure_argument".to_owned(), Json::str("--platform")),
     ]
-}
-
-/// The refusal of a `--live` run: Python's (`engine_not_ported`).
-pub fn live_not_ported() -> Report {
-    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, LIVE_NOT_PORTED);
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
 }
 
 /// One checked query: the rule or query file it is in, as shown and on disk.
@@ -623,22 +596,14 @@ fn findings_outcome(
     (clean, None)
 }
 
-/// `opentide validate query`, offline. `--live` is refused before this runs.
+/// `opentide validate query`, offline. A `--live` run never reaches it: the
+/// command line runs it (`App::validate_query_live`, or [`plugin_live`] on
+/// a platform plugin).
 #[expect(
     clippy::too_many_lines,
     reason = "the oracle's steps in order (validate_query_offline), read top to bottom"
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
-    if args.live {
-        if let Some(platform) = args
-            .platform
-            .as_deref()
-            .filter(|platform| crate::plugins::is_plugin(platform))
-        {
-            return plugin_live(args, platform, cx);
-        }
-        return live(args, cx.env);
-    }
     if let Some(report) = refuse(args) {
         return report;
     }
@@ -1213,14 +1178,17 @@ mod tests {
         assert!(refuse(&Args::default()).is_none());
     }
 
+    /// A plugin's live check refuses a usage error first, as every `--live`
+    /// run does, before any plugin is called.
     #[test]
-    fn a_live_run_is_handed_back() {
-        let report = run(
+    fn a_plugin_live_run_refuses_a_usage_error_first() {
+        let report = plugin_live(
             &Args {
                 live: true,
-                strategies: vec!["PREVIEW".into()],
+                strict: true,
                 ..Args::default()
             },
+            "acme_plugin",
             &Context {
                 repo: None,
                 env: &Env::default(),
@@ -1231,8 +1199,8 @@ mod tests {
             },
         );
         let failure = report.outcome.failure.unwrap();
-        assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
-        assert!(failure.message.contains("has no Rust implementation yet"));
+        assert_eq!(failure.code, code::USAGE_ERROR);
+        assert_eq!(failure.argument.as_deref(), Some("--strict"));
         assert_eq!(report.outcome.exit_code, 2);
     }
 

@@ -42,14 +42,17 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home / "opentide" / "compare"
 
 
-#: A command line with no Rust implementation: a bare ``generate``, the full
-#: pipeline (``setup --plugin``, the last ``setup`` run on Python, moved to Rust
-#: with UC-4.4d, and ``share targets`` with UC-4.4b, both #834).
-UNPORTED = ("generate",)
-UNPORTED_MESSAGE = (
-    "opentide generate without schemas or templates or vocabs or snippets "
-    "has no Rust implementation yet"
-)
+#: A command line with no Rust implementation. Every command has one since
+#: the full pipeline, a bare ``generate``, was ported (UC-6.0, #841), so the
+#: tests that use it take ``info`` out of the dispatch table (:func:`unported`).
+UNPORTED = ("info",)
+UNPORTED_MESSAGE = "opentide info has no Rust implementation yet"
+
+
+@pytest.fixture
+def unported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """:data:`UNPORTED` without its Rust implementation, for this test."""
+    monkeypatch.delitem(engines.RUST_COMMANDS, UNPORTED)
 
 
 def fake(mode: str) -> RustCommand:
@@ -74,7 +77,9 @@ def test_the_engine_is_python_unless_set() -> None:
     assert engines.requested({"OPENTIDE_ENGINE": "compare"}) == "compare"
 
 
-def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_engine_is_read_per_process(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, unported: None
+) -> None:
     """Read when the command runs, not when opentide is imported."""
     args = ["--json", "--repo", str(workspace), *UNPORTED]
     assert invoke(args, "rust")[0] == 2
@@ -82,12 +87,14 @@ def test_the_engine_is_read_per_process(workspace: Path, monkeypatch: pytest.Mon
     assert invoke(args, None)[0] != 2
 
 
-def test_rust_on_a_command_without_rust_is_engine_not_ported(workspace: Path) -> None:
+def test_rust_on_a_command_without_rust_is_engine_not_ported(
+    workspace: Path, unported: None
+) -> None:
     code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     doc = document(stdout)
     assert doc["exit_code"] == 2
-    assert doc["command"] == "generate"
+    assert doc["command"] == "info"
     assert doc["failure"]["code"] == "engine_not_ported"
     assert doc["failure"]["argument"] == "OPENTIDE_ENGINE"
     message = doc["failure"]["message"]
@@ -103,7 +110,7 @@ def test_rust_on_a_subcommand_names_its_path(workspace: Path) -> None:
     assert document(stdout)["command"] == "validate query"
 
 
-def test_rust_without_json_is_one_error_line(workspace: Path) -> None:
+def test_rust_without_json_is_one_error_line(workspace: Path, unported: None) -> None:
     code, stdout, stderr = invoke(["--no-color", "--repo", str(workspace), *UNPORTED], "rust")
     assert code == 2
     assert stdout == ""
@@ -120,7 +127,9 @@ def test_an_unknown_engine_is_a_usage_error_with_a_suggestion(workspace: Path) -
 
 
 @pytest.mark.parametrize("engine", [None, "", "python", "compare"])
-def test_python_runs_where_rust_does_not_exist(workspace: Path, engine: str | None) -> None:
+def test_python_runs_where_rust_does_not_exist(
+    workspace: Path, engine: str | None, unported: None
+) -> None:
     """``compare`` on a command with no Rust implementation runs Python alone."""
     code, stdout, _ = invoke(["--json", "--repo", str(workspace), *UNPORTED], engine)
     assert code == 0
@@ -154,33 +163,31 @@ def test_a_rust_command_that_requires_a_flag_covers_only_runs_with_it() -> None:
     assert doctor.covers(["doctor"])
 
 
-def test_generate_is_rust_only_with_a_phase_named() -> None:
-    """``generate <phase>`` runs on Rust; a bare ``generate`` (the full pipeline) stays Python's."""
+def test_help_is_covered_on_every_path_whatever_the_run_requires() -> None:
+    """``--help`` is the command tree's, printed by the Rust command line (UC-6.0b, #841)."""
+    command = RustCommand(launch=("x",), requires=("--dry-run",), refuses=("--plan",))
+    assert command.covers(["deploy", "--help"])
+    assert command.covers(["deploy", "--plan", "x", "--help"])
+    # After ``--`` it is an argument, not the option.
+    assert not command.covers(["deploy", "--", "--help"])
+    assert engines.RUST_COMMANDS[("query",)].covers(["query", "--help"])
+    # The root and the bare groups are the Rust command line's too.
+    groups = [(), ("generate", "extract"), ("lsp",), ("mcp",), ("migrate",), ("new",), ("rules",)]
+    for path in groups:
+        assert engines.RUST_COMMANDS[path].covers([*path])
+
+
+def test_generate_is_rust_with_or_without_a_phase_named() -> None:
+    """``generate <phase>`` and a bare ``generate`` (the full pipeline, UC-6.0) run on Rust."""
     generate = engines.RUST_COMMANDS[("generate",)]
-    assert generate.requires == ("schemas", "templates", "vocabs", "snippets")
+    assert generate.requires == ()
     assert generate.covers(["generate", "schemas"])
     assert generate.covers(["generate", "templates", "vocabs"])
     assert generate.covers(["generate", "snippets", "--json"])
-    assert not generate.covers(["generate"])
-    assert not generate.covers(["generate", "--help"])
-    # After ``--`` it is an argument, not a phase.
-    assert not generate.covers(["generate", "--", "schemas"])
-    # The named subcommands have their own entries, without requires.
+    assert generate.covers(["generate"])
+    assert generate.covers(["generate", "--", "schemas"])
     assert engines.RUST_COMMANDS[("generate", "docs")].requires == ()
-
-
-def test_a_bare_generate_stays_python(workspace: Path) -> None:
-    """``OPENTIDE_ENGINE=rust`` refuses a bare ``generate`` by name: it is not ported."""
-    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "generate"], "rust")
-    assert code == 2
-    doc = document(stdout)
-    assert doc["command"] == "generate"
-    assert doc["failure"]["code"] == "engine_not_ported"
-    assert (
-        "opentide generate without schemas or templates or vocabs or snippets "
-        "has no Rust implementation yet" in doc["failure"]["message"]
-    )
-    # Unset, Python runs it: no refusal.
+    # Unset, Python still runs it: no default has flipped.
     assert engines.selected(("generate",), {}) == engines.PYTHON
 
 
@@ -200,7 +207,8 @@ def test_a_rust_command_that_refuses_a_flag_covers_only_runs_without_it() -> Non
 def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() -> None:
     """``query`` runs on Rust where every ``--platform`` it names has a Rust connector."""
     query = engines.RUST_COMMANDS[("query",)]
-    assert query.platforms == engines.RUST_QUERY_PLATFORMS
+    assert query.platforms == engines.RUST_QUERY_ROUTED
+    assert (*engines.RUST_QUERY_PLATFORMS, "sysdig") == engines.RUST_QUERY_ROUTED
     assert query.side_effects
     for platform in ("crowdstrike", "defender_for_endpoint", "elastic", "harfanglab"):
         assert query.covers(["query", "--platform", platform, "x"])
@@ -208,10 +216,12 @@ def test_a_command_that_reaches_tenants_is_routed_by_the_platforms_it_names() ->
     # The SDK platforms (UC-4.3, #833).
     for platform in ("sentinel", "splunk", "carbon_black_cloud"):
         assert query.covers(["query", "--platform", platform, "x"])
-    assert not query.covers(["query", "--platform", "sysdig", "x"])
-    assert query.uncovered("query", ["--platform", "sysdig"]) == "query on sysdig"
+    # Sysdig has no runner: the Rust command line refuses it as Python does.
+    assert query.covers(["query", "--platform", "sysdig", "x"])
+    assert not query.covers(["query", "--platform", "acme", "x"])
+    assert query.uncovered("query", ["--platform", "acme"]) == "query on acme"
     # Every platform it names counts; none named is the workspace's to say.
-    assert not query.covers(["query", "--platform", "elastic", "--platform", "sysdig"])
+    assert not query.covers(["query", "--platform", "elastic", "--platform", "acme"])
     assert query.covers(["query", "--platform", "elastic", "--platform", "splunk"])
     assert not query.covers(["query", "x"])
     assert query.uncovered("query", ["x"]) == "query without --platform"
@@ -276,14 +286,17 @@ def test_rust_refuses_validate_query_live_and_compare_runs_python_alone(
     assert document(stdout)["failure"] == document(python_stdout)["failure"]
 
 
-def test_rust_refuses_a_query_on_a_platform_without_a_connector(workspace: Path) -> None:
-    """``query --platform sysdig`` has no Rust query runner: refused, never half-run."""
+def test_rust_refuses_a_query_on_sysdig_as_python_does(workspace: Path) -> None:
+    """``query --platform sysdig``: no query runner, a usage error on ``--platform`` (UC-6.0d)."""
     args = ["--json", "--repo", str(workspace), "query", "--platform", "sysdig", "T"]
     code, stdout, _ = invoke(args, "rust")
+    python_code, python_stdout, _ = invoke(args, "python")
     doc = document(stdout)
-    assert code == 2
-    assert doc["failure"]["code"] == "engine_not_ported"
-    assert "opentide query on sysdig has no Rust implementation yet" in doc["failure"]["message"]
+    assert code == python_code == 2
+    assert doc["failure"]["code"] == "usage_invalid_value"
+    assert doc["failure"]["message"] == "sysdig has no query runner"
+    assert doc["failure"] == document(python_stdout)["failure"]
+    assert doc["choices"] == document(python_stdout)["choices"]
 
 
 def test_rust_output_reaches_a_stream_that_lives_in_memory(
@@ -859,14 +872,19 @@ def test_a_host_runs_rust_only_for_a_run_its_implementation_covers() -> None:
     rust = {"OPENTIDE_ENGINE": "rust"}
     generate = engines.RUST_COMMANDS[("generate",)]
     assert engines.rust_command(("generate",), rust, ["generate", "schemas"]) is generate
-    assert engines.rust_command(("generate",), rust, ["generate"]) is None
-    assert engines.rust_command(("generate",), rust, ["generate", "--", "schemas"]) is None
+    assert engines.rust_command(("generate",), rust, ["generate"]) is generate
+    flagged = RustCommand(launch=("x",), requires=("--dry-run",))
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(engines.RUST_COMMANDS, ("generate",), flagged)
+        assert engines.rust_command(("generate",), rust, ["generate"]) is None
+        assert engines.rust_command(("generate",), rust, ["generate", "--", "--dry-run"]) is None
     deploy = engines.RUST_COMMANDS[("deploy",)]
     assert engines.rust_command(("deploy",), rust, ["deploy", "--dry-run"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy"]) is deploy
     assert engines.rust_command(("deploy",), rust, ["deploy", "--platform", "sysdig"]) is deploy
     query = engines.RUST_COMMANDS[("query",)]
-    assert engines.rust_command(("query",), rust, ["query", "--platform", "sysdig"]) is None
+    assert engines.rust_command(("query",), rust, ["query", "--platform", "sysdig"]) is query
+    assert engines.rust_command(("query",), rust, ["query", "--platform", "acme"]) is None
     assert engines.rust_command(("query",), rust, ["query", "--platform", "splunk"]) is query
     assert engines.rust_command(("info",), rust, ["info"]) is engines.RUST_COMMANDS[("info",)]
 
@@ -963,15 +981,16 @@ def test_hosts_run_under_any_engine_but_not_a_bad_one(workspace: Path) -> None:
 
 @pytest.mark.parametrize(
     ("engine", "rust_runs"),
-    [(None, False), ("python", False), ("compare", False), ("rust", True)],
+    [(None, True), ("", True), ("python", False), ("compare", False), ("rust", True)],
 )
-def test_mcp_start_is_the_rust_server_under_rust_and_the_python_host_otherwise(
+def test_mcp_start_is_the_rust_server_by_default_and_the_python_host_otherwise(
     workspace: Path, monkeypatch: pytest.MonkeyPatch, engine: str | None, rust_runs: bool
 ) -> None:
-    """``mcp start`` (UC-3.7, #829): ``rust`` serves from Rust; otherwise Python hosts.
+    """``mcp start`` (UC-3.7, #829; UC-6.0c, #841): Rust serves by default and under ``rust``.
 
-    Under ``compare`` an MCP call answers with Python's result and records how
-    Rust differs (#822), so the Python server is the host there too.
+    ``python`` is the escape hatch to the Python server. Under ``compare`` an
+    MCP call answers with Python's result and records how Rust differs
+    (#822), so the Python server is the host there too.
     """
     assert ("mcp", "start") in engines.RUST_COMMANDS
     monkeypatch.setitem(engines.RUST_COMMANDS, ("mcp", "start"), fake("exit"))
