@@ -245,7 +245,7 @@ export interface DeployPlanOptions {
  */
 export interface LintOptions {
   /** `--check`; empty runs the checks `lint.toml` enables. */
-  checks?: Array<'filenames' | 'metadata' | 'placeholders' | 'queries'>
+  checks?: Array<'filenames' | 'metadata' | 'recommended' | 'placeholders' | 'queries'>
   /** `--strict`: any finding fails the run. */
   strict?: boolean
   /** `--file`: object files, by path or by name. */

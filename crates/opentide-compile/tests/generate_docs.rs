@@ -1,13 +1,13 @@
-//! `generate docs` (UC-3.2b, #915; the 0.26.0 page redesign): every page and
-//! folder index of the tide-corpus fixture, in the generic and GitHub
-//! flavours, compared with the files opentide 0.28.0 writes for it
-//! (`tests/docs_0_28/`, diagrams aside until D2 ports them), and the oracle's
-//! failure on the vscode fixture. The GitLab and Azure DevOps flavours, the
-//! flavour a run picks from its CI and `origin`, a rule with several
-//! platform blocks, a rule's tenants and remote ids, and a threat's CVEs
-//! have no recording: their tests assert what 0.28.0 writes for them
-//! (compared with its pages on the same edits of the fixture when they were
-//! written).
+//! `generate docs` (UC-3.2b, #915; the 0.26.0 redesign): every file a run
+//! writes for the tide-corpus fixture, in each of the four flavours,
+//! compared byte for byte with the files opentide 0.28.1 writes for it
+//! (`tests/docs_0_28/<flavor>`: pages, folder indexes, GitLab's `.order`
+//! files and the catalogue overview, diagrams included), and the oracle's
+//! failure on the vscode fixture. The flavour a run picks from its CI and
+//! `origin`, a rule with several platform blocks, a rule's tenants and
+//! remote ids, and a threat's CVEs have no recording: their tests assert
+//! what 0.28.x writes for them (compared with its pages on the same edits of
+//! the fixture when they were written).
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a broken fixture is a failure")]
@@ -25,7 +25,7 @@ use opentide_compile::generate::docs::cve::{
     CveDetail, CveRecord, CveSource, Cvss, Epss, EpssDetail, Weakness,
 };
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
-use opentide_compile::generate::docs::render::{Pages, Templates};
+use opentide_compile::generate::docs::render::Pages;
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
     FlavorHints, Settings, cve_details_needed, index_pages, pages,
@@ -102,13 +102,11 @@ fn render_cves(
     let catalog = Catalog::build(workspace.index(), Statuses::from_resolved(resolved))
         .map_err(|error| error.detail)?;
     let vocabularies = Vocabularies::bundled();
-    let templates = Templates::new();
     let deployment = deployment_facts(workspace, &catalog);
     let pages_of = Pages {
         catalog: &catalog,
         settings: &settings,
         vocab: Vocab::new(&vocabularies),
-        templates: &templates,
         deployment: &deployment,
     };
     let (mut outputs, _) = pages(&pages_of, &Scope::ALL, None).map_err(|error| error.detail)?;
@@ -127,74 +125,40 @@ fn render_cves(
         .collect())
 }
 
-/// `text` without its Mermaid diagrams and their legends: D2 (#790's
-/// catch-up plan, §5.2) ports 0.28.0's diagrams, and until then the pages
-/// are held to 0.28.0 on everything else.
-fn without_diagrams(text: &str) -> String {
-    let mut out = String::new();
-    let mut lines = text.lines().peekable();
-    let mut skip_blank = false;
-    while let Some(line) = lines.next() {
-        if line == "```mermaid" || line == "::: mermaid" {
-            let end = if line == "```mermaid" { "```" } else { ":::" };
-            for inner in lines.by_ref() {
-                if inner == end {
-                    break;
-                }
-            }
-            skip_blank = true;
-            continue;
+/// The files under `dir`, by path below `prefix`, recursively.
+fn files_under(dir: &Path, prefix: &str, out: &mut BTreeMap<String, String>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let key = format!("{prefix}/{name}");
+        if path.is_dir() {
+            files_under(&path, &key, out);
+        } else {
+            out.insert(key, std::fs::read_to_string(&path).unwrap());
         }
-        if line.starts_with("*Shapes:*") {
-            skip_blank = true;
-            continue;
-        }
-        if skip_blank && line.is_empty() {
-            skip_blank = false;
-            continue;
-        }
-        skip_blank = false;
-        out.push_str(line);
-        out.push('\n');
     }
-    out
 }
 
-/// Every page of the tide corpus is what opentide 0.28.0 writes
-/// (`tests/docs_0_28/<flavor>`, its output for that flavour), diagrams
-/// aside; the root README, 0.28.0's catalogue overview, is D2's.
+/// Every file a run writes for the tide corpus in `flavor` is the one
+/// opentide 0.28.1 writes (`tests/docs_0_28/<flavor>`).
 fn check(flavor: &str) {
     let (_dir, workspace) = open("tide-corpus");
     let written = render(&workspace, Some(flavor)).unwrap();
-    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/docs_0_28")
-        .join(flavor);
     let mut expected = BTreeMap::new();
-    for folder in ["rules", "objectives", "threats"] {
-        for entry in std::fs::read_dir(base.join(folder)).unwrap() {
-            let path = entry.unwrap().path();
-            let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            expected.insert(
-                format!("docs/{folder}/{name}"),
-                std::fs::read_to_string(&path).unwrap(),
-            );
-        }
-    }
-    let written: BTreeMap<&String, &String> = written
-        .iter()
-        .filter(|(path, _)| path.as_str() != "docs/README.md")
-        .collect();
+    files_under(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/docs_0_28")
+            .join(flavor),
+        "docs",
+        &mut expected,
+    );
     assert_eq!(
-        written.keys().map(|path| path.as_str()).collect::<Vec<_>>(),
-        expected.keys().map(String::as_str).collect::<Vec<_>>(),
+        written.keys().collect::<Vec<_>>(),
+        expected.keys().collect::<Vec<_>>(),
         "{flavor}: the files written"
     );
-    for (path, text) in written {
-        assert_eq!(
-            without_diagrams(text),
-            without_diagrams(&expected[path]),
-            "{flavor}: {path}"
-        );
+    for (path, text) in &written {
+        assert_eq!(text, &expected[path], "{flavor}: {path}");
     }
 }
 
@@ -209,13 +173,13 @@ fn every_github_page_is_0_28s() {
 }
 
 #[test]
-fn diagrams_are_left_out_of_the_comparison() {
-    assert_eq!(
-        without_diagrams(
-            "a\n\n```mermaid\nflowchart\n```\n\n*Shapes:* x\n\nb\n::: mermaid\ng\n:::\nc\n"
-        ),
-        "a\n\nb\nc\n"
-    );
+fn every_gitlab_page_is_0_28s() {
+    check("gitlab");
+}
+
+#[test]
+fn every_azure_devops_page_is_0_28s() {
+    check("azure_devops");
 }
 
 #[test]
@@ -443,7 +407,8 @@ fn azure_devops_pages_use_wiki_links_and_its_mermaid_blocks() {
         "{index}"
     );
     let objective = &written["docs/objectives/credential-access-objective.md"];
-    assert!(objective.contains("::: mermaid\ngraph TB\n"), "{objective}");
+    assert!(objective.contains("::: mermaid\ngraph LR\n"), "{objective}");
+    assert!(!objective.contains("classDef"), "{objective}");
     assert!(!objective.contains("```mermaid"), "{objective}");
     assert!(!objective.contains("subgraph"), "{objective}");
     assert!(
@@ -542,7 +507,25 @@ fn a_rules_tenants_and_remote_ids() {
         page.contains(
             "| Microsoft Defender for Endpoint | `STAGING` | PREVIEW runs | `lab` | yes |\n\n\
              - `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational \
-             testing\n\n### Tenant targeting\n\n\
+             testing\n\n```mermaid\n"
+        ),
+        "{page}"
+    );
+    // The deployment map: a solid line labelled with the runs that reach a
+    // tenant, a dotted one to a tenant no run reaches, each remote id under
+    // its tenant.
+    assert!(
+        page.contains(
+            "    subgraph lane3[\"Tenants\"]\n        ten1[[\"lab\"]]\n        \
+             ten2[[\"prod<br>id 7002\"]]\n    end\n    rul1 --> plt1\n    \
+             plt1 -->|\"PREVIEW\"| ten1\n    plt1 -.-> ten2\n"
+        ),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "*Lines:* solid line = deployed, by the runs named on the line; dotted line = not \
+             deployed: no run takes this status or tenant.\n\n### Tenant targeting\n\n\
              | Platform | Tenant | Reached by | Remote ID |\n| --- | --- | --- | --- |\n\
              | Microsoft Defender for Endpoint | `lab` | PREVIEW runs | - |\n\
              | Microsoft Defender for Endpoint | `prod`<br>Production SOC | no run: the tenant \
@@ -762,13 +745,11 @@ fn cve_details_are_needed_with_retrieve_details_on() {
         .unwrap();
         let catalog = Catalog::build(workspace.index(), Statuses::from_resolved(resolved)).unwrap();
         let vocabularies = Vocabularies::bundled();
-        let templates = Templates::new();
         let deployment = deployment_facts(workspace, &catalog);
         let pages_of = Pages {
             catalog: &catalog,
             settings: &settings,
             vocab: Vocab::new(&vocabularies),
-            templates: &templates,
             deployment: &deployment,
         };
         cve_details_needed(&pages_of, scopes, targets)

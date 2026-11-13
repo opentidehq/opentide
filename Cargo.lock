@@ -3269,7 +3269,6 @@ dependencies = [
  "serde_json",
  "shlex 2.0.1",
  "tempfile",
- "textwrap",
  "thiserror 2.0.20",
  "toml 0.8.23",
  "tracing",
