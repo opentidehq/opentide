@@ -622,6 +622,20 @@ fn number(value: usize) -> ContextValue {
     ContextValue::Number(serde_json::Number::from(value))
 }
 
+/// Whether `query` counts as one of `validate`'s queries checked: a Google
+/// SecOps block's sections are one rule, the one deploy assembles, counted
+/// at its `events` (a block without `events` is not checked).
+fn counts(query: &CheckedQuery) -> bool {
+    match query.field_path.as_slice() {
+        [configurations, platform, section]
+            if configurations == "configurations" && platform == "google_secops" =>
+        {
+            section == "events"
+        }
+        _ => true,
+    }
+}
+
 /// The queries check of `validate` on the query engines.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EngineQueries;
@@ -656,7 +670,9 @@ impl QueryCheck for EngineQueries {
                 if query.placeholder {
                     continue;
                 }
-                found.queries += 1;
+                if counts(&query) {
+                    found.queries += 1;
+                }
                 for item in &query.findings {
                     if item.severity != EngineSeverity::Error {
                         // Style: lint's queries check.
@@ -699,6 +715,30 @@ impl QueryCheck for EngineQueries {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_google_secops_block_is_one_query_counted_at_its_events() {
+        let text = "name: A\nconfigurations:\n  google_secops:\n    events: |\n      \
+                    $e.metadata.event_type = \"USER_LOGIN\"\n    outcome: |\n      \
+                    $risk_score = 10\n    condition: |\n      $e\n  sentinel:\n    query: |\n      \
+                    SecurityEvent\n";
+        let profiles = Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            visibility_problem: None,
+        };
+        let queries = profiles.check_object(text);
+        assert_eq!(queries.len(), 4, "{queries:?}");
+        assert_eq!(queries.iter().filter(|query| counts(query)).count(), 2);
+        // A block with a section label in a text is not checked: no queries.
+        let header = text.replace("$risk_score = 10", "condition:");
+        let queries = profiles.check_object(&header);
+        assert!(
+            queries
+                .iter()
+                .all(|query| query.platform != "google_secops"),
+            "{queries:?}"
+        );
+    }
 
     #[test]
     fn a_span_ending_after_a_newline_ends_on_its_own_line() {
