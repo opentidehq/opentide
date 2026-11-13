@@ -491,14 +491,16 @@ mod tests {
         let (fs, _) = shard(&body("65f1c0de9a1b2c3d4e5f6a7b"));
         assert!(scan(&fs, Path::new("/w")).is_empty());
         for malformed in ["65F1C0DE9A1B2C3D4E5F6A7B", "65f1c0de", "rule-1"] {
-            let (fs, _) = shard(&body(malformed));
+            let (fs, path) = shard(&body(malformed));
             let errors = scan(&fs, Path::new("/w"));
             assert_eq!(errors.len(), 1, "{malformed}");
+            // The shard's path as the platform writes it (`\` on Windows).
             assert_eq!(
                 errors[0].message,
                 format!(
-                    "/w/.opentide/states/deployment/{UUID}.json platforms.bitdefender.prod: \
-                     bitdefender external id '{malformed}' does not match '^[0-9a-f]{{24}}$'"
+                    "{} platforms.bitdefender.prod: bitdefender external id '{malformed}' does \
+                     not match '^[0-9a-f]{{24}}$'",
+                    path.display()
                 ),
             );
         }
