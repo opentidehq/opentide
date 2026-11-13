@@ -91,8 +91,9 @@ def test_a_workspace_lists_its_tenants_in_file_order() -> None:
 
 
 def test_the_platforms_and_what_each_can_do() -> None:
-    assert len(platforms()) == 9
+    assert len(platforms()) == 10
     assert capabilities("sysdig") == Capabilities(deploy=True, live_validation=False, query=False)
+    assert capabilities("exabeam") == Capabilities(deploy=True, live_validation=True, query=True)
     assert capabilities("nowhere") is None
 
 
