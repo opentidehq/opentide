@@ -109,6 +109,7 @@ pub fn parse(text: &str) -> Result<Node, ParseError> {
         value: Value::Map(entries),
         start,
         end,
+        text: None,
     })
 }
 
@@ -147,6 +148,7 @@ fn table_entries(
                 value: Value::Str(key.to_owned()),
                 start: key_start,
                 end: key_end,
+                text: None,
             }),
             value: Arc::new(value),
         });
@@ -176,12 +178,18 @@ fn item_node(
                     value: Value::Map(table_entries(table, positions, table_start, depth + 1)?),
                     start: table_start,
                     end: table_end,
+                    text: None,
                 }));
             }
             Value::Seq(items)
         }
     };
-    Ok(Node { value, start, end })
+    Ok(Node {
+        value,
+        start,
+        end,
+        text: None,
+    })
 }
 
 fn value_node(
@@ -217,6 +225,7 @@ fn value_node(
                         value: Value::Str(key.to_owned()),
                         start: key_start,
                         end: key_end,
+                        text: None,
                     }),
                     value: Arc::new(value_node(item, positions, key_start, depth + 1)?),
                 });
@@ -228,6 +237,7 @@ fn value_node(
         value: converted,
         start,
         end,
+        text: None,
     })
 }
 

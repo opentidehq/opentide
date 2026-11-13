@@ -35,6 +35,7 @@ use opentide_workspace::diagnostic::ContextValue;
 use opentide_workspace::validate::annotate::relative_path;
 use opentide_workspace::validate::{QueryCheck, QueryFindings, QueryObject};
 use opentide_workspace::{Diagnostic, FileSystem, Severity, Workspace};
+use rayon::prelude::*;
 
 /// `context.source` of the findings of the queries check.
 pub const ENGINE_SOURCE: &str = "engine";
@@ -642,9 +643,16 @@ impl QueryCheck for EngineQueries {
         } else {
             Severity::Error
         };
-        for object in objects {
+        // The engines analyse the objects on every core (the installed
+        // datasets are only read while ENGINE is held); the findings are
+        // then gathered in the objects' order.
+        let checked: Vec<Vec<CheckedQuery>> = objects
+            .par_iter()
+            .map(|object| profiles.check_object(object.source))
+            .collect();
+        for (object, queries) in objects.iter().zip(checked) {
             let mut shown = None;
-            for query in profiles.check_object(object.source) {
+            for query in queries {
                 if query.placeholder {
                     continue;
                 }
@@ -756,11 +764,11 @@ mod tests {
     fn help_names_the_replacement_the_step_the_reference_or_the_page() {
         assert_eq!(
             engine_help("kql_unknown_table", "unknown table 'X'", Some("Y")),
-            "did you mean 'Y'?"
+            "did you mean \"Y\"?"
         );
         assert_eq!(
             engine_help("spl_x", "is Not A Command here", Some("stats")),
-            "did you mean 'stats'?"
+            "did you mean \"stats\"?"
         );
         assert_eq!(
             engine_help("esql_x", "needs a source", Some("FROM logs-*")),

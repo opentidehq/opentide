@@ -183,7 +183,7 @@ impl<'i> Relations<'i> {
             .map(AsRef::as_ref)
             .filter(|schema| opentide_workspace::index::truthy(schema));
         if let Some(schema) = schema {
-            let text = py_str(schema);
+            let text = node_text(schema);
             return Ok(text.split("::").next().unwrap_or_default().to_owned());
         }
         if self.index.signals.contains_key(uuid) {
@@ -197,7 +197,7 @@ impl<'i> Relations<'i> {
         }
         let name = body
             .get("name")
-            .map_or_else(|| "NAME NOT FOUND".to_owned(), py_str);
+            .map_or_else(|| "NAME NOT FOUND".to_owned(), node_text);
         Err(Cause::Other(format!(
             "Object {name} is missing a schema identifier"
         )))
@@ -269,17 +269,17 @@ impl<'i> Relations<'i> {
 fn listed(node: Option<&Node>) -> Vec<String> {
     match node.map(|node| &node.value) {
         None => Vec::new(),
-        Some(Value::Seq(items)) => items.iter().map(|item| py_str(item)).collect(),
-        Some(_) => node.map(py_str).into_iter().collect(),
+        Some(Value::Seq(items)) => items.iter().map(|item| node_text(item)).collect(),
+        Some(_) => node.map(node_text).into_iter().collect(),
     }
 }
 
-/// A value as Python's `str()` writes it: a string as is, anything else as
-/// its `repr`.
-pub fn py_str(node: &Node) -> String {
+/// A value as text: a string as it is, anything else as its JSON (`1`,
+/// `null`, `true`, `["x",1]`).
+pub fn node_text(node: &Node) -> String {
     match &node.value {
         Value::Str(text) | Value::Datetime(text) => text.clone(),
-        _ => opentide_schema::configuration::repr::node(node),
+        _ => crate::json::Json::from_node(node).to_compact(),
     }
 }
 
@@ -288,17 +288,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn python_str_of_values() {
+    fn values_as_text() {
         let document =
             opentide_schema::node::load("a: x\nb: 1\nc: ~\nd: true\ne: 1.5\nf: [x, 1]\n").unwrap();
         let root = document.root().unwrap();
-        let text = |key: &str| py_str(root.get(key).unwrap());
+        let text = |key: &str| node_text(root.get(key).unwrap());
         assert_eq!(text("a"), "x");
         assert_eq!(text("b"), "1");
-        assert_eq!(text("c"), "None");
-        assert_eq!(text("d"), "True");
+        assert_eq!(text("c"), "null");
+        assert_eq!(text("d"), "true");
         assert_eq!(text("e"), "1.5");
-        assert_eq!(text("f"), "['x', 1]");
+        assert_eq!(text("f"), r#"["x",1]"#);
     }
 
     fn index_of(objects: &[(&str, &str, &str)]) -> Index {

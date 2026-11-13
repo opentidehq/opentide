@@ -259,7 +259,7 @@ fn an_unknown_revision_is_checked_against_the_newest_without_the_unknown_key_che
     assert_eq!(errors[0].kind, ErrorKind::InvalidValue("value_error"));
     assert_eq!(
         errors[0].message,
-        "Value error, unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the \
+        "Value error, unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the \
          newest rule revision, without the unknown-key check"
     );
     assert_eq!(
@@ -303,7 +303,7 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
     );
     assert_eq!(
         verdict("rule::1.1", "threat").unwrap_err().to_string(),
-        "'rule::1.1' is not a threat schema identifier"
+        "\"rule::1.1\" is not a threat schema identifier"
     );
     for (schema, written) in [
         ("platform::sentinel::1.0", "platform::sentinel::1.0"),
@@ -330,14 +330,14 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
         assert_eq!(verdict, Err(Rejection::SchemaMissing), "{schema}");
         assert_eq!(verdict.unwrap_err().code(), "schema_missing");
     }
-    // `identifier-quoting` (tests/oracle/objects_cases.toml): single quotes
+    // `identifier-quoting` (tests/oracle/objects_cases.toml): double quotes
     // whatever the identifier holds, where the oracle used Python's repr.
     for (schema, message) in [
-        ("true", "unknown schema identifier: 'true'"),
-        ("[rule::1.1]", "unknown schema identifier: '[...]'"),
+        ("true", "unknown schema identifier: \"true\""),
+        ("[rule::1.1]", "unknown schema identifier: \"[...]\""),
         (
             "\"rule's::1.1\"",
-            "unknown schema identifier: 'rule's::1.1'",
+            "unknown schema identifier: \"rule's::1.1\"",
         ),
     ] {
         let rejection = verdict(schema, "rule").unwrap_err();

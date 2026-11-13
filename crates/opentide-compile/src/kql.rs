@@ -3,7 +3,6 @@
 //! to the tenant before the query, their filters after it.
 
 use indexmap::IndexMap;
-use opentide_schema::configuration::repr::float_text;
 
 use crate::json::Json;
 
@@ -25,13 +24,32 @@ pub fn kql_string(value: &str) -> String {
     out
 }
 
+/// A float as a KQL `real` literal: the shortest digits that read back, with
+/// a decimal point or an exponent so that KQL reads a real and not a long
+/// (`1.0`, `1.5e-7`), and `real(nan)`, `real(+inf)`, `real(-inf)` for the
+/// values no digits write.
+fn kql_real(float: f64) -> String {
+    if float.is_nan() {
+        "real(nan)".to_owned()
+    } else if float.is_infinite() {
+        if float > 0.0 {
+            "real(+inf)"
+        } else {
+            "real(-inf)"
+        }
+        .to_owned()
+    } else {
+        format!("{float:?}")
+    }
+}
+
 /// A `let` value as KQL writes it, or `None` for a type KQL has no literal for
 /// (the oracle skips it with a warning).
 fn let_literal(value: &Json) -> Option<String> {
     match value {
         Json::Bool(flag) => Some(if *flag { "true" } else { "false" }.to_owned()),
         Json::Int(integer) => Some(integer.to_string()),
-        Json::Float(float) => Some(float_text(*float)),
+        Json::Float(float) => Some(kql_real(*float)),
         Json::Str(text) => Some(kql_string(text)),
         Json::Null | Json::Array(_) | Json::Object(_) => None,
     }
@@ -107,13 +125,13 @@ mod tests {
     }
 
     #[test]
-    fn float_lets_are_written_as_python_writes_them() {
-        // Past 1e16 and below 1e-4 Python's str takes an exponent.
+    fn float_lets_are_kql_reals() {
+        // The shortest digits that read back, with a point or an exponent.
         let list =
             exclusions("- {let: {big: 1.0e+16, small: 1.0e-5, whole: 1.0e+15, half: 0.5}}\n");
         assert_eq!(
             compile_query("T", Some(&list), "one"),
-            "let big = 1e+16;\nlet small = 1e-05;\nlet whole = 1000000000000000.0;\n\
+            "let big = 1e16;\nlet small = 1e-5;\nlet whole = 1000000000000000.0;\n\
              let half = 0.5;\nT"
         );
     }

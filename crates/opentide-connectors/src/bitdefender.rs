@@ -504,7 +504,7 @@ impl<'a> Client<'a> {
                 let message = error
                     .get("message")
                     .filter(|message| message.truthy())
-                    .map(crate::python::python_str)
+                    .map(crate::text::json_text)
                     .unwrap_or_default();
                 match code {
                     Some(TOO_MANY_REQUESTS) => {
@@ -575,7 +575,7 @@ fn details(data: Option<&Json>) -> Option<String> {
         Json::Object(data) => data
             .get("details")
             .filter(|details| !details.is_null())
-            .map(crate::python::python_str),
+            .map(crate::text::json_text),
         Json::Str(text) => Some(text.clone()),
         _ => None,
     }

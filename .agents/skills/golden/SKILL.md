@@ -87,7 +87,9 @@ oracle's recording through `opentide-compare`: stdout, stderr, the exit code, th
 JSON document (by its data: key order, indentation, escapes and the final newline are layout, not
 compared), with the goldens' normalisation. Everything else is compared byte for byte. `--runner node` launches the npm package's bin
 instead. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
-report.
+report, in three parts: `--partition K/N` runs the cases whose id hashes (FNV-1a) to part K, so
+parts 1/N to N/N run every case once, and `--unused FILE` writes the ledger entries the part did
+not apply instead of failing on them; an entry every part lists is stale, and the gather fails.
 
 `uv sync` builds the console script's native module (`src/opentide/_native.*`) once and does not
 rebuild it when the Rust sources change: after a pull, a merge or an edit, the CLI would run the

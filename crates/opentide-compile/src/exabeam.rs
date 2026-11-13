@@ -11,7 +11,6 @@
 //! the specification's Compiled body table; `tests/fixtures/exabeam/` holds
 //! the bodies.
 
-use opentide_schema::configuration::repr::float_text;
 use opentide_schema::objects::platform::exabeam::{delay_minutes, duration, unit_name};
 use opentide_schema::objects::platform::python_strip;
 
@@ -102,7 +101,6 @@ fn py_str(value: &Json) -> String {
         Json::Bool(true) => "True".to_owned(),
         Json::Bool(false) => "False".to_owned(),
         Json::Int(integer) => integer.to_string(),
-        Json::Float(float) => float_text(*float),
         Json::Str(text) => text.clone(),
         other => other.to_compact(),
     }

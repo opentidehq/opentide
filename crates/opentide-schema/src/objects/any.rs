@@ -111,6 +111,7 @@ fn node(value: Value) -> Arc<Node> {
         value,
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     })
 }
 

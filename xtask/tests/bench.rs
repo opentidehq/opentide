@@ -14,7 +14,6 @@
     reason = "test helpers outside #[test] functions"
 )]
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -30,7 +29,7 @@ fn scratch(name: &str) -> PathBuf {
 
 fn fake_opentide(dir: &Path) -> PathBuf {
     let path = dir.join("opentide");
-    std::fs::write(
+    xtask::script::write_executable(
         &path,
         // 64 MiB of ballast (dd's buffer): a real command peaks above
         // xtask's own RSS, and the bench refuses one that does not.
@@ -39,7 +38,6 @@ fn fake_opentide(dir: &Path) -> PathBuf {
          printf '%s\\n' '{\"code\":\"vocab_unknown\",\"ok\":true,\"exit_code\":0}'\n",
     )
     .unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
     path
 }
 
@@ -221,8 +219,8 @@ fn a_command_that_fails_is_not_measured() {
     // would measure nothing, so the run stops with exit status 2.
     let dir = scratch("failure");
     let opentide = dir.join("opentide");
-    std::fs::write(&opentide, "#!/bin/sh\necho '{\"exit_code\":1}'\nexit 1\n").unwrap();
-    std::fs::set_permissions(&opentide, std::fs::Permissions::from_mode(0o755)).unwrap();
+    xtask::script::write_executable(&opentide, "#!/bin/sh\necho '{\"exit_code\":1}'\nexit 1\n")
+        .unwrap();
     let output = xtask(
         &[
             "bench",
@@ -284,12 +282,11 @@ fn a_command_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
     // run stops (exit 2).
     let dir = scratch("floor-cli");
     let opentide = dir.join("opentide");
-    std::fs::write(
+    xtask::script::write_executable(
         &opentide,
         "#!/bin/sh\nprintf '%s\\n' '{\"code\":\"vocab_unknown\",\"ok\":true,\"exit_code\":0}'\n",
     )
     .unwrap();
-    std::fs::set_permissions(&opentide, std::fs::Permissions::from_mode(0o755)).unwrap();
     let output = xtask_with_ballast(&[
         "bench",
         "--only",
@@ -342,8 +339,7 @@ fn a_language_server_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
     // can stop the run is the RSS guard.
     let dir = scratch("floor-lsp");
     let server = dir.join("server");
-    std::fs::write(&server, STUB_SERVER).unwrap();
-    std::fs::set_permissions(&server, std::fs::Permissions::from_mode(0o755)).unwrap();
+    xtask::script::write_executable(&server, STUB_SERVER).unwrap();
     let workspace = dir.join("workspace");
     std::fs::create_dir_all(workspace.join("objects/rules")).unwrap();
     std::fs::write(workspace.join("objects/rules/a.yaml"), "name: a\n").unwrap();

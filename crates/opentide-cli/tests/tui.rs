@@ -208,7 +208,7 @@ fn select_a_rule_run_validate_and_see_its_diagnostic() {
             .unwrap_or_else(|| panic!("{text} not in {source}"))
     };
     assert!(at("tlp: clearr") < at("error[vocab_unknown]:"));
-    at("help: did you mean 'clear'?");
+    at("help: did you mean \"clear\"?");
     assert_eq!(
         tree(&app, 80).last().unwrap(),
         "    └── Sentinel KQL Rule  ✗ 1"
@@ -220,7 +220,7 @@ fn select_a_rule_run_validate_and_see_its_diagnostic() {
     let log = results(&app);
     assert!(log.contains("$ opentide validate"), "{log}");
     assert!(
-        log.contains("error[vocab_unknown]: 'clearr' is not a TLP value"),
+        log.contains("error[vocab_unknown]: \"clearr\" is not a TLP value"),
         "{log}"
     );
     assert!(log.contains(&format!("╭─▶ {RULE_FILE}:8:8")), "{log}");

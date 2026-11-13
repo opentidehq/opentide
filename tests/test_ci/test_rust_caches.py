@@ -25,6 +25,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import pytest
 import yaml
 from tests.test_ci import ci_matrix
 
@@ -189,9 +190,19 @@ def test_the_engine_debug_tree_is_cached_once() -> None:
     """engine-test's Linux compiler cache serves the Linux jobs that build a
     subset of its debug tree; they never save a copy."""
     _, job, runs_on = ENGINE_DEBUG_PRODUCER
-    producer = _compiler_cache(job, runs_on)
+    # The Linux shard that tests opentide-lsp (clients) and opentide-analysis
+    # (elastic-sweep): each shard saves the crates its packages build.
+    (cell,) = [
+        cell
+        for cell in _cells(_ci()["jobs"][job])
+        if cell["os"] == runs_on
+        and {"opentide-lsp", "opentide-analysis"} <= set(ci_matrix.selection(cell["packages"])[0])
+    ]
+    family = f"sccache-engine-dev-ubuntu-latest-{cell['shard']}-"
+    savers = [c for c in _compiler_caches() if c.job == job and (c.saves or "").startswith(family)]
+    assert len(savers) == 1, family
+    producer = savers[0]
     assert producer.saves is not None
-    assert producer.saves.startswith("sccache-engine-dev-ubuntu-latest-")
     for _, reader_job in ENGINE_DEBUG_READERS:
         reader = _compiler_cache(reader_job)
         assert reader.restores == producer.saves
@@ -213,22 +224,38 @@ def test_the_python_jobs_build_the_binding_once() -> None:
 
 
 def test_a_release_restores_no_cache() -> None:
+    """publish.yml restores nothing, and the asset build it shares with the
+    dry run keeps no target tree: the dry run's compiler cache (below) is
+    restored and saved only under ``inputs.dry-run``."""
     assert not _in("publish.yml"), "the release builds from nothing"
-    build = _in("engine-release-build.yml")
-    assert build, "the dry run of the asset build is cached"
-    for cache in build:
-        assert cache.condition == "inputs.dry-run", (cache.job, cache.condition)
+    assert not _in("engine-release-build.yml"), "sccache, not a target tree per target"
+    workflow = yaml.safe_load((WORKFLOWS / "engine-release-build.yml").read_text("utf-8"))
+    cached = 0
+    for job_id, job in workflow["jobs"].items():
+        for step in job.get("steps") or []:
+            uses = str(step.get("uses", ""))
+            run = str(step.get("run", ""))
+            sccache = "sccache" in uses + str(step.get("with") or {})
+            setup = uses.startswith(("actions/cache", "taiki-e/install-action"))
+            if (setup and sccache) or "RUSTC_WRAPPER" in run:
+                assert "inputs.dry-run" in str(step.get("if", "")), (job_id, step.get("name"))
+                cached += 1
+    assert cached >= 8, "the binaries and the WebAssembly builds are cached in the dry run"
 
 
 def test_a_release_restores_no_other_cache() -> None:
-    """Nor any cache of another kind: actions/cache, or a setup action's own."""
+    """Nor any cache of another kind: a setup action's own, or actions/cache
+    outside the dry run."""
     for name in ("publish.yml", "engine-release-build.yml"):
         workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
         for job_id, job in workflow["jobs"].items():
             for step in job.get("steps") or []:
                 uses = str(step.get("uses", ""))
                 inputs = step.get("with") or {}
-                assert not uses.startswith("actions/cache"), (name, job_id)
+                if uses.startswith("actions/cache"):
+                    assert name == "engine-release-build.yml", (name, job_id)
+                    assert "inputs.dry-run" in str(step.get("if", "")), (name, job_id)
+                    continue
                 assert "cache" not in inputs, (name, job_id, uses)
                 if uses.startswith("astral-sh/setup-uv"):
                     # Its default, "auto", caches on GitHub-hosted runners:
@@ -241,11 +268,77 @@ def test_a_release_restores_no_other_cache() -> None:
                     assert inputs.get("package-manager-cache") is False, (name, job_id)
 
 
+# The release dry run's compiler caches (#1047 follow-up): one sccache family
+# per runner (os and arch) for the binaries, one for the WebAssembly builds,
+# each saved by one cell from a push when the key missed. Its ten target trees,
+# one per target and job, evicted the families pull requests restore.
+RELEASE_NATIVE = "sccache-release-${{ runner.os }}-${{ runner.arch }}-"
+RELEASE_WASM = "sccache-release-wasm-"
+
+
+def _release_steps(job_id: str) -> list[dict[str, Any]]:
+    workflow = yaml.safe_load((WORKFLOWS / "engine-release-build.yml").read_text("utf-8"))
+    return workflow["jobs"][job_id].get("steps") or []
+
+
+@pytest.mark.parametrize(("job_id", "family"), [("native", RELEASE_NATIVE), ("wasm", RELEASE_WASM)])
+def test_the_release_dry_run_keeps_one_compiler_cache_per_runner(job_id: str, family: str) -> None:
+    steps = _release_steps(job_id)
+    (restore,) = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
+    (save,) = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_SAVE)]
+    assert restore["with"]["key"] == save["with"]["key"] == family + STABLE_HASH
+    assert restore["with"]["restore-keys"] == family + STABLE_HASH.removesuffix(WEEK)
+    assert restore["with"]["path"] == save["with"]["path"] == ".sccache"
+    condition = str(save["if"])
+    assert condition.startswith(PUSH_ONLY), condition
+    assert "inputs.dry-run" in condition
+    assert "steps.sccache.outputs.cache-hit != 'true'" in condition
+    # The wrapper is set, and sccache installed, before the first cargo command.
+    names = [str(s.get("name", "")) for s in steps]
+    builds = ("cargo build", "build-wasm.sh")
+    first_cargo = min(
+        n for n, s in enumerate(steps) if any(b in str(s.get("run", "")) for b in builds)
+    )
+    assert names.index("Install sccache") < names.index("Wrap rustc in sccache") < first_cargo
+
+
+def test_one_release_cell_per_runner_saves_its_compiler_cache() -> None:
+    workflow = yaml.safe_load((WORKFLOWS / "engine-release-build.yml").read_text("utf-8"))
+    native = workflow["jobs"]["native"]
+    (save,) = [s for s in native["steps"] if str(s.get("uses", "")).startswith(SCCACHE_SAVE)]
+    assert str(save["if"]).endswith("&& matrix.saves")
+    cells = native["strategy"]["matrix"]["include"]
+    savers = [c["os"] for c in cells if c["saves"] is True]
+    # Every runner has its saver, and only one: the Intel macOS cross build
+    # restores Apple silicon's family.
+    assert sorted(savers) == sorted({c["os"] for c in cells})
+    assert [c["target"] for c in cells if c["saves"] is False] == ["x86_64-apple-darwin"]
+
+
+def test_the_benchmarks_restore_the_full_sets_cache_and_save_none() -> None:
+    """bench.yml's nightly runs saved two target trees; it now restores the
+    full set's Linux compiler cache, with the environment of the job that
+    saves it (`conformance`), so that the crates both build hit."""
+    workflow = yaml.safe_load((WORKFLOWS / "bench.yml").read_text(encoding="utf-8"))
+    job = workflow["jobs"]["bench"]
+    uses = [str(s.get("uses", "")) for s in job["steps"]]
+    assert not any(u.startswith((RUST_CACHE, SCCACHE_SAVE, "actions/cache@")) for u in uses)
+    (restore,) = [s for s in job["steps"] if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
+    assert restore["with"]["key"] == FULL_SET_FAMILY + STABLE_HASH
+    assert restore["with"]["restore-keys"] == FULL_SET_FAMILY + STABLE_HASH.removesuffix(WEEK)
+    conformance = _ci()["jobs"]["conformance"]["env"]
+    for name in ("RUSTFLAGS", "CARGO_PROFILE_DEV_DEBUG", "RUSTC_WRAPPER", "SCCACHE_DIR"):
+        assert job["env"][name] == conformance[name], name
+    assert str(job["runs-on"]).startswith("ubuntu"), "the Linux family"
+
+
 # sccache (#841): the workspace's own crates, which rust-cache drops before
 # saving, cached by content. Each cache name has one job that saves it.
 SCCACHE_RESTORE = "actions/cache/restore@"
 SCCACHE_SAVE = "actions/cache/save@"
-SCCACHE_KEY = re.compile(r"^sccache-(?P<name>.+)-\$\{\{ hashFiles\(.*\) \}\}$")
+SCCACHE_KEY = re.compile(
+    r"^sccache-(?P<name>.+)-\$\{\{ hashFiles\(.*\) \}\}-\$\{\{ steps\.week\.outputs\.week \}\}$"
+)
 
 
 class CompilerCache(NamedTuple):
@@ -290,7 +383,8 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
     """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
     jobs = _ci()["jobs"]
     wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
-    assert {"engine-test-part", "test", "cli-e2e", "golden-compare", "corpus-part"} <= set(wrapped)
+    expected = {"engine-test-part", "test", "cli-e2e", "golden-compare-part", "corpus-part"}
+    assert expected <= set(wrapped)
     for job_id in wrapped:
         steps = jobs[job_id]["steps"]
         installs = [
@@ -347,7 +441,7 @@ def test_the_python_jobs_share_one_pyo3_configuration() -> None:
     the binding in the cache is the one it builds (#841)."""
     jobs = _ci()["jobs"]
     python_jobs = [job for workflow, job in (PYTHON_PRODUCER, *PYTHON_READERS)]
-    python_jobs += ["cli-e2e-full", "golden-compare"]
+    python_jobs += ["cli-e2e-full", "golden-compare-part"]
     seen = {(jobs[job].get("env") or {}).get("PYO3_PYTHON") for job in python_jobs}
     assert seen == {"/usr/bin/python3"}, seen
 
@@ -377,7 +471,11 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     if save_if is False:
                         continue
                     save_if = str(save_if)
-                    allowed = ("${{ " + PUSH_ONLY, "${{ github.event_name != 'pull_request'")
+                    allowed = (
+                        "${{ " + PUSH_ONLY,
+                        "${{ github.event_name != 'pull_request'",
+                        TARGET_TREE_SAVE,
+                    )
                     assert save_if.startswith(allowed), (
                         f"{where}: rust-cache saves on a pull request ({save_if})"
                     )
@@ -392,13 +490,21 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
     assert checked >= 15
 
 
-# The compiler cache's key (#1047): one per family (and OS), stable while
-# Cargo.lock and the toolchain are. A key that hashed the sources made every
-# push to a base branch save a new copy of each family (about 4 GB a push),
-# which evicted the caches pull requests restore from the 10 GB a repository
-# keeps. sccache is content-addressed, so a stale copy still serves every
-# crate that did not change.
-STABLE_HASH = "${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}"
+# The compiler cache's key: one per family (and OS), stable for a week of one
+# toolchain. A key that hashed the sources made every push to a base branch
+# save a new copy of each family (about 4 GB a push, #1047); one that hashed
+# Cargo.lock still did on most merges, which change it, and the families pull
+# requests restore were evicted from the 10 GB a repository keeps before the
+# next pull request read them (#841). sccache is content-addressed, so a copy
+# a few days old still serves every crate that did not change.
+STABLE_HASH = "${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}"
+WEEK = "${{ steps.week.outputs.week }}"
+WEEK_RUN = 'echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"'
+# Target trees (rust-cache) are saved by the nightly and on pushes to
+# development only, whose caches every pull request reads.
+TARGET_TREE_SAVE = (
+    "${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}"
+)
 # The full set's jobs that built a rust-cache tree of their own now share one
 # compiler cache per OS, which `conformance` saves on each.
 FULL_SET_FAMILY = "sccache-full-set-${{ runner.os }}-"
@@ -423,15 +529,70 @@ def _sccache_steps() -> list[tuple[str, dict[str, Any]]]:
     ]
 
 
-def test_a_compiler_cache_key_changes_only_with_the_lockfile_and_toolchain() -> None:
+def test_a_compiler_cache_key_changes_only_with_the_toolchain_and_the_week() -> None:
     steps = _sccache_steps()
     assert len(steps) >= 15
     for job_id, step in steps:
         key = str(step["with"]["key"])
         assert key.endswith("-" + STABLE_HASH), (job_id, key)
+        assert "Cargo.lock" not in key, (job_id, key)
         if str(step["uses"]).startswith(SCCACHE_RESTORE):
-            # A new lockfile restores the newest copy of its family.
-            assert step["with"].get("restore-keys") == key.removesuffix(STABLE_HASH), job_id
+            # A new week restores the newest copy of its family and toolchain.
+            assert step["with"].get("restore-keys") == key.removesuffix(WEEK), job_id
+
+
+@pytest.mark.parametrize("name", ["ci.yml", "bench.yml", "engine-release-build.yml"])
+def test_the_week_is_computed_before_each_compiler_cache_restore(name: str) -> None:
+    """`steps.week.outputs.week` is the ISO week (UTC) of the run, set by the
+    step just before the restore, under the restore's own condition."""
+    workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+    found = 0
+    for job_id, job in workflow["jobs"].items():
+        steps = job.get("steps") or []
+        for at, step in enumerate(steps):
+            if not str(step.get("uses", "")).startswith(SCCACHE_RESTORE):
+                continue
+            week = steps[at - 1]
+            assert week.get("id") == "week", (name, job_id)
+            assert week["run"] == WEEK_RUN and week["shell"] == "bash", (name, job_id)
+            assert week.get("if") == step.get("if"), (name, job_id)
+            found += 1
+    assert found, name
+
+
+def test_the_week_is_iso_8601() -> None:
+    """`date -u +%G-W%V`: the ISO year and week, so that the last days of
+    December and the first of January share a key when they share a week."""
+    import subprocess
+
+    week = subprocess.run(
+        ["bash", "-c", "date -u -d 2026-12-31 +%G-W%V; date -u -d 2027-01-01 +%G-W%V"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert week == ["2026-W53", "2026-W53"]
+
+
+def test_target_trees_are_saved_by_the_nightly_and_development_only() -> None:
+    """Every rust-cache that saves on a base branch's event saves on the
+    nightly and pushes to development only; a pull request's ref
+    (`refs/pull/N/merge`) never saves."""
+    checked = 0
+    for path in _pull_request_workflows():
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in (workflow.get("jobs") or {}).items():
+            for step in job.get("steps") or []:
+                if not str(step.get("uses", "")).startswith(RUST_CACHE):
+                    continue
+                save_if = (step.get("with") or {}).get("save-if", True)
+                if save_if is False or path.name == "golden-preview.yml":
+                    # golden-preview runs on the 0.28 train only, never on
+                    # development: it saves on that branch's pushes.
+                    continue
+                assert save_if == TARGET_TREE_SAVE, (path.name, job_id, save_if)
+                checked += 1
+    assert checked >= 6
 
 
 def test_a_job_with_a_compiler_cache_restores_no_target_tree() -> None:

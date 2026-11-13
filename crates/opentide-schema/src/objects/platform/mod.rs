@@ -345,6 +345,7 @@ pub fn fill_legacy_keys(model: &str, block: &Node) -> Node {
                             value: Value::Str((*target).to_owned()),
                             start: entry.key.start,
                             end: entry.key.end,
+                            text: None,
                         }),
                         value: entry.value.clone(),
                     });
@@ -356,6 +357,7 @@ pub fn fill_legacy_keys(model: &str, block: &Node) -> Node {
         value: Value::Map(out),
         start: block.start,
         end: block.end,
+        text: None,
     }
 }
 
@@ -568,6 +570,7 @@ pub(crate) fn json_node(value: &serde_json::Value) -> Node {
         value,
         start: crate::node::Mark::default(),
         end: crate::node::Mark::default(),
+        text: None,
     }
 }
 

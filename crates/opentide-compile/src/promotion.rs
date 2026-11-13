@@ -154,14 +154,11 @@ pub fn promotable(root: &Node, non_promotable: &[String]) -> Vec<(String, String
         .collect()
 }
 
-/// A key as Python's `str` writes the value PyYAML reads it as
-/// (`f"{key} : {value}"`).
+/// A key as text: a string as it is, anything else as YAML writes it
+/// (`null`, `true`, `1`).
 fn key_text(key: &Node) -> String {
     match &key.value {
         Value::Str(text) => text.clone(),
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
         other => other.to_string(),
     }
 }

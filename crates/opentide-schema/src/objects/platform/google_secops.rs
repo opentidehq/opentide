@@ -358,6 +358,7 @@ fn authored(node: &Node) -> Node {
         ),
         start: node.start,
         end: node.end,
+        text: None,
     }
 }
 

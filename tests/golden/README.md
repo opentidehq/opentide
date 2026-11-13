@@ -226,6 +226,7 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | `git <version>`, in cases with `normalise = ["host-git"]` (`doctor`) | `git <GIT_VERSION>` | `opentide doctor` prints the host's git; help text quotes a literal example, which stays |
 | `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
+| The frame a live region keeps, in cases with `normalise = ["live-frames"]` (`deploy` in human mode) | `<LIVE></LIVE>`: what was printed during the region and the outcome lines after it are still compared | worker threads update the platform row, so Live's first render can already show their progress |
 
 When `golden check --engine rust` compares a run with its recording (not when a case is
 recorded), one more rule applies to each side:

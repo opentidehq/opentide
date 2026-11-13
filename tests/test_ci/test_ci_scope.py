@@ -25,16 +25,23 @@ which fails open.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
 import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -70,7 +77,7 @@ CI_CORE = {
     "test",
     "cli-e2e",
     "gitlab-ci-lint",
-    "golden-compare",
+    "golden-compare-part",
     "report-only-guard",
 }
 # Jobs that gather the parts of a core gate under the required check's name
@@ -78,7 +85,11 @@ CI_CORE = {
 # skipping it (a skipped required check passes), and it fails unless the job
 # it needs succeeded.
 GATHER = "${{ !cancelled() }}"
-CI_GATHER = {"corpus": "corpus-part", "engine-test": "engine-test-part"}
+CI_GATHER = {
+    "corpus": "corpus-part",
+    "engine-test": "engine-test-part",
+    "golden-compare": "golden-compare-part",
+}
 # A gathering job whose parts a pull request may skip (they are path-scoped):
 # it also needs `changes`, to know whether they had to run.
 CI_GATHER_SCOPED = {"corpus"}
@@ -188,9 +199,13 @@ def test_a_gathering_job_fails_unless_every_part_passed(job_id: str, parts: str)
     else:
         assert _needs(job) == [parts], job_id
         assert parts in CI_CORE, f"{parts} runs on every pull request"
-    (step,) = job["steps"]
+    # The last step judges the parts (golden compare downloads their unused
+    # ledger entries first, and only when they passed).
+    *before, step = job["steps"]
     assert step["env"]["RESULT"] == f"${{{{ needs.{parts}.result }}}}"
     assert 'test "${RESULT}" = success' in step["run"]
+    for earlier in before:
+        assert earlier.get("if") == f"needs.{parts}.result == 'success'", (job_id, earlier)
 
 
 @pytest.mark.parametrize("needed", ["true", "false"])
@@ -208,6 +223,77 @@ def test_the_gathering_check_passes_only_on_success(result: str, needed: str) ->
     )
     passes = result == ("success" if needed == "true" else "skipped")
     assert (done.returncode == 0) is passes, (result, needed)
+
+
+# Golden compare (#841): three parts by a hash of the case id, and a gather
+# that keeps the required check's name and finds the stale ledger entries.
+GOLDEN_PARTS = 3
+
+
+def _golden_check_step() -> dict[str, Any]:
+    *_, step = _ci_jobs()["golden-compare"]["steps"]
+    return step
+
+
+def test_golden_compare_runs_every_part_of_the_cases() -> None:
+    job = _ci_jobs()["golden-compare-part"]
+    assert job["strategy"]["matrix"]["part"] == list(range(1, GOLDEN_PARTS + 1))
+    assert job["strategy"]["fail-fast"] is False
+    assert _golden_check_step()["env"]["PARTS"] == str(GOLDEN_PARTS)
+    (compare,) = [s for s in job["steps"] if "golden check" in str(s.get("run", ""))]
+    assert compare["env"]["PART"] == "${{ matrix.part }}"
+    words = shlex.split(compare["run"])
+    assert words[:6] == ["cargo", "xtask", "golden", "check", "--engine", "rust"]
+    # Part K of the same N in every cell: together, every case exactly once
+    # (xtask's the_partitions_run_every_case_exactly_once).
+    assert words[words.index("--partition") + 1] == f"${{PART}}/{GOLDEN_PARTS}"
+    unused = words[words.index("--unused") + 1]
+    assert unused == "golden-unused-${PART}.json"
+    assert "--filter" not in words, "a part of every case, not a filtered run"
+    (upload,) = [s for s in job["steps"] if s.get("name") == "Upload the unused ledger entries"]
+    assert upload["with"]["path"] == "golden-unused-${{ matrix.part }}.json"
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert "continue-on-error" not in upload and "if" not in upload
+    (download,) = _ci_jobs()["golden-compare"]["steps"][:-1]
+    assert download["with"] == {"pattern": "golden-unused-*", "merge-multiple": True}
+
+
+def _gather_golden(tmp_path: Path, result: str, parts: dict[int, list[int]]) -> bool:
+    """The gather's own shell, over the unused entries each part wrote."""
+    for part, entries in parts.items():
+        listed = [
+            {"entry": e, "command": "info", "case": "info/*", "target": "stdout", "rule": "r"}
+            for e in entries
+        ]
+        (tmp_path / f"golden-unused-{part}.json").write_text(json.dumps(listed), encoding="utf-8")
+    step = _golden_check_step()
+    done = subprocess.run(
+        ["bash", "-ec", step["run"]],
+        cwd=tmp_path,
+        env={**os.environ, "RESULT": result, "PARTS": step["env"]["PARTS"]},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.returncode == 0
+
+
+@pytest.mark.parametrize("result", ["failure", "cancelled", "skipped"])
+def test_the_golden_gather_fails_when_a_part_fails(tmp_path: Path, result: str) -> None:
+    every: dict[int, list[int]] = {part: [] for part in range(1, GOLDEN_PARTS + 1)}
+    assert not _gather_golden(tmp_path, result, every)
+    assert _gather_golden(tmp_path, "success", every)
+
+
+def test_the_golden_gather_fails_without_every_parts_entries(tmp_path: Path) -> None:
+    assert not _gather_golden(tmp_path, "success", {1: [], 2: []})
+
+
+def test_the_golden_gather_fails_on_an_entry_no_part_applied(tmp_path: Path) -> None:
+    # Entry 4 applied in part 2 only, entry 7 in none: 7 is stale.
+    assert not _gather_golden(tmp_path, "success", {1: [4, 7], 2: [7], 3: [4, 7]})
+    # Each entry applied in a part at least: none is stale.
+    assert _gather_golden(tmp_path, "success", {1: [4, 7], 2: [7], 3: [4]})
 
 
 @pytest.mark.parametrize(
@@ -278,7 +364,7 @@ def test_python_runs_oldest_and_newest_on_a_pull_request_and_every_version_in_th
 # matrix part that runs the step or None, the command). The fast ones are core
 # gates; the query fault kinds (about eight minutes) run in the full set.
 COMPARISONS = [
-    ("engine", None, "cargo xtask cassettes check"),
+    ("engine", None, "target/debug/xtask cassettes check"),
     ("corpus-part", "faults", "cargo xtask corpus faults --check --engine rust --only platforms"),
     (
         "corpus-part",
@@ -856,3 +942,250 @@ def test_the_pinned_elastic_references_are_cached_and_checked() -> None:
     oracle = (ROOT / "scripts" / "engine" / "oracles" / "oracle.py").read_text(encoding="utf-8")
     # The pins and the check the cache relies on.
     assert '"lucene-core.jar": (' in oracle and "sha256(path.read_bytes())" in oracle
+
+
+def test_a_pull_request_builds_the_sdist_and_the_full_set_the_wheel_from_it() -> None:
+    """The wheel from the sdist took 4 to 6 minutes of Lint in a temporary
+    directory sccache cannot reuse; the full set still builds it (and
+    `packages` every installable wheel). A pull request checks the sdist."""
+    steps = {step.get("name"): step for step in _ci_jobs()["lint"]["steps"]}
+    assert steps["Build the sdist"]["run"] == "uv build --sdist"
+    assert steps["Twine check"]["run"] == "uvx twine check dist/*"
+    for name in ("Build the sdist", "Twine check"):
+        assert "if" not in steps[name], name
+    assert steps["Build the wheel from the sdist"]["if"] == FULL_SET
+
+
+def test_engine_lint_builds_xtask_once() -> None:
+    """One cargo build of xtask and the language server, whose binaries the
+    later steps run: no `cargo xtask` or `cargo run` builds them again."""
+    steps = _ci_jobs()["engine"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps]
+    build = "cargo build --locked --package xtask --package opentide-lsp"
+    assert runs.count(build) == 1
+    built = runs.index(build)
+    for n, run in enumerate(runs):
+        for line in run.splitlines():
+            assert not re.search(r"\bcargo (xtask|run)\b", line), line
+            if "target/debug/" in line:
+                assert n > built, line
+    used = "\n".join(runs)
+    for command in ("check-layers", "cassettes check", "codegen --check"):
+        assert f"target/debug/xtask {command}" in used, command
+    assert "target/debug/opentide-lsp generate-highlights --check" in used
+
+
+# The Linux engine-test shards (#841): by package, so that each shard builds
+# only its packages' test binaries (sccache does not cache a test harness).
+def _workspace_packages() -> dict[str, Path]:
+    """Every member of the root Cargo.toml's workspace: its package name and
+    directory."""
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    packages = {}
+    for member in manifest["workspace"]["members"]:
+        member_manifest = tomllib.loads((ROOT / member / "Cargo.toml").read_text("utf-8"))
+        packages[member_manifest["package"]["name"]] = ROOT / member
+    return packages
+
+
+def _linux_shards() -> list[list[str]]:
+    from tests.test_ci import ci_matrix
+
+    cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
+    assert {cell["os"] for cell in cells} == {"ubuntu-latest"}
+    return [
+        ci_matrix.selection(cell["packages"])[0]
+        for cell in sorted(cells, key=lambda c: int(c["shard"]))
+    ]
+
+
+def test_the_engine_test_shards_cover_every_package_once() -> None:
+    """A package in no shard would never be tested on a pull request; one in
+    two would be built and tested twice."""
+    shards = _linux_shards()
+    named = [package for shard in shards for package in shard]
+    assert len(named) == len(set(named)), "a package is in two shards"
+    assert set(named) == set(_workspace_packages())
+
+
+def _weight(directory: Path) -> float:
+    """What a package costs a shard: its lines of Rust (the unit-test harness
+    compiles them all again) and three thousand per test binary it links."""
+    lines = sum(
+        len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+        for path in directory.rglob("*.rs")
+        if "target" not in path.parts
+    )
+    tests = directory / "tests"
+    binaries = [*tests.glob("*.rs"), *tests.glob("*/main.rs")] if tests.is_dir() else []
+    return lines + 3000 * len(binaries)
+
+
+def test_the_engine_test_shards_take_even_shares() -> None:
+    """The slowest shard is the gate's time: none carries much more than its
+    share, so a new heavy crate goes where it keeps them even."""
+    packages = _workspace_packages()
+    weights = [sum(_weight(packages[name]) for name in shard) for shard in _linux_shards()]
+    mean = sum(weights) / len(weights)
+    assert max(weights) <= 1.25 * mean, [round(w / mean, 2) for w in weights]
+
+
+def _features(arguments: list[str]) -> dict[str, set[str]]:
+    """The features cargo enables on each workspace member for a build of
+    `arguments` (`--workspace`, or a shard's `-p` and `--features`)."""
+    import shutil
+
+    cargo = shutil.which("cargo")
+    assert cargo, "cargo resolves the features"
+    tree = subprocess.run(
+        [
+            cargo,
+            "tree",
+            "--locked",
+            "-e",
+            "features",
+            "-f",
+            "{p} [{f}]",
+            "--prefix",
+            "none",
+            *arguments,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    members = set(_workspace_packages())
+    found: dict[str, set[str]] = {}
+    for line in tree.splitlines():
+        match = re.match(r"(\S+) v\S+(?: \([^)]*\))? \[(.*)\]$", line)
+        if match and match.group(1) in members:
+            found.setdefault(match.group(1), set()).update(
+                feature for feature in match.group(2).split(",") if feature
+            )
+    return found
+
+
+def test_each_shard_builds_its_packages_with_the_workspaces_features() -> None:
+    """`--workspace` unifies features: the bindings turn on the facade's
+    `cli`, `python` and the rest, and opentide-schema's `python`, which gate
+    tests (opentide-schema's trybuild cases are `cfg(feature = "python")`).
+    A shard of `-p` alone would build those packages without them and skip
+    their tests without a word, so each shard names them with `--features`."""
+    from tests.test_ci import ci_matrix
+
+    whole = _features(["--workspace"])
+    cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
+    for cell in cells:
+        packages, _ = ci_matrix.selection(cell["packages"])
+        shard = _features(cell["packages"].split())
+        for package in packages:
+            missing = whole.get(package, set()) - shard.get(package, set())
+            assert not missing, f"shard {cell['shard']}: {package} without {sorted(missing)}"
+
+
+# opentide-schema's compile-fail cases (`opentide-schema::ui`, trybuild): the
+# full set, and a pull request that changes what they compile.
+UI_INPUTS = [
+    "crates/opentide-schema-derive/src/lib.rs",
+    "crates/opentide-schema/src/model/rule.rs",
+    "crates/opentide-schema/tests/ui.rs",
+    "crates/opentide-schema/tests/ui/pyclass_generic.stderr",
+    "crates/opentide-schema/Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+]
+NOT_UI_INPUTS = ["crates/opentide-cli/src/main.rs", "docs/cli/validate.md", "src/opentide/sdk.py"]
+
+
+def _ui_step() -> dict[str, Any]:
+    (step,) = [s for s in _ci_jobs()["engine-test-part"]["steps"] if s.get("id") == "ui"]
+    return step
+
+
+def _ui_decision(tmp_path: Path, changed: list[str], full_set: str, merge: bool = True) -> str:
+    """The step's own shell in a repository whose HEAD merges a change of
+    `changed` into a base, as a pull request's checkout does."""
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
+    git("init", "-q", "-b", "base")
+    (tmp_path / "README").write_text("base\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    git("switch", "-q", "-c", "change")
+    for path in changed:
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("changed\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "change")
+    if merge:
+        git("switch", "-q", "base")
+        (tmp_path / "BASE").write_text("moved on\n", encoding="utf-8")
+        git("add", "-A")
+        git("commit", "-q", "-m", "base moves")
+        git("merge", "-q", "--no-ff", "-m", "merge", "change")
+    step = _ui_step()
+    output = tmp_path / "output"
+    subprocess.run(
+        ["bash", "-c", step["run"]],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "FULL_SET": full_set,
+            "UI_PATHS": step["env"]["UI_PATHS"],
+            "GITHUB_OUTPUT": str(output),
+        },
+        check=True,
+        capture_output=True,
+    )
+    return output.read_text(encoding="utf-8").strip()
+
+
+@pytest.mark.parametrize("path", UI_INPUTS)
+def test_the_compile_fail_cases_run_when_their_inputs_change(tmp_path: Path, path: str) -> None:
+    assert _ui_decision(tmp_path, [path, "docs/cli/validate.md"], "false") == "run=true"
+
+
+def test_the_compile_fail_cases_wait_for_the_full_set_otherwise(tmp_path: Path) -> None:
+    assert _ui_decision(tmp_path, NOT_UI_INPUTS, "false") == "run=false"
+
+
+def test_the_compile_fail_cases_run_in_the_full_set(tmp_path: Path) -> None:
+    assert _ui_decision(tmp_path, NOT_UI_INPUTS, "true") == "run=true"
+
+
+def test_the_compile_fail_cases_run_when_the_merge_cannot_be_read(tmp_path: Path) -> None:
+    """No second parent (a push, or a checkout without the merge): fail open."""
+    assert _ui_decision(tmp_path, NOT_UI_INPUTS, "false", merge=False) == "run=true"
+
+
+def test_the_compile_fail_filter_names_the_trybuild_binary() -> None:
+    """The filter excludes exactly the test binary of crates/opentide-schema/tests/ui.rs,
+    in the shard that builds it, only when the step said not to run it; the
+    checkout reads the merge's parent."""
+    from tests.test_ci import ci_matrix
+
+    job = _ci_jobs()["engine-test-part"]
+    assert job["steps"][0]["with"]["fetch-depth"] == 2
+    assert (ROOT / "crates" / "opentide-schema" / "tests" / "ui.rs").is_file()
+    step = _ui_step()
+    assert step["env"]["FULL_SET"] == "${{ " + FULL_SET + " }}"
+    (nextest,) = [s for s in job["steps"] if "cargo nextest run" in str(s.get("run", ""))]
+    assert nextest["env"]["UI"] == "${{ steps.ui.outputs.run }}"
+    assert "filter=(-E 'not binary_id(opentide-schema::ui)')" in nextest["run"]
+    condition = 'if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then'
+    assert condition in nextest["run"]
+    owners = [
+        cell
+        for cell in ci_matrix.cells(job, "pull")
+        if "opentide-schema" in ci_matrix.selection(cell["packages"])[0]
+    ]
+    assert len(owners) == 1 and f" {owners[0]['packages']} ".count(" -p opentide-schema ") == 1

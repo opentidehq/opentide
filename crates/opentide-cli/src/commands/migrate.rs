@@ -494,7 +494,7 @@ objective:
             NEEDS_HUMAN_DECISION
         );
         assert!(
-            report.warnings[0].starts_with("entities: 'Account' is defined under several stages")
+            report.warnings[0].starts_with("entities: \"Account\" is defined under several stages")
         );
         // The mechanical value is still applied.
         let written = std::fs::read_to_string(dir.path().join("objects/o.yaml")).unwrap();

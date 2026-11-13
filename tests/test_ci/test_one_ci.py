@@ -264,13 +264,15 @@ TREE_BEFORE = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree
 TREE_AFTER = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"'
 
 
-NEXTEST = "cargo nextest run --workspace --locked --profile ci"
+# A shard names its packages (matrix.packages, read into an array).
+NEXTEST = 'cargo nextest run --locked --profile ci "${selected[@]}" "${filter[@]}"'
+DOCTESTS = 'cargo test --locked --doc "${selected[@]}"'
 
 
 def _runs_command(line: str, command: str) -> bool:
     """The line is the command, or the command and its options (a shard's)."""
     line = line.strip()
-    return line == command or (command == NEXTEST and line.startswith(command + " "))
+    return line == command
 
 
 @pytest.mark.parametrize(
@@ -278,10 +280,10 @@ def _runs_command(line: str, command: str) -> bool:
     [
         ("engine", "cargo fmt --all --check"),
         ("engine", "cargo clippy --workspace --all-targets --locked -- -D warnings"),
-        ("engine", "cargo xtask check-layers"),
+        ("engine", "target/debug/xtask check-layers"),
         ("engine", "cargo doc --no-deps --workspace --locked"),
         ("engine-test-part", NEXTEST),
-        ("engine-test-part", "cargo test --workspace --locked --doc"),
+        ("engine-test-part", DOCTESTS),
         # The tests leave the checkout as they found it (#931).
         ("engine-test-part", TREE_BEFORE),
         ("engine-test-part", TREE_AFTER),
@@ -315,12 +317,9 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     # Only the scope's condition: the core gates have none, the full set's
     # jobs exactly theirs (test_ci_scope.py).
     assert spec.get("if") == _scope().expected_condition(job), job
-    # The doctests run once, on Linux; nothing else is conditional.
-    allowed = {
-        ("engine-test-part", "cargo test --workspace --locked --doc"): (
-            "runner.os == 'Linux' && matrix.shard == 1"
-        )
-    }
+    # The doctests run on Linux, each shard its packages'; nothing else is
+    # conditional.
+    allowed = {("engine-test-part", DOCTESTS): "runner.os == 'Linux'"}
     assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
     run = str(step["run"])
     assert not re.search(r"\|\|\s*(?:true|:)\b", run), (job, command)
@@ -343,7 +342,7 @@ def test_ci_fails_when_the_rust_tests_leave_a_file_in_the_checkout() -> None:
 
     before = index(TREE_BEFORE)
     nextest = index(NEXTEST)
-    doctests = index("cargo test --workspace --locked --doc")
+    doctests = index(DOCTESTS)
     guard = index(TREE_AFTER)
     assert before < nextest < doctests < guard
     lines = [line.strip() for line in steps[guard].splitlines()]
@@ -415,8 +414,17 @@ def test_nextest_runs_on_three_operating_systems() -> None:
     full = ci_matrix.cells(jobs["engine-test-part"], "full")
     pull = ci_matrix.cells(jobs["engine-test-part"], "pull")
     assert [c for c in full if c["os"] == "ubuntu-latest"] == pull
-    step = next(s for s in jobs["engine-test-part"]["steps"] if NEXTEST in str(s.get("run", "")))
-    assert "--partition hash:${{ matrix.shard }}/${{ matrix.shards }}" in str(step["run"])
+    # Linux by package (test_ci_scope.py holds the packages to the workspace's
+    # members, once each); macOS and Windows whole.
+    for cell in full:
+        whole = cell["os"] != "ubuntu-latest"
+        assert (cell["packages"] == "--workspace") is whole, cell
+    for step in jobs["engine-test-part"]["steps"]:
+        run = str(step.get("run", ""))
+        if NEXTEST in run or DOCTESTS in run:
+            assert step["env"]["PACKAGES"] == "${{ matrix.packages }}"
+            assert 'read -ra selected <<< "${PACKAGES}"' in run
+            assert "--partition" not in run
 
 
 def test_the_fuzz_smoke_covers_every_target() -> None:
@@ -537,12 +545,17 @@ def test_only_report_uploads_may_fail_without_failing_their_job() -> None:
 
     When GitHub's artifact service is down, ``actions/upload-artifact`` fails
     after its retries, and that must not fail a job whose checks passed. No
-    other step in ci.yml may set continue-on-error.
+    other step in ci.yml may set continue-on-error. The one upload a gate
+    reads, golden compare's unused ledger entries (the gather finds the stale
+    ones in them), fails its part instead.
     """
+    gate_inputs = {("golden-compare-part", "Upload the unused ledger entries")}
     uploads = 0
     for job_id, spec in _ci_jobs().items():
         for step in spec.get("steps") or []:
-            if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+            if (job_id, step.get("name")) in gate_inputs:
+                assert "continue-on-error" not in step, (job_id, step.get("name"))
+            elif str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                 uploads += 1
                 assert step.get("continue-on-error") is True, (job_id, step.get("name"))
             else:
