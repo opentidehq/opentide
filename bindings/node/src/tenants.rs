@@ -514,10 +514,7 @@ where
     F: Future<Output = Result<T, Failure>> + Send + 'static,
 {
     let (deferred, promise) = env.create_deferred::<Unknown<'static>, Resolver>()?;
-    let (abort, detach) = match listening {
-        Ok(listening) => (Ok(listening.abort), listening.detach),
-        Err(failure) => (Err(failure), None),
-    };
+    let (abort, detach) = parts(listening);
     // Boxed: the deferred's type, whose document borrows from no `Env`, is
     // then out of sight of the spawned future's `Send` check, which cannot
     // prove a higher-ranked lifetime (rust-lang/rust#110338).
@@ -533,10 +530,7 @@ where
             }
         }));
     });
-    let ready = work.and_then(|work| match abort? {
-        Abort::Already => Err(interrupted()),
-        abort => Ok((runtime()?, abortable(work, abort))),
-    });
+    let ready = ready(work, abort).and_then(|work| Ok((runtime()?, work)));
     match ready {
         Ok((runtime, work)) => {
             runtime.spawn(async move { settle(work.await) });
@@ -544,6 +538,32 @@ where
         Err(failure) => settle(Err(failure)),
     }
     Ok(promise)
+}
+
+/// What waits for an operation's signal, and what takes the listener off it
+/// when the operation settles.
+fn parts(listening: Result<Listening, Failure>) -> (Result<Abort, Failure>, Option<Detach>) {
+    match listening {
+        Ok(listening) => (Ok(listening.abort), listening.detach),
+        Err(failure) => (Err(failure), None),
+    }
+}
+
+/// `work` as it runs until its signal aborts it; the failure that rejects the
+/// promise at once instead: a request that does not convert, a signal that is
+/// not one, or one already aborted.
+fn ready<T, F>(
+    work: Result<F, Failure>,
+    abort: Result<Abort, Failure>,
+) -> Result<impl Future<Output = Result<T, Failure>>, Failure>
+where
+    F: Future<Output = Result<T, Failure>>,
+{
+    let work = work?;
+    match abort? {
+        Abort::Already => Err(interrupted()),
+        abort => Ok(abortable(work, abort)),
+    }
 }
 
 /// Whether, and when, an operation stops waiting: its `AbortSignal`.
@@ -716,23 +736,63 @@ fn read_options(
     let Some(options) = options else {
         return (Ok(Settings::default()), None);
     };
-    let at = |name: &str, value: Option<Either<JsDate<'_>, String>>| match value {
-        None => Ok(None),
-        Some(Either::A(date)) => date_instant(name, date.value_of().ok()).map(Some),
-        Some(Either::B(text)) => instant(name, &text).map(Some),
+    let read = |value: Option<Either<JsDate<'_>, String>>| match value? {
+        Either::A(date) => Some(When::Date(date.value_of().ok())),
+        Either::B(text) => Some(When::Text(text)),
     };
-    let settings = at("start", options.start).and_then(|start| {
+    let given = Given {
+        language: options.language,
+        start: read(options.start),
+        end: read(options.end),
+        limit: options.limit,
+        index: options.index,
+        data_view: options.data_view,
+        timeout: options.timeout,
+    };
+    (given.settings(), options.signal)
+}
+
+/// A window's instant as JavaScript gave it.
+#[derive(Debug, Clone, PartialEq)]
+enum When {
+    /// A `Date`: its milliseconds since the epoch, `None` when they do not
+    /// read.
+    Date(Option<f64>),
+    /// An RFC 3339 string.
+    Text(String),
+}
+
+/// `QueryOptions` as JavaScript gave them, the instants not read yet.
+#[derive(Debug, Clone, Default)]
+struct Given {
+    language: Option<String>,
+    start: Option<When>,
+    end: Option<When>,
+    limit: Option<u32>,
+    index: Option<Vec<String>>,
+    data_view: Option<String>,
+    timeout: Option<f64>,
+}
+
+impl Given {
+    /// The settings, each instant read: one that does not read is a usage
+    /// error naming its option.
+    fn settings(self) -> Result<Settings, Failure> {
+        let at = |name: &str, value: Option<When>| match value {
+            None => Ok(None),
+            Some(When::Date(milliseconds)) => date_instant(name, milliseconds).map(Some),
+            Some(When::Text(text)) => instant(name, &text).map(Some),
+        };
         Ok(Settings {
-            language: options.language,
-            start,
-            end: at("end", options.end)?,
-            limit: options.limit,
-            index: options.index,
-            data_view: options.data_view,
-            timeout: options.timeout,
+            language: self.language,
+            start: at("start", self.start)?,
+            end: at("end", self.end)?,
+            limit: self.limit,
+            index: self.index,
+            data_view: self.data_view,
+            timeout: self.timeout,
         })
-    });
-    (settings, options.signal)
+    }
 }
 
 /// The facade's request from `settings`; a missing `end` is now.
@@ -911,6 +971,113 @@ mod tests {
         for seconds in [-1.0, f64::NAN, f64::INFINITY] {
             assert!(duration("timeout", seconds).is_err(), "{seconds}");
         }
+    }
+
+    #[test]
+    fn given_options_read_their_instants_as_dates_or_strings() {
+        let given = Given {
+            language: Some("s1ql".into()),
+            start: Some(When::Date(Some(1_794_474_000_000.0))),
+            end: Some(When::Text(AT.into())),
+            limit: Some(3),
+            index: Some(vec!["logs".into()]),
+            data_view: Some("view".into()),
+            timeout: Some(2.0),
+        };
+        let settings = given.settings().unwrap();
+        assert_eq!(
+            settings.start,
+            Some("2026-11-12T09:00:00Z".parse().unwrap())
+        );
+        assert_eq!(settings.end, Some(AT.parse().unwrap()));
+        assert_eq!(
+            (
+                settings.language.as_deref(),
+                settings.limit,
+                settings.timeout
+            ),
+            (Some("s1ql"), Some(3), Some(2.0))
+        );
+        assert_eq!(settings.index, Some(vec!["logs".to_owned()]));
+        assert_eq!(settings.data_view.as_deref(), Some("view"));
+        assert_eq!(Given::default().settings().unwrap().start, None);
+        for (start, end, named) in [
+            (Some(When::Date(None)), None, "start:"),
+            (None, Some(When::Text("soon".into())), "end:"),
+            (Some(When::Text("2026-11-12".into())), None, "start:"),
+        ] {
+            let given = Given {
+                start,
+                end,
+                ..Given::default()
+            };
+            let failure = given.settings().unwrap_err();
+            assert_eq!(failure.code, "usage_invalid_value");
+            assert!(failure.message.starts_with(named), "{failure:?}");
+        }
+    }
+
+    #[test]
+    fn an_operation_runs_unless_its_request_or_its_signal_refuses() {
+        let done = || Ok(async { Ok::<_, Failure>(1) });
+        let never = || Abort::Never;
+        assert_eq!(run(ready(done(), Ok(never())).unwrap()).unwrap(), 1);
+        let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
+        assert_eq!(
+            run(ready(done(), Ok(Abort::On(receiver))).unwrap()).unwrap(),
+            1
+        );
+        drop(sender);
+        let refused = ready(done(), Ok(Abort::Already)).err().unwrap();
+        assert_eq!(refused.code, "interrupted");
+        let not_a_signal = ready(done(), Err(Failure::invalid("signal: x".into())))
+            .err()
+            .unwrap();
+        assert_eq!(not_a_signal.code, "usage_invalid_value");
+        // A request that does not convert wins over the signal.
+        let bad: Result<std::future::Ready<Result<u8, Failure>>, Failure> =
+            Err(Failure::usage("operation: upsert".into()));
+        let failure = ready(bad, Ok(Abort::Already)).err().unwrap();
+        assert_eq!(failure.code, "usage_invalid_choice");
+    }
+
+    #[test]
+    fn no_signal_listens_to_nothing() {
+        // No signal: Node is never called, so a null environment is never read.
+        let listening = listen(Env::from_raw(std::ptr::null_mut()), None).unwrap();
+        assert!(matches!(listening.abort, Abort::Never));
+        assert!(listening.detach.is_none());
+        let (abort, detach) = parts(Ok(listening));
+        assert!(matches!(abort, Ok(Abort::Never)));
+        assert!(detach.is_none());
+        let (abort, detach) = parts(Err(Failure::invalid("signal: x".into())));
+        assert_eq!(abort.unwrap_err().code, "usage_invalid_value");
+        assert!(detach.is_none());
+    }
+
+    #[test]
+    fn no_options_are_the_defaults_and_no_signal() {
+        let (settings, signal) = read_options(None);
+        let settings = settings.unwrap();
+        assert_eq!(
+            (settings.start, settings.end, settings.limit),
+            (None, None, None)
+        );
+        assert!(signal.is_none());
+    }
+
+    #[test]
+    fn a_signal_that_has_not_aborted_waits_for_the_work() {
+        let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
+        let slow = async {
+            for _ in 0..3 {
+                tokio::task::yield_now().await;
+            }
+            Ok::<_, Failure>(3)
+        };
+        assert_eq!(run(abortable(slow, Abort::On(receiver))).unwrap(), 3);
+        // Aborting after the work settled changes nothing.
+        assert!(sender.send(()).is_err());
     }
 
     #[test]
