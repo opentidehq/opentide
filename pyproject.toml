@@ -219,9 +219,17 @@ environment = { MACOSX_DEPLOYMENT_TARGET = "10.12" }
 # 10, Ubuntu 18.10 and their successors.
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
-# The manylinux images have no Rust toolchain.
-before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
-environment = { PATH = "$HOME/.cargo/bin:$PATH" }
+# The manylinux images have no Rust toolchain: before-all installs
+# rust-toolchain.toml's release, minimal, before anything builds, and
+# RUSTUP_TOOLCHAIN names it so that rustup never reads the file inside the
+# container. Without it, the first rustc or cargo in /project auto-installed
+# the file's toolchain with its components (rustfmt, clippy, in the default
+# profile) mid-build: hatch_build.py's `rustc -vV` hid a failed install, and
+# cargo then failed "recovering from a partially installed toolchain" with
+# `detected conflict: 'bin/cargo-clippy'`. A wheel needs rustc and cargo only.
+# tests/test_ci/test_rust_toolchain.py holds the version to the file's.
+before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain \"$RUSTUP_TOOLCHAIN\""
+environment = { PATH = "$HOME/.cargo/bin:$PATH", RUSTUP_TOOLCHAIN = "1.99.1" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

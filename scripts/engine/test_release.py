@@ -609,7 +609,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # a job builds comes from `rustup target add`, which with no toolchain
         # named adds it to the pinned release. (A build from the sdist, which
         # leaves the pin out, runs pip with the runner's Rust, as a user's does.)
+        # The package builds (build-packages.yml) are stricter: they run
+        # scripts/build/install-rust.sh, which installs that release by name
+        # with the minimal profile, without the file's components, adds the
+        # target and names the release in RUSTUP_TOOLCHAIN, so that rustup
+        # installs nothing mid-build (tests/test_ci/test_rust_toolchain.py).
         install = "rustup toolchain install --profile minimal --no-self-update"
+        script = "scripts/build/install-rust.sh"
         target = r"--target (\$\{\{[^}]*\}\}|\S+)"
         jobs = all_jobs()
         built: dict[str, set[str]] = {}
@@ -637,11 +643,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 "wasm",
             ],
         )
+        by_script = sorted(job for job, body in jobs.items() if script in body)
+        self.assertEqual(by_script, ["npm-native", "wheels"])
+        # npm-native cross-compiles: the script adds its target.
+        self.assertIn(f'{script} "${{TARGET}}"', jobs["npm-native"])
         for job, body in jobs.items():
             self.assertNotIn("dtolnay/rust-toolchain", body, job)
             self.assertNotRegex(body, r"rustup (?:default|override)|cargo \+", job)
             installs = re.findall(r"rustup toolchain install(.*)", body)
-            self.assertEqual(len(installs), 1 if job in rust else 0, (job, installs))
+            expected = 1 if job in rust and job not in by_script else 0
+            self.assertEqual(len(installs), expected, (job, installs))
             if not installs:
                 continue
             # No toolchain name and nothing rustup would ignore: the bare install
@@ -658,7 +669,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertLessEqual(built[job], added, job)
         # The matrix build cross-compiles for x86_64-apple-darwin and the like.
         self.assertEqual(built["native"], {"${{ matrix.target }}"})
-        self.assertEqual(targets_added(jobs["npm-native"]), {"${{ matrix.target }}"})
+        # npm-native adds its target through the script, with TARGET its matrix's.
+        self.assertIn("TARGET: ${{ matrix.target }}", jobs["npm-native"])
         # build-wasm.sh adds its own targets, but the job states them.
         self.assertEqual(targets_added(jobs["wasm"]), {"wasm32-unknown-unknown", "wasm32-wasip1"})
 

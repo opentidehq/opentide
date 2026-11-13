@@ -7,7 +7,8 @@
 # which this pin never goes below. That floor is declared, not checked: no job
 # builds with it.
 #
-# To move to a newer release, in one PR: change `channel`, then run
+# To move to a newer release, in one PR: change `channel` (and RUSTUP_TOOLCHAIN in
+# pyproject.toml's [tool.cibuildwheel.linux], which the Linux wheels build with), then run
 # `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`
 # and `cargo nextest run --workspace --profile ci`; fix what the new lints
 # report, or allow one in the root Cargo.toml with its reason (crates/AGENTS.md,
