@@ -2,11 +2,15 @@
 //! nested models).
 
 use garde::Validate;
+use indexmap::IndexMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::FromNode;
-use crate::objects::platform::platform_block;
+use crate::from_node::Context;
+use crate::node::{Node, Value};
+use crate::objects::checks::Violation;
+use crate::objects::platform::{platform_block, python_strip};
 use crate::pins::Pins;
 
 /// Declares a Splunk model whose every field is optional: `name: Type`, each
@@ -313,5 +317,101 @@ platform_block! {
         /// tenant.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub correlation_search: Option<bool>,
+        /// `savedsearches.conf` keys no other field sets, sent as written at deploy: a custom alert
+        /// action's `action.<name>.param.*`, for instance. A value is a string, number, boolean
+        /// (`1` or `0`) or `null` (empty). A key the block also sets takes this value.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(extend("tide.template.hide" = true))]
+        #[from_node(with = "saved_search_table")]
+        #[garde(custom(garde_saved_search_table))]
+        pub advanced: Option<IndexMap<String, Option<SavedSearchValue>>>,
     }
+}
+
+/// A `savedsearches.conf` value in a Splunk block's `advanced` table:
+/// `str | int | float | bool`, or `null`. Splunk stores every value as text,
+/// so a list or a table has no meaning there.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, FromNode)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum SavedSearchValue {
+    /// A string.
+    #[from_node(tag = "str")]
+    #[schemars(description = "")]
+    Text(String),
+    /// An integer.
+    #[from_node(tag = "int")]
+    #[schemars(description = "")]
+    Int(i64),
+    /// A number.
+    #[from_node(tag = "float")]
+    #[schemars(
+        description = "",
+        schema_with = "crate::objects::platform::number_schema"
+    )]
+    Float(f64),
+    /// A boolean, sent as `1` or `0`.
+    #[from_node(tag = "bool")]
+    #[schemars(description = "")]
+    Bool(bool),
+}
+
+/// The text of a blank `advanced` key's error.
+const BLANK_KEY: &str = "a savedsearches.conf key must not be empty";
+
+/// A key of the `advanced` table must not be blank.
+fn check_saved_search_key(key: &str) -> Result<(), Violation> {
+    if python_strip(key).is_empty() {
+        Err(Violation::value_error(BLANK_KEY))
+    } else {
+        Ok(())
+    }
+}
+
+/// `advanced` in the conversion: `null`, or a table of scalars whose keys
+/// are not blank.
+#[expect(
+    clippy::option_option,
+    reason = "a FromNode `with` function's signature: the outer Option is the conversion's \
+              success, the inner the optional field's own value (as `optional_query_text`)"
+)]
+fn saved_search_table(
+    node: &Node,
+    cx: &mut Context,
+) -> Option<Option<IndexMap<String, Option<SavedSearchValue>>>> {
+    if matches!(node.value, Value::Null) {
+        return Some(None);
+    }
+    let table = IndexMap::<String, Option<SavedSearchValue>>::from_node(node, cx);
+    let mut ok = true;
+    if let Value::Map(entries) = &node.value {
+        for entry in entries {
+            if let Value::Str(key) = &entry.key.value
+                && let Err(violation) = check_saved_search_key(key)
+            {
+                ok = false;
+                cx.at_key(key, |cx| {
+                    cx.at_key("[key]", |cx| violation.report(&entry.key, cx));
+                });
+            }
+        }
+    }
+    let table = table?;
+    ok.then_some(Some(table))
+}
+
+/// garde: [`check_saved_search_key`] on every key of a present table.
+#[expect(
+    clippy::ref_option,
+    reason = "garde's custom validator takes the field by reference as `&Option<T>` \
+              (as `garde_optional_query_text`)"
+)]
+fn garde_saved_search_table(
+    value: &Option<IndexMap<String, Option<SavedSearchValue>>>,
+    _pins: &Pins,
+) -> garde::Result {
+    value
+        .iter()
+        .flat_map(IndexMap::keys)
+        .try_for_each(|key| check_saved_search_key(key).map_err(Violation::into_garde))
 }

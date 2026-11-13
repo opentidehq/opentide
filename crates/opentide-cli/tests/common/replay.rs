@@ -95,6 +95,8 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
     "tide-corpus-legacy-id-error",
+    "tide-corpus-splunk-advanced",
+    "tide-corpus-legacy-text-id",
     "tide-corpus-compile-missing-field",
     "tide-corpus-compile-invalid-value",
     "tide-corpus-compile-empty-block",
@@ -272,6 +274,8 @@ pub fn fixture(name: &str, ws: &Path) {
         "tide-corpus-cve"
         | "tide-corpus-legacy-ids"
         | "tide-corpus-legacy-id-error"
+        | "tide-corpus-splunk-advanced"
+        | "tide-corpus-legacy-text-id"
         | "tide-corpus-compile-missing-field"
         | "tide-corpus-compile-invalid-value"
         | "tide-corpus-compile-empty-block"

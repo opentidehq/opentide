@@ -72,10 +72,24 @@ instead of downloading.
 
 ## Diagnostic code reference
 
-`render_diagnostics_docs.py` writes `docs/cli/diagnostics.md` from the
-`opentide explain` pages in `src/opentide/data/diagnostics/`. Edit a page
-there, then run it; `--check` exits 1 when the committed reference is stale.
-`tests/test_cli/test_explain.py` fails on drift too.
+`cargo xtask codegen` writes `docs/cli/diagnostics.md` from the
+`opentide explain` pages (`src/opentide/data/diagnostics/`, and the analysis
+engine's codes), through `opentide_cli::explain::reference_markdown`. Edit a
+page there, then run it; `cargo xtask codegen --check` (CI's lint job) exits 1
+when the committed reference is stale. A `<` in prose that cannot open a tag is
+written `&lt;`, so the page stays MDX that opentide.org can render.
+
+## MDX check of the docs
+
+`check_docs_mdx.py` fails on prose in `docs/` that MDX cannot parse: a `<`
+that cannot open a tag (`<=>`, `a < b`) or a bare `{` or `}`, outside code,
+tags, comments and frontmatter. opentide.org renders `docs/` as MDX, and one
+such page stops its docs sync. `scripts/validate-docs.sh` runs it, and
+`tests/test_docs/test_docs_mdx.py` runs it over `docs/`.
+
+```bash
+python3 scripts/build/check_docs_mdx.py [DOCS_DIR]
+```
 
 ## The Rust the packages build with
 
