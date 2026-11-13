@@ -18,10 +18,6 @@ use opentide_connectors::python::python_string_repr;
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = opentide_workspace::state::SCHEMA_ID;
-/// Platforms whose deployer addresses the remote rule by a vendor id.
-pub const STATE_PLATFORMS: [&str; 4] = opentide_workspace::state::STATE_PLATFORMS;
-/// Platforms whose external id is a canonical decimal integer.
-const INTEGER_ID_PLATFORMS: [&str; 3] = ["defender_for_endpoint", "sentinel_one", "sysdig"];
 /// The root keys a shard's model reads; any other is kept as written.
 const ROOT_KEYS: [&str; 3] = ["object_uuid", "platforms", "schema"];
 /// The ignore line `opentide setup` writes, which a workspace that ignores
@@ -148,7 +144,7 @@ pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<Strin
             format!("{platform} external id is empty"),
         )),
         ExternalId::Text(text)
-            if INTEGER_ID_PLATFORMS.contains(&platform) && !canonical_decimal(text) =>
+            if opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal(text) =>
         {
             Err(StateError::new(
                 "external_id_shape",
@@ -333,7 +329,7 @@ impl Shard {
                         "{} names platform {}; only {} store external ids",
                         path.display(),
                         python_string_repr(&platform),
-                        STATE_PLATFORMS.join(", ")
+                        opentide_workspace::state::state_platforms().join(", ")
                     ),
                 ));
             }

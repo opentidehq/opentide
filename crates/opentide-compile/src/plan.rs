@@ -13,27 +13,10 @@ use crate::json::{Json, Object};
 use crate::rule::canonical_uuid;
 use crate::strategy::{RunStrategies, StatusError, StatusStrategy, Statuses, deploys};
 
-/// The platforms, in the order the plan visits a configuration's tables.
-pub const PLATFORMS: [&str; 9] = [
-    "sentinel",
-    "defender_for_endpoint",
-    "splunk",
-    "sentinel_one",
-    "crowdstrike",
-    "harfanglab",
-    "carbon_black_cloud",
-    "elastic",
-    "sysdig",
-];
-
-/// Platforms whose deployer addresses a rule by a vendor id kept in
-/// `.opentide/states/deployment/` (`STATE_PLATFORMS`).
-pub const STATE_PLATFORMS: [&str; 4] = [
-    "crowdstrike",
-    "defender_for_endpoint",
-    "sentinel_one",
-    "sysdig",
-];
+/// The platforms, in the order the plan visits a configuration's tables
+/// ([`opentide_schema::platforms::Order::Container`]).
+pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] =
+    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Container);
 
 /// Where nested rule files are explained.
 pub const NESTED_RULES_ISSUE: &str = "https://github.com/opentidehq/opentide/issues/312";
@@ -721,7 +704,7 @@ pub fn action(
         _ => {}
     }
     // A platform plugin records the ids its platform gives, as the built-in
-    // platforms of `STATE_PLATFORMS` do (UC-4.5b).
+    // platforms whose external id the deployment state keeps do (UC-4.5b).
     if !opentide_workspace::state::stores_ids(platform) {
         return "upsert";
     }
