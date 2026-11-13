@@ -26,6 +26,7 @@
     "workflows/ci-cd",
     "workflows/agentic-setup",
     "---Operate---",
-    "troubleshooting"
+    "troubleshooting",
+    "migration/language-server"
   ]
 }

@@ -107,6 +107,36 @@ def test_rust_host_reads_rustc(hook: types.ModuleType) -> None:
     assert hook.rust_host(None) is None
 
 
+def test_a_failing_rustc_fails_the_build_with_what_it_printed(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Through rustup's proxy, `rustc -vV` can be a toolchain install that
+    failed; read as "no host", the error surfaced later in cargo as a
+    partially installed toolchain (the linux-arm64 wheel, #1031, #1048)."""
+    stderr = "error: failed to install component: 'clippy-preview', detected conflict"
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr=stderr + "\n")
+
+    monkeypatch.setattr(hook.subprocess, "run", run)
+    with pytest.raises(RuntimeError) as raised:
+        hook.rust_host("/root/.cargo/bin/rustc")
+    message = str(raised.value)
+    assert "`/root/.cargo/bin/rustc -vV`" in message
+    assert "status 1" in message
+    assert stderr in message
+
+
+def test_a_rustc_without_a_host_line_reads_as_none(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, stdout="rustc 1.99.1\n", stderr="")
+
+    monkeypatch.setattr(hook.subprocess, "run", run)
+    assert hook.rust_host("rustc") is None
+
+
 def test_the_stub_ships_while_compiled_modules_stay_out() -> None:
     """A ``_native.*`` exclude matched ``_native.pyi`` too, so no stub reached users."""
     from fnmatch import fnmatch

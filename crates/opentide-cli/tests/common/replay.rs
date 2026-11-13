@@ -23,6 +23,19 @@ use opentide_compare::ledger::{Ledger, Usage};
 use opentide_compare::normalise::{Normaliser, Rule, Volatile};
 use opentide_compare::{FileState, Run};
 
+/// Whether `case` records a refused connection, whose text carries the
+/// host's errno (`[Errno 111]` in the recording, `os error 111` from the Rust
+/// connectors on Linux, 61 on macOS): its `unreachable` variants (UC-4.2,
+/// #832; UC-4.4, #834) are recorded and compared on Linux, by `cargo xtask
+/// golden check`, and replayed here only there.
+pub fn host_errno(case: &str) -> bool {
+    !cfg!(target_os = "linux")
+        && case
+            .rsplit('/')
+            .next()
+            .is_some_and(|variant| variant.contains("unreachable"))
+}
+
 /// A generated fixture laid out already (`cargo xtask corpus faults --out
 /// DIR`, `cargo xtask corpus generate --seed 1 ... --out DIR`), named in
 /// `OPENTIDE_REPLAY_FIXTURES` as `fault=DIR,heavy-small=DIR`.
@@ -847,7 +860,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                         "{command}/{mode}/{fixture}/{}",
                         dir.file_name().unwrap().to_string_lossy()
                     );
-                    if !id.contains(&filter) {
+                    if !id.contains(&filter) || host_errno(&id) {
                         continue;
                     }
                     problems.extend(replay(&id, &dir, &ledger, &mut usage));
@@ -862,7 +875,8 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
             })
                 // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
-                || entry.case.starts_with("cassette:");
+                || entry.case.starts_with("cassette:")
+                || host_errno(&entry.case);
             // The root's cases are recorded under `_root`.
             let dir = if entry.command.is_empty() {
                 "_root".to_owned()
