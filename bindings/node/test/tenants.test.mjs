@@ -62,8 +62,9 @@ test('a workspace lists its tenants in file order', () => {
 })
 
 test('the platforms and what each can do', () => {
-  assert.equal(platforms().length, 9)
+  assert.equal(platforms().length, 10)
   assert.deepEqual(capabilities('sysdig'), { deploy: true, liveValidation: false, query: false })
+  assert.deepEqual(capabilities('exabeam'), { deploy: true, liveValidation: true, query: true })
   assert.equal(capabilities('nowhere'), null)
 })
 
