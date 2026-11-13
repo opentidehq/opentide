@@ -111,12 +111,17 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let (repo, options) = placement(cx.repo, cx.env, cx.cwd);
     // The catalogue's ATT&CK matrix and field roles are parsed while the
     // workspace loads: both are cached for the run.
-    let opened = std::thread::scope(|scope| {
-        if section == Some("catalog") {
-            scope.spawn(catalogue::warm);
-        }
+    let opened = if crate::threads::AVAILABLE {
+        std::thread::scope(|scope| {
+            if section == Some("catalog") {
+                scope.spawn(catalogue::warm);
+            }
+            super::open(options)
+        })
+    } else {
+        // Without threads (WASI) the catalogue warms after the load.
         super::open(options)
-    });
+    };
     let workspace = match opened {
         Ok(workspace) => workspace,
         Err(message) => return Report::error(COMMAND, message),

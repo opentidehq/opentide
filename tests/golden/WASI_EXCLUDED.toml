@@ -1,0 +1,11 @@
+# The golden cases `cargo xtask golden check --runner wasi` leaves out, besides
+# those with a cassette (recorded HTTP), which it leaves out unlisted: the WASI
+# build of the command line has no network (wasm32-wasip1 has no sockets; ADR
+# 0007's amendment). Only a case that needs the network may be listed, which
+# xtask's tests hold the list to (xtask/src/golden/wasi.rs): its fixture
+# reaches tenants, a MISP instance or CVE lookups, or its command sends
+# requests. Every other case passes against the WASI build.
+#
+# [[case]]
+# id = "<command>/<mode>/<fixture>/<variant>"   # a glob, as --filter reads one
+# reason = "why it needs the network"

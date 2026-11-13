@@ -252,6 +252,14 @@ lto = true
 codegen-units = 1
 strip = "symbols"
 
+# The WASI build of the command line (`scripts/engine/build-wasm.sh cli`), the
+# one module the VS Code extension runs (ADR 0007's amendment): optimised for
+# size, as the `.vsix` is held to 15 MiB. Unwinding stays: the crash handler
+# catches a panic and reports it.
+[profile.wasi]
+inherits = "release"
+opt-level = "z"
+
 # What an editable install of opentide (`uv sync`) builds for development and CI
 # (hatch_build.py): optimised, so the engine runs at full speed in the Python test
 # suite, without the release profile's slow link-time optimisation.

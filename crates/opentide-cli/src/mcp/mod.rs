@@ -165,7 +165,15 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
         version,
         workspace_problem,
     );
-    let outcome = runtime.block_on(server.run(rpc.file()?));
+    #[cfg(not(target_os = "wasi"))]
+    let outcome = runtime.block_on(server.run(tokio::io::stdin(), rpc.file()?));
+    // WASI: tokio has no standard streams there; blocking ones serve, as
+    // nothing else runs on the current-thread runtime meanwhile.
+    #[cfg(target_os = "wasi")]
+    let outcome = runtime.block_on(server.run(
+        blocking::Input(std::io::stdin()),
+        blocking::Output(rpc.writer()?),
+    ));
     rpc.restore()?;
     outcome?;
     Ok(0)
@@ -174,10 +182,12 @@ pub fn serve(launch: &Launch, version: &str) -> std::io::Result<i32> {
 pub(crate) mod stdio {
     //! stdout for JSON-RPC alone.
 
+    #[cfg(not(target_os = "wasi"))]
     use std::fs::File;
 
     /// The stream the server writes frames to, and what restores descriptor 1.
     pub struct Reserved {
+        #[cfg(not(target_os = "wasi"))]
         rpc: File,
         #[cfg(unix)]
         saved: std::os::fd::OwnedFd,
@@ -185,13 +195,22 @@ pub(crate) mod stdio {
 
     impl Reserved {
         /// A handle on the frames' stream for the transport.
+        #[cfg(not(target_os = "wasi"))]
         pub fn file(&self) -> std::io::Result<tokio::fs::File> {
             Ok(tokio::fs::File::from_std(self.rpc.try_clone()?))
         }
 
         /// A handle on the frames' stream for a blocking writer (`serve`).
+        #[cfg(not(target_os = "wasi"))]
         pub fn writer(&self) -> std::io::Result<File> {
             self.rpc.try_clone()
+        }
+
+        /// The frames' stream for a blocking writer (`serve`): stdout itself
+        /// under WASI.
+        #[cfg(target_os = "wasi")]
+        pub fn writer(&self) -> std::io::Result<std::io::Stdout> {
+            Ok(std::io::stdout())
         }
 
         /// Points descriptor 1 back at the stream it was.
@@ -220,5 +239,63 @@ pub(crate) mod stdio {
         use std::os::windows::io::AsHandle;
         let rpc = File::from(std::io::stdout().as_handle().try_clone_to_owned()?);
         Ok(Reserved { rpc })
+    }
+
+    /// stdout itself for the frames (WASI: no descriptor can be duplicated or
+    /// moved aside, so the commands a server runs write to buffers, never to
+    /// stdout).
+    #[cfg(target_os = "wasi")]
+    pub fn reserve_stdout() -> std::io::Result<Reserved> {
+        Ok(Reserved {})
+    }
+}
+
+/// The standard streams as tokio's async traits, each call blocking (WASI,
+/// where tokio has no `io-std`): the MCP server runs alone on a
+/// current-thread runtime, so blocking it waits for the client and nothing
+/// else.
+#[cfg(target_os = "wasi")]
+mod blocking {
+    use std::io::{Read, Write};
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+    /// A blocking reader as an [`AsyncRead`].
+    pub struct Input<R>(pub R);
+
+    impl<R: Read + Unpin> AsyncRead for Input<R> {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            let this = self.get_mut();
+            let read = this.0.read(buf.initialize_unfilled())?;
+            buf.advance(read);
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// A blocking writer as an [`AsyncWrite`].
+    pub struct Output<W>(pub W);
+
+    impl<W: Write + Unpin> AsyncWrite for Output<W> {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            data: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            Poll::Ready(self.get_mut().0.write(data))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(self.get_mut().0.flush())
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(self.get_mut().0.flush())
+        }
     }
 }

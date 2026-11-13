@@ -38,8 +38,10 @@ pub mod render;
 pub mod schemas;
 pub mod serve;
 pub mod suggest;
+pub mod threads;
 pub mod tree;
 mod tree_meta;
+#[cfg(feature = "terminal")]
 pub mod tui;
 pub mod usage;
 

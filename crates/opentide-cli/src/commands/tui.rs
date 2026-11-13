@@ -71,6 +71,23 @@ pub fn gate(place: &Place<'_>) -> Option<Report> {
     Some(report)
 }
 
+/// The refusal of a build without the terminal UI (the `terminal` feature
+/// off, as in the WASI build), at a terminal where it would otherwise open.
+#[cfg(not(feature = "terminal"))]
+pub fn unavailable() -> Report {
+    let mut report = Report::failed(
+        COMMAND,
+        USAGE_EXIT_CODE,
+        Failure::new(
+            USAGE_TUI_NEEDS_TTY,
+            "opentide tui is not in this build of opentide (it has no terminal UI); run the opentide CLI to open it",
+        ),
+    );
+    report.next("opentide info", "catalogue counts and platforms");
+    report.next("opentide validate", "diagnostics for every object");
+    report
+}
+
 /// The setting that chose `plain` mode at a terminal, read in the order the
 /// mode rules read them.
 fn plain_reason(place: &Place<'_>) -> Option<&'static str> {

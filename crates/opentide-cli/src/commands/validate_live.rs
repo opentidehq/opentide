@@ -1319,20 +1319,16 @@ fn check_batches(
     compile: &opentide_compile::Context<'_>,
 ) -> Result<CheckReport, Early> {
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    let ran = std::thread::scope(|scope| {
-        scope
-            .spawn(|| {
-                tracing::dispatcher::with_default(&dispatch, || {
-                    opentide_connectors::runtime::block_on(async {
-                        if platform == "elastic" {
-                            elastic(batches, timeout, cx, compile).await
-                        } else {
-                            generic(platform, batches, timeout, cx).await
-                        }
-                    })
-                })
+    let ran = crate::threads::run_apart(|| {
+        tracing::dispatcher::with_default(&dispatch, || {
+            opentide_connectors::runtime::block_on(async {
+                if platform == "elastic" {
+                    elastic(batches, timeout, cx, compile).await
+                } else {
+                    generic(platform, batches, timeout, cx).await
+                }
             })
-            .join()
+        })
     });
     match ran {
         Ok(Ok(result)) => result,

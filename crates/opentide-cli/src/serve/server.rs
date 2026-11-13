@@ -10,6 +10,7 @@
 //! and the loop goes on.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::io::Read;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -52,6 +53,48 @@ struct Inner {
     ready: Condvar,
     state: Mutex<State>,
     version: String,
+    /// The client's input, read on this thread when no thread reads it
+    /// ([`Server::read_inline`]: the WASI build, which has no threads).
+    inline: Mutex<Option<Lines<Box<dyn Read + Send>>>>,
+}
+
+/// The lines of a stream, one at a time, without their `\n`; a last line
+/// without one is read at the end of input.
+pub struct Lines<R> {
+    source: R,
+    pending: Vec<u8>,
+    ended: bool,
+}
+
+impl<R: Read> Lines<R> {
+    /// The lines `source` will give.
+    pub fn new(source: R) -> Lines<R> {
+        Lines {
+            source,
+            pending: Vec::new(),
+            ended: false,
+        }
+    }
+
+    /// The next line, reading as much as it takes; `None` at the end of
+    /// input (or once reading fails).
+    pub fn next_line(&mut self) -> Option<Vec<u8>> {
+        let mut chunk = [0_u8; 8192];
+        loop {
+            if let Some(end) = self.pending.iter().position(|byte| *byte == b'\n') {
+                let mut line: Vec<u8> = self.pending.drain(..=end).collect();
+                line.pop();
+                return Some(line);
+            }
+            if self.ended {
+                return (!self.pending.is_empty()).then(|| std::mem::take(&mut self.pending));
+            }
+            match self.source.read(&mut chunk) {
+                Ok(0) | Err(_) => self.ended = true,
+                Ok(read) => self.pending.extend_from_slice(&chunk[..read]),
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -209,6 +252,7 @@ impl Server {
                 ready: Condvar::new(),
                 state: Mutex::new(State::default()),
                 version: version.to_owned(),
+                inline: Mutex::new(None),
             }),
         }
     }
@@ -266,6 +310,60 @@ impl Server {
     }
 
     // --- input ----------------------------------------------------------------------
+
+    /// Reads the client's input on the serving thread instead of a reading
+    /// thread of its own (the WASI build, which has none): [`Server::serve`]
+    /// takes a line from `source` whenever its queue is empty.
+    pub fn read_inline(&self, source: Box<dyn Read + Send>) {
+        *self
+            .inner
+            .inline
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(Lines::new(source));
+    }
+
+    /// Reads one line of the inline input ([`Server::read_inline`]) and takes
+    /// it, as the reading thread does; at the end of input, closes it.
+    /// Returns whether a line came. A part of the server that waits for the
+    /// client's answer to a request of its own (a host-handled request)
+    /// pumps until that answer is taken; the other messages queue as usual.
+    /// Without inline input it reads nothing and returns `false`.
+    pub fn pump(&self) -> bool {
+        let line = {
+            let mut inline = self
+                .inner
+                .inline
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            let Some(lines) = inline.as_mut() else {
+                return false;
+            };
+            let line = lines.next_line();
+            if line.is_none() {
+                *inline = None;
+            }
+            line
+        };
+        match line {
+            Some(line) => {
+                self.receive(&line);
+                true
+            }
+            None => {
+                self.close_input();
+                false
+            }
+        }
+    }
+
+    /// Whether the input is read on the serving thread.
+    fn reads_inline(&self) -> bool {
+        self.inner
+            .inline
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some()
+    }
 
     /// Takes one line from the client, on the reading thread.
     pub fn receive(&self, line: &[u8]) {
@@ -397,6 +495,16 @@ impl Server {
                         drop(queue);
                         self.close();
                         return false;
+                    }
+                    if self.reads_inline() {
+                        drop(queue);
+                        self.pump();
+                        queue = self
+                            .inner
+                            .queue
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner);
+                        continue;
                     }
                     queue = self
                         .inner
