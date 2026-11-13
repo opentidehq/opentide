@@ -26,6 +26,10 @@ pub struct Prepared {
     pub findings: Vec<Finding>,
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the value is reduced modulo 2^32 first"
+)]
 pub fn prepare(source: &str) -> Prepared {
     let mut bytes = source.as_bytes().to_vec();
     let mut rule_wildcards = Vec::new();
@@ -254,7 +258,7 @@ fn in_hex_string(source: &str, offset: usize) -> bool {
     let head = head.trim_end();
     let ident_start = head
         .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .map_or(0, |i| i);
+        .unwrap_or(0);
     head[ident_start..].starts_with('$')
 }
 

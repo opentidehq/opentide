@@ -372,6 +372,10 @@ fn enum_values(line: &str) -> Option<Vec<CompletionItem>> {
 }
 
 /// Signature help at byte `offset`: the call whose parentheses hold it.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a call has far fewer than 2^32 arguments"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let offset = offset.min(source.len());
     let bytes = source.as_bytes();

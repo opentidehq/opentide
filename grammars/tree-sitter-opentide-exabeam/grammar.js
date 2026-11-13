@@ -15,7 +15,7 @@
  * - the advanced operators of Search: `SELECT`, `FROM`, `WHERE`, `AS`,
  *   `GROUP-BY`, `ORDER-BY`, `LIMIT`, pipes, `FOREACH`, the aggregations and
  *   `RGX_EXTRACT`. This SQL-like layer is part of the specified vendor
- *   language, not a SQL dialect (`docs/EXABEAM.md`).
+ *   language, not a SQL dialect (`docs/engine/EXABEAM.md`).
  *
  * Filter operators are any case; clause keywords are recognised in any case
  * too, so a mixed-case one still highlights while the engine reports

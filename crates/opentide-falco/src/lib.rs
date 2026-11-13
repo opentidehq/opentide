@@ -1086,15 +1086,15 @@ pub fn hover(text: &str, offset: usize, ctx: &Context) -> Option<String> {
                     items.join(", ")
                 ));
             }
-            if node.kind() == "identifier" {
-                if let Some(m) = catalog.macros.get(word) {
-                    return Some(format!(
-                        "**`{word}`** (macro, Falco default rules)\n\n```falco\n{}\n```\n\nDefined in `{}`.{}",
-                        m.condition,
-                        m.origin,
-                        also_defined(&m.also)
-                    ));
-                }
+            if node.kind() == "identifier"
+                && let Some(m) = catalog.macros.get(word)
+            {
+                return Some(format!(
+                    "**`{word}`** (macro, Falco default rules)\n\n```falco\n{}\n```\n\nDefined in `{}`.{}",
+                    m.condition,
+                    m.origin,
+                    also_defined(&m.also)
+                ));
             }
             if let Some(l) = catalog.lists.get(word) {
                 return Some(format!(

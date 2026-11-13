@@ -2,6 +2,11 @@
 //! spec's own examples clean. Each case asserts the exact set of codes, so a
 //! check that starts firing elsewhere fails here too.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "positions and counts in test documents of a few lines"
+)]
+
 use opentide_core::Severity;
 use opentide_yara::{Context, Dialect, Profile, analyze_with};
 

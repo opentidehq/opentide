@@ -85,15 +85,14 @@ fn inline(schema: &Value, defs: &Map<String, Value>, depth: usize) -> Value {
             if let Some(target) = map.get("$ref").and_then(Value::as_str)
                 && let Some(name) = target.strip_prefix("#/$defs/")
                 && let Some(definition) = defs.get(name)
+                && let Value::Object(definition) = inline(definition, defs, depth + 1)
             {
-                if let Value::Object(definition) = inline(definition, defs, depth + 1) {
-                    for (key, value) in definition {
-                        // A definition's title is its class name.
-                        if key == "title" && value.as_str() == Some(name) {
-                            continue;
-                        }
-                        out.insert(key, value);
+                for (key, value) in definition {
+                    // A definition's title is its class name.
+                    if key == "title" && value.as_str() == Some(name) {
+                        continue;
                     }
+                    out.insert(key, value);
                 }
             }
             for (key, value) in map {

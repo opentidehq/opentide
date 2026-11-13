@@ -335,6 +335,10 @@ impl<'a> LineIndex<'a> {
     /// Same result as [`position_to_offset`]: the byte offset of an LSP
     /// position (UTF-16 columns), a column past its line's end clamping to
     /// that end, a line past the text's end giving its length.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a char is one or two UTF-16 units"
+    )]
     pub fn offset(&self, position: Position) -> usize {
         let line = position.line as usize;
         let Some(&start) = self.starts.get(line) else {
@@ -1989,7 +1993,7 @@ mod tests {
                     "{text:?} @ {offset}"
                 );
             }
-            let lines = text.split('\n').count() as u32;
+            let lines = u32::try_from(text.split('\n').count()).unwrap();
             for line in 0..=lines + 1 {
                 for character in 0..=40 {
                     let p = Position::new(line, character);

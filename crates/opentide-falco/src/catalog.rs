@@ -289,14 +289,14 @@ impl Catalog {
         let mut candidate = name;
         let mut exact = true;
         loop {
-            if let Some(field) = self.field(candidate) {
-                if exact || field.takes_arg() {
-                    return if field.applies_to(source) {
-                        Lookup::Known(field)
-                    } else {
-                        Lookup::OtherSource(field)
-                    };
-                }
+            if let Some(field) = self.field(candidate)
+                && (exact || field.takes_arg())
+            {
+                return if field.applies_to(source) {
+                    Lookup::Known(field)
+                } else {
+                    Lookup::OtherSource(field)
+                };
             }
             match candidate.rsplit_once('.') {
                 Some((head, _)) if head.contains('.') => {

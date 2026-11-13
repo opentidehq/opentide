@@ -1,8 +1,8 @@
 //! The Graylog dialect against recorded live-Graylog verdicts.
 //!
-//! `testdata/oracles/graylog/*.lucene` are probes sent to
+//! `crates/testdata/oracles/graylog/*.lucene` are probes sent to
 //! `POST /api/search/validate` on Graylog 7.2.2 and 6.3.5
-//! (`scripts/oracles/graylog/probes.py`); `expected.tsv` records the status
+//! (`scripts/engine/oracles/graylog/probes.py`); `expected.tsv` records the status
 //! per release line. Graylog's validator parses the query with Lucene's
 //! classic parser and compiles each regex; ERROR means deploy saves nothing.
 //! This test needs no server. It holds the engine to those verdicts:
@@ -88,7 +88,7 @@ const CODES: &[(&str, &str)] = &[
 ];
 
 fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/oracles/graylog")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/oracles/graylog")
 }
 
 #[test]

@@ -266,7 +266,7 @@ Engine checks below the grammar (Elastic dialect unless noted):
   - `graylog_double_backslash` (warning): four backslashes in a row. `\\` is already one literal backslash in a Graylog query.
   - `graylog_analyzed_field` (warning): a regexp, wildcard, or range on `message` or `full_message`, which Graylog tokenises.
   - Hover and completion know Graylog's message fields (`message`, `full_message`, `source`, `timestamp`, `streams`, `gl2_source_input`, `gl2_source_node`, `gl2_message_id`) and `_exists_`, and offer no ECS field. `opentide-lsp analyze --platform graylog` checks a `.lucene` file in the Graylog dialect.
-  - `testdata/oracles/graylog/` holds probes with the verdicts of Graylog 7.2.2 and 6.3.5's `POST /api/search/validate` (`scripts/oracles/graylog/probes.py`); `crates/opentide-lucene/tests/graylog_verdicts.rs` holds the dialect to them: an error exactly where Graylog says ERROR, except the silent failures above and two validator gaps it lists.
+  - `crates/testdata/oracles/graylog/` holds probes with the verdicts of Graylog 7.2.2 and 6.3.5's `POST /api/search/validate` (`scripts/engine/oracles/graylog/probes.py`); `crates/opentide-lucene/tests/graylog_verdicts.rs` holds the dialect to them: an error exactly where Graylog says ERROR, except the silent failures above and two validator gaps it lists.
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |
@@ -383,9 +383,9 @@ Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike'
 
 ## Exabeam
 
-Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-Scale SIEM ([exabeam-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md)): `configurations.exabeam.sequences[].query` (profile `rule`), hunts with `system: exabeam` and `.exabeam` files (profile `search`). Exabeam's guides call it "EQL"; the id is never `eql`, which is Elastic's. `docs/EXABEAM.md` has the profiles, the codes and the conformance results.
+Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-Scale SIEM ([exabeam-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md)): `configurations.exabeam.sequences[].query` (profile `rule`), hunts with `system: exabeam` and `.exabeam` files (profile `search`). Exabeam's guides call it "EQL"; the id is never `eql`, which is Elastic's. `docs/engine/EXABEAM.md` has the profiles, the codes and the conformance results.
 
-- **Verdicts** come from `crates/opentide-exabeam/src/check.rs`, a port of the specification's reference checker, which agrees with it on every conformance query and on Exabeam's 2,371 published rules but for three RE2 differences (`docs/EXABEAM.md`).
+- **Verdicts** come from `crates/opentide-exabeam/src/check.rs`, a port of the specification's reference checker, which agrees with it on every conformance query and on Exabeam's 2,371 published rules but for three RE2 differences (`docs/engine/EXABEAM.md`).
 - **The tree-sitter grammar** (`grammars/tree-sitter-opentide-exabeam`) colours and structures the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query but one, listed in `tests/reference.rs`.
 
 | id | grammar rule | fixture ids | capture |
@@ -415,7 +415,7 @@ Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-
 
 ## YARA
 
-Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md)): HarfangLab and Bitdefender `yara` blocks. `docs/YARA.md` has the codes.
+Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md)): HarfangLab and Bitdefender `yara` blocks. `docs/engine/YARA.md` has the codes.
 
 - **Verdicts** come from VirusTotal's `yara-x-parser` (`crates/opentide-yara`), not from this grammar.
 - **The tree-sitter grammar** (`grammars/tree-sitter-opentide-yara`) colours and structures the text. It is written from libyara's `grammar.y`, `lexer.l` and `hex_grammar.y`, with their precedence: `expression` (booleans, comparisons, `of`, `for`) over `primary_expression` (arithmetic, string counts and offsets, module references). `\` is division, so `/` always opens a regexp.
@@ -475,11 +475,11 @@ Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles th
 
 ## YARA-L
 
-Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations ([yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md)): `configurations.google_secops` sections, Google SecOps hunts, and rule files. `docs/YARAL.md` has the codes.
+Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations ([yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md)): `configurations.google_secops` sections, Google SecOps hunts, and rule files. `docs/engine/YARAL.md` has the codes.
 
 - **The grammar is the verdict parser** (`grammars/tree-sitter-opentide-yaral`, written for the spec: Google publishes none). It parses a rule or a search: sections in any order (the engine reports order and profile), newline-separated predicates as juxtaposed statements, field paths whose `.segment` and `[index]` accessors follow without blanks, so a UDM segment named like a keyword (`network.dhcp.options`) stays a name.
 - **Keywords** are case-insensitive in any mix (`and`, `AND`, `aNd`): each is a token rule matching every spelling (`_kw_and`), aliased to the lower-case node, and the language's keywords are a `reserved` set, so `word` extraction keeps `metadata` an identifier and a keyword is never a name.
-- **Coverage**: every rule of chronicle/detection-rules' `rules/community` (410) parses; `testdata/conformance/external/yaral/` holds 79 of them with fault twins.
+- **Coverage**: every rule of chronicle/detection-rules' `rules/community` (410) parses; `crates/testdata/conformance/external/yaral/` holds 79 of them with fault twins.
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |

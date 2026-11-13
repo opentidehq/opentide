@@ -661,7 +661,7 @@ fn regexp_body(
     // Graylog: its PCRE-only syntax is `graylog_regex_unsupported`, and
     // Lucene checks the rest with that syntax masked, so one construct is
     // reported once.
-    let scan = (dialect == Dialect::Graylog).then(|| graylog::scan_regex(body));
+    let graylog_scan = (dialect == Dialect::Graylog).then(|| graylog::scan_regex(body));
     let push_body = |finding: &graylog::BodyFinding,
                      code: &str,
                      severity: Severity,
@@ -675,12 +675,12 @@ fn regexp_body(
         d.severity = severity;
         out.push(d);
     };
-    if let Some(scan) = &scan {
-        for f in &scan.unsupported {
+    if let Some(graylog_scan) = &graylog_scan {
+        for f in &graylog_scan.unsupported {
             push_body(f, codes::GRAYLOG_REGEX_UNSUPPORTED, Severity::Error, out);
         }
     }
-    let checked = scan.as_ref().map_or(body, |s| s.masked.as_str());
+    let checked = graylog_scan.as_ref().map_or(body, |s| s.masked.as_str());
     for problem in regexp::elasticsearch_problems(checked) {
         // Carbon Black's Solr version is not known: syntax advice only.
         if dialect == Dialect::CarbonBlack && !problem.syntax {
@@ -710,7 +710,7 @@ fn regexp_body(
             return;
         }
     }
-    if let Some(scan) = &scan {
+    if let Some(scan) = &graylog_scan {
         for f in &scan.operators {
             push_body(f, codes::GRAYLOG_REGEX_OPERATOR, Severity::Warning, out);
         }

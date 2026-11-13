@@ -9,7 +9,15 @@
 //! (`scripts/exabeam_language.py`), and the field catalogue from Exabeam's
 //! Common Information Model ([`catalog`]). The tree-sitter grammar
 //! (`grammars/tree-sitter-opentide-exabeam`) drives highlighting and editor
-//! structure. See `docs/EXABEAM.md`.
+//! structure. See `docs/engine/EXABEAM.md`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
 
 pub mod assist;
 pub mod catalog;
@@ -69,6 +77,10 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 }
 
 /// Analyze a query where `ctx` says it runs.
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
 pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let checked = check(source, ctx.profile);

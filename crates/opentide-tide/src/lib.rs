@@ -437,14 +437,13 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
             .configurations
             .as_ref()
             .is_some_and(|c| c.get("elastic").is_some())
+        && let Some(rule) = &root
     {
-        if let Some(rule) = &root {
-            diagnostics.extend(elastic::block_advisories(
-                input.source,
-                rule,
-                input.workspace,
-            ));
-        }
+        diagnostics.extend(elastic::block_advisories(
+            input.source,
+            rule,
+            input.workspace,
+        ));
     }
 
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
@@ -505,26 +504,26 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
     // `data_view_id`) are its query's, so `opentide validate` reports them as
     // the editor does, except on a placeholder query, which validate skips
     // (the editor still reports them on the block).
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
-        if let Some(query) = out.iter_mut().find(|q| {
+    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic"))
+        && let Some(query) = out.iter_mut().find(|q| {
             q.query.field_path == ["configurations", "elastic", "query"]
                 && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
-                .diagnostics
-                .extend(elastic::dataset_declarations(source, block));
-        }
+        })
+    {
+        query
+            .diagnostics
+            .extend(elastic::dataset_declarations(source, block));
     }
     // An unknown event source is the condition's: its fields go unchecked.
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig")) {
-        if let Some(query) = out.iter_mut().find(|q| {
+    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig"))
+        && let Some(query) = out.iter_mut().find(|q| {
             q.query.field_path == ["configurations", "sysdig", "condition"]
                 && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
-                .diagnostics
-                .extend(falco::source_diagnostics(source, block));
-        }
+        })
+    {
+        query
+            .diagnostics
+            .extend(falco::source_diagnostics(source, block));
     }
     out
 }
@@ -589,6 +588,10 @@ fn analyze_injections(
                 }
                 (r.diagnostics, r.tokens)
             }
+            // No Tide field injects YARA, the Exabeam Query Language or
+            // YARA-L yet: the HarfangLab, Bitdefender, Exabeam and Google
+            // SecOps block ports bring their injection and its analysis.
+            LanguageId::Yara | LanguageId::Exabeam | LanguageId::Yaral => (Vec::new(), Vec::new()),
             LanguageId::Lucene => {
                 let dialect = if inj.platform == "carbon_black_cloud" {
                     opentide_lucene::Dialect::CarbonBlack

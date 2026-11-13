@@ -3,7 +3,7 @@
 
 Copies each listed community rule, unmodified, from a checkout of
 chronicle/detection-rules (Apache-2.0) at ``COMMIT`` into
-``testdata/conformance/external/yaral/``, and writes its ``.broken.`` twin:
+``crates/testdata/conformance/external/yaral/``, and writes its ``.broken.`` twin:
 the same file with one injected fault, chosen by the file's place in the
 list:
 
@@ -13,14 +13,14 @@ list:
 1. a dangling ``and`` at the end of ``condition``, a syntax error;
 2. a misspelled section label (``condition:`` becomes ``conditon:``).
 
-Google publishes no offline compiler (scripts/oracles/README.md), so the
+Google publishes no offline compiler (scripts/engine/oracles/README.md), so the
 twins are faults the language spec and Google's pages both name.
 ``crates/opentide-yaral/tests/external_corpus.rs`` holds the engine to the
 files: every public file parses and has no error beyond its listed
 exceptions; every twin gets an error.
 
 Usage:
-    python -I scripts/sync_yaral_corpus.py --rules ../detection-rules [--check]
+    python -I scripts/engine/sync_yaral_corpus.py --rules ../detection-rules [--check]
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "testdata" / "conformance" / "external" / "yaral"
 COMMIT = "a49c3752f3f013e9ead85c7430b8f39369efacbf"
 
@@ -165,7 +165,7 @@ def main() -> int:
         stale = [p for p, t in expected.items() if not p.exists() or p.read_text(encoding="utf-8") != t]
         extra = [p for p in OUT.glob("*.yaral") if p not in expected]
         for p in stale + extra:
-            print(f"{p.relative_to(ROOT)} differs; run scripts/sync_yaral_corpus.py", file=sys.stderr)
+            print(f"{p.relative_to(ROOT)} differs; run scripts/engine/sync_yaral_corpus.py", file=sys.stderr)
         return 1 if stale or extra else 0
     OUT.mkdir(parents=True, exist_ok=True)
     for p in OUT.glob("*.yaral"):

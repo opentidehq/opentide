@@ -136,14 +136,14 @@ fn match_inline(line: &str, i: usize) -> Option<(usize, &'static str)> {
     {
         return Some((i + 1 + rel + 1, "markdown.emphasis"));
     }
-    if rest.starts_with('[') {
-        if let Some(close) = rest.find(']') {
-            let after = &rest[close + 1..];
-            if after.starts_with('(') {
-                if let Some(end_paren) = after.find(')') {
-                    return Some((i + close + 1 + end_paren + 1, "markdown.link"));
-                }
-            }
+    if rest.starts_with('[')
+        && let Some(close) = rest.find(']')
+    {
+        let after = &rest[close + 1..];
+        if after.starts_with('(')
+            && let Some(end_paren) = after.find(')')
+        {
+            return Some((i + close + 1 + end_paren + 1, "markdown.link"));
         }
     }
     if rest.starts_with("http://") || rest.starts_with("https://") {

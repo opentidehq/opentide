@@ -89,11 +89,11 @@ pub(crate) fn dataset_diagnostics(root: Node, source: &str) -> Vec<Diagnostic> {
         .filter_map(|(name, span)| opentide_ecs::index_not_declared(name, range(source, *span)))
         .collect();
     let names: Vec<&str> = indices.iter().map(|(n, _)| n.as_str()).collect();
-    if opentide_ecs::indices_are_ecs(&names) {
-        if let Some(query) = query_node(root) {
-            let ecs = opentide_ecs::with_declared_fields(&names, || Walker::new(source).run(query));
-            out.extend(ecs);
-        }
+    if opentide_ecs::indices_are_ecs(&names)
+        && let Some(query) = query_node(root)
+    {
+        let ecs = opentide_ecs::with_declared_fields(&names, || Walker::new(source).run(query));
+        out.extend(ecs);
     }
     out
 }
@@ -340,12 +340,12 @@ impl<'s> Walker<'s> {
                 // `IN (FROM …)` reads other indices.
                 "source_subquery" | "map_expression" => continue,
                 "qualified_name" => {
-                    if let Some(name) = self.source_column(n) {
-                        if let Some(d) = opentide_ecs::unknown_field_diagnostic(&name, || {
+                    if let Some(name) = self.source_column(n)
+                        && let Some(d) = opentide_ecs::unknown_field_diagnostic(&name, || {
                             range(self.source, node_span(n))
-                        }) {
-                            self.out.push(d);
-                        }
+                        })
+                    {
+                        self.out.push(d);
                     }
                     continue;
                 }

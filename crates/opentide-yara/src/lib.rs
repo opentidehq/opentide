@@ -4,7 +4,7 @@
 //! opinion whose refusals are warnings (`yara_x_incompatible`). The verdict
 //! parser is VirusTotal's `yara-x-parser` (lossless, with error recovery), and
 //! `.yar` files are formatted with `yara-x-fmt`. The `yara-x` compiler crate is
-//! not a dependency: it is an oracle only (`scripts/oracles`).
+//! not a dependency: it is an oracle only (`scripts/engine/oracles`).
 //!
 //! A signature goes through:
 //!
@@ -17,7 +17,15 @@
 //! 4. [`check::Checker`]: the symbol table, types and every other code of
 //!    the spec, on each rule that parsed.
 //!
-//! `docs/YARA.md` maps each code to the libyara source and the test.
+//! `docs/engine/YARA.md` maps each code to the libyara source and the test.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
 
 mod atoms;
 pub mod catalog;

@@ -1,6 +1,6 @@
-# Dumps YARA-X's module reflection as JSON for scripts/sync_yara_modules.py
+# Dumps YARA-X's module reflection as JSON for scripts/engine/sync_yara_modules.py
 # (#165). Not a workspace member, and never shipped: `yara-x` (wasmtime) must
-# stay out of the root Cargo.lock (scripts/ci-oracle.sh checks it).
+# stay out of the root Cargo.lock (scripts/engine/ci-oracle.sh checks it).
 [package]
 name = "yara-modules"
 version = "0.0.0"

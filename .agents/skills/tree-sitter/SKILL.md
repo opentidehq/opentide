@@ -46,7 +46,7 @@ bash scripts/engine/check-grammars.sh
 - YARA-L keywords are case-insensitive in any mix. Lexical precedence beats match length in tree-sitter's lexer (a `prec`ed `meta` keyword lexes `metadata` as `meta`), so each keyword is a token rule (`_kw_and: token(/[aA][nN][dD]/)`) that `kw($, "and")` aliases to the lower-case node, and the keywords are a `reserved` set: `word: identifier` extraction lexes the whole name first, and a reserved word is never an identifier. `reserved` takes token rules, not aliases.
 - EQL keywords are lowercase and listed in `reserved`. Lucene reserves upper-case `AND`/`OR`/`NOT` only.
 - A missing token that tree-sitter inserts can be hidden (`MISSING` on an anonymous node). `opentide_syntax::first_error` falls back to the smallest visible node with `has_error`, so the engine still reports a parse error.
-- SQL is not a grammar. Do not add a `select` statement production "for later". Exabeam's `SELECT` … `GROUP-BY` layer is not SQL: it is specified as part of exabeam-1.0 and lives in the `exabeam` grammar only (`docs/EXABEAM.md`).
+- SQL is not a grammar. Do not add a `select` statement production "for later". Exabeam's `SELECT` … `GROUP-BY` layer is not SQL: it is specified as part of exabeam-1.0 and lives in the `exabeam` grammar only (`docs/engine/EXABEAM.md`).
 
 Prefer a JS DSL rule over an external scanner. Adding `scanner.c` means updating `build.rs` (compile the extra C file) and `check-grammars.sh`. Do not add one unless the DSL cannot express the token.
 

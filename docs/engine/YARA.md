@@ -10,7 +10,7 @@ Language id `yara` (`.yar`, `.yara`). Platforms: HarfangLab (`configurations.har
 |------|--------|-------|
 | Verdicts (diagnostics) | VirusTotal `yara-x-parser` 1.23.0 (BSD-3-Clause): pure Rust, logos + rowan, a lossless CST with byte spans, error recovery | `opentide-yara` |
 | Formatting of `.yar` files | `yara-x-fmt` 1.23.0 (BSD-3-Clause) | `opentide_yara::format` |
-| Oracles, never shipped | `yara-python` 4.5.4 (libyara) and the `yara-x` wheel | `scripts/oracles` |
+| Oracles, never shipped | `yara-python` 4.5.4 (libyara) and the `yara-x` wheel | `scripts/engine/oracles` |
 
 The `yara-x` compiler crate is not a dependency: it brings wasmtime, breaks the WASI build, reports one error per compile, and would make YARA-X the contract. The `yara-x-*` crates need Rust 1.95, which `rust-toolchain.toml` pins.
 
@@ -19,7 +19,7 @@ The `yara-x` compiler crate is not a dependency: it brings wasmtime, breaks the 
 1. **Profile text checks**: `bitdefender_yara_ascii` and `bitdefender_yara_size` on the raw text.
 2. **libyara-only forms** (`syntax.rs`): the tree-sitter grammar (libyara's dialect) finds what yara-x-parser refuses and libyara accepts: a repeated rule modifier, a rule wildcard in `of`, an escape in a `base64` alphabet. Each is blanked to text of the same length and reported as `yara_x_incompatible`.
 3. **yara-x-parser** on that text: each error, classified (a syntax error inside a hex string is `yara_hex_string`, an `xor` bound `yara_string_modifier`, an integer overflow `yara_number_out_of_range`).
-4. **Semantic pass** (`check.rs`) on each rule that parsed: the symbol table (imports, rules defined so far, strings, loop variables), types, module members from `catalogs/yara/modules.toml`, and the YARA-X-only syntax yara-x-parser accepts and libyara refuses (`with`, digit separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal jump bounds), each a `yara_parse_error` naming the feature.
+4. **Semantic pass** (`check.rs`) on each rule that parsed: the symbol table (imports, rules defined so far, strings, loop variables), types, module members from `data/catalogs/yara/modules.toml`, and the YARA-X-only syntax yara-x-parser accepts and libyara refuses (`with`, digit separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal jump bounds), each a `yara_parse_error` naming the feature.
 
 `Dialect::YaraX` accepts YARA-X's syntax and makes `yara_x_incompatible` an error. No profile uses it today.
 
@@ -106,15 +106,15 @@ In `.yar` files, and in `yara.signature` and HarfangLab's decomposed fragments i
 
 ## Modules
 
-`catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. Where YARA-X types a member differently, the row records it (`yara_x_ret` for a function, `yara_x_kind` for a field). **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
+`data/catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`.agents/skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. Where YARA-X types a member differently, the row records it (`yara_x_ret` for a function, `yara_x_kind` for a field). **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
 
 ## Verified against the engines
 
-The references are `yara-python` 4.5.4 (libyara) and the `yara-x` 1.23.0 wheel. Neither ships (`scripts/oracles/README.md`).
+The references are `yara-python` 4.5.4 (libyara) and the `yara-x` 1.23.0 wheel. Neither ships (`scripts/engine/oracles/README.md`).
 
 ### In every `cargo test`
 
-- **Conformance cases**: `testdata/conformance/yara/cases.json` holds 1,762 cases with both engines' recorded verdicts. They come from YARA-X's `lib/src/tests/mod.rs` and its compiler `errors`/`warnings` suites, and from libyara's `tests/test-rules.c`, extracted by `scripts/sync_yara_conformance.py`. Verdict pairs (libyara, YARA-X):
+- **Conformance cases**: `crates/testdata/conformance/yara/cases.json` holds 1,762 cases with both engines' recorded verdicts. They come from YARA-X's `lib/src/tests/mod.rs` and its compiler `errors`/`warnings` suites, and from libyara's `tests/test-rules.c`, extracted by `scripts/engine/sync_yara_conformance.py`. Verdict pairs (libyara, YARA-X):
 
   | Pair | Cases |
   |------|-------|
@@ -130,16 +130,16 @@ The references are `yara-python` 4.5.4 (libyara) and the `yara-x` 1.23.0 wheel. 
   - `yara_x_incompatible` on every case libyara compiles and YARA-X refuses;
   - no `yara_x_incompatible` on a case both compile.
 
-  The differences are the `[[yara]]` entries of `testdata/oracles/exceptions.toml`. There are four:
+  The differences are the `[[yara]]` entries of `crates/testdata/oracles/exceptions.toml`. There are four:
   - an unterminated `/*`: libyara silently drops the rest of the text, and the engine reports it as YARA-X does;
   - sixteen nested repetitions that libyara runs out of memory on;
   - YARA-X's regexp size limit, which is not modelled;
   - libyara's test-only `tests` module.
-- **External corpus**: 50 public files with their `.broken.` twins, under `testdata/conformance/external/yara`. 25 come from ReversingLabs (MIT) and 25 from signature-base (DRL 1.1). `crates/opentide-yara/tests/external_corpus.rs` requires no finding on each file under both dialects, and an error on each twin.
+- **External corpus**: 50 public files with their `.broken.` twins, under `crates/testdata/conformance/external/yara`. 25 come from ReversingLabs (MIT) and 25 from signature-base (DRL 1.1). `crates/opentide-yara/tests/external_corpus.rs` requires no finding on each file under both dialects, and an error on each twin.
 
 ### In CI
 
-`oracle.yml` → libyara and YARA-X (`scripts/oracles/yara/oracle.py`) re-checks every recorded verdict against the live engines. It also runs every YARA file of the repository (269: the production corpus, the external corpus, YARA-X's parser suite) through the engine and both references.
+`oracle.yml` → libyara and YARA-X (`scripts/engine/oracles/yara/oracle.py`) re-checks every recorded verdict against the live engines. It also runs every YARA file of the repository (269: the production corpus, the external corpus, YARA-X's parser suite) through the engine and both references.
 
 ### Local sweeps
 

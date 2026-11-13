@@ -20,7 +20,7 @@
 //!   query, so `\\\\` matches two.
 //! - `graylog_analyzed_field`: `message` and `full_message` are tokenised.
 //!
-//! Verified on Graylog 7.2.2 and 6.3.5 (`testdata/oracles/graylog/`).
+//! Verified on Graylog 7.2.2 and 6.3.5 (`crates/testdata/oracles/graylog/`).
 
 use opentide_core::{ByteSpan, CompletionItem, Diagnostic, codes, span_to_range};
 use tree_sitter::Node;

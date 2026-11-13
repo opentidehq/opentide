@@ -1,11 +1,16 @@
 //! Public YARA rules (ReversingLabs, MIT; signature-base, DRL 1.1), each
 //! file unmodified, plus a twin with one injected fault.
 //!
-//! Sources and licences: `testdata/conformance/external/SOURCES.md`. The
-//! files are written by `scripts/sync_yara_corpus.py`. libyara 4.5 and
+//! Sources and licences: `crates/testdata/conformance/external/SOURCES.md`. The
+//! files are written by `scripts/engine/sync_yara_corpus.py`. libyara 4.5 and
 //! YARA-X 1.x compile every public file without a warning, so the engine
 //! must report nothing under either dialect. libyara refuses every twin, so
 //! the engine must report an error.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
 
 use opentide_core::Severity;
 use opentide_yara::{Context, Dialect, analyze_with};
@@ -15,7 +20,7 @@ use std::path::PathBuf;
 /// `(source, file name, text, broken twin)`.
 fn corpus() -> Vec<(String, String, String, String)> {
     let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/external/yara");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/yara");
     let mut out = Vec::new();
     for dir in fs::read_dir(&root).unwrap() {
         let dir = dir.unwrap().path();

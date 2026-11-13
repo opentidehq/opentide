@@ -1,6 +1,6 @@
-//! Exabeam queries written for opentide (`testdata/conformance/external/exabeam/`),
+//! Exabeam queries written for opentide (`crates/testdata/conformance/external/exabeam/`),
 //! each with a `.broken.` twin carrying one injected fault. Exabeam's own
-//! published rules may not be redistributed (`docs/EXABEAM.md` records the
+//! published rules may not be redistributed (`docs/engine/EXABEAM.md` records the
 //! measurement over them), so these are realistic queries of our own,
 //! written with the CIM's field names.
 //!
@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/external/exabeam")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/exabeam")
 }
 
 fn request(text: &str, profile: &str) -> QueryRequest {

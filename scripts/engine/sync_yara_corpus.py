@@ -2,7 +2,7 @@
 """Vendor the public YARA rules of the external corpus (#165).
 
 Copies each listed file, unmodified, from two checkouts into
-``testdata/conformance/external/yara/<source>/`` and writes its ``.broken.``
+``crates/testdata/conformance/external/yara/<source>/`` and writes its ``.broken.``
 twin: the same file with one injected fault, chosen by the file's place in
 the list (an unterminated rule, an undefined string, a misspelled
 ``condition``, an undefined identifier). libyara must refuse every twin;
@@ -18,7 +18,7 @@ external_corpus.rs`` holds the engine to the files: every public file comes
 out clean, every twin gets an error.
 
 Usage:
-    python -I scripts/sync_yara_corpus.py --reversinglabs ../reversinglabs-yara-rules --signature-base ../signature-base [--check]
+    python -I scripts/engine/sync_yara_corpus.py --reversinglabs ../reversinglabs-yara-rules --signature-base ../signature-base [--check]
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "testdata" / "conformance" / "external" / "yara"
 
 RL_COMMIT = "e0a0be54aa1e11ccfd6854e4f19e9476f328fd84"

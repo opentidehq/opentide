@@ -494,16 +494,17 @@ pub(crate) fn block_advisories(
                     .and_then(|s| s.as_str())
             })
             .unwrap_or("Informational");
-        if let Some((band, low, high)) = risk_band(level) {
-            if (0..=100).contains(&score) && !(low..=high).contains(&score) {
-                out.push(warn(
+        if let Some((band, low, high)) = risk_band(level)
+            && (0..=100).contains(&score)
+            && !(low..=high).contains(&score)
+        {
+            out.push(warn(
                     codes::RISK_BAND,
                     format!(
                         "risk score {score} is outside Kibana's {band} band ({low}–{high}) for alert severity {level}"
                     ),
                     key,
                 ));
-            }
         }
     }
 

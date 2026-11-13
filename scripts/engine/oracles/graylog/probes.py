@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record live Graylog verdicts for testdata/oracles/graylog/*.lucene.
+"""Record live Graylog verdicts for crates/testdata/oracles/graylog/*.lucene.
 
 Each probe is sent to `POST /api/search/validate` on every server named in
 OPENTIDE_GRAYLOG_URLS (comma-separated base URLs, e.g.
@@ -9,7 +9,7 @@ or an access token and `token`). The verdict is Graylog's `status`: `OK`,
 `WARN` (WARNING: an unknown field, a lower-case operator), or `ERR` (ERROR:
 Graylog refuses the query, and opentide deploy saves nothing).
 
-The columns of testdata/oracles/graylog/expected.tsv are the servers'
+The columns of crates/testdata/oracles/graylog/expected.tsv are the servers'
 `major.minor` versions (`GET /api/system`). Without `--write`, the run
 compares the live verdicts with the file and exits 1 on a difference.
 `crates/opentide-lucene/tests/graylog_verdicts.rs` holds the engine to the
@@ -17,7 +17,7 @@ file without a server. Standard library only.
 
 Usage:
     OPENTIDE_GRAYLOG_URLS=... OPENTIDE_GRAYLOG_USER=... OPENTIDE_GRAYLOG_PASSWORD=... \\
-        python3 -I scripts/oracles/graylog/probes.py [--write]
+        python3 -I scripts/engine/oracles/graylog/probes.py [--write]
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 PROBES = ROOT / "testdata" / "oracles" / "graylog"
 EXPECTED = PROBES / "expected.tsv"
 STATUS = {"OK": "OK", "WARNING": "WARN", "ERROR": "ERR"}

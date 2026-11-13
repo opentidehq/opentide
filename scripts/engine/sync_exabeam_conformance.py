@@ -6,21 +6,21 @@ specifications `specs/languages/exabeam-1.0.md` comes with a reference checker,
 no grammar and no parser, so that checker is the reference the engine
 (`crates/opentide-exabeam`) is held to. This script runs it over
 
-- `testdata/conformance/exabeam/{valid,invalid,highlight}/*.exabeam` (the
+- `crates/testdata/conformance/exabeam/{valid,invalid,highlight}/*.exabeam` (the
   spec's fixtures, copied unchanged),
-- `testdata/conformance/external/exabeam/*.exabeam` (queries written for
+- `crates/testdata/conformance/external/exabeam/*.exabeam` (queries written for
   opentide, and their `.broken.` twins),
-- `testdata/conformance/exabeam/probes.tsv` (more queries written for
+- `crates/testdata/conformance/exabeam/probes.tsv` (more queries written for
   opentide, one per line),
 
-and writes `testdata/conformance/exabeam/reference.json`: for each query, its
+and writes `crates/testdata/conformance/exabeam/reference.json`: for each query, its
 profile and the checker's diagnostics (code, byte range) and highlight tokens
 (byte range, capture). `crates/opentide-exabeam/tests/reference.rs` compares
 the engine with it. Byte offsets: the checker counts characters.
 
 It also runs the block checker, `validate_exabeam_block` and
 `validate_exabeam_searches` of the specifications' `scripts/object_fixtures.py`,
-over `testdata/conformance/exabeam/blocks/*.yaml` (block cases written for
+over `crates/testdata/conformance/exabeam/blocks/*.yaml` (block cases written for
 opentide) and `objects/{valid,invalid}/*.yaml` (the spec's fixtures), and
 records each error's code and field path under `blocks`
 (`crates/opentide-tide/tests/exabeam_spec.rs` compares them). Unknown keys
@@ -32,7 +32,7 @@ Inputs (read as data; the checker is imported from the checkout given):
 - ``--specifications DIR``: an opentidehq/specifications checkout.
 
 Usage:
-    python -I scripts/sync_exabeam_conformance.py --specifications ../specifications [--check]
+    python -I scripts/engine/sync_exabeam_conformance.py --specifications ../specifications [--check]
 
 ``--check`` compares with the committed file and exits 1 when it differs.
 """
@@ -46,7 +46,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CONFORMANCE = ROOT / "testdata" / "conformance" / "exabeam"
 EXTERNAL = ROOT / "testdata" / "conformance" / "external" / "exabeam"
 OUT = CONFORMANCE / "reference.json"
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     checker = load_module(args.specifications, "exabeam_language")
     fixtures = load_module(args.specifications, "object_fixtures")
     doc = {
-        "generated_by": "scripts/sync_exabeam_conformance.py",
+        "generated_by": "scripts/engine/sync_exabeam_conformance.py",
         "reference": f"opentidehq/specifications@{commit(args.specifications)} scripts/exabeam_language.py, scripts/object_fixtures.py",
         "queries": [record(checker, *q) for q in queries()],
         "blocks": [record_block(fixtures, p) for p in block_cases()],

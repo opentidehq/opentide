@@ -62,13 +62,18 @@
 #   harness depends on no workspace crate; opentide-connectors' and
 #   opentide-cli's tests and xtask (`cargo xtask cassettes`) use it. Never
 #   shipped (publish = false).
+# - opentide-yara, opentide-yaral and opentide-exabeam (language-server
+#   0.13.0 to 0.16.0, E1) are foundation tier 2, beside opentide-cql: query
+#   engines like it, they depend on opentide-core, -syntax and -highlight (and
+#   yara-x-parser, yara-x-fmt or regex-syntax) and on no other query engine.
 
 [[layer]]
 name = "foundation"
 tiers = [
     ["opentide-core", "opentide-compare", "opentide-schema-derive", "opentide-cassette"],
     ["opentide-syntax", "opentide-highlight", "opentide-ecs"],
-    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql"],
+    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql",
+     "opentide-yara", "opentide-yaral", "opentide-exabeam"],
     ["opentide-esql", "opentide-eql"],
     ["opentide-schema"],
 ]

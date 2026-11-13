@@ -1,7 +1,12 @@
 //! The tree-sitter grammar (highlighting, structure) agrees with
 //! `yara-x-parser` (verdicts) on which inputs parse: yara-x-parser's own
-//! parser inputs (`testdata/conformance/yara-x/parser`) and the YARA corpus.
+//! parser inputs (`crates/testdata/conformance/yara-x/parser`) and the YARA corpus.
 //! Where they differ by design, the input is listed with the reason.
+
+#![expect(
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
 
 use opentide_core::LanguageId;
 use std::path::{Path, PathBuf};
@@ -70,8 +75,11 @@ const EXPECTED: &[(&str, &str)] = &[
 #[test]
 fn tree_sitter_agrees_with_yara_x_parser() {
     let mut disagreements = Vec::new();
-    let mut files = inputs(&root().join("testdata/conformance/yara-x/parser"), "in");
-    files.extend(inputs(&root().join("testdata/corpus/yara"), "yar"));
+    let mut files = inputs(
+        &root().join("crates/testdata/conformance/yara-x/parser"),
+        "in",
+    );
+    files.extend(inputs(&root().join("crates/testdata/corpus/yara"), "yar"));
     for path in &files {
         let source = std::fs::read_to_string(path).unwrap();
         let (yx, ts) = (yara_x_accepts(&source), tree_sitter_accepts(&source));
@@ -91,7 +99,7 @@ fn tree_sitter_agrees_with_yara_x_parser() {
 #[test]
 fn corpus_fixtures_match_their_names() {
     let mut wrong = Vec::new();
-    for path in inputs(&root().join("testdata/corpus/yara"), "yar") {
+    for path in inputs(&root().join("crates/testdata/corpus/yara"), "yar") {
         let source = std::fs::read_to_string(&path).unwrap();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let valid = name.contains("__valid");

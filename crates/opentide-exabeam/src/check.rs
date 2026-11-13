@@ -1,7 +1,7 @@
 //! The verdict parser: the Exabeam Query Language as exabeam-1.0 defines it,
 //! a recursive-descent parser that follows the reference checker of
 //! opentidehq/specifications (`scripts/exabeam_language.py`) step for step, so
-//! the two agree on every conformance query (`docs/EXABEAM.md`).
+//! the two agree on every conformance query (`docs/engine/EXABEAM.md`).
 //!
 //! It reports every language code of the spec, and the two catalogue codes the
 //! reference checker cannot (`exabeam_unknown_field`,
@@ -1207,8 +1207,10 @@ impl<'a> Parser<'a> {
         while self.take_keyword(&["OR"], false).is_some() {
             branches.push(self.and_expr(stop)?);
         }
-        if branches.len() == 1 {
-            return Ok(branches.pop().expect("one branch"));
+        if branches.len() == 1
+            && let Some(branch) = branches.pop()
+        {
+            return Ok(branch);
         }
         if branches.iter().any(|b| b.kind == Kind::And) {
             self.diag(
@@ -1260,8 +1262,10 @@ impl<'a> Parser<'a> {
             }
             items.push(next);
         }
-        if items.len() == 1 {
-            return Ok(items.pop().expect("one item"));
+        if items.len() == 1
+            && let Some(item) = items.pop()
+        {
+            return Ok(item);
         }
         Ok(Node {
             kind: Kind::And,
@@ -1677,9 +1681,8 @@ impl<'a> Parser<'a> {
         }
         let (hi, _, hi_e) = self.bound()?;
         self.ws();
-        let close = match self.rest().chars().next() {
-            Some(c @ (']' | '}')) => c,
-            _ => return fail("a range closes with ] or }", self.pos),
+        let Some(close @ (']' | '}')) = self.rest().chars().next() else {
+            return fail("a range closes with ] or }", self.pos);
         };
         self.expect(close, "punctuation.bracket")?;
         if (open == '[') != (close == ']') {
@@ -2034,7 +2037,7 @@ impl<'a> Parser<'a> {
                 .iter()
                 .copied()
                 .find(|c| *c == upper)
-                .expect("a clause keyword");
+                .unwrap_or(CLAUSES[0]);
             let index = |w: &str| CLAUSES.iter().position(|c| *c == w).unwrap_or(0);
             if let Some(last) = seen.last()
                 && index(word) < index(last)

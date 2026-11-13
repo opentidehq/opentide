@@ -16,8 +16,16 @@
 //! Two profiles: a rule (`YaraLRule`, or a Tide block's sections assembled
 //! into one) and a search (`YaraLSearch`, a hunt). Reference lists, data
 //! tables, composite producer names and curated rules live in the tenant and
-//! are never reported unknown. `docs/YARAL.md` maps each code to Google's page
+//! are never reported unknown. `docs/engine/YARAL.md` maps each code to Google's page
 //! and the test that proves it.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
 
 pub mod catalog;
 mod check;
@@ -266,7 +274,7 @@ mod tests {
 
     const SPRAY: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../testdata/conformance/specifications-google-secops/rule-google-secops-spray-1.0.yaral"
+        "/../testdata/conformance/specifications-google-secops/rule-google-secops-spray-1.0.yaral"
     ));
 
     #[test]

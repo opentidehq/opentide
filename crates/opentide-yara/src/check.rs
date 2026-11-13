@@ -1,7 +1,7 @@
 //! The semantic pass over yara-x-parser's AST: the symbol table (imports,
 //! rules, strings, loop variables), types, and every yara-1.0 code that is
 //! not a syntax error. Each check cites the libyara 4.5 behaviour it mirrors
-//! (`docs/YARA.md`).
+//! (`docs/engine/YARA.md`).
 
 use crate::atoms::{self, MaskedByte};
 use crate::catalog::{Catalog, Kind, Member};
@@ -501,7 +501,7 @@ impl<'a> Checker<'a> {
             match &meta.value {
                 MetaValue::Float((_, s)) => self.yara_x_only("A float meta value", span(s)),
                 MetaValue::String((raw, s)) if raw.starts_with("\"\"\"") => {
-                    self.yara_x_only("A `\"\"\"` string", span(s))
+                    self.yara_x_only("A `\"\"\"` string", span(s));
                 }
                 _ => {}
             }
@@ -828,7 +828,7 @@ impl<'a> Checker<'a> {
                             self.yara_x(
                                 "YARA-X refuses the empty jump range `[0-0]`".to_string(),
                                 at,
-                            )
+                            );
                         }
                         (Some(0), Some(0)) if text.contains('-') => {}
                         (Some(0), Some(0)) => {
@@ -1518,7 +1518,7 @@ impl<'a> Checker<'a> {
                             let first = items
                                 .iter()
                                 .find(|i| self.yara_x_bool.contains(&span(&i.span())))
-                                .expect("counted above");
+                                .unwrap_or(&items[0]);
                             self.yara_x_number(first, "among integers in an enumeration");
                         }
                         vec![ty]
@@ -1671,7 +1671,7 @@ impl<'a> Checker<'a> {
                             span(&e.span()),
                         );
                     } else if let Some(size) = size
-                        && i.value as usize > size
+                        && !usize::try_from(i.value).is_ok_and(|v| v <= size)
                     {
                         self.warn(
                             codes::YARA_SUSPICIOUS_EXPRESSION,
@@ -2372,6 +2372,10 @@ fn fold_step(e: &Expr) -> Result<Option<i64>, &'static str> {
 /// A hex string's chain fragments, as libyara splits it at a jump that is
 /// unbounded or spans more than `YR_STRING_CHAINING_THRESHOLD` bytes: each
 /// fragment's runs of fixed or masked bytes.
+#[expect(
+    clippy::unwrap_used,
+    reason = "`fragments` starts with one fragment and only grows"
+)]
 fn hex_fragments(sub: &HexSubPattern) -> Vec<Vec<Vec<MaskedByte>>> {
     let mut fragments = vec![Vec::new()];
     let mut current = Vec::new();

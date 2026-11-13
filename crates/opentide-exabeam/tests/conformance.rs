@@ -1,8 +1,14 @@
 //! The engine against the conformance data of specifications exabeam-1.0
-//! (`testdata/conformance/exabeam/`, SOURCES.md): every valid query is clean
+//! (`crates/testdata/conformance/exabeam/`, SOURCES.md): every valid query is clean
 //! under its profile, every invalid one reports exactly its code, and the
 //! highlight goldens match. The reference checker has no field catalogue, so
 //! the two catalogue warnings are compared separately.
+
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test; positions and counts in test documents fit every integer type"
+)]
 
 use opentide_core::Severity;
 use opentide_exabeam::{Context, Profile, analyze_with, check};
@@ -13,7 +19,7 @@ const CATALOGUE_CODES: [&str; 2] = ["exabeam_unknown_field", "exabeam_string_fie
 
 fn dir(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/exabeam")
+        .join("../testdata/conformance/exabeam")
         .join(name)
 }
 

@@ -10,7 +10,12 @@
 //! ```
 //!
 //! It writes every rule's findings (`EXABEAM_RESULTS`, for a comparison with
-//! the reference checker) and prints the totals `docs/EXABEAM.md` records.
+//! the reference checker) and prints the totals `docs/engine/EXABEAM.md` records.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
 
 use opentide_exabeam::{Profile, check};
 use std::collections::BTreeMap;

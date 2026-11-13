@@ -12,15 +12,15 @@ Reads two checkouts, both BSD-3-Clause:
   ``assert_false_rule*``, ``assert_error`` and ``assert_warning*`` of
   ``tests/test-rules.c`` whose rule is a C string literal.
 
-and writes ``testdata/conformance/yara/cases.json``: one row per case with
+and writes ``crates/testdata/conformance/yara/cases.json``: one row per case with
 its source, where it comes from, and the verdict of `yara-python` 4.5.4
 (libyara: ``ok``, ``warning`` or ``error``) and of the ``yara-x`` wheel
 (``ok`` or ``error``). The verdicts are what the engine is held to
-(``crates/opentide-yara/tests/conformance.rs``); ``scripts/oracles`` checks
+(``crates/opentide-yara/tests/conformance.rs``); ``scripts/engine/oracles`` checks
 them again against the engines in CI. Neither package ships.
 
 Usage:
-    python -I scripts/sync_yara_conformance.py --yara-x ../yara-x --libyara ../yara [--check]
+    python -I scripts/engine/sync_yara_conformance.py --yara-x ../yara-x --libyara ../yara [--check]
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "testdata" / "conformance" / "yara" / "cases.json"
 
 YARA_X_TAG = "v1.23.0"

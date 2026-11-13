@@ -18,6 +18,11 @@ pub const YR_MAX_ATOM_LENGTH: usize = 4;
 pub const WARNING_THRESHOLD: i32 = 38;
 
 /// `yr_atoms_heuristic_quality` without its constant offset.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "an atom is at most a few bytes long"
+)]
 pub fn quality(atom: &[MaskedByte]) -> i32 {
     let mut q = 0;
     let mut seen = [false; 256];

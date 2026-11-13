@@ -1,13 +1,18 @@
 //! The engine against libyara 4.5 on YARA-X's and libyara's own test cases
-//! (`testdata/conformance/yara/cases.json`, written by
-//! `scripts/sync_yara_conformance.py` with each engine's live verdict).
+//! (`crates/testdata/conformance/yara/cases.json`, written by
+//! `scripts/engine/sync_yara_conformance.py` with each engine's live verdict).
 //!
 //! Under the libyara dialect, a case libyara refuses must get an error, and
 //! a case it compiles must get none. A libyara compile warning must get a
 //! warning. Under the YARA-X dialect, a case YARA-X refuses must get an
 //! error. Every difference is a `[[yara]]` entry of
-//! `testdata/oracles/exceptions.toml`, which `scripts/oracles/yara/oracle.py`
+//! `crates/testdata/oracles/exceptions.toml`, which `scripts/engine/oracles/yara/oracle.py`
 //! shares; an entry for a case that agrees fails.
+
+#![expect(
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
 
 use opentide_core::Severity;
 use opentide_yara::{Context, Dialect, analyze_with};
@@ -33,8 +38,8 @@ struct Cases {
 }
 
 fn cases() -> Vec<Case> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/yara/cases.json");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/yara/cases.json");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     serde_json::from_str::<Cases>(&text)
         .expect("cases.json")
@@ -57,13 +62,13 @@ fn verdict(source: &str, dialect: Dialect) -> (bool, bool) {
 }
 
 /// Cases where the engine and a reference differ by design: the `[[yara]]`
-/// entries of `testdata/oracles/exceptions.toml` whose paths name a case
+/// entries of `crates/testdata/oracles/exceptions.toml` whose paths name a case
 /// (`cases.json#<origin>`), as (origin, check, id). The check is `libyara`
 /// (the libyara verdict), `yara_x` (`yara_x_incompatible` against YARA-X's
 /// verdict) or `both`.
 fn differences() -> Vec<(String, String, String)> {
     let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/oracles/exceptions.toml");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/oracles/exceptions.toml");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     let doc: toml::Value = toml::from_str(&text).expect("exceptions.toml");
     let mut out = Vec::new();
@@ -93,7 +98,7 @@ fn differences() -> Vec<(String, String, String)> {
         {
             if let Some(origin) = p
                 .as_str()
-                .and_then(|p| p.strip_prefix("testdata/conformance/yara/cases.json#"))
+                .and_then(|p| p.strip_prefix("crates/testdata/conformance/yara/cases.json#"))
             {
                 out.push((origin.to_string(), check.clone(), id.clone()));
             }

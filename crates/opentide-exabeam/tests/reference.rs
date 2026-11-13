@@ -1,12 +1,17 @@
 //! The engine against the reference checker of specifications exabeam-1.0
 //! (`scripts/exabeam_language.py`), whose verdicts on every conformance query
-//! `scripts/sync_exabeam_conformance.py` records in
-//! `testdata/conformance/exabeam/reference.json`: the spec's fixtures, the
-//! queries of `testdata/conformance/external/exabeam/` and the probes of
+//! `scripts/engine/sync_exabeam_conformance.py` records in
+//! `crates/testdata/conformance/exabeam/reference.json`: the spec's fixtures, the
+//! queries of `crates/testdata/conformance/external/exabeam/` and the probes of
 //! `probes.tsv`.
 //!
 //! Codes, ranges and highlight tokens must be the reference's, but for the
-//! differences `DIFFERENCES` lists with their reason (`docs/EXABEAM.md`).
+//! differences `DIFFERENCES` lists with their reason (`docs/engine/EXABEAM.md`).
+
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "positions and counts in test documents of a few lines"
+)]
 
 use opentide_exabeam::{Profile, check};
 use std::path::PathBuf;
@@ -28,7 +33,7 @@ const DIFFERENCES: &[(&str, &str)] = &[];
 #[test]
 fn the_engine_agrees_with_the_reference_checker() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/exabeam/reference.json");
+        .join("../testdata/conformance/exabeam/reference.json");
     let doc: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let queries = doc["queries"].as_array().unwrap();
@@ -131,7 +136,7 @@ const HIGHLIGHT_DIFFERENCES: &[&str] = &[];
 #[test]
 fn tree_sitter_highlighting_agrees_on_error_free_queries() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/exabeam/reference.json");
+        .join("../testdata/conformance/exabeam/reference.json");
     let doc: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let spec = opentide_highlight::HighlightSpec::load().unwrap();

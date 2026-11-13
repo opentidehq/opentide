@@ -2,8 +2,13 @@
 //! raises it and its clean neighbour. The YAML-only codes of a Google SecOps
 //! block (`yaral_section_header`, `yaral_section_empty`,
 //! `yaral_section_alias`, `yaral_match_shape`) are in
-//! `crates/opentide-tide/tests/google_secops.rs`. `docs/YARAL.md` maps each
+//! `crates/opentide-tide/tests/google_secops.rs`. `docs/engine/YARAL.md` maps each
 //! code to Google's page and to its test here.
+
+#![expect(
+    clippy::format_collect,
+    reason = "positions and counts in test documents of a few lines"
+)]
 
 use opentide_core::{Severity, codes};
 use opentide_yaral::{Context, analyze, analyze_with};
@@ -698,7 +703,7 @@ fn the_spec_goldens_are_clean() {
         "rule-google-secops-spray-1.0",
     ] {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../testdata/conformance/specifications-google-secops")
+            .join("../testdata/conformance/specifications-google-secops")
             .join(format!("{stem}.yaral"));
         let text = std::fs::read_to_string(path).unwrap();
         let found = analyze(&text).diagnostics;

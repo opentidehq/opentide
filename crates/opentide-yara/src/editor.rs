@@ -313,7 +313,7 @@ pub fn references(source: &str, offset: usize, with_definition: bool) -> Vec<Spa
         }
         None => {}
     }
-    out.sort();
+    out.sort_unstable();
     out.dedup();
     out
 }
@@ -379,7 +379,7 @@ pub fn folding(source: &str) -> Vec<Span> {
         let mut cursor = node.walk();
         stack.extend(node.children(&mut cursor));
     }
-    out.sort();
+    out.sort_unstable();
     out
 }
 
@@ -916,6 +916,10 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
 }
 
 /// Signature help inside a module function call or an integer reader.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a call has far fewer than 2^32 arguments"
+)]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let offset = offset.min(source.len());
     let bytes = source.as_bytes();

@@ -1,4 +1,4 @@
-//! Google's own YARA-L examples (testdata/conformance/google-yaral/,
+//! Google's own YARA-L examples (crates/testdata/conformance/google-yaral/,
 //! Apache-2.0 code samples): each has exactly the error codes `cases.tsv`
 //! gives it under yara-l-1.0 1.1.
 
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 #[test]
 fn google_examples_have_their_expected_errors() {
     let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/google-yaral");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/google-yaral");
     let cases = std::fs::read_to_string(root.join("cases.tsv")).unwrap();
     let mut checked = 0;
     for line in cases

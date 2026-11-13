@@ -496,10 +496,10 @@ fn initialize(
         }),
         definition_provider: Some(lsp::OneOf::Left(true)),
         references_provider: Some(lsp::OneOf::Left(true)),
-        // YARA string identifiers (`$name`), in `.yar` files and Tide blocks.
+        // YARA string identifiers (`$name`), in `.yar` and `.yara` files.
         rename_provider: Some(lsp::OneOf::Right(lsp::RenameOptions {
             prepare_provider: Some(true),
-            work_done_progress_options: Default::default(),
+            work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
         })),
         // `.yar` files, with yara-x-fmt.
         document_formatting_provider: Some(lsp::OneOf::Left(true)),
@@ -2107,7 +2107,9 @@ fn handle_semantic_tokens(
     Some(lsp::SemanticTokensResult::Tokens(lsp::SemanticTokens {
         result_id: None,
         data: data
-            .chunks_exact(5)
+            .as_chunks::<5>()
+            .0
+            .iter()
             .map(|t| lsp::SemanticToken {
                 delta_line: t[0],
                 delta_start: t[1],

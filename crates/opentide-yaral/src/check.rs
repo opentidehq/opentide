@@ -133,7 +133,7 @@ fn unparen(mut node: Node<'_>) -> Node<'_> {
     node
 }
 
-fn named_children<'t>(node: Node<'t>) -> Vec<Node<'t>> {
+fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .filter(|c| c.kind() != "comment")
@@ -362,7 +362,7 @@ fn leading_wildcard(pattern: &str) -> bool {
                     .chars()
                     .all(|c| c.is_ascii_alphabetic() || c == '-') =>
             {
-                p = &rest[end + 1..]
+                p = &rest[end + 1..];
             }
             _ => break,
         }
@@ -1302,12 +1302,12 @@ impl<'s> Checker<'s> {
     }
 
     /// The operands of an `or` chain, through parentheses that hold an `or`.
-    fn or_operands<'t>(&self, node: Node<'t>, out: &mut Vec<Node<'t>>) {
+    fn or_operands<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
         let inner = unparen(node);
         if inner.kind() == "or_expression" {
             for side in ["left", "right"] {
                 if let Some(s) = inner.child_by_field_name(side) {
-                    self.or_operands(s, out);
+                    Self::or_operands(s, out);
                 }
             }
         } else {
@@ -1372,7 +1372,7 @@ impl<'s> Checker<'s> {
         };
         for group in or_groups {
             let mut operands = Vec::new();
-            self.or_operands(group, &mut operands);
+            Self::or_operands(group, &mut operands);
             let mut events: BTreeSet<String> = BTreeSet::new();
             let mut event_terms = false;
             for operand in &operands {

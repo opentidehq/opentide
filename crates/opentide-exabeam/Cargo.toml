@@ -7,8 +7,11 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "opentide engine component: I/O-free Exabeam Query Language engine (Exabeam New-Scale SIEM). Depend on opentide-analysis."
+description = "opentide engine component: I/O-free Exabeam Query Language engine (Exabeam New-Scale SIEM). Internal: depend on the opentide crate."
 readme = "../COMPONENT.md"
+
+[lints]
+workspace = true
 
 [dependencies]
 opentide-core.workspace = true

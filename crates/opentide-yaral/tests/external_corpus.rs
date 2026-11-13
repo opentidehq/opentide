@@ -1,12 +1,18 @@
 //! Public YARA-L rules (chronicle/detection-rules, Apache-2.0), each file
 //! unmodified, plus a twin with one injected fault.
 //!
-//! Sources and licence: `testdata/conformance/external/yaral/SOURCES.md`. The
-//! files are written by `scripts/sync_yaral_corpus.py`. Google publishes no
+//! Sources and licence: `crates/testdata/conformance/external/yaral/SOURCES.md`. The
+//! files are written by `scripts/engine/sync_yaral_corpus.py`. Google publishes no
 //! offline compiler, so the rules' presence in Google's repository is the
 //! evidence that they compile: every public file must parse and have no error,
 //! except the findings listed in `EXCEPTIONS`, where yara-l-1.0 and Google's
 //! repository disagree (none today). Every twin must get an error.
+
+#![expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
 
 use opentide_core::{Severity, codes};
 use opentide_yaral::analyze;
@@ -20,7 +26,7 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[];
 /// `(file name, text, broken twin)`.
 fn corpus() -> Vec<(String, String, String)> {
     let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/external/yaral");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/yaral");
     let mut out = Vec::new();
     for entry in fs::read_dir(&root).unwrap() {
         let path = entry.unwrap().path();

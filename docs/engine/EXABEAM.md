@@ -2,13 +2,13 @@
 
 The Exabeam engine (`crates/opentide-exabeam`) checks the search language of Exabeam's New-Scale Security Operations Platform (the New-Scale SIEM): the sequence queries of an Exabeam correlation rule (`configurations.exabeam.sequences[].query`, platform `exabeam-1.0`), Exabeam threat hunts (`response.procedure.searches[]` with `system: exabeam`), and raw `.exabeam` files. Exabeam's guides call the language "EQL". opentide never does, because `eql` is Elastic's Event Query Language: the language id is `exabeam`.
 
-The contract is opentidehq/specifications [`specs/languages/exabeam-1.0.md`](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md) (normative) and the platform spec [`specs/platforms/exabeam-1.0.md`](https://github.com/opentidehq/specifications/blob/main/specs/platforms/exabeam-1.0.md), with the research in RFC 0018. Exabeam publishes no grammar and no parser. The spec ships a reference checker, `scripts/exabeam_language.py`, and the block checker `validate_exabeam_block` in `scripts/object_fixtures.py`; the engine is held to both.
+The contract is opentidehq/specifications [`specs/languages/exabeam-1.0.md`](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md) (normative) and the platform spec [`specs/platforms/exabeam-1.0.md`](https://github.com/opentidehq/specifications/blob/main/specs/platforms/exabeam-1.0.md), with the research in RFC 0018. Exabeam publishes no grammar and no parser. The spec ships a reference checker, `scripts/exabeam_language.py`, and the block checker `validate_exabeam_block` in `scripts/engine/object_fixtures.py`; the engine is held to both.
 
 | Layer | Source of truth | Engine |
 |-------|-----------------|--------|
 | Syntax, profiles, every language code | exabeam-1.0 and its reference checker | `src/check.rs`: a step-for-step port of the reference checker |
 | Regular expressions (`RGX`, `RGXi`, `RGX_EXTRACT`) | RE2 | the `regex` crate's syntax parser (RE2 syntax), after RE2's own rules and refusals (below) |
-| Fields, subjects, activity types, outcomes | Exabeam's Common Information Model, ExabeamLabs/CIMLibrary@e72bfa2 (Apache-2.0) | `catalogs/exabeam/` (`scripts/sync_exabeam_catalog.py`), `src/catalog.rs` |
+| Fields, subjects, activity types, outcomes | Exabeam's Common Information Model, ExabeamLabs/CIMLibrary@e72bfa2 (Apache-2.0) | `data/catalogs/exabeam/` (`scripts/engine/sync_exabeam_catalog.py`), `src/catalog.rs` |
 | Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `grammars/tree-sitter-opentide-exabeam`, `highlights/queries/exabeam/highlights.scm` |
 | Block constraints and advisories | exabeam-1.0 platform "Constraints", "Advisories" and `validate_exabeam_block` | `crates/opentide-tide/src/exabeam.rs` |
 
@@ -27,10 +27,10 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 
 | Suite | Queries | Agreement | Harness |
 |-------|---------|-----------|---------|
-| The spec's fixtures (`testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree-sitter highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
-| The reference checker's recorded verdicts (`reference.json`): the fixtures above, `testdata/conformance/external/exabeam/` and 255 probes (`probes.tsv`) | 331 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
+| The spec's fixtures (`crates/testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree-sitter highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
+| The reference checker's recorded verdicts (`reference.json`): the fixtures above, `crates/testdata/conformance/external/exabeam/` and 255 probes (`probes.tsv`) | 331 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
 | Tree-sitter highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
-| Queries written for opentide (`testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
+| Queries written for opentide (`crates/testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
 | The block checker's recorded verdicts: 51 block cases written for opentide and the spec's 8 object fixtures | 59 | every error, code and field path, identical, but for the block without `status` (below) | `crates/opentide-tide/tests/exabeam_spec.rs` |
 | Grammar productions | 21 rules, one valid and one invalid fixture each | 21 / 21 | `crates/opentide-syntax/tests/corpus_gate.rs` |
 | Exabeam's published correlation rules, ExabeamLabs/new-scale-content-hub (measured, not vendored: its README forbids redistribution) | 2,371 rules, one sequence each | see below | `crates/opentide-exabeam/tests/content_hub.rs` (ignored; reads a local checkout) |
@@ -100,7 +100,7 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 
 ## No oracle
 
-Exabeam's search language is closed source: there is no parser to port or run in CI, and the only reference is a tenant's Search API (`POST /search/v2/events`, which `opentide validate query --live` calls). The specification's reference checker stands in for one, and its verdicts are recorded (`scripts/sync_exabeam_conformance.py`). See `scripts/oracles/README.md`.
+Exabeam's search language is closed source: there is no parser to port or run in CI, and the only reference is a tenant's Search API (`POST /search/v2/events`, which `opentide validate query --live` calls). The specification's reference checker stands in for one, and its verdicts are recorded (`scripts/engine/sync_exabeam_conformance.py`). See `scripts/engine/oracles/README.md`.
 
 ## Open
 

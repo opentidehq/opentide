@@ -17,6 +17,10 @@ pub struct Finding {
 }
 
 #[derive(Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about one regexp, each read on its own"
+)]
 pub struct Check {
     pub errors: Vec<Finding>,
     pub yara_x: Vec<Finding>,
@@ -39,6 +43,10 @@ pub struct Check {
 
 /// What a parsed (sub)expression is, beyond its atoms.
 #[derive(Clone, PartialEq, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about one subexpression, each read on its own"
+)]
 struct Node {
     atoms: Atoms,
     nullable: bool,
@@ -123,7 +131,7 @@ pub fn check(src: &str) -> Check {
     p.check
 }
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     fn error(&mut self, start: usize, end: usize, message: &str) {
         self.check.errors.push(Finding {
             start,
@@ -276,7 +284,7 @@ impl<'a> Parser<'a> {
     /// Whether the quantifier at `from..self.pos` has no upper bound.
     fn unbounded_quantifier(&self, from: usize) -> bool {
         let q = &self.src[from..self.pos];
-        matches!(q.first(), Some(b'*') | Some(b'+'))
+        matches!(q.first(), Some(b'*' | b'+'))
             || (q.first() == Some(&b'{') && q.windows(2).any(|w| w == b",}"))
     }
 
@@ -551,7 +559,7 @@ impl<'a> Parser<'a> {
         } else {
             self.check.greedy = true;
         }
-        if matches!(self.peek(), Some(b'*') | Some(b'+')) {
+        if matches!(self.peek(), Some(b'*' | b'+')) {
             self.error(self.pos, self.pos + 1, "nothing to repeat");
         }
         (optional, true)
@@ -565,7 +573,7 @@ fn parse_bound(s: &str) -> Option<u32> {
     // Saturate: "repeat interval too large" either way.
     Some(
         s.parse::<u64>()
-            .map_or(u32::MAX, |v| v.min(u32::MAX as u64) as u32),
+            .map_or(u32::MAX, |v| u32::try_from(v).unwrap_or(u32::MAX)),
     )
 }
 
@@ -690,7 +698,7 @@ mod tests {
 
     #[test]
     fn atoms_follow_libyara() {
-        let len = |b: &[u8]| Some(b.len() as i32);
+        let len = |b: &[u8]| i32::try_from(b.len()).ok();
         assert_eq!(check("abc?d").atoms.best(&len), Some(2));
         assert_eq!(check("a.bcd").atoms.best(&len), Some(3));
         // The weakest branch decides.

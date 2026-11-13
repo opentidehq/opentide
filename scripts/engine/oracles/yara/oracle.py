@@ -3,15 +3,15 @@
 
 The references are the ``yara-python`` 4.5.4 and ``yara-x`` 1.23.0 wheels,
 installed in CI only (``oracle.yml``); neither ships, and neither may appear
-in a Rust or npm manifest (``scripts/ci-oracle.sh``).
+in a Rust or npm manifest (``scripts/engine/ci-oracle.sh``).
 
 Two checks:
 
-1. Every verdict recorded in ``testdata/conformance/yara/cases.json`` is what
+1. Every verdict recorded in ``crates/testdata/conformance/yara/cases.json`` is what
    the live engines say. ``crates/opentide-yara/tests/conformance.rs`` holds
    the engine to those verdicts on every ``cargo test``; this keeps them
    honest without the YARA-X and libyara checkouts.
-2. Every YARA file in the repository (``testdata/corpus/yara``, the external
+2. Every YARA file in the repository (``crates/testdata/corpus/yara``, the external
    corpus with its ``.broken.`` twins, YARA-X's parser suite) goes through the
    engine (``opentide-lsp analyze``) and both references. They agree when:
    - the engine reports an error exactly when libyara refuses the file;
@@ -21,11 +21,11 @@ Two checks:
      ``yara_x_incompatible``.
 
 A disagreement fails unless a ``[[yara]]`` entry of
-``testdata/oracles/exceptions.toml`` lists its path, and a listed file that
+``crates/testdata/oracles/exceptions.toml`` lists its path, and a listed file that
 agrees fails too. ``conformance.rs`` reads the same entries for the cases.
 
 Usage:
-    python3 scripts/oracles/yara/oracle.py [--binary target/debug/opentide-lsp] [--report report.json]
+    python3 scripts/engine/oracles/yara/oracle.py [--binary target/debug/opentide-lsp] [--report report.json]
 """
 
 from __future__ import annotations
@@ -37,14 +37,14 @@ import subprocess
 import sys
 import tomllib
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-CASES = ROOT / "testdata/conformance/yara/cases.json"
-EXCEPTIONS = ROOT / "testdata/oracles/exceptions.toml"
+ROOT = pathlib.Path(__file__).resolve().parents[4]
+CASES = ROOT / "crates/testdata/conformance/yara/cases.json"
+EXCEPTIONS = ROOT / "crates/testdata/oracles/exceptions.toml"
 CORPORA = [
-    ("testdata/corpus/yara", "*.yar"),
-    ("testdata/conformance/external/yara", "**/*.yar"),
-    ("testdata/conformance/external/yara", "**/*.yara"),
-    ("testdata/conformance/yara-x/parser", "*.in"),
+    ("crates/testdata/corpus/yara", "*.yar"),
+    ("crates/testdata/conformance/external/yara", "**/*.yar"),
+    ("crates/testdata/conformance/external/yara", "**/*.yara"),
+    ("crates/testdata/conformance/yara-x/parser", "*.in"),
 ]
 PINS = {"yara": "4.5.4", "yara_x": "1.23.0"}  # yara-python, yara-x
 
@@ -112,7 +112,7 @@ def main() -> int:
         if (live["libyara"], live["yara_x"]) != (case["libyara"], case["yara_x"]):
             failures.append(
                 f"{case['origin']}: recorded {case['libyara']}/{case['yara_x']}, the engines say "
-                f"{live['libyara']}/{live['yara_x']} (re-run scripts/sync_yara_conformance.py)"
+                f"{live['libyara']}/{live['yara_x']} (re-run scripts/engine/sync_yara_conformance.py)"
             )
 
     # 2. The files.
