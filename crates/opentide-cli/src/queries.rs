@@ -410,8 +410,41 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
                 relative, uuid, diagnostic,
             ));
         }
+        out.extend(block_advisories(file, relative, uuid, &text));
         Ok(out)
     }
+}
+
+/// The platforms' block advisories of an object file
+/// (`_platform_advisory_findings`): each a `queries` warning at its field
+/// path. A file that does not load as YAML has none: the parse error is
+/// another check's finding.
+fn block_advisories(
+    file: &Path,
+    relative: &str,
+    uuid: Option<&str>,
+    text: &str,
+) -> Vec<opentide_workspace::lint::LintFinding> {
+    let Ok(document) = opentide_schema::node::load(text) else {
+        return Vec::new();
+    };
+    let Some(root) = document.root() else {
+        return Vec::new();
+    };
+    let locator = document.locator();
+    opentide_schema::objects::platform::block_advisories(root)
+        .into_iter()
+        .map(|advisory| {
+            let mut diagnostic =
+                Diagnostic::new(advisory.code, Severity::Warning, advisory.message)
+                    .file(file)
+                    .at(advisory.field_path);
+            diagnostic.yaml_line = locator.yaml_line(&diagnostic.field_path);
+            diagnostic.path = Some(relative.to_owned());
+            diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
+            opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
+        })
+        .collect()
 }
 
 /// `bytes` as Python's `read_text(encoding="utf-8-sig")` reads them: without

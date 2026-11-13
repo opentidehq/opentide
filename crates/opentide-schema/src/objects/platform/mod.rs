@@ -59,6 +59,7 @@ pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
 pub use google_secops::GoogleSecopsConfig;
+pub use google_secops::advisories::Advisory;
 pub use harfanglab::HarfangLabConfig;
 pub use sentinel::SentinelConfig;
 pub use sentinel_one::SentinelOneConfig;
@@ -392,6 +393,14 @@ pub const NAMED_CHECKS: [NamedCheck; 2] = [
         run: sysdig::block_codes,
     },
 ];
+
+/// Every block advisory a rule earns, each platform's in the platform
+/// table's order: a warning that never rejects the rule, which `validate`
+/// and `lint`'s `queries` check report at its field path. Google SecOps'
+/// ([`google_secops::advisories::advisories`]).
+pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
+    google_secops::advisories::advisories(rule)
+}
 
 /// The named check called `name`.
 pub fn named_check(name: &str) -> Option<&'static NamedCheck> {
