@@ -4,7 +4,7 @@
 //! server's `bitdefender_spec.rs`, on the model. The YARA signature's codes
 //! are the YARA lane's, with their cases.
 
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde_json::{Value as Json, json};
 
@@ -75,23 +75,66 @@ fn path(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|part| (*part).to_owned()).collect()
 }
 
-fn fixtures() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/bitdefender")
+/// A fixture of `tests/fixtures/bitdefender/`, compiled in: the crate does
+/// no I/O, its tests included (`scripts/engine/check-io-free.sh`).
+macro_rules! fixture {
+    ($name:literal) => {
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/bitdefender/",
+            $name
+        ))
+    };
 }
 
-fn fixture_codes(path: &Path) -> BTreeSet<String> {
-    let text = std::fs::read_to_string(path).unwrap();
-    let document = crate::node::load(&text).unwrap();
-    let block = document
-        .root()
-        .unwrap()
-        .get("configurations")
-        .unwrap()
-        .get("bitdefender")
-        .unwrap()
-        .clone();
+/// The specification's valid fixtures.
+const VALID: [(&str, &str); 3] = [
+    ("block-bitdefender.yaml", fixture!("block-bitdefender.yaml")),
+    (
+        "rule-bitdefender-detection-1.0.yaml",
+        fixture!("rule-bitdefender-detection-1.0.yaml"),
+    ),
+    (
+        "rule-bitdefender-yara-1.0.yaml",
+        fixture!("rule-bitdefender-yara-1.0.yaml"),
+    ),
+];
+
+/// The specification's invalid fixtures, each with the code its header names.
+const INVALID: [(&str, &str, &str); 4] = [
+    (
+        "rule-bitdefender-two-kinds.yaml",
+        fixture!("invalid/rule-bitdefender-two-kinds.yaml"),
+        "bitdefender_rule_kind",
+    ),
+    (
+        "rule-bitdefender-criterion-field.yaml",
+        fixture!("invalid/rule-bitdefender-criterion-field.yaml"),
+        "bitdefender_criterion_field",
+    ),
+    (
+        "rule-bitdefender-exclusion.yaml",
+        fixture!("invalid/rule-bitdefender-exclusion.yaml"),
+        "bitdefender_rule_kind",
+    ),
+    (
+        "rule-bitdefender-kill-on-yara.yaml",
+        fixture!("invalid/rule-bitdefender-kill-on-yara.yaml"),
+        "bitdefender_action_scope",
+    ),
+];
+
+/// The block of a fixture: `configurations.bitdefender`, or the document.
+fn fixture_block(text: &str) -> Arc<crate::node::Node> {
+    let document = crate::node::load(text).unwrap();
+    let root = document.root().unwrap().clone();
+    root.get("configurations")
+        .map_or_else(|| root.clone(), |c| c.get("bitdefender").unwrap().clone())
+}
+
+fn fixture_codes(text: &str) -> BTreeSet<String> {
     let mut cx = Context::new();
-    let _ = BitdefenderConfig::from_node(&block, &mut cx);
+    let _ = BitdefenderConfig::from_node(&fixture_block(text), &mut cx);
     cx.into_errors()
         .into_iter()
         .map(|error| error.kind.pydantic_type().unwrap_or_default().to_owned())
@@ -100,50 +143,22 @@ fn fixture_codes(path: &Path) -> BTreeSet<String> {
 
 #[test]
 fn the_specification_fixtures_validate() {
-    let mut names = Vec::new();
-    for entry in std::fs::read_dir(fixtures()).unwrap() {
-        let path = entry.unwrap().path();
-        if path.extension().is_some_and(|ext| ext == "yaml") {
-            names.push(path);
-        }
-    }
-    names.sort();
-    assert_eq!(names.len(), 3, "{names:?}");
-    for path in names {
-        let text = std::fs::read_to_string(&path).unwrap();
-        let document = crate::node::load(&text).unwrap();
-        let root = document.root().unwrap();
-        let block = root
-            .get("configurations")
-            .map_or_else(|| root.clone(), |c| c.get("bitdefender").unwrap().clone());
+    for (name, text) in VALID {
         let mut cx = Context::new();
-        let value = BitdefenderConfig::from_node(&block, &mut cx);
-        assert!(cx.into_errors().is_empty(), "{}", path.display());
-        assert!(value.is_some());
+        let value = BitdefenderConfig::from_node(&fixture_block(text), &mut cx);
+        assert!(cx.into_errors().is_empty(), "{name}");
+        assert!(value.is_some(), "{name}");
     }
 }
 
 #[test]
 fn the_specification_invalid_fixtures_report_their_code() {
-    for (name, code) in [
-        ("rule-bitdefender-two-kinds.yaml", "bitdefender_rule_kind"),
-        (
-            "rule-bitdefender-criterion-field.yaml",
-            "bitdefender_criterion_field",
-        ),
-        ("rule-bitdefender-exclusion.yaml", "bitdefender_rule_kind"),
-        (
-            "rule-bitdefender-kill-on-yara.yaml",
-            "bitdefender_action_scope",
-        ),
-    ] {
-        let path = fixtures().join("invalid").join(name);
-        let text = std::fs::read_to_string(&path).unwrap();
+    for (name, text, code) in INVALID {
         assert!(
             text.contains(&format!("Expected constraint code: {code}")),
             "{name}"
         );
-        assert!(fixture_codes(&path).contains(code), "{name}");
+        assert!(fixture_codes(text).contains(code), "{name}");
     }
 }
 
@@ -596,17 +611,7 @@ fn each_code_is_reported_at_its_field_path() {
 
 #[test]
 fn validate_reports_the_code_at_its_path_under_the_rule() {
-    let file = fixtures().join("invalid/rule-bitdefender-criterion-field.yaml");
-    let text = std::fs::read_to_string(file).unwrap();
-    let document = crate::node::load(&text).unwrap();
-    let block = document
-        .root()
-        .unwrap()
-        .get("configurations")
-        .unwrap()
-        .get("bitdefender")
-        .unwrap()
-        .clone();
+    let block = fixture_block(INVALID[1].1);
     let mut cx = Context::new();
     cx.at_key("configurations", |cx| {
         cx.at_key("bitdefender", |cx| BitdefenderConfig::from_node(&block, cx))
