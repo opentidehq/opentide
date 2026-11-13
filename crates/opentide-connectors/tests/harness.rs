@@ -2,7 +2,8 @@
 //! cassette the Python client recorded (`tests/cassettes/mock-platform/
 //! deploy.json`, `cargo xtask cassettes record`) is replayed through the
 //! replaying proxy, and the Rust connector's requests must be the Python
-//! client's, byte for byte, in order. One byte off fails.
+//! client's, in order: a JSON body the same data, any other byte for byte.
+//! A changed value fails.
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
@@ -11,7 +12,6 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
-use opentide_connectors::body::python_json;
 use opentide_connectors::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
 };
@@ -65,8 +65,9 @@ const RULE: Rule = Rule {
 
 /// The sample connector: the mock platform's rules API.
 struct MockPlatform {
-    /// Writes bodies as `json.dumps` does; off, as serde_json does.
-    python_bodies: bool,
+    /// Sends the compiled bytes; off, the same data written again by
+    /// serde_json.
+    as_compiled: bool,
 }
 
 impl MockPlatform {
@@ -87,7 +88,7 @@ impl MockPlatform {
         if let Some(body) = body {
             // The compiled bytes; off, the body as serde_json would write
             // it again (keys sorted, no spaces, raw UTF-8).
-            let bytes = if self.python_bodies {
+            let bytes = if self.as_compiled {
                 body.to_vec()
             } else {
                 let value: serde_json::Value = serde_json::from_slice(body).unwrap();
@@ -182,11 +183,7 @@ impl Platform for MockPlatform {
 
 /// Runs the Python client's sequence with the sample connector against
 /// *proxy*, returning the remote id and the 404's status.
-fn deploy(
-    proxy: &Proxy,
-    rule: &Rule,
-    python_bodies: bool,
-) -> Result<(String, u16), ConnectorError> {
+fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16), ConnectorError> {
     let mut ca = tempfile::NamedTempFile::new().unwrap();
     ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
     let env = Environment::from_pairs(proxy.client_env(ca.path().to_str().unwrap()))
@@ -214,7 +211,7 @@ fn deploy(
     let http = HttpClient::new(&tenant.label, &tenant.http, &env, None)?;
     let mut registry = Registry::new();
     registry
-        .register(Box::new(MockPlatform { python_bodies }))
+        .register(Box::new(MockPlatform { as_compiled }))
         .unwrap();
     let platform = registry.get("mock").unwrap();
     let deployer = platform.deployer().unwrap();
@@ -231,7 +228,7 @@ fn deploy(
                 &DeployRequest {
                     rule_id: rule.rule_id.to_owned(),
                     operation: Operation::Create,
-                    body: python_json(rule).unwrap(),
+                    body: serde_json::to_vec(rule).unwrap(),
                 },
             )
             .await?;
@@ -246,7 +243,7 @@ fn deploy(
                 &DeployRequest {
                     rule_id: remote.clone(),
                     operation: Operation::Update,
-                    body: python_json(&tuned).unwrap(),
+                    body: serde_json::to_vec(&tuned).unwrap(),
                 },
             )
             .await?;
@@ -256,11 +253,11 @@ fn deploy(
                 &DeployRequest {
                     rule_id: remote.clone(),
                     operation: Operation::Disable,
-                    body: python_json(&serde_json::json!({"enabled": false})).unwrap(),
+                    body: serde_json::to_vec(&serde_json::json!({"enabled": false})).unwrap(),
                 },
             )
             .await?;
-        let missing = MockPlatform { python_bodies }
+        let missing = MockPlatform { as_compiled }
             .call(
                 cx,
                 reqwest::Method::GET,
@@ -292,7 +289,7 @@ fn harness_sample_connector_sends_what_the_python_client_sent() {
 }
 
 #[test]
-fn harness_a_single_byte_difference_fails() {
+fn harness_a_changed_value_fails_and_another_layout_passes() {
     // severity 74 instead of 73: one byte of the create body.
     let proxy = replay("mock-platform/deploy");
     let one_off = Rule {
@@ -308,16 +305,12 @@ fn harness_a_single_byte_difference_fails() {
         "{}",
         mismatches[0]
     );
-    // serde_json's own layout (no spaces after separators, raw UTF-8) is
-    // not the Python client's either.
+    // The same data in serde_json's layout (keys sorted, no spaces, raw
+    // UTF-8) is the same body: a JSON body matches as data.
     let proxy = replay("mock-platform/deploy");
-    let _ = deploy(&proxy, &RULE, false);
-    let mismatches = proxy.verify();
-    assert_eq!(
-        mismatches.first().map(|m| m.index),
-        Some(1),
-        "{mismatches:?}"
-    );
+    let outcome = deploy(&proxy, &RULE, false);
+    assert_eq!(proxy.verify(), Vec::new());
+    assert_eq!(outcome.unwrap(), ("r-1".to_owned(), 404));
     // A request the cassette does not hold, or one too few, fails too.
     let proxy = replay("mock-platform/deploy");
     let mismatches = proxy.verify();

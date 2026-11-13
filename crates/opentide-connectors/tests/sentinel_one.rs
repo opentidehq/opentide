@@ -1,7 +1,7 @@
 //! SentinelOne against the cassettes recorded from the Python client
 //! (`tests/cassettes/sentinel_one/`, `cargo xtask cassettes record
 //! sentinel_one/<scenario>`): every request the connector sends must be the
-//! Python client's, byte for byte and in order.
+//! Python client's, in order (a JSON body as the same data).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 

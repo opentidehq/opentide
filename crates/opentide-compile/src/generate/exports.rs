@@ -4,7 +4,8 @@
 //! (`export/revisions_export.py`).
 //!
 //! The layer is laid out at four spaces in its keys' order; the table and the
-//! snapshot at two, keys sorted. Every file is ASCII ([`super::json_text`]).
+//! snapshot at two, keys sorted, so a run writes the same file whatever order
+//! it read the objects in ([`super::json_text`]).
 
 use std::path::{Path, PathBuf};
 

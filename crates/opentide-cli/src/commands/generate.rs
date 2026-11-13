@@ -858,10 +858,7 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
             if options.include_visibility {
                 let report = visibility_report(&workspace, &index, &root);
                 let document = explorer::visibility(report, &generated_at, &tlp);
-                write(&[Output::text(
-                    visibility_path,
-                    opentide_compile::generate::json_text::line(&document),
-                )])?;
+                write(&[Output::text(visibility_path, document.to_compact())])?;
             } else if visibility_path.is_file() {
                 // Opt-in per run: an inventory an earlier run wrote is not published again.
                 std::fs::remove_file(&visibility_path)

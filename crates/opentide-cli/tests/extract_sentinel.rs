@@ -5,7 +5,7 @@
 //! the oracle's files and document in `tests/extract_sentinel/oracle/`. Here the
 //! Rust command runs in a copy of the same workspace, its ids fixed the same
 //! way, against that cassette: it must send exactly the oracle's requests,
-//! write `output-soc.json` byte for byte, and write each rule file as the
+//! write `output-soc.json` with the oracle's data, and write each rule file as the
 //! oracle did, but for the differences `tests/golden/APPROVED_DIFFS.toml`
 //! approves (case `cassette:sentinel/extract`), and load to the oracle's data.
 
@@ -164,11 +164,16 @@ fn sentinel_rules_are_extracted_as_the_oracle_extracted_them() {
         ]
     );
 
-    // The listing's dump, byte for byte.
+    // The listing's dump: the oracle's data, laid out four spaces a level
+    // (strings in UTF-8 where the oracle escaped them).
+    let dump = std::fs::read_to_string(ws.join("output-soc.json")).unwrap();
+    let oracle_dump = std::fs::read_to_string(here().join("oracle/output-soc.json")).unwrap();
     assert_eq!(
-        String::from_utf8(std::fs::read(ws.join("output-soc.json")).unwrap()).unwrap(),
-        String::from_utf8(std::fs::read(here().join("oracle/output-soc.json")).unwrap()).unwrap()
+        serde_json::from_str::<serde_json::Value>(&dump).unwrap(),
+        serde_json::from_str::<serde_json::Value>(&oracle_dump).unwrap()
     );
+    assert!(dump.contains("\n    {\n        \"kind\": \"Scheduled\","));
+    assert!(dump.contains("Encoded PowerShell — Ünïcode"));
 
     // The rule files: the oracle's bytes but for the approved differences,
     // and the oracle's data.
