@@ -325,7 +325,7 @@ fn title(text: &str) -> String {
     out
 }
 
-/// `json.dumps(text, ensure_ascii=False)`.
+/// `text` as a JSON string.
 fn json_string(text: &str) -> String {
     serde_json::to_string(text).unwrap_or_default()
 }
@@ -1649,10 +1649,7 @@ fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
         .map(py)
         .unwrap_or_default();
     if !python_uuid(&id) {
-        return Some(format!(
-            "Kibana rule_id {} is not a UUID",
-            opentide_connectors::python::python_string_repr(&id)
-        ));
+        return Some(format!("Kibana rule_id {id:?} is not a UUID"));
     }
     let loaded = opentide_schema::node::load(text).ok()?;
     let root = loaded.root()?;

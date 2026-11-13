@@ -1059,9 +1059,18 @@ mod tests {
                 ("defender_for_endpoint", "tenant:contoso"),
                 ("defender_for_endpoint", "tenant:fabrikam"),
                 ("harfanglab", "tenant:sigma"),
+                ("sentinel", "compile"),
+                ("sentinel", "preview"),
+                ("sentinel", "tenant:one"),
+                ("sentinel", "tenant:two"),
+                ("sentinel_one", "tenant:account"),
+                ("sentinel_one", "tenant:site"),
                 ("splunk", "tenant:es"),
                 ("splunk", "tenant:es"),
-                ("sysdig", "preview")
+                ("sysdig", "compile"),
+                ("sysdig", "preview"),
+                ("sysdig", "tenant:plain"),
+                ("sysdig", "tenant:tagged")
             ]
         );
         // A rule the oracle refused, and one the index does not hold.

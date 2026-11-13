@@ -429,7 +429,8 @@ fn the_editor_text_is_annotated() {
         "{}",
         &text[..400]
     );
-    assert!(text.is_ascii());
+    // UTF-8 as it is: no `\uXXXX` escape stands for a character past ASCII.
+    assert!(!text.contains("\\u00"));
 }
 
 #[test]

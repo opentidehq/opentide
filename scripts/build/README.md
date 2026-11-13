@@ -5,13 +5,14 @@ repositories.
 
 ## Vocabulary and pin sync
 
-`sync_vocabularies.py` mirrors canonical vocabulary files from
+`cargo xtask vocab sync` (`xtask/src/vocab/sync.rs`) mirrors canonical vocabulary files from
 `specifications/vocabularies/*.vocab.toml` into
 `src/opentide/data/vocabulary/` and schema pins from
 `specifications/schemas/pins/*.toml` into `src/opentide/data/pins/`, then
 refreshes `data/specifications.lock.json`.
-The ingest (`cargo xtask vocab ingest --apply`, [`scripts/vocabulary/README.md`](../vocabulary/README.md))
-runs this sync step after writing canonical vocabularies.
+The ingests (`cargo xtask vocab ingest --apply` and `cargo xtask vocab malapi --apply`,
+[`scripts/vocabulary/README.md`](../vocabulary/README.md)) run this sync step
+after writing canonical vocabularies.
 
 Vocabularies must match byte for byte. Pins are compared table by table, the
 way opentide loads them: a missing or extra `[schema::M.m]` revision, a
@@ -42,9 +43,8 @@ cargo xtask vocab sync
 cargo xtask vocab sync --check
 ```
 
-`cargo xtask vocab sync` (`xtask/src/vocab/sync.rs`) and `sync_vocabularies.py`
-compute the same lockfile. Nothing runs the Python script any more: the
-vocab-upstream workflow and the ingest use `cargo xtask vocab sync` (UC-6.3).
+It replaced the Python `sync_vocabularies.py`, which computed the same
+lockfile and was removed once nothing ran it (UC-6.3).
 
 If the specifications repository is not available locally, sync mode writes a
 baseline lockfile from the currently bundled vocabularies and pins, and

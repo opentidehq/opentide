@@ -210,7 +210,7 @@ mod comparator {
     }
 
     #[test]
-    fn json_key_order_must_be_equal() {
+    fn json_key_order_is_layout() {
         let oracle = run(0, DOCUMENT, "");
         let candidate = run(
             0,
@@ -218,36 +218,39 @@ mod comparator {
             "",
         );
         let (report, _) = check(&oracle, &candidate, &Ledger::default());
-        assert!(!report.equal);
-        assert_eq!(
-            kinds(&report),
-            vec![("stdout".into(), Kind::JsonKeyOrder, Some("/summary".into()))]
-        );
-        assert_eq!(report.differences[0].oracle, "rules, threats");
-        assert_eq!(report.differences[0].candidate, "threats, rules");
+        assert!(report.equal, "{report:?}");
     }
 
     #[test]
-    fn the_same_json_in_other_bytes_is_reported() {
-        let indented = "{\n  \"ok\": true,\n  \"summary\": {\n    \"rules\": 3,\n    \"threats\": 1\n  },\n  \"exit_code\": 0\n}\n";
+    fn the_same_json_in_other_bytes_is_equal() {
+        let indented = "{\n    \"ok\": true,\n    \"summary\": {\n        \"rules\": 3,\n        \"threats\": 1\n    },\n    \"exit_code\": 0\n}";
+        for candidate in [indented, DOCUMENT.trim_end()] {
+            let (report, _) = check(
+                &run(0, DOCUMENT, ""),
+                &run(0, candidate, ""),
+                &Ledger::default(),
+            );
+            assert!(report.equal, "{report:?}");
+        }
+        // Escapes are layout too: `\u00e9` and `é` are one string.
         let (report, _) = check(
-            &run(0, DOCUMENT, ""),
-            &run(0, indented, ""),
+            &with_file(run(0, "", ""), "a.json", "{\"name\": \"\\u00e9\"}"),
+            &with_file(run(0, "", ""), "a.json", "{\"name\":\"\u{e9}\"}"),
+            &Ledger::default(),
+        );
+        assert!(report.equal, "{report:?}");
+    }
+
+    #[test]
+    fn a_number_keeps_its_type() {
+        let (report, _) = check(
+            &run(0, "{\"n\": 1}", ""),
+            &run(0, "{\"n\": 1.0}", ""),
             &Ledger::default(),
         );
         assert_eq!(
             kinds(&report),
-            vec![("stdout".into(), Kind::JsonBytes, None)]
-        );
-        let no_newline = DOCUMENT.trim_end();
-        let (report, _) = check(
-            &run(0, DOCUMENT, ""),
-            &run(0, no_newline, ""),
-            &Ledger::default(),
-        );
-        assert_eq!(
-            kinds(&report),
-            vec![("stdout".into(), Kind::JsonBytes, None)]
+            vec![("stdout".into(), Kind::JsonValue, Some("/n".into()))]
         );
     }
 
@@ -302,7 +305,7 @@ mod comparator {
     }
 
     #[test]
-    fn an_approved_insertion_keeps_key_order_checked() {
+    fn an_approved_insertion_is_placed_by_data() {
         let ledger = Ledger::parse(&entry(
             "*",
             "stdout",
@@ -311,34 +314,27 @@ mod comparator {
             "\"rust\"",
         ))
         .expect("valid");
-        let candidate = run(
-            0,
+        for candidate in [
             "{\"ok\":true,\"summary\":{\"rules\":3,\"threats\":1},\"engine\":\"rust\",\"exit_code\":0}\n",
-            "",
+            "{\n  \"summary\": {\"rules\": 3, \"threats\": 1},\n  \"ok\": true,\n  \"engine\": \"rust\",\n  \"exit_code\": 0\n}\n",
+        ] {
+            let (report, usage) = check(&run(0, DOCUMENT, ""), &run(0, candidate, ""), &ledger);
+            assert!(report.equal, "{report:?}");
+            assert!(usage.is_used(0));
+        }
+        // The approval is narrow: another value beside it is still reported.
+        let (report, _) = check(
+            &run(0, DOCUMENT, ""),
+            &run(
+                0,
+                "{\"ok\":false,\"summary\":{\"rules\":3,\"threats\":1},\"engine\":\"rust\",\"exit_code\":0}\n",
+                "",
+            ),
+            &ledger,
         );
-        let (report, _) = check(&run(0, DOCUMENT, ""), &candidate, &ledger);
-        assert!(report.equal, "{report:?}");
-        let reordered = run(
-            0,
-            "{\"summary\":{\"rules\":3,\"threats\":1},\"ok\":true,\"engine\":\"rust\",\"exit_code\":0}\n",
-            "",
-        );
-        let (report, _) = check(&run(0, DOCUMENT, ""), &reordered, &ledger);
         assert_eq!(
             kinds(&report),
-            vec![("stdout".into(), Kind::JsonKeyOrder, Some(String::new()))]
-        );
-    }
-
-    #[test]
-    fn an_approved_diff_still_checks_the_layout() {
-        let ledger =
-            Ledger::parse(&entry("*", "stdout", "json:/summary/rules", "3", "4")).expect("valid");
-        let indented = "{\n  \"ok\": true,\n  \"summary\": {\n    \"rules\": 4,\n    \"threats\": 1\n  },\n  \"exit_code\": 0\n}\n";
-        let (report, _) = check(&run(0, DOCUMENT, ""), &run(0, indented, ""), &ledger);
-        assert_eq!(
-            kinds(&report),
-            vec![("stdout".into(), Kind::JsonBytes, None)]
+            vec![("stdout".into(), Kind::JsonValue, Some("/ok".into()))]
         );
     }
 

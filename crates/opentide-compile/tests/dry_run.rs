@@ -267,8 +267,8 @@ fn a_selected_rule_without_a_status_fails_the_plan_and_keeps_the_scope() {
     assert_eq!(outcome.exit_code, 1);
     assert_eq!(
         text(&outcome, "message"),
-        "\"\\\"'A' (00000000-0000-4000-8000-00000000000a): configurations.sentinel.status is \
-         required for deployment\\\"\""
+        "\"\\\"A\\\" (00000000-0000-4000-8000-00000000000a): configurations.sentinel.status is \
+         required for deployment\""
     );
     let keys: Vec<&String> = outcome.payload.keys().collect();
     assert_eq!(keys, ["status", "message", "scope"]);
@@ -330,7 +330,7 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
     assert_eq!(
         text(&outcome, "diagnostics").replace("\\\\", "/"),
         "[{\"code\":\"compile_failed\",\"severity\":\"error\",\"message\":\"Sysdig cannot \
-         compile this rule: 'URGENT'\",\"help\":null,\"path\":\"objects/rules/bad.yaml\",\
+         compile this rule: \\\"URGENT\\\"\",\"help\":null,\"path\":\"objects/rules/bad.yaml\",\
          \"file_path\":\"/ws/objects/rules/bad.yaml\",\
          \"platform\":\"sysdig\",\"uuid\":\"00000000-0000-4000-8000-0000000000b1\",\
          \"name\":\"Rule 00000000-0000-4000-8000-0000000000b1\"}]"

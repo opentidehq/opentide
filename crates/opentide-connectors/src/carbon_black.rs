@@ -21,7 +21,6 @@ use crate::connector::{
     utc_z,
 };
 use crate::error::ConnectorError;
-use crate::python::{python_bytes_repr, python_string_repr};
 use crate::retry::RetryPolicy;
 use crate::{HttpSettings, Secret};
 
@@ -240,9 +239,9 @@ impl CarbonBlack {
         match serde_json::from_slice::<Value>(&answer.body) {
             Ok(value) => Ok(Ok(Some(value))),
             Err(_) => Ok(Err(SdkError::Api(format!(
-                "Received error code {} from API (Cannot parse response as JSON: {})",
+                "Received error code {} from API (Cannot parse response as JSON: {:?})",
                 answer.status,
-                python_bytes_repr(&answer.body)
+                String::from_utf8_lossy(&answer.body)
             )))),
         }
     }
@@ -531,11 +530,13 @@ impl CarbonBlack {
                 .get("invalid_message")
                 .map(value_str)
                 .unwrap_or_default();
+            let sent = serde_json::json!({
+                "time_range": {"start": start, "end": end},
+                "query": request.text,
+                "sort": null,
+            });
             return Err(refused(SdkError::Api(format!(
-                "Invalid query: {{'time_range': {{'start': {}, 'end': {}}}, 'query': {}, 'sort': None}}: {message}",
-                python_string_repr(&start),
-                python_string_repr(&end),
-                python_string_repr(&request.text)
+                "Invalid query: {sent}: {message}"
             ))));
         }
         let mut window = Map::new();
@@ -592,6 +593,7 @@ impl CarbonBlack {
                 });
             }
             tokio::select! {
+                biased;
                 () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(POLL_DELAY) => {}
             }
@@ -718,9 +720,7 @@ fn truthy(value: &Value) -> bool {
 fn value_str(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
-        other => serde_json::from_value::<Json>(other.clone())
-            .map(|json| crate::python::python_repr(&json))
-            .unwrap_or_default(),
+        other => other.to_string(),
     }
 }
 
@@ -888,14 +888,14 @@ mod tests {
         for truthful in ["true", "1", "-0.5", "\"no\"", "[0]", "{\"a\": null}"] {
             assert!(truthy(&value(truthful)), "{truthful}");
         }
-        // `str(value)`: a string as it is, anything else as its repr (the
-        // job status's `message`, a tag that is not a string).
+        // A string as it is, anything else as its JSON (the job status's
+        // `message`, a tag that is not a string).
         assert_eq!(
             value_str(&value("\"No data available\"")),
             "No data available"
         );
         assert_eq!(value_str(&value("7")), "7");
-        assert_eq!(value_str(&value("[true, null]")), "[True, None]");
-        assert_eq!(value_str(&value("{\"a\": \"b\"}")), "{'a': 'b'}");
+        assert_eq!(value_str(&value("[true, null]")), "[true,null]");
+        assert_eq!(value_str(&value("{\"a\": \"b\"}")), r#"{"a":"b"}"#);
     }
 }

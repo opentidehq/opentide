@@ -20,7 +20,7 @@ use crate::connector::{
     kql_code, utc_z,
 };
 use crate::error::ConnectorError;
-use crate::python::{python_str, python_string_repr};
+use crate::python::python_str;
 use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
@@ -80,7 +80,7 @@ pub enum SentinelOneError {
         detail: String,
     },
     /// A deployment-state id that is not a number (`int(external_id)`).
-    #[error("invalid literal for int() with base 10: {0}")]
+    #[error("invalid literal for int() with base 10: {0:?}")]
     BadId(String),
     /// The tenant could not be reached, or the run was cancelled.
     #[error(transparent)]
@@ -335,6 +335,7 @@ impl SentinelOne {
                 });
             }
             tokio::select! {
+                biased;
                 () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }
@@ -532,7 +533,7 @@ fn column_name(column: &Json) -> String {
 pub fn rule_id(text: &str) -> Result<i64, SentinelOneError> {
     text.trim()
         .parse::<i64>()
-        .map_err(|_| SentinelOneError::BadId(python_string_repr(text)))
+        .map_err(|_| SentinelOneError::BadId(text.to_owned()))
 }
 
 impl Deployer for SentinelOne {
