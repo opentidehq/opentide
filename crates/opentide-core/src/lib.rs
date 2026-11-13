@@ -493,6 +493,11 @@ impl Diagnostic {
         }
     }
 
+    pub fn with_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
+    }
+
     pub fn with_field_path(mut self, path: Vec<String>) -> Self {
         self.field_path = Some(path);
         self

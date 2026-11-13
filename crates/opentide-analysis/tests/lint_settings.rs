@@ -15,11 +15,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 const CASE: &str = "testdata/conformance/lint-toml";
-const CODES: [&str; 4] = [
+const CODES: [&str; 5] = [
     "filename_slug",
     "filename_pattern",
     "missing_author",
     "missing_organisation",
+    "recommended_field_missing",
 ];
 
 static SETTINGS: Mutex<()> = Mutex::new(());
@@ -128,7 +129,7 @@ fn without_lint_toml_the_defaults_still_apply() {
 fn a_check_lint_toml_disables_is_not_reported() {
     let _turn = SETTINGS.lock().unwrap_or_else(|p| p.into_inner());
     install_lint(Some(
-        "[filenames]\nenabled = false\n[metadata]\nenabled = false\n",
+        "[filenames]\nenabled = false\n[metadata]\nenabled = false\n[recommended]\nenabled = false\n",
     ))
     .unwrap();
     let found = engine_findings();

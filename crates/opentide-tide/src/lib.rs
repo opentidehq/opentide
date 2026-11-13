@@ -679,16 +679,15 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 ),
             ] {
                 if missing && lint.requires(key) {
-                    let mut d = Diagnostic::information(
-                        code,
-                        format!("recommended field metadata.{key} is missing"),
-                        key_range(input.source, "metadata"),
-                    )
-                    .with_field_path(vec!["metadata".into(), key.into()]);
-                    if let Some(severity) = lint.metadata_severity {
-                        d.severity = severity;
-                    }
-                    diagnostics.push(d);
+                    diagnostics.push(
+                        Diagnostic::information(
+                            code,
+                            format!("recommended field metadata.{key} is missing"),
+                            key_range(input.source, "metadata"),
+                        )
+                        .with_severity(lint.metadata_severity.unwrap_or(Severity::Information))
+                        .with_field_path(vec!["metadata".into(), key.into()]),
+                    );
                 }
             }
         }
@@ -1801,8 +1800,9 @@ impl ShapeCheck<'_> {
         }
         for field in &children {
             let key = serde_yaml::Value::String(field.name.clone());
-            let wanted = field.required || (field.recommended && self.recommended.is_some());
-            if !wanted || mapping.contains_key(&key) {
+            // `None`: not asked for here, or lint.toml `[recommended]` disables it.
+            let recommended = self.recommended.filter(|_| field.recommended);
+            if !(field.required || recommended.is_some()) || mapping.contains_key(&key) {
                 continue;
             }
             // A legacy spelling that fills the field counts (`search` for `query`).
@@ -1821,21 +1821,18 @@ impl ShapeCheck<'_> {
                 continue;
             }
             let dotted = field_path.join(".");
-            let diagnostic = if field.required {
-                Diagnostic::error(
+            let diagnostic = match recommended {
+                Some(severity) if !field.required => Diagnostic::information(
+                    codes::RECOMMENDED_FIELD_MISSING,
+                    format!("recommended field '{dotted}' is missing"),
+                    self.range(steps),
+                )
+                .with_severity(severity),
+                _ => Diagnostic::error(
                     codes::SCHEMA_VALIDATION,
                     format!("missing required field '{dotted}'"),
                     self.range(steps),
-                )
-            } else {
-                Diagnostic {
-                    severity: self.recommended.unwrap_or(Severity::Information),
-                    ..Diagnostic::information(
-                        codes::RECOMMENDED_FIELD_MISSING,
-                        format!("recommended field '{dotted}' is missing"),
-                        self.range(steps),
-                    )
-                }
+                ),
             };
             self.found.push(diagnostic.with_field_path(field_path));
         }
