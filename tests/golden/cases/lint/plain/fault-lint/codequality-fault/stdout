@@ -1,0 +1,648 @@
+warning[lucene_lowercase_operator]: `and` is a search term in Lucene, not an operator; operators are upper case (`AND`)
+   ╭─▶ objects/rules/covert-beacon-rule-0185.yaml:62:28
+   │
+61 │     query: |
+62 │       process.name:cmd.exe and user.name:root
+   │                            ━━━
+   │
+   ╰─ help: try: AND
+
+warning[kql_join_summarize_before_project]: `join` runs before `project` narrows columns; project the needed columns first (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+   ╭─▶ objects/rules/covert-injection-rule-0073.yaml:42:9
+   │
+41 │       SecurityEvent
+42 │       | join kind=inner (SigninLogs) on $left.Account == $right.UserPrincipalName
+   │         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[eql_maxspan_lookback]: EQL maxspan exceeds scheduling.lookback (1m); a sequence that straddles two runs is missed
+   ╭─▶ objects/rules/covert-injection-rule-0287.yaml:61:29
+   │
+60 │     query: |
+61 │       sequence with maxspan=3m [process where true] [file where true]
+   │                             ━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[falco_unknown_rule]: `No such rule` is not a rule of the Falco default rules: Falco refuses to append to it, and on Sysdig it must be a rule the tenant has
+   ╭─▶ objects/rules/covert-loader-rule-0261.yaml:46:5
+   │
+45 │     priority: NOTICE
+46 │     append_to_rule: No such rule
+   │     ━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[technique_not_enterprise]: T1626 (Mobile : Abuse Elevation Control Mechanism) is not Enterprise ATT&CK; Elastic deploy skips it from the rule's threat mapping
+   ╭─▶ objects/rules/covert-pivot-rule-0044.yaml:19:1
+   │
+18 │   It looks for bitsadmin.exe launched in an unusual way.
+19 │ techniques:
+   │ ━━━━━━━━━━
+   │
+   ╰─ help: opentide explain technique_not_enterprise describes it
+
+warning[eql_expression_depth]: expression nesting exceeds 250 levels (parentheses plus chained `not`/`-`/`+`): Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject this query; earlier patches and 9.0 to 9.2 accept it
+   ╭─▶ objects/rules/covert-spray-rule-0242.yaml:45:271
+   │
+44 │     query: |
+45 │       process where ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((true))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+   │                                                                                                                                                                                                                                                                               ━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[kql_unscoped_union]: unscoped `union` uses wildcard table `*` and reads every table; name the tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+   ╭─▶ objects/rules/covert-tunnel-rule-0088.yaml:62:13
+   │
+61 │     query: |
+62 │       union * | take 1
+   │             ━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[esql_expression_depth]: expressions nest 310 deep; Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject more than 300 (earlier releases allow 400)
+   ╭─▶ objects/rules/elevated-beacon-rule-0200.yaml:71:349
+   │
+70 │     query: |
+71 │       FROM logs-* METADATA _id | WHERE ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((true))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+   │                                                                                                                                                                                                                                                                                                                                                             ━━━━━━
+   │
+   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+warning[lucene_unescaped_slash]: `/var/` is read as a regular expression because `/` is unescaped, so the value splits into separate clauses; escape the slashes (`\/`) or quote the value
+   ╭─▶ objects/rules/elevated-downgrade-rule-0251.yaml:59:17
+   │
+58 │     query: |
+59 │       file.path:/var/log AND process.pid:1
+   │                 ━━━━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+warning[eql_nested_comment]: Elasticsearch nests block comments, so this comment runs past its first `*/`; other EQL tools end it there. Avoid `/*` inside a comment
+   ╭─▶ objects/rules/elevated-harvest-rule-0362.yaml:63:21
+   │
+62 │     query: |
+63 │       process where /* outer /* inner */ still comment */ true
+   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[eql_maxspan_window]: EQL maxspan exceeds the rule window, interval + lookback (5m + 1m); the sequence cannot fit one run
+   ╭─▶ objects/rules/elevated-implant-rule-0332.yaml:40:29
+   │
+39 │     query: |
+40 │       sequence with maxspan=1h [process where true] [file where true]
+   │                             ━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[kql_render_not_valid]: `render` is not valid in detection queries
+   ╭─▶ objects/rules/elevated-loader-rule-0079.yaml:66:9
+   │
+65 │       SecurityEvent
+66 │       | render table
+   │         ━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[ecs_unknown_field]: `process.nmae` is not an ECS v9.5.0 field; did you mean `process.name`? (ECS allows custom fields, so this is a warning)
+   ╭─▶ objects/rules/encoded-downgrade-rule-0263.yaml:65:7
+   │
+64 │     query: |
+65 │       process.nmae: x
+   │       ━━━━━━━━━━━━
+   │
+   ╰─ help: try: process.name
+
+warning[lucene_looks_like_kuery]: this query reads like Kibana KQL (lower-case `and`/`or`/`not` operators, `field >= value` ranges); if it is an Elastic rule, set `language: kuery`
+   ╭─▶ objects/rules/encoded-dropper-rule-0161.yaml:55:7
+   │
+54 │     query: |
+55 │       process.name:cmd.exe and event.code >= 4624
+   │       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+warning[lucene_lowercase_operator]: `and` is a search term in Lucene, not an operator; operators are upper case (`AND`)
+   ╭─▶ objects/rules/encoded-dropper-rule-0161.yaml:55:28
+   │
+54 │     query: |
+55 │       process.name:cmd.exe and event.code >= 4624
+   │                            ━━━
+   │
+   ╰─ help: try: AND
+
+warning[lucene_kuery_syntax]: `event.code >=` is KQL; Lucene searches `>=` as a term. Write `event.code:>=value`
+   ╭─▶ objects/rules/encoded-dropper-rule-0161.yaml:55:43
+   │
+54 │     query: |
+55 │       process.name:cmd.exe and event.code >= 4624
+   │                                           ━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+error[name_missing]: Object has no name; cannot check filename slug
+  ╭─▶ objects/rules/encoded-harvest-rule-0032.yaml
+  ╰─ help: add a name: the file name is derived from it
+
+warning[lucene_regexp]: Lucene regular expressions have no `(?…)` groups or flags: `(?:` matches the text `?:` and `(?i)` the text `?i`; drop the `?…` part
+   ╭─▶ objects/rules/encoded-harvest-rule-0236.yaml:64:21
+   │
+63 │     query: |
+64 │       process.name:/(?i)cmd.*/
+   │                     ━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+warning[spl_subsearch_truncation]: `join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)
+   ╭─▶ objects/rules/encoded-injection-rule-0102.yaml:60:20
+   │
+59 │     query: |
+60 │       index=main | join host [search index=other]
+   │                    ━━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+warning[lucene_range_operator]: `event.code:>` needs its value without a space (`event.code:>10`); as written, Elasticsearch searches `event.code` for the text `>` and the next word in every field
+   ╭─▶ objects/rules/encoded-injection-rule-0206.yaml:50:18
+   │
+49 │     query: |
+50 │       event.code:> 10
+   │                  ━━━━
+   │
+   ╰─ help: try: >10
+
+error[yaml_parse]: Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month)
+  ╭─▶ objects/rules/encoded-relay-rule-0014.yaml:9:13
+  │
+8 │   modified: 2025-10-17
+9 │   reviewed: 2026-02-30
+  │             ━━━━━━━━━━
+
+error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
+  ╭─▶ objects/rules/encoded-spray-rule-0023.yaml:53:1
+  ╰─ note: while parsing a flow sequence that starts at line 52, column 9
+
+warning[falco_unknown_list]: `nope_list` is not a list of this block or of the Falco default rules: it is compared as the single value 'nope_list'
+   ╭─▶ objects/rules/hidden-downgrade-rule-0234.yaml:45:40
+   │
+44 │     condition: |
+45 │       spawned_process and proc.name in nope_list
+   │                                        ━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[spl_wildcard]: leading wildcard `*fail` cannot use the term index; a trailing `fail*` is fine (https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search)
+   ╭─▶ objects/rules/hidden-dropper-rule-0120.yaml:49:7
+   │
+48 │     query: |
+49 │       *fail
+   │       ━━━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+warning[falco_output_syntax]: unknown filter: `%proc.name)` is not a field or a transformer (libsinsp)
+   ╭─▶ objects/rules/hidden-injection-rule-0027.yaml:46:53
+   │
+45 │           - ksh
+46 │     output: Shell spawned in a container (proc.name=%proc.name)
+   │                                                     ━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[falco_unknown_source]: `not a source!` is not an event source the engine knows (`syscall`, `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked
+   ╭─▶ objects/rules/hidden-injection-rule-0027.yaml:51:5
+   │
+50 │       - shell
+51 │     source: not a source!
+   │     ━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[kql_deprecated_operator]: 'containscs' is a legacy spelling; use contains_cs
+   ╭─▶ objects/rules/hidden-relay-rule-0070.yaml:73:24
+   │
+72 │       SecurityEvent
+73 │       | where Computer containscs 'a'
+   │                        ━━━━━━━━━━
+   │
+   ╰─ help: try: contains_cs
+
+warning[falco_unknown_source]: `my_plugin` is not an event source the engine knows (`syscall`, `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked
+   ╭─▶ objects/rules/hidden-tunnel-rule-0270.yaml:76:5
+   │
+75 │           container.id != host
+76 │     source: my_plugin
+   │     ━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[eql_literal_wildcard]: `==` matches `*` literally; use `like` for a wildcard
+   ╭─▶ objects/rules/hidden-tunnel-rule-0272.yaml:54:37
+   │
+53 │     query: |
+54 │       process where process.name == "*.exe"
+   │                                     ━━━━━━━
+   │
+   ╰─ help: try: like
+
+warning[lucene_kuery_syntax]: `process.pid >=` is KQL; Lucene searches `>=` as a term. Write `process.pid:>=value`
+   ╭─▶ objects/rules/lateral-implant-rule-0146.yaml:78:19
+   │
+77 │     query: |
+78 │       process.pid >= 10
+   │                   ━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+error[yaml_parse]: Could not parse object YAML: found character that cannot start any token
+   ╭─▶ objects/rules/lateral-injection-rule-0024.yaml:68:1
+   │
+67 │       lookback: "2h"
+68 │    indent: tab
+   │ ━
+   │
+   ╰─ note: while scanning for the next token
+
+warning[nested_object_file]: objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)
+  ╰─▶ objects/rules/nested/hidden-harvest-rule-0020.yaml
+
+warning[falco_exception]: Multiple definitions of exception 'e' in the same rule
+   ╭─▶ objects/rules/persistent-implant-rule-0252.yaml:65:9
+   │
+64 │           - proc.pname
+65 │         name: e
+   │         ━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[eql_case_sensitive]: event category `PROCESS` is compared case-sensitively; ECS categories are lower case
+   ╭─▶ objects/rules/persistent-injection-rule-0227.yaml:70:7
+   │
+69 │     query: |
+70 │       PROCESS where true
+   │       ━━━━━━━
+   │
+   ╰─ help: try: process
+
+warning[kql_unscoped_search]: unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+   ╭─▶ objects/rules/persistent-pivot-rule-0082.yaml:57:7
+   │
+56 │     query: |
+57 │       search "error"
+   │       ━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[kql_where_not_first]: `where` is not the first operator after the table reference; filter before later operators (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+   ╭─▶ objects/rules/persistent-relay-rule-0091.yaml:52:9
+   │
+51 │       | extend Computer = tolower(Computer)
+52 │       | where EventID == 4688
+   │         ━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[falco_deprecated_field]: `evt.dir` is deprecated: due to the drop of enter events, 'evt.dir = <' always evaluates to true, and 'evt.dir = >' always evaluates to false. The rule expression can be simplified by removing the condition on 'evt.dir'
+   ╭─▶ objects/rules/rapid-dropper-rule-0180.yaml:58:27
+   │
+57 │     condition: |
+58 │       spawned_process and evt.dir = <
+   │                           ━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[esql_group_by_column]: suppression.group_by `user.name` is not an output column of the ES|QL query (c, host.name); deploy rejects it
+   ╭─▶ objects/rules/rapid-dropper-rule-0215.yaml:49:7
+   │
+48 │     suppression:
+49 │       group_by:
+   │       ━━━━━━━━
+   │
+   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+warning[falco_regex_simple]: regex check with 'bash' may be optimized with simpler operators such as '=', 'contains', 'startswith', 'endswith'
+   ╭─▶ objects/rules/rapid-dropper-rule-0216.yaml:49:43
+   │
+48 │     condition: |
+49 │       spawned_process and proc.name regex bash
+   │                                           ━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[falco_unsafe_na_check]: comparing a `ka.` or `jevt.` field with `<NA>`: such a field may hold the string `<NA>`, so the check does not tell a missing value apart
+   ╭─▶ objects/rules/rapid-implant-rule-0279.yaml:50:22
+   │
+49 │     condition: |
+50 │       ka.user.name = <NA>
+   │                      ━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[kql_wildcard_table]: wildcard table `*` scans every table; name the table instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+   ╭─▶ objects/rules/rapid-injection-rule-0097.yaml:75:33
+   │
+74 │     query: |
+75 │       search in (SecurityEvent, *) "error"
+   │                                 ━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[lucene_mixed_operators]: Lucene has no AND/OR precedence (`a OR b AND c` means `a +b +c`); add parentheses
+   ╭─▶ objects/rules/rapid-injection-rule-0191.yaml:74:22
+   │
+73 │     query: |
+74 │       process.name:a OR process.name:b AND user.name:c
+   │                      ━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+warning[esql_metadata_id]: non-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic Security cannot de-duplicate its alerts (9.4 and later add it)
+   ╭─▶ objects/rules/rapid-loader-rule-0245.yaml:56:7
+   │
+55 │     query: |
+56 │       FROM logs-* | WHERE process.name == "x"
+   │       ━━━━
+   │
+   ╰─ help: try: METADATA _id, _version, _index
+
+warning[eql_runs_ignored]: Elasticsearch ignores a decimal `runs` value: [2.5] runs the query once; use an integer from 1 to 100
+   ╭─▶ objects/rules/rapid-spray-rule-0403.yaml:91:53
+   │
+90 │     query: |
+91 │       sequence with maxspan=1m [process where true] with runs=2.5 [file where true]
+   │                                                     ━━━━━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[kuery_lucene_syntax]: `_exists_:field` is Lucene; in KQL write `field:*`
+   ╭─▶ objects/rules/rapid-tunnel-rule-0143.yaml:48:7
+   │
+47 │     query: |
+48 │       _exists_:host.name AND bytes:[100 TO 200]
+   │       ━━━━━━━━
+   │
+   ╰─ help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+warning[kuery_looks_like_lucene]: this query reads like Lucene (`_exists_`, ranges); if it is an Elastic rule, set `language: lucene`
+   ╭─▶ objects/rules/rapid-tunnel-rule-0143.yaml:48:7
+   │
+47 │     query: |
+48 │       _exists_:host.name AND bytes:[100 TO 200]
+   │       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+warning[kuery_lucene_syntax]: `[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a and field <= b`
+   ╭─▶ objects/rules/rapid-tunnel-rule-0143.yaml:48:36
+   │
+47 │     query: |
+48 │       _exists_:host.name AND bytes:[100 TO 200]
+   │                                    ━━━━━━━━━━━━
+   │
+   ╰─ help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+warning[sysdig_list_self_reference]: list `corpus_shells_369` names itself: Falco keeps `corpus_shells_369` as a literal item, which on Sysdig resolves against a tenant list of that name, not this one
+   ╭─▶ objects/rules/remote-downgrade-rule-0288.yaml:39:9
+   │
+38 │       - name: corpus_shells_369
+39 │         items:
+   │         ━━━━━
+   │
+   ╰─ help: opentide explain sysdig_list_self_reference describes it
+
+warning[risk_band]: risk score 90 is outside Kibana's high band (48–73) for alert severity High
+   ╭─▶ objects/rules/remote-harvest-rule-0323.yaml:65:5
+   │
+64 │       lookback: "1m"
+65 │     risk: 90
+   │     ━━━━
+   │
+   ╰─ help: opentide explain risk_band describes it
+
+warning[kql_table_not_declared]: 'AuditLogs' is not a table the workspace declares for sentinel in visibility.toml
+   ╭─▶ objects/rules/remote-loader-rule-0100.yaml:52:7
+   │
+51 │     query: |
+52 │       AuditLogs
+   │       ━━━━━━━━━
+   │
+   ╰─ help: opentide explain kql_table_not_declared describes it
+
+warning[placeholder]: author holds a placeholder value written by opentide new
+   ╭─▶ objects/rules/remote-pivot-rule-0033.yaml:10:11
+   │
+ 9 │   tlp: clear
+10 │   author: Corpus Generator  # opentide:placeholder
+   │           ━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: replace the value, then delete the '# opentide:placeholder' comment
+
+warning[falco_unknown_macro]: `my_private_macro` is not a macro of this block or of the Falco default rules; the tenant must define it
+   ╭─▶ objects/rules/remote-tunnel-rule-0243.yaml:59:27
+   │
+58 │     condition: |
+59 │       spawned_process and my_private_macro
+   │                           ━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[filename_mismatch]: Filename 'renamed-1.yaml' does not match slugify(name)='scheduled-injection-rule-0029'
+  ╭─▶ objects/rules/renamed-1.yaml
+  ╰─ help: rename it to objects/rules/scheduled-injection-rule-0029.yaml
+
+warning[spl_dataset_not_declared]: sourcetype `linux_secure` is not declared: no Splunk log source in visibility.toml names it
+   ╭─▶ objects/rules/rogue-beacon-rule-0129.yaml:45:18
+   │
+44 │     query: |
+45 │       sourcetype=linux_secure | head 1
+   │                  ━━━━━━━━━━━━
+   │
+   ╰─ help: opentide explain spl_dataset_not_declared describes it
+
+warning[spl_empty_stage]: empty pipeline stage: Splunk ignores a trailing `|`; remove it or add the command
+   ╭─▶ objects/rules/rogue-injection-rule-0084.yaml:57:27
+   │
+56 │     query: |
+57 │       index=main | head 1 |
+   │                           ━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+warning[lookback_zero]: scheduling.lookback is zero: the next run starts as this window ends, so late events are missed; Elastic recommends at least 1m
+   ╭─▶ objects/rules/rogue-injection-rule-0308.yaml:72:7
+   │
+71 │       interval: "5m"
+72 │       lookback: "0m"
+   │       ━━━━━━━━
+   │
+   ╰─ help: opentide explain lookback_zero describes it
+
+error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
+  ╭─▶ objects/rules/rogue-relay-rule-0035.yaml:59:1
+  ╰─ note: while parsing a flow sequence that starts at line 58, column 9
+
+warning[lookback_long]: scheduling.lookback exceeds 1h: in Elastic it is overlap added to interval, not the whole query window as in Sentinel
+   ╭─▶ objects/rules/rogue-tunnel-rule-0278.yaml:52:7
+   │
+51 │       interval: "10m"
+52 │       lookback: "2h"
+   │       ━━━━━━━━
+   │
+   ╰─ help: opentide explain lookback_long describes it
+
+warning[eql_regex]: EQL regex (Lucene syntax) has no inline flags or `(?...)` groups: `(?i)` matches the text `?i`. Use `regex~` for a case-insensitive match
+   ╭─▶ objects/rules/rogue-tunnel-rule-0377.yaml:58:40
+   │
+57 │     query: |
+58 │       process where process.name regex "(?i)cmd"
+   │                                        ━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[lucene_elasticsearch_only]: `_exists_:field` is Elasticsearch syntax; Carbon Black searches a field named `_exists_`. Use `field:*`
+   ╭─▶ objects/rules/scheduled-downgrade-rule-0041.yaml:55:7
+   │
+54 │     query: |
+55 │       _exists_:process_name
+   │       ━━━━━━━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+warning[kql_deprecated_function]: 'any' is deprecated; use take_any()
+   ╭─▶ objects/rules/scheduled-harvest-rule-0064.yaml:56:19
+   │
+55 │       SecurityEvent
+56 │       | summarize any(Computer)
+   │                   ━━━
+   │
+   ╰─ help: did you mean 'take_any'?
+
+warning[kuery_escape]: Kibana turns `\t` inside quotes into a control character; write `\\t` for a backslash
+   ╭─▶ objects/rules/scheduled-injection-rule-0098.yaml:38:31
+   │
+37 │     query: |
+38 │       process.command_line:"C:\temp\x"
+   │                               ━━
+   │
+   ╰─ help: try: \\t
+
+warning[spl_unknown_command]: 'frobnicate' is not a command opentide knows; an app on the search head may provide it (opentide cannot declare app commands yet)
+   ╭─▶ objects/rules/scheduled-loader-rule-0111.yaml:58:20
+   │
+57 │     query: |
+58 │       index=main | frobnicate
+   │                    ━━━━━━━━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+warning[kuery_lucene_syntax]: `[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a and field <= b`
+   ╭─▶ objects/rules/scheduled-relay-rule-0173.yaml:54:13
+   │
+53 │     query: |
+54 │       bytes:[100 TO 200]
+   │             ━━━━━━━━━━━━
+   │
+   ╰─ help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+warning[threshold_lookback]: threshold rule's lookback exceeds its interval (5m): threshold counts are not de-duplicated across overlapping runs
+   ╭─▶ objects/rules/scheduled-spray-rule-0074.yaml:83:7
+   │
+82 │       interval: "5m"
+83 │       lookback: "10m"
+   │       ━━━━━━━━
+   │
+   ╰─ help: opentide explain threshold_lookback describes it
+
+warning[falco_no_evttype]: the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
+   ╭─▶ objects/rules/silent-beacon-rule-0207.yaml:54:7
+   │
+53 │     condition: |
+54 │       proc.name = bash
+   │       ━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[elastic_dataset_not_declared]: index pattern `winlogbeat-*` is not declared: no elastic log source in visibility.toml names it or a pattern that covers it
+   ╭─▶ objects/rules/silent-exfiltration-rule-0353.yaml:76:9
+   │
+75 │     index:
+76 │       - winlogbeat-*
+   │         ━━━━━━━━━━━━
+   │
+   ╰─ help: opentide explain elastic_dataset_not_declared describes it
+
+warning[eql_until_term]: a missing event (`![`) as the `until` term parses, but Elasticsearch documents no behaviour for it; use `[`
+   ╭─▶ objects/rules/silent-exfiltration-rule-0407.yaml:73:77
+   │
+72 │     query: |
+73 │       sequence with maxspan=1m [process where true] [file where true] until ![network where true]
+   │                                                                             ━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+warning[falco_newer_syntax]: the `anyof` operator modifier needs libsinsp 0.25.0 or later: an older Falco or Sysdig agent refuses the rule
+   ╭─▶ objects/rules/silent-injection-rule-0198.yaml:44:37
+   │
+43 │     condition: |
+44 │       spawned_process and proc.name = anyof (bash, sh)
+   │                                     ━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[falco_field_as_value]: 'proc.pname' may be a valid field misused as a const string value: compare with val(proc.pname)
+   ╭─▶ objects/rules/silent-relay-rule-0189.yaml:57:39
+   │
+56 │     condition: |
+57 │       spawned_process and proc.name = proc.pname
+   │                                       ━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+warning[spl_leading_not]: leading `NOT` used as the search filter scans events before excluding them (https://docs.splunk.com/Documentation/Splunk/latest/Search/Booleanexpressions)
+   ╭─▶ objects/rules/silent-tunnel-rule-0093.yaml:44:7
+   │
+43 │     query: |
+44 │       NOT host=a index=main
+   │       ━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+warning[kql_unscoped_union]: unscoped `union` uses wildcard table `*` and reads every table; name the tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)
+   ╭─▶ objects/rules/staged-injection-rule-0106.yaml:58:13
+   │
+57 │     query: |
+58 │       union * | take 1
+   │             ━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+warning[lucene_escape]: Lucene drops a single backslash: `\W` searches `W`. Write `\\` for a literal backslash
+   ╭─▶ objects/rules/staged-spray-rule-0116.yaml:45:31
+   │
+44 │     query: |
+45 │       process.command_line:"C:\Windows"
+   │                               ━━
+   │
+   ╰─ help: try: \\W
+
+warning[falco_transformer_as_value]: 'tolower(x)' may be a valid field transformer misused as a const string value
+   ╭─▶ objects/rules/staged-spray-rule-0225.yaml:61:39
+   │
+60 │     condition: |
+61 │       spawned_process and proc.name = "tolower(x)"
+   │                                       ━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[yaml_parse]: Could not parse object YAML: expected a mapping at the top of the file, found an empty file
+  ╰─▶ objects/threats/encoded-exfiltration-threat-0030.yaml
+
+warning[filename_mismatch]: Filename 'hidden-downgrade-threat-0005-v2.yaml' does not match slugify(name)='hidden-downgrade-threat-0005'
+  ╭─▶ objects/threats/hidden-downgrade-threat-0005-v2.yaml
+  ╰─ help: rename it to objects/threats/hidden-downgrade-threat-0005.yaml
+
+! 86 findings in 80 files · 6 errors, 70 warnings, 10 notes
+→ opentide lint --fix · rename 2 files to match their names
+→ opentide lint --format codequality --output opentide-reports/lint.codequality.json --verbose · show 10 notes, such as a missing optional field

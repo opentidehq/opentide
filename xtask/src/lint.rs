@@ -78,17 +78,36 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_1_2_dates,
     },
-    Approved {
-        id: "recommended-check",
-        reason: "opentide 0.28.1 adds lint's `recommended` check (#1028): it runs by default, \
-                 so `checks` lists it after `metadata`, and it reports a rule without \
-                 `configurations` or `response` as a `recommended_field_missing` note the \
-                 0.23.0 oracle did not report. A note never fails `--strict`, so a strict run \
-                 that is left with notes only passes; its verdict is derived from the findings",
-        changelog: "**`opentide lint` reports a rule without `configurations` or `response` as a note.**",
-        applies: recommended_check,
-    },
 ];
+
+/// A recorded case where the oracle crashed (its recording is an
+/// `internal` failure) and the Rust run is right.
+pub struct OracleCrash {
+    /// The case id (`lint/json/<fixture>/<variant>`).
+    pub case: &'static str,
+    /// Why the Rust result is right.
+    pub reason: &'static str,
+    /// The bold lead of its CHANGELOG.md entry.
+    pub changelog: &'static str,
+}
+
+/// The cases the oracle crashed on: every difference of such a case is
+/// approved while its recording is the oracle's crash. An entry whose case
+/// did not crash, or explains no difference, is stale.
+pub const ORACLE_CRASHES: &[OracleCrash] = &[OracleCrash {
+    case: "lint/json/fault/recommended-crash",
+    reason: "opentide 0.28.1's recommended check (#1028) builds the editor schemas from the \
+             workspace's configuration and crashes on the fault workspace's invalid \
+             deployment.toml (#1081); Rust's check reads no configuration and reports the \
+             workspace's findings",
+    changelog: "**`lint` no longer crashes on an invalid configuration file**",
+}];
+
+/// Whether a recording is the oracle's crash: an `internal` failure.
+fn crashed(recording: &Recording) -> bool {
+    serde_json::from_slice::<Json>(&recording.stdout)
+        .is_ok_and(|stdout| stdout["failure"]["code"] == "internal")
+}
 
 fn code(finding: &Json) -> &str {
     finding["code"].as_str().unwrap_or("")
@@ -157,28 +176,6 @@ fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>, oracle_list: &[Jso
         (None, Some(rust)) => oracle_list
             .iter()
             .any(|item| is_invalid_date(item) && item["path"] == rust["path"]),
-        _ => false,
-    }
-}
-
-fn recommended_check(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    match (oracle, rust) {
-        // A finding of the new check.
-        (None, Some(rust)) => {
-            code(rust) == "recommended_field_missing"
-                && rust["check"] == "recommended"
-                && rust["severity"] == "info"
-        }
-        // `checks`: the oracle's list with `recommended` added after `metadata`.
-        (Some(Json::Array(oracle)), Some(Json::Array(rust))) => {
-            let mut expected = oracle.clone();
-            let at = oracle
-                .iter()
-                .position(|check| check == "metadata")
-                .map_or(0, |index| index + 1);
-            expected.insert(at, json!("recommended"));
-            *rust == expected
-        }
         _ => false,
     }
 }
@@ -309,13 +306,14 @@ struct Recorded {
 }
 
 /// The status, message, exit code and summary the oracle's findings give
-/// without its queries findings (`run_lint`'s verdict).
+/// without its queries findings (`run_lint`'s verdict). A note never fails
+/// a run, `--strict` or not (opentide 0.28.0, #1029).
 fn verdict(findings: &[Json], strict: bool, files: &Json) -> (String, String, i32, Json) {
     let left: Vec<&Json> = findings
         .iter()
         .filter(|f| f.get("fixed") != Some(&Json::Bool(true)))
         .collect();
-    let status = if !left.is_empty() && strict {
+    let status = if strict && left.iter().any(|f| f["severity"] != "info") {
         "failed"
     } else if !left.is_empty() {
         "issues"
@@ -627,6 +625,17 @@ pub fn run(args: &[String]) -> Result<u8> {
         differences.extend(run_case(recording, &ws)?);
     }
     let mut used = vec![0usize; APPROVED.len()];
+    let crashed_cases: Vec<&str> = cases
+        .iter()
+        .filter(|recording| crashed(recording))
+        .map(|recording| recording.case.id.as_str())
+        .collect();
+    let crash_of = |difference: &Difference| {
+        ORACLE_CRASHES
+            .iter()
+            .position(|crash| crash.case == difference.case && crashed_cases.contains(&crash.case))
+    };
+    let mut crash_used = vec![0usize; ORACLE_CRASHES.len()];
     let mut failures = 0;
     let is_list = |difference: &Difference| difference.what == "findings";
     let rule_of = |difference: &Difference| {
@@ -643,6 +652,18 @@ pub fn run(args: &[String]) -> Result<u8> {
         *explained.entry(difference.case.as_str()).or_insert(true) &= rule_of(difference).is_some();
     }
     for difference in &differences {
+        if let Some(index) = crash_of(difference) {
+            crash_used[index] += 1;
+            if show_approved {
+                println!(
+                    "approved (oracle crash): {} {}",
+                    difference.case, difference.what
+                );
+                println!("  oracle: {}", show(difference.oracle.as_ref()));
+                println!("  rust:   {}", show(difference.rust.as_ref()));
+            }
+            continue;
+        }
         // A finding, or the list of checks that ran, is explained by a rule.
         let rule = if is_list(difference) || difference.what == "checks" {
             rule_of(difference)
@@ -678,6 +699,19 @@ pub fn run(args: &[String]) -> Result<u8> {
             println!(
                 "       stale: the rule explains no difference ({})",
                 rule.reason
+            );
+            stale += 1;
+        }
+    }
+    for (crash, count) in ORACLE_CRASHES.iter().zip(&crash_used) {
+        println!(
+            "{count:>5}  oracle crash {}  ({})",
+            crash.case, crash.changelog
+        );
+        if complete && *count == 0 {
+            println!(
+                "       stale: the oracle did not crash on this case, or it differs in nothing ({})",
+                crash.reason
             );
             stale += 1;
         }
@@ -825,6 +859,10 @@ mod tests {
         );
         let (status, _, exit, _) = verdict(&findings, true, &json!(7));
         assert_eq!((status.as_str(), exit), ("failed", 1));
+        // Notes alone never fail --strict.
+        let notes = [finding("info", false), finding("info", false)];
+        let (status, _, exit, _) = verdict(&notes, true, &json!(2));
+        assert_eq!((status.as_str(), exit), ("issues", 0));
         // Everything fixed: completed, but the oracle still says it found issues.
         let (status, message, exit, summary) = verdict(&[finding("error", true)], true, &json!(1));
         assert_eq!(
@@ -906,24 +944,6 @@ mod tests {
         (recording, dunce::canonicalize(&ws).unwrap())
     }
 
-    /// `recording` run with the oracle's four checks named, so the
-    /// `recommended` check 0.28.1 added (an approved difference) is not run.
-    fn oracle_checks(recording: &mut Recording) {
-        let at = recording
-            .case
-            .argv
-            .iter()
-            .position(|arg| arg == "lint")
-            .unwrap()
-            + 1;
-        for check in ["queries", "placeholders", "metadata", "filenames"] {
-            recording
-                .case
-                .argv
-                .splice(at..at, ["--check".to_owned(), check.to_owned()]);
-        }
-    }
-
     fn parts(differences: &[Difference]) -> std::collections::BTreeSet<String> {
         differences.iter().map(|d| d.what.clone()).collect()
     }
@@ -975,7 +995,7 @@ mod tests {
         edit(&mut recording, "\"fixed\":12,\"ok\"", "\"fixed\":0,\"ok\"");
         edit(
             &mut recording,
-            "\"checks\":[\"filenames\",\"metadata\",\"placeholders\",\"queries\"]",
+            "\"checks\":[\"filenames\",\"metadata\",\"recommended\",\"placeholders\",\"queries\"]",
             "\"checks\":[\"filenames\"]",
         );
         edit(
@@ -1031,7 +1051,6 @@ mod tests {
         // Without --strict, the recording's findings leave lint at "issues":
         // the verdict is recomputed from them, so only the file count differs.
         recording.case.argv.retain(|arg| arg != "--strict");
-        oracle_checks(&mut recording);
         edit(&mut recording, "\"files\":2,", "\"files\":99,");
         let differences = run_case(&recording, &ws).unwrap();
         assert_eq!(
@@ -1045,7 +1064,6 @@ mod tests {
             "lint/json/tide-corpus/file-missing",
             &dir.path().join("refused"),
         );
-        oracle_checks(&mut refused);
         let clean = run_case(&refused, &ws).unwrap();
         assert!(clean.is_empty(), "{clean:?}");
         edit(&mut refused, "\"exit_code\":1", "\"exit_code\":0");
