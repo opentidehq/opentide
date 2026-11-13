@@ -88,7 +88,7 @@ fn a_macro_sees_only_earlier_macros() {
     assert_eq!(code, "compile_failed");
     assert_eq!(
         reason,
-        "Sysdig cannot compile this rule: macro 'm1' uses the block macro 'm2', which is \
+        "Sysdig cannot compile this rule: macro \"m1\" uses the block macro \"m2\", which is \
          itself or defined after it: Falco refuses it as an undefined macro"
     );
 }
@@ -103,7 +103,7 @@ fn a_macro_cannot_use_itself() {
     assert_eq!(code, "compile_failed");
     assert_eq!(
         reason,
-        "Sysdig cannot compile this rule: macro 'm1' uses the block macro 'm1', which is \
+        "Sysdig cannot compile this rule: macro \"m1\" uses the block macro \"m1\", which is \
          itself or defined after it: Falco refuses it as an undefined macro"
     );
 }
@@ -120,7 +120,7 @@ fn a_tuple_exception_without_comps_compares_with_equals() {
     .unwrap_err();
     assert_eq!(
         reason,
-        "Sysdig cannot compile this rule: exception 't': the block list 'shells' appears in a \
+        "Sysdig cannot compile this rule: exception \"t\": the block list \"shells\" appears in a \
          value where Falco's expansion would not produce a value list"
     );
 }
@@ -158,7 +158,7 @@ fn a_list_inside_a_value_is_refused() {
     .unwrap_err();
     assert_eq!(
         reason,
-        "Sysdig cannot compile this rule: exception 'e': the block list 'shells' appears in a \
+        "Sysdig cannot compile this rule: exception \"e\": the block list \"shells\" appears in a \
          value where Falco's expansion would not produce a value list"
     );
     // A list as all of a tuple item, under a comparison that takes one value.
@@ -168,7 +168,7 @@ fn a_list_inside_a_value_is_refused() {
     ))
     .unwrap_err();
     assert!(
-        reason.contains("exception 't': the block list 'shells'"),
+        reason.contains("exception \"t\": the block list \"shells\""),
         "{reason}"
     );
     // Inside a nested value list, and inside a tuple item.
@@ -178,17 +178,17 @@ fn a_list_inside_a_value_is_refused() {
              fields: [proc.name]\n      comps: [in]\n      values:\n{values}{lists}"
         ))
         .unwrap_err();
-        assert!(reason.contains("the block list 'shells'"), "{reason}");
+        assert!(reason.contains("the block list \"shells\""), "{reason}");
     }
 }
 
 #[test]
-fn an_unknown_status_fails_with_the_oracles_key_error() {
+fn an_unknown_status_fails_with_its_name() {
     let (code, reason) = body("    status: NOPE\n    condition: proc.name = x\n").unwrap_err();
     assert_eq!(code, "compile_failed");
     assert!(
         reason.starts_with(
-            "Sysdig cannot compile this rule: \"Status 'NOPE' is not defined in deployment \
+            "Sysdig cannot compile this rule: Status \"NOPE\" is not defined in deployment \
              configuration. Available statuses: DESIGN, "
         ),
         "{reason}"
@@ -200,7 +200,7 @@ fn a_priority_falco_does_not_know_fails() {
     let (_, reason) =
         body("    status: STAGING\n    condition: proc.name = x\n    priority: urgent\n")
             .unwrap_err();
-    assert_eq!(reason, "Sysdig cannot compile this rule: 'URGENT'");
+    assert_eq!(reason, "Sysdig cannot compile this rule: \"URGENT\"");
 }
 
 #[test]

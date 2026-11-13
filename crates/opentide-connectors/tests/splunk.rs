@@ -199,7 +199,7 @@ fn splunk_query_sends_what_the_python_runner_sent() {
     assert!(
         gateway.starts_with(
             "gateway Splunk at https://splunk.invalid:8089 answered with an HTML page (HTTP 502), \
-             not its REST API (page title: '502 Bad Gateway'). HTTP 502 Bad Gateway is what a \
+             not its REST API (page title: \"502 Bad Gateway\"). HTTP 502 Bad Gateway is what a \
              gateway or proxy in front of the tenant answers when the tenant does not answer it \
              in time, so the url and port are not at fault when other requests to the same \
              address succeed. The request went through the proxy http://127.0.0.1:"
@@ -249,7 +249,7 @@ fn splunk_validate_parses_without_a_search() {
             assert_eq!(*status, 504);
             assert!(message.starts_with(
                 "Splunk at https://splunk.invalid:8089 answered with an HTML page (HTTP 504), \
-                 not its REST API (page title: '504 Gateway Time-out')."
+                 not its REST API (page title: \"504 Gateway Time-out\")."
             ));
         }
         other => panic!("{other:?}"),
