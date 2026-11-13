@@ -792,7 +792,7 @@ async fn create(
 ) -> Result<(), CallError> {
     let name = &rule.compiled.name;
     let params = create_params(&rule.compiled);
-    let quoted = opentide_schema::configuration::repr::quote(name);
+    let quoted = format!("{name:?}");
     let unconfirmed = format!(
         "the first create of {quoted} got no answer, so it may have succeeded with an id \
          opentide does not know. Resolve it in the GravityZone console (delete the rule, or \
@@ -858,7 +858,7 @@ async fn create(
             format!(
                 "createCustomRule for {quoted} answered {}, not a 24-hex rule id; the rule may \
                  exist on the tenant without a binding",
-                crate::python::python_repr(&result)
+                result.to_compact()
             ),
             None,
         ),

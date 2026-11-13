@@ -3,7 +3,7 @@
 //! code, so a query is fenced and captioned in its own language (KQL, SPL,
 //! ES|QL, YARA) rather than as text.
 //!
-//! The labels are the workspace's ([`opentide_workspace::info::PLATFORMS`]);
+//! The labels are the workspace's ([`opentide_schema::platforms::PLATFORMS`]);
 //! `every_platform_has_a_profile` fails when the rule model gains a platform
 //! this table does not name.
 
@@ -130,10 +130,7 @@ const LABELS: [(&str, &str); 4] = [
 
 /// `sentinel` as `Microsoft Sentinel`; a platform no table names, title-cased.
 pub fn platform_label(platform: &str) -> String {
-    if let Some(found) = opentide_workspace::info::PLATFORMS
-        .iter()
-        .find(|entry| entry.name == platform)
-    {
+    if let Some(found) = opentide_schema::platforms::get(platform) {
         return found.label.to_owned();
     }
     if let Some((_, label)) = LABELS.iter().find(|(key, _)| *key == platform) {
@@ -178,9 +175,7 @@ mod tests {
     fn every_platform_has_a_profile() {
         for platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
             assert!(
-                opentide_workspace::info::PLATFORMS
-                    .iter()
-                    .any(|entry| entry.name == platform),
+                opentide_schema::platforms::is_builtin(platform),
                 "{platform} has no label"
             );
             assert!(

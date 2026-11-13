@@ -418,12 +418,12 @@ fn an_unknown_target_alias_fails_before_any_call() {
     for (targets, reason) in [
         (
             json!({"endpoint_tags": ["nowhere"]}),
-            "tenant 'gravityzone-eu': endpoint tag alias(es) nowhere are not in the tenant's \
+            "tenant \"gravityzone-eu\": endpoint tag alias(es) nowhere are not in the tenant's \
              endpoint_tags table",
         ),
         (
             json!({"companies": ["nowhere"]}),
-            "tenant 'gravityzone-eu': company alias(es) nowhere are not in the tenant's \
+            "tenant \"gravityzone-eu\": company alias(es) nowhere are not in the tenant's \
              companies table",
         ),
     ] {

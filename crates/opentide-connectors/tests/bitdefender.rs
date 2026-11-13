@@ -486,7 +486,7 @@ fn a_create_answering_no_id_fails_the_rule() {
         panic!("a failure");
     };
     assert!(
-        error.contains("answered True, not a 24-hex rule id"),
+        error.contains("answered true, not a 24-hex rule id"),
         "{error}"
     );
     assert_eq!(outcome.state, StateChange::Keep);

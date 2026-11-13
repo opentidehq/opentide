@@ -9,7 +9,6 @@
 //! `filters: []`, no targets sends `targets: {}`. Every call carries
 //! `type: 1`, a detection rule: exclusion rules (`type: 2`) are never sent.
 
-use opentide_schema::configuration::repr::quote;
 use opentide_schema::objects::platform::bitdefender::checks::targets_shape_ok_json;
 use opentide_schema::objects::platform::bitdefender::{
     ACTION_TYPES, BitdefenderActions, BitdefenderConfig, Kind, NOT_ON_YARA, ProcessAction,
@@ -90,7 +89,7 @@ pub struct GravityZoneRule {
 /// compile diagnostic reads it, under the same code.
 pub fn target_error(code: &'static str, reason: &str, tenant: Option<&str>) -> CompileError {
     let reason = match tenant {
-        Some(tenant) => format!("tenant {}: {reason}", quote(tenant)),
+        Some(tenant) => format!("tenant {tenant:?}: {reason}"),
         None => reason.to_owned(),
     };
     let hint = if code == TARGET_UNKNOWN {
