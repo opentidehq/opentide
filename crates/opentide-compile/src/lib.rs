@@ -32,6 +32,7 @@ pub mod duration;
 pub mod elastic;
 pub mod generate;
 pub mod git;
+pub mod graylog;
 pub mod harfanglab;
 pub mod json;
 pub mod kql;
