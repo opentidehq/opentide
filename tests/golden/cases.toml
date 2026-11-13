@@ -1802,19 +1802,23 @@ command = "deploy"
 variant = "elastic-tenant"
 args = ["deploy", "--strategy", "PREVIEW", "--platform", "elastic", "--all"]
 fixtures = ["tide-corpus"]
+normalise = ["live-frames"]
 
 # UC-4.6 (#979): a deploy that sends, on the connectors, on the
 # `deploy-tenants` fixture, each platform served from a cassette recorded
 # from the oracle (tests/cassettes/golden/, the `golden/deploy-*` scenarios):
 # creates whose ids are recorded in deployment state, updates, deletes whose
 # ids are forgotten, skips and refusals. In human mode the deploy's live
-# region is one `<LIVE>` block whatever its frames (UC-4.4, #834).
+# region is one `<LIVE>` block whatever its frames (UC-4.4, #834), and
+# `live-frames` empties the frame it keeps: the platform row is updated from
+# worker threads, so Live's first render can already show their progress.
 
 [[case]]
 command = "deploy"
 variant = "send-defender"
 args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-defender"
@@ -1824,6 +1828,7 @@ command = "deploy"
 variant = "send-sentinel-one"
 args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { S1_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sentinel-one"
@@ -1833,6 +1838,7 @@ command = "deploy"
 variant = "send-crowdstrike"
 args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-crowdstrike"
@@ -1842,6 +1848,7 @@ command = "deploy"
 variant = "send-sysdig"
 args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sysdig"
@@ -1851,6 +1858,7 @@ command = "deploy"
 variant = "send-elastic"
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/deploy-elastic"
@@ -1860,6 +1868,7 @@ command = "deploy"
 variant = "send-splunk"
 args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-splunk"
@@ -1869,6 +1878,7 @@ command = "deploy"
 variant = "send-carbon-black"
 args = ["deploy", "--platform", "carbon_black_cloud", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-carbon-black"
@@ -1927,6 +1937,7 @@ command = "deploy"
 variant = "unreachable-defender-for-endpoint"
 args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 
 [[case]]
@@ -1934,6 +1945,7 @@ command = "deploy"
 variant = "unreachable-sentinel-one"
 args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { S1_API_TOKEN = "golden-stand-in-credential" }
 
 [[case]]
@@ -1941,6 +1953,7 @@ command = "deploy"
 variant = "unreachable-crowdstrike"
 args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
 
 [[case]]
@@ -1948,6 +1961,7 @@ command = "deploy"
 variant = "unreachable-elastic"
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 
 [[case]]
@@ -1955,6 +1969,7 @@ command = "deploy"
 variant = "unreachable-sysdig"
 args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 
 [[case]]
