@@ -14,6 +14,7 @@
 //! finding, typed by its code and placed at the path the spec fixes for it,
 //! so `validate` and the editor name the same finding.
 
+pub mod advisories;
 pub mod assemble;
 pub mod yaral;
 
