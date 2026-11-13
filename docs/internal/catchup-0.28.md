@@ -1,12 +1,12 @@
 ---
 title: Catch-up 0.28 manifest
-description: Every path development changed between 0.23.0 and 0.28.0, and after it up to `164450afc`, that the M0 merge kept at integration's version, with the work unit that brings it.
+description: Every path development changed between 0.23.0 and 0.28.0, and after it up to v0.28.1 (`164450afc`), that the M0 merge kept at integration's version, with the work unit that brings it.
 ---
 
 # Catch-up 0.28 manifest
 
 The M0 merge (`chore/merge-development-0.28`) made `v0.28.0` (`3acbea603`), and development
-after it up to `164450afc` (#1029, #1015 and #1049: 0.28.1, not yet tagged), ancestors of
+merged at v0.28.1, `164450afc` (#1029, #1015 and #1049), ancestors of
 `integration/unified-core` without changing what integration does. It deleted the old Python
 implementation and its tests, and took only history and process files from development (the
 allowlist in [the plan, §3.1](./catchup-0.28-plan.md#31-recommendation-one-early-merge-commit-m0-features-ported-after)).
@@ -21,7 +21,7 @@ deletes its rows here. O2 deletes this page when only the last two tables are le
 
 ## Check
 
-The paths that still differ from development at `164450afc` (a later merge of development moves
+The paths that still differ from development at v0.28.1 (`164450afc`) (a later merge of development moves
 both commits of the command to its tip):
 
 ```bash
