@@ -730,6 +730,24 @@ mod tests {
     }
 
     #[test]
+    fn a_graylog_id_is_24_lower_case_hex_digits() {
+        assert_eq!(
+            normalise_external_id(
+                "graylog",
+                &ExternalId::Text("65f1c0ffee0123456789abcd".into())
+            )
+            .unwrap(),
+            "65f1c0ffee0123456789abcd"
+        );
+        assert_eq!(
+            normalise_external_id("graylog", &ExternalId::Text("65F1".into()))
+                .unwrap_err()
+                .message,
+            "graylog external id \"65F1\" does not match \"[0-9a-f]{24}\""
+        );
+    }
+
+    #[test]
     fn a_missing_shard_is_an_empty_state_and_a_write_creates_it() {
         let dir = tempfile::tempdir().unwrap();
         let shard = Shard::load(dir.path(), &UUID.to_uppercase()).unwrap();

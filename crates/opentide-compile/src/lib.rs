@@ -34,6 +34,7 @@ pub mod elastic;
 pub mod generate;
 pub mod git;
 pub mod google_secops;
+pub mod graylog;
 pub mod harfanglab;
 pub mod json;
 pub mod kql;

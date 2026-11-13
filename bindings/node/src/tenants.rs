@@ -1181,8 +1181,9 @@ mod tests {
 
     #[test]
     fn the_platforms_and_what_each_can_do() {
-        assert_eq!(platforms().len(), 11);
+        assert_eq!(platforms().len(), 12);
         assert!(platforms().contains(&"sentinel_one".to_owned()));
+        assert!(platforms().contains(&"graylog".to_owned()));
         assert_eq!(
             capabilities("sysdig".into()),
             Some(Capabilities {

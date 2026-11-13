@@ -13,9 +13,9 @@ use super::merge::merge_layers;
 use super::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
     DefenderForEndpointConfiguration, DeploymentConfiguration, DocumentationConfiguration,
-    ElasticConfiguration, GoogleSecopsConfiguration, HarfangLabConfiguration, PLATFORMS,
-    PathsConfiguration, PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration,
-    SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
+    ElasticConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
+    PLATFORMS, PathsConfiguration, PlatformConfiguration, SentinelConfiguration,
+    SentinelOneConfiguration, SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
 };
 use super::sharing::{SharingIssue, merge_sharing_documents};
 use super::{Finding, Severity, bundled, codes, models::TLP_ORDER, repr, toml};
@@ -317,6 +317,7 @@ fn validate(key: &str, merged: &Node) -> Vec<Finding> {
         "platforms/sysdig.toml" => (convert::<SysdigConfiguration>(merged).0, None),
         "platforms/bitdefender.toml" => (convert::<BitdefenderConfiguration>(merged).0, None),
         "platforms/google_secops.toml" => (convert::<GoogleSecopsConfiguration>(merged).0, None),
+        "platforms/graylog.toml" => (convert::<GraylogConfiguration>(merged).0, None),
         _ => (convert::<PlatformConfiguration>(merged).0, None),
     };
     let mut issues: Vec<Finding> = errors

@@ -3412,6 +3412,395 @@ reason = "an engine warning lint's query filter drops; language server only (KG-
 code = "yaral_meta_duplicate"
 reason = "deploy writes a Google SecOps rule's meta: a block's meta keys are YAML keys (a repeated one is yaml_parse), the keys deploy writes itself and values that are not strings are google_secops_meta_key, and the oracle reports nothing in the meta it generates (contributors repeat author there); a search's meta is not checked (yara-l engine: Google ignores it), so only a YARA-L rule the language server reads on its own reports it"
 
+[[kind]]
+id = "graylog-aggregation"
+codes = ["graylog_aggregation"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+    aggregation: {group_by: source, condition: "count( >= 3"}
+''' },
+]
+isolated = true
+note = "an aggregation condition the condition grammar refuses (an unclosed call); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-all-streams"
+codes = ["graylog_all_streams"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n\n[[tenants]]\nname = \"graylog-lab\"\n\n[tenants.setup]\nurl = \"https://graylog.example\"\ntoken = \"$GRAYLOG_LAB_TOKEN\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "a block that names no streams, on a tenant that names none: the definition searches every stream; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-analyzed-field"
+codes = ["graylog_analyzed_field"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'message:/.*mshta.*/'
+''' },
+]
+isolated = true
+note = "a regex on the analysed `message` field (the queries check of lint); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-double-backslash"
+codes = ["graylog_double_backslash"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'image_lc:/.*\\\\\\\\mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "four backslashes in a Graylog query, which match two; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-event-field"
+codes = ["graylog_event_field"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+    event_fields: {"bad name!": source}
+''' },
+]
+isolated = true
+note = "an event field whose name is not a field name; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-event-key"
+codes = ["graylog_event_key"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+    event_fields: {host: source}
+    event_key: user
+''' },
+]
+isolated = true
+note = "an event key that names no event field; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-event-limit"
+codes = ["graylog_event_limit"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 0
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "an event limit below 1; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-field-name"
+codes = ["graylog_field_name"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+    aggregation: {group_by: "bad field!", condition: "count() >= 3"}
+''' },
+]
+isolated = true
+note = "a group-by field that is not a field name; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-leading-wildcard"
+codes = ["graylog_leading_wildcard"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'image_lc:*mshta.exe'
+''' },
+]
+isolated = true
+note = "a leading wildcard, which Graylog refuses unless the tenant allows it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-list-shape"
+codes = ["graylog_list_shape"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: [sysmon, sysmon]
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "a streams list that repeats an alias; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-open-range"
+codes = ["graylog_open_range"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:[1 TO *]'
+''' },
+]
+isolated = true
+note = "a range with a `*` bound, which Graylog's validator refuses; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-overlapping-window"
+codes = ["graylog_overlapping_window"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {every: 5m, window: 15m}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "a filter whose window is longer than its interval; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-priority"
+codes = ["graylog_priority"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+    priority: Extreme
+''' },
+]
+isolated = true
+note = "a priority outside the Informational to Critical scale; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-query-blank"
+codes = ["graylog_query_blank"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: '   '
+''' },
+]
+isolated = true
+note = "a blank query; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-regex-operator"
+codes = ["graylog_regex_operator"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'image_lc:/.*f~g.*/'
+''' },
+]
+isolated = true
+note = "`~` in a regex, which Lucene reads as complement; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-regex-quote"
+codes = ["graylog_regex_quote"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'image_lc:/a"b"c/'
+''' },
+]
+isolated = true
+note = "a quoted literal in a regex (a balanced pair: an unclosed quote is lucene_regexp); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-regex-unsupported"
+codes = ["graylog_regex_unsupported"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'image_lc:/(?i)mshta/'
+''' },
+]
+isolated = true
+note = "a PCRE inline flag, which Lucene regexes do not have; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-schedule"
+codes = ["graylog_schedule"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {every: 5x, window: 10m}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "an interval that is not a duration; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
+[[kind]]
+id = "graylog-title-duplicate"
+class = "cross-file"
+codes = ["graylog_title_duplicate"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
+    { op = "append_text", text = '''
+  graylog:
+    enabled: true
+    status: STAGING
+    name: graylog shared title
+    streams: "65f0c0ffee0123456789abcd"
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    query: 'EventID:1 AND image_lc:/.*mshta\\.exe/'
+''' },
+]
+isolated = true
+note = "every target's Graylog block has the same title, so each names the others; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+
 # Codes in scope whose fault kind a unit of the 0.28 catch-up train still
 # owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them
 # and no kind above produces them yet. Each names its owner. The list only
@@ -3623,82 +4012,6 @@ owner = "P-EX"
 [[pending]]
 code = "exabeam_wildcard_in_phrase"
 owner = "P-EX"
-
-[[pending]]
-code = "graylog_aggregation"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_all_streams"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_analyzed_field"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_double_backslash"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_event_field"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_event_key"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_event_limit"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_field_name"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_leading_wildcard"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_list_shape"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_open_range"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_overlapping_window"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_priority"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_query_blank"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_regex_operator"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_regex_quote"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_regex_unsupported"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_schedule"
-owner = "P-GL"
-
-[[pending]]
-code = "graylog_title_duplicate"
-owner = "P-GL"
 
 [[pending]]
 code = "harfanglab_rule_kind"

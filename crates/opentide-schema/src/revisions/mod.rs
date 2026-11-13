@@ -111,6 +111,7 @@ pub const REVISIONS: &[Revision] = &[
         Kind::Platform,
         "GoogleSecopsConfig",
     ),
+    revision("platform::graylog::1.0", Kind::Platform, "GraylogConfig"),
     revision(
         "platform::harfanglab::1.0",
         Kind::Platform,
