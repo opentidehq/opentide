@@ -14756,6 +14756,2219 @@ reason = "The tenant that cannot be reached is described in the HTTP client's wo
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**Tenants are reached through opentide's own connectors, not the vendor SDKs**"
 
+# The packaged authoring skills carry YAML frontmatter (`name`, `description`) and
+# name the catalogue's full skill at their end (#731, development's 0.28.1 files):
+# each installed SKILL.md gains its frontmatter above the heading the oracle wrote
+# first, and a closing paragraph; one `lines` entry per case, file and block.
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/agent/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/human/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/json/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/none/fresh"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.claude/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.claude/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup skills"
+case = "setup.skills/plain/skills-merge/merge"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/agent/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/human/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/json/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.agents/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.agents/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "# Detection engineering"
+candidate = '''
+---
+name: detection-engineering
+description: >-
+  Short, offline primer on opentide's three object families (threats, objectives,
+  rules), how they link, and the validate, lint and deploy loop. Use when starting
+  detection content in an opentide repository and the full detection-engineering
+  skill from opentidehq/skills is not installed.
+---
+
+# Detection engineering'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.cursor/skills/detection-engineering/SKILL.md"
+rule = "lines"
+oracle = "Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy."
+candidate = '''
+Loop until the checks pass: search what exists, draft, `opentide --json validate --strict` and apply each finding's `fix` (or read `opentide explain <code>`), then preview the deployment. Branch on the exit code and `failure.code`; follow `next_actions`. `opentide --json commands` lists every command and option. People review, merge and deploy.
+
+This is the short copy opentide installs when the opentidehq/skills catalogue cannot be reached. The full skill (hunt-to-rule conversion, platform pairing, maturity, review scope) replaces it on the next `opentide setup skills --install detection-engineering` with network access.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "# Detection rules"
+candidate = '''
+---
+name: opentide-detection-rule
+description: >-
+  Shape and checks for opentide detection rules (rule::1.1 YAML under objects/rules/,
+  one configurations.<platform> block per platform). Use when creating or editing a
+  rule; pair with the opentide-rule skill and the platform's skill for authoring.
+---
+
+# Detection rules'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
+[[diff]]
+command = "setup"
+case = "setup/plain/none/skills"
+target = "file:ws/.cursor/skills/opentide-detection-rule/SKILL.md"
+rule = "lines"
+oracle = "`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses."
+candidate = '''
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
+
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.'''
+reason = "The packaged authoring skills start with YAML frontmatter (`name`, the skill's folder, and `description`, when to use it), as the Agent Skills format requires: without it Claude Code, Cursor and Codex do not list the skill. Each also ends by naming the catalogue's full authoring skill to install. The files are development's (0.28.1), so both branches ship the same skills."
+issue = "https://github.com/opentidehq/opentide/issues/731"
+changelog = "**The packaged authoring skills have frontmatter**"
+
 # Messages quote values with Rust formatting, not Python repr (#841).
 
 [[diff]]
