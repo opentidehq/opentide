@@ -65,6 +65,7 @@ impl Base {
     /// The generator options.
     pub fn options(&self) -> Result<Options> {
         Ok(Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed: self.seed,
             counts: Counts {
                 threats: self.threats,
@@ -1045,6 +1046,7 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
 
     fn workspace() -> crate::corpus::workspace::Workspace {
         generate(&Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed: 1,
             counts: Counts {
                 threats: 6,

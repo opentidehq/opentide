@@ -113,21 +113,6 @@ fn code(finding: &Json) -> &str {
     finding["code"].as_str().unwrap_or("")
 }
 
-/// Whether `code` (a finding's `code` field) belongs to a platform the
-/// recorded oracle lacks (`opentide_schema::platforms::SINCE_ORACLE`): it is
-/// `<id>_...` for one of those ids. No 0.23.0 code has such a prefix, so this
-/// is false until a row lands.
-fn after_oracle_code(code: Option<&Json>) -> bool {
-    let Some(code) = code.and_then(Json::as_str) else {
-        return false;
-    };
-    opentide_schema::platforms::SINCE_ORACLE.iter().any(|id| {
-        code.strip_prefix(id)
-            .and_then(|rest| rest.strip_prefix('_'))
-            .is_some()
-    })
-}
-
 fn without(finding: &Json, drop: &[&str]) -> Json {
     let mut copy = finding.clone();
     if let Some(map) = copy.as_object_mut() {
@@ -415,12 +400,8 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
         .findings
         .iter()
         .filter(|finding| finding.get("check") != Some(&json!("queries")))
-        .filter(|finding| !after_oracle_code(finding.get("code")))
         .map(Item::new)
         .collect();
-    // The recorded oracle (0.23.0) lacks the codes of the platforms the train
-    // ports onto it; drop findings of those codes from both sides. On this
-    // oracle none are present, so this is a no-op until a row lands.
     let rust: Vec<Item> = report
         .findings
         .iter()
@@ -430,7 +411,6 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
                 serde_json::from_str(&crate::payloads::placeholder(&text, ws)).unwrap_or_default();
             map
         })
-        .filter(|map| !after_oracle_code(map.get("code")))
         .map(|map| Item::new(&map))
         .collect();
     list_differences(&case.id, &oracle, &rust, &mut out);

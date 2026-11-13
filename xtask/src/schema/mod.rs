@@ -183,24 +183,6 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
     ]
 }
 
-/// The model-name prefixes of the platforms the recorded oracle lacks
-/// (`opentide_schema::platforms::SINCE_ORACLE`): each such platform's config
-/// class without its `Config` suffix (`ExabeamConfig` -> `Exabeam`), which its
-/// nested models also share. A platform with no row yet contributes none.
-fn since_oracle_model_prefixes() -> Vec<String> {
-    platform::PLATFORM_CONFIG_MODELS
-        .iter()
-        .filter(|entry| opentide_schema::platforms::after_oracle(entry.key))
-        .map(|entry| {
-            entry
-                .model
-                .strip_suffix("Config")
-                .unwrap_or(entry.model)
-                .to_owned()
-        })
-        .collect()
-}
-
 /// A property the models have and the oracle's do not, ported or written on
 /// purpose.
 #[derive(Debug, Clone, Copy)]
@@ -273,23 +255,11 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
             )],
         ));
     }
-    let after_oracle = since_oracle_model_prefixes();
     for (name, rust) in rust_schemas() {
-        // The recorded probe (0.23.0) lacks the models of the platforms the
-        // train ports onto it; skip those, keyed by their config class's
-        // prefix. On this oracle no such prefix exists, so this is a no-op.
-        if after_oracle
-            .iter()
-            .any(|prefix| name.starts_with(prefix.as_str()))
-        {
-            continue;
-        }
         let pydantic = oracle["schemas"]
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
         let a = normalise(pydantic, Side::Pydantic, &[]);
-        let mut rust = rust;
-        drop_since_oracle_properties(&mut rust);
         let b = normalise(&rust, Side::Schemars, &[]);
         let mut found = differences(&a, &b);
         found.retain(|difference| match approved_property(name, difference) {
@@ -314,22 +284,6 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         .collect();
     out.push(("(approvals)".to_owned(), stale));
     Ok(out)
-}
-
-/// Removes, at any depth, each `properties` member named after a platform
-/// the recorded oracle lacks (`SINCE_ORACLE`): `RuleConfigurations` and the
-/// rule models carry their blocks, which the 0.23.0 probe's schemas cannot.
-fn drop_since_oracle_properties(schema: &mut Value) {
-    match schema {
-        Value::Object(members) => {
-            if let Some(Value::Object(properties)) = members.get_mut("properties") {
-                properties.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
-            }
-            members.values_mut().for_each(drop_since_oracle_properties);
-        }
-        Value::Array(items) => items.iter_mut().for_each(drop_since_oracle_properties),
-        _ => {}
-    }
 }
 
 fn python(options: &Options, repo: &Path, target: &Path) -> Result<PathBuf> {
@@ -558,19 +512,6 @@ mod tests {
         let options = parse(&args(&["--against", "python", "--only", "schemas"])).unwrap();
         assert_eq!(options.only, Some(Only::Schemas));
         assert!(parse(&args(&["--against", "python", "--only", "x"])).is_err());
-    }
-
-    #[test]
-    fn properties_of_platforms_the_oracle_lacks_are_dropped() {
-        let mut schema = serde_json::json!({"properties": {
-            "configurations": {"properties": {"google_secops": {}, "sentinel": {}}},
-            "google_secops": {"type": "object"}
-        }});
-        drop_since_oracle_properties(&mut schema);
-        assert_eq!(
-            schema,
-            serde_json::json!({"properties": {"configurations": {"properties": {"sentinel": {}}}}})
-        );
     }
 
     #[test]

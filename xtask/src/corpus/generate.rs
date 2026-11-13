@@ -108,15 +108,22 @@ pub struct Options {
     pub counts: Counts,
     /// The `paths.toml` variant.
     pub layout: Layout,
+    /// The platforms rules get blocks for and configurations are written
+    /// for, in connector order: every platform ([`vocab::PLATFORMS`]) but
+    /// where a run is measured against an oracle that knows fewer (the
+    /// benchmarks', `tests/bench/budgets.toml`). Generation is seeded on the
+    /// list's length and order.
+    pub platforms: &'static [&'static str],
 }
 
 impl Options {
-    /// The default counts and layout for `seed`.
+    /// The default counts and layout for `seed`, with every platform.
     pub fn new(seed: u64) -> Self {
         Self {
             seed,
             counts: DEFAULT_COUNTS,
             layout: Layout::Explicit,
+            platforms: vocab::PLATFORMS,
         }
     }
 }
@@ -130,6 +137,7 @@ pub const TENANTS: &[(&str, &[&str])] = &[
     ("elastic", &["elastic-staging", "elastic-production"]),
     ("sysdig", &["sysdig-production"]),
     ("exabeam", &["exabeam-production"]),
+    ("graylog", &["graylog-lab"]),
 ];
 
 fn tenants_of(platform: &str) -> &'static [&'static str] {
@@ -156,7 +164,7 @@ pub fn generate(options: &Options) -> Workspace {
         ..Ids::default()
     };
     let mut files = Vec::new();
-    files.extend(configuration_files(options.layout));
+    files.extend(configuration_files(options.layout, options.platforms));
     let mut threats = root.fork("threats");
     for index in 0..options.counts.threats {
         files.push(threat(&mut threats, index, options.layout, &mut ids));
@@ -168,7 +176,7 @@ pub fn generate(options: &Options) -> Workspace {
     mark_referenced_threats(&mut files);
     let mut rules = root.fork("rules");
     for index in 0..options.counts.rules {
-        files.push(rule(&mut rules, index, options.layout, &ids));
+        files.push(rule(&mut rules, index, options, &ids));
     }
     mark_referenced_objectives(&mut files);
     files.push(File {
@@ -602,8 +610,7 @@ fn objective(rng: &mut Rng, index: usize, layout: Layout, ids: &mut Ids) -> File
 /// The platforms rule `index` configures: one primary in rotation, and a
 /// second (and third) on some rules, so that every platform has many rules
 /// even in a small workspace.
-fn rule_platforms(rng: &mut Rng, index: usize) -> Vec<&'static str> {
-    let all = vocab::generated_platforms();
+fn rule_platforms(rng: &mut Rng, index: usize, all: &[&'static str]) -> Vec<&'static str> {
     let primary = all[index % all.len()];
     let mut platforms = vec![primary];
     if index % 3 != 2 {
@@ -621,7 +628,8 @@ fn rule_platforms(rng: &mut Rng, index: usize) -> Vec<&'static str> {
     platforms
 }
 
-fn rule(rng: &mut Rng, index: usize, layout: Layout, ids: &Ids) -> File {
+fn rule(rng: &mut Rng, index: usize, options: &Options, ids: &Ids) -> File {
+    let layout = options.layout;
     let uuid = rng.uuid();
     let name = object_name(rng, "Rule", index);
     let slug = slugify(&name);
@@ -644,8 +652,8 @@ fn rule(rng: &mut Rng, index: usize, layout: Layout, ids: &Ids) -> File {
             pairs.insert(at, ("reviewed".to_string(), Yaml::raw(reviewed)));
         }
     }
-    let platforms = rule_platforms(rng, index);
-    let variant = index / vocab::generated_platforms().len();
+    let platforms = rule_platforms(rng, index, options.platforms);
+    let variant = index / options.platforms.len();
     let mut configurations = Vec::new();
     for (position, platform) in platforms.iter().enumerate() {
         let (block, block_tags) = platform_block(rng, platform, variant + position, &name);
@@ -818,9 +826,15 @@ fn platform_block(
         "harfanglab" => pairs.extend(harfanglab(rng, variant, process, name, &mut tags)),
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
-        "bitdefender" => pairs.extend(bitdefender(process)),
+        "bitdefender" => pairs.extend(bitdefender(variant, process)),
         "exabeam" => pairs.extend(exabeam(rng, variant, process, &mut tags)),
-        "google_secops" => pairs.extend(google_secops(variant, process, &mut tags)),
+        "google_secops" => {
+            // The block's `name` is the YARA-L rule's: an identifier.
+            if let Some((_, value)) = pairs.iter_mut().find(|(key, _)| key == "name") {
+                *value = Yaml::s(yaral_rule_name(name));
+            }
+            pairs.extend(google_secops(variant, process, &mut tags));
+        }
         "graylog" => pairs.extend(graylog(rng, variant, process, &mut tags)),
         _ => {}
     }
@@ -1260,28 +1274,50 @@ fn sysdig(rng: &mut Rng, variant: usize, tags: &mut Vec<String>) -> Vec<(String,
     pairs
 }
 
+/// A YARA-L rule name for the rule titled `name` (google-secops-1.0, Rule
+/// name): lower case, every other character `_`, and `r_` before a leading
+/// digit.
+fn yaral_rule_name(name: &str) -> String {
+    let slug: String = name
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let slug = slug.trim_matches('_').to_owned();
+    if slug.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("r_{slug}")
+    } else {
+        slug
+    }
+}
+
 /// A Bitdefender GravityZone Basic rule on the process target, which
-/// bitdefender-1.0's checks accept.
-fn bitdefender(process: &str) -> Vec<(String, Yaml)> {
-    kv(vec![(
-        "detection",
-        Yaml::map(vec![
-            ("target", Yaml::s("process")),
-            (
-                "criteria",
-                Yaml::Seq(vec![
-                    Yaml::map(vec![
-                        ("field", Yaml::s("Process.Name")),
-                        ("is", Yaml::s(process)),
+/// bitdefender-1.0's checks accept, with its own `severity`, so it never
+/// collapses the rule's `alert_severity` to GravityZone's three levels
+/// (`bitdefender_severity_collapsed`).
+fn bitdefender(variant: usize, process: &str) -> Vec<(String, Yaml)> {
+    kv(vec![
+        ("severity", Yaml::s(["Low", "Medium", "High"][variant % 3])),
+        (
+            "detection",
+            Yaml::map(vec![
+                ("target", Yaml::s("process")),
+                (
+                    "criteria",
+                    Yaml::Seq(vec![
+                        Yaml::map(vec![
+                            ("field", Yaml::s("Process.Name")),
+                            ("is", Yaml::s(process)),
+                        ]),
+                        Yaml::map(vec![
+                            ("field", Yaml::s("Process.CommandLine")),
+                            ("contains", Yaml::s("*-enc*")),
+                        ]),
                     ]),
-                    Yaml::map(vec![
-                        ("field", Yaml::s("Process.CommandLine")),
-                        ("contains", Yaml::s("*-enc*")),
-                    ]),
-                ]),
-            ),
-        ]),
-    )])
+                ),
+            ]),
+        ),
+    ])
 }
 
 /// An Exabeam block: one or two sequences of filter queries, the second with
@@ -1315,10 +1351,7 @@ fn exabeam(
                 Yaml::map(vec![
                     ("function", Yaml::s("count")),
                     ("operator", Yaml::s("more_than")),
-                    (
-                        "value",
-                        Yaml::Seq(vec![Yaml::raw(format!("{}", 2 + rng.below(5)))]),
-                    ),
+                    ("value", Yaml::raw(format!("{}", 2 + rng.below(5)))),
                     ("within", Yaml::s("10m")),
                 ]),
             ),
@@ -1407,9 +1440,11 @@ fn graylog(
             )),
         ),
         ("streams", Yaml::s(stream)),
+        // A filter's window is its interval: a longer one alerts on a message
+        // once per overlapping run (`graylog_overlapping_window`).
         (
             "schedule",
-            Yaml::map(vec![("every", Yaml::s(every)), ("window", Yaml::s("15m"))]),
+            Yaml::map(vec![("every", Yaml::s(every)), ("window", Yaml::s(every))]),
         ),
     ]);
     if variant % 2 == 1 {
@@ -1457,6 +1492,10 @@ fn tenant_setup(platform: &str, tenant: &str) -> String {
         "exabeam" => format!(
             "ssl = true\nregion = \"us-east\"\n\
              client_id = \"${var}_CLIENT_ID\"\nclient_secret = \"${var}_CLIENT_SECRET\"\n"
+        ),
+        "graylog" => format!(
+            "ssl = true\nurl = \"https://{tenant}.graylog.example\"\n\
+             token = \"${var}_TOKEN\"\n"
         ),
         _ => String::new(),
     }
@@ -1578,8 +1617,8 @@ description = \"Endpoint telemetry\"
 system = \"elastic\"
 ";
 
-fn configuration_files(layout: Layout) -> Vec<File> {
-    let mut files: Vec<File> = vocab::generated_platforms()
+fn configuration_files(layout: Layout, platforms: &[&'static str]) -> Vec<File> {
+    let mut files: Vec<File> = platforms
         .iter()
         .map(|platform| {
             config_file(
@@ -1624,19 +1663,8 @@ mod tests {
     }
 
     #[test]
-    fn the_generated_corpus_leaves_out_platforms_the_oracle_lacks() {
-        let generated = vocab::generated_platforms();
-        for id in opentide_schema::platforms::SINCE_ORACLE {
-            assert!(
-                !generated.contains(id),
-                "the generated corpus must leave {id} out (SINCE_ORACLE): a registry row on the \
-                 train would otherwise reshuffle the seeded corpus"
-            );
-        }
-        // Without SINCE_ORACLE the list is the whole connector order.
-        if opentide_schema::platforms::SINCE_ORACLE.is_empty() {
-            assert_eq!(generated, vocab::PLATFORMS);
-        }
+    fn the_generated_corpus_holds_every_platform_by_default() {
+        assert_eq!(super::Options::new(1).platforms, vocab::PLATFORMS);
     }
 
     #[test]

@@ -22,6 +22,30 @@
   "visibility.toml"
  ],
  "cases": {
+  "bitdefender-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/bitdefender.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/bitdefender.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
   "carbon-black": [
    {
     "code": "schema_validation",
@@ -683,6 +707,30 @@
    }
   ],
   "elastic-valid-version": [],
+  "exabeam-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/exabeam.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/exabeam.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
   "generic-platform": [
    {
     "code": "schema_validation",
@@ -732,6 +780,54 @@
     ],
     "file_path": "/w/.opentide/configurations/platforms/foo.bar.toml",
     "message": "Input should be a valid dictionary",
+    "severity": "error"
+   }
+  ],
+  "google-secops-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/google_secops.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/google_secops.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "graylog-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/graylog.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/graylog.toml",
+    "message": "Input should be a valid string",
     "severity": "error"
    }
   ],

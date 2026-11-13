@@ -14,7 +14,7 @@ oracle = "0.28.1"
 seed = 1
 threats = 80
 objectives = 30
-rules = 135
+rules = 200
 layout = "explicit"
 
 # The combined fault workspace (`cargo xtask corpus faults --out DIR`, a
@@ -22,7 +22,7 @@ layout = "explicit"
 [combined]
 threats = 120
 objectives = 60
-rules = 600
+rules = 700
 
 [[kind]]
 id = "uuid-invalid-rule"
@@ -1428,9 +1428,10 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule", platform = "elastic", tags = ["elastic:kuery"] }
 ops = [
-    { op = "delete", path = "configurations.elastic.severity" },
+    { op = "set", path = "configurations.elastic.severity.default", value = "low" },
     { op = "set", path = "configurations.elastic.risk", value = 90 },
 ]
+note = "a low default severity, whose band is 0-21, so 90 is out of band on every target"
 
 [[kind]]
 id = "technique-not-enterprise"
@@ -2115,7 +2116,6 @@ codes = ["google_secops_rule_name"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2130,7 +2130,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-severity"
@@ -2138,7 +2138,6 @@ codes = ["google_secops_severity"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2153,7 +2152,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-run-frequency"
@@ -2161,7 +2160,6 @@ codes = ["google_secops_run_frequency"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2176,7 +2174,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "Google's legacy HOURLY; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "Google's legacy HOURLY; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-schedule"
@@ -2184,7 +2182,6 @@ codes = ["google_secops_schedule"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2201,7 +2198,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a schedule on a DAILY rule; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "a schedule on a DAILY rule; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-meta-key"
@@ -2209,7 +2206,6 @@ codes = ["google_secops_meta_key"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2225,7 +2221,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-name-duplicate"
@@ -2233,7 +2229,6 @@ codes = ["google_secops_name_duplicate"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2249,7 +2244,7 @@ ops = [
 ]
 counts = { google_secops_name_duplicate = 5 }
 isolated = true
-note = "five enabled blocks with one name: each names the four others; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "five enabled blocks with one name: each names the four others; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-risk-score-missing"
@@ -2257,7 +2252,6 @@ codes = ["google_secops_risk_score_missing"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2271,7 +2265,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an advisory: validate and lint both report it; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-rule-id-literal"
@@ -2279,7 +2273,6 @@ codes = ["google_secops_rule_id_literal"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2294,7 +2287,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an advisory: validate and lint both report it; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "google-secops-live-frequency-unavailable"
@@ -2302,7 +2295,6 @@ codes = ["google_secops_live_frequency_unavailable"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2323,7 +2315,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an advisory: validate and lint both report it; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-parse-error"
@@ -2331,7 +2323,6 @@ codes = ["yaral_parse_error"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2345,7 +2336,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-section-header"
@@ -2353,7 +2344,6 @@ codes = ["yaral_section_header"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2369,7 +2359,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-section-empty"
@@ -2377,7 +2367,6 @@ codes = ["yaral_section_empty"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2390,7 +2379,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-section-missing"
@@ -2398,7 +2387,6 @@ codes = ["yaral_section_missing"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2410,7 +2398,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-section-alias"
@@ -2418,7 +2406,6 @@ codes = ["yaral_section_alias"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2433,7 +2420,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "condition aliases a meta value; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "condition aliases a meta value; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-section-order"
@@ -2451,7 +2438,7 @@ match:
 ''' } },
 ]
 isolated = true
-note = "a hunt: a block's sections are assembled in order, so only a search can misorder them; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "a hunt: a block's sections are assembled in order, so only a search can misorder them; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-section-unavailable"
@@ -2466,7 +2453,7 @@ options:
 ''' } },
 ]
 isolated = true
-note = "a hunt: options is a rule section; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "a hunt: options is a rule section; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-match-shape"
@@ -2474,7 +2461,6 @@ codes = ["yaral_match_shape"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2493,7 +2479,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a match type that is not hop, tumbling or sliding (a match without window is yaral_match_window); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "a match type that is not hop, tumbling or sliding (a match without window is yaral_match_window); isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-match-window"
@@ -2501,7 +2487,6 @@ codes = ["yaral_match_window"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2519,7 +2504,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-option"
@@ -2527,7 +2512,6 @@ codes = ["yaral_option"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2543,7 +2527,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-reserved-identifier"
@@ -2551,7 +2535,6 @@ codes = ["yaral_reserved_identifier"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2566,7 +2549,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-undefined-variable"
@@ -2574,7 +2557,6 @@ codes = ["yaral_undefined_variable"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2588,7 +2570,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-multi-event-match"
@@ -2596,7 +2578,6 @@ codes = ["yaral_multi_event_match"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2613,7 +2594,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-match-variable"
@@ -2621,7 +2602,6 @@ codes = ["yaral_match_variable"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2639,7 +2619,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-condition-shape"
@@ -2647,7 +2627,6 @@ codes = ["yaral_condition_shape"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2665,7 +2644,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-nocase-on-enum"
@@ -2673,7 +2652,6 @@ codes = ["yaral_nocase_on_enum"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2687,7 +2665,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-outcome-limit"
@@ -2695,7 +2673,6 @@ codes = ["yaral_outcome_limit"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2730,7 +2707,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-outcome-aggregation"
@@ -2738,7 +2715,6 @@ codes = ["yaral_outcome_aggregation"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2757,7 +2733,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-unknown-function"
@@ -2765,7 +2741,6 @@ codes = ["yaral_unknown_function"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2780,7 +2755,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-function-unavailable"
@@ -2788,7 +2763,6 @@ codes = ["yaral_function_unavailable"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2803,7 +2777,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-unknown-udm-field"
@@ -2811,7 +2785,6 @@ codes = ["yaral_unknown_udm_field"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2826,7 +2799,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-enum-value"
@@ -2834,7 +2807,6 @@ codes = ["yaral_enum_value"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2848,7 +2820,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-type"
@@ -2856,7 +2828,6 @@ codes = ["yaral_type"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2871,7 +2842,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-regex"
@@ -2879,7 +2850,6 @@ codes = ["yaral_regex"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2894,7 +2864,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-reference-list-limit"
@@ -2902,7 +2872,6 @@ codes = ["yaral_reference_list_limit"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2927,7 +2896,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "eleven data-table `in` statements (in cidr on reference lists also earns yaral_reference_list_deprecated); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "eleven data-table `in` statements (in cidr on reference lists also earns yaral_reference_list_deprecated); isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-export-value"
@@ -2935,7 +2904,6 @@ codes = ["yaral_export_value"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2951,7 +2919,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-window-bound"
@@ -2959,7 +2927,6 @@ codes = ["yaral_window_bound"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2974,7 +2941,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "window_start in an outcome of a rule without a match window ($window_start is yaral_reserved_identifier); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "window_start in an outcome of a rule without a match window ($window_start is yaral_reserved_identifier); isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-string-escape"
@@ -2983,7 +2950,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -2998,7 +2964,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an engine warning: lint reports it, validate keeps errors only; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-deprecated-field"
@@ -3007,7 +2973,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -3022,7 +2987,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an engine warning: lint reports it, validate keeps errors only; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-unfiltered-event"
@@ -3031,7 +2996,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -3045,7 +3009,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an engine warning: lint reports it, validate keeps errors only; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-leading-wildcard-regex"
@@ -3054,7 +3018,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -3069,7 +3032,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an engine warning: lint reports it, validate keeps errors only; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yaral-reference-list-deprecated"
@@ -3078,7 +3041,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/google_secops.toml", text = "[platform]\nenabled = true\nname = \"Google Security Operations\"\n" },
     { op = "append_text", text = '''
   google_secops:
     enabled: true
@@ -3093,7 +3055,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an engine warning: lint reports it, validate keeps errors only; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Google SecOps; and each Google SecOps kind adds the platform's configuration file"
+note = "an engine warning: lint reports it, validate keeps errors only; isolated so the combined workspace the goldens record stays as it was"
 
 # Codes in scope no fault kind can produce: no workspace mutation makes the
 # commands the runner uses offline (validate, lint, deploy migrate-state)
@@ -3105,7 +3067,6 @@ codes = ["bitdefender_rule_kind"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low" } },
 ]
 isolated = true
@@ -3117,7 +3078,6 @@ codes = ["bitdefender_target"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "flow", criteria = [{ field = "Process.Name", is = "x" }] } } },
 ]
 isolated = true
@@ -3129,7 +3089,6 @@ codes = ["bitdefender_criterion_shape"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "process", criteria = [{ field = "Process.Name", is = "a.exe", contains = "*b*" }] } } },
 ]
 isolated = true
@@ -3140,7 +3099,6 @@ codes = ["bitdefender_criterion_field"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "process", criteria = [{ field = "File.Name", is = "a.exe" }] } } },
 ]
 isolated = true
@@ -3151,7 +3109,6 @@ codes = ["bitdefender_criterion_relation"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "registry", criteria = [{ field = "Registry.Operation", contains = "*key*" }] } } },
 ]
 isolated = true
@@ -3162,7 +3119,6 @@ codes = ["bitdefender_criterion_value"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "registry", criteria = [{ field = "Registry.Operation", is = "not_an_operation" }] } } },
 ]
 isolated = true
@@ -3173,7 +3129,6 @@ codes = ["bitdefender_criteria_combination"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "file", criteria = [{ field = "File.CreatedBy.Name", is = "a.exe" }, { field = "File.MD5", is = "d41d8cd98f00b204e9800998ecf8427e" }] } } },
 ]
 isolated = true
@@ -3184,7 +3139,6 @@ codes = ["bitdefender_action_scope"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", actions = { sandbox = true }, detection = { target = "registry", criteria = [{ field = "Registry.Key", is = "HKLM\\Software\\x" }] } } },
 ]
 isolated = true
@@ -3195,7 +3149,6 @@ codes = ["bitdefender_targets_shape"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", targets = { endpoint_tags = ["a"], companies = ["b"] }, detection = { target = "process", criteria = [{ field = "Process.Name", is = "powershell.exe" }] } } },
 ]
 isolated = true
@@ -3206,7 +3159,6 @@ codes = ["bitdefender_severity"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "low", detection = { target = "process", criteria = [{ field = "Process.Name", is = "powershell.exe" }] } } },
 ]
 isolated = true
@@ -3217,7 +3169,6 @@ codes = ["bitdefender_severity_collapsed"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", detection = { target = "process", criteria = [{ field = "Process.Name", is = "powershell.exe" }] } } },
     { op = "set", path = "response.alert_severity", value = "Critical" },
 ]
@@ -3230,7 +3181,6 @@ codes = ["bitdefender_registry_full_hive"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "registry", criteria = [{ field = "Registry.Key", contains = "HKEY_LOCAL_MACHINE\\Software\\*" }] } } },
 ]
 isolated = true
@@ -3241,7 +3191,6 @@ codes = ["bitdefender_contains_no_wildcard"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", detection = { target = "process", criteria = [{ field = "Process.CommandLine", contains = "-enc" }] } } },
 ]
 isolated = true
@@ -3253,7 +3202,6 @@ codes = ["bitdefender_name_duplicate"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", name = "Duplicate GravityZone rule", detection = { target = "process", criteria = [{ field = "Process.Name", is = "powershell.exe" }] } } },
 ]
 isolated = true
@@ -3267,7 +3215,6 @@ codes = ["bitdefender_yara_ascii"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", yara = { signature = "rule r { strings: $s = \"caf\u00e9\" condition: $s }" } } },
 ]
 isolated = true
@@ -3278,7 +3225,6 @@ codes = ["bitdefender_yara_size"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/bitdefender.toml", text = "[platform]\nenabled = true\nname = \"Bitdefender GravityZone\"\ndescription = \"Bitdefender in the fault workspace.\"\n" },
     { op = "set", path = "configurations.bitdefender", value = { enabled = true, schema = "platform::bitdefender::1.0", status = "STAGING", severity = "Low", yara = { signature = "rule big { strings: $a = \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\" condition: $a }" } } },
 ]
 isolated = true
@@ -3378,7 +3324,7 @@ reason = "declared in opentide-core's codes but emitted by no crate"
 
 [[unreachable]]
 code = "deprecated_field"
-reason = "needs a `tide.meta.deprecation` marker in a metaschema; no field of 0.23.0's models carries one (the deprecations catalogue is empty)"
+reason = "needs a `tide.meta.deprecation` marker in a metaschema; no field of 0.28.1's models carries one (the deprecations catalogue is empty)"
 
 [[unreachable]]
 code = "engine_unavailable"
@@ -3418,7 +3364,6 @@ codes = ["graylog_aggregation"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3430,7 +3375,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an aggregation condition the condition grammar refuses (an unclosed call); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "an aggregation condition the condition grammar refuses (an unclosed call); isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-all-streams"
@@ -3438,7 +3383,6 @@ codes = ["graylog_all_streams"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n\n[[tenants]]\nname = \"graylog-lab\"\n\n[tenants.setup]\nurl = \"https://graylog.example\"\ntoken = \"$GRAYLOG_LAB_TOKEN\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3449,7 +3393,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a block that names no streams, on a tenant that names none: the definition searches every stream; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a block that names no streams, on a tenant that names none: the definition searches every stream; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-analyzed-field"
@@ -3458,7 +3402,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3470,7 +3413,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a regex on the analysed `message` field (the queries check of lint); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a regex on the analysed `message` field (the queries check of lint); isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-double-backslash"
@@ -3479,7 +3422,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3491,7 +3433,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "four backslashes in a Graylog query, which match two; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "four backslashes in a Graylog query, which match two; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-event-field"
@@ -3499,7 +3441,6 @@ codes = ["graylog_event_field"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3512,7 +3453,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an event field whose name is not a field name; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "an event field whose name is not a field name; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-event-key"
@@ -3520,7 +3461,6 @@ codes = ["graylog_event_key"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3534,7 +3474,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an event key that names no event field; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "an event key that names no event field; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-event-limit"
@@ -3542,7 +3482,6 @@ codes = ["graylog_event_limit"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3554,7 +3493,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an event limit below 1; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "an event limit below 1; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-field-name"
@@ -3562,7 +3501,6 @@ codes = ["graylog_field_name"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3574,7 +3512,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a group-by field that is not a field name; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a group-by field that is not a field name; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-leading-wildcard"
@@ -3582,7 +3520,6 @@ codes = ["graylog_leading_wildcard"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3594,7 +3531,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a leading wildcard, which Graylog refuses unless the tenant allows it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a leading wildcard, which Graylog refuses unless the tenant allows it; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-list-shape"
@@ -3602,7 +3539,6 @@ codes = ["graylog_list_shape"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3614,7 +3550,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a streams list that repeats an alias; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a streams list that repeats an alias; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-open-range"
@@ -3622,7 +3558,6 @@ codes = ["graylog_open_range"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3634,7 +3569,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a range with a `*` bound, which Graylog's validator refuses; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a range with a `*` bound, which Graylog's validator refuses; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-overlapping-window"
@@ -3642,7 +3577,6 @@ codes = ["graylog_overlapping_window"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3654,7 +3588,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a filter whose window is longer than its interval; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a filter whose window is longer than its interval; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-priority"
@@ -3662,7 +3596,6 @@ codes = ["graylog_priority"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3675,7 +3608,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a priority outside the Informational to Critical scale; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a priority outside the Informational to Critical scale; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-query-blank"
@@ -3683,7 +3616,6 @@ codes = ["graylog_query_blank"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3695,7 +3627,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a blank query; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a blank query; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-regex-operator"
@@ -3704,7 +3636,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3716,7 +3647,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "`~` in a regex, which Lucene reads as complement; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "`~` in a regex, which Lucene reads as complement; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-regex-quote"
@@ -3725,7 +3656,6 @@ severity = "warning"
 command = ["lint"]
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3737,7 +3667,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a quoted literal in a regex (a balanced pair: an unclosed quote is lucene_regexp); isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a quoted literal in a regex (a balanced pair: an unclosed quote is lucene_regexp); isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-regex-unsupported"
@@ -3745,7 +3675,6 @@ codes = ["graylog_regex_unsupported"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3757,7 +3686,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "a PCRE inline flag, which Lucene regexes do not have; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "a PCRE inline flag, which Lucene regexes do not have; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-schedule"
@@ -3765,7 +3694,6 @@ codes = ["graylog_schedule"]
 severity = "error"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3777,7 +3705,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "an interval that is not a duration; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "an interval that is not a duration; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "graylog-title-duplicate"
@@ -3786,7 +3714,6 @@ codes = ["graylog_title_duplicate"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
-    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n" },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -3799,7 +3726,7 @@ ops = [
 ''' },
 ]
 isolated = true
-note = "every target's Graylog block has the same title, so each names the others; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
+note = "every target's Graylog block has the same title, so each names the others; isolated so the combined workspace the goldens record stays as it was"
 
 # Codes in scope whose fault kind a unit of the 0.28 catch-up train still
 # owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them

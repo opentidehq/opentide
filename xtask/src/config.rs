@@ -145,14 +145,8 @@ pub fn run(args: &[String]) -> Result<u8> {
     Ok(u8::from(failed > 0))
 }
 
-/// The approved differences:
-///
-/// - `config_parse`'s message is the TOML crate's (`config_cases.toml`
-///   `toml-parse-message`): only its code is compared.
-/// - opentide 0.28.1 adds lint's `recommended` check (`config_cases.toml`
-///   `lint-recommended-check`): the bundled `lint.toml`'s `[recommended]`
-///   table is left out of Rust's resolved configuration where the oracle's
-///   has none. Once the oracle is 0.28.1 (O2) it has one, and both compare.
+/// The approved difference: `config_parse`'s message is the TOML crate's
+/// (`config_cases.toml` `toml-parse-message`), so only its code is compared.
 fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
     let parse = |value: &Json| value.pointer("/error/code") == Some(&json!("config_parse"));
     if parse(oracle) && parse(rust) {
@@ -161,32 +155,7 @@ fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
             json!({"error": {"code": "config_parse"}}),
         );
     }
-    let mut rust = rust.clone();
-    if oracle.pointer("/resolved/lint/recommended").is_none()
-        && let Some(lint) = rust
-            .pointer_mut("/resolved/lint")
-            .and_then(Json::as_object_mut)
-    {
-        lint.remove("recommended");
-    }
-    // The platforms the catch-up train ports onto the 0.23.0 oracle: Rust's
-    // resolved configuration carries their bundled `platforms.<id>` table, which
-    // the oracle lacks; leave each such platform out where the oracle has none
-    // (`opentide_schema::platforms::SINCE_ORACLE`). O2's oracle has them. On
-    // 0.23.0 output none is present, so this changes nothing until a row lands.
-    // `systems` is the same table under its legacy name.
-    for key in ["platforms", "systems"] {
-        if let Some(platforms) = rust
-            .pointer_mut(&format!("/resolved/{key}"))
-            .and_then(Json::as_object_mut)
-        {
-            platforms.retain(|id, _| {
-                !opentide_schema::platforms::after_oracle(id)
-                    || oracle.pointer(&format!("/resolved/{key}/{id}")).is_some()
-            });
-        }
-    }
-    (oracle.clone(), rust)
+    (oracle.clone(), rust.clone())
 }
 
 fn rust_result(workspace: &Path) -> Result<Json> {
@@ -334,6 +303,7 @@ fn generated_workspaces(
         ("custom", Layout::Custom),
     ] {
         let options = Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed: 1,
             counts: Counts {
                 threats: 3,
@@ -393,59 +363,6 @@ mod tests {
             &json!({"error": {"code": "retired_configuration_file", "message": "b"}}),
         );
         assert_ne!(oracle, rust);
-    }
-
-    #[test]
-    fn the_recommended_check_compares_only_once_the_oracle_has_it() {
-        let rust = json!({"resolved": {"lint": {"metadata": {"enabled": true}, "recommended": {"enabled": true}}}, "issues": []});
-        // 0.23.0: no `recommended` table, so Rust's is left out.
-        let old = json!({"resolved": {"lint": {"metadata": {"enabled": true}}}, "issues": []});
-        let (oracle, compared) = comparable(&old, &rust);
-        assert_eq!(oracle, compared);
-        // 0.28.1: the oracle has it, so a different value still differs.
-        let new = json!({"resolved": {"lint": {"metadata": {"enabled": true}, "recommended": {"enabled": false}}}, "issues": []});
-        let (oracle, compared) = comparable(&new, &rust);
-        assert_ne!(oracle, compared);
-        // Anything else outside `recommended` still differs.
-        let other = json!({"resolved": {"lint": {"metadata": {"enabled": false}}}, "issues": []});
-        let (oracle, compared) = comparable(&other, &rust);
-        assert_ne!(oracle, compared);
-    }
-
-    #[test]
-    fn a_platform_the_oracle_lacks_is_left_out_of_resolved_platforms() {
-        // A platform in SINCE_ORACLE (the train ports it onto the 0.23.0 oracle).
-        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
-        let rust = json!({"resolved": {"platforms": {
-            platform: {"enabled": true}, "sentinel": {"enabled": true}
-        }}, "issues": []});
-        // The oracle has no such platform: Rust's table is left out, sentinel stays.
-        let oracle =
-            json!({"resolved": {"platforms": {"sentinel": {"enabled": true}}}, "issues": []});
-        let (compared_oracle, compared_rust) = comparable(&oracle, &rust);
-        assert_eq!(compared_oracle, compared_rust);
-        assert!(
-            compared_rust
-                .pointer(&format!("/resolved/platforms/{platform}"))
-                .is_none()
-        );
-        // Once the oracle has it (O2), a difference still shows.
-        let oracle_has = json!({"resolved": {"platforms": {
-            platform: {"enabled": false}, "sentinel": {"enabled": true}
-        }}, "issues": []});
-        let (compared_oracle, compared_rust) = comparable(&oracle_has, &rust);
-        assert_ne!(compared_oracle, compared_rust);
-    }
-
-    #[test]
-    fn a_platform_the_oracle_lacks_is_left_out_of_resolved_systems_too() {
-        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
-        let rust = json!({"resolved": {"systems": {
-            platform: {"platform": {}}, "sentinel": {"platform": {}}
-        }}, "issues": []});
-        let oracle = json!({"resolved": {"systems": {"sentinel": {"platform": {}}}}, "issues": []});
-        let (compared_oracle, compared_rust) = comparable(&oracle, &rust);
-        assert_eq!(compared_oracle, compared_rust);
     }
 
     #[test]
