@@ -375,13 +375,14 @@ pub(crate) fn check_types(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
             }
             // `c-uri:"x"` reads as `c - (uri : "x")`: a field name with a
             // hyphen needs backticks.
-            if out.len() > before && operator == "-" {
-                if let Some(name) = hyphenated_name(node, source) {
-                    for d in &mut out[before..] {
-                        d.message.push_str(&format!(
+            if out.len() > before
+                && operator == "-"
+                && let Some(name) = hyphenated_name(node, source)
+            {
+                for d in &mut out[before..] {
+                    d.message.push_str(&format!(
                             "; `{name}` reads as a subtraction, so quote a field name that contains `-` with backticks (`` `{name}` ``)"
                         ));
-                    }
                 }
             }
         }

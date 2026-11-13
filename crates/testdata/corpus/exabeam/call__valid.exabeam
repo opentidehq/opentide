@@ -1,0 +1,2 @@
+# prod:call valid
+process_command_line:RGXi("\\s-enc\\s") AND file_name:WLDi("*resume*")

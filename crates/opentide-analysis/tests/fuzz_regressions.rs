@@ -55,6 +55,9 @@ fn saved_fuzz_inputs_do_not_crash_or_hang() {
         ("lucene", LanguageId::Lucene),
         ("falco", LanguageId::Falco),
         ("cql", LanguageId::Cql),
+        ("yara", LanguageId::Yara),
+        ("exabeam", LanguageId::Exabeam),
+        ("yaral", LanguageId::Yaral),
         ("tide", LanguageId::TideYaml),
     ];
     let mut ran = 0;

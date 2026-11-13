@@ -681,7 +681,7 @@ pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Resul
                     }
                 }
                 Op::CopyFromPartner { path, from_path } => {
-                    if before.len() % 2 != 0 {
+                    if !before.len().is_multiple_of(2) {
                         bail!(
                             "fault kind `{}`: copy_from_partner needs an even count",
                             kind.id

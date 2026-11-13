@@ -1,0 +1,9 @@
+error[vocab_unknown]: 'clearr' is not a TLP value
+  ╭─▶ Objects/Detection Rules/rule-0002-defender-kql.yaml:9:8
+  │
+8 │   modified: 2026-01-02
+9 │   tlp: clearr
+  │        ━━━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'clear'?
+

@@ -294,7 +294,7 @@ In `--json` mode a line naming it is in `warnings`, and the structured finding (
 
 ### What a platform compiler needs
 
-A rule that validates must deploy. Some of a platform's requirements are not in its schema: Sentinel builds no alert rule without `grouping.alert`, without `scheduling.frequency` and `scheduling.lookback` unless `scheduling.nrt` is true, or with `alert.suppression: true`. The `schema` check therefore compiles each rule for every enabled platform that opentide compiles offline (Sentinel and Elastic), exactly as `deploy --dry-run` does, and fails a rule the compiler rejects with the dry run's code, message and help (`compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, ...):
+A rule that validates must deploy. Some of a platform's requirements are not in its schema: Sentinel builds no alert rule without `grouping.alert`, without `scheduling.frequency` and `scheduling.lookback` unless `scheduling.nrt` is true, or with `alert.suppression: true`. The `schema` check therefore compiles each rule for every enabled platform that opentide compiles offline (Sentinel, Elastic and Sysdig), exactly as `deploy --dry-run` does, and fails a rule the compiler rejects with the dry run's code, message and help (`compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, ...):
 
 ```text illustrative
 error[compile_missing_field]: configurations.sentinel.grouping.alert is missing

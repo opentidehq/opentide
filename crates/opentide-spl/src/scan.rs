@@ -76,10 +76,10 @@ pub(crate) fn subsearches(source: &str, start: usize, end: usize) -> Vec<(usize,
             depth += 1;
         } else if bytes[i] == b']' && depth > 0 {
             depth -= 1;
-            if depth == 0 {
-                if let Some(open) = inner_start.take() {
-                    out.push((open, i));
-                }
+            if depth == 0
+                && let Some(open) = inner_start.take()
+            {
+                out.push((open, i));
             }
         }
         i += 1;

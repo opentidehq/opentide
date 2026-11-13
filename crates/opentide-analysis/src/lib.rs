@@ -24,6 +24,7 @@ mod position;
 pub use position::LineStarts;
 
 pub mod config;
+mod yara;
 pub use config::{
     CONFIGURATIONS_DIRECTORY, ConfigIssue, ConfigurationSchemas, configuration_completions,
     configuration_hover, configuration_path, is_configuration_path, place_configuration_issues,
@@ -209,6 +210,31 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: Vec::new(),
             }
         }
+        LanguageId::Yara => {
+            let r = opentide_yara::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: yara::symbols(&request.text),
+            }
+        }
+        // A `.exabeam` file is a search (exabeam-1.0, "Defaults").
+        LanguageId::Exabeam => {
+            let r = opentide_exabeam::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Yaral => {
+            let r = opentide_yaral::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::TideYaml => {
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
@@ -254,11 +280,13 @@ pub struct QueryReport {
 /// query with no finding is reported too, so a host can count what it
 /// checked. Only the queries are checked: for the object's own fields, use
 /// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike queries are CQL,
-/// checked as correlation rules; HarfangLab queries are not injected, so they
-/// never appear.
+/// checked as correlation rules; Exabeam sequence queries are checked under
+/// the language's `rule` profile and `system: exabeam` hunts under `search`;
+/// HarfangLab queries are not injected, so they never appear.
 pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
     // Ranges are those of the text after a byte-order mark, as an editor shows them.
     let text = opentide_core::strip_bom(text);
+    let lines = opentide_core::LineIndex::new(text);
     opentide_tide::analyze_queries(text, &elastic_tenants(host))
         .into_iter()
         .map(|query| QueryReport {
@@ -266,7 +294,7 @@ pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport>
             language: query.query.language,
             platform: query.query.platform,
             field_path: query.query.field_path,
-            range: opentide_core::span_to_range(text, query.query.host_span),
+            range: lines.range(query.query.host_span),
             diagnostics: query.diagnostics,
         })
         .collect()
@@ -290,9 +318,10 @@ pub fn analyze_blocks(host: &dyn WorkspaceHost, text: &str) -> Vec<Diagnostic> {
 pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key
-    /// (`defender_for_endpoint` picks the Defender KQL schema and
-    /// `carbon_black_cloud` the Carbon Black Lucene dialect). `None` for the
-    /// language's default.
+    /// (`defender_for_endpoint` picks the Defender KQL schema,
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
+    /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
+    /// correlation-rule sequence). `None` for the language's default.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -313,13 +342,26 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
             opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
                 .diagnostics
         }
-        LanguageId::Lucene => {
-            let dialect = if platform == "carbon_black_cloud" {
-                opentide_lucene::Dialect::CarbonBlack
+        // `platform: exabeam` is a correlation-rule sequence query (the
+        // `rule` profile); without it, a search.
+        LanguageId::Exabeam => {
+            let ctx = if platform == "exabeam" {
+                opentide_exabeam::Context::RULE
             } else {
-                opentide_lucene::Dialect::Elastic
+                opentide_exabeam::Context::SEARCH
             };
+            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
+        }
+        LanguageId::Lucene => {
+            let dialect = opentide_lucene::Dialect::for_platform(platform);
             opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
+        }
+        // `platform: harfanglab` or `bitdefender`: the platform's YARA profile.
+        LanguageId::Yara => {
+            let ctx = opentide_yara::Profile::for_platform(platform)
+                .map(opentide_yara::Context::for_profile)
+                .unwrap_or_default();
+            opentide_yara::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Esql => {
             let target = request
@@ -562,9 +604,14 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Kuery => {
             opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
         }
-        // Carbon Black has its own fields: no ECS (#162).
-        LanguageId::Lucene if platform == "carbon_black_cloud" => {
-            opentide_lucene::hover_dialect(text, offset, opentide_lucene::Dialect::CarbonBlack)
+        // Carbon Black has its own fields (#162), and Graylog its message
+        // fields: no ECS.
+        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+            opentide_lucene::hover_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::for_platform(platform),
+            )
         }
         LanguageId::Lucene => {
             opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
@@ -573,6 +620,9 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
             opentide_falco::hover(text, offset, &opentide_falco::Context::default())
         }
         LanguageId::Cql => opentide_cql::hover(text, offset),
+        LanguageId::Yara => opentide_yara::editor::hover(text, offset),
+        LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -627,11 +677,11 @@ fn query_completions(
     match language {
         LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene if platform == "carbon_black_cloud" => {
+        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
             opentide_lucene::completions_dialect(
                 text,
                 offset,
-                opentide_lucene::Dialect::CarbonBlack,
+                opentide_lucene::Dialect::for_platform(platform),
             )
         }
         LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
@@ -648,10 +698,15 @@ fn query_completions(
             opentide_falco::completions(text, offset, &opentide_falco::Context::default())
         }
         LanguageId::Cql => opentide_cql::completions(text, offset),
+        LanguageId::Yara => opentide_yara::editor::completions(text, offset),
+        LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
     }
 }
+
+pub use yara::{definition, folding, format, references, rename};
 
 pub fn compiled_kql(text: &str, tenant: &str) -> String {
     opentide_kql::compile_kql_query(text, &[], tenant)
@@ -697,9 +752,12 @@ fn query_signature_help(
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),
         LanguageId::Cql => opentide_cql::signature_help(text, offset),
+        LanguageId::Yara => opentide_yara::editor::signature_help(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::signature_help(text, offset),
         LanguageId::Kuery
         | LanguageId::Lucene
         | LanguageId::Falco
+        | LanguageId::Exabeam
         | LanguageId::TideYaml
         | LanguageId::Config => None,
     }

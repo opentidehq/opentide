@@ -112,6 +112,82 @@ pub const ELASTIC_ADVISORY_CODES: [&str; 5] = [
 /// The engine's advisories on a Sysdig rule block (`SYSDIG_ADVISORY_CODES`).
 pub const SYSDIG_ADVISORY_CODES: [&str; 1] = ["sysdig_list_self_reference"];
 
+/// Where an engine code is reported, for the codes whose reporter is not the
+/// one its kind implies: block advisories on a query, the Sysdig block's model
+/// constraints that `validate` names in its `schema_validation`, and since
+/// UC-2.6 the editor's share of each (`docs/cli/diagnostics.md` held them by
+/// hand until the reference was generated again).
+const ENGINE_REPORTED_BY: &[(&str, &str)] = &[
+    (
+        "falco_exception",
+        "Reported by the analysis engine on the Sysdig block's `exceptions`, with the condition's findings, since Falco appends them to the condition when it loads the rule: as an error, an exception Falco would reject, by `opentide validate` (its `queries` check); as a warning, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both. An exception whose shape the model refuses (fields, comps and values that do not align) is `sysdig_exception_shape` instead, which `validate` names in its `schema_validation` finding: Falco's checks leave that exception to it.",
+    ),
+    (
+        "falco_unknown_rule",
+        "Reported by the analysis engine on the Sysdig block's `append_to_rule`, as a warning: `opentide lint` (its `queries` check) shows it. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "falco_unknown_source",
+        "Reported by the analysis engine on the Sysdig block's `source`, as a warning, with the condition's findings (its fields go unchecked): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it.",
+    ),
+    (
+        "lookback_long",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "lookback_zero",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "risk_band",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "sysdig_definition_duplicate",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_definition_name",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_definition_order",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_exception_shape",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_list_in_value",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_priority",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_rule_shape",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_source",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_tuning_keys",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "technique_not_enterprise",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "threshold_lookback",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+];
+
 /// The first paragraph that is not a heading, its whitespace collapsed.
 fn summary_of(markdown: &str) -> String {
     markdown
@@ -229,6 +305,10 @@ fn engine_page(code: &str) -> Option<Page> {
                 .to_owned(),
         )
     };
+    let where_ = ENGINE_REPORTED_BY
+        .iter()
+        .find(|(name, _)| *name == code)
+        .map_or(where_, |(_, reported_by)| (*reported_by).to_owned());
     let markdown = format!(
         "# {code}\n\n{sentence}\n\n{where_}\n\n## Example\n\n```text\n{example}\n```\n\n\
          ## How to fix\n\n{fix}\n"
@@ -257,6 +337,125 @@ fn retired_page(retired: &Retired) -> Page {
         markdown,
         retired: true,
     }
+}
+
+/// The lines of `docs/cli/diagnostics.md` above the table of codes.
+const REFERENCE_HEAD: &[&str] = &[
+    "---",
+    "title: Diagnostic codes",
+    "description: What each opentide diagnostic code means, an example, and how to fix it.",
+    "---",
+    "",
+    "<!-- Generated from src/opentide/data/diagnostics/ and the analysis engine's codes by",
+    "     `cargo xtask codegen`. Edit the pages there. -->",
+    "",
+    "# Diagnostic codes",
+    "",
+    "Every finding `opentide validate` and `opentide lint` report carries a stable `code`, \
+     and every command that fails sets a `failure.code` \
+     ([JSON output](./json-output.md#failure-codes)). \
+     `opentide explain <code>` prints the page for either; this reference collects them all. \
+     `opentide explain` with no code lists the codes.",
+    "",
+    "| Code | Meaning |",
+    "|------|---------|",
+];
+
+/// `docs/cli/diagnostics.md` (`reference_markdown`): a table of every code
+/// and its summary, then every page with its headings one level down. A
+/// `text` fence that does not hold a command is marked `illustrative`, so
+/// the docs check does not run it; prose is made safe for MDX
+/// ([`mdx_prose`]). `cargo xtask codegen` writes it.
+pub fn reference_markdown() -> String {
+    let pages = all();
+    let mut lines: Vec<String> = REFERENCE_HEAD
+        .iter()
+        .map(|line| (*line).to_owned())
+        .collect();
+    lines.extend(pages.iter().map(|page| {
+        format!(
+            "| [`{code}`](#{code}) | {} |",
+            mdx_prose(&page.summary),
+            code = page.code
+        )
+    }));
+    for page in &pages {
+        lines.push(String::new());
+        let source: Vec<&str> = page.markdown.trim_end_matches('\n').lines().collect();
+        let mut in_fence = false;
+        for (index, line) in source.iter().enumerate() {
+            if line.starts_with("```") {
+                in_fence = !in_fence;
+                let following = source.get(index + 1).copied().unwrap_or_default();
+                if in_fence && *line == "```text" && !following.starts_with("opentide ") {
+                    // Output an example shows, not a command the docs check could run.
+                    lines.push("```text illustrative".to_owned());
+                    continue;
+                }
+                lines.push((*line).to_owned());
+            } else if in_fence {
+                lines.push((*line).to_owned());
+            } else {
+                let line = mdx_prose(line);
+                if line.starts_with('#') {
+                    lines.push(format!("#{line}"));
+                } else {
+                    lines.push(line);
+                }
+            }
+        }
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
+}
+
+/// `line` with each `<` that cannot open a tag written `&lt;`, code spans
+/// left alone (`_mdx_prose`). opentide.org renders the docs as MDX, which
+/// reads `<=>` in prose as a broken tag and refuses the page. The engine's
+/// sentences are plain text, so the reference escapes them, not the engine,
+/// and `opentide explain` prints them as they are.
+pub fn mdx_prose(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let mut out = String::with_capacity(line.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let character = chars[index];
+        if character == '`' {
+            let end = code_span_end(&chars, index);
+            let run = end.unwrap_or_else(|| backtick_run_end(&chars, index));
+            out.extend(&chars[index..run]);
+            index = run;
+            continue;
+        }
+        let opens_tag = chars
+            .get(index + 1)
+            .is_some_and(|next| next.is_ascii_alphabetic() || matches!(next, '/' | '!' | '>'));
+        if character == '<' && !opens_tag {
+            out.push_str("&lt;");
+        } else {
+            out.push(character);
+        }
+        index += 1;
+    }
+    out
+}
+
+/// The index after the run of backticks that starts at `start`.
+fn backtick_run_end(chars: &[char], start: usize) -> usize {
+    chars[start..]
+        .iter()
+        .position(|character| *character != '`')
+        .map_or(chars.len(), |offset| start + offset)
+}
+
+/// The end of the code span that opens at `start` (a run of backticks, at
+/// least one other character, then a run of backticks), or `None` when no
+/// backtick closes it: the regex `` `+(?:(?!`).)+?`+ `` of the oracle.
+fn code_span_end(chars: &[char], start: usize) -> Option<usize> {
+    let content = backtick_run_end(chars, start);
+    let close = content + chars[content..].iter().position(|c| *c == '`')?;
+    (close > content).then(|| backtick_run_end(chars, close))
 }
 
 /// Every code `validate` and `lint` can emit, and every code with a page
@@ -423,6 +622,81 @@ mod tests {
         let compiled: Vec<&str> = pages::PAGES.iter().map(|(code, _)| *code).collect();
         assert!(compiled.len() > 100, "{}", compiled.len());
         assert_eq!(compiled, on_disk);
+    }
+
+    /// The engine's sentence for this code names the CQL operator `<=>` in
+    /// plain prose; MDX on opentide.org reads it as a broken tag and refuses
+    /// the whole docs sync (0.24.1, #897). `opentide explain` keeps it.
+    #[test]
+    fn the_reference_escapes_a_bare_angle_bracket_for_mdx() {
+        let reference = reference_markdown();
+        let row = reference
+            .lines()
+            .find(|line| line.starts_with("| [`cql_link_outside_correlate`]"))
+            .unwrap();
+        assert!(row.contains("&lt;=>"), "{row}");
+        assert!(!row.contains("<=>"), "{row}");
+        assert!(
+            page("cql_link_outside_correlate")
+                .unwrap()
+                .markdown
+                .contains("<=>")
+        );
+    }
+
+    #[test]
+    fn mdx_prose_leaves_code_spans_tags_and_comments_alone() {
+        for (line, expected) in [
+            ("a <=> b", "a &lt;=> b"),
+            ("x < 3 and y<", "x &lt; 3 and y&lt;"),
+            ("`<=>` and ``a ` <b``", "`<=>` and ``a ` <b``"),
+            ("<Tab> </Tab> <!-- c --> <>", "<Tab> </Tab> <!-- c --> <>"),
+            ("an `unclosed <= span", "an `unclosed &lt;= span"),
+            ("``", "``"),
+            ("é < ü", "é &lt; ü"),
+        ] {
+            assert_eq!(mdx_prose(line), expected, "{line}");
+        }
+    }
+
+    #[test]
+    fn the_reference_holds_every_page_its_headings_one_level_down() {
+        let reference = reference_markdown();
+        assert!(reference.starts_with("---\ntitle: Diagnostic codes\n"));
+        assert!(reference.ends_with('\n') && !reference.ends_with("\n\n"));
+        for code in codes() {
+            assert!(
+                reference.contains(&format!("\n## {code}\n")),
+                "{code}: no section"
+            );
+            assert!(
+                reference.contains(&format!("| [`{code}`](#{code}) | ")),
+                "{code}: no row"
+            );
+        }
+        assert!(!reference.contains("\n# vocab_unknown\n"));
+        assert!(reference.contains("\n### How to fix\n"));
+        // Output an example shows is marked, a command is not.
+        assert!(reference.contains("```text illustrative\n"));
+        assert!(reference.contains("```text\nopentide validate query\n```"));
+    }
+
+    /// Each override names an engine code, and its page says it.
+    #[test]
+    fn engine_reporters_name_engine_codes() {
+        for (code, reported_by) in ENGINE_REPORTED_BY {
+            assert!(opentide_core::codes::describe(code).is_some(), "{code}");
+            assert!(
+                !pages::PAGES.iter().any(|(name, _)| name == code),
+                "{code}: a file page wins over the override"
+            );
+            assert!(page(code).unwrap().markdown.contains(reported_by), "{code}");
+        }
+        assert!(
+            ENGINE_REPORTED_BY
+                .windows(2)
+                .all(|pair| pair[0].0 < pair[1].0)
+        );
     }
 
     #[test]

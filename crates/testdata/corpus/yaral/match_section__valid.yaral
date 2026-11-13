@@ -1,0 +1,12 @@
+// prod:match_section valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $user = $e.target.user.userid
+  match:
+    $user over 10m
+  condition:
+    #e > 3
+}

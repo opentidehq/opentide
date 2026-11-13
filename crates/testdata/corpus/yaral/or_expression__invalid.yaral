@@ -1,0 +1,2 @@
+// prod:or_expression invalid
+$e.metadata.event_type = "USER_LOGIN" or or $e.x = 1

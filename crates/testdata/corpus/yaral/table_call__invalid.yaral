@@ -1,0 +1,5 @@
+// prod:table_call invalid
+rule r {
+  export:
+    %hosts.write_row(
+}

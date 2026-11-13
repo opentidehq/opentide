@@ -1,0 +1,44 @@
+name: Office application spawns obfuscated PowerShell
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000060
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  An Office application started PowerShell with an encoded or
+  downloaded command, outside the Contoso admin tooling.
+techniques:
+- T1566.001
+- T1059.001
+response:
+  alert_severity: High
+configurations:
+  graylog:
+    enabled: true
+    schema: platform::graylog::1.0
+    status: STAGING
+    tags: [Office, initial access]
+    streams: sysmon
+    schedule: {every: 5m, window: 15m}
+    aggregation:
+      group_by: source
+      condition: count() >= 3 OR card(parent_image_lc) >= 2
+    event_fields:
+      host: source
+      user: User
+      account: "${source.User}@${source.Domain}"
+      owner: {lookup: {table: asset-owners, key_field: source}}
+    event_key: host
+    grace_period: 30m
+    notifications: soc-slack
+    summary: Obfuscated PowerShell from ${source.ParentImage} on ${source.source}
+    remediation: Isolate the host and collect the process tree.
+    query: >-
+      EventID:1
+      AND parent_image_lc:/.*\\(winword|excel|powerpnt|outlook)\.exe/
+      AND image_lc:/.*\\(powershell|pwsh)\.exe/
+      AND command_line_lc:/.*( -enc | -encodedcommand |frombase64string|iex\().*/
+      AND NOT command_line_lc:/.*\\program files\\contoso\\admintools\\.*/

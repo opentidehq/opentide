@@ -1,0 +1,33 @@
+stage median {
+  metadata.event_type = "NETWORK_CONNECTION"
+  $host = principal.hostname
+  $target = target.ip
+
+  match:
+    $host, $target
+
+  outcome:
+    $median = window.median(network.sent_bytes, true)
+}
+
+stage absolute_deviations {
+  metadata.event_type = "NETWORK_CONNECTION"
+  $join_host = principal.hostname
+  $join_host = $median.host
+  $join_target = target.ip[0]
+  $join_target = $median.target
+
+  outcome:
+    $host = $join_host
+    $target = $join_target
+    $absolute_deviation = math.abs(network.sent_bytes - $median.median)
+}
+
+$host = $absolute_deviations.host
+$target = $absolute_deviations.target
+
+match:
+  $host, $target
+
+outcome:
+  $mean_absolute_deviation = avg($absolute_deviations.absolute_deviation)
