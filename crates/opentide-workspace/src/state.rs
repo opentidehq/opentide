@@ -90,7 +90,7 @@ fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
             if tenant.trim().is_empty()
                 || tenant != tenant.trim()
                 || id.trim().is_empty()
-                || opentide_schema::platforms::external_id_problem(&platform, &id).is_some()
+                || id_kind(&platform).shape_problem(&id).is_some()
             {
                 return None;
             }
@@ -103,6 +103,33 @@ fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
         }
     }
     Some(bindings)
+}
+
+/// How *platform* stores its external ids ([`opentide_schema::platforms`]).
+/// The tests add one patterned platform the table does not have yet.
+pub(crate) fn id_kind(platform: &str) -> opentide_schema::platforms::ExternalId {
+    #[cfg(test)]
+    if platform == test_platform::PATTERNED {
+        return test_platform::KIND;
+    }
+    opentide_schema::platforms::external_id_kind(platform)
+}
+
+/// A test-only platform whose ids are patterned text, until the table has
+/// one (Bitdefender, Graylog, Exabeam, Google SecOps).
+#[cfg(test)]
+pub(crate) mod test_platform {
+    use opentide_schema::platforms::{ExternalId, IdPattern};
+
+    /// Its identifier: a plugin's to the table, so it stores ids.
+    pub(crate) const PATTERNED: &str = "patterned_test";
+    /// Its ids: 24 lower-case hex digits, as Graylog's and Bitdefender's.
+    pub(crate) const KIND: ExternalId = ExternalId::Text {
+        pattern: Some(IdPattern {
+            regex: "[0-9a-f]{24}",
+            shape: "24 lower-case hex digits",
+        }),
+    };
 }
 
 /// Each rule's bindings, by its canonical UUID, from
@@ -199,6 +226,30 @@ mod tests {
         let found = bindings(&fs, Path::new("/ws"));
         assert_eq!(found[UUID][0].platform, "acme");
         assert_eq!(found[UUID][0].rule_id, "acme-rule-17");
+    }
+
+    #[test]
+    fn a_patterned_platforms_binding_is_kept_only_with_an_id_of_its_shape() {
+        use super::test_platform::PATTERNED;
+        let fs = MemoryFs::new();
+        let other = "1b4d0e4e-1c33-4f53-8a6b-4c5b6e7f8a9b";
+        let third = "2b4d0e4e-1c33-4f53-8a6b-4c5b6e7f8a9b";
+        for (uuid, id) in [
+            (UUID, r#""0123456789abcdef01234567""#),
+            (other, r#""12""#),
+            (third, "12"),
+        ] {
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{uuid}.json"),
+                format!(
+                    r#"{{"schema": "deployment.state::1.0", "object_uuid": "{uuid}", "platforms": {{"{PATTERNED}": {{"lab": {id}}}}}}}"#
+                ),
+            );
+        }
+        let found = bindings(&fs, Path::new("/ws"));
+        // Text that is not the shape, and a number, are not ids: skipped.
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[UUID][0].rule_id, "0123456789abcdef01234567");
     }
 
     #[test]
