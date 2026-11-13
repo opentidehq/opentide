@@ -9,7 +9,9 @@ The M0 merge (`chore/merge-development-0.28`) made `v0.28.0` (`3acbea603`) an an
 `integration/unified-core` without changing what integration does. It deleted the old Python
 implementation and its tests, and took only history and process files from development (the
 allowlist in [the plan, §3.1](./catchup-0.28-plan.md#31-recommendation-one-early-merge-commit-m0-features-ported-after)).
-Every other path development changed is still at integration's version. This page lists them,
+Its docs also name 0.28.0 as the latest release: the docs version tests require it once
+`[0.28.0]` is the newest dated `CHANGELOG.md` version. Every other path development changed is
+still at integration's version. This page lists them,
 with the unit of [the plan](./catchup-0.28-plan.md) that brings each one.
 
 A port PR takes its paths with `git checkout 3acbea603 -- <path>` (or edits them into shape) and
@@ -30,42 +32,39 @@ The train is mergeable when it prints only the paths under [Superseded](#superse
 
 ## Deferred
 
-268 paths.
+265 paths.
 
 | Path | Unit | Note |
 |---|---|---|
 | `.agents/skills/uv/SKILL.md` | E1 | Rust 1.95 |
 | `AGENTS.md` | X1 | the platform matrix goes to `crates/opentide-connectors/AGENTS.md` |
-| `README.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `README.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/cli/deploy.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/diagnostics.md` | F3 | generated, after the P-units and H1 add their codes |
 | `docs/cli/explain.md` | F3 | code list, widened by the new codes |
 | `docs/cli/generate.md` | D1, D2, D3 | pages, diagrams, CVE details |
-| `docs/cli/index.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/cli/index.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/cli/info.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/lsp.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/new.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/query.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/setup.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/validate.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; F1 the `advanced` table |  |
-| `docs/index.md` | X1 | platform count and version claims |
+| `docs/index.md` | X1 | platform count; M0 moved its version claims to 0.28.0 |
 | `docs/internal/cli-experience.md` | F3 | MDX escaping (`< 120 ms`) |
 | `docs/mcp/configuration.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
-| `docs/mcp/index.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
-| `docs/mcp/installation.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/mcp/index.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/mcp/installation.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/mcp/tools.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
-| `docs/sdk/installation.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/sdk/installation.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/sdk/models.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/sdk/platforms.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/usage/concepts/deployment-state.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/usage/concepts/platforms.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; F1 the `advanced` table |  |
-| `docs/usage/index.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
-| `docs/usage/installation.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest | and version claims |
-| `docs/usage/quickstart.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
-| `docs/usage/troubleshooting.md` | X1 | the Typer section (no Typer on integration) and version claims |
-| `docs/usage/why-opentide.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
-| `docs/usage/workflows/agentic-setup.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
-| `docs/usage/workflows/ci-cd.md` | X1 | version claims; integration states its own at 1.0.0-rc.1 |
+| `docs/usage/index.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/usage/installation.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest | M0 moved its version claims to 0.28.0 |
+| `docs/usage/troubleshooting.md` | X1 | the Typer section (no Typer on integration); M0 moved its pins to 0.28.0 |
+| `docs/usage/workflows/agentic-setup.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `scripts/build/check_docs_mdx.py` | F3 | the MDX check; a `.py` path: the check command does not list it |
 | `scripts/validate-docs.sh` | F3 | the MDX check's hook; integration's docs fail the check today (9 errors) |
 | `src/opentide/data/bitdefender/NOTICE` | P-BD | with `criteria.toml` |
