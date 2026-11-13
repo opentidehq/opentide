@@ -54,8 +54,16 @@ usage).
 | `cargo xtask golden coverage` | Rewrites `COVERAGE.md` |
 
 `record`, `check` and `diff` take `--filter GLOB` (over case ids,
-`<command>/<mode>/<fixture>/<variant>`) and `--jobs N`; `check` and `diff` take
+`<command>/<mode>/<fixture>/<variant>`, or their leading parts: `explain/*` is every `explain`
+case) and `--jobs N`; `check` and `diff` take
 `--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
+
+**Preview of the next oracle** (`tests/golden/ORACLE.next`, 0.28.1 during the catch-up): judge a
+port against it without committing recordings, `cargo xtask golden record --oracle
+tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
+check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in
+the PR. `golden lock --oracle FILE` writes that file's requirements beside it; `cassettes record`
+and `mcp record` take `--oracle FILE` too. The README has the rules.
 
 What is recorded (the README has the detail):
 
@@ -80,6 +88,12 @@ JSON document (by its data: key order, indentation, escapes and the final newlin
 compared), with the goldens' normalisation. Everything else is compared byte for byte. `--runner node` launches the npm package's bin
 instead. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
 report.
+
+`uv sync` builds the console script's native module (`src/opentide/_native.*`) once and does not
+rebuild it when the Rust sources change: after a pull, a merge or an edit, the CLI would run the
+Rust code of an earlier checkout. So `golden check --engine rust` stops first (exit status 2) when
+the module is older than a file it is built from (cargo's dep-info for it, else the tracked Rust
+sources), names that file, and says to run `uv sync --group dev --reinstall-package opentide`.
 
 Until UC-6.2 (#841), `OPENTIDE_ENGINE=python|rust|compare` chose a command's implementation at run
 time and `--engine compare` ran only the cases the Python dispatch table covered; both went with

@@ -78,10 +78,22 @@ def builds_for_musl(rust_host: str | None) -> bool:
 
 
 def rust_host(rustc: str | None) -> str | None:
-    """rustc's host triple (``x86_64-unknown-linux-musl``), or ``None`` when rustc does not say."""
+    """rustc's host triple (``x86_64-unknown-linux-musl``), or ``None`` when rustc does not say.
+
+    A rustc that fails is an error, with what it printed: through rustup's
+    proxy it can be a toolchain install that failed (rust-toolchain.toml),
+    which cargo would otherwise meet later as a less telling error.
+    """
     if rustc is None:
         return None
-    version = subprocess.run([rustc, "-vV"], capture_output=True, text=True, check=False).stdout
+    command = [rustc, "-vV"]
+    done = subprocess.run(command, capture_output=True, text=True, check=False)
+    if done.returncode != 0:
+        raise RuntimeError(
+            f"`{' '.join(command)}` exited with status {done.returncode}:\n"
+            f"{(done.stderr or '').strip() or '(no output on stderr)'}"
+        )
+    version = done.stdout
     return next(
         (
             line.split(":", 1)[1].strip()

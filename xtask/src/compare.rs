@@ -128,8 +128,9 @@ pub fn read_ledger(path: &Path, changelog: &str) -> Result<Ledger> {
 
 /// The candidate of `golden check --engine rust`: this repository's CLI
 /// (`.venv`, from `uv sync --group dev`), the console script that runs the
-/// Rust core in process.
-pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
+/// Rust core in process. `target` is the Cargo target directory, where the
+/// build of its native module left its dep-info ([`native_freshness`]).
+pub fn candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
     let install_dir = repo.join(".venv");
     let bin_dir = install_dir.join("bin");
     if !bin_dir.join("opentide").is_file() {
@@ -138,6 +139,7 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
             bin_dir.join("opentide").display()
         );
     }
+    native_freshness(repo, target)?;
     Ok(crate::golden::run::Engine {
         name: "rust".into(),
         bin_dir,
@@ -145,6 +147,155 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
         host_paths: Vec::new(),
         known_uuids: std::sync::Arc::new(package_uuids(repo)?),
     })
+}
+
+/// The command that rebuilds the console script's native module.
+pub const REBUILD_NATIVE: &str = "uv sync --group dev --reinstall-package opentide";
+
+/// Fails when the console script's native module (`src/opentide/_native.*`,
+/// which `uv sync` builds once and does not rebuild when the Rust sources
+/// change) is older than a file it is built from: the CLI would run the Rust
+/// code of an earlier checkout, and every case would compare that.
+///
+/// The files are those cargo's dep-info lists for the last build of the
+/// module (`<target>/develop/lib_native.d`: every source, `include_str!` file
+/// and manifest), or, without one, the tracked Rust sources and manifests of
+/// `crates/` and `bindings/python/`. Times are modification times: a file
+/// touched without a change also counts, and the rebuild settles it.
+pub fn native_freshness(repo: &Path, target: &Path) -> Result<()> {
+    let Some(module) = native_module(repo) else {
+        // Not an editable install of this checkout: nothing to compare.
+        return Ok(());
+    };
+    let built = mtime(&module)?;
+    let inputs = match dep_info(target) {
+        Some(text) => parse_dep_info(&text),
+        None => tracked_rust_inputs(repo)?,
+    };
+    if let Some((input, _)) = newest_after(&inputs, built) {
+        bail!(
+            "the console script's native module {} is older than {}, one of the files it is \
+             built from: it runs the Rust code of an earlier checkout, and every case would \
+             compare that. Rebuild it: `{REBUILD_NATIVE}`",
+            module.display(),
+            input.display()
+        );
+    }
+    Ok(())
+}
+
+/// The native module of an editable install: `src/opentide/_native.<suffix>`.
+fn native_module(repo: &Path) -> Option<std::path::PathBuf> {
+    let dir = repo.join("src/opentide");
+    let mut found: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| {
+            path.is_file()
+                && path.file_name().is_some_and(|name| {
+                    let name = name.to_string_lossy();
+                    name.starts_with("_native.")
+                        && [".so", ".pyd", ".dylib"]
+                            .iter()
+                            .any(|ext| name.ends_with(ext))
+                })
+        })
+        .collect();
+    found.sort();
+    found.pop()
+}
+
+/// The dep-info cargo wrote for the module's last build, in the `develop`
+/// profile `uv sync` builds.
+fn dep_info(target: &Path) -> Option<String> {
+    ["lib_native.d", "_native.d"]
+        .iter()
+        .find_map(|name| std::fs::read_to_string(target.join("develop").join(name)).ok())
+}
+
+/// The inputs of a dep-info file (`out: in in\ with\ spaces …`).
+pub fn parse_dep_info(text: &str) -> Vec<std::path::PathBuf> {
+    let mut inputs = Vec::new();
+    for line in text.lines() {
+        // `: ` ends the output: a Windows path has `C:\` but never `: `.
+        let Some((_, deps)) = line.split_once(": ") else {
+            continue;
+        };
+        let mut current = String::new();
+        let mut chars = deps.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' if chars.peek() == Some(&' ') => {
+                    current.push(' ');
+                    chars.next();
+                }
+                ' ' => {
+                    if !current.is_empty() {
+                        inputs.push(std::path::PathBuf::from(std::mem::take(&mut current)));
+                    }
+                }
+                other => current.push(other),
+            }
+        }
+        if !current.is_empty() {
+            inputs.push(std::path::PathBuf::from(current));
+        }
+    }
+    inputs
+}
+
+/// The tracked Rust sources and manifests the module could be built from,
+/// when no dep-info names them (tests, benches and examples are not).
+fn tracked_rust_inputs(repo: &Path) -> Result<Vec<std::path::PathBuf>> {
+    let output = std::process::Command::new("git")
+        .args([
+            "ls-files",
+            "-z",
+            "--",
+            "crates",
+            "bindings/python",
+            "Cargo.toml",
+            "Cargo.lock",
+        ])
+        .current_dir(repo)
+        .output()
+        .context("run git ls-files")?;
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    Ok(output
+        .stdout
+        .split(|b| *b == 0)
+        .map(|path| String::from_utf8_lossy(path).into_owned())
+        .filter(|path| {
+            [".rs", ".toml", ".lock"]
+                .iter()
+                .any(|ext| path.ends_with(ext))
+                && !["/tests/", "/benches/", "/examples/"]
+                    .iter()
+                    .any(|part| path.contains(part))
+        })
+        .map(|path| repo.join(path))
+        .collect())
+}
+
+/// The most recently modified of `inputs` modified after `built`; missing files
+/// (a dep-info entry since deleted) do not count.
+fn newest_after(
+    inputs: &[std::path::PathBuf],
+    built: std::time::SystemTime,
+) -> Option<(std::path::PathBuf, std::time::SystemTime)> {
+    inputs
+        .iter()
+        .filter_map(|path| mtime(path).ok().map(|time| (path.clone(), time)))
+        .filter(|(_, time)| *time > built)
+        .max_by_key(|(_, time)| *time)
+}
+
+fn mtime(path: &Path) -> Result<std::time::SystemTime> {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .with_context(|| format!("stat {}", path.display()))
 }
 
 /// The version a candidate reports (`opentide --version` prints
@@ -323,6 +474,15 @@ pub fn golden(
             Err(error) => return Ok(Err(format!("error: {error:#}"))),
         };
         let dir = cases.join(&actual.case.id);
+        // A case with no recording fails on its own: a preview's recordings
+        // (`golden record --out`) may lack the cases the oracle could not run.
+        if !dir.join("case.toml").is_file() {
+            return Ok(Err(format!(
+                "{}: not recorded in {}",
+                actual.case.id,
+                cases.display()
+            )));
+        }
         let recorded = crate::golden::recording::Recording::read(&dir, blobs)
             .with_context(|| format!("{}: not recorded", actual.case.id))?;
         // Each side's own version, the exact string it reports, is not behaviour.

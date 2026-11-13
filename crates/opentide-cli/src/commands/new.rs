@@ -538,10 +538,8 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             let labels: Vec<&str> = enabled
                 .iter()
                 .map(|key| {
-                    super::setup::wizard::PLATFORMS
-                        .iter()
-                        .find(|(name, _)| name == key)
-                        .map_or(key.as_str(), |(_, label)| *label)
+                    opentide_schema::platforms::get(key)
+                        .map_or(key.as_str(), |platform| platform.label)
                 })
                 .collect();
             let asked = prompter.borrow_mut().checkbox_hinted(

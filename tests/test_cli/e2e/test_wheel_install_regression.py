@@ -359,6 +359,10 @@ _REMOVED_DEPENDENCIES = (
     "typer",
     "rich",
     "textual",
+    "questionary",
+    "ruamel.yaml",
+    "dulwich",
+    "structlog",
 )
 
 

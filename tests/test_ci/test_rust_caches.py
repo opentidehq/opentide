@@ -190,27 +190,35 @@ def test_no_two_cells_on_one_runner_share_a_cache_they_both_save() -> None:
         assert count == 1 or name in shared_on_purpose, f"{name} is saved by {count} cells"
 
 
+def _compiler_cache(job: str, runs_on: str | None = None) -> CompilerCache:
+    return next(c for c in _compiler_caches() if c.job == job and runs_on in (None, c.runs_on))
+
+
 def test_the_engine_debug_tree_is_cached_once() -> None:
-    caches = _rust_caches()
-    producer = next(c for c in caches if (c.workflow, c.job, c.runs_on) == ENGINE_DEBUG_PRODUCER)
-    assert producer.shared_key == "engine-dev"
-    assert producer.saves
-    for workflow, job in ENGINE_DEBUG_READERS:
-        reader = next(c for c in caches if (c.workflow, c.job) == (workflow, job))
-        assert _name(reader) == _name(producer), f"{job} reads engine-test's Linux cache"
-        assert not reader.saves, f"{job} must not save a copy of engine-test's cache"
+    """engine-test's Linux compiler cache serves the Linux jobs that build a
+    subset of its debug tree; they never save a copy."""
+    _, job, runs_on = ENGINE_DEBUG_PRODUCER
+    producer = _compiler_cache(job, runs_on)
+    assert producer.saves is not None
+    assert producer.saves.startswith("sccache-engine-dev-ubuntu-latest-")
+    for _, reader_job in ENGINE_DEBUG_READERS:
+        reader = _compiler_cache(reader_job)
+        assert reader.restores == producer.saves
+        assert reader.saves is None, f"{reader_job} must not save a copy of engine-test's cache"
 
 
 def test_the_python_jobs_build_the_binding_once() -> None:
-    caches = _rust_caches()
-    cells = [c for c in caches if (c.workflow, c.job) == PYTHON_PRODUCER]
-    assert {c.shared_key for c in cells} == {"python-engine"}
-    # The coverage cell (3.14) saves; 3.10 reads, as test-full's cells do.
-    assert [c.saves for c in cells].count(True) == 1
-    for workflow, job in PYTHON_READERS:
-        for reader in (c for c in caches if (c.workflow, c.job) == (workflow, job)):
-            assert reader.shared_key == "python-engine", job
-            assert not reader.saves, job
+    """test's coverage cell (3.14) saves the compiler cache of the binding `uv
+    sync` builds; the other Python jobs on Linux restore it."""
+    _, producer_job = PYTHON_PRODUCER
+    producer = _compiler_cache(producer_job)
+    assert producer.saves is not None and producer.saves.startswith("sccache-python-engine-")
+    assert "matrix.python-version == env.COVERAGE_PYTHON" in str(producer.save_condition)
+    # lint saves a compiler cache of its own (sccache-lint-).
+    for _, job in (r for r in PYTHON_READERS if r[1] != "lint"):
+        reader = _compiler_cache(job)
+        assert reader.restores == producer.saves, job
+        assert reader.saves is None, job
 
 
 def test_a_release_restores_no_cache() -> None:
@@ -305,7 +313,8 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
             for n, s in enumerate(steps)
             if re.search(r"\b(cargo|uv sync|uv build|uv run)\b", str(s.get("run", "")))
         ]
-        assert cargo and installs[0] < min(cargo), f"{job_id}: install sccache before cargo"
+        # npm-install builds through node only: no cargo line, but the wrapper still applies.
+        assert not cargo or installs[0] < min(cargo), f"{job_id}: install sccache before cargo"
         restores = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
         assert len(restores) == 1, f"{job_id}: restore a compiler cache"
         directory = str((jobs[job_id].get("env") or {}).get("SCCACHE_DIR", ""))
@@ -387,4 +396,78 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     checked += 1
                 elif uses.startswith("actions/cache@"):
                     raise AssertionError(f"{where}: actions/cache saves on every event")
-    assert checked >= 20
+    # The jobs that saved rust-cache trees now save one stable compiler cache
+    # per family (#1047): fewer saves, each checked.
+    assert checked >= 15
+
+
+# The compiler cache's key (#1047): one per family (and OS), stable while
+# Cargo.lock and the toolchain are. A key that hashed the sources made every
+# push to a base branch save a new copy of each family (about 4 GB a push),
+# which evicted the caches pull requests restore from the 10 GB a repository
+# keeps. sccache is content-addressed, so a stale copy still serves every
+# crate that did not change.
+STABLE_HASH = "${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}"
+# The full set's jobs that built a rust-cache tree of their own now share one
+# compiler cache per OS, which `conformance` saves on each.
+FULL_SET_FAMILY = "sccache-full-set-${{ runner.os }}-"
+FULL_SET_JOBS = {
+    "facade",
+    "node",
+    "npm-install",
+    "conformance",
+    "engine-wasm",
+    "engine-package",
+    "bench",
+    "cli-windows-smoke",
+}
+
+
+def _sccache_steps() -> list[tuple[str, dict[str, Any]]]:
+    return [
+        (job_id, step)
+        for job_id, job in _ci()["jobs"].items()
+        for step in job.get("steps") or []
+        if str(step.get("uses", "")).startswith((SCCACHE_RESTORE, SCCACHE_SAVE))
+    ]
+
+
+def test_a_compiler_cache_key_changes_only_with_the_lockfile_and_toolchain() -> None:
+    steps = _sccache_steps()
+    assert len(steps) >= 15
+    for job_id, step in steps:
+        key = str(step["with"]["key"])
+        assert key.endswith("-" + STABLE_HASH), (job_id, key)
+        if str(step["uses"]).startswith(SCCACHE_RESTORE):
+            # A new lockfile restores the newest copy of its family.
+            assert step["with"].get("restore-keys") == key.removesuffix(STABLE_HASH), job_id
+
+
+def test_a_job_with_a_compiler_cache_restores_no_target_tree() -> None:
+    """rust-cache's target tree (about 0.7 GB a job family) is what sccache
+    already covers; keeping both doubled what a push saved."""
+    for job_id, job in _ci()["jobs"].items():
+        uses = [str(step.get("uses", "")) for step in job.get("steps") or []]
+        if any(u.startswith(SCCACHE_RESTORE) for u in uses):
+            assert not any(u.startswith(RUST_CACHE) for u in uses), job_id
+
+
+def test_the_full_set_shares_one_compiler_cache_per_os() -> None:
+    jobs = _ci()["jobs"]
+    for job_id in FULL_SET_JOBS:
+        assert _wraps_with_sccache(jobs[job_id]), job_id
+        cache = _compiler_cache(job_id)
+        assert cache.restores == FULL_SET_FAMILY + STABLE_HASH, job_id
+    savers = {c.job for c in _compiler_caches() if c.saves == FULL_SET_FAMILY + STABLE_HASH}
+    assert savers == {"conformance"}
+    # One cell per OS, so each OS's family has its saver.
+    matrix = jobs["conformance"]["strategy"]["matrix"]["os"]
+    assert sorted(matrix) == ["macos-latest", "ubuntu-latest", "windows-latest"]
+    used = {str(jobs[j]["runs-on"]) for j in FULL_SET_JOBS if j != "conformance"}
+    assert used <= set(matrix), used
+
+
+def test_only_the_fuzz_jobs_keep_a_target_tree_in_ci() -> None:
+    """fuzz-smoke builds with the nightly in fuzz/target and caches its
+    cargo-fuzz binary in ~/.cargo/bin: the one rust-cache left in ci.yml."""
+    assert {c.job for c in _in("ci.yml")} == {"fuzz-smoke"}
