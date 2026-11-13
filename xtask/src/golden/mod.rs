@@ -11,6 +11,8 @@
 //! - [`recording`]: the files of a recording, and the differences of two.
 //! - [`blob`]: the store of large recorded files, by SHA-256.
 //! - [`coverage`]: the coverage report, `COVERAGE.md`.
+//! - [`report_only`]: the catch-up train's marker, while its oracle is the
+//!   one it is catching up from.
 //!
 //! `tests/golden/README.md` holds the review rules.
 
@@ -24,6 +26,7 @@ pub mod oracle;
 #[cfg(unix)]
 mod pty;
 pub mod recording;
+pub mod report_only;
 pub mod run;
 pub mod snapshot;
 
