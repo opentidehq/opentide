@@ -1,0 +1,8 @@
+error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_severity`
+   ╭─▶ Objects/Detection Rules/rule-0001-sentinel-kql.yaml:21:1
+   │
+21 │ configurations:
+   │ ━━━━━━━━━━━━━━━
+   │
+   ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
+

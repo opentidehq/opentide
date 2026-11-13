@@ -1,0 +1,9 @@
+error[compile_invalid_value]: configurations.sentinel.alert.suppression is true
+   ╭─▶ Objects/Detection Rules/rule-0001-sentinel-kql.yaml:36:20
+   │
+35 │       title: Sentinel KQL Rule
+36 │       suppression: true
+   │                    ━━━━
+   │
+   ╰─ help: set it to false or a duration such as PT1H
+

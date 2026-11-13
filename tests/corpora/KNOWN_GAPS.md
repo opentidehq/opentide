@@ -176,6 +176,14 @@ Options: the grammar parses the wildcard forms (they are valid KQL).
 `block["severity"]["mapping"]`, a KeyError). The generator writes a mapping with every default for
 that reason. Options: treat a missing mapping as none (the documented shape allows it).
 
+**Decided (UC-2.2, #817): a missing mapping is none.** The Rust Elastic compiler
+(`opentide-compile`'s `elastic`, UC-3.1) sends no `severity_mapping` for a `severity` block without
+`mapping`, which the documented shape allows, so the rule compiles, and `validate`'s compile check,
+which runs that compiler, reports nothing. The difference is listed in
+`tests/golden/APPROVED_DIFFS.toml` for `validate/*/tide-corpus-compile-elastic-severity/*`
+("**An Elastic rule whose `severity` has no `mapping` validates and deploys**");
+`compile-failed-elastic-severity` keeps pinning the oracle.
+
 ## KG-10: The compile check runs only when the run is otherwise clean
 
 `compile_invalid_rule`, `compile_invalid_value`, `compile_missing_field` and `compile_empty_block`
@@ -186,6 +194,20 @@ in `VALIDATION_CODES` either (`codes.toml` takes them from their explain pages, 
 `compile_empty_block` needs both an empty `response` and no `alert.severity` in the Sentinel block
 ("`response` is empty, so Sentinel cannot read `alert_severity`"). Options: run the compile check
 independently of other findings, and list its codes.
+
+**Kept (UC-2.2, #817): the oracle's rule.** `opentide-workspace`'s `validate` runs the compile
+check where the oracle does: with the `schema` check, on rules a deploy compiles (their block's
+status maps to `PREVIEW`, `RELEASE`, `UNIVERSAL` or `DISABLEMENT`, the platform is enabled and has
+an offline compiler: Sentinel, Elastic, Sysdig), once the run has no other error, with the
+compiler's code, reason and hint at the key at fault (else the platform's block), its line the
+deepest key of that path the file has. The compilers sit above `opentide-workspace`, so the host
+passes them (`Options::compile_check`, `opentide_compile::validate::Compilers`): the command line,
+MCP, `validate --watch` and the SDKs' facade (with its `compile` feature). The codes stay out of
+`VALIDATION_CODES`, and fail no check's status, as in the oracle. Running the check whatever else
+the run found, and listing its codes, stays an option for a later decision: it changes what
+`validate` reports on a workspace with other errors. The golden cases
+`validate/{plain,json}/tide-corpus-compile-*/compile-check` and the conformance corpus `compile`
+hold it.
 
 ## KG-11: A rule block naming an undeclared tenant
 

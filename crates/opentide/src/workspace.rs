@@ -135,7 +135,10 @@ impl Workspace {
     ///
     /// The queries check runs on the query engines with the `queries`
     /// feature; without it, it reports one `engine_unavailable` error unless
-    /// [`ValidateOptions::queries`] turns it off.
+    /// [`ValidateOptions::queries`] turns it off. With the `compile` feature
+    /// the `schema` check also compiles each rule a deploy would compile, once
+    /// nothing else failed, and reports what the platform's offline compiler
+    /// refuses (`compile_missing_field`, ...), as `opentide validate` does.
     ///
     /// ```
     /// use opentide::validate::QueriesMode;
@@ -187,6 +190,7 @@ impl Workspace {
             query_check: Some(queries::validate_check()),
             cve_check: None,
             platform_configurations: platforms,
+            compile_check: compile_check(),
         })
     }
 
@@ -438,4 +442,17 @@ pub struct Counts {
     pub threats: usize,
     /// Detection objectives.
     pub objectives: usize,
+}
+
+/// `validate`'s compile check: the platforms' offline compilers, with the
+/// `compile` feature (UC-2.2, #817); without it nothing is compiled.
+#[cfg(feature = "compile")]
+fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileCheck> {
+    Some(&opentide_compile::validate::Compilers)
+}
+
+/// `validate`'s compile check: none without the `compile` feature.
+#[cfg(not(feature = "compile"))]
+fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileCheck> {
+    None
 }

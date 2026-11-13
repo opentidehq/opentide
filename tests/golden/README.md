@@ -161,6 +161,8 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `share-misp` | [`fixtures/share-misp/`](fixtures/share-misp/): three `[[misp]]` destinations (one served by the MISP stand-in of `tests/cassettes/misp/tenant.py`, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before, for `share` (UC-4.4b); a cassette's client copies it before a push or retract writes the ledger |
 | `share-misp-broken` | `share-misp` with one declared edit: a `max_tlp` that is no TLP name, the `sharing_config` preflight |
 | `share-misp-push`, `share-misp-push-config` | `share-misp` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one shared rule, or `sharing.toml` alone: `share push --changed` on a GitHub, GitLab or Azure push and with `--since` (UC-4.4e); the `golden/share-push-changed` cassette's client builds the same checkout |
+| `tide-corpus-compile-missing-field`, `-invalid-value`, `-empty-block`, `-invalid-rule`, `-elastic-severity` | `tide-corpus` with one declared edit each, a rule the platform's compiler refuses: the Sentinel rule without `grouping.alert`, with `alert.suppression: true`, with an empty `response`, with `frequency: hourly`; the Elastic rule's `severity` without `mapping`: `validate`'s compile check (UC-2.2, #817) |
+| `tide-corpus-compile-hidden` | `tide-corpus-compile-missing-field` with an unrelated `tlp: clearr` in another rule: the compile check runs only when nothing else failed (KG-10) |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 

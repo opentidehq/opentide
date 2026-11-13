@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you build an `opentide_workspace::validate::Options` with a struct literal, set its new `compile_check` field: `Some(&opentide_compile::validate::Compilers)` to compile rules as `opentide validate` does, or `None`.
 - If you build an `opentide_analysis::QueryReport` with a struct literal, set its new `placeholder` field (`false` for a query you checked).
 - If you called `opentide_analysis::install_configuration_schemas`, build an `opentide_analysis::ConfigurationSchemas` (`ConfigurationSchemas::parse(router, &schemas)`) and pass it to `configuration_hover` and `configuration_completions`.
 - If your client reads `capabilities.experimental.opentide.catalog`, accept `models`: the server generates its Tide field catalogs and no longer reports `workspace` or `bundled`.
@@ -28,6 +29,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
 
 ### Added
+
+- **`opentide_workspace::validate::CompileCheck` and `opentide_compile::validate::Compilers`: `validate`'s compile check** ([opentide#817](https://github.com/opentidehq/opentide/issues/817)). `Options::compile_check` takes the platforms' offline compilers, which sit above `opentide-workspace`; with them the `schema` check compiles each rule a deploy would compile once nothing else failed and reports `compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, `compile_invalid_rule` or `compile_failed` at the key at fault, as `opentide validate` does. `opentide::Workspace::validate` passes them with the `compile` feature.
 
 - **`opentide::Workspace::validate_with_platforms`, `opentide_workspace::state::stores_ids` and `opentide_compile::plan::enabled_with`: platform plugins in validate, deployment state and the deploy plan** ([opentide#835](https://github.com/opentidehq/opentide/issues/835)). `validate_with_platforms` runs `validate` with a `validate::PlatformConfigurations` (now re-exported with `PlatformFinding`) that checks the plugins' blocks; `validate` is unchanged. A deployment state shard may hold a platform plugin's ids: `stores_ids` accepts the four built-in platforms that keep ids and any identifier no built-in platform has, and the shard readers, `validate`'s state check and `plan::action` (a plugin's change is a `create` or an `update`) follow it. `dry_run::Request` gains `plugins`, the plugins a plan may include when the configuration enables them (`enabled_with`).
 

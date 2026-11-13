@@ -30,7 +30,7 @@ cargo install --git https://github.com/opentidehq/opentide opentide --features c
 |---------|:-------:|--------------|
 | `schema` | yes | `opentide::models`: the Tide models, every revision, schema identifiers |
 | `workspace` | yes | `Workspace`: open, `validate`, `lint`, `info`, `catalog`, `coverage` |
-| `compile` | yes | `Workspace::deploy_plan` and `opentide::deploy` |
+| `compile` | yes | `Workspace::deploy_plan` and `opentide::deploy`, and validate's compile check (a rule a deploy would compile must compile); without it `validate` compiles nothing |
 | `queries` | no | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::main(argv)`, `opentide::cli::run_json(argv)` and the `opentide` binary; implies `compile` and `queries` |
 | `lsp` | no | `opentide::lsp`: the language server, on stdio or one message at a time |

@@ -82,6 +82,12 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
     "tide-corpus-legacy-id-error",
+    "tide-corpus-compile-missing-field",
+    "tide-corpus-compile-invalid-value",
+    "tide-corpus-compile-empty-block",
+    "tide-corpus-compile-invalid-rule",
+    "tide-corpus-compile-elastic-severity",
+    "tide-corpus-compile-hidden",
     "vscode",
     "setup-merge",
     "skills-merge",
@@ -248,8 +254,17 @@ pub fn fixture(name: &str, ws: &Path) {
             )
             .unwrap();
         }
-        // UC-4.4 (#834): tide-corpus with the edits cases.toml declares.
-        "tide-corpus-cve" | "tide-corpus-legacy-ids" | "tide-corpus-legacy-id-error" => {
+        // UC-4.4 (#834), UC-2.2 (#817): tide-corpus with the edits
+        // cases.toml declares.
+        "tide-corpus-cve"
+        | "tide-corpus-legacy-ids"
+        | "tide-corpus-legacy-id-error"
+        | "tide-corpus-compile-missing-field"
+        | "tide-corpus-compile-invalid-value"
+        | "tide-corpus-compile-empty-block"
+        | "tide-corpus-compile-invalid-rule"
+        | "tide-corpus-compile-elastic-severity"
+        | "tide-corpus-compile-hidden" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }
