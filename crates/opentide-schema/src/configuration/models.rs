@@ -1120,7 +1120,7 @@ pub struct BitdefenderSetup {
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
     /// Control Center API Access URL, ending in /api. Calls go to
-    /// <url>/v1.0/jsonrpc/incidents.
+    /// `<url>/v1.0/jsonrpc/incidents`.
     pub url: String,
     /// GravityZone API key with the Incidents API. Must be a $NAME placeholder.
     pub api_key: EnvPlaceholder,

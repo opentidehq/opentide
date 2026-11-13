@@ -522,3 +522,47 @@ configurations:
     #policies:
       #- 
     #minimum_engine_version: 3
+  #bitdefender:
+    #enabled: false
+    #name: 
+    #schema: platform::bitdefender::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+    #severity: Low
+    #tags:
+      #- 
+    #targets:
+      #endpoint_tags:
+        #- 
+      #companies:
+        #- 
+    #actions:
+      #isolate: true
+      #collect_investigation_package: true
+      #sandbox: true
+      #kill_process:
+        #include_parent: false
+        #include_children: false
+      #antimalware_scan: quick
+      #quarantine:
+        #include_parent: false
+        #include_children: false
+      #risk_scan: true
+    #detection:
+      #target: 
+      #criteria:
+        #- field: 
+          #is: 
+          #contains: 
+          #any:
+            #- 
+      #alert: 
+    #yara:
+      #signature: |
+        #...
+      #on_access: true
