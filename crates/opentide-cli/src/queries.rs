@@ -261,9 +261,11 @@ impl Profiles {
 }
 
 impl Profiles {
-    /// Everything the engine reports for the object file `text` at `path`,
-    /// as the language server does (`check_file`): its queries' findings and
-    /// the platform blocks' advisories.
+    /// Everything the engine reports for the object file `text` at `path`
+    /// (`check_file`): its queries' findings and the platform blocks'
+    /// advisories. The language server publishes `validate`'s and `lint`'s
+    /// findings instead, and the engine's own analysis leaves the blocks to
+    /// `lint` (UC-2.6, #821), so they are asked for here.
     pub fn check_file(&self, path: &Path, text: &str) -> Vec<Finding> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
@@ -278,6 +280,7 @@ impl Profiles {
         response
             .diagnostics
             .into_iter()
+            .chain(opentide_analysis::analyze_blocks(&self.host, &text))
             .map(|diagnostic| finding(&text, &lines, diagnostic))
             .collect()
     }

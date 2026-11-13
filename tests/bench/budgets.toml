@@ -166,9 +166,15 @@ label = "language server, first diagnostics"
 baseline_s = 1.515
 baseline_rss_mib = 163.2
 target_s = 0.1
-# The language server of today (the engine imported from language-server) misses
-# the target; UC-2.6 rebuilds it on opentide-workspace.
-target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
+# The language server misses the target. UC-2.6 (#821) rebuilt it on
+# opentide-workspace and took its own Tide checks away (the platform-block
+# analysis, and with it the editor's index of the other objects for the first
+# diagnostics): measured on one machine (4-core Xeon 2.10GHz, not a runner of
+# the class the numbers below come from, 7 runs each), the median moved from
+# 0.147 s before that change to 0.144 s after it, inside the run-to-run
+# spread. What is left is the workspace load `validate` needs before the first
+# findings, so the waiver stays and names the item that addresses it.
+target_waiver = "#926, the first diagnostics waiting for the workspace load"
 rust_baseline_s = 0.154
 # Plan section 11: editor memory per window (language server and backend) <= 150 MB,
 # enforced as MiB (150e6 bytes).
