@@ -53,50 +53,9 @@ pub struct Frames {
 /// `OPENTIDE_LINKS` values.
 pub const LINK_SCHEMES: [&str; 4] = ["file", "vscode", "cursor", "none"];
 
-/// The query languages' reference pages, by the code prefix of their findings.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
-    ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
-    (
-        "spl_",
-        "SPL",
-        "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference",
-    ),
-    (
-        "esql_",
-        "ES|QL",
-        "https://www.elastic.co/docs/reference/query-languages/esql",
-    ),
-    (
-        "eql_",
-        "EQL",
-        "https://www.elastic.co/docs/reference/query-languages/eql",
-    ),
-    (
-        "kuery_",
-        "Kibana KQL",
-        "https://www.elastic.co/docs/reference/query-languages/kql",
-    ),
-    (
-        "lucene_",
-        "Lucene query string",
-        "https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query",
-    ),
-    (
-        "ecs_",
-        "ECS field",
-        "https://www.elastic.co/docs/reference/ecs/ecs-field-reference",
-    ),
-    (
-        "falco_",
-        "Falco condition",
-        "https://falco.org/docs/concepts/rules/conditions/",
-    ),
-    (
-        "cql_",
-        "CQL",
-        "https://library.humio.com/crowdstrike-query-language/",
-    ),
-];
+/// The query languages' reference pages, by the code prefix of their
+/// findings: the one table `validate` and `lint` read (`crate::queries`).
+pub use crate::queries::ENGINE_REFERENCES;
 
 /// `(language, url)` of the reference for an engine `code`, when it is a query code.
 pub fn engine_reference(code: &str) -> Option<(&'static str, &'static str)> {
@@ -965,6 +924,14 @@ mod tests {
             ))
         );
         assert_eq!(engine_reference("vocab_unknown"), None);
+        assert_eq!(
+            engine_reference("yara_slow_pattern").map(|(language, _)| language),
+            Some("YARA rule")
+        );
+        assert_eq!(
+            engine_reference("exabeam_unknown_value").map(|(language, _)| language),
+            Some("Exabeam Query Language")
+        );
         assert_eq!(position("ab\ncd", 4), (2, 2));
     }
 
