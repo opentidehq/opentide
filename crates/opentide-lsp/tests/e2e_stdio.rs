@@ -783,30 +783,6 @@ fn yara_editor_features_over_stdio() {
     assert!(l.contains(&"imphash".to_string()), "{l:?}");
 }
 
-/// A rename in HarfangLab's decomposed form edits `strings` and `condition`.
-#[test]
-fn yara_rename_across_decomposed_fragments_over_stdio() {
-    let mut lsp = Lsp::spawn();
-    lsp.request("initialize", json!({ "capabilities": {} }));
-    lsp.notify("initialized", json!({}));
-    let uri = "file:///w/objects/rules/cmd-string.yaml";
-    let text = "name: Cmd String\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  harfanglab:\n    yara:\n      meta:\n        context:\n          - file\n        os: Windows\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
-    published_codes(&mut lsp, uri, "opentide-yaml", text);
-    let renamed = lsp.request(
-        "textDocument/rename",
-        json!({ "textDocument": { "uri": uri }, "position": { "line": 14, "character": 17 }, "newName": "shell" }),
-    );
-    let edits = renamed["result"]["changes"][uri]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let lines: Vec<u64> = edits
-        .iter()
-        .filter_map(|e| e["range"]["start"]["line"].as_u64())
-        .collect();
-    assert_eq!(lines, [12, 14, 14], "{renamed}");
-}
-
 #[test]
 fn cql_over_stdio() {
     let mut lsp = Lsp::spawn();

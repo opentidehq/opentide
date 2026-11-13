@@ -186,7 +186,7 @@ pub fn run(
     let connection = Connection::open(&tenant, options)?;
     let now = Timestamp::now();
     let window = TimeWindow {
-        start: now.checked_sub(std::time::Duration::from_secs(24 * 60 * 60))?,
+        start: now.checked_sub(std::time::Duration::from_hours(24))?,
         end: now,
     };
     let mut request = QueryRequest::new(query, language, window);
