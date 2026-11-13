@@ -69,7 +69,7 @@ per-runner sccache or restore-only, and engine lint building xtask once.
 |-----|----------------|
 | `lint` | ruff, ty (the dependencies installed without the project), actionlint 1.7.7 over the workflows with shellcheck over their scripts (`.github/actionlint.yaml`), `uv build --sdist` and `twine check` (the full set also builds the wheel from the sdist, the `develop` profile, into the cached target directory); the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | rustfmt, clippy `-D warnings`, one `cargo build` of xtask and `opentide-lsp` whose binaries the later steps run: `xtask check-layers`, `xtask cassettes check` (#831: one deploy cassette per scenario of `tests/cassettes/scenarios.toml`, recorded and redacted, none edited by hand), `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | (`engine-test-part`: Linux in two shards, `nextest --partition hash:N/2`, on every pull request; macOS and Windows whole in the full set, through a matrix that depends on the scope, `include: ${{ fromJSON(<full set> && '[...]' || '[...]') }}`; `engine-test` gathers them under each OS's required check, as `corpus` does, #841, and on a pull request reports macOS's and Windows's as the Linux shards') `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
+| `engine-test` | (`engine-test-part`: Linux in three shards by package, each building and testing only its packages (`matrix.packages`, `-p` per package: a test harness is a binary, which sccache does not cache, so a `--partition` shard compiled every test of the workspace again), on every pull request; `tests/test_ci/test_ci_scope.py` holds the shards to every workspace member exactly once, to even shares, and to the features `--workspace` enables on each member (`cargo tree -e features`: the bindings turn on the facade's `cli`, `python` and the rest and opentide-schema's `python`, which gate tests, so shards 1 and 2 name them with `--features`); opentide-schema's compile-fail cases (`opentide-schema::ui`, trybuild, a minute) run in the full set and on a pull request that changes the derive, the crate, the cases, `Cargo.lock`, the toolchain or ci.yml (the shard reads the merge commit's diff, and runs them when it cannot); macOS and Windows whole in the full set, through a matrix that depends on the scope, `include: ${{ fromJSON(<full set> && '[...]' || '[...]') }}`; `engine-test` gathers them under each OS's required check, as `corpus` does, #841, and on a pull request reports macOS's and Windows's as the Linux shards') `cargo nextest run --profile ci` on Linux (each shard's packages), macOS and Windows (`--workspace`) (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`, each shard its packages') on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `test` | Python **3.14** with the coverage gate; the **3.10** cell runs in the full set (on a pull request it starts and skips its steps, `env.RUNS`, so its required check reports); `test-full` adds 3.11–3.13 in the full set |
 | `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test`. The E2E tests that only repeat a golden case through the same console script run in the full set (`full_set`): `test_opentide_console_script_help`, `test_opentide_console_script_json_is_single_document`, `test_opentide_console_script_validates_corpus` and `test_workflow_subprocess_e2e.py` |
@@ -120,13 +120,17 @@ rustup installs nothing in the middle of a build; the Linux wheels' containers d
 **Compiler caches, one strategy** (`tests/test_ci/test_rust_caches.py`, #841, #1047): the Rust
 jobs of ci.yml wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from taiki-e/install-action), whose
 directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path
-with `..`) actions/cache keeps under `sccache-<family>-<hash of Cargo.lock and rust-toolchain.toml>`,
-restored with the family as `restore-keys`. The key does not hash the sources: sccache is
-content-addressed, so a copy made some merges ago still serves every crate that did not change,
-and a push to a base branch saves nothing until the lockfile or the toolchain changes. Each family
-has one job that saves it (`actions/cache/save`, from a push, only when the key missed):
-`lint`, `engine-check` (`engine`), `engine-dev-<os>` (`engine-test-part`'s first shard per OS;
-`clients` and `elastic-sweep` restore Linux's), `corpus` (`corpus-part`'s generator; the other
+with `..`) actions/cache keeps under `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`
+(the week from a `week` step just before the restore, `date -u +%G-W%V`), restored with the
+family and toolchain as `restore-keys`. The key hashes neither the sources nor `Cargo.lock`:
+sccache is content-addressed, so a copy a few days old still serves every crate that did not
+change, and a family is saved once a week, by the first push of the week. A key on `Cargo.lock`,
+which most merges change, saved every family again on each merge, and with the target trees
+below that passed the 10 GB GitHub keeps, so the families pull requests restore were evicted
+before the next one read them (the engine tests built cold). Each family has one job that saves
+it (`actions/cache/save`, from a push, only when the key missed):
+`lint`, `engine-check` (`engine`), `engine-dev-<os>-<n>` (each `engine-test-part` shard per OS;
+`clients` and `elastic-sweep` restore Linux shard 2's, which tests `opentide-lsp` and `opentide-analysis`), `corpus` (`corpus-part`'s generator; the other
 parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
 Python jobs restore it), `golden-compare` (part 1; the other parts restore it), and `full-set-<OS>` (`conformance` on each OS; the full
 set's other Rust jobs restore their OS's: `facade`, `node`, `npm-install`, `engine-wasm`,
@@ -134,8 +138,11 @@ set's other Rust jobs restore their OS's: `facade`, `node`, `npm-install`, `engi
 rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
 two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per
 repository keeps once a few pushes land, so the caches pull requests read were evicted within
-minutes (#1047). The rust-caches left: `fuzz` (`fuzz-smoke`: the nightly's `fuzz/target` and
-cargo-fuzz in `~/.cargo/bin`), plus the other workflows' own. The release dry run
+minutes (#1047). The rust-caches left, target trees: `fuzz` (`fuzz-smoke`: the nightly's
+`fuzz/target` and cargo-fuzz in `~/.cargo/bin`), plus coverage.yml's, golden.yml's, schema.yml's
+and oracle.yml's own; each saves on the nightly and on pushes to `development` only
+(`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose caches every
+pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
 (`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
 `release-<os>-<arch>` per runner for the binaries (one cell per runner saves; the Intel macOS
 cross build restores Apple silicon's) and `release-wasm`, saved from a push when the key missed;

@@ -30,12 +30,18 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
 import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -966,3 +972,219 @@ def test_engine_lint_builds_xtask_once() -> None:
     for command in ("check-layers", "cassettes check", "codegen --check"):
         assert f"target/debug/xtask {command}" in used, command
     assert "target/debug/opentide-lsp generate-highlights --check" in used
+
+
+# The Linux engine-test shards (#841): by package, so that each shard builds
+# only its packages' test binaries (sccache does not cache a test harness).
+def _workspace_packages() -> dict[str, Path]:
+    """Every member of the root Cargo.toml's workspace: its package name and
+    directory."""
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    packages = {}
+    for member in manifest["workspace"]["members"]:
+        member_manifest = tomllib.loads((ROOT / member / "Cargo.toml").read_text("utf-8"))
+        packages[member_manifest["package"]["name"]] = ROOT / member
+    return packages
+
+
+def _linux_shards() -> list[list[str]]:
+    from tests.test_ci import ci_matrix
+
+    cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
+    assert {cell["os"] for cell in cells} == {"ubuntu-latest"}
+    return [
+        ci_matrix.selection(cell["packages"])[0]
+        for cell in sorted(cells, key=lambda c: int(c["shard"]))
+    ]
+
+
+def test_the_engine_test_shards_cover_every_package_once() -> None:
+    """A package in no shard would never be tested on a pull request; one in
+    two would be built and tested twice."""
+    shards = _linux_shards()
+    named = [package for shard in shards for package in shard]
+    assert len(named) == len(set(named)), "a package is in two shards"
+    assert set(named) == set(_workspace_packages())
+
+
+def _weight(directory: Path) -> float:
+    """What a package costs a shard: its lines of Rust (the unit-test harness
+    compiles them all again) and three thousand per test binary it links."""
+    lines = sum(
+        len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+        for path in directory.rglob("*.rs")
+        if "target" not in path.parts
+    )
+    tests = directory / "tests"
+    binaries = [*tests.glob("*.rs"), *tests.glob("*/main.rs")] if tests.is_dir() else []
+    return lines + 3000 * len(binaries)
+
+
+def test_the_engine_test_shards_take_even_shares() -> None:
+    """The slowest shard is the gate's time: none carries much more than its
+    share, so a new heavy crate goes where it keeps them even."""
+    packages = _workspace_packages()
+    weights = [sum(_weight(packages[name]) for name in shard) for shard in _linux_shards()]
+    mean = sum(weights) / len(weights)
+    assert max(weights) <= 1.25 * mean, [round(w / mean, 2) for w in weights]
+
+
+def _features(arguments: list[str]) -> dict[str, set[str]]:
+    """The features cargo enables on each workspace member for a build of
+    `arguments` (`--workspace`, or a shard's `-p` and `--features`)."""
+    import shutil
+
+    cargo = shutil.which("cargo")
+    assert cargo, "cargo resolves the features"
+    tree = subprocess.run(
+        [
+            cargo,
+            "tree",
+            "--locked",
+            "-e",
+            "features",
+            "-f",
+            "{p} [{f}]",
+            "--prefix",
+            "none",
+            *arguments,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    members = set(_workspace_packages())
+    found: dict[str, set[str]] = {}
+    for line in tree.splitlines():
+        match = re.match(r"(\S+) v\S+(?: \([^)]*\))? \[(.*)\]$", line)
+        if match and match.group(1) in members:
+            found.setdefault(match.group(1), set()).update(
+                feature for feature in match.group(2).split(",") if feature
+            )
+    return found
+
+
+def test_each_shard_builds_its_packages_with_the_workspaces_features() -> None:
+    """`--workspace` unifies features: the bindings turn on the facade's
+    `cli`, `python` and the rest, and opentide-schema's `python`, which gate
+    tests (opentide-schema's trybuild cases are `cfg(feature = "python")`).
+    A shard of `-p` alone would build those packages without them and skip
+    their tests without a word, so each shard names them with `--features`."""
+    from tests.test_ci import ci_matrix
+
+    whole = _features(["--workspace"])
+    cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
+    for cell in cells:
+        packages, _ = ci_matrix.selection(cell["packages"])
+        shard = _features(cell["packages"].split())
+        for package in packages:
+            missing = whole.get(package, set()) - shard.get(package, set())
+            assert not missing, f"shard {cell['shard']}: {package} without {sorted(missing)}"
+
+
+# opentide-schema's compile-fail cases (`opentide-schema::ui`, trybuild): the
+# full set, and a pull request that changes what they compile.
+UI_INPUTS = [
+    "crates/opentide-schema-derive/src/lib.rs",
+    "crates/opentide-schema/src/model/rule.rs",
+    "crates/opentide-schema/tests/ui.rs",
+    "crates/opentide-schema/tests/ui/pyclass_generic.stderr",
+    "crates/opentide-schema/Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+]
+NOT_UI_INPUTS = ["crates/opentide-cli/src/main.rs", "docs/cli/validate.md", "src/opentide/sdk.py"]
+
+
+def _ui_step() -> dict[str, Any]:
+    (step,) = [s for s in _ci_jobs()["engine-test-part"]["steps"] if s.get("id") == "ui"]
+    return step
+
+
+def _ui_decision(tmp_path: Path, changed: list[str], full_set: str, merge: bool = True) -> str:
+    """The step's own shell in a repository whose HEAD merges a change of
+    `changed` into a base, as a pull request's checkout does."""
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
+    git("init", "-q", "-b", "base")
+    (tmp_path / "README").write_text("base\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    git("switch", "-q", "-c", "change")
+    for path in changed:
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("changed\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "change")
+    if merge:
+        git("switch", "-q", "base")
+        (tmp_path / "BASE").write_text("moved on\n", encoding="utf-8")
+        git("add", "-A")
+        git("commit", "-q", "-m", "base moves")
+        git("merge", "-q", "--no-ff", "-m", "merge", "change")
+    step = _ui_step()
+    output = tmp_path / "output"
+    subprocess.run(
+        ["bash", "-c", step["run"]],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "FULL_SET": full_set,
+            "UI_PATHS": step["env"]["UI_PATHS"],
+            "GITHUB_OUTPUT": str(output),
+        },
+        check=True,
+        capture_output=True,
+    )
+    return output.read_text(encoding="utf-8").strip()
+
+
+@pytest.mark.parametrize("path", UI_INPUTS)
+def test_the_compile_fail_cases_run_when_their_inputs_change(tmp_path: Path, path: str) -> None:
+    assert _ui_decision(tmp_path, [path, "docs/cli/validate.md"], "false") == "run=true"
+
+
+def test_the_compile_fail_cases_wait_for_the_full_set_otherwise(tmp_path: Path) -> None:
+    assert _ui_decision(tmp_path, NOT_UI_INPUTS, "false") == "run=false"
+
+
+def test_the_compile_fail_cases_run_in_the_full_set(tmp_path: Path) -> None:
+    assert _ui_decision(tmp_path, NOT_UI_INPUTS, "true") == "run=true"
+
+
+def test_the_compile_fail_cases_run_when_the_merge_cannot_be_read(tmp_path: Path) -> None:
+    """No second parent (a push, or a checkout without the merge): fail open."""
+    assert _ui_decision(tmp_path, NOT_UI_INPUTS, "false", merge=False) == "run=true"
+
+
+def test_the_compile_fail_filter_names_the_trybuild_binary() -> None:
+    """The filter excludes exactly the test binary of crates/opentide-schema/tests/ui.rs,
+    in the shard that builds it, only when the step said not to run it; the
+    checkout reads the merge's parent."""
+    from tests.test_ci import ci_matrix
+
+    job = _ci_jobs()["engine-test-part"]
+    assert job["steps"][0]["with"]["fetch-depth"] == 2
+    assert (ROOT / "crates" / "opentide-schema" / "tests" / "ui.rs").is_file()
+    step = _ui_step()
+    assert step["env"]["FULL_SET"] == "${{ " + FULL_SET + " }}"
+    (nextest,) = [s for s in job["steps"] if "cargo nextest run" in str(s.get("run", ""))]
+    assert nextest["env"]["UI"] == "${{ steps.ui.outputs.run }}"
+    assert "filter=(-E 'not binary_id(opentide-schema::ui)')" in nextest["run"]
+    condition = 'if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then'
+    assert condition in nextest["run"]
+    owners = [
+        cell
+        for cell in ci_matrix.cells(job, "pull")
+        if "opentide-schema" in ci_matrix.selection(cell["packages"])[0]
+    ]
+    assert len(owners) == 1 and f" {owners[0]['packages']} ".count(" -p opentide-schema ") == 1

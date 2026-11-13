@@ -154,14 +154,21 @@ jobs:
             echo "SCCACHE_CACHE_SIZE=1G"
             echo "SCCACHE_IDLE_TIMEOUT=0"
           } >> "$GITHUB_ENV"
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        if: inputs.dry-run
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         if: inputs.dry-run
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
-          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-release-${{ runner.os }}-${{ runner.arch }}-
+          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: build opentide-lsp
         shell: bash
         run: cargo build --locked --release -p opentide-lsp --target ${{ matrix.target }}
@@ -204,7 +211,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
-          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
       - name: upload opentide-lsp
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -252,14 +259,21 @@ jobs:
             echo "SCCACHE_CACHE_SIZE=1G"
             echo "SCCACHE_IDLE_TIMEOUT=0"
           } >> "$GITHUB_ENV"
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        if: inputs.dry-run
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         if: inputs.dry-run
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
-          key: sccache-release-wasm-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-release-wasm-
+          key: sccache-release-wasm-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-release-wasm-${{ hashFiles('rust-toolchain.toml') }}-
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -285,7 +299,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
-          key: sccache-release-wasm-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-release-wasm-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: engine-asset-wasm

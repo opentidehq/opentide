@@ -151,20 +151,36 @@ pub fn run(args: &[String]) -> Result<u8> {
     let mut compared = 0;
     let mut judged = 0;
     if check {
-        let (count, golden) = golden_parity(&root)?;
-        compared = count;
-        problems.extend(golden);
-        let (count, verdicts) = schema_verdicts(&root)?;
-        judged = count;
-        problems.extend(verdicts);
         let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
         let ledger = opentide_compare::ledger::Ledger::parse(
             &std::fs::read_to_string(&ledger_path)
                 .with_context(|| format!("read {}", ledger_path.display()))?,
         )
         .map_err(|error| anyhow::anyhow!("{}:\n{error}", ledger_path.display()))?;
-        let mut usage = opentide_compare::ledger::Usage::default();
-        let (count, catalogs) = catalog_parity(&root, &ledger, &mut usage)?;
+        // The three comparisons share nothing: each on threads of its own
+        // (Engine lint waited on them one after the other, #841), their
+        // problems reported in the same order as before.
+        let (golden, verdicts, catalogs) = std::thread::scope(|scope| {
+            let golden = scope.spawn(|| golden_parity(&root));
+            let verdicts = scope.spawn(|| schema_verdicts(&root));
+            let catalogs = scope.spawn(|| {
+                let mut usage = opentide_compare::ledger::Usage::default();
+                catalog_parity(&root, &ledger, &mut usage)
+            });
+            let join = |handle: std::thread::ScopedJoinHandle<'_, _>| {
+                handle
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            };
+            (join(golden), join(verdicts), join(catalogs))
+        });
+        let (count, golden) = golden?;
+        compared = count;
+        problems.extend(golden);
+        let (count, verdicts) = verdicts?;
+        judged = count;
+        problems.extend(verdicts);
+        let (count, catalogs) = catalogs?;
         compared += count;
         problems.extend(catalogs);
     }
@@ -944,6 +960,16 @@ fn parse_json(label: &str, bytes: &[u8]) -> Result<Value> {
     serde_json::from_slice(bytes).with_context(|| format!("{label}: not JSON"))
 }
 
+/// One schema of a recording, with the one Rust generates for its path.
+struct SchemaComparison {
+    /// `<case id>: <path>`, for messages.
+    name: String,
+    path: String,
+    kind: SchemaKind,
+    oracle: Vec<u8>,
+    rust: String,
+}
+
 /// The number of verdicts compared, and the differences: the schemas of
 /// every recorded `generate` that wrote them, and the configuration
 /// schemas, against the oracle's.
@@ -977,6 +1003,8 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
     let mut problems = Vec::new();
     let mut judged = 0;
     let mut allowed = Vec::new();
+    // Each schema the oracle wrote, with Rust's, compared on every core below.
+    let mut comparisons: Vec<SchemaComparison> = Vec::new();
     let cases = golden.join("cases");
     let blobs = golden.join("blobs");
     let mut generated: BTreeMap<String, Vec<Artifact>> = BTreeMap::new();
@@ -1052,23 +1080,43 @@ fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
             if !done.insert(key) {
                 continue;
             }
-            let oracle = parse_json(&format!("{id}: {path}"), bytes)?;
-            let rust = parse_json(&format!("Rust's {path}"), artifact.text.as_bytes())?;
-            let subjects = match schema_kind(&path) {
-                SchemaKind::Visibility => &visibility,
-                SchemaKind::Object => &objects,
-            };
-            let tally = verdict::compare(
-                &format!("{id}: {path}"),
-                &oracle,
-                &rust,
-                subjects,
-                &verdict::ALLOWANCES,
-                &mut problems,
-            )?;
-            judged += tally.compared;
-            allowed.extend(tally.allowed);
+            comparisons.push(SchemaComparison {
+                name: format!("{id}: {path}"),
+                kind: schema_kind(&path),
+                oracle: bytes.to_vec(),
+                rust: artifact.text.clone(),
+                path,
+            });
         }
+    }
+    // Every verdict is independent: on every core, the problems in the
+    // recordings' order whichever thread finished first.
+    let compared = crate::parallel::in_order(&comparisons, |comparison| {
+        let oracle = parse_json(&comparison.name, &comparison.oracle)?;
+        let rust = parse_json(
+            &format!("Rust's {}", comparison.path),
+            comparison.rust.as_bytes(),
+        )?;
+        let subjects = match comparison.kind {
+            SchemaKind::Visibility => &visibility,
+            SchemaKind::Object => &objects,
+        };
+        let mut found = Vec::new();
+        let tally = verdict::compare(
+            &comparison.name,
+            &oracle,
+            &rust,
+            subjects,
+            &verdict::ALLOWANCES,
+            &mut found,
+        )?;
+        Ok::<_, anyhow::Error>((tally, found))
+    });
+    for outcome in compared {
+        let (tally, found) = outcome?;
+        problems.extend(found);
+        judged += tally.compared;
+        allowed.extend(tally.allowed);
     }
 
     let oracle_path = root.join(ORACLE_CONFIGURATION_SCHEMAS);
