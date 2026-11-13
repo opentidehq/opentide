@@ -1,0 +1,31 @@
+stage user_login_counts {
+    $user = principal.user.userid
+    metadata.event_type = "USER_LOGIN"
+    security_result.action = "ALLOW"
+
+    match:
+        $user
+
+    outcome:
+        $login_count = count(metadata.id)
+}
+
+stage total_users {
+    outcome:
+        $count = count($user_login_counts.user)
+    limit:
+        1
+}
+
+cross join $total_users, $user_login_counts
+
+$login_count = $user_login_counts.login_count
+$user = $user_login_counts.user
+$tot_users = $total_users.count
+
+// all users who logged in the same number of times are grouped together.
+match:
+    $login_count
+outcome:
+    $num_users = count($user)
+    $frequency_percent = (count($user) / max($tot_users) ) * 100

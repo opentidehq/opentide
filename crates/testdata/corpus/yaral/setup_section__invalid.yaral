@@ -1,0 +1,5 @@
+// prod:setup_section invalid
+rule r {
+  setup:
+    graph_override (
+}

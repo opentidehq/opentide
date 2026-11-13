@@ -19,7 +19,10 @@ members = [
     "crates/opentide-lucene",
     "crates/opentide-falco",
     "crates/opentide-cql",
+    "crates/opentide-exabeam",
     "crates/opentide-ecs",
+    "crates/opentide-yara",
+    "crates/opentide-yaral",
     "crates/opentide-schema-derive",
     "crates/opentide-schema",
     "crates/opentide-tide",
@@ -41,7 +44,7 @@ members = [
 [workspace.package]
 version = "0.12.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 license = "EUPL-1.2"
 repository = "https://github.com/opentidehq/opentide"
 homepage = "https://opentide.org"
@@ -59,7 +62,10 @@ opentide-kuery = { path = "crates/opentide-kuery", version = "=0.12.0" }
 opentide-lucene = { path = "crates/opentide-lucene", version = "=0.12.0" }
 opentide-falco = { path = "crates/opentide-falco", version = "=0.12.0" }
 opentide-cql = { path = "crates/opentide-cql", version = "=0.12.0" }
+opentide-exabeam = { path = "crates/opentide-exabeam", version = "=0.12.0" }
 opentide-ecs = { path = "crates/opentide-ecs", version = "=0.12.0" }
+opentide-yara = { path = "crates/opentide-yara", version = "=0.12.0" }
+opentide-yaral = { path = "crates/opentide-yaral", version = "=0.12.0" }
 opentide-schema = { path = "crates/opentide-schema", version = "=0.12.0" }
 opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=0.12.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.12.0" }
@@ -94,7 +100,9 @@ jiff = { version = "0.2", default-features = false, features = ["std"] }
 # (opentide-schema `generate::schema`): Gruber's English title-case rules.
 titlecase = { version = "3.6", default-features = false }
 # The parsed pattern (HIR) of a `regex` pattern, to anchor it whatever its
-# flags (opentide-schema `lint`): the version `regex` itself locks.
+# flags (opentide-schema `lint`), and the RE2 syntax of Exabeam's RGX patterns
+# and YARA-L regular expressions, parsed without compiling: the version `regex`
+# itself locks.
 regex-syntax = "0.8"
 # "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
 strsim = "0.11"
@@ -112,6 +120,13 @@ cc = "1"
 uuid = "1"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
+# YARA (opentidehq/language-server#165, RFC 0015 §6): VirusTotal's lossless
+# parser (logos + rowan, error recovery) is the verdict parser, and its
+# formatter formats `.yar` files. Not the `yara-x` compiler crate: it brings
+# wasmtime and breaks the WASI build. It is an oracle only
+# (scripts/engine/oracles). Exact pins: they set the floor (rust-version 1.95).
+yara-x-parser = "=1.23.0"
+yara-x-fmt = "=1.23.0"
 # The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.

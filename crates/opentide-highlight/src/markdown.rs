@@ -114,36 +114,36 @@ fn highlight_inline(
 fn match_inline(line: &str, i: usize) -> Option<(usize, &'static str)> {
     let rest = &line[i..];
     let bytes = rest.as_bytes();
-    if let Some(inner) = rest.strip_prefix('`') {
-        if let Some(rel) = inner.find('`') {
-            return Some((i + 1 + rel + 1, "markdown.code"));
-        }
+    if let Some(inner) = rest.strip_prefix('`')
+        && let Some(rel) = inner.find('`')
+    {
+        return Some((i + 1 + rel + 1, "markdown.code"));
     }
-    if let Some(inner) = rest.strip_prefix("**") {
-        if let Some(rel) = inner.find("**") {
-            return Some((i + 2 + rel + 2, "markdown.strong"));
-        }
+    if let Some(inner) = rest.strip_prefix("**")
+        && let Some(rel) = inner.find("**")
+    {
+        return Some((i + 2 + rel + 2, "markdown.strong"));
     }
-    if let Some(inner) = rest.strip_prefix("__") {
-        if let Some(rel) = inner.find("__") {
-            return Some((i + 2 + rel + 2, "markdown.strong"));
-        }
+    if let Some(inner) = rest.strip_prefix("__")
+        && let Some(rel) = inner.find("__")
+    {
+        return Some((i + 2 + rel + 2, "markdown.strong"));
     }
-    if bytes.first() == Some(&b'*') && bytes.get(1) != Some(&b'*') {
-        if let Some(inner) = rest.strip_prefix('*') {
-            if let Some(rel) = inner.find('*') {
-                return Some((i + 1 + rel + 1, "markdown.emphasis"));
-            }
-        }
+    if bytes.first() == Some(&b'*')
+        && bytes.get(1) != Some(&b'*')
+        && let Some(inner) = rest.strip_prefix('*')
+        && let Some(rel) = inner.find('*')
+    {
+        return Some((i + 1 + rel + 1, "markdown.emphasis"));
     }
-    if rest.starts_with('[') {
-        if let Some(close) = rest.find(']') {
-            let after = &rest[close + 1..];
-            if after.starts_with('(') {
-                if let Some(end_paren) = after.find(')') {
-                    return Some((i + close + 1 + end_paren + 1, "markdown.link"));
-                }
-            }
+    if rest.starts_with('[')
+        && let Some(close) = rest.find(']')
+    {
+        let after = &rest[close + 1..];
+        if after.starts_with('(')
+            && let Some(end_paren) = after.find(')')
+        {
+            return Some((i + close + 1 + end_paren + 1, "markdown.link"));
         }
     }
     if rest.starts_with("http://") || rest.starts_with("https://") {

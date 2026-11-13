@@ -1,0 +1,2 @@
+# prod:field_term valid
+bytes_in > 1000 AND bytes_out:>=5 AND product=="web application" AND src_ip:10.0.0.1 AND parsed:true AND user != "x"

@@ -493,10 +493,10 @@ impl<'a> Pass<'a> {
         if body.kind() == "tabular_expression" {
             return Some(self.tabular(body, &scope));
         }
-        if let Some(ident) = simple_ident(body) {
-            if let Some(schema) = self.named_source(self.text(ident), &scope) {
-                return Some(schema);
-            }
+        if let Some(ident) = simple_ident(body)
+            && let Some(schema) = self.named_source(self.text(ident), &scope)
+        {
+            return Some(schema);
         }
         self.expression(
             body,
@@ -703,12 +703,12 @@ impl<'a> Pass<'a> {
             let arg = call
                 .children_by_field_name("arguments", &mut cursor)
                 .find(|n| n.is_named());
-            if let Some(arg) = arg.and_then(simple_primary) {
-                if arg.kind() == "string" {
-                    let text = self.text(arg);
-                    let table = text.trim_matches(|c| c == '"' || c == '\'' || c == '@');
-                    return self.named_source(table, scope).unwrap_or_else(Schema::open);
-                }
+            if let Some(arg) = arg.and_then(simple_primary)
+                && arg.kind() == "string"
+            {
+                let text = self.text(arg);
+                let table = text.trim_matches(|c| c == '"' || c == '\'' || c == '@');
+                return self.named_source(table, scope).unwrap_or_else(Schema::open);
             }
             return Schema::open();
         }
@@ -723,10 +723,10 @@ impl<'a> Pass<'a> {
                 })
                 .unwrap_or_else(Schema::open);
         }
-        if !scope.binds(name) {
-            if let Some(schema) = self.asim_schema(name) {
-                return schema;
-            }
+        if !scope.binds(name)
+            && let Some(schema) = self.asim_schema(name)
+        {
+            return schema;
         }
         Schema::open()
     }
@@ -1483,10 +1483,10 @@ impl<'a> Pass<'a> {
                         let object = node
                             .child_by_field_name("object")
                             .map(|o| self.text(o).trim().to_string());
-                        if object.as_deref() == Some("$right") {
-                            if let Some(member) = node.child_by_field_name("member") {
-                                keys.insert(self.text(member).to_string());
-                            }
+                        if object.as_deref() == Some("$right")
+                            && let Some(member) = node.child_by_field_name("member")
+                        {
+                            keys.insert(self.text(member).to_string());
                         }
                         continue;
                     }
@@ -1515,15 +1515,15 @@ impl<'a> Pass<'a> {
             match child.kind() {
                 "mv_option" => {
                     let name = child.child(0).map(|n| self.text(n)).unwrap_or_default();
-                    if name == "with_itemindex" {
-                        if let Some(value) = child.child_by_field_name("value") {
-                            let column = Column {
-                                made_by: Some(made_by),
-                                ..Column::new(self.text(value), Some("long".into()))
-                            };
-                            self.define(value, &column);
-                            out.set(column);
-                        }
+                    if name == "with_itemindex"
+                        && let Some(value) = child.child_by_field_name("value")
+                    {
+                        let column = Column {
+                            made_by: Some(made_by),
+                            ..Column::new(self.text(value), Some("long".into()))
+                        };
+                        self.define(value, &column);
+                        out.set(column);
                     }
                 }
                 "mv_expand_item" => {
@@ -1924,36 +1924,35 @@ impl<'a> Pass<'a> {
         let op = operator.as_str();
         let mut found: Option<(String, String)> = None;
         if STRING_OPERATORS.contains(&op) || STRING_SET_OPERATORS.contains(&op) {
-            if let Some((column, kind)) = column_of(self, left) {
-                if NUMERIC.contains(&kind.as_str())
-                    || matches!(kind.as_str(), "datetime" | "timespan" | "bool")
-                {
-                    found = Some((column, kind));
-                }
+            if let Some((column, kind)) = column_of(self, left)
+                && (NUMERIC.contains(&kind.as_str())
+                    || matches!(kind.as_str(), "datetime" | "timespan" | "bool"))
+            {
+                found = Some((column, kind));
             }
         } else if op == "between" || op == "!between" {
-            if let Some((column, kind)) = column_of(self, left) {
-                if matches!(kind.as_str(), "string" | "bool" | "guid") {
-                    found = Some((column, kind));
-                }
+            if let Some((column, kind)) = column_of(self, left)
+                && matches!(kind.as_str(), "string" | "bool" | "guid")
+            {
+                found = Some((column, kind));
             }
-        } else if ORDERING.contains(&op) {
-            if let Some(right) = right {
-                let pairs = [(left, right), (right, left)];
-                for (c, l) in pairs {
-                    let (Some((column, kind)), Some(lit)) = (column_of(self, c), literal(self, l))
-                    else {
-                        continue;
-                    };
-                    let bad = match kind.as_str() {
-                        "string" | "guid" | "datetime" | "timespan" => true,
-                        k if NUMERIC.contains(&k) => lit == "string",
-                        _ => false,
-                    };
-                    if bad {
-                        found = Some((column, kind));
-                        break;
-                    }
+        } else if ORDERING.contains(&op)
+            && let Some(right) = right
+        {
+            let pairs = [(left, right), (right, left)];
+            for (c, l) in pairs {
+                let (Some((column, kind)), Some(lit)) = (column_of(self, c), literal(self, l))
+                else {
+                    continue;
+                };
+                let bad = match kind.as_str() {
+                    "string" | "guid" | "datetime" | "timespan" => true,
+                    k if NUMERIC.contains(&k) => lit == "string",
+                    _ => false,
+                };
+                if bad {
+                    found = Some((column, kind));
+                    break;
                 }
             }
         }

@@ -150,5 +150,10 @@ highlights/test/node_modules
 /mutants.out/
 /mutants.out.old/
 
+# The YARA module generator's own build (scripts/engine/yara-modules)
+/scripts/engine/yara-modules/target/
+# Its lock is not committed: an oracle-side tool, run by hand, never shipped.
+/scripts/engine/yara-modules/Cargo.lock
+
 # sccache's directory in CI (SCCACHE_DIR, .github/workflows/ci.yml)
 .sccache/

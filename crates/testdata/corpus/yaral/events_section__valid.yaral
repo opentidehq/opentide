@@ -1,0 +1,10 @@
+// prod:events_section valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $e.principal.hostname = "web01"
+  condition:
+    $e
+}

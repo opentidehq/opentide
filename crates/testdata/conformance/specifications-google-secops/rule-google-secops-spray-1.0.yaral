@@ -1,0 +1,38 @@
+rule password_spray_then_success {
+  meta:
+    author = "Detection Engineering"
+    description = "Ten or more blocked logins for one user from one address, then an allowed login for that user from that address, within 30 minutes."
+    severity = "High"
+    priority = "High"
+    technique = "T1078,T1110.003"
+    opentide_uuid = "00000000-0000-4000-8003-000000000062"
+    opentide_version = "1"
+
+  events:
+    $fail.metadata.event_type = "USER_LOGIN"
+    $fail.security_result.action = "BLOCK"
+    $fail.principal.ip = $ip
+    $fail.target.user.userid = $user
+
+    $success.metadata.event_type = "USER_LOGIN"
+    $success.security_result.action = "ALLOW"
+    $success.principal.ip = $ip
+    $success.target.user.userid = $user
+
+    $fail.metadata.event_timestamp.seconds < $success.metadata.event_timestamp.seconds
+
+  match:
+    $user, $ip over 30m
+
+  outcome:
+    $risk_score = max(80)
+    $risk_entity_to_score = $user
+    $failed_attempts = count_distinct($fail.metadata.id)
+    $target_hosts = array_distinct($success.target.hostname)
+
+  condition:
+    #fail >= 10 and $success
+
+  options:
+    suppression_window = 1h
+}

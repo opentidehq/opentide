@@ -1,0 +1,1 @@
+all $e.udm.additional.fields["pod_name"] = "kube-scheduler"

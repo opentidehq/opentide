@@ -153,16 +153,6 @@ pub fn build_load(root: &Path) -> Result<PathBuf> {
     build_example(root, "load")
 }
 
-/// Builds opentide-workspace's `validate` example (`--release`): the Rust
-/// engine's `validate_*` commands (UC-2.2, #817).
-///
-/// # Errors
-///
-/// The build fails, or names no executable.
-pub fn build_validate(root: &Path) -> Result<PathBuf> {
-    build_example(root, "validate")
-}
-
 /// Builds the opentide-workspace example `name` (`--release`); its path.
 fn build_example(root: &Path, name: &str) -> Result<PathBuf> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
@@ -196,11 +186,12 @@ fn build_example(root: &Path, name: &str) -> Result<PathBuf> {
         .with_context(|| format!("cargo built no {name} executable"))
 }
 
-/// Builds the Rust CLI (opentide-cli's `opentide`, release): the Rust
-/// engine of the commands it runs.
+/// Builds the `opentide` binary (the facade crate with `cli`, as `cargo
+/// install opentide --features cli` builds it; release): the Rust engine of
+/// every command-line scenario.
 pub fn build_cli(root: &Path) -> Result<PathBuf> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    eprintln!("bench: building opentide-cli (release)");
+    eprintln!("bench: building the opentide binary (release, --features cli)");
     let output = Command::new(cargo)
         .current_dir(root)
         .args([
@@ -208,7 +199,9 @@ pub fn build_cli(root: &Path) -> Result<PathBuf> {
             "--release",
             "--locked",
             "--package",
-            "opentide-cli",
+            "opentide",
+            "--features",
+            "cli",
             "--bin",
             "opentide",
             "--message-format=json-render-diagnostics",
@@ -217,7 +210,10 @@ pub fn build_cli(root: &Path) -> Result<PathBuf> {
         .output()
         .context("run cargo build")?;
     if !output.status.success() {
-        bail!("cargo build -p opentide-cli failed ({})", output.status);
+        bail!(
+            "cargo build -p opentide --features cli failed ({})",
+            output.status
+        );
     }
     String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -261,7 +257,7 @@ pub fn build_lsp(root: &Path) -> Result<PathBuf> {
 fn run(command: &mut Command) -> Result<()> {
     let status = command
         .status()
-        .with_context(|| format!("run {:?}", command.get_program()))?;
+        .with_context(|| format!("run {}", command.get_program().display()))?;
     if !status.success() {
         bail!("{command:?} failed ({status})");
     }

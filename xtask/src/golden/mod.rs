@@ -789,7 +789,7 @@ pub fn run_all(
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(result);
                     let n = done.fetch_add(1, Ordering::SeqCst) + 1;
-                    if n % 100 == 0 || n == cases.len() {
+                    if n.is_multiple_of(100) || n == cases.len() {
                         eprintln!(
                             "golden {label}: {n}/{} case(s), {:.0}s",
                             cases.len(),

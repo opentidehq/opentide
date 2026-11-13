@@ -126,17 +126,15 @@ impl FieldCatalog {
             .building
             .as_ref()
             .is_some_and(|(_, handle)| handle.is_finished())
+            && let Some((for_config, handle)) = self.building.take()
+            && let Ok(catalog) = handle.join()
         {
-            if let Some((for_config, handle)) = self.building.take() {
-                if let Ok(catalog) = handle.join() {
-                    self.built = Some((for_config, catalog));
-                }
-            }
+            self.built = Some((for_config, catalog));
         }
-        if let Some((for_config, catalog)) = &self.built {
-            if same(for_config, config) {
-                return Some(Arc::clone(catalog));
-            }
+        if let Some((for_config, catalog)) = &self.built
+            && same(for_config, config)
+        {
+            return Some(Arc::clone(catalog));
         }
         // The bundled configuration's are generated at start-up.
         if config.resolved.tree == *bundled_configuration() {

@@ -1,0 +1,30 @@
+# Kill process on a YARA rule, which GravityZone allows on Basic rules only.
+# Expected constraint code: bitdefender_action_scope.
+name: Bitdefender YARA rule with kill process
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000056
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Kill process is a Basic-rule action.
+status: STAGING
+severity: Medium
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    actions:
+      kill_process: true
+    yara:
+      signature: |
+        rule A {
+          strings:
+            $a = "evil"
+          condition:
+            $a
+        }

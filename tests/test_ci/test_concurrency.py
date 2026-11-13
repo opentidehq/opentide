@@ -26,9 +26,9 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 BASE_BRANCHES = ("development", "integration/unified-core")
 # The workflows a push to a base branch runs that hold a concurrency group (the
-# guard against this list going stale is below). bench.yml has no push
-# trigger: its nightly and manual runs wait for each other on purpose.
+# guard against this list going stale is below).
 EXPECTED = {
+    "bench.yml",
     "ci.yml",
     "codeql.yml",
     "coverage.yml",
@@ -39,7 +39,7 @@ EXPECTED = {
 }
 
 EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
-NAME = re.compile(r"\bgithub\.[A-Za-z_.]+")
+NAME = re.compile(r"\b(?:github|matrix)\.[A-Za-z_.]+")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -81,6 +81,8 @@ def _context(event: str, ref: str, run_id: str) -> dict[str, str]:
         "github.ref": ref,
         "github.run_id": run_id,
         "github.workflow": "Workflow",
+        # bench.yml's jobs: one group per engine of the matrix.
+        "matrix.engine": "rust",
     }
 
 

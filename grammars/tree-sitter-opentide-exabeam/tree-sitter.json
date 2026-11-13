@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_exabeam",
+      "camelcase": "OpentideExabeam",
+      "scope": "source.exabeam",
+      "file-types": ["exabeam"],
+      "highlights": "../../highlights/queries/exabeam/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

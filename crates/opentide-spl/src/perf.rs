@@ -54,17 +54,17 @@ fn walk_pipeline(
             continue;
         }
         let (word, word_span) = command_word(source, seg_start, seg_end);
-        if let Some((cmd_start, cmd_end)) = word_span {
-            if let Some(message) = truncation_message(&word) {
-                push(
-                    out,
-                    source,
-                    codes::SPL_SUBSEARCH_TRUNCATION,
-                    message,
-                    cmd_start,
-                    cmd_end,
-                );
-            }
+        if let Some((cmd_start, cmd_end)) = word_span
+            && let Some(message) = truncation_message(&word)
+        {
+            push(
+                out,
+                source,
+                codes::SPL_SUBSEARCH_TRUNCATION,
+                message,
+                cmd_start,
+                cmd_end,
+            );
         }
         for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
             walk_pipeline(source, inner_start, inner_end, catalog, out);

@@ -29,6 +29,31 @@ fn an_enum_doc_is_the_text_after_its_last_rule_on_one_line_and_capped() {
 }
 
 #[test]
+fn an_enum_doc_joins_only_the_words_the_cap_keeps_and_says_the_same() {
+    let whole = |markdown: &str| {
+        let text = markdown.trim();
+        let text = text.rsplit("---").next().unwrap_or(text).trim();
+        cap_doc(&text.split_whitespace().collect::<Vec<_>>().join(" "))
+    };
+    let mut cases: Vec<String> = vec![
+        String::new(),
+        "x".repeat(DOC_CAP),
+        "x".repeat(DOC_CAP + 1),
+        format!("{} y", "x".repeat(DOC_CAP - 2)),
+        format!("{} y", "x".repeat(DOC_CAP - 1)),
+        format!("{} yy", "x".repeat(DOC_CAP - 2)),
+        format!("{}\n\n  tail", "é ".repeat(DOC_CAP)),
+        format!("### A\n---\n{}", "word\t ".repeat(100)),
+    ];
+    for width in 1..12 {
+        cases.push(format!("{} ", "w".repeat(width)).repeat(2 * DOC_CAP / width));
+    }
+    for case in &cases {
+        assert_eq!(short_doc(case), whole(case), "{case:?}");
+    }
+}
+
+#[test]
 fn enum_values_are_written_as_yaml_and_empty_ones_dropped() {
     let (values, docs) = clean_enum(
         &[json!(true), json!(null), json!(""), json!(3), json!("x")],

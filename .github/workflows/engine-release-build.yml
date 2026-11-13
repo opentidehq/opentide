@@ -168,13 +168,17 @@ jobs:
       - name: build opentide
         shell: bash
         run: cargo build --locked --release -p opentide --features cli --bin opentide --target ${{ matrix.target }}
-      # opentide-lsp keeps language-server's budget (30 MiB); opentide, which
-      # also carries the connectors' HTTP and TLS stack, gets 80 MiB.
+      # opentide-lsp: 40 MiB. language-server's 30 MiB held until the 0.16
+      # import (E1) added YARA (yara-x-parser), YARA-L and the Exabeam Query
+      # Language with their catalogs to a server that also validates objects
+      # here: 29.8 MB on x86_64 Linux and 33.8 MB on x86_64 Windows then.
+      # opentide, which also carries the connectors' HTTP and TLS stack, gets
+      # 80 MiB.
       - name: size budget
         shell: bash
         run: |
           set -euo pipefail
-          for budget in opentide-lsp:31457280 opentide:83886080; do
+          for budget in opentide-lsp:41943040 opentide:83886080; do
             name="${budget%%:*}"
             ext=""
             case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac

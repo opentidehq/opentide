@@ -1,0 +1,27 @@
+name: Google SecOps platform block
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000060
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Google SecOps single-event rule: the smallest useful block.
+status: STAGING
+severity: Medium
+response:
+  alert_severity: Medium
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+      $e.target.process.file.full_path = /\\mshta\.exe$/ nocase
+    outcome: |
+      $risk_score = 40
+    condition: |
+      $e

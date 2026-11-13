@@ -1,0 +1,12 @@
+$e1.metadata.product_name = "firewall_1"
+$e1.principal.hostname = $host
+
+$e2.metadata.product_name = "firewall_2"
+$e2.principal.hostname = $host
+
+match:
+// $e1 is the pivot; the 10-minute window starts at the $e1 timestamp
+  $host over 10m after $e1
+
+condition:
+  $e1 and !$e2

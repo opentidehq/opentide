@@ -465,3 +465,79 @@ fn cql_corpus_gate() {
         ],
     });
 }
+
+#[test]
+fn yara_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Yara,
+        id: "yara",
+        // Leaf tokens and keyword choices: every fixture that tags a
+        // production contains them.
+        structural: &[
+            "source_file",
+            "identifier",
+            "integer",
+            "boolean",
+            "text_string",
+            "string_identifier",
+            "tag",
+            "hex_byte",
+            "hex_jump_bound",
+            "hex_alternative_branch",
+            "quantifier_keyword",
+            "them",
+            "loop_variables",
+        ],
+    });
+}
+
+#[test]
+fn exabeam_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Exabeam,
+        id: "exabeam",
+        // Leaf tokens and names: every fixture that tags a production
+        // contains them.
+        structural: &[
+            "source_file",
+            "filter",
+            "field_name",
+            "alias",
+            "table_name",
+            "string",
+            "number",
+            "identifier",
+            "bare_word",
+            "text_word",
+            "bound",
+        ],
+    });
+}
+
+#[test]
+fn yaral_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Yaral,
+        id: "yaral",
+        // Leaf tokens and the pieces of the tagged productions: every fixture
+        // that tags a production contains them.
+        structural: &[
+            "source_file",
+            "identifier",
+            "field_name",
+            "integer",
+            "float",
+            "string",
+            "boolean",
+            "window_bound",
+            "variable",
+            "count",
+            "arguments",
+            "function_name",
+            "match_clause",
+            "order_item",
+            "meta_entry",
+            "option_entry",
+        ],
+    });
+}

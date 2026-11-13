@@ -1,0 +1,2 @@
+// prod:not_expression valid
+not $e.principal.hostname = "web01"

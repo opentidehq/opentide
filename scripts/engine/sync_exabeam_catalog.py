@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Generate data/catalogs/exabeam/, the Exabeam Common Information Model catalogue.
+
+The Exabeam Query Language (specifications `specs/languages/exabeam-1.0.md`,
+language id `exabeam`) names fields from Exabeam's Common Information Model
+(CIM). Exabeam publishes the model in ExabeamLabs/CIMLibrary under the Apache
+License 2.0:
+
+- ``Fields_Descriptions.md``: every CIM field with its data type and a
+  description (1,130 fields);
+- ``cim.json``: the subjects, the activity types (``<subject>-<activity>``)
+  and their outcomes (``success``, ``fail``).
+
+This script reads both and writes:
+
+- ``data/catalogs/exabeam/fields.toml``: each field with its type and description,
+  then the platform fields the CIM table leaves out (``PLATFORM_FIELDS``) and
+  the field-name prefixes that are never unknown (``PREFIXES``);
+- ``data/catalogs/exabeam/values.toml``: the subjects, activity types and outcomes,
+  for hover and completion of ``subject``, ``activity_type`` and ``outcome``.
+
+The source is pinned by commit (``PINNED_COMMIT``): a checkout at another
+commit fails the run unless ``--allow-other-commit`` is given, so a catalogue
+change is a reviewed change of the pin.
+
+Inputs (read as data, never executed):
+
+- ``--source DIR``: an ExabeamLabs/CIMLibrary checkout.
+
+Usage:
+    python -I scripts/engine/sync_exabeam_catalog.py --source ../CIMLibrary [--check]
+
+``--check`` regenerates in memory and exits 1 when a committed file differs.
+Standard library only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "catalogs" / "exabeam"
+REPOSITORY = "ExabeamLabs/CIMLibrary"
+PINNED_COMMIT = "e72bfa2c97578e267e9197493c382b4e9b956d1a"
+PINNED_DATE = "2026-10-20"
+
+# The CIM's data types. A type this list lacks fails the run, so a new one is
+# read before the engine relies on it (`string` drives
+# `exabeam_string_field_number`).
+TYPES = (
+    "string",
+    "array",
+    "integer",
+    "number",
+    "boolean",
+    "datetime",
+    "hexadecimal",
+    "ipv4/ipv6",
+    "email",
+    "json",
+)
+
+# Fields the platform sets on every event that the CIM table does not list
+# (exabeam-1.0, "Field catalogue"). Descriptions are written here.
+PLATFORM_FIELDS = (
+    (
+        "approxLogTime",
+        "datetime",
+        "The time Exabeam received the log, in epoch milliseconds. "
+        "A time field: Search matches it with a range only.",
+    ),
+    (
+        "rawLogIds",
+        "array",
+        "The ids of the raw logs an event was parsed from.",
+    ),
+    (
+        "ingest_time",
+        "datetime",
+        "The time Exabeam ingested the event. A time field: Search matches it with a range only.",
+    ),
+    (
+        "raw_log_time",
+        "datetime",
+        "The time written in the raw log. A time field: Search matches it with a range only.",
+    ),
+    (
+        "time",
+        "datetime",
+        "The event time. A time field: Search matches it with a range only.",
+    ),
+)
+
+# Field-name prefixes that are never `exabeam_unknown_field`: custom fields a
+# tenant defines (`c_`) and the metadata fields the platform adds (`m_`).
+PREFIXES = (
+    ("c_", "A custom field the tenant defines."),
+    ("m_", "A metadata field the platform adds to every event."),
+)
+
+
+def toml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def head_commit(source: Path) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(source), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.stdout.strip()
+
+
+def read_fields(source: Path) -> list[tuple[str, str, str]]:
+    """(name, type, description) for each row of Fields_Descriptions.md."""
+    rows: list[tuple[str, str, str]] = []
+    text = (source / "Fields_Descriptions.md").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3 or cells[0] == "Field" or set(cells[0]) <= {"-", " ", ":"}:
+            continue
+        # A description may itself hold `|`: everything after the type is it.
+        name, kind, description = cells[0], cells[1], " | ".join(cells[2:]).strip()
+        if kind not in TYPES:
+            raise SystemExit(f"{name}: unknown CIM type {kind!r}; add it to TYPES after reading it")
+        rows.append((name, kind, " ".join(description.split())))
+    names = [r[0] for r in rows]
+    if len({n.lower() for n in names}) != len(names):
+        raise SystemExit("Fields_Descriptions.md lists a field twice")
+    return rows
+
+
+def render_fields(rows: list[tuple[str, str, str]]) -> str:
+    out = [
+        "# Generated by scripts/engine/sync_exabeam_catalog.py. Do not edit.",
+        f"# Source: {REPOSITORY}@{PINNED_COMMIT} ({PINNED_DATE}), Fields_Descriptions.md",
+        "# Apache License 2.0 (LICENSE-Apache-2.0.txt, NOTICE).",
+        "",
+        "# Field-name prefixes that are never an unknown field.",
+    ]
+    for prefix, description in PREFIXES:
+        out += [
+            "[[prefixes]]",
+            f"prefix = {toml_string(prefix)}",
+            f"description = {toml_string(description)}",
+            "",
+        ]
+    out.append("# Common Information Model fields, then the platform fields the CIM table omits.")
+    known = {r[0].lower() for r in rows}
+    for name, kind, description in rows:
+        out += [
+            "[[fields]]",
+            f"name = {toml_string(name)}",
+            f"type = {toml_string(kind)}",
+            f"description = {toml_string(description)}",
+            "",
+        ]
+    for name, kind, description in PLATFORM_FIELDS:
+        if name.lower() in known:
+            continue
+        out += [
+            "[[fields]]",
+            f"name = {toml_string(name)}",
+            f"type = {toml_string(kind)}",
+            f"description = {toml_string(description)}",
+            "platform = true",
+            "",
+        ]
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def render_values(source: Path) -> str:
+    cim = json.loads((source / "cim.json").read_text(encoding="utf-8"))
+    subjects = cim["Subjects"]
+    events = cim["EventTypes"]
+    activity: dict[str, dict[str, object]] = {}
+    outcomes: set[str] = set()
+    for event in events.values():
+        name = event["activity_type"]
+        outcomes.add(event["outcome"])
+        row = activity.setdefault(
+            name,
+            {
+                "subject": event["subject"],
+                "activity": event["activity"],
+                "pretty_name": event.get("pretty_name", ""),
+                "outcomes": set(),
+            },
+        )
+        row["outcomes"].add(event["outcome"])  # type: ignore[union-attr]
+        if row["subject"] != event["subject"] or row["activity"] != event["activity"]:
+            raise SystemExit(f"{name}: two subjects or activities")
+        if f"{event['subject']}-{event['activity']}" != name:
+            raise SystemExit(f"{name}: not <subject>-<activity>")
+        if event["subject"] not in subjects:
+            raise SystemExit(f"{name}: subject {event['subject']!r} is not a CIM subject")
+    out = [
+        "# Generated by scripts/engine/sync_exabeam_catalog.py. Do not edit.",
+        f"# Source: {REPOSITORY}@{PINNED_COMMIT} ({PINNED_DATE}), cim.json",
+        "# Apache License 2.0 (LICENSE-Apache-2.0.txt, NOTICE).",
+        "",
+        f"outcomes = [{', '.join(toml_string(o) for o in sorted(outcomes))}]",
+        "",
+    ]
+    for name in sorted(subjects):
+        out += [
+            "[[subjects]]",
+            f"name = {toml_string(name)}",
+            "description = "
+            + toml_string(" ".join(str(subjects[name].get("description", "")).split())),
+            "",
+        ]
+    for name in sorted(activity):
+        row = activity[name]
+        out += [
+            "[[activity_types]]",
+            f"name = {toml_string(name)}",
+            f"subject = {toml_string(str(row['subject']))}",
+            f"activity = {toml_string(str(row['activity']))}",
+            f"pretty_name = {toml_string(str(row['pretty_name']))}",
+            f"outcomes = [{', '.join(toml_string(o) for o in sorted(row['outcomes']))}]",  # type: ignore[arg-type]
+            "",
+        ]
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--source", type=Path, required=True, help="ExabeamLabs/CIMLibrary checkout")
+    ap.add_argument("--check", action="store_true", help="compare with the committed files")
+    ap.add_argument(
+        "--allow-other-commit",
+        action="store_true",
+        help="read a checkout that is not the pinned commit",
+    )
+    args = ap.parse_args(argv)
+    commit = head_commit(args.source)
+    if commit != PINNED_COMMIT and not args.allow_other_commit:
+        print(f"{args.source} is at {commit}, not the pinned {PINNED_COMMIT}", file=sys.stderr)
+        return 2
+    rows = read_fields(args.source)
+    outputs = {
+        OUT / "fields.toml": render_fields(rows),
+        OUT / "values.toml": render_values(args.source),
+    }
+    stale = False
+    for path, text in outputs.items():
+        if args.check:
+            current = path.read_text(encoding="utf-8") if path.exists() else ""
+            if current != text:
+                print(f"{path.relative_to(ROOT)} is out of date", file=sys.stderr)
+                stale = True
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            print(f"wrote {path.relative_to(ROOT)}")
+    print(f"{len(rows)} CIM fields")
+    return 1 if stale else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

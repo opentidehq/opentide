@@ -1,0 +1,2 @@
+// prod:array valid
+arrays.contains(["a", "b"], $e.principal.hostname)
