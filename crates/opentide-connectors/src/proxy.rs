@@ -109,6 +109,7 @@ impl ProxySettings {
     }
 
     /// The reqwest proxies, each with the `no_proxy` list.
+    #[cfg(not(target_os = "wasi"))]
     pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, String> {
         let no_proxy = || {
             self.no_proxy
@@ -134,6 +135,7 @@ impl ProxySettings {
     }
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The message for a proxy URL that is not one, without its credentials.
 fn invalid(url: &str) -> String {
     let shown = url::Url::parse(url)

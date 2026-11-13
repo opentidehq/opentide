@@ -251,8 +251,7 @@ impl MispClient {
             explicit_proxy,
         )
         .map_err(|_| connectivity())?;
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+        let runtime = crate::runtime::builder()
             .enable_all()
             .build()
             .map_err(|_| connectivity())?;

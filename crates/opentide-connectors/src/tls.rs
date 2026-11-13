@@ -9,13 +9,21 @@
 //! `requests` does with `verify=False`, and an exported bundle does not turn
 //! it back on (psf/requests#3829, the reason `TenantSession` exists).
 
-use std::path::{Path, PathBuf};
+#[cfg(not(target_os = "wasi"))]
+use std::path::Path;
+use std::path::PathBuf;
+#[cfg(not(target_os = "wasi"))]
 use std::sync::{Arc, OnceLock};
 
+#[cfg(not(target_os = "wasi"))]
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+#[cfg(not(target_os = "wasi"))]
 use rustls::crypto::{CryptoProvider, WebPkiSupportedAlgorithms};
+#[cfg(not(target_os = "wasi"))]
 use rustls::pki_types::pem::PemObject;
+#[cfg(not(target_os = "wasi"))]
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+#[cfg(not(target_os = "wasi"))]
 use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
 
 use crate::Environment;
@@ -42,6 +50,7 @@ impl Default for TlsSettings {
     }
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The crypto provider every client uses: ring.
 pub fn provider() -> Arc<CryptoProvider> {
     static PROVIDER: OnceLock<Arc<CryptoProvider>> = OnceLock::new();
@@ -50,12 +59,14 @@ pub fn provider() -> Arc<CryptoProvider> {
         .clone()
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The system's root certificates, read once per process.
 fn native_roots() -> &'static [CertificateDer<'static>] {
     static ROOTS: OnceLock<Vec<CertificateDer<'static>>> = OnceLock::new();
     ROOTS.get_or_init(|| rustls_native_certs::load_native_certs().certs)
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The certificates of the PEM bundle at *path*.
 pub fn read_bundle(path: &Path) -> Result<Vec<CertificateDer<'static>>, String> {
     let certs: Result<Vec<_>, _> = CertificateDer::pem_file_iter(path)
@@ -88,6 +99,7 @@ pub fn bundles(settings: &TlsSettings, env: &Environment) -> Vec<PathBuf> {
     paths
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The rustls configuration of one tenant.
 ///
 /// An environment bundle that cannot be read is skipped, as a client that
@@ -122,12 +134,14 @@ pub fn client_config(settings: &TlsSettings, env: &Environment) -> Result<Client
     Ok(builder.with_root_certificates(roots).with_no_client_auth())
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// Accepts any certificate; checks the handshake's signatures still.
 #[derive(Debug)]
 struct AcceptAny {
     algorithms: WebPkiSupportedAlgorithms,
 }
 
+#[cfg(not(target_os = "wasi"))]
 impl ServerCertVerifier for AcceptAny {
     fn verify_server_cert(
         &self,

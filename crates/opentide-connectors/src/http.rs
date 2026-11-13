@@ -213,6 +213,12 @@ impl HttpClient {
     /// An answer's body, read whole by the transport, or why it could not
     /// be read: each read must have brought data within the tenant's
     /// timeout (`requests`' read timeout).
+    #[expect(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "async as it was when it read the body: every caller awaits it, and a \
+                  transport may read lazily again"
+    )]
     pub async fn bytes(
         &self,
         response: Response,

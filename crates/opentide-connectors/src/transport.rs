@@ -4,7 +4,7 @@
 //!
 //! Two implementations:
 //!
-//! - [`ReqwestTransport`] (native, the default): reqwest on rustls, with the
+//! - `ReqwestTransport` (every target but WASI, the default): reqwest on rustls, with the
 //!   tenant's TLS, CA bundles, proxies, connect and read timeouts, HTTP/1.1.
 //!   It is the client opentide always had, moved under the trait: what it
 //!   sends and how it fails are unchanged, so the cassettes and goldens are.
@@ -20,7 +20,9 @@
 
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(not(target_os = "wasi"))]
+use std::time::Instant;
 
 use tokio_util::sync::CancellationToken;
 
@@ -95,7 +97,7 @@ impl Request {
         self.timeout = timeout;
     }
 
-    #[cfg(feature = "native")]
+    #[cfg(not(target_os = "wasi"))]
     fn from_reqwest(request: &reqwest::Request) -> Self {
         Self {
             method: request.method().clone(),
@@ -109,7 +111,7 @@ impl Request {
         }
     }
 
-    #[cfg(feature = "native")]
+    #[cfg(not(target_os = "wasi"))]
     fn into_reqwest(self) -> reqwest::Request {
         let mut request = reqwest::Request::new(self.method, self.url);
         *request.headers_mut() = self.headers;
@@ -136,7 +138,7 @@ impl BuildError {
         }
     }
 
-    #[cfg(feature = "native")]
+    #[cfg(not(target_os = "wasi"))]
     fn reqwest(error: reqwest::Error) -> Self {
         Self {
             display: error.to_string(),
@@ -169,14 +171,14 @@ pub struct RequestBuilder {
 
 #[derive(Debug)]
 enum Inner {
-    #[cfg(feature = "native")]
+    #[cfg(not(target_os = "wasi"))]
     Reqwest(reqwest::RequestBuilder),
     Plain(Result<Request, String>),
 }
 
 /// The client that builds requests natively: it never sends one (the
 /// tenant's transport does), so it verifies nothing and trusts nothing.
-#[cfg(feature = "native")]
+#[cfg(not(target_os = "wasi"))]
 fn builder_client() -> Result<&'static reqwest::Client, String> {
     static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
         std::sync::OnceLock::new();
@@ -199,7 +201,7 @@ fn builder_client() -> Result<&'static reqwest::Client, String> {
 
 impl RequestBuilder {
     pub(crate) fn new(method: Method, url: &str) -> Self {
-        #[cfg(feature = "native")]
+        #[cfg(not(target_os = "wasi"))]
         if let Ok(client) = builder_client() {
             return Self {
                 inner: Inner::Reqwest(client.request(method, url)),
@@ -224,7 +226,7 @@ impl RequestBuilder {
         <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
     {
         let inner = match self.inner {
-            #[cfg(feature = "native")]
+            #[cfg(not(target_os = "wasi"))]
             Inner::Reqwest(builder) => Inner::Reqwest(builder.header(name, value)),
             Inner::Plain(request) => Inner::Plain(request.and_then(|mut request| {
                 let name = HeaderName::try_from(name)
@@ -243,7 +245,7 @@ impl RequestBuilder {
     pub fn body(self, body: impl Into<Vec<u8>>) -> Self {
         let body: Vec<u8> = body.into();
         let inner = match self.inner {
-            #[cfg(feature = "native")]
+            #[cfg(not(target_os = "wasi"))]
             Inner::Reqwest(builder) => Inner::Reqwest(builder.body(body)),
             Inner::Plain(request) => Inner::Plain(request.map(|mut request| {
                 request.body = Some(body);
@@ -257,7 +259,7 @@ impl RequestBuilder {
     #[must_use]
     pub fn timeout(self, timeout: Duration) -> Self {
         let inner = match self.inner {
-            #[cfg(feature = "native")]
+            #[cfg(not(target_os = "wasi"))]
             Inner::Reqwest(builder) => Inner::Reqwest(builder.timeout(timeout)),
             Inner::Plain(request) => Inner::Plain(request.map(|mut request| {
                 request.timeout = Some(timeout);
@@ -274,7 +276,7 @@ impl RequestBuilder {
     /// Its URL or a header does not parse.
     pub fn build(self) -> Result<Request, BuildError> {
         match self.inner {
-            #[cfg(feature = "native")]
+            #[cfg(not(target_os = "wasi"))]
             Inner::Reqwest(builder) => builder
                 .build()
                 .map(|request| Request::from_reqwest(&request))
@@ -455,22 +457,23 @@ pub(crate) fn make(spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, Strin
     default(spec)
 }
 
-#[cfg(feature = "native")]
+#[cfg(not(target_os = "wasi"))]
 fn default(spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
     Ok(Arc::new(ReqwestTransport::new(spec)?))
 }
 
-#[cfg(not(feature = "native"))]
+#[cfg(target_os = "wasi")]
 fn default(_spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
-    Err(
-        "this build of opentide reaches tenants only through its host: run the command \
-         through `opentide serve` with a client that answers `opentide/fetch`"
-            .to_owned(),
-    )
+    Err(NETWORK_UNAVAILABLE.to_owned())
 }
 
+/// The setup failure of every tenant of the WASI build when no transport is
+/// installed: the host gives the process no sockets, so only `opentide
+/// serve`, with a client that answers `opentide/fetch`, reaches a tenant.
+pub const NETWORK_UNAVAILABLE: &str = "this command needs the network; run the opentide CLI";
+
 /// The native transport: reqwest on rustls.
-#[cfg(feature = "native")]
+#[cfg(not(target_os = "wasi"))]
 #[derive(Debug)]
 pub struct ReqwestTransport {
     client: reqwest::Client,
@@ -478,7 +481,7 @@ pub struct ReqwestTransport {
     read_timeout: Duration,
 }
 
-#[cfg(feature = "native")]
+#[cfg(not(target_os = "wasi"))]
 impl ReqwestTransport {
     /// The client of the tenant *spec* describes.
     ///
@@ -543,7 +546,7 @@ impl ReqwestTransport {
     }
 }
 
-#[cfg(feature = "native")]
+#[cfg(not(target_os = "wasi"))]
 impl Transport for ReqwestTransport {
     fn execute<'a>(
         &'a self,
