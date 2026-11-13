@@ -60,16 +60,16 @@ path = "ws/.opentide/schemas/rule.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5126672
-blob = "f5dd5d0eaf27213c80b5baebbe20a71ef1dd6f27070f851c3cfea5b07a9ccd90"
+size = 5255512
+blob = "90c46de8fc7e3fdf2c29e563221625002e1929fa227a8a42b5678bb74b7ff066"
 
 [[files]]
 path = "ws/.opentide/schemas/rule.1.1.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5128882
-blob = "be9eff98fc25755d07d17d5578ffc51b9ae71c8188ea7acbe1507504669ba901"
+size = 5257722
+blob = "ea076ccca08608ccc998ae4e93d5b858a4939b6cd62499f090e5bba4c5cbe5cb"
 
 [[files]]
 path = "ws/.opentide/schemas/threat.1.0.schema.json"
@@ -106,6 +106,13 @@ kind = "dir"
 mode = "0755"
 
 [[files]]
+path = "ws/.opentide/templates/platforms/bitdefender.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 732
+
+[[files]]
 path = "ws/.opentide/templates/platforms/carbon_black_cloud.template.yaml"
 change = "created"
 kind = "file"
@@ -132,6 +139,27 @@ change = "created"
 kind = "file"
 mode = "0644"
 size = 1906
+
+[[files]]
+path = "ws/.opentide/templates/platforms/exabeam.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 738
+
+[[files]]
+path = "ws/.opentide/templates/platforms/google_secops.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 609
+
+[[files]]
+path = "ws/.opentide/templates/platforms/graylog.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 550
 
 [[files]]
 path = "ws/.opentide/templates/platforms/harfanglab.template.yaml"

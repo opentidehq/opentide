@@ -1,4 +1,6 @@
-[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[1;33mwarning: [0mVocabulary not found · vocab: reviewed
-[?25h[1A[2K[1;31m✗[0m 101 errors in 89 files · 771 objects checked · 1600 queries · <SECONDS>
+[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[1;31merror: [0mEnvironment variable missing · detail: Unset configuration variables: $GRAYLOG_LAB_TOKEN · 
+advice: Set those environment variables before a live check.
+[1;33mwarning: [0mVocabulary not found · vocab: reviewed
+[?25h[1A[2K[1;31m✗[0m 101 errors in 89 files · 871 objects checked · 1924 queries · <SECONDS>
 [1;36m→[0m [1mopentide explain unknown_key[0m[2m · [0m[2mhow to fix it[0m
 [1;36m→[0m [1mopentide validate[0m[2m · [0m[2mcheck again[0m
