@@ -483,7 +483,7 @@ mod tests {
         assert_eq!(errors[0].code, "deployment_state_shape");
         assert!(
             errors[0].message.ends_with(
-                "platforms.patterned_test.lab: patterned_test external id '12' is not 24 \
+                "platforms.patterned_test.lab: patterned_test external id \"12\" is not 24 \
                  lower-case hex digits"
             ),
             "{}",
