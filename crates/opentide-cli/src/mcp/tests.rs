@@ -188,7 +188,10 @@ fn every_resource_answers_on_the_corpus() {
     );
     assert!(read(&server, "opentide://vocabularies/nope")["available"].is_array());
     let platforms = read(&server, "opentide://platforms");
-    assert_eq!(platforms.as_array().unwrap().len(), 9);
+    assert_eq!(
+        platforms.as_array().unwrap().len(),
+        opentide_schema::platforms::COUNT
+    );
     let Answer::Error(error) = server.read("opentide://nothing") else {
         panic!("an unknown resource is an error");
     };

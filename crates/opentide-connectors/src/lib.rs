@@ -37,6 +37,7 @@ pub mod elastic;
 pub mod encode;
 pub mod env;
 pub mod error;
+pub mod google_secops;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
@@ -74,6 +75,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
+        "google_secops" => google_secops::http_settings(timeout),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
@@ -99,6 +101,11 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        // Application Default Credentials are the process's own ambient
+        // credentials (google-auth's `default()` reads the process
+        // environment): a caller with an environment of its own (the CLI)
+        // builds `GoogleSecops::new` with it.
+        Box::new(google_secops::GoogleSecops::new(Environment::process())),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).
@@ -138,6 +145,10 @@ mod tests {
         assert_eq!(
             super::http_settings("defender_for_endpoint", timeout),
             super::defender::http_settings()
+        );
+        assert_eq!(
+            super::http_settings("google_secops", timeout),
+            super::google_secops::http_settings(timeout)
         );
         assert_eq!(
             super::http_settings("sysdig", timeout),
@@ -181,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn the_builtin_registry_holds_the_nine_platforms_and_what_each_can_do() {
+    fn the_builtin_registry_holds_the_ten_platforms_and_what_each_can_do() {
         let registry = super::builtin();
         assert_eq!(registry.ids(), super::plugin::BUILTIN);
         assert_eq!(
@@ -195,7 +206,8 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "google_secops"
             ]
         );
         let can = |id: &str| {
@@ -215,6 +227,7 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        assert_eq!(can("google_secops"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);
