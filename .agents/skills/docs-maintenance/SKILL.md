@@ -20,7 +20,7 @@ Use this skill when adding features, changing CLI/MCP/SDK surface area, or autho
 
 Internal maintainer docs: `docs/internal/` (excluded from public site root).
 
-Authoring conventions: [`docs/README.md`](../../docs/README.md).
+Authoring conventions: [`docs/README.md`](../../../docs/README.md).
 
 ## Page template
 
@@ -137,4 +137,4 @@ Eight platforms deploy; six validate queries. CrowdStrike and HarfangLab: **`sup
 
 After CLI/Usage changes, the website still needs `pnpm sync:content` so `content/docs/` picks up new pages (`lint`, `migrate`) and nav. Landing hero copy in `components/landing/hero-terminal.tsx` is independent of this tree — keep it aligned with the first-user sequence (`setup` → `generate` → `validate` → `deploy --dry-run`).
 
-Notes: [`docs/fumadocs/`](../../docs/fumadocs/).
+Notes: [`docs/fumadocs/`](../../../docs/fumadocs/).

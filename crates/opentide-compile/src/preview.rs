@@ -21,8 +21,12 @@ use crate::{
 pub const PREVIEW_TENANT: &str = "corpus-tenant";
 
 /// The platforms whose request body opentide builds from the rule alone,
-/// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles.
-pub const OFFLINE: [&str; 3] = ["sentinel", "elastic", "sysdig"];
+/// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles: those
+/// [`compile_offline`] compiles.
+pub fn offline() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Container, |platform| platform.compiles_offline)
+}
 
 /// The request body a deploy would send for `rule` on `platform` with no
 /// tenant (`compile_offline`). `None` for a platform this crate does not
@@ -41,15 +45,14 @@ pub fn compile_offline(
 }
 
 /// The platforms whose deployer builds the body from the tenant (and, for
-/// Defender, SentinelOne and CrowdStrike, the deployment state).
-pub const DEPLOYERS: [&str; 6] = [
-    "defender_for_endpoint",
-    "splunk",
-    "sentinel_one",
-    "crowdstrike",
-    "harfanglab",
-    "carbon_black_cloud",
-];
+/// Defender, SentinelOne and CrowdStrike, the deployment state): those
+/// [`compile_tenant`] builds writes for.
+pub fn deployers() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Container, |platform| {
+        platform.deploys && !platform.compiles_offline
+    })
+}
 
 /// What a deployer's body depends on besides the rule and the tenant.
 #[derive(Debug, Clone, PartialEq, Eq)]

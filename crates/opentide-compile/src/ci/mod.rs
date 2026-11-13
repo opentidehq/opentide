@@ -78,15 +78,11 @@ impl Provider {
 }
 
 /// The platforms whose queries a pipeline checks on a live tenant
-/// (`QUERY_VALIDATION_PLATFORMS`).
-pub const QUERY_VALIDATION_PLATFORMS: [&str; 6] = [
-    "sentinel",
-    "defender_for_endpoint",
-    "splunk",
-    "sentinel_one",
-    "carbon_black_cloud",
-    "elastic",
-];
+/// (`QUERY_VALIDATION_PLATFORMS`), in the connectors' order.
+pub fn query_validation_platforms() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Connector, |platform| platform.live_check)
+}
 
 /// The commands of the catalogue gate, which write findings reports.
 pub const GATE_COMMANDS: [&str; 2] = ["validate", "lint"];
@@ -436,7 +432,7 @@ fn values(options: &Options) -> Value {
     let queries: Vec<Value> = options
         .platforms
         .iter()
-        .filter(|platform| QUERY_VALIDATION_PLATFORMS.contains(&platform.as_str()))
+        .filter(|platform| query_validation_platforms().contains(&platform.as_str()))
         .map(|platform| {
             let variables = options.credentials.get(platform).unwrap_or(&none);
             context! {

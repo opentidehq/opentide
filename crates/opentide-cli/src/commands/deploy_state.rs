@@ -14,14 +14,9 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
-use opentide_connectors::python::python_string_repr;
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = opentide_workspace::state::SCHEMA_ID;
-/// Platforms whose deployer addresses the remote rule by a vendor id.
-pub const STATE_PLATFORMS: [&str; 4] = opentide_workspace::state::STATE_PLATFORMS;
-/// Platforms whose external id is a canonical decimal integer.
-const INTEGER_ID_PLATFORMS: [&str; 3] = ["defender_for_endpoint", "sentinel_one", "sysdig"];
 /// The root keys a shard's model reads; any other is kept as written.
 const ROOT_KEYS: [&str; 3] = ["object_uuid", "platforms", "schema"];
 /// The ignore line `opentide setup` writes, which a workspace that ignores
@@ -95,10 +90,7 @@ pub fn canonical_uuid(value: &str) -> Result<String, StateError> {
     canonical(value).ok_or_else(|| {
         StateError::new(
             "deployment_state_shape",
-            format!(
-                "{} is not a UUID, so it cannot name a deployment state shard",
-                python_string_repr(value)
-            ),
+            format!("{value:?} is not a UUID, so it cannot name a deployment state shard"),
         )
     })
 }
@@ -119,11 +111,11 @@ pub enum ExternalId {
 }
 
 impl ExternalId {
-    /// The id as Python's `repr` writes it.
-    pub fn repr(&self) -> String {
+    /// The id as a message shows it: a number as is, a string quoted.
+    pub fn shown(&self) -> String {
         match self {
             Self::Int(number) => number.to_string(),
-            Self::Text(text) => python_string_repr(text),
+            Self::Text(text) => format!("{text:?}"),
         }
     }
 }
@@ -148,14 +140,13 @@ pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<Strin
             format!("{platform} external id is empty"),
         )),
         ExternalId::Text(text)
-            if INTEGER_ID_PLATFORMS.contains(&platform) && !canonical_decimal(text) =>
+            if opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal(text) =>
         {
             Err(StateError::new(
                 "external_id_shape",
                 format!(
-                    "{platform} external id {} is not a canonical decimal integer (no sign, no \
-                     leading zeroes)",
-                    python_string_repr(text)
+                    "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
+                     no leading zeroes)"
                 ),
             ))
         }
@@ -289,16 +280,12 @@ impl Shard {
         let schema = payload.get("schema");
         if schema.and_then(serde_json::Value::as_str) != Some(SCHEMA_ID) {
             let shown = match schema {
-                Some(serde_json::Value::String(text)) => python_string_repr(text),
-                Some(other) => other.to_string(),
-                None => "None".to_owned(),
+                Some(value) => value.to_string(),
+                None => "null".to_owned(),
             };
             return Err(StateError::shape(
                 path,
-                &format!(
-                    "has schema {shown}, expected {}",
-                    python_string_repr(SCHEMA_ID)
-                ),
+                &format!("has schema {shown}, expected {SCHEMA_ID:?}"),
             ));
         }
         let Some(object_uuid) = payload.get("object_uuid").and_then(|value| value.as_str()) else {
@@ -308,10 +295,8 @@ impl Shard {
             return Err(StateError::new(
                 "deployment_state_uuid_mismatch",
                 format!(
-                    "{} records object_uuid {}, but its file name is {}",
-                    path.display(),
-                    python_string_repr(object_uuid),
-                    python_string_repr(stem)
+                    "{} records object_uuid {object_uuid:?}, but its file name is {stem:?}",
+                    path.display()
                 ),
             ));
         }
@@ -330,10 +315,9 @@ impl Shard {
                 return Err(StateError::new(
                     "deployment_state_platform",
                     format!(
-                        "{} names platform {}; only {} store external ids",
+                        "{} names platform {platform:?}; only {} store external ids",
                         path.display(),
-                        python_string_repr(&platform),
-                        STATE_PLATFORMS.join(", ")
+                        opentide_workspace::state::state_platforms().join(", ")
                     ),
                 ));
             }
@@ -371,10 +355,9 @@ impl Shard {
                     return Err(StateError::shape(
                         path,
                         &format!(
-                            "platforms.{platform} tenant {} has surrounding whitespace; the key \
-                             must be the tenant name exactly ({})",
-                            python_string_repr(&tenant),
-                            python_string_repr(tenant.trim())
+                            "platforms.{platform} tenant {tenant:?} has surrounding whitespace; \
+                             the key must be the tenant name exactly ({:?})",
+                            tenant.trim()
                         ),
                     ));
                 }
@@ -584,10 +567,7 @@ pub fn os_error_text(error: &std::io::Error, path: &Path) -> String {
         .strip_suffix(&format!(" (os error {code})"))
         .unwrap_or(&text);
     let tag = if cfg!(windows) { "WinError" } else { "Errno" };
-    format!(
-        "[{tag} {code}] {reason}: {}",
-        python_string_repr(&path.display().to_string())
-    )
+    format!("[{tag} {code}] {reason}: {:?}", path.display().to_string())
 }
 
 /// Why a state write failed: an `OSError` or a shard that cannot be used.
@@ -635,11 +615,11 @@ pub fn record_created(
         StateError::new(
             "deployment_state_write_failed",
             format!(
-                "{platform} created rule {} for {object_uuid} on tenant {}, but the deployment \
+                "{platform} created rule {} for {object_uuid} on tenant {:?}, but the deployment \
                  state could not be written ({}). The remote rule was not removed; add the id to \
                  .opentide/states/deployment/ by hand before the next deploy.",
-                external_id.repr(),
-                python_string_repr(tenant.trim()),
+                external_id.shown(),
+                tenant.trim(),
                 write_error_text(&error)
             ),
         )
@@ -665,9 +645,9 @@ pub fn record_deleted(
         StateError::new(
             "deployment_state_write_failed",
             format!(
-                "{platform} deleted the rule for {object_uuid} on tenant {}, but the deployment \
-                 state could not be updated ({})",
-                python_string_repr(tenant.trim()),
+                "{platform} deleted the rule for {object_uuid} on tenant {:?}, but the \
+                 deployment state could not be updated ({})",
+                tenant.trim(),
                 write_error_text(&error)
             ),
         )
@@ -711,7 +691,7 @@ mod tests {
         assert!(canonical("not-a-uuid").is_none());
         assert_eq!(
             canonical_uuid("nope").unwrap_err().message,
-            "'nope' is not a UUID, so it cannot name a deployment state shard"
+            "\"nope\" is not a UUID, so it cannot name a deployment state shard"
         );
     }
 
@@ -725,7 +705,7 @@ mod tests {
             normalise_external_id("sentinel_one", &ExternalId::Text("017".into()))
                 .unwrap_err()
                 .message,
-            "sentinel_one external id '017' is not a canonical decimal integer (no sign, no \
+            "sentinel_one external id \"017\" is not a canonical decimal integer (no sign, no \
              leading zeroes)"
         );
         assert_eq!(
@@ -834,12 +814,12 @@ mod tests {
         assert!(
             refused(&shard_text(r#"{"sysdig": {"t": "01"}}"#))
                 .message
-                .contains("platforms.sysdig.t: sysdig external id '01'")
+                .contains("platforms.sysdig.t: sysdig external id \"01\"")
         );
         assert!(
             refused(r#"{"schema": "other"}"#)
                 .message
-                .ends_with("has schema 'other', expected 'deployment.state::1.0'")
+                .ends_with("has schema \"other\", expected \"deployment.state::1.0\"")
         );
         // The rule's shard under another spelling of its name. Alone in the
         // folder, so a filesystem that folds case (macOS, Windows), where the
@@ -866,18 +846,18 @@ mod tests {
             record_created(dir.path(), UUID, "sysdig", "other", &ExternalId::Int(43)).unwrap_err();
         assert_eq!(error.code, "deployment_state_write_failed");
         assert!(error.message.starts_with(&format!(
-            "sysdig created rule 43 for {UUID} on tenant 'other', but the deployment state could \
-             not be written ("
+            "sysdig created rule 43 for {UUID} on tenant \"other\", but the deployment state \
+             could not be written ("
         )));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     }
 
     #[test]
-    fn an_os_error_reads_as_pythons() {
+    fn an_os_error_names_its_errno_and_path() {
         let error = std::io::Error::from_raw_os_error(13);
         let text = os_error_text(&error, Path::new("/x/y.json"));
         assert!(
-            text.starts_with('[') && text.ends_with(": '/x/y.json'"),
+            text.starts_with('[') && text.ends_with(": \"/x/y.json\""),
             "{text}"
         );
         assert_eq!(
