@@ -1,7 +1,7 @@
 //! MISP's REST client against the cassettes the oracle's `share push` and
 //! `share retract` recorded on the stand-in of `tests/cassettes/misp/`
 //! (UC-4.4b, #834): the calls the engine makes, in its order, each request
-//! the oracle's (PyMISP's) byte for byte, bodies included.
+//! the oracle's (PyMISP's), bodies included (as the same JSON data).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 

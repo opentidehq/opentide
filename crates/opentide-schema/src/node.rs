@@ -8,5 +8,5 @@
 
 mod dump;
 
-pub use dump::{DumpError, to_yaml};
+pub use dump::{DumpError, double_quoted, to_yaml};
 pub use opentide_core::node::*;

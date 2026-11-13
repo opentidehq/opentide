@@ -239,32 +239,29 @@ pub fn newline(text: &str) -> &'static str {
     if text.contains("\r\n") { "\r\n" } else { "\n" }
 }
 
-/// `value` as `json.dumps(value, indent=2)` writes it, every line ending
-/// `newline`, with one after the document: non-ASCII characters escaped,
-/// as Python's encoder does by default.
+/// `value` as a file: indented by two spaces, UTF-8, every line ending
+/// `newline`, with one after the document.
 pub fn dumps(value: &Json, newline: &str) -> String {
     let text = crate::json::document_text(value, true);
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        if ch.is_ascii() {
-            out.push(ch);
-        } else {
-            let mut units = [0_u16; 2];
-            for unit in ch.encode_utf16(&mut units) {
-                out.push_str(&format!("\\u{unit:04x}"));
-            }
-        }
-    }
     if newline == "\n" {
-        out
+        text
     } else {
-        out.replace('\n', newline)
+        text.replace('\n', newline)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dumps_writes_utf8_with_the_files_newline() {
+        let value = Json::parse("{\"name\": \"caf\u{e9}\", \"n\": [1]}").unwrap();
+        assert_eq!(
+            dumps(&value, "\r\n"),
+            "{\r\n  \"name\": \"caf\u{e9}\",\r\n  \"n\": [\r\n    1\r\n  ]\r\n}\r\n"
+        );
+    }
 
     fn template() -> Json {
         Json::parse(

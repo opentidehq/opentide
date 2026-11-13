@@ -23,13 +23,14 @@ mode.
 
 ## Invariants
 
-- The oracle's output is the contract: JSON is compared by data, then by the order of every
-  object's keys, then by bytes. Never compare JSON as a map alone, and never re-serialise a
-  document before the byte comparison: normalisation rewrites bytes in place.
+- The oracle's output is the contract, and JSON is data: a stream or a file that parses as one
+  JSON document on both sides is compared by its values alone. The order of an object's keys, the
+  indentation, the escapes and the final newline are layout, which the comparator does not
+  judge (the maintainer's rule: never port a library's layout to keep bytes identical). Numbers
+  keep their spelling's type: `1` and `1.0` differ. Everything that is not JSON is compared by
+  bytes.
 - An approved difference is applied only where both of its values are found as written, and only
-  at its target; everything else is still compared. With an approved JSON value, the bytes are
-  checked by layout (both sides must be the same one of `json::LAYOUTS`), so a layout change is
-  never hidden behind an approval.
+  at its target; everything else is still compared.
 - A text rule is one whole line on each side, approved where the oracle and candidate lines match
   it at the same line number (without the line ending, which is still compared). Part of a line
   approves nothing.

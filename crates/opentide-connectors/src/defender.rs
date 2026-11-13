@@ -8,7 +8,7 @@
 //! credentials (Entra ID's token endpoint), then sends every call to Graph's
 //! beta security API with the bearer token and `Content-Type:
 //! application/json`. Bodies are the compiled rule (`opentide-compile`
-//! `defender::body`) written as `json.dumps` writes them.
+//! `defender::body`), sent as compact JSON.
 
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
@@ -16,7 +16,6 @@ use std::sync::{Mutex, PoisonError};
 use opentide_compile::json::{Json, Object};
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
@@ -465,7 +464,7 @@ async fn sign_in(cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
 
 /// *body* as `requests`' `json=` writes it.
 fn json_body(cx: TenantContext<'_>, body: &Json) -> Result<Vec<u8>, ConnectorError> {
-    python_json(body).map_err(|error| ConnectorError::Setup {
+    serde_json::to_vec(body).map_err(|error| ConnectorError::Setup {
         platform: cx.tenant.label.platform.clone(),
         tenant: cx.tenant.label.tenant.clone(),
         message: format!("the request body cannot be written: {error}"),
