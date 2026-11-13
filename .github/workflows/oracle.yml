@@ -197,11 +197,12 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
       # Every oracle builds the same debug opentide-lsp: one cache, saved by
-      # this job on a branch push (not a tag), read by the others.
+      # this job by the nightly and on pushes to development (the default
+      # branch, whose caches every pull request reads), read by the others.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: oracle
-          save-if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
+          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "10.0.x"

@@ -120,11 +120,15 @@ rustup installs nothing in the middle of a build; the Linux wheels' containers d
 **Compiler caches, one strategy** (`tests/test_ci/test_rust_caches.py`, #841, #1047): the Rust
 jobs of ci.yml wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from taiki-e/install-action), whose
 directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path
-with `..`) actions/cache keeps under `sccache-<family>-<hash of Cargo.lock and rust-toolchain.toml>`,
-restored with the family as `restore-keys`. The key does not hash the sources: sccache is
-content-addressed, so a copy made some merges ago still serves every crate that did not change,
-and a push to a base branch saves nothing until the lockfile or the toolchain changes. Each family
-has one job that saves it (`actions/cache/save`, from a push, only when the key missed):
+with `..`) actions/cache keeps under `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`
+(the week from a `week` step just before the restore, `date -u +%G-W%V`), restored with the
+family and toolchain as `restore-keys`. The key hashes neither the sources nor `Cargo.lock`:
+sccache is content-addressed, so a copy a few days old still serves every crate that did not
+change, and a family is saved once a week, by the first push of the week. A key on `Cargo.lock`,
+which most merges change, saved every family again on each merge, and with the target trees
+below that passed the 10 GB GitHub keeps, so the families pull requests restore were evicted
+before the next one read them (the engine tests built cold). Each family has one job that saves
+it (`actions/cache/save`, from a push, only when the key missed):
 `lint`, `engine-check` (`engine`), `engine-dev-<os>-<n>` (each `engine-test-part` shard per OS;
 `clients` and `elastic-sweep` restore Linux shard 2's, which tests `opentide-lsp` and `opentide-analysis`), `corpus` (`corpus-part`'s generator; the other
 parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
@@ -134,8 +138,11 @@ set's other Rust jobs restore their OS's: `facade`, `node`, `npm-install`, `engi
 rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
 two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per
 repository keeps once a few pushes land, so the caches pull requests read were evicted within
-minutes (#1047). The rust-caches left: `fuzz` (`fuzz-smoke`: the nightly's `fuzz/target` and
-cargo-fuzz in `~/.cargo/bin`), plus the other workflows' own. The release dry run
+minutes (#1047). The rust-caches left, target trees: `fuzz` (`fuzz-smoke`: the nightly's
+`fuzz/target` and cargo-fuzz in `~/.cargo/bin`), plus coverage.yml's, golden.yml's, schema.yml's
+and oracle.yml's own; each saves on the nightly and on pushes to `development` only
+(`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose caches every
+pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
 (`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
 `release-<os>-<arch>` per runner for the binaries (one cell per runner saves; the Intel macOS
 cross build restores Apple silicon's) and `release-wasm`, saved from a push when the key missed;
