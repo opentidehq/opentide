@@ -54,6 +54,12 @@ indexmap = { version = "2", features = ["serde"] }
 # generate-stubs` uses the same crate). Its version is PyO3's.
 pyo3-introspection = "0.30.1"
 jsonschema = { version = "0.61.1", default-features = false }
+# xtask vocab malapi (src/vocab/malapi/): malapi.io's pages, parsed with
+# html5ever (the parser scraper wraps) into markup5ever_rcdom's tree. Not
+# scraper itself: its selectors and cssparser are MPL-2.0, which deny.toml's
+# licence policy leaves to a maintainer's decision.
+html5ever = "0.40.1"
+markup5ever_rcdom = "0.40.1"
 
 [target.'cfg(unix)'.dependencies]
 # The pseudo-terminals of human mode and killing a case's process group.
