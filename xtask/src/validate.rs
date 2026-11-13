@@ -366,6 +366,36 @@ fn invalid_uuid_every_file(
         })
 }
 
+/// Every finding's `message` without the platforms the recorded oracle
+/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) in the lists of
+/// platforms it names (`deployment_state_platform`'s "only crowdstrike,
+/// defender_for_endpoint, google_secops, … store external ids"): the 0.23.0
+/// oracle's lists predate them. O2 empties `SINCE_ORACLE`, and this with it.
+fn without_since_oracle_names(report: &mut Json) {
+    for key in ["issues", "warnings"] {
+        let Some(findings) = report.get_mut(key).and_then(Json::as_array_mut) else {
+            continue;
+        };
+        for finding in findings {
+            if let Some(Json::String(message)) = finding.get_mut("message") {
+                *message = without_since_oracle_items(message);
+            }
+        }
+    }
+}
+
+/// `text` without each `SINCE_ORACLE` id that stands as an item of a
+/// comma-separated list (`a, google_secops, b`, `a, google_secops`).
+fn without_since_oracle_items(text: &str) -> String {
+    let mut out = text.to_owned();
+    for id in opentide_schema::platforms::SINCE_ORACLE {
+        out = out
+            .replace(&format!("{id}, "), "")
+            .replace(&format!(", {id}"), "");
+    }
+    out
+}
+
 /// KG-01: the oracle's `compile_invalid_rule` on a Sentinel block for a
 /// duration it cannot read, and the Rust model's `schema_validation` on the
 /// duration's own field, in the same words.
@@ -605,42 +635,6 @@ fn online_cve(
 }
 
 /// Runs one case; its differences.
-/// The `deployment_state_platform` findings of `report` with the platforms
-/// the recorded oracle (0.23.0) lacks (`opentide_schema::platforms::SINCE_ORACLE`)
-/// left out of their "only <platforms> store external ids" list: a platform
-/// the train ports that stores external ids is named there, and the oracle
-/// cannot name it. O2's oracle does, and `SINCE_ORACLE` is empty then.
-fn without_since_oracle_state_platforms(report: &mut Json) {
-    const LEAD: &str = "; only ";
-    const TAIL: &str = " store external ids";
-    for key in ["issues", "warnings"] {
-        let Some(findings) = report.get_mut(key).and_then(Json::as_array_mut) else {
-            continue;
-        };
-        for finding in findings {
-            if finding.get("code").and_then(Json::as_str) != Some("deployment_state_platform") {
-                continue;
-            }
-            let Some(message) = finding.get("message").and_then(Json::as_str) else {
-                continue;
-            };
-            let (Some(start), Some(end)) = (message.find(LEAD), message.rfind(TAIL)) else {
-                continue;
-            };
-            let from = start + LEAD.len();
-            if from > end {
-                continue;
-            }
-            let kept: Vec<&str> = message[from..end]
-                .split(", ")
-                .filter(|id| !opentide_schema::platforms::after_oracle(id))
-                .collect();
-            let rewritten = format!("{}{}{}", &message[..from], kept.join(", "), &message[end..]);
-            finding["message"] = Json::String(rewritten);
-        }
-    }
-}
-
 fn run_case(
     case: &Case,
     ws: &Path,
@@ -717,7 +711,7 @@ fn run_case(
     let root = ws.to_string_lossy().into_owned();
     let text = crate::payloads::placeholder(&serde_json::to_string(&validation.report)?, ws);
     let mut rust: Json = serde_json::from_str(&text)?;
-    without_since_oracle_state_platforms(&mut rust);
+    without_since_oracle_names(&mut rust);
     let list = |report: &Json, key: &str| -> Vec<Json> {
         report[key].as_array().cloned().unwrap_or_default()
     };
@@ -1104,6 +1098,24 @@ pub fn run(args: &[String]) -> Result<u8> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn platform_lists_leave_out_the_platforms_the_oracle_lacks() {
+        let id = opentide_schema::platforms::SINCE_ORACLE[0];
+        assert_eq!(
+            super::without_since_oracle_items(&format!(
+                "only crowdstrike, {id}, sysdig store external ids"
+            )),
+            "only crowdstrike, sysdig store external ids"
+        );
+        assert_eq!(
+            super::without_since_oracle_items(&format!("only crowdstrike, {id}")),
+            "only crowdstrike"
+        );
+        let mut report = json!({"issues": [{"message": format!("a, {id}")}], "warnings": []});
+        super::without_since_oracle_names(&mut report);
+        assert_eq!(report["issues"][0]["message"], "a");
+    }
     use super::*;
 
     #[test]
@@ -1179,26 +1191,6 @@ mod tests {
             "object_uuid": value,
             "message": format!("UUID '{value}' is not a valid UUIDv4"),
         })
-    }
-
-    #[test]
-    fn a_state_platform_the_oracle_lacks_is_left_out_of_the_message() {
-        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
-        let message = |list: &str| {
-            format!("<WS>/s.json names platform 'splunk'; only {list} store external ids")
-        };
-        let mut report = json!({"issues": [
-            {"code": "deployment_state_platform",
-             "message": message(&format!("{platform}, crowdstrike, sysdig"))},
-            {"code": "other", "message": message(platform)},
-        ]});
-        without_since_oracle_state_platforms(&mut report);
-        assert_eq!(
-            report["issues"][0]["message"],
-            json!(message("crowdstrike, sysdig"))
-        );
-        // Another code's message is left as it is.
-        assert_eq!(report["issues"][1]["message"], json!(message(platform)));
     }
 
     #[test]

@@ -59,9 +59,10 @@ fn counts_and_coverage_of_the_default_workspace() {
     assert_eq!(workspace.family(Family::Threat).count(), 300);
     assert_eq!(workspace.family(Family::Objective).count(), 300);
     assert_eq!(workspace.family(Family::Rule).count(), 500);
-    // Every platform, both rule revisions and every feature the scope names.
+    // Every platform the corpus generates (`SINCE_ORACLE` ones are left
+    // out until O2), both rule revisions and every feature the scope names.
     let rules: Vec<_> = workspace.family(Family::Rule).collect();
-    for platform in &xtask::corpus::vocab::generated_platforms() {
+    for platform in xtask::corpus::vocab::generated_platforms() {
         let count = rules
             .iter()
             .filter(|r| r.platforms.iter().any(|p| p == platform))

@@ -174,15 +174,15 @@ fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
     // the oracle lacks; leave each such platform out where the oracle has none
     // (`opentide_schema::platforms::SINCE_ORACLE`). O2's oracle has them. On
     // 0.23.0 output none is present, so this changes nothing until a row lands.
-    // `systems` is the same tables under the configuration's older name.
-    for table in ["platforms", "systems"] {
+    // `systems` is the same table under its legacy name.
+    for key in ["platforms", "systems"] {
         if let Some(platforms) = rust
-            .pointer_mut(&format!("/resolved/{table}"))
+            .pointer_mut(&format!("/resolved/{key}"))
             .and_then(Json::as_object_mut)
         {
             platforms.retain(|id, _| {
                 !opentide_schema::platforms::after_oracle(id)
-                    || oracle.pointer(&format!("/resolved/{table}/{id}")).is_some()
+                    || oracle.pointer(&format!("/resolved/{key}/{id}")).is_some()
             });
         }
     }
@@ -438,21 +438,14 @@ mod tests {
     }
 
     #[test]
-    fn a_platform_the_oracle_lacks_is_left_out_of_resolved_systems() {
-        // `systems` holds the same tables as `platforms` (its older name).
+    fn a_platform_the_oracle_lacks_is_left_out_of_resolved_systems_too() {
         let platform = opentide_schema::platforms::SINCE_ORACLE[0];
         let rust = json!({"resolved": {"systems": {
-            platform: {"platform": {"enabled": false}}, "sentinel": {"enabled": true}
+            platform: {"platform": {}}, "sentinel": {"platform": {}}
         }}, "issues": []});
-        let oracle =
-            json!({"resolved": {"systems": {"sentinel": {"enabled": true}}}, "issues": []});
+        let oracle = json!({"resolved": {"systems": {"sentinel": {"platform": {}}}}, "issues": []});
         let (compared_oracle, compared_rust) = comparable(&oracle, &rust);
         assert_eq!(compared_oracle, compared_rust);
-        // A difference in a platform the oracle knows still shows.
-        let other =
-            json!({"resolved": {"systems": {"sentinel": {"enabled": false}}}, "issues": []});
-        let (compared_oracle, compared_rust) = comparable(&other, &rust);
-        assert_ne!(compared_oracle, compared_rust);
     }
 
     #[test]

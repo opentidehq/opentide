@@ -57,7 +57,7 @@ pub const USAGE_NEEDS_INPUT: &str = super::setup::USAGE_NEEDS_INPUT;
 
 /// Keys a platform block needs beyond its model's required fields, so it
 /// holds detection logic and deploys (`PLATFORM_EXTRA_KEYS`).
-const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 7] = [
+const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 8] = [
     (
         "defender_for_endpoint",
         &[&["scope"], &["scope", "selection"]],
@@ -90,6 +90,10 @@ const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 7] = [
             &["detection", "criteria", "is"],
         ],
     ),
+    (
+        "google_secops",
+        &[&["events"], &["outcome"], &["condition"]],
+    ),
 ];
 
 /// A key under a platform block, its value, and whether it is a placeholder.
@@ -98,7 +102,12 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 2] = [
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 3] = [
+    (
+        "google_secops",
+        // A rule without $risk_score earns google_secops_risk_score_missing.
+        &[(&["outcome"], "$risk_score = 40", true)],
+    ),
     (
         "sentinel",
         &[

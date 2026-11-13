@@ -1,0 +1,16 @@
+{
+  "method": "PATCH",
+  "path": "/v1/projects/acme-secops/locations/eu/instances/3f0ac524-5ae1-4bfd-b86d-53afc953e7e6/rules/ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1/deployment",
+  "query": {
+    "updateMask": "enabled,alerting,runFrequency"
+  },
+  "body": {
+    "enabled": true,
+    "alerting": true,
+    "runFrequency": "LIVE_CUSTOMIZABLE",
+    "scheduleCustomizations": {
+      "ensureEnrichmentCompleteness": true,
+      "lateArrivingDataAdjustment": "1800s"
+    }
+  }
+}

@@ -9,8 +9,8 @@ use crate::node::{Node, Value};
 use crate::objects::objective::ObjectiveV1_0;
 use crate::objects::platform::{
     BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    HarfangLabConfig, PLATFORM_CONFIG_MODELS, SentinelConfig, SentinelOneConfig, SplunkConfig,
-    SysdigConfig,
+    GoogleSecopsConfig, HarfangLabConfig, PLATFORM_CONFIG_MODELS, SentinelConfig,
+    SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::rule::{RuleV1_0, RuleV1_1};
 use crate::objects::threat::ThreatVectorV1_0;
@@ -80,6 +80,7 @@ pub fn platform_template(platform: &str) -> Result<Option<String>, TemplateError
         "elastic" => render::<ElasticConfig>(&options)?,
         "sysdig" => render::<SysdigConfig>(&options)?,
         "bitdefender" => render::<BitdefenderConfig>(&options)?,
+        "google_secops" => render::<GoogleSecopsConfig>(&options)?,
         _ => return Ok(None),
     }))
 }

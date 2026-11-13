@@ -23,9 +23,9 @@ use crate::configuration::checks::{FILE_MODELS, GENERIC_PLATFORM_FILE};
 use crate::configuration::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
     DefenderForEndpointConfiguration, DeploymentConfiguration, DocumentationConfiguration,
-    ElasticConfiguration, HarfangLabConfiguration, PLATFORMS, PathsConfiguration,
-    PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration,
-    SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
+    ElasticConfiguration, GoogleSecopsConfiguration, HarfangLabConfiguration, PLATFORMS,
+    PathsConfiguration, PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration,
+    SharingConfiguration, SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
 };
 
 use super::schema::StripFrameworkKeywords;
@@ -94,6 +94,7 @@ fn raw(file_key: &str) -> Option<Schema> {
         "platforms/elastic.toml" => model_schema::<ElasticConfiguration>(),
         "platforms/sysdig.toml" => model_schema::<SysdigConfiguration>(),
         "platforms/bitdefender.toml" => model_schema::<BitdefenderConfiguration>(),
+        "platforms/google_secops.toml" => model_schema::<GoogleSecopsConfiguration>(),
         GENERIC_PLATFORM_FILE => model_schema::<PlatformConfiguration>(),
         _ => return None,
     })

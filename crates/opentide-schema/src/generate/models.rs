@@ -110,8 +110,8 @@ pub fn models() -> &'static [Model] {
     static MODELS: OnceLock<Vec<Model>> = OnceLock::new();
     MODELS.get_or_init(|| {
         use platform::{
-            bitdefender, carbon_black, crowdstrike, defender, elastic, harfanglab, sentinel,
-            sentinel_one, splunk, sysdig,
+            bitdefender, carbon_black, crowdstrike, defender, elastic, google_secops, harfanglab,
+            sentinel, sentinel_one, splunk, sysdig,
         };
         let mut all = vec![
             model::<metadata::ObjectMetadata>(true),
@@ -226,6 +226,10 @@ pub fn models() -> &'static [Model] {
             bitdefender::BitdefenderProcessScope,
             bitdefender::BitdefenderActions,
             bitdefender::BitdefenderConfig,
+            google_secops::GoogleSecopsMatch,
+            google_secops::GoogleSecopsOptions,
+            google_secops::GoogleSecopsSchedule,
+            google_secops::GoogleSecopsConfig,
         ]);
         all
     })

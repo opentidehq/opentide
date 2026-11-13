@@ -177,6 +177,7 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("ElasticConfig", of::<platform::ElasticConfig>()),
         ("SysdigConfig", of::<platform::SysdigConfig>()),
         ("BitdefenderConfig", of::<platform::BitdefenderConfig>()),
+        ("GoogleSecopsConfig", of::<platform::GoogleSecopsConfig>()),
     ]
 }
 
@@ -196,31 +197,6 @@ fn since_oracle_model_prefixes() -> Vec<String> {
                 .to_owned()
         })
         .collect()
-}
-
-/// `schema` without the `SINCE_ORACLE` platforms' blocks: a platform the train
-/// ports onto the recorded oracle (0.23.0) is a property of the rule's
-/// `configurations` (`RuleConfigurations`, and each `DetectionRule` revision
-/// inline), which the oracle's models lack. Their ids name no other property.
-fn without_since_oracle_properties(schema: &mut Value) {
-    match schema {
-        Value::Object(map) => {
-            if let Some(Value::Object(properties)) = map.get_mut("properties") {
-                properties.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
-            }
-            if let Some(Value::Array(required)) = map.get_mut("required") {
-                required.retain(|key| {
-                    !key.as_str()
-                        .is_some_and(opentide_schema::platforms::after_oracle)
-                });
-            }
-            for value in map.values_mut() {
-                without_since_oracle_properties(value);
-            }
-        }
-        Value::Array(items) => items.iter_mut().for_each(without_since_oracle_properties),
-        _ => {}
-    }
 }
 
 /// A property the models have and the oracle's do not: a field development
@@ -308,9 +284,9 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         let pydantic = oracle["schemas"]
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
-        let mut rust = rust;
-        without_since_oracle_properties(&mut rust);
         let a = normalise(pydantic, Side::Pydantic, &[]);
+        let mut rust = rust;
+        drop_since_oracle_properties(&mut rust);
         let b = normalise(&rust, Side::Schemars, &[]);
         let mut found = differences(&a, &b);
         found.retain(|difference| match approved_property(name, difference) {
@@ -335,6 +311,22 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         .collect();
     out.push(("(approvals)".to_owned(), stale));
     Ok(out)
+}
+
+/// Removes, at any depth, each `properties` member named after a platform
+/// the recorded oracle lacks (`SINCE_ORACLE`): `RuleConfigurations` and the
+/// rule models carry their blocks, which the 0.23.0 probe's schemas cannot.
+fn drop_since_oracle_properties(schema: &mut Value) {
+    match schema {
+        Value::Object(members) => {
+            if let Some(Value::Object(properties)) = members.get_mut("properties") {
+                properties.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
+            }
+            members.values_mut().for_each(drop_since_oracle_properties);
+        }
+        Value::Array(items) => items.iter_mut().for_each(drop_since_oracle_properties),
+        _ => {}
+    }
 }
 
 fn python(options: &Options, repo: &Path, target: &Path) -> Result<PathBuf> {
@@ -566,21 +558,15 @@ mod tests {
     }
 
     #[test]
-    fn a_since_oracle_platform_block_is_left_out_of_the_rule_schemas() {
-        let platform = opentide_schema::platforms::SINCE_ORACLE[0];
-        let mut schema = serde_json::json!({
-            "properties": {"configurations": {"properties": {
-                platform: {"type": "object"}, "sentinel": {"type": "object"}
-            }, "required": [platform, "sentinel"]}}
-        });
-        without_since_oracle_properties(&mut schema);
+    fn properties_of_platforms_the_oracle_lacks_are_dropped() {
+        let mut schema = serde_json::json!({"properties": {
+            "configurations": {"properties": {"google_secops": {}, "sentinel": {}}},
+            "google_secops": {"type": "object"}
+        }});
+        drop_since_oracle_properties(&mut schema);
         assert_eq!(
             schema,
-            serde_json::json!({
-                "properties": {"configurations": {"properties": {
-                    "sentinel": {"type": "object"}
-                }, "required": ["sentinel"]}}
-            })
+            serde_json::json!({"properties": {"configurations": {"properties": {"sentinel": {}}}}})
         );
     }
 
@@ -680,7 +666,7 @@ mod tests {
     #[test]
     fn every_model_and_every_platform_block_has_a_schema() {
         let schemas = rust_schemas();
-        assert_eq!(schemas.len(), 30);
+        assert_eq!(schemas.len(), 31);
         for entry in platform::PLATFORM_CONFIG_MODELS {
             assert!(
                 schemas.iter().any(|(name, _)| *name == entry.model),

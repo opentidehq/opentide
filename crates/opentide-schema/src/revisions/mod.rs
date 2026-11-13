@@ -107,6 +107,11 @@ pub const REVISIONS: &[Revision] = &[
     ),
     revision("platform::elastic::1.0", Kind::Platform, "ElasticConfig"),
     revision(
+        "platform::google_secops::1.0",
+        Kind::Platform,
+        "GoogleSecopsConfig",
+    ),
+    revision(
         "platform::harfanglab::1.0",
         Kind::Platform,
         "HarfangLabConfig",

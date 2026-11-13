@@ -330,6 +330,28 @@ pub const PLATFORMS: &[Platform] = &[
         connector_rank: 9,
         configuration_rank: 9,
     },
+    Platform {
+        id: "google_secops",
+        label: "Google Security Operations",
+        configuration_name: "Google Security Operations",
+        config_class: "GoogleSecopsConfig",
+        // google-secops-1.0: the rule id, never a revision (`@v_…`) or a
+        // resource name.
+        external_id: ExternalId::Text {
+            pattern: Some("^ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["yaral"],
+        // The offline YARA-L check arrives with the engine import (E1).
+        offline_languages: &[],
+        query_file_suffixes: &["yaral"],
+        cli_rank: 10,
+        connector_rank: 10,
+        configuration_rank: 10,
+    },
 ];
 
 /// How many platforms are built in.
@@ -532,7 +554,8 @@ mod tests {
                 "carbon_black_cloud",
                 "elastic",
                 "sysdig",
-                "bitdefender"
+                "bitdefender",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -547,7 +570,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "bitdefender"
+                "bitdefender",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -562,7 +586,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "bitdefender"
+                "bitdefender",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -577,7 +602,8 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
-                "bitdefender"
+                "bitdefender",
+                "google_secops"
             ]
         );
     }
@@ -590,6 +616,7 @@ mod tests {
                 "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
+                "google_secops",
                 "sentinel_one",
                 "sysdig"
             ]
@@ -604,6 +631,7 @@ mod tests {
                 "carbon_black_cloud",
                 "defender_for_endpoint",
                 "elastic",
+                "google_secops",
                 "sentinel",
                 "sentinel_one",
                 "splunk"
@@ -615,12 +643,18 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig", "bitdefender"]
+            [
+                "sentinel",
+                "elastic",
+                "sysdig",
+                "bitdefender",
+                "google_secops"
+            ]
         );
         assert_eq!(
             query_file_suffixes(),
             [
-                "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco"
+                "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco", "yaral"
             ]
         );
     }

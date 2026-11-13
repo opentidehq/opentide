@@ -1742,6 +1742,7 @@ impl Sender<'_, '_> {
         let settings = match platform {
             "sysdig" => opentide_connectors::sysdig::http_defaults(),
             "bitdefender" => opentide_connectors::bitdefender::http_defaults(),
+            "google_secops" => opentide_connectors::google_secops::http_defaults(),
             _ => http_settings(platform, Duration::from_secs(timeout)),
         };
         let tenant = Tenant::from_setup(
@@ -1794,6 +1795,7 @@ impl Sender<'_, '_> {
             "elastic" => self.elastic(&batches, log),
             "sysdig" => self.sysdig(&batches, log),
             "bitdefender" => self.bitdefender(&batches, log),
+            "google_secops" => self.google_secops(&batches, log),
             "defender_for_endpoint" | "sentinel_one" | "crowdstrike" => {
                 self.with_state(platform, &batches, log)
             }
@@ -3259,6 +3261,200 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// Google Security Operations: each rule verified, created, updated,
+    /// disabled, archived or deleted by the id deployment state records
+    /// (`GoogleSecopsDeploy`). Credentials that cannot be loaded, refused
+    /// credentials or an instance that cannot be reached stop the tenant.
+    fn google_secops(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        use opentide_connectors::google_secops::deploy::{
+            Action, RuleDeploy, StateChange, deploy_rule,
+        };
+        use opentide_connectors::google_secops::{GoogleSecops, Instance};
+        let platform = "google_secops";
+        let logger = "opentide.platforms.google_secops.deployer";
+        let connector = GoogleSecops::new(self.environment.clone());
+        for batch in batches {
+            let tenant = batch.tenant.name.clone();
+            let planned = self.screen(platform, batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect(platform, batch)?;
+            let ready = Instance::of(&connection.tenant).and_then(|instance| {
+                connector
+                    .authorizer(&connection.tenant)
+                    .map(|authorizer| (instance, authorizer))
+            });
+            let (instance, authorizer) = match ready {
+                Ok(ready) => ready,
+                Err(error) => {
+                    // Unset or unreadable credentials: no rule on the tenant can deploy.
+                    self.google_secops_tenant_failed(&tenant, &error.text(), logger);
+                    continue;
+                }
+            };
+            let scope = instance.scope(&connection.tenant);
+            let delete = opentide_compile::deploy::setup_text(&batch.table, "deletion") == "delete";
+            for (rule, action) in planned {
+                let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
+                let strategy = match self.strategy_of(rule, platform) {
+                    Ok(strategy) => strategy,
+                    Err(raised) => {
+                        self.close(log, result, Err(raised))?;
+                        continue;
+                    }
+                };
+                let assembled = match opentide_compile::google_secops::assemble(self.compile, rule)
+                {
+                    Ok(assembled) => assembled,
+                    Err(error) => {
+                        tracing::error!(
+                            uuid = rule.uuid.as_str(),
+                            tenant = tenant.as_str(),
+                            name = rule.name.as_str(),
+                            error = error.reason.as_str(),
+                            logger,
+                            "compile_failed"
+                        );
+                        self.rule_error(&mut result, &format!("compile_failed: {}", error.reason));
+                        log.finished(result);
+                        continue;
+                    }
+                };
+                let block = rule.block(platform).cloned().unwrap_or(CJson::Null);
+                let root = self.workspace.root().to_path_buf();
+                let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
+                    Some(ignore) => Some(StateError {
+                        code: "deployment_state_ignored",
+                        message: deploy_state::ignored_message(&ignore),
+                    }),
+                    None => self.unpersisted(&rule.uuid, platform, &tenant),
+                };
+                let request = RuleDeploy {
+                    action: match &action {
+                        Planned::Create => Action::Create,
+                        Planned::Update(id) => Action::Update(id.clone()),
+                        Planned::Delete(id) => Action::Delete(id.clone()),
+                    },
+                    assembled,
+                    run_state: opentide_compile::google_secops::run_state(&block, strategy),
+                    run_frequency: block
+                        .get("run_frequency")
+                        .and_then(CJson::as_str)
+                        .map(str::to_owned),
+                    disabling: strategy == StatusStrategy::Disablement,
+                    retiring: matches!(
+                        strategy,
+                        StatusStrategy::Disablement | StatusStrategy::Deletion
+                    ),
+                    scope: scope.clone(),
+                    delete,
+                    recreate_refusal: recreate_refusal
+                        .as_ref()
+                        .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
+                };
+                let context = self.context(&connection);
+                let outcome = self.block(deploy_rule(
+                    context,
+                    &authorizer,
+                    &instance.endpoint,
+                    &instance.resource,
+                    &request,
+                ));
+                match outcome {
+                    Ok(outcome) => {
+                        for warning in &outcome.warnings {
+                            self.warned = true;
+                            tracing::warn!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                code = warning.code,
+                                detail = warning.detail.as_str(),
+                                logger,
+                                "{}",
+                                warning.code
+                            );
+                        }
+                        match &outcome.state {
+                            StateChange::Record(id) => {
+                                tracing::info!(
+                                    uuid = rule.uuid.as_str(),
+                                    rule_id = id.as_str(),
+                                    logger,
+                                    "google_secops_rule_created"
+                                );
+                                let external = ExternalId::Text(id.clone());
+                                self.record_created(&mut result, platform, &tenant, &external);
+                            }
+                            StateChange::Forget => {
+                                self.record_deleted(&mut result, platform, &tenant);
+                            }
+                            StateChange::Keep => {}
+                        }
+                        for failure in &outcome.failures {
+                            match recreate_refusal
+                                .as_ref()
+                                .filter(|refusal| refusal.code == failure.code)
+                            {
+                                Some(refusal) => {
+                                    self.report_failure(refusal, &rule.uuid, platform, &tenant);
+                                    result.fail(&refusal.message);
+                                }
+                                None => {
+                                    tracing::error!(
+                                        uuid = rule.uuid.as_str(),
+                                        tenant = tenant.as_str(),
+                                        name = rule.name.as_str(),
+                                        code = failure.code.as_str(),
+                                        error = failure.message.as_str(),
+                                        logger,
+                                        "{}",
+                                        failure.code
+                                    );
+                                    self.rule_error(
+                                        &mut result,
+                                        &format!("{}: {}", failure.code, failure.message),
+                                    );
+                                }
+                            }
+                        }
+                        log.finished(result);
+                    }
+                    Err(error) => {
+                        // Refused credentials or an unreachable instance fail every rule on it.
+                        let text = error.text();
+                        self.google_secops_tenant_failed(&tenant, &text, logger);
+                        result.fail(&text);
+                        log.finished(result);
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// A Google SecOps tenant no rule can deploy to (`_tenant_failed`): its
+    /// code (`google_secops_credentials_missing`,
+    /// `google_secops_tenant_unauthorized`) when the error names one, else
+    /// `google_secops_tenant_unreachable`.
+    fn google_secops_tenant_failed(&mut self, tenant: &str, text: &str, logger: &str) {
+        let code = text
+            .split_once(": ")
+            .map(|(code, _)| code)
+            .filter(|code| code.starts_with("google_secops_") && !code.contains(' '))
+            .unwrap_or("google_secops_tenant_unreachable");
+        tracing::error!(
+            code,
+            tenant,
+            error = text,
+            critical = true,
+            logger,
+            "google_secops_tenant_deployment_failed"
+        );
+        self.failed = true;
     }
 }
 

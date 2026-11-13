@@ -1117,6 +1117,17 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
             text("port").unwrap_or_else(|| "None".to_owned())
         );
     }
+    if platform == "google_secops" {
+        // The instance's endpoint, else its location's (`_tenant_host`).
+        return text("endpoint")
+            .filter(|endpoint| !endpoint.is_empty())
+            .or_else(|| {
+                text("location")
+                    .filter(|location| !location.is_empty())
+                    .map(|location| opentide_compile::google_secops::default_endpoint(&location))
+            })
+            .unwrap_or_default();
+    }
     text("url")
         .filter(|url| !url.is_empty())
         .unwrap_or_else(|| default_host(platform).to_owned())
@@ -1326,6 +1337,8 @@ fn check_batches(
                     opentide_connectors::runtime::block_on(async {
                         if platform == "elastic" {
                             elastic(batches, timeout, cx, compile).await
+                        } else if platform == "google_secops" {
+                            google_secops(batches, timeout, cx, compile).await
                         } else {
                             generic(platform, batches, timeout, cx).await
                         }
@@ -1519,6 +1532,161 @@ async fn generic(
                     }
                     Err(error) => return Err(early(platform, &tenant.name, &host, error)),
                 }
+            }
+        }
+        streak.finish().map_err(Early::Unreachable)?;
+    }
+    Ok(report)
+}
+
+/// `GoogleSecopsValidator.validate`: each rule's assembled YARA-L text,
+/// compiled by `verifyRuleText` on every instance deploy would send it to.
+/// Google's `ERROR` diagnostics fail the rule (`google_secops_compile_error`)
+/// and its `WARNING` ones are warnings, each placed on the section key and
+/// line it falls in; a `run_frequency` Google does not allow fails it too.
+/// Credentials that cannot be loaded fail every rule on the instance;
+/// refused ones fail the rule they were refused on, and the rest are not
+/// sent.
+async fn google_secops(
+    batches: &[Batch],
+    timeout: f64,
+    cx: &Context<'_>,
+    compile: &opentide_compile::Context<'_>,
+) -> Result<CheckReport, Early> {
+    use opentide_connectors::google_secops::client::Client;
+    use opentide_connectors::google_secops::{GoogleSecops, Instance, check_rule};
+    let platform = "google_secops";
+    let environment = Environment::from_pairs(cx.env.iter());
+    let connector = GoogleSecops::new(environment.clone());
+    let cancel = CancellationToken::new();
+    let mut report = CheckReport::default();
+    for batch in batches {
+        let tenant = &batch.tenant;
+        let rules: Vec<&opentide_compile::Rule> = batch
+            .rules
+            .iter()
+            .map(|sent| &sent.rule)
+            .filter(|rule| rule.block(platform).is_some())
+            .collect();
+        if rules.is_empty() {
+            continue;
+        }
+        let host = tenant_host(platform, tenant);
+        let conn = connect(platform, tenant, timeout, cx, &environment).map_err(Early::Failed)?;
+        let ready = Instance::of(&conn.tenant).and_then(|instance| {
+            connector
+                .authorizer(&conn.tenant)
+                .map(|authorizer| (instance, authorizer))
+        });
+        let (instance, authorizer) = match ready {
+            Ok(ready) => ready,
+            Err(error) => {
+                let text = error.text();
+                for rule in rules {
+                    report
+                        .checks
+                        .push(rejected(platform, rule, &tenant.name, None, &text));
+                }
+                continue;
+            }
+        };
+        let context = TenantContext {
+            tenant: &conn.tenant,
+            http: &conn.http,
+            cancel: &cancel,
+        };
+        let client = Client::new(context, &authorizer, &instance.endpoint, &instance.resource);
+        let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
+        for rule in rules {
+            tracing::info!(
+                mdr_name = rule.name.as_str(),
+                uuid = rule.uuid.as_str(),
+                tenant = tenant.name.as_str(),
+                logger = LIVE_LOGGER,
+                "validating_query"
+            );
+            let assembled = match opentide_compile::google_secops::assemble(compile, rule) {
+                Ok(assembled) => assembled,
+                Err(error) => {
+                    report
+                        .checks
+                        .push(rejected(platform, rule, &tenant.name, None, &error.reason));
+                    continue;
+                }
+            };
+            let frequency = rule
+                .block(platform)
+                .and_then(|block| block.get("run_frequency"))
+                .and_then(CJson::as_str);
+            let found = watched(
+                check_rule(&client, &assembled, frequency),
+                &cancel,
+                cx.interrupted,
+            )
+            .await;
+            match found {
+                Ok(check) => {
+                    streak.answered();
+                    for error in &check.errors {
+                        log_rejected(platform, rule, &tenant.name, error);
+                    }
+                    for warning in &check.warnings {
+                        tracing::warn!(
+                            detail = format!("{} ({}) on {}", rule.name, rule.uuid, tenant.name)
+                                .as_str(),
+                            warning = warning.as_str(),
+                            logger = LIVE_LOGGER,
+                            "query_validation_warning"
+                        );
+                    }
+                    if check.errors.is_empty() {
+                        tracing::info!(
+                            mdr_name = rule.name.as_str(),
+                            tenant = tenant.name.as_str(),
+                            logger = LIVE_LOGGER,
+                            "valid_query"
+                        );
+                    }
+                    report.checks.push(RuleCheck {
+                        rule: rule.uuid.clone(),
+                        name: rule.name.clone(),
+                        tenant: tenant.name.clone(),
+                        label: None,
+                        errors: check.errors,
+                        warnings: check.warnings,
+                        code: None,
+                    });
+                }
+                Err(refused @ ConnectorError::Authentication { .. }) => {
+                    streak.answered();
+                    // The instance refuses every rule alike: the rest are not sent.
+                    let text = refused.text();
+                    tracing::error!(
+                        tenant = tenant.name.as_str(),
+                        error = text.as_str(),
+                        critical = true,
+                        logger = "opentide.platforms.google_secops.validator",
+                        "google_secops_tenant_validation_failed"
+                    );
+                    report
+                        .checks
+                        .push(rejected(platform, rule, &tenant.name, None, &text));
+                    break;
+                }
+                Err(ConnectorError::Timeout { seconds, .. }) => {
+                    let error = read_timeout_text(platform, &host, seconds);
+                    streak.timed_out(&error, true).map_err(Early::Unreachable)?;
+                    report.checks.push(timed_out(
+                        platform,
+                        rule,
+                        &tenant.name,
+                        None,
+                        &error,
+                        timeout,
+                        Vec::new(),
+                    ));
+                }
+                Err(error) => return Err(early(platform, &tenant.name, &host, error)),
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
@@ -2154,6 +2322,24 @@ mod tests {
             tenant_host("sentinel", &tenant(&[])),
             "https://api.loganalytics.io"
         );
+        assert_eq!(
+            tenant_host(
+                "google_secops",
+                &tenant(&[("location", CJson::Str("eu".into()))])
+            ),
+            "https://eu-chronicle.googleapis.com"
+        );
+        assert_eq!(
+            tenant_host(
+                "google_secops",
+                &tenant(&[
+                    ("location", CJson::Str("eu".into())),
+                    ("endpoint", CJson::Str("https://proxy.invalid".into()))
+                ])
+            ),
+            "https://proxy.invalid"
+        );
+        assert_eq!(tenant_host("google_secops", &tenant(&[])), "");
         assert_eq!(
             read_timeout_text("sentinel_one", "https://s1.invalid", 5),
             "HTTPSConnectionPool(host='s1.invalid', port=443): Read timed out. (read timeout=5)"

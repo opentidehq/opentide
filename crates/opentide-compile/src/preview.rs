@@ -3,7 +3,8 @@
 
 use opentide_schema::objects::platform::{
     BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    GoogleSecopsConfig, HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig,
+    SysdigConfig,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -11,8 +12,8 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, harfanglab,
-    sentinel, sentinel_one, splunk, sysdig,
+    Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, google_secops,
+    harfanglab, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -41,6 +42,7 @@ pub fn compile_offline(
         "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
         "bitdefender" => Some(bitdefender_request(cx, rule, None)),
+        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         _ => None,
     }
 }
@@ -112,6 +114,8 @@ pub fn compile_tenant(
         "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
         "sysdig" => Some(sysdig::compile_body(cx, rule, known)),
         "bitdefender" => Some(bitdefender_tenant(cx, rule, config, id)),
+        // The text is the same on every tenant: the `rules.create` body.
+        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             Some(elastic::compile(cx, rule, &setup))
@@ -166,6 +170,7 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
         "elastic" => model_dump::<ElasticConfig>(block),
         "sysdig" => model_dump::<SysdigConfig>(block),
         "bitdefender" => model_dump::<BitdefenderConfig>(block),
+        "google_secops" => model_dump::<GoogleSecopsConfig>(block),
         _ => None,
     };
     dumped.unwrap_or_else(|| block.clone())
@@ -294,6 +299,12 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
         // calls `compile_diagnostic(exc)` without the platform); this names
         // Sysdig (tests/golden/payloads/APPROVED.toml).
         "sysdig" => match sysdig::compile_body(cx, rule, None) {
+            Ok(body) => compiled(rule, body),
+            Err(error) => failure(rule, &error),
+        },
+        // `_google_secops_compile_preview`: the `rules.create` body, or the
+        // failure, named for Google SecOps.
+        "google_secops" => match google_secops::compile_offline(cx, rule) {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
