@@ -2146,6 +2146,471 @@
       },
       "type": "object"
     },
+    "ExabeamConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "contributors": {
+          "description": "Platform contributors.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "correlation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamCorrelation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required with two or more sequences; not allowed with one."
+        },
+        "delay": {
+          "description": "Evaluation delay, 7m to 180m (3h). Omitted: Exabeam's default of 7 minutes.",
+          "markdownDescription": "Evaluation delay, `7m` to `180m` (`3h`). Omitted: Exabeam's default of 7 minutes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "email": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamEmail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Also send an email when the rule triggers."
+        },
+        "enabled": {
+          "default": false,
+          "description": "Whether this platform block is active.",
+          "type": "boolean"
+        },
+        "flags": {
+          "description": "Platform flags.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "name": {
+          "default": "",
+          "description": "Platform-specific rule name.",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "enum": [
+                "alert",
+                "case",
+                "none"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "alert (an alert in Threat Center), case, or none. Default: alert.",
+          "markdownDescription": "`alert` (an alert in Threat Center), `case`, or `none`. Default: `alert`."
+        },
+        "schedule": {
+          "description": "When the rule is active. Omitted: always.",
+          "items": {
+            "$ref": "#/$defs/ExabeamRecurrence"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "schema": {
+          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
+          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequences": {
+          "description": "One or more sequences, in the order the events happen. Each is a filter and a condition: any match, or a threshold.",
+          "items": {
+            "$ref": "#/$defs/ExabeamSequence"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "none, low, medium, high, or critical. Derived from response.alert_severity when omitted.",
+          "markdownDescription": "`none`, `low`, `medium`, `high`, or `critical`. Derived from `response.alert_severity`\nwhen omitted."
+        },
+        "status": {
+          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
+          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it.",
+          "type": "string"
+        },
+        "suppression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamSuppression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Suppress repeated triggers."
+        },
+        "tenants": {
+          "description": "Target tenant identifiers.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "test_mode": {
+          "description": "Run the rule in test mode: it triggers and writes a rule-trigger-test event, with no outcome. Default: the tenant test_mode.",
+          "markdownDescription": "Run the rule in test mode: it triggers and writes a `rule-trigger-test` event, with no\noutcome. Default: the tenant `test_mode`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "sequences"
+      ],
+      "type": "object"
+    },
+    "ExabeamCorrelation": {
+      "additionalProperties": false,
+      "properties": {
+        "group_by": {
+          "description": "Up to three fields every sequence shares (the API's limit; the console allows more)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "within": {
+          "description": "The window every sequence's condition must be met in: whole m, h, or d",
+          "markdownDescription": "The window every sequence's condition must be met in: whole `m`, `h`, or `d`",
+          "type": "string"
+        }
+      },
+      "required": [
+        "within"
+      ],
+      "type": "object"
+    },
+    "ExabeamDays": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "items": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      ]
+    },
+    "ExabeamEmail": {
+      "additionalProperties": false,
+      "properties": {
+        "attach_csv": {
+          "description": "Attach the matching events as CSV",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "recipients": {
+          "description": "One or more email addresses",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "subject": {
+          "description": "Email subject",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "recipients"
+      ],
+      "type": "object"
+    },
+    "ExabeamRecurrence": {
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamDays"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "week: one or more weekday names (monday … sunday). month: day numbers 1–31. Not allowed otherwise.",
+          "markdownDescription": "`week`: one or more weekday names (`monday` … `sunday`). `month`: day numbers 1–31. Not\nallowed otherwise."
+        },
+        "every": {
+          "description": "day, week, month, or days (a range of weekdays)",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "days"
+          ],
+          "markdownDescription": "`day`, `week`, `month`, or `days` (a range of weekdays)",
+          "type": "string"
+        },
+        "first": {
+          "description": "days only: the first weekday of the range",
+          "markdownDescription": "`days` only: the first weekday of the range",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from": {
+          "description": "Start time, UTC, H:MMZ or HH:MMZ (8:00Z, 08:00Z)",
+          "markdownDescription": "Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)",
+          "type": "string"
+        },
+        "last": {
+          "description": "days only: the last weekday of the range",
+          "markdownDescription": "`days` only: the last weekday of the range",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_day": {
+          "description": "month only: also the last day of the month. A month recurrence has days, last_day: true, or both.",
+          "markdownDescription": "`month` only: also the last day of the month. A `month` recurrence has `days`,\n`last_day: true`, or both.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "to": {
+          "description": "End time, UTC, H:MMZ or HH:MMZ",
+          "markdownDescription": "End time, UTC, `H:MMZ` or `HH:MMZ`",
+          "type": "string"
+        }
+      },
+      "required": [
+        "every",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "ExabeamSequence": {
+      "additionalProperties": false,
+      "properties": {
+        "group_by": {
+          "description": "One to three fields. A threshold is evaluated per value. With any match, the rule still triggers on every matching event; to trigger once per value, also set suppression.group_by to these fields (Exabeam's granular suppression).",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "One to three fields. A threshold is evaluated per value. With any match, the rule still\ntriggers on every matching event; to trigger once per value, also set `suppression.group_by`\nto these fields (Exabeam's granular suppression).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Sequence name, shown in the console",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "A filter in the Exabeam Query Language, profile rule. Multiline in YAML.",
+          "markdownDescription": "A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML.",
+          "type": "string"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamThreshold"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The condition. Without it, the sequence triggers on any matching event."
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "ExabeamSuppression": {
+      "additionalProperties": false,
+      "properties": {
+        "for": {
+          "description": "Suppress repeated triggers for this long: whole m, h, d, or w",
+          "markdownDescription": "Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`",
+          "type": "string"
+        },
+        "group_by": {
+          "description": "One to three fields. Suppress per value instead of for the whole rule.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "for"
+      ],
+      "type": "object"
+    },
+    "ExabeamThreshold": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "description": "The field the function reads. Required except for count. count without a field counts events.",
+          "markdownDescription": "The field the function reads. Required except for `count`. `count` without a field counts\nevents.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "function": {
+          "description": "count, unique_count, value, max, min, sum, or average",
+          "enum": [
+            "count",
+            "unique_count",
+            "value",
+            "max",
+            "min",
+            "sum",
+            "average"
+          ],
+          "markdownDescription": "`count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`",
+          "type": "string"
+        },
+        "operator": {
+          "description": "more_than, less_than, in, or not_in",
+          "enum": [
+            "more_than",
+            "less_than",
+            "in",
+            "not_in"
+          ],
+          "markdownDescription": "`more_than`, `less_than`, `in`, or `not_in`",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "more_than and less_than: a number (count and unique_count: a non-negative integer). in and not_in: a non-empty list of strings or numbers.",
+          "markdownDescription": "`more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative\ninteger). `in` and `not_in`: a non-empty list of strings or numbers."
+        },
+        "within": {
+          "description": "The window: whole m, h, or d",
+          "markdownDescription": "The window: whole `m`, `h`, or `d`",
+          "type": "string"
+        }
+      },
+      "required": [
+        "function",
+        "operator",
+        "within"
+      ],
+      "type": "object"
+    },
+    "ExabeamValue": {
+      "anyOf": [
+        {
+          "format": "int64",
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/ExabeamValueItem"
+          },
+          "type": "array"
+        }
+      ]
+    },
+    "ExabeamValueItem": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "int64",
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        }
+      ]
+    },
     "GoogleSecopsConfig": {
       "additionalProperties": false,
       "properties": {
@@ -3421,6 +3886,18 @@
           ],
           "description": "Elastic Security detection rule (platform::elastic::1.0).",
           "markdownDescription": "Elastic Security detection rule (`platform::elastic::1.0`)."
+        },
+        "exabeam": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExabeamConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exabeam New-Scale SIEM correlation rule (platform::exabeam::1.0).",
+          "markdownDescription": "Exabeam New-Scale SIEM correlation rule (`platform::exabeam::1.0`)."
         },
         "google_secops": {
           "anyOf": [

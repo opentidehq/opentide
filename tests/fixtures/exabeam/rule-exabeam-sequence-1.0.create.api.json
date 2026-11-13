@@ -1,0 +1,83 @@
+{
+  "method": "POST",
+  "path": "/correlation-rules/v2/rules",
+  "body": {
+    "name": "Office document drops encoded PowerShell that calls out",
+    "description": "An Office application starts PowerShell with an encoded command, and the same host then opens a network connection from PowerShell within fifteen minutes.\n\nATT&CK: T1059.001, T1566.001\nopentide: 00000000-0000-4000-8003-000000000072",
+    "severity": "critical",
+    "enabled": true,
+    "testMode": false,
+    "sequencesConfig": {
+      "sequences": [
+        {
+          "name": "Office spawns encoded PowerShell",
+          "query": "activity_type:\"process-create\"\nAND parent_process_name:(\"winword.exe\", \"excel.exe\", \"powerpnt.exe\")\nAND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND process_command_line:RGXi(\"\\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\\s\")",
+          "condition": {
+            "triggerOnAnyMatch": true,
+            "groupByOption": true,
+            "groupBy": [
+              "host"
+            ]
+          }
+        },
+        {
+          "name": "PowerShell connects out",
+          "query": "activity_type:\"network-session\" AND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND NOT dest_ip:[10.0.0.0/8] AND NOT dest_ip:[172.16.0.0/12] AND NOT dest_ip:[192.168.0.0/16]",
+          "condition": {
+            "triggerOnAnyMatch": false,
+            "groupByOption": true,
+            "groupBy": [
+              "host"
+            ],
+            "functionType": "count",
+            "subject": "event",
+            "operator": "more_than",
+            "value": "0",
+            "time": 10,
+            "unit": "minutes"
+          }
+        }
+      ],
+      "commonProperties": {
+        "groupBy": [
+          "host"
+        ],
+        "time": 15,
+        "unit": "minutes"
+      },
+      "outcomes": {
+        "sendAlertTriage": true,
+        "createCase": false,
+        "sendEmail": true,
+        "alertTriage": {
+          "name": "Office document drops encoded PowerShell that calls out"
+        },
+        "email": {
+          "recipients": [
+            "soc@example.com"
+          ],
+          "subject": "Office document drops encoded PowerShell that calls out",
+          "attachCsv": true
+        }
+      }
+    },
+    "suppressConfig": {
+      "suppressOption": false
+    },
+    "delayConfig": {
+      "delay": true,
+      "delayTimeInMinutes": 15
+    },
+    "scheduleConfig": {
+      "recurrences": [
+        {
+          "recurrenceType": "CUSTOM",
+          "startTime": "06:00Z",
+          "endTime": "20:00Z",
+          "dayFrom": "MONDAY",
+          "dayTo": "FRIDAY"
+        }
+      ]
+    }
+  }
+}

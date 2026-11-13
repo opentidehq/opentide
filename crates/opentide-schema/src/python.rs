@@ -951,6 +951,10 @@ use crate::objects::platform::elastic::{
     ElasticThreatEntry, ElasticThreatGroup, ElasticThreatMatch, ElasticThreshold, ElasticTimeline,
 };
 use crate::objects::platform::elastic::{IntegrationChoice, JobId, RiskChoice, SeverityChoice};
+use crate::objects::platform::exabeam::{
+    ExabeamConfig, ExabeamCorrelation, ExabeamDays, ExabeamEmail, ExabeamRecurrence,
+    ExabeamSequence, ExabeamSuppression, ExabeamThreshold, ExabeamValue,
+};
 use crate::objects::platform::google_secops::{
     GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
 };
@@ -995,7 +999,7 @@ use pyo3::type_hint_union;
 #[cfg(feature = "stubs")]
 mod hint {
     use pyo3::inspect::PyStaticExpr;
-    use pyo3::{type_hint_identifier, type_hint_subscript};
+    use pyo3::{type_hint_identifier, type_hint_subscript, type_hint_union};
 
     pub const STR: PyStaticExpr = type_hint_identifier!("builtins", "str");
     pub const INT: PyStaticExpr = type_hint_identifier!("builtins", "int");
@@ -1003,6 +1007,12 @@ mod hint {
     pub const FLOAT: PyStaticExpr = type_hint_identifier!("builtins", "float");
     pub const STRS: PyStaticExpr =
         type_hint_subscript!(type_hint_identifier!("builtins", "list"), STR);
+    pub const INTS: PyStaticExpr =
+        type_hint_subscript!(type_hint_identifier!("builtins", "list"), INT);
+    pub const SCALARS: PyStaticExpr = type_hint_subscript!(
+        type_hint_identifier!("builtins", "list"),
+        type_hint_union!(STR, INT, FLOAT)
+    );
 }
 
 py_value! {
@@ -1018,6 +1028,8 @@ py_value! {
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
     CriterionValue => type_hint_union!(hint::STR, hint::INT),
     SavedSearchValue => type_hint_union!(hint::STR, hint::INT, hint::FLOAT, hint::BOOL),
+    ExabeamValue => type_hint_union!(hint::INT, hint::FLOAT, hint::SCALARS),
+    ExabeamDays => type_hint_union!(hint::STRS, hint::INTS),
 }
 
 /// A union with a model member: the member's class instance, as Pydantic
@@ -1210,6 +1222,13 @@ py_models! {
     GraylogLookupTable,
     GraylogEventLookup,
     GraylogConfig [<GraylogConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    ExabeamThreshold,
+    ExabeamSequence,
+    ExabeamCorrelation,
+    ExabeamSuppression,
+    ExabeamEmail,
+    ExabeamRecurrence,
+    ExabeamConfig [<ExabeamConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     GoogleSecopsMatch,
     GoogleSecopsOptions,
     GoogleSecopsSchedule,
@@ -1248,21 +1267,23 @@ pub mod models {
         ElasticMachineLearning, ElasticNewTerms, ElasticOverrides, ElasticRequiredField,
         ElasticRisk, ElasticRiskScoreMapping, ElasticScheduling, ElasticSeverity,
         ElasticSeverityMapping, ElasticSuppression, ElasticThreatEntry, ElasticThreatGroup,
-        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExternalDetector,
-        GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
-        HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
-        HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata, ObjectReferences, ObjectiveBody,
-        ObjectiveComposition, ObjectiveV1_0, Organisation, ResponseProcedure, ResponseSearch,
-        RuleConfigurations, RuleMetadata, RuleResponse, RuleV1_0, RuleV1_1, SentinelAlert,
-        SentinelAlertGrouping, SentinelConfig, SentinelCustomDetails, SentinelDynamicProperties,
-        SentinelEntityMapping, SentinelExclusion, SentinelGrouping, SentinelMappingEntry,
-        SentinelOneCondition, SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails,
-        SentinelOneResponse, SentinelOneSingleEvent, SentinelOneSubQuery, SentinelScheduling,
-        SentinelTemplate, SentinelTrigger, SignalData, SplunkActions, SplunkConfig, SplunkEmail,
-        SplunkEmailInclude, SplunkNotable, SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk,
-        SplunkRiskObject, SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling,
-        SplunkTimerange, SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro,
-        ThreatActor, ThreatBody, ThreatVectorV1_0,
+        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExabeamConfig, ExabeamCorrelation,
+        ExabeamEmail, ExabeamRecurrence, ExabeamSequence, ExabeamSuppression, ExabeamThreshold,
+        ExternalDetector, GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions,
+        GoogleSecopsSchedule, HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource,
+        HarfangLabSigmaSelection, HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata,
+        ObjectReferences, ObjectiveBody, ObjectiveComposition, ObjectiveV1_0, Organisation,
+        ResponseProcedure, ResponseSearch, RuleConfigurations, RuleMetadata, RuleResponse,
+        RuleV1_0, RuleV1_1, SentinelAlert, SentinelAlertGrouping, SentinelConfig,
+        SentinelCustomDetails, SentinelDynamicProperties, SentinelEntityMapping, SentinelExclusion,
+        SentinelGrouping, SentinelMappingEntry, SentinelOneCondition, SentinelOneConfig,
+        SentinelOneCorrelation, SentinelOneDetails, SentinelOneResponse, SentinelOneSingleEvent,
+        SentinelOneSubQuery, SentinelScheduling, SentinelTemplate, SentinelTrigger, SignalData,
+        SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude, SplunkNotable,
+        SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject, SplunkSchedule,
+        SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange, SplunkTrigger,
+        SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor, ThreatBody,
+        ThreatVectorV1_0,
     };
 
     #[pymodule_export]

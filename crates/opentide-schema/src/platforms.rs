@@ -352,6 +352,28 @@ pub const PLATFORMS: &[Platform] = &[
         configuration_rank: 10,
     },
     Platform {
+        id: "exabeam",
+        label: "Exabeam New-Scale SIEM",
+        configuration_name: "Exabeam New-Scale SIEM",
+        config_class: "ExabeamConfig",
+        // The rule UUID Exabeam assigns, kept lower-case and canonical.
+        external_id: ExternalId::Text {
+            pattern: Some("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["exabeam"],
+        // The Exabeam Query Language comes with the engine import (E1):
+        // until then the engine parses none of these queries offline.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 11,
+        connector_rank: 11,
+        configuration_rank: 11,
+    },
+    Platform {
         id: "google_secops",
         label: "Google Security Operations",
         configuration_name: "Google Security Operations",
@@ -369,9 +391,9 @@ pub const PLATFORMS: &[Platform] = &[
         // The offline YARA-L check arrives with the engine import (E1).
         offline_languages: &["yaral"],
         query_file_suffixes: &["yaral"],
-        cli_rank: 11,
-        connector_rank: 11,
-        configuration_rank: 11,
+        cli_rank: 12,
+        connector_rank: 12,
+        configuration_rank: 12,
     },
 ];
 
@@ -577,6 +599,7 @@ mod tests {
                 "sysdig",
                 "bitdefender",
                 "graylog",
+                "exabeam",
                 "google_secops"
             ]
         );
@@ -594,6 +617,7 @@ mod tests {
                 "sysdig",
                 "bitdefender",
                 "graylog",
+                "exabeam",
                 "google_secops"
             ]
         );
@@ -611,6 +635,7 @@ mod tests {
                 "sysdig",
                 "bitdefender",
                 "graylog",
+                "exabeam",
                 "google_secops"
             ]
         );
@@ -628,6 +653,7 @@ mod tests {
                 "sysdig",
                 "bitdefender",
                 "graylog",
+                "exabeam",
                 "google_secops"
             ]
         );
@@ -641,6 +667,7 @@ mod tests {
                 "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
+                "exabeam",
                 "google_secops",
                 "graylog",
                 "sentinel_one",
@@ -657,6 +684,7 @@ mod tests {
                 "carbon_black_cloud",
                 "defender_for_endpoint",
                 "elastic",
+                "exabeam",
                 "google_secops",
                 "graylog",
                 "sentinel",
@@ -676,6 +704,7 @@ mod tests {
                 "sysdig",
                 "bitdefender",
                 "graylog",
+                "exabeam",
                 "google_secops"
             ]
         );

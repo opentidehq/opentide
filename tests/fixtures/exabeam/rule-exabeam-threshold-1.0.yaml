@@ -1,0 +1,37 @@
+name: Password spraying from outside the network
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000071
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  One external source address fails to log in as more than three
+  different users within thirty minutes.
+techniques:
+- T1110.003
+response:
+  alert_severity: High
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    outcome: case
+    sequences:
+      - name: Failed logins from outside
+        query: |
+          activity_type:"app-login" AND outcome:"fail"
+          AND NOT src_ip:[10.0.0.0/8] AND NOT src_ip:[172.16.0.0/12] AND NOT src_ip:[192.168.0.0/16]
+        group_by: [src_ip]
+        threshold:
+          function: unique_count
+          field: user
+          operator: more_than
+          value: 3
+          within: 30m
+    suppression:
+      for: 1h
+      group_by: [src_ip]

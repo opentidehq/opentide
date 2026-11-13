@@ -675,6 +675,31 @@ fn lint_reports_the_graylog_block_advisories() {
     );
 }
 
+#[test]
+fn lint_reports_the_exabeam_block_advisories() {
+    let text = rule(
+        "  exabeam:\n    status: PREVIEW\n    outcome: none\n    sequences:\n      - query: \
+         activity_type = \"a\"\n      - query: activity_type = \"b\"\n        threshold:\n          \
+         within: 10m\n    correlation:\n      within: 12m\n",
+    );
+    let found = lint_check(&text);
+    let advisories: Vec<(String, String, usize)> = found
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("exabeam_"))
+        .collect();
+    assert_eq!(
+        advisories,
+        [
+            ("exabeam_outcome_silent".to_owned(), "warning".to_owned(), 8),
+            (
+                "exabeam_correlation_window".to_owned(),
+                "warning".to_owned(),
+                15
+            ),
+        ]
+    );
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {
