@@ -530,7 +530,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 /// What a rule's platform blocks say that no query of theirs carries: the
 /// Elastic block's advisories, the Sysdig block's tuning and list
 /// advisories, the HarfangLab `yara` block's constraints on what deploy
-/// assembles ([`yara::constraint_diagnostics`]), and, when the block has no query to carry them (none, or a
+/// assembles (`yara::constraint_diagnostics`), and, when the block has no query to carry them (none, or a
 /// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
