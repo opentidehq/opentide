@@ -43,7 +43,6 @@ pub mod misp;
 pub mod plugin;
 pub mod progress;
 pub mod proxy;
-pub mod python;
 pub mod retry;
 pub mod runtime;
 pub mod sentinel;
@@ -51,6 +50,7 @@ pub mod sentinel_one;
 pub mod splunk;
 pub mod sysdig;
 pub mod tenant;
+pub mod text;
 pub mod tls;
 pub mod vulnerability;
 

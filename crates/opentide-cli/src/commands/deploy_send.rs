@@ -2513,7 +2513,7 @@ impl Sender<'_, '_> {
         match platform {
             "defender_for_endpoint" => {
                 let logger = "opentide.platforms.defender_for_endpoint.client";
-                let advice = opentide_connectors::python::python_str(&body);
+                let advice = opentide_connectors::text::json_text(&body);
                 let refused = |error: DefenderError, action: &Planned| match error {
                     DefenderError::Refused { message, context } => {
                         let context = context.unwrap_or_default();
@@ -2676,7 +2676,7 @@ impl Sender<'_, '_> {
                         let context = detail
                             .as_deref()
                             .and_then(|text| serde_json::from_str::<CJson>(text).ok())
-                            .map(|value| opentide_connectors::python::python_str(&value))
+                            .map(|value| opentide_connectors::text::json_text(&value))
                             .unwrap_or_default();
                         tracing::error!(
                             detail = message.as_str(),

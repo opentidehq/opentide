@@ -895,7 +895,7 @@ mod tests {
             [
                 "error[vocab_unknown]: 'clearr' is not a TLP value",
                 "  ╭─▶ objects/rules/r.yaml:8:8",
-                "  ╰─ help: did you mean 'clear'?",
+                "  ╰─ help: did you mean \"clear\"?",
             ]
         );
         // No line: the field stands in; no help: the location closes the frame.
@@ -933,7 +933,7 @@ mod tests {
             finding(None, Some("clear"), From::Validate)
                 .help_text()
                 .as_deref(),
-            Some("did you mean 'clear'?")
+            Some("did you mean \"clear\"?")
         );
         // The language server's help is written already.
         assert_eq!(

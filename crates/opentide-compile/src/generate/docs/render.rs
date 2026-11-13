@@ -1374,12 +1374,9 @@ fn platforms(configurations: &opentide_schema::objects::RuleConfigurations) -> V
         let Some(block) = blocks.get(name).filter(|block| !block.is_null()) else {
             continue;
         };
-        let enabled = match block.get("enabled") {
-            Some(JsonValue::Bool(true)) => "True".to_owned(),
-            Some(JsonValue::Bool(false)) => "False".to_owned(),
-            Some(JsonValue::Null) | None => "None".to_owned(),
-            Some(other) => other.to_string(),
-        };
+        let enabled = block
+            .get("enabled")
+            .map_or_else(|| "null".to_owned(), JsonValue::to_string);
         let alert_title = text(block.get("alert").and_then(|alert| alert.get("title")))
             .or_else(|| text(block.get("details").and_then(|details| details.get("name"))));
         let entity_mappings = match block.get("entities") {
@@ -1399,7 +1396,7 @@ fn platforms(configurations: &opentide_schema::objects::RuleConfigurations) -> V
                             .collect(),
                         _ => Vec::new(),
                     };
-                    let entity_name = text(entity.get("entity")).unwrap_or_else(|| "None".into());
+                    let entity_name = text(entity.get("entity")).unwrap_or_else(|| "null".into());
                     if pairs.is_empty() {
                         entity_name
                     } else {

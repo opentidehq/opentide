@@ -53,7 +53,7 @@ pub enum VocabError {
         message: String,
     },
     /// A required top-level key is missing.
-    #[error("missing required key '{key}' in vocabulary document: {file}")]
+    #[error("missing required key {key:?} in vocabulary document: {file}")]
     MissingKey {
         /// The file.
         file: String,
@@ -61,7 +61,7 @@ pub enum VocabError {
         key: String,
     },
     /// A top-level key has the wrong type or value.
-    #[error("invalid '{key}' in vocabulary document {file}: {why}")]
+    #[error("invalid {key:?} in vocabulary document {file}: {why}")]
     InvalidKey {
         /// The file.
         file: String,
@@ -71,7 +71,7 @@ pub enum VocabError {
         why: String,
     },
     /// The document's `field` is not its file name's stem.
-    #[error("vocabulary field '{field}' does not match filename '{expected}' in {file}")]
+    #[error("vocabulary field {field:?} does not match filename {expected:?} in {file}")]
     FieldMismatch {
         /// The file.
         file: String,
@@ -81,7 +81,7 @@ pub enum VocabError {
         expected: String,
     },
     /// Two entries share a key.
-    #[error("duplicate entry key '{key}' in vocabulary {file} at index {index}")]
+    #[error("duplicate entry key {key:?} in vocabulary {file} at index {index}")]
     DuplicateKey {
         /// The file.
         file: String,
@@ -415,7 +415,7 @@ impl Unknown {
     /// The code.
     pub const CODE: &'static str = opentide_core::codes::VOCAB_UNKNOWN;
 
-    /// The finding's message: `Value 'clearr' is not a valid 'tlp::1.0'
+    /// The finding's message: `Value "clearr" is not a valid "tlp::1.0"
     /// vocabulary entry`.
     pub fn message(&self) -> String {
         format!(
@@ -425,7 +425,7 @@ impl Unknown {
         )
     }
 
-    /// The help line: `did you mean 'clear'?`.
+    /// The help line: `did you mean "clear"?`.
     pub fn help(&self) -> Option<String> {
         self.suggestion
             .as_deref()
@@ -433,67 +433,12 @@ impl Unknown {
     }
 }
 
-/// `text` quoted as the CLI's messages quote a value: in single quotes, or in
-/// double quotes when it holds a single quote and no double quote; a
-/// backslash, the quote, and every character that does not print escaped
-/// (`\n`, `\x07`, `\xa0`, `\u200b`, `\U000e0001`), so a value that only
+/// `text` quoted as every message quotes a value: in double quotes, with
+/// Rust's escapes for a backslash, a quote and every character that does
+/// not show (`\n`, `\u{7}`, `\u{a0}`, `\u{200b}`), so a value that only
 /// looks valid (`High` and a no-break space) shows what it holds.
-///
-/// A character does not print when its general category ([`unicode_properties`])
-/// is a control, format, surrogate, private-use or unassigned one, or a line,
-/// paragraph or space separator other than the space itself: Python's
-/// `str.isprintable`, which the oracle's `repr` follows.
 pub fn quote(text: &str) -> String {
-    let delimiter = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut quoted = String::with_capacity(text.len() + 2);
-    quoted.push(delimiter);
-    for c in text.chars() {
-        match c {
-            '\\' => quoted.push_str("\\\\"),
-            '\n' => quoted.push_str("\\n"),
-            '\r' => quoted.push_str("\\r"),
-            '\t' => quoted.push_str("\\t"),
-            c if c == delimiter => {
-                quoted.push('\\');
-                quoted.push(c);
-            }
-            c if !prints(c) => {
-                let code = c as u32;
-                let escaped = if code <= 0xff {
-                    format!("\\x{code:02x}")
-                } else if code <= 0xffff {
-                    format!("\\u{code:04x}")
-                } else {
-                    format!("\\U{code:08x}")
-                };
-                quoted.push_str(&escaped);
-            }
-            c => quoted.push(c),
-        }
-    }
-    quoted.push(delimiter);
-    quoted
-}
-
-/// Whether `c` shows as itself in a message ([`quote`]).
-fn prints(c: char) -> bool {
-    use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
-    c == ' '
-        || !matches!(
-            c.general_category(),
-            G::Control
-                | G::Format
-                | G::Surrogate
-                | G::PrivateUse
-                | G::Unassigned
-                | G::LineSeparator
-                | G::ParagraphSeparator
-                | G::SpaceSeparator
-        )
+    format!("{text:?}")
 }
 
 #[cfg(test)]

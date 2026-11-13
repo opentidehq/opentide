@@ -79,7 +79,7 @@ pub fn check_schema_identifier(value: &str) -> Result<(), Violation> {
         Ok(())
     } else {
         Err(Violation::value_error(format!(
-            "unknown schema identifier: '{value}'"
+            "unknown schema identifier: {value:?}"
         )))
     }
 }
@@ -91,7 +91,7 @@ pub fn check_single_vocab_name(value: &str) -> Result<(), Violation> {
         Err(Violation {
             kind: "vocab_packed_names",
             message: format!(
-                "'{value}' packs several vocabulary names into one string; list each name as \
+                "{value:?} packs several vocabulary names into one string; list each name as \
                  its own item"
             ),
             context: vec![("value", value.to_owned())],
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(packed.kind, "vocab_packed_names");
         assert_eq!(
             packed.message,
-            "'a; b' packs several vocabulary names into one string; list each name as its own item"
+            "\"a; b\" packs several vocabulary names into one string; list each name as its own item"
         );
         assert_eq!(check_at_least_one(1), Ok(()));
         let short = check_at_least_one(0).unwrap_err();
@@ -582,11 +582,14 @@ mod tests {
         let unknown = check_schema_identifier("rule:1.0").unwrap_err();
         assert_eq!(
             unknown.message,
-            "Value error, unknown schema identifier: 'rule:1.0'"
+            "Value error, unknown schema identifier: \"rule:1.0\""
         );
         assert_eq!(
             unknown.context,
-            [("error", "unknown schema identifier: 'rule:1.0'".to_owned())]
+            [(
+                "error",
+                "unknown schema identifier: \"rule:1.0\"".to_owned()
+            )]
         );
     }
 }

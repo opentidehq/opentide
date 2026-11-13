@@ -12,7 +12,6 @@ use opentide_core::falco::{
     flatten_lists, is_list_comparison, is_python_space, list_inside, normalize_comp, python_strip,
     resolve_list, upsert,
 };
-use opentide_schema::configuration::repr::float_text;
 use opentide_schema::objects::platform::falco_text::{
     check_position_names, join_lines, substitute_macros,
 };
@@ -22,7 +21,7 @@ use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{Context, attack};
-use opentide_schema::configuration::repr::quote as python_repr;
+use opentide_schema::node::{Node, Value};
 
 /// The platform's display name, in a failure's message.
 pub const DISPLAY: &str = "Sysdig";
@@ -123,45 +122,64 @@ pub struct FalcoRule {
     pub minimum_engine_version: Option<i64>,
 }
 
-/// A value as Python's `str()` writes it.
-fn py_str(value: &Json) -> String {
-    match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(flag) => if *flag { "True" } else { "False" }.to_owned(),
-        Json::Str(text) => text.clone(),
-        other => py_repr(other),
-    }
-}
-
-/// A value as Python's `repr()` writes it.
-fn py_repr(value: &Json) -> String {
-    match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(flag) => if *flag { "True" } else { "False" }.to_owned(),
-        Json::Int(integer) => integer.to_string(),
-        Json::Float(float) => float_text(*float),
-        Json::Str(text) => python_repr(text),
-        Json::Array(items) => format!(
-            "[{}]",
-            items.iter().map(py_repr).collect::<Vec<_>>().join(", ")
-        ),
-        Json::Object(object) => format!(
-            "{{{}}}",
-            object
-                .iter()
-                .map(|(key, value)| format!("{}: {}", python_repr(key), py_repr(value)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
-}
-
-/// `item_text`: a list or exception item as YAML gives it to Falco.
+/// A value as text: a string as it is, anything else as its JSON. In the
+/// block's definitions and exceptions every scalar is already text
+/// ([`falco_block`]).
 fn item_text(value: &Json) -> String {
     match value {
-        Json::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
-        other => py_str(other),
+        Json::Str(text) => text.clone(),
+        other => other.to_compact(),
     }
+}
+
+/// The rule's Sysdig block as Falco reads its definitions and exceptions:
+/// in `macros`, `lists` and `exceptions`, a scalar that is not a string is
+/// its text as written in the file (`1.50`, `True`), which is what Falco's
+/// YAML loader makes of a list item or an exception value.
+fn falco_block(rule: &Rule) -> Result<Json, CompileError> {
+    let json = block_of(rule)?;
+    let node = rule
+        .node
+        .get("configurations")
+        .and_then(|configurations| configurations.get("sysdig"));
+    let (Some(node), Json::Object(object)) = (node, json) else {
+        return Ok(json.clone());
+    };
+    let mut object = object.clone();
+    for key in ["macros", "lists", "exceptions"] {
+        if let Some(child) = node.get(key) {
+            object.insert(key.into(), falco_json(child));
+        }
+    }
+    Ok(Json::Object(object))
+}
+
+/// `node` with every scalar but null as Falco's text.
+fn falco_json(node: &Node) -> Json {
+    match &node.value {
+        Value::Null => Json::Null,
+        Value::Seq(items) => Json::Array(items.iter().map(|item| falco_json(item)).collect()),
+        Value::Map(entries) => Json::Object(
+            entries
+                .iter()
+                .map(|entry| {
+                    (
+                        opentide_schema::objects::platform::sysdig::item_text(&entry.key),
+                        falco_json(&entry.value),
+                    )
+                })
+                .collect(),
+        ),
+        _ => Json::Str(opentide_schema::objects::platform::sysdig::item_text(node)),
+    }
+}
+
+/// A null list item or exception value: Falco has no text for it.
+fn null_value(place: &str) -> CompileError {
+    CompileError::invalid_rule(format!(
+        "{place}: a value is null, and Falco reads each value as text: write the text it \
+         should match (quote it, \"null\", to match that word)"
+    ))
 }
 
 /// Why a block's definitions cannot be expanded (`ExpansionError`): the
@@ -285,6 +303,9 @@ impl Expander {
 
     /// `_members`: a value list with block list names expanded.
     fn members(&self, values: Vec<Json>, place: &str) -> Result<Json, CompileError> {
+        if values.iter().any(Json::is_null) {
+            return Err(null_value(place));
+        }
         let out = self.passes(values);
         for value in &out {
             if let Some(name) = self.list_in(value) {
@@ -297,7 +318,7 @@ impl Expander {
     /// An exception as Sysdig receives it (`exception`).
     fn exception(&self, entry: &Json) -> Result<Json, CompileError> {
         let set = |key: &str| entry.get(key).filter(|value| !value.is_null());
-        let name = py_str(set("name").unwrap_or(&Json::Null));
+        let name = item_text(set("name").unwrap_or(&Json::Null));
         let fields = set("fields");
         let comps = set("comps");
         let values = set("values");
@@ -313,7 +334,7 @@ impl Expander {
             if let Some(comps) = comps {
                 out.insert(
                     "comps".into(),
-                    normalize_comp(&py_str(comps)).to_owned().into(),
+                    normalize_comp(&item_text(comps)).to_owned().into(),
                 );
             }
             if let Some(values) = values {
@@ -324,7 +345,7 @@ impl Expander {
         let comp_list: Vec<String> = match comps {
             Some(Json::Array(items)) => items
                 .iter()
-                .map(|comp| normalize_comp(&py_str(comp)).to_owned())
+                .map(|comp| normalize_comp(&item_text(comp)).to_owned())
                 .collect(),
             _ => {
                 let count = match fields {
@@ -348,6 +369,9 @@ impl Expander {
             };
             let mut new_row = Vec::new();
             for (comp, item) in comp_list.iter().zip(row) {
+                if item.is_null() {
+                    return Err(null_value(&place));
+                }
                 if let Json::Array(items) = item {
                     new_row.push(self.members(items, &place)?);
                     continue;
@@ -377,7 +401,7 @@ fn definitions(block: &Json, list: &str, key: &str) -> Vec<(String, Json)> {
     let mut out: Vec<(String, Json)> = Vec::new();
     if let Some(Json::Array(entries)) = block.get(list) {
         for entry in entries {
-            let name = py_str(entry.get("name").unwrap_or(&Json::Null));
+            let name = item_text(entry.get("name").unwrap_or(&Json::Null));
             let value = entry.get(key).cloned().unwrap_or(Json::Null);
             upsert(&mut out, &name, value);
         }
@@ -443,7 +467,7 @@ pub fn attack_tags(cx: &Context<'_>, techniques: &[String]) -> Vec<String> {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(py_str).collect(),
+        Some(Json::Array(items)) => items.iter().map(item_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -456,21 +480,24 @@ pub fn compile(
     strategy: StatusStrategy,
     tenant_tags: &[String],
 ) -> Result<FalcoRule, CompileError> {
-    let block = block_of(rule)?;
+    let block = &falco_block(rule)?;
     let macros: Vec<(String, String)> = definitions(block, "macros", "condition")
         .into_iter()
-        .map(|(name, condition)| (name, py_str(&condition)))
+        .map(|(name, condition)| (name, item_text(&condition)))
         .collect();
     let lists: Vec<(String, Vec<String>)> = definitions(block, "lists", "items")
         .into_iter()
         .map(|(name, items)| {
             let items = match items {
+                Json::Array(items) if items.iter().any(Json::is_null) => {
+                    return Err(null_value(&format!("list {name:?}")));
+                }
                 Json::Array(items) => items.iter().map(item_text).collect(),
                 _ => Vec::new(),
             };
-            (name, items)
+            Ok((name, items))
         })
-        .collect();
+        .collect::<Result<_, CompileError>>()?;
     let expander = Expander::new(&macros, &lists)?;
     let condition = text(block, "condition").map(|condition| expander.expand(condition));
     let mut exceptions = Vec::new();
@@ -548,7 +575,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")
-        .map_or_else(|| "None".to_owned(), py_str);
+        .map_or_else(|| "null".to_owned(), item_text);
     cx.statuses
         .strategy(&status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.exception_text()))

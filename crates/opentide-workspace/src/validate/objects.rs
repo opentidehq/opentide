@@ -897,7 +897,7 @@ fn platform_not_enabled(
                         });
                     (
                         format!(
-                            "this block will not deploy: {file} sets '{key}' in [platform], not \
+                            "this block will not deploy: {file} sets {key:?} in [platform], not \
                              'enabled', so {platform} is disabled; rename the key to 'enabled'"
                         ),
                         Some(key.clone()),
@@ -1142,7 +1142,7 @@ mod tests {
         let warning = &found[0];
         assert_eq!(warning.code, "deprecated_field");
         assert_eq!(warning.severity, Severity::Warning);
-        assert_eq!(warning.message, "Field 'old' is deprecated: use `new`");
+        assert_eq!(warning.message, "Field \"old\" is deprecated: use `new`");
         assert_eq!(warning.field_path, ["old"]);
         assert_eq!(
             (warning.object_uuid.as_str(), warning.object_type.as_str()),

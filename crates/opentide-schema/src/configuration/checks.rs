@@ -369,6 +369,7 @@ fn without(merged: &Node, key: &str) -> Node {
         ),
         start: merged.start,
         end: merged.end,
+        text: None,
     }
 }
 

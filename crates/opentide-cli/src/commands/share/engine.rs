@@ -678,7 +678,7 @@ fn template_problem(
     if template.version != Some(TEMPLATE_VERSION) {
         let version = template
             .version
-            .map_or_else(|| "None".to_owned(), |version| version.to_string());
+            .map_or_else(|| "null".to_owned(), |version| version.to_string());
         return (None, Some(format!("template_version:{version}")));
     }
     (None, None)

@@ -111,6 +111,7 @@ impl Merged {
                             value: Value::Str(key.clone()),
                             start: value.start,
                             end: value.start,
+                            text: None,
                         }),
                         value: Arc::clone(value),
                     })
@@ -118,6 +119,7 @@ impl Merged {
             ),
             start: crate::node::Mark::default(),
             end: crate::node::Mark::default(),
+            text: None,
         }
     }
 }
@@ -505,7 +507,7 @@ fn issue(
     let entry = entry.unwrap_or_else(|| "None".to_owned());
     let message = match code {
         codes::MISSING_FIELD => format!("{place} is missing {field}."),
-        codes::UNKNOWN_KEY => format!("Unknown key '{field}' in {place}."),
+        codes::UNKNOWN_KEY => format!("Unknown key {field:?} in {place}."),
         codes::NAME_INVALID => "Block name must be 1–64 characters of lowercase letters, \
                                 digits, hyphen, and underscore."
             .to_owned(),

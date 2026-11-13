@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-schema/src/objects/table.rs
-assertion_line: 174
 expression: "serde_json::to_string_pretty(&results).unwrap()"
 ---
 {
@@ -1039,7 +1038,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "revision-bad-version": {
-    "loader": "unknown schema identifier: 'rule::1.x'"
+    "loader": "unknown schema identifier: \"rule::1.x\""
   },
   "revision-empty": {
     "loader": "schema_missing"
@@ -1094,50 +1093,50 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "loader": "schema_missing"
   },
   "revision-not-an-identifier": {
-    "loader": "unknown schema identifier: 'rule'"
+    "loader": "unknown schema identifier: \"rule\""
   },
   "revision-null": {
     "loader": "schema_missing"
   },
   "revision-number": {
-    "loader": "unknown schema identifier: '1.1'"
+    "loader": "unknown schema identifier: \"1.1\""
   },
   "revision-other-family": {
-    "loader": "'threat::1.0' is not a rule schema identifier"
+    "loader": "\"threat::1.0\" is not a rule schema identifier"
   },
   "revision-platform-identifier": {
-    "loader": "unknown schema identifier: 'platform::sentinel::1.0'"
+    "loader": "unknown schema identifier: \"platform::sentinel::1.0\""
   },
   "revision-schema-bool": {
-    "loader": "unknown schema identifier: 'true'"
+    "loader": "unknown schema identifier: \"true\""
   },
   "revision-schema-float-zero": {
     "loader": "schema_missing"
   },
   "revision-schema-list": {
-    "loader": "unknown schema identifier: '[...]'"
+    "loader": "unknown schema identifier: \"[...]\""
   },
   "revision-schema-map": {
-    "loader": "unknown schema identifier: '{...}'"
+    "loader": "unknown schema identifier: \"{...}\""
   },
   "revision-schema-negative-float-zero": {
     "loader": "schema_missing"
   },
   "revision-schema-quote": {
-    "loader": "unknown schema identifier: 'rule's::1.1'"
+    "loader": "unknown schema identifier: \"rule's::1.1\""
   },
   "revision-unknown-family-spelling": {
     "errors": [
       {
         "ctx": {
-          "error": "unknown schema identifier: 'Rule::1.1'; checked against rule::1.1, the newest rule revision, without the unknown-key check"
+          "error": "unknown schema identifier: \"Rule::1.1\"; checked against rule::1.1, the newest rule revision, without the unknown-key check"
         },
         "field_path": [
           "metadata",
           "schema"
         ],
         "input": "Rule::1.1",
-        "msg": "Value error, unknown schema identifier: 'Rule::1.1'; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "msg": "Value error, unknown schema identifier: \"Rule::1.1\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1153,14 +1152,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "unknown schema identifier: 'objective::2.0'; checked against objective::1.0, the newest objective revision, without the unknown-key check"
+          "error": "unknown schema identifier: \"objective::2.0\"; checked against objective::1.0, the newest objective revision, without the unknown-key check"
         },
         "field_path": [
           "metadata",
           "schema"
         ],
         "input": "objective::2.0",
-        "msg": "Value error, unknown schema identifier: 'objective::2.0'; checked against objective::1.0, the newest objective revision, without the unknown-key check",
+        "msg": "Value error, unknown schema identifier: \"objective::2.0\"; checked against objective::1.0, the newest objective revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1241,20 +1240,20 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "revision-unknown-other-family": {
-    "loader": "unknown schema identifier: 'threat::9.0'"
+    "loader": "unknown schema identifier: \"threat::9.0\""
   },
   "revision-unknown-rule": {
     "errors": [
       {
         "ctx": {
-          "error": "unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check"
+          "error": "unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the newest rule revision, without the unknown-key check"
         },
         "field_path": [
           "metadata",
           "schema"
         ],
         "input": "rule::7.0",
-        "msg": "Value error, unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "msg": "Value error, unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1270,14 +1269,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "unknown schema identifier: 'rule::1.2'; checked against rule::1.1, the newest rule revision, without the unknown-key check"
+          "error": "unknown schema identifier: \"rule::1.2\"; checked against rule::1.1, the newest rule revision, without the unknown-key check"
         },
         "field_path": [
           "metadata",
           "schema"
         ],
         "input": "rule::1.2",
-        "msg": "Value error, unknown schema identifier: 'rule::1.2'; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "msg": "Value error, unknown schema identifier: \"rule::1.2\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1328,14 +1327,14 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "unknown schema identifier: 'threat::1.5'; checked against threat::1.0, the newest threat revision, without the unknown-key check"
+          "error": "unknown schema identifier: \"threat::1.5\"; checked against threat::1.0, the newest threat revision, without the unknown-key check"
         },
         "field_path": [
           "metadata",
           "schema"
         ],
         "input": "threat::1.5",
-        "msg": "Value error, unknown schema identifier: 'threat::1.5'; checked against threat::1.0, the newest threat revision, without the unknown-key check",
+        "msg": "Value error, unknown schema identifier: \"threat::1.5\"; checked against threat::1.0, the newest threat revision, without the unknown-key check",
         "span": [
           5,
           11,
@@ -1433,7 +1432,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "revision-visibility-is-another-family": {
-    "loader": "'visibility::1.0' is not a rule schema identifier"
+    "loader": "\"visibility::1.0\" is not a rule schema identifier"
   },
   "rule-1-0-minimal": {
     "value": {
@@ -3314,7 +3313,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "1"
         ],
         "input": "a;b",
-        "msg": "'a;b' packs several vocabulary names into one string; list each name as its own item",
+        "msg": "\"a;b\" packs several vocabulary names into one string; list each name as its own item",
         "span": [
           13,
           16,
@@ -3338,7 +3337,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "1"
         ],
         "input": "Identity Theft; Fraud",
-        "msg": "'Identity Theft; Fraud' packs several vocabulary names into one string; list each name as its own item",
+        "msg": "\"Identity Theft; Fraud\" packs several vocabulary names into one string; list each name as its own item",
         "span": [
           13,
           26,
@@ -3503,7 +3502,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "leverage"
         ],
         "input": "High; Low",
-        "msg": "must be a YAML list of leverage vocabulary names, not a single string; list each name in 'High; Low' as its own item",
+        "msg": "must be a YAML list of leverage vocabulary names, not a single string; list each name in \"High; Low\" as its own item",
         "span": [
           14,
           14,

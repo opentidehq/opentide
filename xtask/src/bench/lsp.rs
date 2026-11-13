@@ -342,15 +342,14 @@ done
         prelude: &str,
         before_spawn: impl FnOnce(),
     ) -> Result<FirstDiagnostics> {
-        use std::os::unix::fs::PermissionsExt;
         let dir =
             std::env::temp_dir().join(format!("xtask-bench-lsp-{name}-{}", std::process::id()));
         let source = dir.join("source");
         std::fs::create_dir_all(source.join("objects/rules")).unwrap();
         std::fs::write(source.join("objects/rules/a.yaml"), "name: a\n").unwrap();
         let server = dir.join("server");
-        std::fs::write(&server, STUB_SERVER.replace("{prelude}", prelude)).unwrap();
-        std::fs::set_permissions(&server, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::script::write_executable(&server, &STUB_SERVER.replace("{prelude}", prelude))
+            .unwrap();
         let run = RunDir::prepare(&dir.join("run"), Some(&source)).unwrap();
         let result = first_diagnostics_with(
             &server,

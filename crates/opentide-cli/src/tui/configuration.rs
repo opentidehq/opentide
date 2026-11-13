@@ -219,16 +219,13 @@ fn reference(value: &Node) -> Option<String> {
     }
 }
 
-/// A scalar as Python's `str` writes it.
+/// A scalar as text: a string as it is, anything else as YAML writes it
+/// (`null`, `true`, `1.5`).
 fn scalar_text(value: &Value) -> String {
     match value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::Int(number) => number.to_string(),
-        Value::Float(number) => number.to_string(),
         Value::Str(text) | Value::Datetime(text) => text.clone(),
         Value::Seq(_) | Value::Map(_) => String::new(),
+        other => other.to_string(),
     }
 }
 

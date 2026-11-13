@@ -739,7 +739,7 @@ mod tests {
         }
         assert_eq!(
             check_duration("hourly").unwrap_err().message,
-            "Value error, Duration 'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a \
+            "Value error, Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a \
              shorthand duration (30m, 1h, 1d, 1h10m)"
         );
     }
@@ -775,7 +775,7 @@ mod tests {
         }
         assert_eq!(
             check_duration("1000000000d").unwrap_err().message,
-            "Value error, Duration '1000000000d' is longer than a rule can be deployed with (at \
+            "Value error, Duration \"1000000000d\" is longer than a rule can be deployed with (at \
              most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
         );
     }

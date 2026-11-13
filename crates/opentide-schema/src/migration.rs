@@ -27,10 +27,10 @@ use crate::revisions::{Revision, SchemaId, TideObject, lookup, revisions_of};
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MigrationError {
     /// The identifier names no registered revision.
-    #[error("unknown schema identifier: '{0}'")]
+    #[error("unknown schema identifier: {0:?}")]
     Unregistered(String),
     /// Source and target are of different families.
-    #[error("cannot migrate across families: '{source_id}' -> '{target}'")]
+    #[error("cannot migrate across families: {source_id:?} -> {target:?}")]
     CrossFamily {
         /// The source revision.
         source_id: String,
@@ -38,7 +38,7 @@ pub enum MigrationError {
         target: String,
     },
     /// The target is older than the source.
-    #[error("cannot migrate backwards: '{source_id}' -> '{target}'")]
+    #[error("cannot migrate backwards: {source_id:?} -> {target:?}")]
     Backwards {
         /// The source revision.
         source_id: String,
@@ -221,6 +221,7 @@ pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
             value: Value::Map(entries),
             start: metadata.start,
             end: metadata.end,
+            text: None,
         })
     };
     let entries = match entries
@@ -240,6 +241,7 @@ pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
                     value: Value::Map(vec![schema]),
                     start: Mark::default(),
                     end: Mark::default(),
+                    text: None,
                 }),
             });
             entries
@@ -249,6 +251,7 @@ pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
         value: Value::Map(entries),
         start: root.start,
         end: root.end,
+        text: None,
     }
 }
 
@@ -270,6 +273,7 @@ fn text(value: &str) -> Arc<Node> {
         value: Value::Str(value.to_owned()),
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     })
 }
 

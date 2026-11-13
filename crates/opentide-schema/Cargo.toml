@@ -39,8 +39,6 @@ toml.workspace = true
 serde_json.workspace = true
 # Entries in document order, looked up by key. The version Cargo.lock holds.
 indexmap = { version = "2", features = ["serde"] }
-# Which characters a quoted value escapes (`vocab::quote`).
-unicode-properties.workspace = true
 serde-saphyr.workspace = true
 opentide-schema-derive.workspace = true
 # Configuration TOML with every item's span (UC-1.5): the version the

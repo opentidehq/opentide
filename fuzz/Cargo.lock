@@ -2958,7 +2958,6 @@ dependencies = [
  "titlecase",
  "toml",
  "toml_edit",
- "unicode-properties",
 ]
 
 [[package]]
