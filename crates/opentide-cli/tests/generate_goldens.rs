@@ -1053,17 +1053,19 @@ fn docs_preview_shards_refresh_signals_and_references() {
     let page =
         std::fs::read_to_string(ws.join("docs/objectives/credential-access-objective.md")).unwrap();
     for line in [
+        // The renamed signal and the pull request's signal both get a section.
         "### Renamed logon signal\n",
         "### Pull request signal\n",
-        "| Renamed logon signal | _None_ |\n",
-        "| Pull request signal | [Signal Rule](../rules/signal-rule.md) \
-         (`00000000-0000-4000-8003-00000000aaaa`) |\n",
-        "| Signal | [Pull request signal](credential-access-objective.md#pull-request-signal) \
-         (`00000000-0000-4000-8099-000000000002`) | Downstream | signal |\n",
-        "| Rule | [Signal Rule](../rules/signal-rule.md) \
-         (`00000000-0000-4000-8003-00000000aaaa`) | Downstream | rule |\n",
-        "| Rule | [Objective Rule](../rules/objective-rule.md) \
-         (`00000000-0000-4000-8003-00000000bbbb`) | Downstream | rule |\n",
+        // The signals summary links each, and names the rule that implements one.
+        "| [Renamed logon signal](#renamed-logon-signal) | Medium | Statistical | - | \
+         *None yet* | - |\n",
+        "| [Pull request signal](#pull-request-signal) | Medium | Statistical | - | \
+         [Signal Rule](../rules/signal-rule.md) | Microsoft Defender for Endpoint `STAGING` |\n",
+        // The related-objects table reaches the pull request's objects.
+        "| Signal | [Pull request signal](credential-access-objective.md#pull-request-signal) | \
+         Downstream |\n",
+        "| Rule | [Signal Rule](../rules/signal-rule.md) | Downstream |\n",
+        "| Rule | [Objective Rule](../rules/objective-rule.md) | Downstream |\n",
     ] {
         assert!(page.contains(line), "{line}: {page}");
     }
@@ -1136,13 +1138,14 @@ fn docs_with_cve_details_fetch_each_record() {
     assert_eq!(code, 0, "{stdout}");
     let page = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
     let section = &page[page.find("## CVE").unwrap()..];
-    let section = &section[..section.find("\n## ").unwrap()];
+    // The CVE section ends where the next one, Detection coverage, begins.
+    let section = &section[..section.find("\n## Detection coverage").unwrap()];
     // The bundled documentation.toml's `default_db_link` places the pages.
     const PAGES: &str = "https://vulnerability.circl.lu/vuln/";
     assert_eq!(
         section,
         format!(
-            "## CVE\nIdentifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
+            "## CVE\n\nIdentifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
              which aggregates CVE, GHSA, CSAF, NVD, and related feeds.\n\n\
              | Identifier | Published | Severity | Summary |\n\
              | --- | --- | --- | --- |\n\

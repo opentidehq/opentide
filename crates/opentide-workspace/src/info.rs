@@ -16,53 +16,10 @@ use serde::Serialize;
 
 use crate::fields::{get, mapping};
 
-/// One platform the CLI knows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Platform {
-    /// Its key (`sentinel`).
-    pub name: &'static str,
-    /// Its label (`Microsoft Sentinel`).
-    pub label: &'static str,
-    /// Whether rules deploy to it.
-    pub can_deploy: bool,
-    /// Whether `validate --live` checks its queries.
-    pub can_validate: bool,
-    /// Whether `opentide query` runs on it.
-    pub can_query: bool,
+/// Every platform, by name ([`opentide_schema::platforms`]).
+fn by_name() -> Vec<&'static opentide_schema::platforms::Platform> {
+    opentide_schema::platforms::select(opentide_schema::platforms::Order::Name, |_| true)
 }
-
-const fn platform(
-    name: &'static str,
-    label: &'static str,
-    can_validate: bool,
-    can_query: bool,
-) -> Platform {
-    Platform {
-        name,
-        label,
-        can_deploy: true,
-        can_validate,
-        can_query,
-    }
-}
-
-/// Every platform, in the registry's order.
-pub const PLATFORMS: [Platform; 9] = [
-    platform("carbon_black_cloud", "Carbon Black Cloud", true, true),
-    platform("crowdstrike", "CrowdStrike Falcon", false, true),
-    platform(
-        "defender_for_endpoint",
-        "Microsoft Defender for Endpoint",
-        true,
-        true,
-    ),
-    platform("elastic", "Elastic Security", true, true),
-    platform("harfanglab", "HarfangLab", false, true),
-    platform("sentinel", "Microsoft Sentinel", true, true),
-    platform("sentinel_one", "SentinelOne", true, true),
-    platform("splunk", "Splunk Enterprise Security", true, true),
-    platform("sysdig", "Sysdig Secure", false, false),
-];
 
 /// The strategies a run deploys, in order.
 pub const DEPLOYABLE_STRATEGIES: [&str; 2] = ["PREVIEW", "RELEASE"];
@@ -214,21 +171,21 @@ pub fn platforms(
     only: Option<&str>,
     is_set: &dyn Fn(&str) -> bool,
 ) -> Vec<PlatformInfo> {
-    PLATFORMS
-        .iter()
-        .filter(|platform| only.is_none_or(|only| only == platform.name))
+    by_name()
+        .into_iter()
+        .filter(|platform| only.is_none_or(|only| only == platform.id))
         .map(|platform| {
-            let config = systems.and_then(|systems| get(systems, platform.name));
+            let config = systems.and_then(|systems| get(systems, platform.id));
             let enabled = config
                 .and_then(|config| mapping(config, "platform"))
                 .and_then(|block| get(block, "enabled"))
                 .is_some_and(|enabled| matches!(enabled.value, Value::Bool(true)));
             PlatformInfo {
-                name: platform.name.to_owned(),
+                name: platform.id.to_owned(),
                 enabled,
-                can_deploy: platform.can_deploy,
-                can_validate: platform.can_validate,
-                can_query: platform.can_query,
+                can_deploy: platform.deploys,
+                can_validate: platform.live_check,
+                can_query: platform.query_runner,
                 tenants: tenants(config.and_then(|c| get(c, "tenants")), is_set),
             }
         })
@@ -237,10 +194,7 @@ pub fn platforms(
 
 /// The label of a platform key, or the key.
 pub fn label(name: &str) -> &str {
-    PLATFORMS
-        .iter()
-        .find(|platform| platform.name == name)
-        .map_or(name, |platform| platform.label)
+    opentide_schema::platforms::get(name).map_or(name, |platform| platform.label)
 }
 
 /// One row of `info vocab`.

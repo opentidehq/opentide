@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
+use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
 use opentide_compile::generate::docs::render::{Pages, Templates};
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
@@ -510,11 +511,23 @@ fn docs_phase(
         Catalog::build(index, Statuses::from_resolved(resolved)).map_err(|error| error.detail)?;
     let vocabularies = Vocabularies::bundled();
     let templates = Templates::new();
+    // What deploy would do with each rule: the statuses, the enabled
+    // platforms, their tenants (never their credentials) and the state's ids.
+    let config = opentide_compile::Json::from_node(&resolved.tree);
+    let enabled = opentide_compile::plan::enabled_with(&config, &crate::plugins::plugin_ids());
+    let deployment = DeploymentFacts::read(
+        &config,
+        &enabled,
+        &OsFs,
+        root,
+        catalog.rules.iter().map(|record| record.uuid.as_str()),
+    );
     let pages_of = Pages {
         catalog: &catalog,
         settings: &settings,
         vocab: Vocab::new(&vocabularies),
         templates: &templates,
+        deployment: &deployment,
     };
     let output_text = Json::str(settings.output.to_string_lossy().as_ref());
     let flagged: Vec<Scope> = [

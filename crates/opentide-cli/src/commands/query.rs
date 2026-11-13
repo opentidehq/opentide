@@ -3,7 +3,7 @@
 //! `query/service.py` request for request.
 //!
 //! The query runs on the platforms with a Rust connector and a query runner
-//! ([`PLATFORMS`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
+//! ([`platforms`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
 //! Elastic, HarfangLab, Sentinel, SentinelOne, Splunk; every platform with a
 //! runner since UC-4.3, #833). A rule's query (`--rule`, `--file`) runs
 //! here too since UC-4.4c (#834): the queries a deploy of the rule sends,
@@ -19,7 +19,6 @@ use std::time::{Duration, Instant};
 
 use opentide_connectors::connector::{QueryOutcome, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::python::python_string_repr;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 
@@ -35,29 +34,16 @@ use crate::render::text::{Style, Text};
 pub const COMMAND: &str = "query";
 
 /// The platforms whose queries run here: those with a connector and a query
-/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`).
-pub const PLATFORMS: [&str; 8] = [
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-];
+/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`), sorted.
+pub fn platforms() -> Vec<&'static str> {
+    query_platforms()
+}
 
 /// Every platform with a query runner (`QUERY_PLATFORMS`), sorted.
-pub const QUERY_PLATFORMS: [&str; 8] = [
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-];
+pub fn query_platforms() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Name, |platform| platform.query_runner)
+}
 
 /// Rows per tenant when `--limit` names none (`DEFAULT_LIMIT`).
 pub const DEFAULT_LIMIT: i64 = 100;
@@ -73,16 +59,7 @@ pub const CELL_WIDTH: usize = 60;
 /// The languages each platform's runner takes; the first is the default
 /// (`PLATFORM_LANGUAGES`).
 pub fn languages(platform: &str) -> &'static [&'static str] {
-    match platform {
-        "sentinel" | "defender_for_endpoint" => &["kql"],
-        "splunk" => &["spl"],
-        "sentinel_one" => &["powerquery"],
-        "carbon_black_cloud" => &["lucene"],
-        "crowdstrike" => &["cql"],
-        "harfanglab" => &["telemetry"],
-        "elastic" => &["esql", "eql", "lucene", "kuery"],
-        _ => &[],
-    }
+    opentide_schema::platforms::get(platform).map_or(&[], |platform| platform.runner_languages)
 }
 
 /// The client a platform's runner names when its credentials are unset, and
@@ -214,7 +191,7 @@ pub fn plugin_rule(platform: &str, source: &str) -> Report {
 /// A platform with no query runner (Sysdig): a usage error on `--platform`,
 /// the platforms with one as its choices (`run_query`).
 pub fn no_runner(platform: &str) -> Report {
-    let choices: Vec<String> = QUERY_PLATFORMS
+    let choices: Vec<String> = query_platforms()
         .iter()
         .map(|name| (*name).to_owned())
         .collect();
@@ -331,8 +308,7 @@ fn parse_instant(value: &str, flag: &str) -> Result<jiff::Timestamp, String> {
         return Ok(moment.timestamp());
     }
     Err(format!(
-        "{flag} {} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z",
-        python_string_repr(value)
+        "{flag} {value:?} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
     ))
 }
 
@@ -359,10 +335,7 @@ fn resolve_window(
             let lookback = since.unwrap_or(DEFAULT_SINCE);
             let not_a_duration = || {
                 (
-                    format!(
-                        "--since {} is not a duration, such as 15m, 24h, 7d or PT1H",
-                        python_string_repr(lookback)
-                    ),
+                    format!("--since {lookback:?} is not a duration, such as 15m, 24h, 7d or PT1H"),
                     "--since",
                 )
             };
@@ -560,8 +533,7 @@ fn select<'t>(
     if let Some(unknown) = wanted.iter().find(|name| !known.contains(name)) {
         return Err((
             format!(
-                "{platform} has no tenant named {}; configured: {}",
-                python_string_repr(unknown),
+                "{platform} has no tenant named {unknown:?}; configured: {}",
                 known.join(", ")
             ),
             Some(unknown.clone()),
@@ -800,14 +772,14 @@ fn run_on_tenant(
         }
         Err(ConnectorError::Authentication { message, .. }) => {
             outcome.error = Some(format!(
-                "cannot authenticate to {platform} tenant {}: {message}",
-                python_string_repr(&configured.name)
+                "cannot authenticate to {platform} tenant {:?}: {message}",
+                configured.name
             ));
         }
         Err(ConnectorError::Gateway { message, .. }) => {
             outcome.error = Some(format!(
-                "{platform} tenant {} did not answer the query within {}s: {message}",
-                python_string_repr(&configured.name),
+                "{platform} tenant {:?} did not answer the query within {}s: {message}",
+                configured.name,
                 seconds_g(request.timeout.as_secs_f64()),
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
@@ -815,10 +787,10 @@ fn run_on_tenant(
         Err(ConnectorError::Timeout { seconds, .. }) => {
             let host = setup_host(platform, configured);
             outcome.error = Some(format!(
-                "{platform} tenant {} did not answer the query within {}s: \
+                "{platform} tenant {:?} did not answer the query within {}s: \
                  HTTPSConnectionPool(host='{host}', port=443): Read timed out. (read \
                  timeout={seconds})",
-                python_string_repr(&configured.name),
+                configured.name,
                 seconds_g(request.timeout.as_secs_f64()),
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
@@ -912,7 +884,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             }
         }
     };
-    if !PLATFORMS.contains(&platform) && !plugin {
+    if !platforms().contains(&platform) && !plugin {
         // Sysdig (`run_query`'s first check): no query runner, the platforms
         // with one as the choices.
         return no_runner(platform);
@@ -941,9 +913,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return usage_with(
             platform,
             &format!(
-                "{platform} queries are {}, not {}",
-                languages.join(", "),
-                python_string_repr(language)
+                "{platform} queries are {}, not {language:?}",
+                languages.join(", ")
             ),
             "--language",
             suggest(language, &choices),
@@ -1218,7 +1189,7 @@ fn cell(value: Option<&Json>) -> String {
     let text = match value {
         None | Some(Json::Null) => return String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
-        Some(value) => python_str(value),
+        Some(value) => scalar_text(value),
     };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if text.chars().count() <= CELL_WIDTH {
@@ -1230,12 +1201,9 @@ fn cell(value: Option<&Json>) -> String {
     }
 }
 
-/// `str(value)` of a row's value.
-fn python_str(value: &Json) -> String {
+/// A row's value as text: a string as is, anything else as its JSON.
+fn scalar_text(value: &Json) -> String {
     match value {
-        Json::Null => "None".into(),
-        Json::Bool(true) => "True".into(),
-        Json::Bool(false) => "False".into(),
         Json::Str(text) => text.clone(),
         other => crate::json::document_text(other, false)
             .trim_end()
@@ -1300,7 +1268,7 @@ fn csv_value(value: Option<&Json>) -> String {
     match value {
         None | Some(Json::Null) => String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
-        Some(value) => python_str(value),
+        Some(value) => scalar_text(value),
     }
 }
 
@@ -1648,13 +1616,13 @@ mod tests {
         );
         assert_eq!(
             resolve_window(Some("soon"), None, None, now).unwrap_err().0,
-            "--since 'soon' is not a duration, such as 15m, 24h, 7d or PT1H"
+            "--since \"soon\" is not a duration, such as 15m, 24h, 7d or PT1H"
         );
         assert_eq!(
             resolve_window(None, Some("yesterday"), None, now)
                 .unwrap_err()
                 .0,
-            "--from 'yesterday' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+            "--from \"yesterday\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
         );
     }
 
@@ -1683,7 +1651,7 @@ mod tests {
         let unknown = select("elastic", &["qa".into()], &two, "x").unwrap_err();
         assert_eq!(
             unknown.0,
-            "elastic has no tenant named 'qa'; configured: prod, lab"
+            "elastic has no tenant named \"qa\"; configured: prod, lab"
         );
         assert_eq!(unknown.2, ["prod", "lab", "all"]);
         assert_eq!(
@@ -1693,7 +1661,7 @@ mod tests {
     }
 
     #[test]
-    fn rows_are_written_as_the_python_cli_writes_them() {
+    fn rows_are_written_as_text_and_json() {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
         let mut lab = failed("lab", "e", None);
         assert_eq!(
@@ -1710,7 +1678,7 @@ mod tests {
         assert_eq!(cell(row.get("c")), "");
         assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
         assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
-        assert_eq!(csv_value(Some(&Json::Bool(true))), "True");
+        assert_eq!(csv_value(Some(&Json::Bool(true))), "true");
         let table = |headers: &[&str], row: &[&str], width: usize| -> Vec<String> {
             let headers: Vec<String> = headers.iter().map(|h| (*h).to_owned()).collect();
             let row: Vec<String> = row.iter().map(|c| (*c).to_owned()).collect();
@@ -2255,7 +2223,7 @@ mod tests {
 
     #[test]
     fn each_platform_has_its_languages_credentials_and_address() {
-        for platform in QUERY_PLATFORMS {
+        for platform in query_platforms() {
             assert!(!languages(platform).is_empty(), "{platform}");
         }
         assert_eq!(languages("elastic"), ["esql", "eql", "lucene", "kuery"]);
@@ -2306,7 +2274,7 @@ mod tests {
         assert_eq!(setup_host("elastic", &tenant(None)), "");
         assert_eq!(seconds_g(120.0), "120");
         assert_eq!(seconds_g(0.25), "0.25");
-        for platform in PLATFORMS {
+        for platform in platforms() {
             let settings = http_settings(platform, Duration::from_secs(30));
             assert!(settings.timeout > Duration::ZERO, "{platform}");
         }
@@ -2368,7 +2336,7 @@ mod tests {
         assert_eq!(utc("2026-10-27T08:00:00"), "2026-10-27T08:00:00.000Z");
         assert_eq!(
             parse_instant("27/10/2026", "--to").unwrap_err(),
-            "--to '27/10/2026' is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+            "--to \"27/10/2026\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
         );
         // strerror is the OS message without Rust's " (os error N)".
         let missing = std::io::Error::from_raw_os_error(2);

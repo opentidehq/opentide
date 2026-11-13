@@ -14,30 +14,25 @@ use crate::fs::{EntryKind, FileSystem};
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = "deployment.state::1.0";
-/// Platforms whose deployer addresses the remote rule by a vendor id.
-pub const STATE_PLATFORMS: [&str; 4] = [
-    "crowdstrike",
-    "defender_for_endpoint",
-    "sentinel_one",
-    "sysdig",
-];
+/// Platforms whose deployer addresses the remote rule by a vendor id, by
+/// name ([`opentide_schema::platforms::state_platforms`]).
+pub fn state_platforms() -> Vec<&'static str> {
+    opentide_schema::platforms::state_platforms()
+}
 /// Whether a shard may bind *platform*'s rules to ids: a built-in platform
 /// whose deployer addresses the remote rule by a vendor id
-/// ([`STATE_PLATFORMS`]), or a platform plugin's (UC-4.5b, #835): an
+/// ([`state_platforms`]), or a platform plugin's (UC-4.5b, #835): an
 /// identifier (lower case letters, digits and `_`, starting with a letter)
 /// that no built-in platform has. Whether that plugin is installed where the
 /// shard is read does not matter: the shard is the deploying run's record.
 pub fn stores_ids(platform: &str) -> bool {
-    STATE_PLATFORMS.contains(&platform)
+    opentide_schema::platforms::get(platform).is_some_and(|row| row.external_id.is_stored())
         || (!crate::validate::objects::PLATFORMS.contains(&platform)
             && platform.starts_with(|ch: char| ch.is_ascii_lowercase())
             && platform
                 .bytes()
                 .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'))
 }
-
-/// Platforms whose external id is a canonical decimal integer.
-const INTEGER_ID_PLATFORMS: [&str; 3] = ["defender_for_endpoint", "sentinel_one", "sysdig"];
 
 /// One binding, as `info catalog` lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -101,7 +96,8 @@ fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
             if tenant.trim().is_empty()
                 || tenant != tenant.trim()
                 || id.trim().is_empty()
-                || (INTEGER_ID_PLATFORMS.contains(&platform.as_str()) && !canonical_decimal(&id))
+                || (opentide_schema::platforms::has_integer_id(&platform)
+                    && !canonical_decimal(&id))
             {
                 return None;
             }
