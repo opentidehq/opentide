@@ -190,9 +190,19 @@ def test_the_engine_debug_tree_is_cached_once() -> None:
     """engine-test's Linux compiler cache serves the Linux jobs that build a
     subset of its debug tree; they never save a copy."""
     _, job, runs_on = ENGINE_DEBUG_PRODUCER
-    producer = _compiler_cache(job, runs_on)
+    # The Linux shard that tests opentide-lsp (clients) and opentide-analysis
+    # (elastic-sweep): each shard saves the crates its packages build.
+    (cell,) = [
+        cell
+        for cell in _cells(_ci()["jobs"][job])
+        if cell["os"] == runs_on
+        and {"opentide-lsp", "opentide-analysis"} <= set(cell["packages"].split()[1::2])
+    ]
+    family = f"sccache-engine-dev-ubuntu-latest-{cell['shard']}-"
+    savers = [c for c in _compiler_caches() if c.job == job and (c.saves or "").startswith(family)]
+    assert len(savers) == 1, family
+    producer = savers[0]
     assert producer.saves is not None
-    assert producer.saves.startswith("sccache-engine-dev-ubuntu-latest-")
     for _, reader_job in ENGINE_DEBUG_READERS:
         reader = _compiler_cache(reader_job)
         assert reader.restores == producer.saves

@@ -966,3 +966,62 @@ def test_engine_lint_builds_xtask_once() -> None:
     for command in ("check-layers", "cassettes check", "codegen --check"):
         assert f"target/debug/xtask {command}" in used, command
     assert "target/debug/opentide-lsp generate-highlights --check" in used
+
+
+# The Linux engine-test shards (#841): by package, so that each shard builds
+# only its packages' test binaries (sccache does not cache a test harness).
+def _workspace_packages() -> dict[str, Path]:
+    """Every member of the root Cargo.toml's workspace: its package name and
+    directory."""
+    import tomllib
+
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    packages = {}
+    for member in manifest["workspace"]["members"]:
+        member_manifest = tomllib.loads((ROOT / member / "Cargo.toml").read_text("utf-8"))
+        packages[member_manifest["package"]["name"]] = ROOT / member
+    return packages
+
+
+def _linux_shards() -> list[list[str]]:
+    from tests.test_ci import ci_matrix
+
+    cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
+    assert {cell["os"] for cell in cells} == {"ubuntu-latest"}
+    shards = []
+    for cell in sorted(cells, key=lambda c: int(c["shard"])):
+        words = cell["packages"].split()
+        assert words[::2] == ["-p"] * (len(words) // 2) and len(words) % 2 == 0, cell
+        shards.append(words[1::2])
+    return shards
+
+
+def test_the_engine_test_shards_cover_every_package_once() -> None:
+    """A package in no shard would never be tested on a pull request; one in
+    two would be built and tested twice."""
+    shards = _linux_shards()
+    named = [package for shard in shards for package in shard]
+    assert len(named) == len(set(named)), "a package is in two shards"
+    assert set(named) == set(_workspace_packages())
+
+
+def _weight(directory: Path) -> float:
+    """What a package costs a shard: its lines of Rust (the unit-test harness
+    compiles them all again) and three thousand per test binary it links."""
+    lines = sum(
+        len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+        for path in directory.rglob("*.rs")
+        if "target" not in path.parts
+    )
+    tests = directory / "tests"
+    binaries = [*tests.glob("*.rs"), *tests.glob("*/main.rs")] if tests.is_dir() else []
+    return lines + 3000 * len(binaries)
+
+
+def test_the_engine_test_shards_take_even_shares() -> None:
+    """The slowest shard is the gate's time: none carries much more than its
+    share, so a new heavy crate goes where it keeps them even."""
+    packages = _workspace_packages()
+    weights = [sum(_weight(packages[name]) for name in shard) for shard in _linux_shards()]
+    mean = sum(weights) / len(weights)
+    assert max(weights) <= 1.25 * mean, [round(w / mean, 2) for w in weights]
