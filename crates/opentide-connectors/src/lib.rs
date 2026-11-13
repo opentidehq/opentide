@@ -34,6 +34,7 @@ pub mod elastic;
 pub mod encode;
 pub mod env;
 pub mod error;
+pub mod graylog;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
@@ -164,7 +165,16 @@ mod tests {
                 toml::Value::Integer(3)
             ])
         );
-        assert!(!setup.contains_key("nested") && !setup.contains_key("none"));
+        // A table is kept, for the tenant's string tables (Graylog's
+        // `stream_ids`); a null has no TOML form and is left out.
+        assert_eq!(
+            setup["nested"],
+            toml::Value::Table(toml::map::Map::from_iter([(
+                "a".to_owned(),
+                toml::Value::Integer(1)
+            )]))
+        );
+        assert!(!setup.contains_key("none"));
         assert!(tenants[1].1.is_empty());
         assert!(super::tenant::configured(&config, "elastic").is_empty());
     }
