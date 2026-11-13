@@ -446,6 +446,30 @@ pub fn check_object(
                     new(error.code, error.message).with("shard", shard.display().to_string()),
                 );
             }
+            let locator = subject.document.locator();
+            for (platform, anchor) in
+                opentide_schema::objects::platform::bitdefender::checks::signature_aliases(root)
+            {
+                let mut issue = new(
+                    opentide_core::codes::YARA_SIGNATURE_ALIAS,
+                    format!(
+                        "configurations.{platform}.yara.signature is a YAML alias; \
+                         write the YARA signature out in the block"
+                    ),
+                )
+                .at([
+                    "configurations".to_owned(),
+                    platform,
+                    "yara".to_owned(),
+                    "signature".to_owned(),
+                ])
+                .suggest(Some(
+                    "Replace the alias (*name) with the signature text".to_owned(),
+                ));
+                // The oracle's YAML reader places an alias at its anchor.
+                issue.yaml_line = locator.yaml_line(&anchor);
+                issues.push(issue);
+            }
         }
         if subject.family == "rule" {
             use opentide_schema::objects::platform::google_secops::advisories::{
