@@ -211,6 +211,8 @@ def _renderable_branch(value: str | None) -> str | None:
 
 #: Help shared by several ``setup`` commands.
 _YES_HELP = "Write without asking for confirmation"
+#: The ``setup mcp`` flags that answer its wizard's question.
+_MCP_FLAGS = "--vscode, --cursor, --claude-code, --claude-desktop"
 _NAME_HELP = "Repository name, used in the README"
 _ORG_HELP = "Organisation or team, used in the README"
 _DESCRIPTION_HELP = "One-line description, used in the README"
@@ -431,7 +433,10 @@ def setup_cmd(
         [],
         "--mcp",
         metavar="HOST",
-        help="Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)",
+        help=(
+            "Write MCP configuration for vscode, cursor, claude-code, claude-desktop or generic "
+            "(repeatable)"
+        ),
     ),
     skills: list[SkillTarget] = typer.Option(
         [],
@@ -495,6 +500,7 @@ def setup_cmd(
             default_branch=default_branch,
             vscode_setup=vscode_setup,
             yes=yes or plan,
+            plan=plan,
             run_repo=_should_run_repo(
                 yes=yes or plan,
                 interactive=False,
@@ -842,6 +848,11 @@ def setup_mcp_cmd(
     claude_code: bool = typer.Option(
         False, "--claude-code", help="Configure Claude Code (.mcp.json)"
     ),
+    claude_desktop: bool = typer.Option(
+        False,
+        "--claude-desktop",
+        help="Configure Claude Desktop (its claude_desktop_config.json, outside the repository)",
+    ),
     generic: bool = typer.Option(
         False, "--generic", help="Configure any MCP host (opentide.mcp.json)"
     ),
@@ -866,6 +877,8 @@ def setup_mcp_cmd(
         hosts.append(McpHost.cursor)
     if claude_code:
         hosts.append(McpHost.claude_code)
+    if claude_desktop:
+        hosts.append(McpHost.claude_desktop)
     if generic:
         hosts.append(McpHost.generic)
 
@@ -873,7 +886,8 @@ def setup_mcp_cmd(
     if (yes or planning) and not hosts:
         emit_error(
             cli,
-            "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
+            "Choose at least one MCP host "
+            "(--vscode, --cursor, --claude-code, --claude-desktop, --generic)",
             exit_code=USAGE_EXIT_CODE,
             code=USAGE_MISSING_OPTION,
         )
@@ -882,7 +896,9 @@ def setup_mcp_cmd(
             cli,
             base,
             "mcp",
-            lambda target, _: run_mcp_setup(McpSetupOptions(path=target, hosts=hosts, yes=True)),
+            lambda target, _: run_mcp_setup(
+                McpSetupOptions(path=target, hosts=hosts, yes=True, plan=True)
+            ),
         )
         return
 
@@ -894,11 +910,11 @@ def setup_mcp_cmd(
         cli.apply_environment()
         result = run_mcp_setup(options)
     else:
-        _require_scripted_for_json(cli, "opentide setup mcp", "--vscode, --cursor, --claude-code")
+        _require_scripted_for_json(cli, "opentide setup mcp", _MCP_FLAGS)
         try:
             result = run_interactive_mcp_setup(base)
         except InteractiveRequiredError as exc:
-            _refuse_wizard(cli, exc, "opentide setup mcp", "--vscode, --cursor, --claude-code")
+            _refuse_wizard(cli, exc, "opentide setup mcp", _MCP_FLAGS)
     _emit_setup(cli, result)
 
 

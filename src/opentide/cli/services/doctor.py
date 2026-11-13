@@ -30,7 +30,7 @@ from rich.console import Console
 from rich.text import Text
 
 from opentide.cli.enums import McpHost
-from opentide.cli.services.setup.mcp import MCP_OUTPUT_PATHS
+from opentide.cli.services.setup.mcp import MCP_OUTPUT_PATHS, claude_desktop_config_path
 from opentide.cli.ui.glyphs import glyph
 
 logger = structlog.get_logger("opentide.cli.services.doctor")
@@ -67,11 +67,13 @@ PLATFORM_SDKS: dict[str, tuple[str, ...]] = {
 }
 
 #: How the checklist names each host ``opentide setup mcp`` writes for; the
-#: files themselves are :data:`~opentide.cli.services.setup.mcp.MCP_OUTPUT_PATHS`.
+#: files themselves are :data:`~opentide.cli.services.setup.mcp.MCP_OUTPUT_PATHS`,
+#: and Claude Desktop's :func:`~opentide.cli.services.setup.mcp.claude_desktop_config_path`.
 MCP_HOST_LABELS: dict[McpHost, str] = {
     McpHost.vscode: "VS Code",
     McpHost.cursor: "Cursor",
     McpHost.claude_code: "Claude Code",
+    McpHost.claude_desktop: "Claude Desktop",
     McpHost.generic: "generic",
 }
 
@@ -919,6 +921,34 @@ def _opentide_server(data: Any) -> Mapping[str, Any] | None:
     return None
 
 
+def _claude_desktop_server(ctx: DoctorContext) -> Mapping[str, Any] | None:
+    """Claude Desktop's opentide server for this workspace, if its config has one.
+
+    The file is the user's, shared by every workspace: an opentide server there
+    for another workspace says nothing about this one, and is not reported.
+    """
+    data = _read_json(claude_desktop_config_path(environ=ctx.environ))
+    servers = data.get("mcpServers") if isinstance(data, Mapping) else None
+    if not isinstance(servers, Mapping):
+        return None
+    for server in servers.values():
+        if not isinstance(server, Mapping):
+            continue
+        args = server.get("args")
+        if not (isinstance(args, list) and args[-2:] == ["mcp", "start"]):
+            continue
+        env = server.get("env")
+        root = env.get("OPENTIDE_REPO_ROOT") if isinstance(env, Mapping) else None
+        if not isinstance(root, str) or not root:
+            continue
+        try:
+            if Path(root).resolve() == ctx.workspace.resolve():
+                return server
+        except (OSError, RuntimeError):
+            continue
+    return None
+
+
 def check_mcp(ctx: DoctorContext) -> list[Check]:
     hosts: list[str] = []
     #: Files that exist but configure no opentide server: often a host's own
@@ -935,7 +965,11 @@ def check_mcp(ctx: DoctorContext) -> list[Check]:
             continue
         hosts.append(MCP_HOST_LABELS[host])
         commands.add(str(server.get("command") or ""))
-    setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)"
+    desktop = _claude_desktop_server(ctx)
+    if desktop is not None:
+        hosts.append(MCP_HOST_LABELS[McpHost.claude_desktop])
+        commands.add(str(desktop.get("command") or ""))
+    setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)"
     from opentide.cli.services.setup.vscode import EXTENSION_ID, recommends_extension
 
     # The extension serves the opentide MCP server to VS Code agents itself (#752).

@@ -672,9 +672,49 @@ def test_mcp_config_states(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_mcp_check_reads_the_files_setup_writes() -> None:
+    from opentide.cli.enums import McpHost
     from opentide.cli.services.setup.mcp import MCP_OUTPUT_PATHS
 
-    assert set(doctor.MCP_HOST_LABELS) == set(MCP_OUTPUT_PATHS)
+    assert set(doctor.MCP_HOST_LABELS) == set(McpHost)
+    # Every host's file is in the repository but Claude Desktop's, read on its own.
+    assert set(McpHost) - set(MCP_OUTPUT_PATHS) == {McpHost.claude_desktop}
+
+
+def test_mcp_config_lists_claude_desktop_for_this_workspace(
+    workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1036: Claude Desktop's user config counts when its server serves this workspace."""
+    from opentide.cli.services.setup.mcp import claude_desktop_config_path
+
+    home = tmp_path / "home"
+    for name in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(name, str(home))
+    env = {"APPDATA": str(home / "AppData"), "XDG_CONFIG_HOME": str(home / ".config")}
+    config = claude_desktop_config_path(environ=env)
+    assert config.is_relative_to(home)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: name)
+
+    def desktop(root: Path) -> None:
+        config.parent.mkdir(parents=True, exist_ok=True)
+        server = {
+            "command": "/opt/opentide/bin/opentide",
+            "args": ["mcp", "start"],
+            "env": {"OPENTIDE_REPO_ROOT": str(root)},
+        }
+        config.write_text(json.dumps({"mcpServers": {"opentide": server}}), encoding="utf-8")
+
+    desktop(tmp_path / "another-workspace")
+    other = _only(doctor.check_mcp(_ctx(workspace, env=env)))
+    assert other.status == "skip", "a server for another workspace says nothing about this one"
+    assert other.fix is not None and "--claude-desktop" in other.fix
+
+    desktop(workspace)
+    ours = _only(doctor.check_mcp(_ctx(workspace, env=env)))
+    assert (ours.status, ours.message) == ("pass", "MCP configured for Claude Desktop")
+
+    _mcp(workspace / ".cursor" / "mcp.json")
+    both = _only(doctor.check_mcp(_ctx(workspace, env=env)))
+    assert both.message == "MCP configured for Cursor, Claude Desktop"
 
 
 # --------------------------------------------------------------------------- configuration

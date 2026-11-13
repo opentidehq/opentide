@@ -17,11 +17,12 @@ opentide setup mcp --vscode --generic --yes
 | `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| `--claude-desktop` | Claude Desktop's `claude_desktop_config.json` ([below](#claude-desktop)) | the workspace's absolute path |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery); an [Agent Plugins](#agent-plugins) `mcp.json` |
 
 ## Minimal config
 
-VS Code workspace MCP (`.vscode/mcp.json`) uses a top-level `servers` object. Cursor, Claude Code, and the generic template use `mcpServers`.
+VS Code workspace MCP (`.vscode/mcp.json`) uses a top-level `servers` object. Cursor, Claude Code, Claude Desktop and the generic template use `mcpServers`.
 
 Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. The generic file is copied into arbitrary hosts, so it does not set `OPENTIDE_REPO_ROOT` — the server walks up from cwd to the nearest detection workspace (`get_repo_root`). Set an absolute path when cwd is not inside the detection workspace.
 
@@ -74,6 +75,32 @@ The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP
   }
 }
 ```
+
+### Claude Desktop
+
+Claude Desktop's chat does not start an installed plugin's local MCP servers, so the [Agent Plugin](#agent-plugins) does not give it opentide. `opentide setup mcp --claude-desktop` adds the server to Claude Desktop's own configuration, keeping every other server and setting there:
+
+```bash
+opentide setup mcp --claude-desktop --yes --path ~/detections
+```
+
+The file is per user, outside the repository: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows, and `~/.config/Claude/claude_desktop_config.json` (under `XDG_CONFIG_HOME` when it is set) elsewhere. Claude Desktop expands no placeholder and, started from the Dock or the Start menu, does not have the shell's `PATH`, so both paths in the entry are absolute:
+
+```json
+{
+  "mcpServers": {
+    "opentide": {
+      "command": "/Users/me/.local/bin/opentide",
+      "args": ["mcp", "start"],
+      "env": {
+        "OPENTIDE_REPO_ROOT": "/Users/me/detections"
+      }
+    }
+  }
+}
+```
+
+`command` is the `opentide` that ran setup (when no `opentide` script can be found, its Python, with `-m opentide` in `args`). An existing `opentide` entry is replaced: run setup again from another workspace to point Claude Desktop at that one. Then restart Claude Desktop, or choose **Developer → Reload MCP Configuration**. A file that is not a JSON object is left unchanged, with a warning. Details: [`setup mcp`](../cli/setup.md#claude-desktop).
 
 ### Generic
 

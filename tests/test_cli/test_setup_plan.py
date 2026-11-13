@@ -587,3 +587,38 @@ def test_the_plan_never_writes_through_a_link_in_git_hooks(git_repo: Path, tmp_p
     result, applied = _invoke("hooks", "--yes", "--path", str(git_repo))
     assert result.exit_code == 0, result.stdout + result.stderr
     assert set(applied["files"]) <= _planned(plan, actions=("create", "merge", "skip"))
+
+
+def test_the_plan_lists_claude_desktops_config_and_writes_nothing_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1036: the config is outside the repository's copy, so the step reports it unwritten."""
+    from opentide.cli.services.setup.mcp import claude_desktop_config_path
+
+    home = tmp_path / "home"
+    for name in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(name, str(home))
+    monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    config = claude_desktop_config_path()
+    target = tmp_path / "repo"
+    target.mkdir()
+    before = _tree(tmp_path)
+
+    for args in (
+        ("mcp", "--claude-desktop", "--plan", "--path", str(target)),
+        ("--plan", "--mcp", "claude-desktop", "--path", str(target)),
+    ):
+        result, plan = _invoke(*args)
+        assert result.exit_code == 0, result.stdout + result.stderr
+        assert document_problems(plan) == []
+        assert _tree(tmp_path) == before, f"{args} wrote a file"
+        assert _planned(plan, actions=("create",)) == {str(config)}
+
+    config.parent.mkdir(parents=True)
+    config.write_text("[]", encoding="utf-8")
+    result, plan = _invoke("mcp", "--claude-desktop", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _planned(plan, actions=("skip",)) == {str(config)}
+    assert any(str(config) in warning for warning in plan["warnings"])
+    assert config.read_text(encoding="utf-8") == "[]"

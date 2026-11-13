@@ -90,6 +90,8 @@ class McpHost(str, Enum):
     vscode = "vscode"
     cursor = "cursor"
     claude_code = "claude-code"
+    #: Claude Desktop's own config file, outside the repository.
+    claude_desktop = "claude-desktop"
     generic = "generic"
 
 

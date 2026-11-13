@@ -330,7 +330,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`lucene_regexp`](#lucene_regexp) | The /regexp/ body is rejected by, or too costly for, Lucene's RegExp. |
 | [`lucene_unescaped_slash`](#lucene_unescaped_slash) | An unescaped / starts a regular expression. |
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
-| [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
+| [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
 | [`missing_author`](#missing_author) | The recommended metadata.author field is missing. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
@@ -5918,7 +5918,7 @@ Use a value of the TLP vocabulary: `clear`, `green`, `amber`, `amber+strict` or 
 
 ## mcp_config
 
-An MCP configuration from `opentide setup mcp` runs `opentide mcp start`.
+An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace.
 
 Reported by `opentide doctor`. Warns when no configuration has such a server, or its command is not on `PATH`; skipped when there is no configuration. Passes without one when `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), which provides the opentide MCP server to VS Code; with both, the message says so, since `.vscode/mcp.json` then serves teammates without the extension.
 
@@ -5926,12 +5926,12 @@ Reported by `opentide doctor`. Warns when no configuration has such a server, or
 
 ```text illustrative
 ○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
-  → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
+  → opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)
 ```
 
 ### How to fix
 
-Run `opentide setup mcp` with your editor's flag.
+Run `opentide setup mcp` with your editor's flag (`--claude-desktop` for Claude Desktop).
 
 ## metadata_recommended
 

@@ -1,6 +1,6 @@
 # mcp_config
 
-An MCP configuration from `opentide setup mcp` runs `opentide mcp start`.
+An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace.
 
 Reported by `opentide doctor`. Warns when no configuration has such a server, or its command is not on `PATH`; skipped when there is no configuration. Passes without one when `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), which provides the opentide MCP server to VS Code; with both, the message says so, since `.vscode/mcp.json` then serves teammates without the extension.
 
@@ -8,9 +8,9 @@ Reported by `opentide doctor`. Warns when no configuration has such a server, or
 
 ```text
 ○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
-  → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
+  → opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)
 ```
 
 ## How to fix
 
-Run `opentide setup mcp` with your editor's flag.
+Run `opentide setup mcp` with your editor's flag (`--claude-desktop` for Claude Desktop).
