@@ -78,6 +78,16 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_1_2_dates,
     },
+    Approved {
+        id: "recommended-check",
+        reason: "opentide 0.28.1 adds lint's `recommended` check (#1028): it runs by default, \
+                 so `checks` lists it after `metadata`, and it reports a rule without \
+                 `configurations` or `response` as a `recommended_field_missing` note the \
+                 0.23.0 oracle did not report. A note never fails `--strict`, so a strict run \
+                 that is left with notes only passes; its verdict is derived from the findings",
+        changelog: "**`opentide lint` reports a rule without `configurations` or `response` as a note.**",
+        applies: recommended_check,
+    },
 ];
 
 fn code(finding: &Json) -> &str {
@@ -132,6 +142,28 @@ fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>, oracle_list: &[Jso
         (None, Some(rust)) => oracle_list
             .iter()
             .any(|item| is_invalid_date(item) && item["path"] == rust["path"]),
+        _ => false,
+    }
+}
+
+fn recommended_check(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    match (oracle, rust) {
+        // A finding of the new check.
+        (None, Some(rust)) => {
+            code(rust) == "recommended_field_missing"
+                && rust["check"] == "recommended"
+                && rust["severity"] == "info"
+        }
+        // `checks`: the oracle's list with `recommended` added after `metadata`.
+        (Some(Json::Array(oracle)), Some(Json::Array(rust))) => {
+            let mut expected = oracle.clone();
+            let at = oracle
+                .iter()
+                .position(|check| check == "metadata")
+                .map_or(0, |index| index + 1);
+            expected.insert(at, json!("recommended"));
+            *rust == expected
+        }
         _ => false,
     }
 }
@@ -590,7 +622,8 @@ pub fn run(args: &[String]) -> Result<u8> {
         *explained.entry(difference.case.as_str()).or_insert(true) &= rule_of(difference).is_some();
     }
     for difference in &differences {
-        let rule = if is_list(difference) {
+        // A finding, or the list of checks that ran, is explained by a rule.
+        let rule = if is_list(difference) || difference.what == "checks" {
             rule_of(difference)
         } else {
             None
@@ -852,6 +885,24 @@ mod tests {
         (recording, dunce::canonicalize(&ws).unwrap())
     }
 
+    /// `recording` run with the oracle's four checks named, so the
+    /// `recommended` check 0.28.1 added (an approved difference) is not run.
+    fn oracle_checks(recording: &mut Recording) {
+        let at = recording
+            .case
+            .argv
+            .iter()
+            .position(|arg| arg == "lint")
+            .unwrap()
+            + 1;
+        for check in ["queries", "placeholders", "metadata", "filenames"] {
+            recording
+                .case
+                .argv
+                .splice(at..at, ["--check".to_owned(), check.to_owned()]);
+        }
+    }
+
     fn parts(differences: &[Difference]) -> std::collections::BTreeSet<String> {
         differences.iter().map(|d| d.what.clone()).collect()
     }
@@ -862,7 +913,10 @@ mod tests {
         let (recording, ws) = laid_out("lint/json/tide-corpus/fix", dir.path());
         let differences = run_case(&recording, &ws).unwrap();
         for difference in &differences {
-            assert_eq!(difference.what, "findings", "{difference:?}");
+            assert!(
+                ["findings", "checks"].contains(&difference.what.as_str()),
+                "{difference:?}"
+            );
             assert!(
                 APPROVED.iter().any(|rule| (rule.applies)(
                     difference.oracle.as_ref(),
@@ -956,6 +1010,7 @@ mod tests {
         // Without --strict, the recording's findings leave lint at "issues":
         // the verdict is recomputed from them, so only the file count differs.
         recording.case.argv.retain(|arg| arg != "--strict");
+        oracle_checks(&mut recording);
         edit(&mut recording, "\"files\":2,", "\"files\":99,");
         let differences = run_case(&recording, &ws).unwrap();
         assert_eq!(
@@ -969,6 +1024,7 @@ mod tests {
             "lint/json/tide-corpus/file-missing",
             &dir.path().join("refused"),
         );
+        oracle_checks(&mut refused);
         let clean = run_case(&refused, &ws).unwrap();
         assert!(clean.is_empty(), "{clean:?}");
         edit(&mut refused, "\"exit_code\":1", "\"exit_code\":0");

@@ -283,12 +283,11 @@ fn a_scalar_enum_applies_only_to_strings() {
 /// `recommended_field_missing`, and what `opentide lint` reports now.
 #[test]
 fn recommended_fields_are_the_catalogs() {
-    let text = std::fs::read_to_string(concat!(
+    let text = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../data/catalogs/tide/generated/fields.json"
-    ))
-    .unwrap();
-    let catalog: Value = serde_json::from_str(&text).unwrap();
+    ));
+    let catalog: Value = serde_json::from_str(text).unwrap();
     let schemas = catalog["schemas"].as_object().unwrap();
     assert!(!schemas.is_empty());
     for identifier in schemas.keys() {
