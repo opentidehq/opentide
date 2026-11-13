@@ -12,6 +12,8 @@ description: "UC-2.2: validate runs in opentide-workspace and reports one Diagno
 | Decision | UC-2.2 |
 | Issues | [#817](https://github.com/opentidehq/opentide/issues/817), epic [#790](https://github.com/opentidehq/opentide/issues/790) |
 
+> History: `OPENTIDE_ENGINE`, named below, chose a command's implementation while the commands moved to Rust; it was removed with the Python implementation (UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841)).
+
 ## Context
 
 `opentide validate` (Python, `validation/`) and the language server (`opentide-analysis`,

@@ -64,9 +64,9 @@ At a terminal, each target lists one row per object, like a deploy plan: `+ crea
 
 `push` and `preview` validate each object that passes the type, status, and TLP filters. `sharing-config` runs as part of loading `sharing.toml`. A literal API key is a warning and is replaced with `[REDACTED]` if it would otherwise appear.
 
-### On the Rust engine
+### Talking to MISP
 
-Every share command speaks MISP's REST API itself ([the implementation](./json-output.md#the-implementation)): the same requests PyMISP sent (the key in `Authorization`, JSON both ways, a 30 s timeout, TLS as `verify_ssl` says, the proxy and CA bundles the environment names), the same records, rows, ledger and exit codes. Its requests carry an `opentide/<version>` User-Agent. A `push --changed` reads its diff with gitoxide, the git implementation in Rust, without the `git` program: the same start, end, files and failures as opentide 0.23.0's Python command line, a `--since` read as the table above says (a short SHA or `HEAD~1` names no commit there either).
+Every share command speaks MISP's REST API itself ([the implementation](./json-output.md#the-implementation)): the key in `Authorization`, JSON both ways, a 30 s timeout, TLS as `verify_ssl` says, the proxy and CA bundles the environment names, and an `opentide/<version>` User-Agent. A `push --changed` reads its diff without the `git` program, from the start the table above gives (a short SHA or `HEAD~1` names no commit there).
 
 ## State
 

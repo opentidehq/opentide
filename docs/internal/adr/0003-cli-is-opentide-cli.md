@@ -12,6 +12,8 @@ description: "Decision D-3 of the unified core: the command line is the Rust cra
 | Decision | D-3 |
 | Issues | Epic [#790](https://github.com/opentidehq/opentide/issues/790); UC-3.3 [#825](https://github.com/opentidehq/opentide/issues/825), UC-3.8 [#830](https://github.com/opentidehq/opentide/issues/830), UC-5.3 [#838](https://github.com/opentidehq/opentide/issues/838), UC-5.5 [#840](https://github.com/opentidehq/opentide/issues/840) |
 
+> History: `OPENTIDE_ENGINE`, named below, chose a command's implementation while the commands moved to Rust; it was removed with the Python implementation (UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841)).
+
 ## Context
 
 Once all logic is Rust ([ADR 0002](./0002-all-logic-in-rust.md)), the command line has to be Rust too, and it has to reach users through PyPI and npm as well as standalone binaries. Today the CLI is Typer and Rich: importing those two alone takes 69 ms before any command runs.

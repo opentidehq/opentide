@@ -27,7 +27,7 @@ npm run build
 
 ## The command line with npx
 
-The package's `opentide` command is the opentide command line in Rust, the program the PyPI console script runs for every command ported to it: the same commands, flags, `--json` documents and exit codes. `npx @opentide/opentide --json commands` prints the same command tree as `opentide --json commands` from PyPI. Two things still differ from the PyPI CLI, which answers them in Python: `--help` prints the Rust command line's help, and `opentide doctor` reports its Python environment checks as not checked.
+The package's `opentide` command is opentide's command line, the program the PyPI console script runs: the same commands, flags, `--json` documents and exit codes. `npx @opentide/opentide --json commands` prints the same command tree as `opentide --json commands` from PyPI. It cannot load [platform plugins](./platforms.md#platform-plugins), which are Python packages.
 
 ```bash
 npx @opentide/opentide --json validate
