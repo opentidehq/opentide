@@ -8,7 +8,7 @@ description: "Decision D-6 of the unified core: on npm, @opentide/opentide is bo
 | | |
 |---|---|
 | Status | Proposed |
-| Date | 2026-11-07 (the plan's decision), recorded 2026-11-08; amended 2026-11-12 (UC-5.5: the package layout and names) |
+| Date | 2026-11-07 (the plan's decision), recorded 2026-11-08; amended 2026-11-12 (UC-5.5: the package layout and names); amended 2026-11-13 (not for the VS Code extension) |
 | Decision | D-6 |
 | Issues | UC-0.1 [#799](https://github.com/opentidehq/opentide/issues/799), UC-5.3 [#838](https://github.com/opentidehq/opentide/issues/838), UC-5.4 [#839](https://github.com/opentidehq/opentide/issues/839), UC-5.5 [#840](https://github.com/opentidehq/opentide/issues/840) |
 
@@ -51,8 +51,13 @@ The maintainer's decision at UC-5.5 ([#840](https://github.com/opentidehq/openti
 
 **Versions and tests.** Every package carries the product's one version, which the release train writes in (`scripts/engine/release.py npm-version`) and checks (`release.py lockstep --npm`). Before anything is published, `scripts/engine/npm-local-registry/test.mjs` publishes the release's tarballs to a throwaway local registry and installs `@opentide/opentide` into a clean project on Linux, macOS and Windows (`publish.yml`'s `smoke-npm`), and on linux-x64-gnu in ci.yml's full set (`npm-install`): npm must choose exactly the host's native package, and the bin, the SDK and the types must work.
 
+## Amendment (2026-11-13): not for the VS Code extension
+
+The maintainer's decision: the VS Code extension is WASI-native ([ADR 0007](./0007-vscode-extension-stays-separate.md#amendment-2026-11-13-the-extension-is-wasi-native)). `@opentide/opentide` stays the npm SDK and CLI for Node.js, because it costs nothing more to provide, but the extension does not consume it, so no extension package carries a native module per platform. Nothing else in this record changes. The "no WebAssembly fallback" above stands: the WASI build the extension runs is the `opentide` CLI compiled to `wasm32-wasip1` and shipped as a release asset, not a napi-rs `wasm32-wasi` package that `@opentide/opentide`'s loader falls back to.
+
 ## Evidence
 
 - Plan: [§1 Decisions](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#1-decisions), [§6 Work plan](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#6-work-plan) (Phase 5), [§8 Distribution](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#8-distribution).
 - PR [#846](https://github.com/opentidehq/opentide/pull/846) (UC-0.1): the npm names, the organisation, the placeholders.
 - PR [#1006](https://github.com/opentidehq/opentide/pull/1006) (UC-5.5): the amendment, the release train that publishes the packages, and the local-registry install test.
+- The 2026-11-13 amendment: the maintainer's decision that the extension is WASI-native (unit W1 of the unified-core epic, [#790](https://github.com/opentidehq/opentide/issues/790)).
