@@ -13497,7 +13497,7 @@ oracle = "error: <WS>/objects/rules/splunk-a-create.yaml: cannot promote its sta
 candidate = "error: <WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses: misplaced bracket\n         in \"<unicode string>\", line 13, column 27"
 reason = "A promoted rule whose rewritten text does not parse fails the run with the oracle's message, `<file>: cannot promote its statuses: <the parser's words>`; the words are the Rust YAML loader's, the problem and its place in the text it read, where PyYAML's quoted the line with a caret under each mark (UC-6.2e)."
 issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**Status promotion names promoted text it cannot read back in the Rust loader's words**"
+changelog = "**Status promotion stops a deploy it cannot rewrite, before writing anything**"
 
 [[diff]]
 command = "deploy"
@@ -13508,7 +13508,7 @@ oracle = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses
 candidate = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses: misplaced bracket\\n  in \\\"<unicode string>\\\", line 13, column 27\""
 reason = "A promoted rule whose rewritten text does not parse fails the run with the oracle's message, `<file>: cannot promote its statuses: <the parser's words>`; the words are the Rust YAML loader's, the problem and its place in the text it read, where PyYAML's quoted the line with a caret under each mark (UC-6.2e)."
 issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**Status promotion names promoted text it cannot read back in the Rust loader's words**"
+changelog = "**Status promotion stops a deploy it cannot rewrite, before writing anything**"
 
 [[diff]]
 command = "deploy"
@@ -13519,7 +13519,7 @@ oracle = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses
 candidate = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses: misplaced bracket\\n  in \\\"<unicode string>\\\", line 13, column 27\""
 reason = "A promoted rule whose rewritten text does not parse fails the run with the oracle's message, `<file>: cannot promote its statuses: <the parser's words>`; the words are the Rust YAML loader's, the problem and its place in the text it read, where PyYAML's quoted the line with a caret under each mark (UC-6.2e)."
 issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**Status promotion names promoted text it cannot read back in the Rust loader's words**"
+changelog = "**Status promotion stops a deploy it cannot rewrite, before writing anything**"
 
 [[diff]]
 command = "deploy"
@@ -13530,4 +13530,4 @@ oracle = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses
 candidate = "\"<WS>/objects/rules/splunk-a-create.yaml: cannot promote its statuses: misplaced bracket\\n  in \\\"<unicode string>\\\", line 13, column 27\""
 reason = "A promoted rule whose rewritten text does not parse fails the run with the oracle's message, `<file>: cannot promote its statuses: <the parser's words>`; the words are the Rust YAML loader's, the problem and its place in the text it read, where PyYAML's quoted the line with a caret under each mark (UC-6.2e)."
 issue = "https://github.com/opentidehq/opentide/issues/790"
-changelog = "**Status promotion names promoted text it cannot read back in the Rust loader's words**"
+changelog = "**Status promotion stops a deploy it cannot rewrite, before writing anything**"
