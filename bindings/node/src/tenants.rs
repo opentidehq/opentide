@@ -12,13 +12,18 @@
 //! `Error` whose `code` is the facade's code and whose `detail` is the
 //! vendor's words, as a synchronous call throws.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
+use std::task::Poll;
 use std::time::Duration;
 
-use napi::Env;
-use napi::bindgen_prelude::{Either, Object, Uint8Array, Unknown};
+use napi::bindgen_prelude::{
+    Either, FnArgs, Function, FunctionRef, JsObjectValue, Object, ObjectRef, Uint8Array, Unknown,
+};
+use napi::{Env, JsDate};
 use napi_derive::napi;
 use opentide::connectors::{
     self, DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployRequest, Operation, QueryOutcome,
@@ -132,19 +137,21 @@ pub struct ConnectOptions {
     pub timeout: Option<f64>,
 }
 
-/// What `query` and `validateQuery` run: `opentide query`'s options.
-#[napi(object)]
-#[derive(Debug, Clone, Default)]
-pub struct QueryOptions {
+/// What `query` and `validateQuery` run: `opentide query`'s options, and
+/// the signal that aborts the one operation.
+#[napi(object, object_to_js = false)]
+pub struct QueryOptions<'a> {
     /// The query's language (`kql`, `esql`, `s1ql`); empty or unset takes the
     /// platform's first.
     pub language: Option<String>,
-    /// Where the search starts: an RFC 3339 instant (`date.toISOString()`).
-    /// Default: 24 hours before `end` for `query`, the minute before `end`
-    /// for `validateQuery`.
-    pub start: Option<String>,
-    /// Where the search ends: an RFC 3339 instant. Default: now.
-    pub end: Option<String>,
+    /// Where the search starts: a `Date` or an RFC 3339 instant
+    /// (`2026-11-12T09:00:00Z`). Default: 24 hours before `end` for `query`,
+    /// the minute before `end` for `validateQuery`.
+    #[napi(ts_type = "Date | string")]
+    pub start: Option<Either<JsDate<'a>, String>>,
+    /// Where the search ends: a `Date` or an RFC 3339 instant. Default: now.
+    #[napi(ts_type = "Date | string")]
+    pub end: Option<Either<JsDate<'a>, String>>,
     /// The most rows to return (default 100); `truncated` says there were
     /// more.
     pub limit: Option<u32>,
@@ -155,6 +162,34 @@ pub struct QueryOptions {
     pub data_view: Option<String>,
     /// How long, in seconds, an asynchronous search may run (default 120).
     pub timeout: Option<f64>,
+    /// Aborts this operation alone: when it aborts, the promise rejects with
+    /// the code `interrupted` and the search is stopped on the tenant where
+    /// the API allows it; the connection's other operations run on. A signal
+    /// already aborted rejects at once. (`Connection.canceller` cancels
+    /// every operation of the connection.)
+    #[napi(ts_type = "AbortSignal")]
+    pub signal: Option<Object<'a>>,
+}
+
+/// `deploy`'s options: the signal that aborts it.
+#[napi(object, object_to_js = false)]
+pub struct DeployOptions<'a> {
+    /// Aborts this deploy alone, as `QueryOptions.signal` does a query. A
+    /// deploy aborted after the tenant received it may have been applied.
+    #[napi(ts_type = "AbortSignal")]
+    pub signal: Option<Object<'a>>,
+}
+
+/// `QueryOptions` read on Node's thread: what the request is built from.
+#[derive(Debug, Clone, Default)]
+struct Settings {
+    language: Option<String>,
+    start: Option<Timestamp>,
+    end: Option<Timestamp>,
+    limit: Option<u32>,
+    index: Option<Vec<String>>,
+    data_view: Option<String>,
+    timeout: Option<f64>,
 }
 
 /// Cancels a connection's operations: the one running rejects with the code
@@ -242,11 +277,14 @@ impl Connection {
         &self,
         env: &'env Env,
         text: String,
-        options: Option<QueryOptions>,
+        options: Option<QueryOptions<'env>>,
     ) -> napi::Result<Object<'env>> {
-        let work = request(text, options, Since::Day)
+        let (settings, signal) = read_options(options);
+        let abort = listen(*env, signal);
+        let work = settings
+            .and_then(|settings| request(text, settings, Since::Day))
             .map(|request| run_query(Arc::clone(&self.inner), request));
-        promise(env, work)
+        promise(env, work, abort)
     }
 
     /// Checks `text` on the tenant (`opentide validate query --live`): by
@@ -259,11 +297,14 @@ impl Connection {
         &self,
         env: &'env Env,
         text: String,
-        options: Option<QueryOptions>,
+        options: Option<QueryOptions<'env>>,
     ) -> napi::Result<Object<'env>> {
-        let work = request(text, options, Since::Minute)
+        let (settings, signal) = read_options(options);
+        let abort = listen(*env, signal);
+        let work = settings
+            .and_then(|settings| request(text, settings, Since::Minute))
             .map(|request| run_check(Arc::clone(&self.inner), request));
-        promise(env, work)
+        promise(env, work, abort)
     }
 
     /// Applies `operation` to the rule `ruleId` on the tenant, sending `body`
@@ -271,7 +312,7 @@ impl Connection {
     /// bytes, and resolves to the platform's identifier of the rule. Rejects
     /// with `tenant_refused`, the other codes of `query`, and
     /// `operation_unsupported` on a platform whose rules deploy only through
-    /// `opentide deploy` (Elastic).
+    /// `opentide deploy` (Elastic). `options.signal` aborts it.
     #[napi(ts_return_type = "Promise<DeployOutcome>")]
     pub fn deploy<'env>(
         &self,
@@ -279,14 +320,16 @@ impl Connection {
         rule_id: String,
         #[napi(ts_arg_type = "'create' | 'update' | 'disable' | 'delete'")] operation: String,
         body: Either<String, Uint8Array>,
+        options: Option<DeployOptions<'env>>,
     ) -> napi::Result<Object<'env>> {
         let body = match body {
             Either::A(text) => text.into_bytes(),
             Either::B(bytes) => bytes.to_vec(),
         };
+        let abort = listen(*env, options.and_then(|options| options.signal));
         let work = deploy_request(rule_id, &operation, body)
             .map(|request| run_deploy(Arc::clone(&self.inner), request));
-        promise(env, work)
+        promise(env, work, abort)
     }
 }
 
@@ -457,31 +500,186 @@ async fn run_deploy(
 /// What settles a promise, on Node's thread: the document, or the error.
 type Resolver = Box<dyn FnOnce(Env) -> napi::Result<Unknown<'static>> + Send>;
 
-/// A promise of `work`'s document: `work` runs on the SDK's runtime and the
-/// promise settles on Node's thread. A request that does not convert, or a
-/// runtime that does not start, rejects it.
-fn promise<T, F>(env: &Env, work: Result<F, Failure>) -> napi::Result<Object<'_>>
+/// A promise of `work`'s document: `work` runs on the SDK's runtime, until
+/// `abort` says to stop waiting, and the promise settles on Node's thread. A
+/// request that does not convert, a signal that is not one, a signal already
+/// aborted, or a runtime that does not start, rejects it.
+fn promise<T, F>(
+    env: &Env,
+    work: Result<F, Failure>,
+    listening: Result<Listening, Failure>,
+) -> napi::Result<Object<'_>>
 where
     T: Serialize + Send + 'static,
     F: Future<Output = Result<T, Failure>> + Send + 'static,
 {
     let (deferred, promise) = env.create_deferred::<Unknown<'static>, Resolver>()?;
+    let (abort, detach) = match listening {
+        Ok(listening) => (Ok(listening.abort), listening.detach),
+        Err(failure) => (Err(failure), None),
+    };
     // Boxed: the deferred's type, whose document borrows from no `Env`, is
     // then out of sight of the spawned future's `Send` check, which cannot
     // prove a higher-ranked lifetime (rust-lang/rust#110338).
     let settle: Box<dyn FnOnce(Result<T, Failure>) + Send> = Box::new(move |outcome| {
-        deferred.resolve(Box::new(move |env| match outcome {
-            Ok(document) => env.to_js_value(&document),
-            Err(failure) => Err(throw(env, failure)),
+        deferred.resolve(Box::new(move |env| {
+            if let Some(detach) = detach {
+                // The outcome stands even if the listener does not come off.
+                detach.detach(env).ok();
+            }
+            match outcome {
+                Ok(document) => env.to_js_value(&document),
+                Err(failure) => Err(throw(env, failure)),
+            }
         }));
     });
-    match work.and_then(|work| Ok((runtime()?, work))) {
+    let ready = work.and_then(|work| match abort? {
+        Abort::Already => Err(interrupted()),
+        abort => Ok((runtime()?, abortable(work, abort))),
+    });
+    match ready {
         Ok((runtime, work)) => {
             runtime.spawn(async move { settle(work.await) });
         }
         Err(failure) => settle(Err(failure)),
     }
     Ok(promise)
+}
+
+/// Whether, and when, an operation stops waiting: its `AbortSignal`.
+#[derive(Debug)]
+enum Abort {
+    /// No signal.
+    Never,
+    /// The signal had aborted before the call.
+    Already,
+    /// The signal's `abort` event sends on this channel.
+    On(tokio::sync::oneshot::Receiver<()>),
+}
+
+/// The rejection of an aborted operation: the code a cancelled connection's
+/// operations reject with.
+fn interrupted() -> Failure {
+    Failure::new(
+        "interrupted",
+        "interrupted: the operation's AbortSignal aborted it".to_owned(),
+    )
+}
+
+/// An `abort` listener: its arguments are not read.
+type Listener<'a> = Function<'a, (), ()>;
+
+/// `signal.addEventListener('abort', listener, { once: true })`.
+type AddListener<'a> = Function<'a, FnArgs<(&'a str, Listener<'a>, Object<'a>)>, Unknown<'a>>;
+
+/// `signal.removeEventListener('abort', listener)`.
+type RemoveListener<'a> = Function<'a, FnArgs<(&'a str, Listener<'a>)>, Unknown<'a>>;
+
+/// An operation's signal, read on Node's thread: when it stops waiting, and
+/// the listener to take off the signal when it settles.
+struct Listening {
+    abort: Abort,
+    detach: Option<Detach>,
+}
+
+/// The `abort` listener an operation added to its signal, which comes off
+/// when the operation settles, so that a signal shared by many operations
+/// does not gather one for each (Node warns past ten).
+struct Detach {
+    signal: ObjectRef<false>,
+    listener: FunctionRef<(), ()>,
+}
+
+impl Detach {
+    /// Removes the listener, on Node's thread, and releases the signal.
+    fn detach(self, env: Env) -> napi::Result<()> {
+        let removed = (|| {
+            let signal = self.signal.get_value(&env)?;
+            let listener = self.listener.borrow_back(&env)?;
+            let remove: RemoveListener<'_> = signal.get_named_property("removeEventListener")?;
+            remove.apply(signal, ("abort", listener).into()).map(drop)
+        })();
+        self.signal.unref(&env)?;
+        removed
+    }
+}
+
+/// Listens, on Node's thread, for `signal`'s `abort` event. Anything that is
+/// not an `AbortSignal` (no `aborted`, no `addEventListener`) is a usage
+/// error, which rejects the operation's promise.
+fn listen(env: Env, signal: Option<Object<'_>>) -> Result<Listening, Failure> {
+    let Some(signal) = signal else {
+        return Ok(Listening {
+            abort: Abort::Never,
+            detach: None,
+        });
+    };
+    subscribe(env, signal)
+        .map_err(|error| Failure::invalid(format!("signal: not an AbortSignal: {error}")))
+}
+
+fn subscribe(env: Env, signal: Object<'_>) -> napi::Result<Listening> {
+    let aborted: Option<bool> = signal.get("aborted")?;
+    if aborted == Some(true) {
+        return Ok(Listening {
+            abort: Abort::Already,
+            detach: None,
+        });
+    }
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let sender = Cell::new(Some(sender));
+    let listener = env.create_function_from_closure::<(), (), _>("abort", move |_| {
+        if let Some(sender) = sender.take() {
+            // The operation has settled when nothing receives: nothing to stop.
+            sender.send(()).ok();
+        }
+        Ok(())
+    })?;
+    let mut once = Object::new(&env)?;
+    once.set_named_property("once", true)?;
+    // `FnArgs`: the tuple is the call's three arguments, not one array.
+    let add: AddListener<'_> = signal.get_named_property("addEventListener")?;
+    let detach = Detach {
+        signal: signal.create_ref()?,
+        listener: listener.create_ref()?,
+    };
+    if let Err(error) = add.apply(signal, ("abort", listener, once).into()) {
+        detach.signal.unref(&env).ok();
+        return Err(error);
+    }
+    Ok(Listening {
+        abort: Abort::On(receiver),
+        detach: Some(detach),
+    })
+}
+
+/// `work`, until `abort` fires: then `interrupted`, and `work` is dropped,
+/// which stops the search on the tenant where the API allows it.
+async fn abortable<T, F>(work: F, abort: Abort) -> Result<T, Failure>
+where
+    F: Future<Output = Result<T, Failure>>,
+{
+    let mut receiver = match abort {
+        Abort::Never => return work.await,
+        Abort::Already => return Err(interrupted()),
+        Abort::On(receiver) => Some(receiver),
+    };
+    let mut work = std::pin::pin!(work);
+    std::future::poll_fn(move |cx| {
+        if let Poll::Ready(outcome) = work.as_mut().poll(cx) {
+            return Poll::Ready(outcome);
+        }
+        if let Some(signal) = receiver.as_mut() {
+            match Pin::new(signal).poll(cx) {
+                Poll::Ready(Ok(())) => return Poll::Ready(Err(interrupted())),
+                // The listener is gone (the signal was collected): it never aborts.
+                Poll::Ready(Err(_)) => receiver = None,
+                Poll::Pending => {}
+            }
+        }
+        Poll::Pending
+    })
+    .await
 }
 
 /// The runtime the operations run on, started by the first one: a failure
@@ -509,23 +707,43 @@ enum Since {
     Minute,
 }
 
-/// The facade's request from `options`; a missing `end` is now.
-fn request(
-    text: String,
-    options: Option<QueryOptions>,
-    since: Since,
-) -> Result<QueryRequest, Failure> {
-    let options = options.unwrap_or_default();
-    let end = match options.end {
-        Some(end) => instant("end", &end)?,
-        None => Timestamp::now(),
+/// `options` read on Node's thread: its settings (a `start` or `end` that
+/// does not read is a usage error, which rejects the promise) and its
+/// signal.
+fn read_options(
+    options: Option<QueryOptions<'_>>,
+) -> (Result<Settings, Failure>, Option<Object<'_>>) {
+    let Some(options) = options else {
+        return (Ok(Settings::default()), None);
     };
+    let at = |name: &str, value: Option<Either<JsDate<'_>, String>>| match value {
+        None => Ok(None),
+        Some(Either::A(date)) => date_instant(name, date.value_of().ok()).map(Some),
+        Some(Either::B(text)) => instant(name, &text).map(Some),
+    };
+    let settings = at("start", options.start).and_then(|start| {
+        Ok(Settings {
+            language: options.language,
+            start,
+            end: at("end", options.end)?,
+            limit: options.limit,
+            index: options.index,
+            data_view: options.data_view,
+            timeout: options.timeout,
+        })
+    });
+    (settings, options.signal)
+}
+
+/// The facade's request from `settings`; a missing `end` is now.
+fn request(text: String, options: Settings, since: Since) -> Result<QueryRequest, Failure> {
+    let end = options.end.unwrap_or_else(Timestamp::now);
     let mut window = TimeWindow::check(end);
     if since == Since::Day {
         window.start = end.checked_sub(QUERY_SINCE).unwrap_or(window.start);
     }
     if let Some(start) = options.start {
-        window.start = instant("start", &start)?;
+        window.start = start;
     }
     if window.start > window.end {
         return Err(Failure::invalid(
@@ -582,6 +800,24 @@ fn duration(name: &str, seconds: f64) -> Result<Duration, Failure> {
         .map_err(|_| Failure::invalid(format!("{name}: {seconds} is not a number of seconds")))
 }
 
+/// A `Date`'s instant, from its milliseconds since the epoch (`None` when
+/// they do not read): an invalid `Date` (`new Date('x')`), or one outside
+/// the years 1 to 9999 (`Timestamp`'s range), is a usage error.
+fn date_instant(name: &str, milliseconds: Option<f64>) -> Result<Timestamp, Failure> {
+    let invalid = || Failure::invalid(format!("{name}: the Date is not a valid instant"));
+    let milliseconds = milliseconds
+        .filter(|ms| ms.is_finite())
+        .ok_or_else(invalid)?;
+    // A `Date` holds a whole number of milliseconds within ±8.64e15 (ECMA-262
+    // TimeClip), which an `i64` holds exactly.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a finite Date value is a whole number within ±8.64e15"
+    )]
+    let milliseconds = milliseconds.trunc() as i64;
+    Timestamp::from_millisecond(milliseconds).map_err(|_| invalid())
+}
+
 fn instant(name: &str, text: &str) -> Result<Timestamp, Failure> {
     text.parse().map_err(|error| {
         Failure::invalid(format!(
@@ -596,30 +832,35 @@ mod tests {
 
     const AT: &str = "2026-11-12T10:00:00Z";
 
-    fn options(start: Option<&str>, end: Option<&str>) -> Option<QueryOptions> {
-        Some(QueryOptions {
-            start: start.map(str::to_owned),
-            end: end.map(str::to_owned),
-            ..QueryOptions::default()
+    /// The settings of a `start` and an `end` given as RFC 3339 strings, as
+    /// `read_options` reads them.
+    fn options(start: Option<&str>, end: Option<&str>) -> Result<Settings, Failure> {
+        Ok(Settings {
+            start: start.map(|text| instant("start", text)).transpose()?,
+            end: end.map(|text| instant("end", text)).transpose()?,
+            ..Settings::default()
         })
+    }
+
+    fn windowed(
+        start: Option<&str>,
+        end: Option<&str>,
+        since: Since,
+    ) -> Result<QueryRequest, Failure> {
+        options(start, end).and_then(|settings| request("x".into(), settings, since))
     }
 
     #[test]
     fn a_query_searches_the_day_and_a_check_the_minute_before_the_end() {
-        let day = request("x".into(), options(None, Some(AT)), Since::Day).unwrap();
+        let day = windowed(None, Some(AT), Since::Day).unwrap();
         assert_eq!(day.window.end, AT.parse::<Timestamp>().unwrap());
         assert_eq!(day.window.seconds(), 86_400);
-        let minute = request("x".into(), options(None, Some(AT)), Since::Minute).unwrap();
+        let minute = windowed(None, Some(AT), Since::Minute).unwrap();
         assert_eq!(minute.window.seconds(), 60);
-        let given = request(
-            "x".into(),
-            options(Some("2026-11-12T09:00:00+00:00"), Some(AT)),
-            Since::Minute,
-        )
-        .unwrap();
+        let given = windowed(Some("2026-11-12T09:00:00+00:00"), Some(AT), Since::Minute).unwrap();
         assert_eq!(given.window.seconds(), 3_600);
         // No end: now.
-        let now = request("x".into(), None, Since::Day).unwrap();
+        let now = request("x".into(), Settings::default(), Since::Day).unwrap();
         assert!(now.window.end <= Timestamp::now());
         assert_eq!(now.limit, DEFAULT_LIMIT);
         assert_eq!(now.timeout, DEFAULT_QUERY_TIMEOUT);
@@ -630,15 +871,15 @@ mod tests {
     fn every_query_option_reaches_the_request() {
         let request = request(
             "event.type = 'x'".into(),
-            Some(QueryOptions {
+            Settings {
                 language: Some("s1ql".into()),
                 start: None,
-                end: Some(AT.into()),
+                end: Some(AT.parse().unwrap()),
                 limit: Some(7),
                 index: Some(vec!["logs-*".into()]),
                 data_view: Some("view".into()),
                 timeout: Some(1.5),
-            }),
+            },
             Since::Day,
         )
         .unwrap();
@@ -657,19 +898,60 @@ mod tests {
             (Some("yesterday"), Some(AT)),
             (None, Some("soon")),
         ] {
-            let failure = request("x".into(), options(start, end), Since::Day).unwrap_err();
+            let failure = windowed(start, end, Since::Day).unwrap_err();
             assert_eq!(failure.code, "usage_invalid_value", "{start:?}..{end:?}");
         }
-        let slow = Some(QueryOptions {
+        let slow = Settings {
             timeout: Some(-1.0),
-            ..QueryOptions::default()
-        });
+            ..Settings::default()
+        };
         let failure = request("x".into(), slow, Since::Day).unwrap_err();
         assert_eq!(failure.code, "usage_invalid_value");
         assert!(failure.message.starts_with("timeout:"), "{failure:?}");
         for seconds in [-1.0, f64::NAN, f64::INFINITY] {
             assert!(duration("timeout", seconds).is_err(), "{seconds}");
         }
+    }
+
+    #[test]
+    fn a_date_is_its_millisecond() {
+        let at = date_instant("start", Some(1_794_477_600_000.0)).unwrap();
+        assert_eq!(at, AT.parse::<Timestamp>().unwrap());
+        assert_eq!(
+            date_instant("end", Some(-1.0)).unwrap(),
+            "1969-12-31T23:59:59.999Z".parse::<Timestamp>().unwrap()
+        );
+        // An invalid Date (`new Date('x')`), one that does not read, and one
+        // beyond the year 9999 are usage errors naming the option.
+        for milliseconds in [Some(f64::NAN), None, Some(8.64e15)] {
+            let failure = date_instant("end", milliseconds).unwrap_err();
+            assert_eq!(failure.code, "usage_invalid_value", "{milliseconds:?}");
+            assert!(failure.message.starts_with("end:"), "{failure:?}");
+        }
+    }
+
+    #[test]
+    fn an_abort_stops_waiting_and_nothing_else_does() {
+        let done = async { Ok::<_, Failure>(1) };
+        assert_eq!(run(abortable(done, Abort::Never)).unwrap(), 1);
+        let never = std::future::pending::<Result<u8, Failure>>();
+        let failure = run(abortable(never, Abort::Already)).unwrap_err();
+        assert_eq!(failure.code, "interrupted");
+
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        sender.send(()).unwrap();
+        let never = std::future::pending::<Result<u8, Failure>>();
+        let failure = run(abortable(never, Abort::On(receiver))).unwrap_err();
+        assert_eq!(failure.code, "interrupted");
+
+        // A listener that is gone never aborts: the work settles.
+        let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
+        drop(sender);
+        let slow = async {
+            tokio::task::yield_now().await;
+            Ok::<_, Failure>(2)
+        };
+        assert_eq!(run(abortable(slow, Abort::On(receiver))).unwrap(), 2);
     }
 
     #[test]
@@ -848,7 +1130,7 @@ mod tests {
                 query: true,
             }
         );
-        let query = request("x".into(), None, Since::Day).unwrap();
+        let query = request("x".into(), Settings::default(), Since::Day).unwrap();
         let failure = run(run_query(Arc::clone(&connection.inner), query.clone())).unwrap_err();
         assert_eq!(failure.code, "tenant_unreachable");
         assert!(!failure.message.contains("s3cret"), "{failure:?}");
@@ -876,7 +1158,7 @@ mod tests {
         );
         let connection = open(&lab, environment(&[])).unwrap();
         assert!(!connection.capabilities().live_validation);
-        let check = request("x".into(), None, Since::Minute).unwrap();
+        let check = request("x".into(), Settings::default(), Since::Minute).unwrap();
         let failure = run(run_check(Arc::clone(&connection.inner), check)).unwrap_err();
         assert_eq!(failure.code, "operation_unsupported");
     }

@@ -61,15 +61,18 @@ opentide = { path = "../../crates/opentide", features = ["cli", "connectors"] }
 # napi-rs 3 (MIT): N-API without a C++ toolchain; napi-derive writes the
 # TypeScript declarations (index.d.ts) from the `#[napi]` items.
 # `dyn-symbols`: the N-API functions are looked up when Node loads the addon,
-# so the unit tests link without a Node to resolve them against.
-napi = { version = "3", default-features = false, features = ["napi4", "dyn-symbols", "serde-json"] }
+# so the unit tests link without a Node to resolve them against. `napi5`
+# (Node 10.17 and later): `Date` arguments and functions from closures (an
+# `AbortSignal`'s listener).
+napi = { version = "3", default-features = false, features = ["napi5", "dyn-symbols", "serde-json"] }
 napi-derive = { version = "3", default-features = false, features = ["type-def"] }
 # The facade's documents, handed to JavaScript in their field order.
 serde.workspace = true
 # The runtime the tenant operations run on: started by the first operation,
 # never when Node loads the addon, and settled back on Node's thread through
-# each promise's deferred (napi's own `async` would start one at load).
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+# each promise's deferred (napi's own `async` would start one at load);
+# `sync`: the channel an `AbortSignal`'s listener aborts an operation by.
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [build-dependencies]
 # The link arguments an addon needs (macOS: `-undefined dynamic_lookup`).
