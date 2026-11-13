@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-11-13
+
+Optional fields such as `author` are notes, not warnings: `lint --strict` no longer fails on them, and `--verbose` shows them.
+
 ### Upgrade
 
 - If your CI runs `opentide lint --strict` to require `author` or `organisation`, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. Notes no longer fail `--strict`.
@@ -17,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
+- **The analysis engine is [language-server 0.16.1](https://github.com/opentidehq/language-server/releases/tag/v0.16.1).** The editor and `opentide tui` report a missing `author`, `organisation`, `configurations` or `response` as information, not a warning, and follow `[recommended]` in `lint.toml`. Exabeam `activity_type`, `subject` and `outcome` values the CIM lacks are the warning `exabeam_unknown_value` ([#1028](https://github.com/opentidehq/opentide/issues/1028), [#1015](https://github.com/opentidehq/opentide/pull/1015)).
 - **`lint --strict` fails only on errors and warnings.** A missing `author` or `organisation` is a note, and no longer fails a CI gate. Raise a check's `severity` in `lint.toml` to gate on it ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
 - **`setup skills` installs the catalogue's `detection-engineering`, the one `discover` describes.** Install wrote the package's 22-line primer while `discover` and `show` described the catalogue's skill. The package copy is now used only when the skill's files cannot be downloaded (the catalogue itself must still load) and nothing is installed yet; an existing install is kept, and the result warns in both cases. `opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` still install from the package ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
 
@@ -1798,7 +1803,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/opentidehq/opentide/releases/tag/v0.28.1
 [0.28.0]: https://github.com/opentidehq/opentide/releases/tag/v0.28.0
 [0.27.0]: https://github.com/opentidehq/opentide/releases/tag/v0.27.0
 [0.26.0]: https://github.com/opentidehq/opentide/releases/tag/v0.26.0
