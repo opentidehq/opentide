@@ -3,7 +3,7 @@
 //! `query/service.py` request for request.
 //!
 //! The query runs on the platforms with a Rust connector and a query runner
-//! ([`PLATFORMS`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
+//! ([`platforms`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
 //! Elastic, HarfangLab, Sentinel, SentinelOne, Splunk; every platform with a
 //! runner since UC-4.3, #833). A rule's query (`--rule`, `--file`) runs
 //! here too since UC-4.4c (#834): the queries a deploy of the rule sends,
@@ -34,29 +34,16 @@ use crate::render::text::{Style, Text};
 pub const COMMAND: &str = "query";
 
 /// The platforms whose queries run here: those with a connector and a query
-/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`).
-pub const PLATFORMS: [&str; 8] = [
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-];
+/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`), sorted.
+pub fn platforms() -> Vec<&'static str> {
+    query_platforms()
+}
 
 /// Every platform with a query runner (`QUERY_PLATFORMS`), sorted.
-pub const QUERY_PLATFORMS: [&str; 8] = [
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-];
+pub fn query_platforms() -> Vec<&'static str> {
+    use opentide_schema::platforms::{Order, ids_where};
+    ids_where(Order::Name, |platform| platform.query_runner)
+}
 
 /// Rows per tenant when `--limit` names none (`DEFAULT_LIMIT`).
 pub const DEFAULT_LIMIT: i64 = 100;
@@ -72,16 +59,7 @@ pub const CELL_WIDTH: usize = 60;
 /// The languages each platform's runner takes; the first is the default
 /// (`PLATFORM_LANGUAGES`).
 pub fn languages(platform: &str) -> &'static [&'static str] {
-    match platform {
-        "sentinel" | "defender_for_endpoint" => &["kql"],
-        "splunk" => &["spl"],
-        "sentinel_one" => &["powerquery"],
-        "carbon_black_cloud" => &["lucene"],
-        "crowdstrike" => &["cql"],
-        "harfanglab" => &["telemetry"],
-        "elastic" => &["esql", "eql", "lucene", "kuery"],
-        _ => &[],
-    }
+    opentide_schema::platforms::get(platform).map_or(&[], |platform| platform.runner_languages)
 }
 
 /// The client a platform's runner names when its credentials are unset, and
@@ -213,7 +191,7 @@ pub fn plugin_rule(platform: &str, source: &str) -> Report {
 /// A platform with no query runner (Sysdig): a usage error on `--platform`,
 /// the platforms with one as its choices (`run_query`).
 pub fn no_runner(platform: &str) -> Report {
-    let choices: Vec<String> = QUERY_PLATFORMS
+    let choices: Vec<String> = query_platforms()
         .iter()
         .map(|name| (*name).to_owned())
         .collect();
@@ -906,7 +884,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             }
         }
     };
-    if !PLATFORMS.contains(&platform) && !plugin {
+    if !platforms().contains(&platform) && !plugin {
         // Sysdig (`run_query`'s first check): no query runner, the platforms
         // with one as the choices.
         return no_runner(platform);
@@ -2245,7 +2223,7 @@ mod tests {
 
     #[test]
     fn each_platform_has_its_languages_credentials_and_address() {
-        for platform in QUERY_PLATFORMS {
+        for platform in query_platforms() {
             assert!(!languages(platform).is_empty(), "{platform}");
         }
         assert_eq!(languages("elastic"), ["esql", "eql", "lucene", "kuery"]);
@@ -2296,7 +2274,7 @@ mod tests {
         assert_eq!(setup_host("elastic", &tenant(None)), "");
         assert_eq!(seconds_g(120.0), "120");
         assert_eq!(seconds_g(0.25), "0.25");
-        for platform in PLATFORMS {
+        for platform in platforms() {
             let settings = http_settings(platform, Duration::from_secs(30));
             assert!(settings.timeout > Duration::ZERO, "{platform}");
         }

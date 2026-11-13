@@ -5,24 +5,17 @@
 use std::path::{Path, PathBuf};
 
 use super::tools::{Context, next_action};
-use crate::commands::validate_query::{LIVE_QUERY_PLATFORMS, offline_languages};
+use crate::commands::validate_query::{live_query_platforms, offline_languages};
 use crate::json::Json;
 use crate::queries::{ENGINE, Profiles};
 
 /// `run_query`'s default row limit (`MAX_QUERY_ROWS`).
 pub const MAX_QUERY_ROWS: i64 = 100;
 
-/// The platforms `run_query` runs on (`QUERY_PLATFORMS`).
-pub const QUERY_PLATFORMS: [&str; 8] = [
-    "carbon_black_cloud",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "elastic",
-    "harfanglab",
-    "sentinel",
-    "sentinel_one",
-    "splunk",
-];
+/// The platforms `run_query` runs on (`QUERY_PLATFORMS`), sorted.
+pub fn query_platforms() -> Vec<&'static str> {
+    crate::commands::query::query_platforms()
+}
 
 /// The language a platform's query is in when the call names none.
 fn default_language(platform: &str) -> &'static str {
@@ -162,7 +155,7 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
 /// catalogue's rules for `platform` on its tenants.
 pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json, String> {
     let platform = check.platform.as_str();
-    let live_platform = LIVE_QUERY_PLATFORMS.contains(&platform);
+    let live_platform = live_query_platforms().contains(&platform);
     if !live_platform && (check.live || offline_languages(platform).is_none()) {
         return Ok(Json::object([
             ("valid", Json::Null),
@@ -351,7 +344,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         ));
     }
     // CrowdStrike and Sysdig are checked offline only: a live step would be refused.
-    if LIVE_QUERY_PLATFORMS.contains(&platform.as_str()) {
+    if live_query_platforms().contains(&platform.as_str()) {
         actions.push(live_step);
     }
     payload.extend([
@@ -385,7 +378,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
     let platform = run.platform.as_str();
     let tenants = names(&run.tenant);
     let indices = names(&run.index);
-    if !QUERY_PLATFORMS.contains(&platform) {
+    if !query_platforms().contains(&platform) {
         return Ok(Json::object([
             ("supported", Json::Bool(false)),
             ("status", Json::str("failed")),
@@ -397,7 +390,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
             (
                 "choices",
                 Json::Array(
-                    QUERY_PLATFORMS
+                    query_platforms()
                         .iter()
                         .map(|name| Json::str(*name))
                         .collect(),
