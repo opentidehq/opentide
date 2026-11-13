@@ -325,7 +325,7 @@ fn title(text: &str) -> String {
     out
 }
 
-/// `json.dumps(text, ensure_ascii=False)`.
+/// `text` as a JSON string.
 fn json_string(text: &str) -> String {
     serde_json::to_string(text).unwrap_or_default()
 }

@@ -398,14 +398,6 @@ pub enum Layout {
     Indented,
 }
 
-/// The layouts the comparator knows, each with and without a final newline.
-pub const LAYOUTS: [(Layout, bool); 4] = [
-    (Layout::Compact, true),
-    (Layout::Indented, true),
-    (Layout::Compact, false),
-    (Layout::Indented, false),
-];
-
 /// `value` written in `layout`, ending in a newline when `newline` is set.
 pub fn write(value: &Json, layout: Layout, newline: bool) -> Vec<u8> {
     let mut out = String::new();
