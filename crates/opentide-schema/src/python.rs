@@ -1195,8 +1195,9 @@ pub mod models {
     #[pymodule_export]
     use super::{
         BitdefenderActions, BitdefenderConfig, BitdefenderCriterion, BitdefenderDetection,
-        BitdefenderProcessScope, BitdefenderTargets, BitdefenderYara, CarbonBlackConfig, CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,
-        DefenderAlert, DefenderAllowBlockAction, DefenderAllowBlockGroupScoping, DefenderConfig,
+        BitdefenderProcessScope, BitdefenderTargets, BitdefenderYara, CarbonBlackConfig,
+        CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule, DefenderAlert,
+        DefenderAllowBlockAction, DefenderAllowBlockGroupScoping, DefenderConfig,
         DefenderDeviceActions, DefenderExclusion, DefenderFileActions, DefenderGroupScoping,
         DefenderImpactedEntities, DefenderResponseActions, DefenderUserActions, DetectionExample,
         DetectionSignal, ElasticActions, ElasticCardinality, ElasticConfig, ElasticEql,
