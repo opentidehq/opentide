@@ -24,6 +24,7 @@
 //! client sends is `opentide-cassette`, a test crate.
 
 pub mod answer;
+pub mod bitdefender;
 pub mod body;
 pub mod carbon_black;
 pub mod connector;
