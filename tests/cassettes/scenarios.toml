@@ -574,3 +574,30 @@ tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
 routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
 secrets = ["ELASTIC_API_KEY"]
 cwd = "repo"
+
+[[scenario]]
+name = "graylog/deploy"
+description = "Graylog's deploy client on the 7.2 and 6.3 tenants: the version, the query check, a create, an update, a disable and a delete, then the failure table's refusals (an unconfirmed create, a refused one, an update of a missing definition, an immutable one, a delete of one in use)."
+client = ["{python}", "tests/cassettes/graylog/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/query"
+description = "Graylog's message search on 7.2 (every field) and on 6.3 (only the fields the query names)."
+client = ["{python}", "tests/cassettes/graylog/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/validate"
+description = "Graylog's live query check (`POST /api/search/validate`): an OK verdict, a warning and a refusal."
+client = ["{python}", "tests/cassettes/graylog/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"

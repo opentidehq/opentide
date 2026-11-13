@@ -77,6 +77,27 @@ const APPROVED: &[(&str, &str, &str)] = &[
         "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━━━\u{1b}[0m",
     ),
     ("lint_fault_frames_plain", "   │ ━", "   │ ━━━"),
+    // A `cql_` finding's frame is highlighted, as every query code's is: the
+    // Rust CLI checks CrowdStrike's CQL and names its reference ("**`opentide
+    // validate` checks CrowdStrike queries, and fails a rule whose query
+    // Next-Gen SIEM would refuse**"), where 0.28.1's table of query references
+    // has no `cql_`, so it frames CQL findings unhighlighted. The lines of
+    // frame-shapes.yaml a CQL frame shows, coloured.
+    (
+        "codes_frames_human",
+        "\u{1b}[34m1 \u{1b}[0m\u{1b}[34m│\u{1b}[0m name: Frame shapes",
+        "\u{1b}[34m1 \u{1b}[0m\u{1b}[34m│\u{1b}[0m name: \u{1b}[32mFrame shapes\u{1b}[0m",
+    ),
+    (
+        "codes_frames_human",
+        "\u{1b}[34m5 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   created: 2026-01-01",
+        "\u{1b}[34m5 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   created: \u{1b}[32m2026-01-01\u{1b}[0m",
+    ),
+    (
+        "codes_frames_human",
+        "\u{1b}[34m6 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   modified: 2026-01-02",
+        "\u{1b}[34m6 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   modified: \u{1b}[32m2026-01-02\u{1b}[0m",
+    ),
 ];
 
 /// `candidate` equals the oracle's `name` byte for byte, but for the
