@@ -38,7 +38,7 @@ fn a_workspace_opens_and_counts_its_objects() {
         (1, 1, 10)
     );
     assert_eq!(info.load_errors, 0);
-    assert_eq!(info.platforms.len(), 10);
+    assert_eq!(info.platforms.len(), 11);
     assert!(
         info.platforms
             .iter()
@@ -98,6 +98,37 @@ impl PlatformConfigurations for AcmeBlocks {
             warning: false,
         }]
     }
+}
+
+#[test]
+fn validate_compiles_what_a_deploy_would_compile() {
+    // UC-2.2 (#817): a Sentinel rule without `grouping.alert` passes the
+    // schema and fails the Sentinel compiler, so validate fails it, as
+    // `deploy --dry-run` would.
+    let (dir, _) = corpus();
+    let rule = dir.path().join("objects/rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    let cut = "\n      alert:\n        enabled: false\n";
+    assert_eq!(text.matches(cut).count(), 1);
+    std::fs::write(&rule, text.replace(cut, "\n")).unwrap();
+    let ws = Workspace::open(dir.path(), &Options::default()).unwrap();
+    // The queries check is the engines' (the `queries` feature), not this test's.
+    let validation = ws.validate(&ValidateOptions::default().queries(QueriesMode::Off));
+    let found: Vec<(&str, &[String])> = validation
+        .report
+        .issues
+        .iter()
+        .map(|d| (d.code.as_str(), d.field_path.as_slice()))
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "compile_missing_field",
+            &["configurations", "sentinel", "grouping", "alert"].map(String::from)[..]
+        )]
+    );
+    assert!(validation.failed);
+    assert_eq!(validation.exit_code(), 1);
 }
 
 #[test]

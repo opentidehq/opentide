@@ -57,7 +57,7 @@ pub const USAGE_NEEDS_INPUT: &str = super::setup::USAGE_NEEDS_INPUT;
 
 /// Keys a platform block needs beyond its model's required fields, so it
 /// holds detection logic and deploys (`PLATFORM_EXTRA_KEYS`).
-const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 6] = [
+const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 7] = [
     (
         "defender_for_endpoint",
         &[&["scope"], &["scope", "selection"]],
@@ -81,6 +81,10 @@ const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 6] = [
     ),
     ("harfanglab", &[&["sigma"]]),
     ("sysdig", &[&["condition"]]),
+    (
+        "google_secops",
+        &[&["events"], &["outcome"], &["condition"]],
+    ),
 ];
 
 /// A key under a platform block, its value, and whether it is a placeholder.
@@ -89,14 +93,21 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 1] = [(
-    "sentinel",
-    &[
-        (&["scheduling", "frequency"], "1h", true),
-        (&["scheduling", "lookback"], "1h", true),
-        (&["grouping", "event"], "SingleAlert", false),
-    ],
-)];
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 2] = [
+    (
+        "google_secops",
+        // A rule without $risk_score earns google_secops_risk_score_missing.
+        &[(&["outcome"], "$risk_score = 40", true)],
+    ),
+    (
+        "sentinel",
+        &[
+            (&["scheduling", "frequency"], "1h", true),
+            (&["scheduling", "lookback"], "1h", true),
+            (&["grouping", "event"], "SingleAlert", false),
+        ],
+    ),
+];
 
 /// `opentide new <family>`'s arguments.
 #[derive(Debug, Clone, Default)]
@@ -533,31 +544,32 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         .map(|(key, _)| key)
         .collect();
     let mut chosen = args.platforms.clone();
-    if family == "rule" && args.platforms.is_empty() && !enabled.is_empty() {
-        if let Some(prompter) = cx.prompter.filter(|_| cx.can_prompt) {
-            let labels: Vec<&str> = enabled
-                .iter()
-                .map(|key| {
-                    opentide_schema::platforms::get(key)
-                        .map_or(key.as_str(), |platform| platform.label)
-                })
-                .collect();
-            let asked = prompter.borrow_mut().checkbox_hinted(
-                "Platform blocks",
-                &labels,
-                &[],
-                false,
-                PLATFORMS_HINT,
-            );
-            match asked {
-                Ok(picked) => {
-                    chosen = picked
-                        .iter()
-                        .filter_map(|&index| enabled.get(index).cloned())
-                        .collect();
-                }
-                Err(stop) => return stopped(&command, stop, cx),
+    if family == "rule"
+        && args.platforms.is_empty()
+        && !enabled.is_empty()
+        && let Some(prompter) = cx.prompter.filter(|_| cx.can_prompt)
+    {
+        let labels: Vec<&str> = enabled
+            .iter()
+            .map(|key| {
+                opentide_schema::platforms::get(key).map_or(key.as_str(), |platform| platform.label)
+            })
+            .collect();
+        let asked = prompter.borrow_mut().checkbox_hinted(
+            "Platform blocks",
+            &labels,
+            &[],
+            false,
+            PLATFORMS_HINT,
+        );
+        match asked {
+            Ok(picked) => {
+                chosen = picked
+                    .iter()
+                    .filter_map(|&index| enabled.get(index).cloned())
+                    .collect();
             }
+            Err(stop) => return stopped(&command, stop, cx),
         }
     }
     let mut platforms: Vec<String> = Vec::new();

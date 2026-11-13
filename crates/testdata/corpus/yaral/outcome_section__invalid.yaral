@@ -1,0 +1,5 @@
+// prod:outcome_section invalid
+rule r {
+  outcome:
+    $risk_score =
+}

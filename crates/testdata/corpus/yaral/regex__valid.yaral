@@ -1,0 +1,2 @@
+// prod:regex valid
+$e.target.process.file.full_path = /\\powershell\.exe$/ nocase

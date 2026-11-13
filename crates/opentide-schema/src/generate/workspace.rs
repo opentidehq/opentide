@@ -8,9 +8,9 @@ use crate::configuration::lint::parse_lint_config;
 use crate::node::{Node, Value};
 use crate::objects::objective::ObjectiveV1_0;
 use crate::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, GraylogConfig,
-    HarfangLabConfig, PLATFORM_CONFIG_MODELS, SentinelConfig, SentinelOneConfig, SplunkConfig,
-    SysdigConfig,
+    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, GoogleSecopsConfig,
+    GraylogConfig, HarfangLabConfig, PLATFORM_CONFIG_MODELS, SentinelConfig, SentinelOneConfig,
+    SplunkConfig, SysdigConfig,
 };
 use crate::objects::rule::{RuleV1_0, RuleV1_1};
 use crate::objects::threat::ThreatVectorV1_0;
@@ -79,6 +79,7 @@ pub fn platform_template(platform: &str) -> Result<Option<String>, TemplateError
         "carbon_black_cloud" => render::<CarbonBlackConfig>(&options)?,
         "elastic" => render::<ElasticConfig>(&options)?,
         "sysdig" => render::<SysdigConfig>(&options)?,
+        "google_secops" => render::<GoogleSecopsConfig>(&options)?,
         "graylog" => render::<GraylogConfig>(&options)?,
         _ => return Ok(None),
     }))

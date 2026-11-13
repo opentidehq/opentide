@@ -670,6 +670,120 @@ configurations:
 }
 
 #[test]
+fn yara_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // `.yar` and `.yara` select the engine when the client reports no known id.
+    let broken = "rule a {\n  condition:\n    true and\n}\n";
+    for uri in ["file:///tmp/r.yar", "file:///tmp/r.yara"] {
+        let codes = published_codes(&mut lsp, uri, "plaintext", broken);
+        assert_eq!(codes, ["yara_parse_error"], "{uri}");
+    }
+    let clean = "import \"pe\"\n\nrule a : tag {\n  strings:\n    $a = \"Global\\\\qx-7731\" wide\n  condition:\n    $a and pe.is_dll()\n}\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/clean.yar", "yara", clean);
+    assert!(codes.is_empty(), "{codes:?}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": "file:///tmp/clean.yar" } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 5 * 12, "semantic tokens for .yar: {tokens}");
+}
+
+#[test]
+fn yara_editor_features_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///tmp/editor.yar";
+    let text = "import \"pe\"\nrule loader {\n  strings:\n    $cfg = \"CFG!\"\n  condition:\n    #cfg > 1 and pe.number_of_sections > 2 and pe.exports(\"x\")\n}\n";
+    let codes = published_codes(&mut lsp, uri, "yara", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let pos = |needle: &str, delta: usize| {
+        let at = text.find(needle).unwrap() + delta;
+        let line = text[..at].matches('\n').count();
+        let col = at - text[..at].rfind('\n').map_or(0, |i| i + 1);
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": col } })
+    };
+    // Hover: a module member, then a string count.
+    let hover = lsp.request("textDocument/hover", pos("number_of_sections", 3));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.contains("pe.number_of_sections") && value.contains("integer"),
+        "{hover}"
+    );
+    let hover = lsp.request("textDocument/hover", pos("#cfg", 2));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("number of matches"), "{hover}");
+    // Definition and references of `$cfg`.
+    let def = lsp.request("textDocument/definition", pos("#cfg", 2));
+    assert_eq!(def["result"]["range"]["start"]["line"], 3, "{def}");
+    let mut refs = pos("#cfg", 2);
+    refs["context"] = json!({ "includeDeclaration": true });
+    let refs = lsp.request("textDocument/references", refs);
+    assert_eq!(refs["result"].as_array().map(Vec::len), Some(2), "{refs}");
+    // Signature help in `pe.exports(`.
+    let sig = lsp.request("textDocument/signatureHelp", pos("\"x\")", 0));
+    let sig_labels: Vec<&str> = sig["result"]["signatures"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|s| s["label"].as_str()).collect())
+        .unwrap_or_default();
+    assert!(sig_labels.contains(&"exports(string) -> integer"), "{sig}");
+    // Rename: prepared on the name, refused for a clash, applied with sigils.
+    let prepared = lsp.request("textDocument/prepareRename", pos("#cfg", 2));
+    assert_eq!(prepared["result"]["start"]["character"], 5, "{prepared}");
+    let mut rename = pos("#cfg", 2);
+    rename["newName"] = json!("bad name");
+    let refused = lsp.request("textDocument/rename", rename.clone());
+    assert_eq!(refused["error"]["code"], -32803, "{refused}");
+    rename["newName"] = json!("config");
+    let renamed = lsp.request("textDocument/rename", rename);
+    let edits = renamed["result"]["changes"][uri]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(edits.len(), 2, "{renamed}");
+    assert!(edits.iter().all(|e| e["newText"] == "config"), "{renamed}");
+    // Formatting the whole file with yara-x-fmt.
+    let messy = "rule   a{condition:true}";
+    published_codes(&mut lsp, "file:///tmp/messy.yar", "yara", messy);
+    let formatted = lsp.request(
+        "textDocument/formatting",
+        json!({ "textDocument": { "uri": "file:///tmp/messy.yar" }, "options": { "tabSize": 2, "insertSpaces": true } }),
+    );
+    assert_eq!(
+        formatted["result"][0]["newText"], "rule a {\n  condition:\n    true\n}\n",
+        "{formatted}"
+    );
+    // Folding: the rule and its sections.
+    let folds = lsp.request(
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    assert!(
+        folds["result"].as_array().is_some_and(|f| f.len() >= 3),
+        "{folds}"
+    );
+    // Completion after `pe.`.
+    let partial = "import \"pe\"\nrule b { condition: pe.";
+    published_codes(&mut lsp, "file:///tmp/partial.yar", "yara", partial);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": "file:///tmp/partial.yar" }, "position": { "line": 1, "character": partial.lines().nth(1).unwrap().len() } }),
+    );
+    let l = labels(items["result"].as_array().map_or(&[][..], |a| a.as_slice()));
+    assert!(l.contains(&"imphash".to_string()), "{l:?}");
+}
+
+#[test]
 fn cql_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
@@ -2168,6 +2282,108 @@ fn a_definition_in_a_web_workspace_is_the_other_documents_own_uri() {
     assert_eq!(location["uri"], objective_uri.as_str(), "{definition}");
 }
 
+#[test]
+fn exabeam_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // The `.exabeam` suffix selects the engine when the client reports no
+    // known id; a raw file is a search.
+    let broken = "activity_type:\"process-create\" AND user != \"SYSTEM\"\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/r.exabeam", "plaintext", broken);
+    assert_eq!(codes, vec!["exabeam_not_equal"], "raw .exabeam file");
+    let uri = "file:///tmp/h.exabeam";
+    let text = "SELECT user, COUNT(*) AS n\nWHERE activity_type:\"app-login\" AND outcome:\"fail\"\nGROUP-BY user\n";
+    let codes = published_codes(&mut lsp, uri, "exabeam", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    let hover = lsp.request("textDocument/hover", at(1, 8));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("activity_type"), "{hover}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        data.len() >= 5 * 15,
+        "semantic tokens for .exabeam: {tokens}"
+    );
+}
+
+#[test]
+fn yaral_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // `.yaral` and `.yl2` select the engine when the client reports no known id.
+    let broken = "rule a {\n  meta:\n    author = \"x\"\n  events:\n    $e.metadata.event_type = \"USER_LOGIN\" and\n  condition:\n    $e\n}\n";
+    for uri in ["file:///tmp/r.yaral", "file:///tmp/r.yl2"] {
+        let codes = published_codes(&mut lsp, uri, "plaintext", broken);
+        assert_eq!(codes, ["yaral_parse_error"], "{uri}");
+    }
+    let uri = "file:///tmp/clean.yaral";
+    let text = "rule clean {\n  meta:\n    author = \"x\"\n  events:\n    $e.metadata.event_type = \"PROCESS_LAUNCH\"\n    $h = strings.to_lower($e.principal.hostname)\n  outcome:\n    $risk_score = 10\n  condition:\n    $e\n}\n";
+    let codes = published_codes(&mut lsp, uri, "yaral", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 5 * 12, "semantic tokens for .yaral: {tokens}");
+    let pos = |needle: &str, delta: usize| {
+        let at = text.find(needle).unwrap() + delta;
+        let line = text[..at].matches('\n').count();
+        let col = at - text[..at].rfind('\n').map_or(0, |i| i + 1);
+        json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": col } })
+    };
+    let hover = lsp.request("textDocument/hover", pos("event_type", 2));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("metadata.event_type"), "{hover}");
+    let hover = lsp.request("textDocument/hover", pos("to_lower", 2));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("strings.to_lower("), "{hover}");
+    let help = lsp.request(
+        "textDocument/signatureHelp",
+        pos("$e.principal.hostname)", 0),
+    );
+    assert!(
+        help["result"]["signatures"][0]["label"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("strings.to_lower("),
+        "{help}"
+    );
+    let completion = lsp.request("textDocument/completion", pos("principal.hostname", 10));
+    let items = completion["result"]["items"]
+        .as_array()
+        .or(completion["result"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        items.iter().any(|i| i["label"] == "hostname"),
+        "{completion}"
+    );
+}
+
 /// #821: a fault of a Sysdig block is `validate`'s, reported once. The
 /// editor had its own walk of the block (`sysdig_priority`, published beside
 /// `validate`'s `schema_validation` naming the same constraint), so the same
@@ -2282,4 +2498,157 @@ fn analyze_blocks_adds_the_platform_block_findings() {
         blocks.iter().any(|c| c == "sysdig_list_self_reference"),
         "{blocks:?}"
     );
+}
+
+/// `(line, start, length, token type)` of each semantic token in `result`,
+/// the delta encoding undone, the type named from the server's legend.
+fn decoded_tokens(init: &Value, tokens: &Value) -> Vec<(u64, u64, u64, String)> {
+    let legend = &init["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"];
+    let data: Vec<u64> = tokens["result"]["data"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_u64).collect())
+        .unwrap_or_default();
+    let (mut line, mut start) = (0, 0);
+    data.as_chunks::<5>()
+        .0
+        .iter()
+        .map(|t| {
+            if t[0] > 0 {
+                start = 0;
+            }
+            line += t[0];
+            start += t[1];
+            let kind = legend[usize::try_from(t[3]).unwrap()]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            (line, start, t[2], kind)
+        })
+        .collect()
+}
+
+#[test]
+fn cql_in_a_crowdstrike_block_and_hunt_over_stdio() {
+    // 0.24.0's "CQL in the editor": the CrowdStrike block's query and a
+    // `system: crowdstrike` hunt get CQL's hover, completion, highlighting
+    // and diagnostics, as a `.cql` file does (C1, #790).
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///tmp/objects/rules/crowdstrike-hover.yaml";
+    let rule = "\
+name: CrowdStrike whoami
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000082
+  schema: rule::1.0
+configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBy([aid, ComputerName], function=count())
+";
+    let codes = published_codes(&mut lsp, uri, "yaml", rule);
+    assert!(
+        !codes.iter().any(|c| c.starts_with("cql_")),
+        "a clean CQL query: {codes:?}"
+    );
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    // Hover on `groupBy` (line 9, after `      | `).
+    let hover = lsp.request("textDocument/hover", at(9, 10));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.contains("groupBy(field, [function], [limit])"),
+        "hover on the block's groupBy: {hover}"
+    );
+    // Highlighting: the query lines carry CQL tokens, `groupBy` a function.
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let decoded = decoded_tokens(&init, &tokens);
+    assert!(
+        decoded.iter().any(|(line, start, len, kind)| *line == 9
+            && *start == 8
+            && *len == 7
+            && kind == "function"),
+        "`groupBy` is a function token: {decoded:?}"
+    );
+    assert!(
+        decoded.iter().any(|(line, ..)| *line == 8),
+        "the event filter is highlighted: {decoded:?}"
+    );
+
+    // Completion of a Falcon event inside the block.
+    let uri = "file:///tmp/objects/rules/crowdstrike-complete.yaml";
+    let rule = "\
+name: CrowdStrike complete
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000083
+  schema: rule::1.0
+configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=Process
+";
+    published_codes(&mut lsp, uri, "yaml", rule);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 8, "character": "      #event_simpleName=Process".len() }
+        }),
+    );
+    let l = labels(items["result"].as_array().map_or(&[][..], |a| a.as_slice()));
+    assert!(
+        l.contains(&"ProcessRollup2".to_string()),
+        "Falcon events in the block: {l:?}"
+    );
+
+    // A hunt with `system: crowdstrike` is CQL too.
+    let uri = "file:///tmp/objects/rules/crowdstrike-hunt.yaml";
+    let rule = "\
+name: CrowdStrike hunt
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000084
+  schema: rule::1.0
+response:
+  procedure:
+    searches:
+      - system: crowdstrike
+        query: '#event_simpleName=DnsRequest | groupBi([aid])'
+";
+    let codes = published_codes(&mut lsp, uri, "yaml", rule);
+    assert!(
+        codes.iter().any(|c| c == "cql_unknown_function"),
+        "the hunt's query is analysed: {codes:?}"
+    );
+    assert!(
+        !codes.iter().any(|c| c == "crowdstrike_unsupported"),
+        "retired: {codes:?}"
+    );
+    // Hover on `DnsRequest`, the Falcon event the hunt filters on.
+    let hover = lsp.request("textDocument/hover", at_uri(uri, 8, 38));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.starts_with("`DnsRequest`: Falcon sensor event"),
+        "hover on the hunt's event: {hover}"
+    );
+}
+
+fn at_uri(uri: &str, line: u32, character: usize) -> Value {
+    json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": line, "character": character }
+    })
 }

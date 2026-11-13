@@ -73,11 +73,11 @@ pub enum ErrorKind {
     /// rejects, with Pydantic's exact type: `value_error`, `literal_error`,
     /// `greater_than_equal`, …
     InvalidValue(&'static str),
-    /// A platform block's constraint, typed by its code
-    /// (`graylog_schedule`): one finding of a block's named check
-    /// ([`crate::objects::platform::NamedCheck`]), at the path its
-    /// specification fixes. The oracle raises it as a `PydanticCustomError`
-    /// whose type is the code, and `validate` reports it under that code.
+    /// A platform block's constraint, reported by its own code at the path
+    /// the platform's specification fixes for it (exabeam-1.0, graylog-1.0,
+    /// bitdefender-1.0): the oracle raises a `PydanticCustomError` whose
+    /// type is the code, and `validation/errors.py` reports that type as the
+    /// finding's code.
     Constraint(&'static str),
     /// The conversion stopped: the document produced more work than
     /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to
@@ -161,9 +161,9 @@ impl SchemaError {
 
     /// The diagnostic code the CLI prints for this error on `surface`: one of
     /// `yaml_parse`, `config_parse`, `schema_validation`, `missing_field` and
-    /// `unknown_key`, as `loading/`, `validation/errors.py` and
-    /// `validation/configuration.py` choose them, or a platform constraint's
-    /// own code ([`ErrorKind::Constraint`]).
+    /// `unknown_key`, or a platform constraint's own code ([`ErrorKind::Constraint`]),
+    /// as `loading/`, `validation/errors.py` and
+    /// `validation/configuration.py` choose them.
     pub const fn code(&self, surface: Surface) -> &'static str {
         match (self.kind, surface) {
             (ErrorKind::Syntax, Surface::Object) => codes::YAML_PARSE,

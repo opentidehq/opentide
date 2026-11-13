@@ -37,6 +37,7 @@ pub mod elastic;
 pub mod encode;
 pub mod env;
 pub mod error;
+pub mod google_secops;
 pub mod graylog;
 pub mod harfanglab;
 pub mod http;
@@ -75,6 +76,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
+        "google_secops" => google_secops::http_settings(timeout),
         "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
@@ -102,6 +104,11 @@ pub fn builtin() -> Registry {
         Box::new(harfanglab::HarfangLab),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
+        // Application Default Credentials are the process's own ambient
+        // credentials (google-auth's `default()` reads the process
+        // environment): a caller with an environment of its own (the CLI)
+        // builds `GoogleSecops::new` with it.
+        Box::new(google_secops::GoogleSecops::new(Environment::process())),
         Box::new(graylog::Graylog),
     ];
     // The table's order, wherever a connector is listed above; a connector
@@ -136,12 +143,16 @@ mod tests {
             super::sentinel::http_settings(Duration::from_secs(300))
         );
         assert_eq!(
-            super::http_settings("sentinel", Duration::from_secs(900)).timeout,
-            super::sentinel::http_settings(Duration::from_secs(900)).timeout
+            super::http_settings("sentinel", Duration::from_mins(15)).timeout,
+            super::sentinel::http_settings(Duration::from_mins(15)).timeout
         );
         assert_eq!(
             super::http_settings("defender_for_endpoint", timeout),
             super::defender::http_settings()
+        );
+        assert_eq!(
+            super::http_settings("google_secops", timeout),
+            super::google_secops::http_settings(timeout)
         );
         assert_eq!(
             super::http_settings("sysdig", timeout),
@@ -209,6 +220,7 @@ mod tests {
                 "harfanglab",
                 "elastic",
                 "sysdig",
+                "google_secops",
                 "graylog"
             ]
         );
@@ -229,6 +241,7 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        assert_eq!(can("google_secops"), (true, true, true));
         assert_eq!(can("graylog"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {

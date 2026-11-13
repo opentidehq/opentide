@@ -337,6 +337,41 @@ mod validate {
     }
 
     #[test]
+    fn google_secops_advisories_warn_and_shared_rule_names_fail() {
+        let fs = workspace();
+        let block = |name: &str| {
+            format!(
+                "configurations:\n  google_secops:\n    enabled: true\n    name: {name}\n    \
+                 status: X\n    events: $e.metadata.event_type = \"X\"\n    condition: \
+                 $e\n"
+            )
+        };
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("{}{}", rule(U1, "A"), block("shared_name")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            format!("{}{}", rule(U2, "B"), block("SHARED_name")),
+        );
+        let validation = run(&fs, &Options::default());
+        let advised = with_code(&validation, "google_secops_risk_score_missing");
+        assert_eq!(advised.len(), 2);
+        assert_eq!(advised[0].severity, Severity::Warning);
+        assert_eq!(advised[0].field_path, ["configurations", "google_secops"]);
+        let duplicates = with_code(&validation, "google_secops_name_duplicate");
+        assert_eq!(duplicates.len(), 2);
+        assert_eq!(duplicates[0].severity, Severity::Error);
+        assert!(
+            duplicates
+                .iter()
+                .any(|d| d.object_uuid == U1 && d.message.contains(U2)),
+            "{duplicates:?}"
+        );
+        assert!(duplicates.iter().all(|d| d.yaml_line.is_some()));
+    }
+
+    #[test]
     fn a_misspelled_enabled_key_is_named() {
         let fs = workspace();
         fs.write(
@@ -403,6 +438,54 @@ mod validate {
             Some(format!(".opentide/states/deployment/{U2}.json").as_str())
         );
         assert!(shards[0].message.ends_with("has no string object_uuid"));
+    }
+
+    /// #913 (0.26.0): a legacy `rule_id::<tenant>` key whose id is text, on
+    /// blocks whose models refuse unknown keys (Sysdig) and accept them as
+    /// legacy keys (SentinelOne), is `external_id_in_rule`, and nothing reads
+    /// the tenant in its name as a vocabulary or schema version: the oracle
+    /// (0.23.0) crashed with `invalid literal for int() with base 10`.
+    #[test]
+    fn a_legacy_tenant_key_with_a_text_id_is_external_id_in_rule() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  sysdig:\n    status: X\n    condition: proc.name = bash\n    \
+                 rule_id::prod: '12'\n",
+                rule(U1, "A")
+            ),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            format!(
+                "{}configurations:\n  sentinel_one:\n    status: X\n    rule_id::soc: 9f2c\n",
+                rule(U2, "B")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let mut paths: Vec<Vec<String>> = with_code(&validation, "external_id_in_rule")
+            .iter()
+            .map(|finding| finding.field_path.clone())
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            [
+                ["configurations", "sentinel_one", "rule_id::soc"],
+                ["configurations", "sysdig", "rule_id::prod"],
+            ]
+        );
+        // Not also a schema error, nor a vocabulary one.
+        for code in ["schema_validation", "vocab_unknown", "internal"] {
+            assert!(
+                with_code(&validation, code).iter().all(|finding| !finding
+                    .field_path
+                    .iter()
+                    .any(|key| key.starts_with("rule_id"))),
+                "{code}"
+            );
+        }
     }
 
     #[test]

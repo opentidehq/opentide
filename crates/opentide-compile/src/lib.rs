@@ -32,6 +32,7 @@ pub mod duration;
 pub mod elastic;
 pub mod generate;
 pub mod git;
+pub mod google_secops;
 pub mod graylog;
 pub mod harfanglab;
 pub mod json;
@@ -46,6 +47,7 @@ pub mod sentinel_one;
 pub mod splunk;
 pub mod strategy;
 pub mod sysdig;
+pub mod validate;
 
 pub use json::Json;
 pub use rule::{CompileError, Rule};

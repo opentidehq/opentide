@@ -1,0 +1,2 @@
+# prod:order_by_clause invalid
+SELECT user ORDER-BY , user

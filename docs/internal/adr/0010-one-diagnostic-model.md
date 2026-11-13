@@ -42,7 +42,8 @@ invariant 3 holds every code's meaning, severity, field path and position rules.
    `--check`, `--type`, `--uuid`, `--file`, `--strict` and `--queries`, the summary counts and
    each check's status. The queries check is the host's (`QueryCheck`), which UC-2.5 (#820)
    supplies from `opentide-analysis`, a crate above this one. The compile check (`compile_*`,
-   the deploy payload) waits for `opentide-compile` (Phase 3).
+   #660) is the host's too (`CompileCheck`): `opentide-compile`'s `validate::Compilers`, passed
+   by the command line and the facade (#817).
 3. **The oracle comparison.** `cargo xtask validate diff` runs every recorded `validate --json`
    case that only checks, against its recording, and fails on any difference no approved rule
    explains; `crates/opentide-workspace/tests/validate.rs` holds every recorded finding to the
@@ -56,6 +57,8 @@ invariant 3 holds every code's meaning, severity, field path and position rules.
    | KG-03 `filename_mismatch` and `filename_slug` | One rule and one code, lint's `filename_mismatch` (the exact slug, or `<slug>-<uuid8>` when names collide), in `lint` (UC-2.3) and in the editor (UC-2.6); `filename_slug` retires once a maintainer approves it |
    | KG-04 invalid and duplicate UUIDs | `invalid_uuid` on every file whose UUID is not a UUID v4, a file displaced from the index by a later one with the same UUID included; `duplicate_id` stays one per file written again, on the later file, naming the first (`also:` in the frame) |
    | KG-05 metadata recommendations | One code, lint's `metadata_recommended` (info), in the CLI and the editor; `missing_author`, `missing_organisation` and `recommended_field_missing` retire once a maintainer approves it; `validate` reports no recommendation |
+   | KG-09 Elastic `severity` without `mapping` | A missing mapping is none, as the documented shape allows: the Elastic compiler sends no `severity_mapping`, so the rule compiles and `validate` passes it, where the oracle's compiler failed (`compile_failed`); approved as `elastic-severity-mapping` (#817) |
+   | KG-10 the compile check runs only on an otherwise clean run | The oracle's rule, kept: with the `schema` check, once nothing else failed, on rules whose block's status deploys, for each enabled platform with an offline compiler; the compile codes stay out of `VALIDATION_CODES` and fail no check's status. Running it whatever else the run found stays open (#817) |
 
 5. **The UUID scan reads the files the index reads.** The oracle's ID scan also read
    `*.debug.yaml` scratch output; the Rust scan reads the indexed files and the files the index

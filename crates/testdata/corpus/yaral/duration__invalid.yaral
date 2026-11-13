@@ -1,0 +1,5 @@
+// prod:duration invalid
+rule r {
+  match:
+    $u by 2 h h
+}

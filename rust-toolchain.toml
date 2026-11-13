@@ -3,10 +3,9 @@
 # releases, and CI denies warnings) arrive in a change of their own instead of
 # failing every open PR on the day it ships. CI installs this file's toolchain
 # (`rustup toolchain install` with no name). The crates also declare a floor,
-# `rust-version` in Cargo.toml (1.85), which this pin never goes below. That
-# floor is declared, not checked: no job builds with it, the code uses let
-# chains (stable since Rust 1.88), Cargo.lock's tree-sitter-language 0.1.8
-# requires Rust 1.90, and xtask's wait4 0.2 (cargo xtask bench) Rust 1.95.
+# `rust-version` in Cargo.toml (1.95, what yara-x-parser and yara-x-fmt need),
+# which this pin never goes below. That floor is declared, not checked: no job
+# builds with it.
 #
 # To move to a newer release, in one PR: change `channel` (and RUSTUP_TOOLCHAIN in
 # pyproject.toml's [tool.cibuildwheel.linux], which the Linux wheels build with), then run

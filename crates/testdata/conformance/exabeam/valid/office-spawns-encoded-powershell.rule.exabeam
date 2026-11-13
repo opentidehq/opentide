@@ -1,0 +1,4 @@
+activity_type:"process-create"
+AND parent_process_name:("winword.exe", "excel.exe", "powerpnt.exe")
+AND process_name:("powershell.exe", "pwsh.exe")
+AND process_command_line:RGXi("\s-(e|en|enc|enco|encod|encode|encoded|encodedcommand)\s")

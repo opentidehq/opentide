@@ -1,0 +1,4 @@
+// prod:cross_join invalid
+cross join
+outcome:
+  $n = 1

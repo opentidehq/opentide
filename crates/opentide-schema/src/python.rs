@@ -947,6 +947,9 @@ use crate::objects::platform::elastic::{
     ElasticThreatEntry, ElasticThreatGroup, ElasticThreatMatch, ElasticThreshold, ElasticTimeline,
 };
 use crate::objects::platform::elastic::{IntegrationChoice, JobId, RiskChoice, SeverityChoice};
+use crate::objects::platform::google_secops::{
+    GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
+};
 use crate::objects::platform::graylog::{
     GraylogAggregation, GraylogConfig, GraylogEventField, GraylogEventLookup, GraylogEventTemplate,
     GraylogLookupTable, GraylogSchedule, StringOrList,
@@ -967,6 +970,7 @@ use crate::objects::platform::sentinel_one::{
     SentinelOneCondition, SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails,
     SentinelOneResponse, SentinelOneSingleEvent, SentinelOneSubQuery,
 };
+use crate::objects::platform::splunk::SavedSearchValue;
 use crate::objects::platform::splunk::{
     SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude, SplunkNotable,
     SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject, SplunkSchedule,
@@ -1008,6 +1012,7 @@ py_value! {
     Suppression => type_hint_union!(hint::STR, hint::BOOL),
     SentinelTechnique => hint::STR,
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
+    SavedSearchValue => type_hint_union!(hint::STR, hint::INT, hint::FLOAT, hint::BOOL),
 }
 
 /// A union with a model member: the member's class instance, as Pydantic
@@ -1166,6 +1171,10 @@ py_models! {
     SysdigMacro,
     SysdigList,
     SysdigConfig [<SysdigConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    GoogleSecopsMatch,
+    GoogleSecopsOptions,
+    GoogleSecopsSchedule,
+    GoogleSecopsConfig [<GoogleSecopsConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
     GraylogSchedule,
     GraylogAggregation,
     GraylogEventTemplate,
@@ -1204,20 +1213,21 @@ pub mod models {
         ElasticMachineLearning, ElasticNewTerms, ElasticOverrides, ElasticRequiredField,
         ElasticRisk, ElasticRiskScoreMapping, ElasticScheduling, ElasticSeverity,
         ElasticSeverityMapping, ElasticSuppression, ElasticThreatEntry, ElasticThreatGroup,
-        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExternalDetector, HarfangLabConfig,
-        HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection, HarfangLabYara,
-        HarfangLabYaraMeta, ObjectMetadata, ObjectReferences, ObjectiveBody, ObjectiveComposition,
-        ObjectiveV1_0, Organisation, ResponseProcedure, ResponseSearch, RuleConfigurations,
-        RuleMetadata, RuleResponse, RuleV1_0, RuleV1_1, SentinelAlert, SentinelAlertGrouping,
-        SentinelConfig, SentinelCustomDetails, SentinelDynamicProperties, SentinelEntityMapping,
-        SentinelExclusion, SentinelGrouping, SentinelMappingEntry, SentinelOneCondition,
-        SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails, SentinelOneResponse,
-        SentinelOneSingleEvent, SentinelOneSubQuery, SentinelScheduling, SentinelTemplate,
-        SentinelTrigger, SignalData, SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude,
-        SplunkNotable, SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject,
-        SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling, SplunkTimerange,
-        SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro, ThreatActor,
-        ThreatBody, ThreatVectorV1_0,
+        ElasticThreatMatch, ElasticThreshold, ElasticTimeline, ExternalDetector,
+        GoogleSecopsConfig, GoogleSecopsMatch, GoogleSecopsOptions, GoogleSecopsSchedule,
+        HarfangLabConfig, HarfangLabSigma, HarfangLabSigmaLogSource, HarfangLabSigmaSelection,
+        HarfangLabYara, HarfangLabYaraMeta, ObjectMetadata, ObjectReferences, ObjectiveBody,
+        ObjectiveComposition, ObjectiveV1_0, Organisation, ResponseProcedure, ResponseSearch,
+        RuleConfigurations, RuleMetadata, RuleResponse, RuleV1_0, RuleV1_1, SentinelAlert,
+        SentinelAlertGrouping, SentinelConfig, SentinelCustomDetails, SentinelDynamicProperties,
+        SentinelEntityMapping, SentinelExclusion, SentinelGrouping, SentinelMappingEntry,
+        SentinelOneCondition, SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails,
+        SentinelOneResponse, SentinelOneSingleEvent, SentinelOneSubQuery, SentinelScheduling,
+        SentinelTemplate, SentinelTrigger, SignalData, SplunkActions, SplunkConfig, SplunkEmail,
+        SplunkEmailInclude, SplunkNotable, SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk,
+        SplunkRiskObject, SplunkSchedule, SplunkScheduling, SplunkThreatObject, SplunkThrottling,
+        SplunkTimerange, SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro,
+        ThreatActor, ThreatBody, ThreatVectorV1_0,
     };
 
     #[pymodule_export]

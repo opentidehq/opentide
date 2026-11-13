@@ -1052,6 +1052,62 @@ platform!(
     SysdigConfiguration, "SysdigConfiguration", SysdigTenant
 );
 
+/// `deletion`: what DELETION does to a Google SecOps rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, FromNode, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[from_node(literal)]
+pub enum GoogleSecopsDeletion {
+    /// `archive`.
+    Archive,
+    /// `delete`.
+    Delete,
+}
+
+fn archive() -> GoogleSecopsDeletion {
+    GoogleSecopsDeletion::Archive
+}
+
+/// `[tenants.setup]` for Google Security Operations.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "GoogleSecopsSetup")]
+pub struct GoogleSecopsSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// The Google Cloud project bound to the SecOps instance, id or number.
+    pub project: NonEmptyString,
+    /// The instance's region: us, eu, europe, or a Google Cloud region such as europe-west2.
+    pub location: NonEmptyString,
+    /// The SecOps customer id (a UUID).
+    pub instance: NonEmptyString,
+    /// The regional service endpoint. Default: `https://<location>-chronicle.googleapis.com`.
+    #[serde(default)]
+    #[schemars(
+        description = "The regional service endpoint. Default: https://<location>-chronicle.googleapis.com."
+    )]
+    pub endpoint: Option<String>,
+    /// A $NAME placeholder for a service-account key, as a JSON document or a path to one.
+    /// Without it, Application Default Credentials (workload identity, gcloud auth).
+    #[serde(default)]
+    pub credentials: Option<EnvPlaceholder>,
+    /// A data access scope id, sent as scope on create and update.
+    #[serde(default)]
+    pub data_access_scope: Option<String>,
+    /// DELETION: archive the rule (keeps its detections and the binding), or delete it without
+    /// force.
+    #[serde(default = "archive")]
+    pub deletion: GoogleSecopsDeletion,
+}
+tenant!(
+    /// `[[tenants]]` for Google Security Operations.
+    GoogleSecopsTenant, "GoogleSecopsTenant", GoogleSecopsSetup
+);
+platform!(
+    /// Merged `platforms/google_secops.toml`.
+    GoogleSecopsConfiguration, "GoogleSecopsConfiguration", GoogleSecopsTenant
+);
+
 /// A Graylog alias or tag: one, or a list (`GraylogName | list[GraylogName]`).
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
@@ -1090,8 +1146,12 @@ pub struct GraylogSetup {
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
     /// The Graylog web interface's base URL. Calls go to `<url>/api/...`.
+    #[schemars(description = "The Graylog web interface's base URL. Calls go to <url>/api/....")]
     pub url: String,
     /// A Graylog access token, sent as HTTP Basic `<token>:token`. Must be a $NAME placeholder.
+    #[schemars(
+        description = "A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME placeholder."
+    )]
     pub token: EnvPlaceholder,
     /// Mirrors the server's allow_leading_wildcard_searches.
     #[serde(default)]

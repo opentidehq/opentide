@@ -1,0 +1,6 @@
+    match:
+        principal.hostname
+    export:
+        %sample.write_row(
+        row: principal.hostname
+      )

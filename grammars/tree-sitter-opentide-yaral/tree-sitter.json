@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_yaral",
+      "camelcase": "OpentideYaral",
+      "scope": "source.yaral",
+      "file-types": ["yaral", "yl2"],
+      "highlights": "../../highlights/queries/yaral/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

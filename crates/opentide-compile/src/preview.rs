@@ -2,8 +2,8 @@
 //! would send, or why it would fail.
 
 use opentide_schema::objects::platform::{
-    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, GraylogConfig,
-    HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig, GoogleSecopsConfig,
+    GraylogConfig, HarfangLabConfig, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -11,8 +11,8 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, carbon_black, crowdstrike, defender, deploy, elastic, graylog, harfanglab, sentinel,
-    sentinel_one, splunk, sysdig,
+    Context, carbon_black, crowdstrike, defender, deploy, elastic, google_secops, graylog,
+    harfanglab, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -40,6 +40,7 @@ pub fn compile_offline(
         "sentinel" => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
         "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
+        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         "graylog" => Some(graylog_request(cx, rule, None)),
         _ => None,
     }
@@ -110,6 +111,8 @@ pub fn compile_tenant(
     match platform {
         "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
         "sysdig" => Some(sysdig::compile_body(cx, rule, known)),
+        // The text is the same on every tenant: the `rules.create` body.
+        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         "graylog" => Some(graylog_request(cx, rule, known)),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
@@ -148,6 +151,7 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
         "carbon_black_cloud" => model_dump::<CarbonBlackConfig>(block),
         "elastic" => model_dump::<ElasticConfig>(block),
         "sysdig" => model_dump::<SysdigConfig>(block),
+        "google_secops" => model_dump::<GoogleSecopsConfig>(block),
         "graylog" => model_dump::<GraylogConfig>(block),
         _ => None,
     };
@@ -217,6 +221,12 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[String]
         // calls `compile_diagnostic(exc)` without the platform); this names
         // Sysdig (tests/golden/payloads/APPROVED.toml).
         "sysdig" => match sysdig::compile_body(cx, rule, None) {
+            Ok(body) => compiled(rule, body),
+            Err(error) => failure(rule, &error),
+        },
+        // `_google_secops_compile_preview`: the `rules.create` body, or the
+        // failure, named for Google SecOps.
+        "google_secops" => match google_secops::compile_offline(cx, rule) {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },

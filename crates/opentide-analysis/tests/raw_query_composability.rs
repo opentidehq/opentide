@@ -220,3 +220,19 @@ fn standalone_cql_matches_tide_crowdstrike_query_unknown_function() {
         )
     );
 }
+
+#[test]
+fn a_yaral_hunt_is_checked_as_a_search() {
+    let query = "metadata.event_type = \"USER_LOGIN\"\n$user = target.user.userid\nmatch:\n  $user\noutcome:\n  $n = avg(metadata.id)\n";
+    let raw = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+        language: LanguageId::Yaral,
+        platform: Some("google_secops".into()),
+        stack: None,
+        text: query.into(),
+    });
+    assert!(
+        !raw.iter()
+            .any(|d| d.code == codes::YARAL_FUNCTION_UNAVAILABLE),
+        "avg is a search aggregation: {raw:?}"
+    );
+}

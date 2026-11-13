@@ -713,6 +713,20 @@ mod tests {
         );
         assert!(normalise_external_id("crowdstrike", &ExternalId::Text(" ".into())).is_err());
         assert!(normalise_external_id("sysdig", &ExternalId::Int(-1)).is_err());
+        // Google SecOps' row pins its ids to `ru_<uuid>` (#1064).
+        let rule_id = "ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1";
+        assert_eq!(
+            normalise_external_id("google_secops", &ExternalId::Text(rule_id.into())).unwrap(),
+            rule_id
+        );
+        let refused =
+            normalise_external_id("google_secops", &ExternalId::Text("rule-1".into())).unwrap_err();
+        assert_eq!(refused.code, "external_id_shape");
+        assert_eq!(
+            refused.message,
+            "google_secops external id \"rule-1\" does not match \
+             \"^ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\""
+        );
     }
 
     #[test]

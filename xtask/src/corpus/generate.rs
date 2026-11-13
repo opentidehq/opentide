@@ -817,6 +817,7 @@ fn platform_block(
         "harfanglab" => pairs.extend(harfanglab(rng, variant, process, name, &mut tags)),
         "elastic" => pairs.extend(elastic(rng, variant, process, &mut tags)),
         "sysdig" => pairs.extend(sysdig(rng, variant, &mut tags)),
+        "google_secops" => pairs.extend(google_secops(variant, process, &mut tags)),
         "graylog" => pairs.extend(graylog(rng, variant, process, &mut tags)),
         _ => {}
     }
@@ -874,7 +875,7 @@ fn sentinel(
             ]),
         ),
     ]);
-    if variant % 3 == 0 && rng.chance(50) {
+    if variant.is_multiple_of(3) && rng.chance(50) {
         tags.push("sentinel:entities".to_string());
         pairs.push((
             "entities".to_string(),
@@ -899,7 +900,7 @@ fn defender(
     process: &str,
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
-    let query = if variant % 2 == 0 {
+    let query = if variant.is_multiple_of(2) {
         format!(
             "DeviceProcessEvents\n| where FileName =~ \"{process}\"\n| project Timestamp, DeviceId, ReportId, DeviceName, AccountName\n"
         )
@@ -935,7 +936,7 @@ fn splunk(
     name: &str,
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
-    let query = if variant % 2 == 0 {
+    let query = if variant.is_multiple_of(2) {
         format!(
             "index=main sourcetype=\"WinEventLog:Security\" EventCode={number}\n| stats count by host, Account_Name\n"
         )
@@ -981,7 +982,7 @@ fn sentinel_one(
     name: &str,
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
-    let condition = if variant % 2 == 0 {
+    let condition = if variant.is_multiple_of(2) {
         tags.push("sentinel_one:single".to_string());
         Yaml::map(vec![
             ("type", Yaml::s("Single Event")),
@@ -1073,7 +1074,7 @@ fn harfanglab(
     tags: &mut Vec<String>,
 ) -> Vec<(String, Yaml)> {
     let mut pairs = kv(vec![("action", Yaml::s("Alert"))]);
-    if variant % 2 == 0 {
+    if variant.is_multiple_of(2) {
         tags.push("harfanglab:sigma".to_string());
         pairs.push((
             "sigma".to_string(),
@@ -1254,6 +1255,51 @@ fn sysdig(rng: &mut Rng, variant: usize, tags: &mut Vec<String>) -> Vec<(String,
         ));
     }
     pairs
+}
+
+/// A valid `google_secops` block (google-secops-1.0): a single-event rule,
+/// or every other variant a multi-event rule with a `match` window (which
+/// `LIVE` does not run, so it is `LIVE_CUSTOMIZABLE`). It draws nothing from
+/// `rng`.
+fn google_secops(variant: usize, process: &str, tags: &mut Vec<String>) -> Vec<(String, Yaml)> {
+    if variant.is_multiple_of(2) {
+        return kv(vec![
+            ("run_frequency", Yaml::s("LIVE")),
+            (
+                "events",
+                Yaml::s(format!(
+                    "$e.metadata.event_type = \"PROCESS_LAUNCH\"\n\
+                     $e.target.process.file.full_path = /{process}$/ nocase\n"
+                )),
+            ),
+            (
+                "outcome",
+                Yaml::s("$risk_score = 60\n$host = $e.principal.hostname\n"),
+            ),
+            ("condition", Yaml::s("$e\n")),
+        ]);
+    }
+    tags.push("google_secops:match".to_string());
+    kv(vec![
+        ("run_frequency", Yaml::s("LIVE_CUSTOMIZABLE")),
+        (
+            "events",
+            Yaml::s(
+                "$fail.metadata.event_type = \"USER_LOGIN\"\n\
+                 $fail.security_result.action = \"BLOCK\"\n\
+                 $fail.target.user.userid = $user\n",
+            ),
+        ),
+        (
+            "match",
+            Yaml::map(vec![
+                ("group_by", Yaml::strs(&["$user"])),
+                ("window", Yaml::s("30m")),
+            ]),
+        ),
+        ("outcome", Yaml::s("$risk_score = max(70)\n")),
+        ("condition", Yaml::s("#fail >= 10\n")),
+    ])
 }
 
 /// A Graylog event definition: a Lucene query over one stream, by id (no
@@ -1473,6 +1519,20 @@ fn configuration_files(layout: Layout) -> Vec<File> {
 mod tests {
     use super::super::vocab;
     use super::{Counts, date, slugify};
+
+    #[test]
+    fn google_secops_blocks_pass_the_block_checks() {
+        use opentide_schema::objects::platform::google_secops::block_findings;
+        for variant in 0..2 {
+            let mut tags = Vec::new();
+            let block = super::Yaml::Map(super::google_secops(variant, "cmd.exe", &mut tags));
+            let document = opentide_schema::node::load(&block.render()).expect("YAML");
+            let root = document.root().expect("a block");
+            let findings = block_findings(root);
+            assert!(findings.is_empty(), "variant {variant}: {findings:?}");
+            assert_eq!(tags.len(), variant);
+        }
+    }
 
     #[test]
     fn the_generated_corpus_leaves_out_platforms_the_oracle_lacks() {

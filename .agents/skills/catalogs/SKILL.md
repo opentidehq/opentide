@@ -94,6 +94,54 @@ ECS is never a closed list: elastic-1.0 says field names MUST NOT be checked aga
 
 `scripts/engine/sync_cql_catalog.py --cache <pages> --lcc <logscale-community-content> --query-hub <Query-Hub> --cql-queries <CQL-Queries> --sentinel <Azure-Sentinel> --pysigma <pySigma-backend-crowdstrike>` regenerates them (`--offline` reads only the page cache; `--check` compares and makes no request); never hand-edit. Facts only: `FUNCTION_SUMMARIES` is written here and the script refuses a function without one; no name only Elastic's integration (ELv2) supplies is used. `PARAM_FIXES` and `FUNCTION_FIXES` correct the reference where CrowdStrike's own content or the page itself contradicts its table, each with its evidence. LogScale is schemaless: fields are hover and completion data, never a finding; an unknown event is a warning, because a newer sensor sends events the catalog lacks.
 
+## YARA catalogs
+
+| Path | Contents |
+| --- | --- |
+| `data/catalogs/yara/modules.toml` | every member of the 13 modules yara-1.0 knows, by path (`sections[].name`, `version_info{}`): kind, element type, documentation, function overloads in libyara's one-letter argument types, and `libyara` / `yara_x` flags saying which engine has it |
+| `data/catalogs/yara/language.toml` | hand-written from the specs: the known modules, libyara's reserved words, and the `harfanglab` and `bitdefender` profiles (dialect, ASCII only, size, confirmed modules, recommended meta, HarfangLab `context` values) |
+
+`scripts/engine/sync_yara_modules.py --libyara <yara at v4.5.4> --yara-x-json <dump>` regenerates `modules.toml` (`--check` compares); never hand-edit it. The dump comes from `scripts/engine/yara-modules`, a separate Cargo project (its own `[workspace]`; its lock is not committed: it is run by hand, pins `yara-x =1.23.0`, ships nothing, and the `yara-x` compiler's tree would fail the deny gate every lock gets) that prints `yara_x::mods::reflect` as JSON: the `yara-x` crate must never enter the workspace lock. libyara's `begin_declarations` blocks decide `libyara = true`; YARA-X's reflection decides `yara_x = true`. Where YARA-X's type differs from libyara's, the row keeps YARA-X's as `yara_x_ret` (an overload) or `yara_x_kind` (a field): YARA-X's `non_bool_expr` reads those. A member only YARA-X has is `yara_unknown_module_member` under libyara 4.5; one only libyara has is `yara_x_incompatible`. libyara 4.5.4 has no `lnk` module, which yara-1.0 lists: its members are checked against YARA-X's. Both sources are BSD-3-Clause (`data/catalogs/yara/NOTICE`).
+
+YARA conformance data is generated too, never hand-edited:
+
+- `scripts/engine/sync_yara_conformance.py --yara-x <yara-x at v1.23.0> --libyara <yara at v4.5.4>` writes `crates/testdata/conformance/yara/cases.json`, the cases with both engines' recorded verdicts (`--check` compares). It needs `yara-python` 4.5.4 and the `yara-x` 1.23.0 wheel, and runs each verdict in a child process with 2 GB and 20 s.
+- `scripts/engine/sync_yara_corpus.py --reversinglabs <checkout> --signature-base <checkout>` writes `crates/testdata/conformance/external/yara/` and its `.broken.` twins (`--check` compares). It takes a signature-base file only when every `license` meta is the DRL 1.1. Nothing GPL or Elastic License is vendored.
+
+A difference from either engine is a `[[yara]]` entry of `crates/testdata/oracles/exceptions.toml` (`check = "libyara" | "yara_x" | "both"`). `conformance.rs` and `scripts/engine/oracles/yara/oracle.py` both read it.
+
+## YARA-L catalogs
+
+| Path | Contents |
+| --- | --- |
+| `data/catalogs/yaral/udm.toml` | the Unified Data Model as a type graph: every message of the event model, the entity model (`graph`) and the detection model (the Chronicle API `Collection`, `detection`), each field's type, `repeated`, `enum` and `deprecated`, Google's first sentence; every enumerated type's values; `[roots]` names each data source's message |
+| `data/catalogs/yaral/functions.toml` | every YARA-L function (Google's function list, the `metrics.*` names, the outcome aggregations): signature, `min_args`/`max_args`, parameter and result types, `availability` (`rules`, `search`, `dashboards`), `aggregation`, summary and page |
+
+`scripts/engine/sync_yaral_catalogs.py --cache <dir>` regenerates both from Google's pages (`--offline` reads only the cache; `--check` compares and makes no request); never hand-edit them. The pages are CC BY 4.0 (`data/catalogs/yaral/NOTICE`). The functions page's "Supported in" chips are only in its HTML, so the script reads the HTML; the UDM and `Collection` pages are read as Markdown (`.md.txt`). Where a page is wrong (`NAME_FIXES`, `ARITY_FIXES`, a message labelled "(Enumerated list)") the script corrects it with its evidence, and a field name that is not an identifier fails the run. A type the pages give no table (`ThreatIntel`, `Int64`) is free: nothing under it is checked. Reference lists, data tables and Struct keys are never checked.
+
+`scripts/engine/sync_yaral_corpus.py --rules <chronicle/detection-rules checkout>` writes `crates/testdata/conformance/external/yaral/` and its `.broken.` twins (`--check` compares). There is no offline oracle (`scripts/engine/oracles/README.md`).
+
+## Bitdefender catalogue
+
+| Path | Contents |
+| --- | --- |
+| `data/catalogs/bitdefender/criteria.toml` | every GravityZone Basic rule target (detection, exclusion, `closed`), every criterion field with its Control Center label, sensors (`edr`, `xdr`, `both`), relations, kind (`string`, `hash`, `ip`, `email`, `port`, `enum` with per-value sensors), pairing data (`requires_any`, `detection_requires_any`, `incompatible`, value `incompatible`, `resource`), the rules over a whole list (`no_sensor_mix`, `one_resource`, `alert_or_operation`) and the registry hive abbreviations |
+
+`scripts/engine/sync_bitdefender_criteria.py --cache <dir>` regenerates it from Bitdefender's "Detection and exclusion criteria for Basic rules" page (`--offline` reads only the cached page; `--check` compares and makes no request); never hand-edit. The page is all rights reserved: facts only, no sentence copied (`data/catalogs/bitdefender/NOTICE`). Every note in the page's table must match a pattern in the script or be listed in `IGNORED_NOTES` with its reason, so a page change fails the run until someone reads it. `closed` marks the four targets whose field list bitdefender-1.0 states (process, file, connection, registry): an unknown field there is `bitdefender_criterion_field` as an error, on another target a warning. `crates/opentide-tide/tests/bitdefender_spec.rs` holds the catalogue to the spec's EDR and enum tables (`crates/testdata/conformance/bitdefender/spec-tables.md`, pasted verbatim) and the spec's fixtures; when the spec changes, paste its new sections there. The checks themselves are `crates/opentide-tide/src/bitdefender.rs`.
+
+## Graylog
+
+`data/catalogs/tz/zones.txt` lists the IANA zone and link names, so `graylog_schedule` checks `schedule.timezone` without I/O. `scripts/engine/sync_tz_zones.py --tzdata <tzdata.zi>` regenerates it (`--check` compares); never hand-edit. The tz database is public domain (`data/catalogs/tz/NOTICE`). The block's checks are `crates/opentide-tide/src/graylog.rs`, held to the spec's fixtures (`crates/testdata/conformance/graylog/`, copied unchanged, `SOURCES.md`) by `crates/opentide-tide/tests/graylog_spec.rs`. The query's Graylog dialect (`crates/opentide-lucene/src/graylog.rs`) is held to live verdicts: `crates/testdata/oracles/graylog/*.lucene` are one-line probes, `expected.tsv` the status Graylog's `POST /api/search/validate` gave on each release line (`scripts/engine/oracles/graylog/probes.py --write`, needs a server), and `graylog_verdicts.rs` the ledger of the disagreements. Add a probe with each new dialect rule and record its verdict.
+
+## Exabeam catalogue
+
+| Path | Contents |
+| --- | --- |
+| `data/catalogs/exabeam/fields.toml` | the 1,130 fields of Exabeam's Common Information Model with type and description, the platform fields the CIM table omits (`platform = true`), and the prefixes never reported (`c_`, `m_`) |
+| `data/catalogs/exabeam/values.toml` | the CIM's subjects, activity types (`<subject>-<activity>`, with their outcomes) and outcomes |
+
+`scripts/engine/sync_exabeam_catalog.py --source <ExabeamLabs/CIMLibrary checkout>` regenerates them from the pinned commit (`--check` compares); never hand-edit. Apache-2.0 (`data/catalogs/exabeam/NOTICE`). Nothing is a closed list: an unknown field is `exabeam_unknown_field`, a number on a string field `exabeam_string_field_number`, and an `activity_type`, `subject` or `outcome` literal the CIM lacks `exabeam_unknown_value` (never a wildcard, function, value between slashes, `null`, empty value, unquoted number or IP address, `@field` or earlier `AS` name), all warnings (exabeam-1.0). Conformance and external Exabeam queries use the CIM's values, so they stay clean. The reference checker's verdicts on the conformance queries and block cases are recorded by `scripts/engine/sync_exabeam_conformance.py --specifications <checkout>` (`crates/testdata/conformance/exabeam/reference.json`, `--check` compares); never hand-edit it. Exabeam's published rules may not be redistributed: measure them with `crates/opentide-exabeam/tests/content_hub.rs`, never vendor them.
+
 ## Tide objects
 
 `cargo xtask codegen` runs `opentide-schema`'s generator (`opentide_schema::generate::catalog`, the one `opentide generate schemas` uses) on the bundled configuration and writes `data/catalogs/tide/generated/`, each revision's reference schema and the router in `data/catalogs/tide/schemas/`, and the highlights key list; `cargo xtask codegen --check` drift-checks them, their version labels aside (UC-1.8b, #900; UC-6.2, #841). A change to the models, a vocabulary or a pin regenerates them in the same pull request. Rows are keyed by schema id; lookups resolve an object's `metadata.schema`, a bare family or unknown revision taking the newest, and a family-keyed catalog (an older workspace one) applying to every revision. Required fields, closed objects and legacy keys come from the catalog: never hard-code a revision check in Rust. The object checks are `opentide-workspace`'s `validate`, and the LSP publishes the same `{code, field_path, severity}` with ranges (`cargo xtask lsp parity --corpus faults`). Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
@@ -114,6 +162,9 @@ Injection, from `language_for_field_path`:
 | `response.procedure.searches[].query` with `system:` a platform identifier above | that platform's language and profile, in any key order (`hunt_query_language`) |
 | `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |
 | `configurations.crowdstrike.query`, hunts with `system: crowdstrike` | CQL (Next-Gen SIEM correlation checks on the rule block) |
+| `configurations.exabeam.sequences[].query`, hunts with `system: exabeam` | Exabeam Query Language, profile `rule` for a sequence and `search` for a hunt; the block's constraint codes are `crates/opentide-tide/src/exabeam.rs` |
+| `configurations.google_secops.{setup,events,outcome,condition,export}` | YARA-L, `rule` profile: one injection, the rule deploy assembles (`crates/opentide-tide/src/google_secops.rs`) |
+| hunts with `system: google_secops` | YARA-L, `search` profile |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
 Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), not from line prefixes, and carry their real path and their platform. The analysed text is the scalar's value (folded, unquoted, escapes decoded, block indent stripped). Tokens are remapped onto the original YAML coordinates through the byte map. Do not highlight the dedented buffer's offsets. `scripts/engine/oracles/oracle.py` extracts the same paths with PyYAML, and `crates/opentide-tide/tests/query_extraction.rs` holds every `crates/testdata/` object to it.

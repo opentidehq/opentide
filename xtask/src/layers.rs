@@ -760,6 +760,30 @@ mod tests {
             ],
         ),
         (
+            "opentide-yara",
+            &[
+                ("opentide-core", None),
+                ("opentide-syntax", None),
+                ("opentide-highlight", None),
+            ],
+        ),
+        (
+            "opentide-yaral",
+            &[
+                ("opentide-core", None),
+                ("opentide-syntax", None),
+                ("opentide-highlight", None),
+            ],
+        ),
+        (
+            "opentide-exabeam",
+            &[
+                ("opentide-core", None),
+                ("opentide-syntax", None),
+                ("opentide-highlight", None),
+            ],
+        ),
+        (
             "opentide-esql",
             &[
                 ("opentide-core", None),
@@ -808,6 +832,9 @@ mod tests {
                 ("opentide-lucene", None),
                 ("opentide-falco", None),
                 ("opentide-cql", None),
+                ("opentide-exabeam", None),
+                ("opentide-yara", None),
+                ("opentide-yaral", None),
                 ("opentide-ecs", None),
                 ("opentide-tide", None),
             ],
@@ -883,18 +910,24 @@ mod tests {
         ),
     ];
 
+    /// Where `name` is in a copy of [`WORKSPACE`].
+    fn index(crates: &Graph<'_>, name: &str) -> usize {
+        crates.iter().position(|(krate, _)| *krate == name).unwrap()
+    }
+
     #[test]
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 28);
+        assert_eq!(report.crates, 31);
     }
 
     #[test]
     fn the_repository_table_fails_a_deliberate_upward_dependency() {
         // opentide-core (foundation) on opentide-lsp (application).
         let mut crates = WORKSPACE.to_vec();
-        crates[0] = ("opentide-core", &[("opentide-lsp", None)]);
+        let at = index(&crates, "opentide-core");
+        crates[at] = ("opentide-core", &[("opentide-lsp", None)]);
         let report = check(&table(REPOSITORY_TABLE), &metadata(&crates));
         assert_eq!(report.violations.len(), 1);
         assert!(matches!(
@@ -911,7 +944,8 @@ mod tests {
     fn the_repository_table_fails_a_query_engine_on_its_own_tier() {
         // opentide-kql and opentide-spl share foundation tier 2.
         let mut crates = WORKSPACE.to_vec();
-        crates[4] = ("opentide-kql", &[("opentide-spl", None)]);
+        let at = index(&crates, "opentide-kql");
+        crates[at] = ("opentide-kql", &[("opentide-spl", None)]);
         let report = check(&table(REPOSITORY_TABLE), &metadata(&crates));
         assert_eq!(report.violations.len(), 1);
         assert!(report.violations[0].to_string().contains("the same tier"));
@@ -922,8 +956,10 @@ mod tests {
         // opentide-lsp (application) on opentide-wasm (bindings), as a dev
         // dependency; opentide-analysis (domain) on xtask (tooling), as a build one.
         let mut crates = WORKSPACE.to_vec();
-        crates[14] = ("opentide-lsp", &[("opentide-wasm", Some("dev"))]);
-        crates[13] = ("opentide-analysis", &[("xtask", Some("build"))]);
+        let at = index(&crates, "opentide-lsp");
+        crates[at] = ("opentide-lsp", &[("opentide-wasm", Some("dev"))]);
+        let at = index(&crates, "opentide-analysis");
+        crates[at] = ("opentide-analysis", &[("xtask", Some("build"))]);
         let report = check(&table(REPOSITORY_TABLE), &metadata(&crates));
         let edges: Vec<_> = report
             .violations

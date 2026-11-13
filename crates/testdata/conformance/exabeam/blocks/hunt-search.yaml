@@ -1,0 +1,26 @@
+name: Hunt
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000114
+  schema: rule::1.1
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case hunt-search.
+response:
+  procedure:
+    searches:
+      - system: exabeam
+        purpose: hunt
+        query: 'SELECT user GROUP-BY user | FOREACH user [ SELECT host ]'
+      - system: exabeam
+        query: 'activity_type:"app-login" | SELECT user'
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'

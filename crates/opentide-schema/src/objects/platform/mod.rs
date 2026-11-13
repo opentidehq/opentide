@@ -34,6 +34,7 @@ pub mod deprecation;
 pub use opentide_core::duration as durations;
 pub mod elastic;
 pub mod falco_text;
+pub mod google_secops;
 pub mod graylog;
 pub mod harfanglab;
 pub mod schema;
@@ -59,6 +60,8 @@ pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
 pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
+pub use google_secops::GoogleSecopsConfig;
+pub use google_secops::advisories::Advisory;
 pub use graylog::GraylogConfig;
 pub use harfanglab::HarfangLabConfig;
 pub use sentinel::SentinelConfig;
@@ -261,6 +264,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<CarbonBlackConfig>("carbon_black_cloud", "CarbonBlackConfig"),
     registered::<ElasticConfig>("elastic", "ElasticConfig"),
     registered::<SysdigConfig>("sysdig", "SysdigConfig"),
+    registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
     registered::<GraylogConfig>("graylog", "GraylogConfig"),
 ];
 
@@ -289,7 +293,11 @@ pub type LegacyKeys = &'static [(&'static str, Option<&'static str>)];
 /// declare it empty: their before-validators report constraint codes and
 /// accept no extra key. So no block tolerates a key, and the pre-pass
 /// ([`fill_legacy_keys`]) has nothing to move.
-pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[("ElasticConfig", &[]), ("SysdigConfig", &[])];
+pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
+    ("ElasticConfig", &[]),
+    ("SysdigConfig", &[]),
+    ("GoogleSecopsConfig", &[]),
+];
 
 /// The legacy keys of `model` ([`LEGACY_KEYS`]); a model that declares none
 /// has none.
@@ -414,6 +422,14 @@ pub const NAMED_CHECKS: [NamedCheck; 3] = [
         findings: Some(graylog::findings),
     },
 ];
+
+/// Every block advisory a rule earns, each platform's in the platform
+/// table's order: a warning that never rejects the rule, which `validate`
+/// and `lint`'s `queries` check report at its field path. Google SecOps'
+/// ([`google_secops::advisories::advisories`]).
+pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
+    google_secops::advisories::advisories(rule)
+}
 
 /// The named check called `name`.
 pub fn named_check(name: &str) -> Option<&'static NamedCheck> {
@@ -650,6 +666,8 @@ pub enum PlatformConfig {
     Elastic(ElasticConfig),
     /// `sysdig`.
     Sysdig(SysdigConfig),
+    /// `google_secops`.
+    GoogleSecops(GoogleSecopsConfig),
     /// `graylog`.
     Graylog(GraylogConfig),
 }
@@ -688,6 +706,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "carbon_black_cloud" => read(node, PlatformConfig::CarbonBlack),
         "elastic" => read(node, PlatformConfig::Elastic),
         "sysdig" => read(node, PlatformConfig::Sysdig),
+        "google_secops" => read(node, PlatformConfig::GoogleSecops),
         "graylog" => read(node, PlatformConfig::Graylog),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",

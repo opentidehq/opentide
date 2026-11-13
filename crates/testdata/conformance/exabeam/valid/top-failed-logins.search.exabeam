@@ -1,0 +1,5 @@
+SELECT user, COUNT(*) AS failures
+WHERE activity_type:"app-login" AND outcome:"fail"
+GROUP-BY user
+ORDER-BY failures DESC
+LIMIT 20

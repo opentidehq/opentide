@@ -30,7 +30,7 @@ opentide-cql.workspace = true
 opentide-highlight.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# Floats printed as serde_yaml printed them (`yaml::number_text`).
+# Floats printed as the oracle's YAML loader printed them (`yaml::number_text`).
 ryu.workspace = true
 toml.workspace = true
 regex.workspace = true
