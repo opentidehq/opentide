@@ -14,6 +14,7 @@ from io import TextIOWrapper
 from typing import TextIO
 
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 
 import opentide
 from opentide.analysis import OFFLINE_QUERY_LANGUAGES
@@ -31,6 +32,7 @@ from opentide.mcp_server.tools import (
     tool_validate_rule,
     tool_validation_report,
 )
+from opentide.mcp_server.ui import build_apps, ui_meta
 from opentide.mcp_server.workspace import (
     apply_plugin_launch,
     require_workspace,
@@ -73,15 +75,41 @@ call to make (command is the same step as an opentide command line). Read the \
 reason before following one.\
 """
 
+#: Reads the workspace or bundled data and nothing else. Hosts (Claude's
+#: connector and plugin directories among them) use these hints to decide which
+#: calls need a person's approval, so each must be true of every argument.
+LOCAL_READ = ToolAnnotations(
+    read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
+)
+#: Read-only offline, but live true contacts a tenant with the configured credentials.
+TENANT_READ = ToolAnnotations(
+    read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True
+)
+#: run_query saves no search or rule, but Elastic kuery runs a rule preview,
+#: which writes its alerts to the preview index: not read-only.
+TENANT_QUERY = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True
+)
+#: dry_run false creates or replaces the rule on the tenant. Not idempotent: when the
+#: deployment state was not recorded, a repeat creates the rule a second time.
+TENANT_DEPLOY = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True
+)
+
+
+#: MCP Apps views (ui.py). A host without MCP Apps ignores them.
+apps = build_apps()
+
 mcp = MCPServer(
     "opentide",
     # Without it mcp 2.x reports serverInfo.version as "".
     version=opentide.__version__,
     instructions=INSTRUCTIONS,
+    extensions=[apps],
 )
 
 
-@mcp.tool()
+@mcp.tool(title="Search the catalogue", annotations=LOCAL_READ)
 def search(
     query: str,
     type: str = "",
@@ -106,7 +134,9 @@ def search(
     )
 
 
-@mcp.tool()
+@mcp.tool(
+    title="Threat, objective and rule lineage", annotations=LOCAL_READ, meta=ui_meta("lineage")
+)
 def get_chaining(uuid: str) -> dict:
     """Threat -> objective -> rule lineage of any object, before you edit or add one.
 
@@ -119,7 +149,7 @@ def get_chaining(uuid: str) -> dict:
     return tool_get_chaining(uuid)
 
 
-@mcp.tool()
+@mcp.tool(title="ATT&CK coverage", annotations=LOCAL_READ, meta=ui_meta("coverage"))
 def coverage(technique: str = "", tactic: str = "") -> dict:
     """ATT&CK coverage: which rules detect a technique, and where the gaps are.
 
@@ -131,7 +161,7 @@ def coverage(technique: str = "", tactic: str = "") -> dict:
     return tool_coverage(technique=technique, tactic=tactic)
 
 
-@mcp.tool()
+@mcp.tool(title="Validate a rule", annotations=LOCAL_READ)
 def validate_rule(uuid: str) -> dict:
     """Validate one rule by UUID: schema, vocabularies and references.
 
@@ -144,7 +174,7 @@ def validate_rule(uuid: str) -> dict:
     return tool_validate_rule(uuid)
 
 
-@mcp.tool()
+@mcp.tool(title="Validation report", annotations=LOCAL_READ, meta=ui_meta("validation"))
 def validation_report(
     file: str = "",
     uuid: str = "",
@@ -175,7 +205,7 @@ def validation_report(
     )
 
 
-@mcp.tool()
+@mcp.tool(title="Explain a diagnostic code", annotations=LOCAL_READ)
 def explain(code: str = "") -> dict:
     """What a diagnostic code means, an example, and how to fix it.
 
@@ -203,7 +233,11 @@ supported false.\
 """
 
 
-@mcp.tool(description=VALIDATE_QUERY_DESCRIPTION)
+@mcp.tool(
+    title="Validate a query",
+    description=VALIDATE_QUERY_DESCRIPTION,
+    annotations=TENANT_READ,
+)
 def validate_query(
     query: str, platform: str, live: bool = False, language: str = "", stack: str = ""
 ) -> dict:
@@ -211,7 +245,7 @@ def validate_query(
     return tool_validate_query(query, platform, live=live, language=language, stack=stack)
 
 
-@mcp.tool()
+@mcp.tool(title="Run a query on a tenant", annotations=TENANT_QUERY)
 def run_query(
     query: str,
     platform: str,
@@ -248,7 +282,7 @@ def run_query(
     )
 
 
-@mcp.tool()
+@mcp.tool(title="Deploy a rule", annotations=TENANT_DEPLOY)
 def deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict:
     """Preview one rule's deployment to a platform. dry_run false deploys it for real.
 
@@ -261,7 +295,7 @@ def deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict:
     return tool_deploy_rule(uuid, platform, dry_run=dry_run)
 
 
-@mcp.tool()
+@mcp.tool(title="Deployment status", annotations=LOCAL_READ)
 def deployment_status(uuid: str) -> dict:
     """Where a rule is deployed: vendor ids and tenants per platform.
 

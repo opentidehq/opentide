@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en" data-view="__OPENTIDE_VIEW__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opentide</title>
+<!--
+  One page for the three opentide MCP Apps views (coverage, validation, lineage).
+  opentide.mcp_server.ui serves it at a ui:// URI per view, with data-view set
+  and, for coverage, the bundled ATT&CK matrix in #attack. It loads nothing from
+  the network: everything it shows comes from the host over postMessage
+  (JSON-RPC, MCP Apps 2026-01-26). Strings from the catalogue are only ever set
+  with textContent, never parsed as HTML.
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --ot-bg: var(--color-background-primary, light-dark(#ffffff, #1b1b1d));
+  --ot-bg-2: var(--color-background-secondary, light-dark(#f5f6f8, #252528));
+  --ot-bg-3: var(--color-background-tertiary, light-dark(#eceef2, #2e2e32));
+  --ot-text: var(--color-text-primary, light-dark(#17181a, #f2f2f3));
+  --ot-text-2: var(--color-text-secondary, light-dark(#565a63, #b4b6bc));
+  --ot-text-3: var(--color-text-tertiary, light-dark(#7c808a, #8c8f96));
+  --ot-border: var(--color-border-primary, light-dark(#dcdfe5, #3a3a3f));
+  --ot-border-2: var(--color-border-secondary, light-dark(#e8eaef, #303034));
+  --ot-danger: var(--color-text-danger, light-dark(#b42318, #ff8a80));
+  --ot-danger-bg: var(--color-background-danger, light-dark(#fdecea, #3b1d1b));
+  --ot-warning: var(--color-text-warning, light-dark(#8a5a00, #f5c060));
+  --ot-warning-bg: var(--color-background-warning, light-dark(#fff4dc, #3a2e14));
+  --ot-success: var(--color-text-success, light-dark(#17703c, #7fd6a0));
+  --ot-success-bg: var(--color-background-success, light-dark(#e6f5ec, #17301f));
+  --ot-info: var(--color-text-info, light-dark(#1f5fbf, #8db8ff));
+  --ot-info-bg: var(--color-background-info, light-dark(#e8f0fd, #1b2840));
+  --ot-ring: var(--color-ring-primary, light-dark(#1f5fbf, #8db8ff));
+  --ot-font: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --ot-mono: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace);
+  --ot-size: var(--font-text-sm-size, 13px);
+  --ot-size-xs: var(--font-text-xs-size, 11.5px);
+  --ot-radius: var(--border-radius-md, 8px);
+  --ot-radius-sm: var(--border-radius-sm, 5px);
+  /* Coverage heat: 0 rules is a gap; more rules, deeper colour. */
+  --ot-heat-0: light-dark(#f1f2f5, #2a2a2e);
+  --ot-heat-1: light-dark(#cfe6d8, #1f4a30);
+  --ot-heat-2: light-dark(#93cdaa, #2a6b44);
+  --ot-heat-3: light-dark(#4fa676, #3c9562);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ot-bg);
+  color: var(--ot-text);
+  font: var(--ot-size)/1.45 var(--ot-font);
+  padding: 14px 16px 16px;
+  overflow-wrap: anywhere;
+}
+button {
+  font: inherit; font-size: var(--ot-size-xs); color: var(--ot-text);
+  background: var(--ot-bg-2); border: 1px solid var(--ot-border);
+  border-radius: var(--ot-radius-sm); padding: 3px 9px; cursor: pointer;
+}
+button:hover { background: var(--ot-bg-3); }
+button:focus-visible, .chip:focus-visible, .node:focus-visible { outline: 2px solid var(--ot-ring); outline-offset: 1px; }
+button[disabled] { opacity: .55; cursor: default; }
+code, .mono { font-family: var(--ot-mono); font-size: .95em; }
+h1 { font-size: 15px; font-weight: 600; margin: 0; }
+h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+.muted { color: var(--ot-text-2); }
+.faint { color: var(--ot-text-3); font-size: var(--ot-size-xs); }
+.header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.header .spacer { flex: 1; }
+.brand { font-size: var(--ot-size-xs); letter-spacing: .04em; text-transform: uppercase; color: var(--ot-text-3); }
+.pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: var(--ot-size-xs); font-weight: 600; white-space: nowrap; }
+.pill.error { color: var(--ot-danger); background: var(--ot-danger-bg); }
+.pill.warning { color: var(--ot-warning); background: var(--ot-warning-bg); }
+.pill.ok { color: var(--ot-success); background: var(--ot-success-bg); }
+.pill.info { color: var(--ot-info); background: var(--ot-info-bg); }
+.pill.neutral { color: var(--ot-text-2); background: var(--ot-bg-3); }
+.card { border: 1px solid var(--ot-border); border-radius: var(--ot-radius); background: var(--ot-bg); }
+.card + .card { margin-top: 10px; }
+.card-head { padding: 8px 12px; border-bottom: 1px solid var(--ot-border-2); background: var(--ot-bg-2); border-radius: var(--ot-radius) var(--ot-radius) 0 0; display: flex; gap: 8px; align-items: center; }
+.card-body { padding: 10px 12px; }
+.segmented { display: inline-flex; border: 1px solid var(--ot-border); border-radius: var(--ot-radius-sm); overflow: hidden; }
+.segmented button { border: 0; border-radius: 0; background: transparent; }
+.segmented button + button { border-left: 1px solid var(--ot-border); }
+.segmented button[aria-pressed="true"] { background: var(--ot-bg-3); font-weight: 600; }
+.state { padding: 18px 4px; color: var(--ot-text-2); }
+.error-box { color: var(--ot-danger); background: var(--ot-danger-bg); border-radius: var(--ot-radius); padding: 10px 12px; white-space: pre-wrap; }
+
+/* Validation */
+.issue { padding: 10px 12px; border-top: 1px solid var(--ot-border-2); }
+.issue:first-child { border-top: 0; }
+.issue-top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.issue-msg { margin: 4px 0 0; }
+.issue-help { margin: 4px 0 0; color: var(--ot-text-2); }
+.issue-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.fix { margin-top: 6px; font-size: var(--ot-size-xs); color: var(--ot-text-2); }
+.fix code { background: var(--ot-bg-3); padding: 0 4px; border-radius: 3px; color: var(--ot-text); }
+.explain { margin-top: 8px; padding: 8px 10px; background: var(--ot-bg-2); border-radius: var(--ot-radius-sm); }
+.explain h3, .explain h4 { font-size: 12.5px; margin: 8px 0 4px; }
+.explain h3:first-child, .explain h4:first-child { margin-top: 0; }
+.explain p { margin: 4px 0; }
+.explain pre { margin: 6px 0; padding: 8px; background: var(--ot-bg); border: 1px solid var(--ot-border-2); border-radius: var(--ot-radius-sm); overflow-x: auto; font-family: var(--ot-mono); font-size: var(--ot-size-xs); white-space: pre; }
+.explain code { background: var(--ot-bg-3); padding: 0 3px; border-radius: 3px; }
+.explain pre code { background: none; padding: 0; }
+.stats { display: flex; gap: 14px; flex-wrap: wrap; margin: -4px 0 12px; }
+
+/* Coverage */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.metric { background: var(--ot-bg-2); border-radius: var(--ot-radius); padding: 8px 10px; }
+.metric .value { font-size: 18px; font-weight: 600; }
+.metric .label { font-size: var(--ot-size-xs); color: var(--ot-text-2); }
+.tactic { display: grid; grid-template-columns: 170px 1fr; gap: 10px; padding: 6px 0; border-top: 1px solid var(--ot-border-2); align-items: start; }
+.tactic:first-of-type { border-top: 0; }
+.tactic-name { font-weight: 600; font-size: 12.5px; }
+.tactic-head { display: flex; flex-direction: column; align-items: stretch; gap: 1px; text-align: left; background: none; border: 0; padding: 0; color: var(--ot-text); }
+.tactic-head:hover { background: none; }
+.tactic-head .bar { display: block; }
+.bar { height: 5px; border-radius: 3px; background: var(--ot-heat-0); margin-top: 5px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--ot-heat-3); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
+.chip { font-family: var(--ot-mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; background: var(--ot-heat-0); color: var(--ot-text-2); }
+.chip.h1 { background: var(--ot-heat-1); color: var(--ot-text); }
+.chip.h2 { background: var(--ot-heat-2); color: var(--ot-text); }
+.chip.h3 { background: var(--ot-heat-3); color: light-dark(#ffffff, #0f1a13); }
+.chip.selected { border-color: var(--ot-ring); box-shadow: 0 0 0 1px var(--ot-ring); }
+.legend { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: var(--ot-size-xs); color: var(--ot-text-2); }
+.legend .chip { cursor: default; }
+.detail { margin: 12px 0; }
+.sub-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+@media (max-width: 520px) { .tactic { grid-template-columns: 1fr; gap: 4px; } }
+
+/* Objects (rules, objectives, threats) */
+.objects { list-style: none; margin: 0; padding: 0; }
+.objects li { padding: 5px 0; border-top: 1px solid var(--ot-border-2); display: flex; gap: 8px; align-items: baseline; }
+.objects li:first-child { border-top: 0; }
+.objects .title { flex: 1; min-width: 0; }
+
+/* Lineage */
+.lineage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: start; }
+.column h2 { display: flex; justify-content: space-between; }
+.node { display: block; width: 100%; text-align: left; background: var(--ot-bg); border: 1px solid var(--ot-border); border-radius: var(--ot-radius-sm); padding: 6px 8px; margin-bottom: 6px; cursor: pointer; font-size: var(--ot-size); }
+.node:hover { background: var(--ot-bg-2); }
+.node.focus { border-color: var(--ot-ring); box-shadow: 0 0 0 1px var(--ot-ring); }
+.node[disabled] { opacity: 1; cursor: default; color: var(--ot-text); }
+.node[disabled]:hover { background: var(--ot-bg); }
+.node .row { display: flex; gap: 6px; align-items: baseline; justify-content: space-between; }
+.node .uuid { display: block; font-family: var(--ot-mono); font-size: 10.5px; color: var(--ot-text-3); }
+.node .meta { display: block; font-size: var(--ot-size-xs); color: var(--ot-text-2); white-space: nowrap; }
+.empty { color: var(--ot-text-3); font-size: var(--ot-size-xs); padding: 6px 0; }
+@media (max-width: 560px) { .lineage { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main id="root"><div class="state">Waiting for opentide…</div></main>
+<script type="application/json" id="attack">__OPENTIDE_ATTACK__</script>
+<script>
+"use strict";
+(() => {
+  const VIEW = document.documentElement.dataset.view;
+  const PROTOCOL_VERSION = "2026-01-26";
+  const root = document.getElementById("root");
+
+  // ---------------------------------------------------------------- bridge
+  let nextId = 1;
+  const pending = new Map();
+  let hostCapabilities = {};
+  let toolArgs = {};
+
+  function post(message) { window.parent.postMessage(message, "*"); }
+  function notify(method, params) { post({ jsonrpc: "2.0", method, params: params || {} }); }
+  function request(method, params, timeoutMs) {
+    const id = nextId++;
+    post({ jsonrpc: "2.0", id, method, params: params || {} });
+    return new Promise((resolve, reject) => {
+      // timeoutMs 0: wait for as long as the host takes.
+      const timer = timeoutMs === 0 ? null : setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(method + " timed out"));
+      }, timeoutMs || 30000);
+      pending.set(id, { resolve, reject, timer });
+    });
+  }
+  function respond(id, result) { post({ jsonrpc: "2.0", id, result }); }
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (!message || message.jsonrpc !== "2.0") return;
+    if (message.method === undefined && message.id !== undefined) {
+      const waiting = pending.get(message.id);
+      if (!waiting) return;
+      pending.delete(message.id);
+      clearTimeout(waiting.timer);
+      if (message.error) waiting.reject(new Error(message.error.message || "request failed"));
+      else waiting.resolve(message.result);
+      return;
+    }
+    if (message.id !== undefined) {
+      // Host -> view requests.
+      if (message.method === "ui/resource-teardown" || message.method === "ping") respond(message.id, {});
+      else post({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } });
+      return;
+    }
+    const params = message.params || {};
+    switch (message.method) {
+      case "ui/notifications/tool-input": toolArgs = params.arguments || {}; break;
+      case "ui/notifications/tool-result": show(parseResult(params)); break;
+      case "ui/notifications/tool-cancelled": render(state("The call was cancelled.")); break;
+      case "ui/notifications/host-context-changed": applyHostContext(params); break;
+    }
+  });
+
+  function applyHostContext(context) {
+    if (!context) return;
+    const html = document.documentElement;
+    if (context.theme === "light" || context.theme === "dark") html.dataset.theme = context.theme;
+    const variables = context.styles && context.styles.variables;
+    if (variables) {
+      for (const [name, value] of Object.entries(variables)) {
+        if (name.startsWith("--") && typeof value === "string") html.style.setProperty(name, value);
+      }
+    }
+    const fonts = context.styles && context.styles.css && context.styles.css.fonts;
+    if (typeof fonts === "string" && fonts) {
+      let style = document.getElementById("host-fonts");
+      if (!style) { style = document.createElement("style"); style.id = "host-fonts"; document.head.appendChild(style); }
+      style.textContent = fonts;
+    }
+  }
+
+  function watchSize() {
+    let lastWidth = 0, lastHeight = 0, scheduled = false;
+    const measure = () => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        const html = document.documentElement;
+        const original = html.style.height;
+        html.style.height = "max-content";
+        const height = Math.ceil(html.getBoundingClientRect().height);
+        html.style.height = original;
+        const width = Math.ceil(window.innerWidth);
+        if (width !== lastWidth || height !== lastHeight) {
+          lastWidth = width; lastHeight = height;
+          notify("ui/notifications/size-changed", { width, height });
+        }
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.documentElement);
+    observer.observe(document.body);
+  }
+
+  async function connect() {
+    if (window.parent === window) {
+      render(state("This view needs an MCP Apps host, such as Claude Desktop. Opened on its own, it has no tool result to show."));
+      return;
+    }
+    // A host may take a while to answer (a web host's sandbox proxy, a busy app): keep
+    // waiting, and only say what the page needs if nothing has answered after 10 s.
+    const hint = setTimeout(() => render(state("Waiting for the host. This view needs an MCP Apps host, such as Claude Desktop.")), 10000);
+    try {
+      const result = await request("ui/initialize", {
+        appInfo: { name: "opentide-" + VIEW, version: "1" },
+        appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
+        protocolVersion: PROTOCOL_VERSION,
+      }, 0);
+      hostCapabilities = (result && result.hostCapabilities) || {};
+      applyHostContext(result && result.hostContext);
+    } catch (error) {
+      clearTimeout(hint);
+      render(state("The host refused this view: " + error.message));
+      return;
+    }
+    clearTimeout(hint);
+    if (root.textContent.startsWith("Waiting for the host")) render(state("Waiting for opentide…"));
+    notify("ui/notifications/initialized");
+    watchSize();
+  }
+
+  // --------------------------------------------------------------- helpers
+  /** A tool result as data: structuredContent, else the JSON text opentide returns. */
+  function parseResult(result) {
+    if (!result) return { error: "No result." };
+    const text = (result.content || []).filter((block) => block && block.type === "text").map((block) => block.text).join("\n");
+    if (result.isError) return { error: text || "The tool reported an error." };
+    if (result.structuredContent && typeof result.structuredContent === "object") {
+      const structured = result.structuredContent;
+      // MCPServer wraps a non-object return value as {"result": ...}.
+      return Object.keys(structured).length === 1 && "result" in structured ? structured.result : structured;
+    }
+    try { return JSON.parse(text); } catch (_) { /* opentide's list tools send one JSON block per item */ }
+    const blocks = (result.content || []).filter((block) => block && block.type === "text");
+    if (blocks.length > 1) {
+      try { return blocks.map((block) => JSON.parse(block.text)); } catch (_) { /* not JSON */ }
+    }
+    return { error: text || "The tool returned no data." };
+  }
+
+  async function callTool(name, args) {
+    const result = await request("tools/call", { name, arguments: args || {} }, 180000);
+    return parseResult(result);
+  }
+  const canCallTools = () => Boolean(hostCapabilities.serverTools);
+  const canMessage = () => Boolean(hostCapabilities.message);
+
+  function sendToChat(text) {
+    return request("ui/message", { role: "user", content: [{ type: "text", text }] });
+  }
+
+  /** Titles for UUIDs: one search call for the whole catalogue, shared by every view. */
+  let catalogue = new Map();
+  let cataloguePromise = null;
+  function loadCatalogue() {
+    if (!canCallTools()) return Promise.resolve(catalogue);
+    if (!cataloguePromise) {
+      cataloguePromise = callTool("search", { query: "" }).then((items) => {
+        if (Array.isArray(items)) catalogue = new Map(items.map((item) => [item.uuid, item]));
+        return catalogue;
+      }).catch(() => catalogue);
+    }
+    return cataloguePromise;
+  }
+  const titleOf = (uuid) => (catalogue.get(uuid) || {}).title;
+
+  /** Build DOM: el("div", {class: "x", onclick: f}, child, "text", ...). Text is never parsed as HTML. */
+  function el(tag, attributes, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attributes || {})) {
+      if (value === undefined || value === null || value === false) continue;
+      if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else if (key === "class") node.className = value;
+      else node.setAttribute(key, value === true ? "" : String(value));
+    }
+    for (const child of children.flat(Infinity)) {
+      if (child === undefined || child === null || child === false) continue;
+      node.appendChild(child instanceof Node ? child : document.createTextNode(String(child)));
+    }
+    return node;
+  }
+  function render(...nodes) { root.replaceChildren(...nodes.flat(Infinity).filter((node) => node !== null && node !== undefined && node !== false)); }
+  function state(text) { return el("div", { class: "state" }, text); }
+  function header(title, ...extra) {
+    return el("div", { class: "header" }, el("div", null, el("div", { class: "brand" }, "opentide"), el("h1", null, title)), el("div", { class: "spacer" }), ...extra);
+  }
+  function plural(count, word, many) { return count + " " + (count === 1 ? word : many || word + "s"); }
+  const shortUuid = (uuid) => (typeof uuid === "string" && uuid.length > 13 ? uuid.slice(0, 8) + "…" + uuid.slice(-4) : String(uuid));
+
+  /** Just enough Markdown for explain pages: headings, fenced code, inline code, paragraphs and lists. */
+  function markdown(source) {
+    const container = el("div", { class: "explain" });
+    const lines = String(source || "").split("\n");
+    let paragraph = [];
+    const flush = () => { if (paragraph.length) { container.appendChild(el("p", null, inline(paragraph.join(" ")))); paragraph = []; } };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith("```")) {
+        flush();
+        const code = [];
+        for (i++; i < lines.length && !lines[i].startsWith("```"); i++) code.push(lines[i]);
+        container.appendChild(el("pre", null, el("code", null, code.join("\n"))));
+      } else if (/^#{1,6} /.test(line)) {
+        flush();
+        const level = line.match(/^#+/)[0].length;
+        if (level > 1) container.appendChild(el(level === 2 ? "h3" : "h4", null, inline(line.replace(/^#+ /, ""))));
+      } else if (/^\s*[-*] /.test(line)) {
+        flush();
+        container.appendChild(el("p", null, "• ", inline(line.replace(/^\s*[-*] /, ""))));
+      } else if (!line.trim()) {
+        flush();
+      } else {
+        paragraph.push(line.trim());
+      }
+    }
+    flush();
+    return container;
+  }
+  function inline(text) {
+    return text.split(/(`[^`]+`)/).filter(Boolean).map((part) =>
+      part.startsWith("`") && part.endsWith("`") ? el("code", null, part.slice(1, -1)) : document.createTextNode(part.replace(/\*\*([^*]+)\*\*/g, "$1")));
+  }
+
+  function objectList(uuids, emptyText) {
+    if (!uuids || !uuids.length) return el("div", { class: "empty" }, emptyText);
+    return el("ul", { class: "objects" }, uuids.map((uuid) => {
+      const object = catalogue.get(uuid) || {};
+      return el("li", null,
+        el("span", { class: "title" }, object.title || shortUuid(uuid)),
+        object.status ? el("span", { class: "pill neutral" }, object.status) : null,
+        el("span", { class: "faint mono", title: uuid }, shortUuid(uuid)));
+    }));
+  }
+
+  // ------------------------------------------------------------ validation
+  // pages: explain results by code; open: the issues whose explanation shows.
+  let validation = { filter: "all", pages: new Map(), open: new Set() };
+  const issueKey = (issue) => [issue.path || issue.file_path, issue.line, issue.column, issue.code, issue.message].join("|");
+
+  function renderValidation(report) {
+    if (report.error) return render(header("Validation report"), el("div", { class: "error-box" }, report.error));
+    const issues = (report.issues || []).map((issue) => Object.assign({ severity: "error" }, issue));
+    const warnings = (report.warnings || []).map((issue) => Object.assign({ severity: "warning" }, issue));
+    const all = issues.concat(warnings);
+    const errorCount = all.filter((issue) => issue.severity === "error").length;
+    const warningCount = all.filter((issue) => issue.severity === "warning").length;
+    const stats = report.stats || {};
+
+    const status = report.ok
+      ? el("span", { class: "pill ok" }, "✓ Valid")
+      : el("span", { class: "pill error" }, errorCount ? plural(errorCount, "error") : "Not valid");
+    const rerun = canCallTools() ? el("button", { onclick: (event) => rerunValidation(event.currentTarget) }, "Re-validate") : null;
+    const filters = el("div", { class: "segmented", role: "group", "aria-label": "Filter issues" },
+      ["all", "error", "warning"].map((filter) => el("button", {
+        "aria-pressed": String(validation.filter === filter),
+        onclick: () => { validation.filter = filter; renderValidation(report); },
+      }, filter === "all" ? "All " + all.length : filter === "error" ? "Errors " + errorCount : "Warnings " + warningCount)));
+
+    const statLine = el("div", { class: "stats faint" },
+      stats.objects_checked !== undefined ? el("span", null, plural(stats.objects_checked, "object") + " checked") : null,
+      stats.queries_checked !== undefined ? el("span", null, plural(stats.queries_checked, "query", "queries") + " checked offline") : null,
+      stats.wall_ms !== undefined ? el("span", null, Math.round(stats.wall_ms) + " ms") : null,
+      warningCount ? el("span", null, plural(warningCount, "warning")) : null);
+
+    const shown = all.filter((issue) => validation.filter === "all" || issue.severity === validation.filter);
+    const groups = new Map();
+    for (const issue of shown) {
+      const key = issue.path || issue.file_path || "(workspace)";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(issue);
+    }
+    const body = groups.size
+      ? Array.from(groups, ([path, list]) => el("section", { class: "card" },
+          el("div", { class: "card-head" }, el("span", { class: "mono" }, path), el("span", { class: "faint" }, plural(list.length, "issue"))),
+          el("div", null, list.map(renderIssue))))
+      : [state(report.ok && !all.length ? "No issues. Every object passed schema, vocabulary, reference and query checks." : "Nothing matches this filter.")];
+
+    render(header("Validation report", status, rerun), all.length ? el("div", { class: "header" }, filters) : null, statLine, ...body);
+  }
+
+  function renderIssue(issue) {
+    const location = issue.line ? "line " + issue.line + (issue.column ? ", column " + issue.column : "") : null;
+    const fix = issue.fix && Array.isArray(issue.fix.edits) && issue.fix.edits.length ? issue.fix : null;
+    const explainSlot = el("div");
+    const key = issueKey(issue);
+    const isOpen = validation.open.has(key) && validation.pages.has(issue.code);
+    if (isOpen) explainSlot.appendChild(explanation(validation.pages.get(issue.code)));
+    const actions = [];
+    if (issue.code && canCallTools()) {
+      actions.push(el("button", { onclick: (event) => toggleExplain(issue, explainSlot, event.currentTarget) }, isOpen ? "Hide explanation" : "Explain " + issue.code));
+    }
+    if (canMessage()) {
+      actions.push(el("button", { onclick: (event) => askToFix(issue, event.currentTarget) }, "Ask Claude to fix"));
+    }
+    return el("div", { class: "issue" },
+      el("div", { class: "issue-top" },
+        el("span", { class: "pill " + (issue.severity === "warning" ? "warning" : "error") }, issue.severity === "warning" ? "warning" : "error"),
+        el("code", null, issue.code || "issue"),
+        location ? el("span", { class: "faint" }, location) : null,
+        issue.field_path ? el("span", { class: "faint mono" }, Array.isArray(issue.field_path) ? issue.field_path.join(".") : issue.field_path) : null),
+      el("p", { class: "issue-msg" }, issue.message || ""),
+      issue.help ? el("p", { class: "issue-help" }, issue.help) : null,
+      fix ? el("div", { class: "fix" }, fix.safe ? el("span", { class: "pill ok" }, "safe fix") : el("span", { class: "pill neutral" }, "suggested fix"), " ",
+        fix.edits.map((edit, index) => [index ? "; " : "", "line " + edit.line + ": replace with ", el("code", null, edit.replacement === "" ? "(nothing)" : edit.replacement)])) : null,
+      actions.length ? el("div", { class: "issue-actions" }, actions) : null,
+      explainSlot);
+  }
+
+  function explanation(page) {
+    return page.error ? el("div", { class: "error-box" }, page.error) : markdown(page.markdown || page.meaning || "");
+  }
+
+  async function toggleExplain(issue, slot, button) {
+    const key = issueKey(issue), code = issue.code;
+    if (validation.open.has(key)) {
+      validation.open.delete(key);
+      slot.replaceChildren();
+      button.textContent = "Explain " + code;
+      return;
+    }
+    button.disabled = true;
+    try {
+      if (!validation.pages.has(code)) validation.pages.set(code, await callTool("explain", { code }));
+      validation.open.add(key);
+      slot.replaceChildren(explanation(validation.pages.get(code)));
+      button.textContent = "Hide explanation";
+    } catch (error) {
+      slot.replaceChildren(el("div", { class: "error-box" }, error.message));
+    } finally { button.disabled = false; }
+  }
+
+  async function askToFix(issue, button) {
+    const where = (issue.path || issue.file_path || "the catalogue") + (issue.line ? ":" + issue.line + (issue.column ? ":" + issue.column : "") : "");
+    button.disabled = true;
+    try {
+      await sendToChat("Fix the opentide " + (issue.code || "validation") + " issue at " + where + ": " + (issue.message || "") +
+        " Edit the file, then call validation_report for it until ok is true.");
+      button.textContent = "Sent to Claude";
+    } catch (error) {
+      button.textContent = "Could not send";
+      button.disabled = false;
+    }
+  }
+
+  async function rerunValidation(button) {
+    button.disabled = true;
+    button.textContent = "Validating…";
+    try { show(await callTool("validation_report", toolArgs)); }
+    catch (error) { render(header("Validation report"), el("div", { class: "error-box" }, error.message)); }
+  }
+
+  // -------------------------------------------------------------- coverage
+  const attack = (() => {
+    try { return JSON.parse(document.getElementById("attack").textContent); } catch (_) { return null; }
+  })();
+  // open: the tactics whose techniques show; null until the reader toggles one (then tactics with coverage show).
+  let coverage = { data: null, selected: null, filter: "all", open: null };
+
+  /** Rules covering a technique: its own entry plus its sub-techniques' (a parent covers its subs). */
+  const byParent = new WeakMap();
+  function rulesFor(matrix, id) {
+    if (id.includes(".")) return Array.from(new Set(matrix[id] || []));
+    let index = byParent.get(matrix);
+    if (!index) {
+      // One pass per matrix: each parent technique with its own and its sub-techniques' rules.
+      index = new Map();
+      for (const [key, list] of Object.entries(matrix)) {
+        const parent = key.split(".")[0];
+        if (!index.has(parent)) index.set(parent, new Set());
+        for (const uuid of list) index.get(parent).add(uuid);
+      }
+      byParent.set(matrix, index);
+    }
+    return Array.from(index.get(id) || []);
+  }
+  const heat = (count) => (count === 0 ? "" : count === 1 ? "h1" : count <= 3 ? "h2" : "h3");
+
+  function renderCoverage(data) {
+    if (data.error) return render(header("ATT&CK coverage"), el("div", { class: "error-box" }, data.error));
+    coverage.data = data;
+    if (data.technique) return renderTechnique(data);
+    const matrix = data.matrix || {};
+    if (!attack || !Array.isArray(attack.tactics) || !attack.tactics.length) return renderCoverageList(matrix);
+
+    const allTechniques = new Map();
+    for (const tactic of attack.tactics) for (const technique of tactic.techniques) allTechniques.set(technique.id, technique);
+    const coveredIds = Array.from(allTechniques.keys()).filter((id) => rulesFor(matrix, id).length);
+    const ruleCount = new Set(Object.values(matrix).flat()).size;
+    const unknown = Object.keys(matrix).filter((id) => !allTechniques.has(id.split(".")[0]));
+
+    const filters = el("div", { class: "segmented", role: "group", "aria-label": "Filter techniques" },
+      [["all", "All"], ["covered", "Covered"], ["gaps", "Gaps"]].map(([key, label]) => el("button", {
+        "aria-pressed": String(coverage.filter === key),
+        onclick: () => { coverage.filter = key; renderCoverage(data); },
+      }, label)));
+
+    const openTactics = coverage.open || new Set(attack.tactics
+      .filter((tactic) => tactic.techniques.some((technique) => rulesFor(matrix, technique.id).length))
+      .map((tactic) => tactic.name));
+    const tactics = attack.tactics.map((tactic) => {
+      const counts = tactic.techniques.map((technique) => rulesFor(matrix, technique.id).length);
+      const covered = counts.filter(Boolean).length;
+      const chips = tactic.techniques.map((technique, index) => {
+        const count = counts[index];
+        if (coverage.filter === "covered" && !count) return null;
+        if (coverage.filter === "gaps" && count) return null;
+        return el("button", {
+          class: "chip " + heat(count) + (coverage.selected === technique.id ? " selected" : ""),
+          title: technique.id + " " + technique.name + " — " + (count ? plural(count, "rule") : "no rule"),
+          onclick: () => { coverage.selected = coverage.selected === technique.id ? null : technique.id; renderCoverage(data); },
+        }, technique.id);
+      }).filter(Boolean);
+      const isOpen = openTactics.has(tactic.name);
+      const toggle = () => {
+        const next = new Set(openTactics);
+        if (isOpen) next.delete(tactic.name); else next.add(tactic.name);
+        coverage.open = next;
+        renderCoverage(data);
+      };
+      return el("div", { class: "tactic" },
+        el("button", { class: "tactic-head", "aria-expanded": String(isOpen), onclick: toggle },
+          el("span", { class: "tactic-name" }, (isOpen ? "▾ " : "▸ ") + tactic.name),
+          el("span", { class: "faint" }, covered + " / " + tactic.techniques.length + " covered"),
+          el("span", { class: "bar" }, el("span", { style: "width:" + (tactic.techniques.length ? Math.round(100 * covered / tactic.techniques.length) : 0) + "%" }))),
+        !isOpen ? el("div", { class: "empty" }, (tactic.techniques.length - covered) + " gaps, " + plural(covered, "technique") + " covered")
+          : chips.length ? el("div", { class: "chips" }, chips) : el("div", { class: "empty" }, coverage.filter === "gaps" ? "No gaps." : "Nothing covered."));
+    });
+    const allOpen = attack.tactics.every((tactic) => openTactics.has(tactic.name));
+    const expandAll = el("button", { onclick: () => { coverage.open = allOpen ? new Set() : new Set(attack.tactics.map((tactic) => tactic.name)); renderCoverage(data); } }, allOpen ? "Collapse all" : "Expand all");
+
+    const ratio = allTechniques.size ? 100 * coveredIds.length / allTechniques.size : 0;
+    const percent = ratio > 0 && ratio < 10 ? ratio.toFixed(1) : String(Math.round(ratio));
+    render(
+      header("ATT&CK coverage", el("span", { class: "faint" }, "ATT&CK " + (attack.version || ""))),
+      el("div", { class: "summary" },
+        metric(coveredIds.length + " / " + allTechniques.size, "techniques covered"),
+        metric(percent + "%", "of the matrix"),
+        metric(String(ruleCount), ruleCount === 1 ? "rule mapped" : "rules mapped"),
+        metric(String(allTechniques.size - coveredIds.length), "gaps")),
+      el("div", { class: "header" }, filters, expandAll, el("div", { class: "spacer" }),
+        el("div", { class: "legend" }, "Rules per technique",
+          el("span", { class: "chip" }, "0"), el("span", { class: "chip h1" }, "1"), el("span", { class: "chip h2" }, "2–3"), el("span", { class: "chip h3" }, "4+"))),
+      coverage.selected ? techniqueDetail(coverage.selected, allTechniques.get(coverage.selected), matrix, data.own_matrix || {}) : null,
+      el("div", null, tactics),
+      unknown.length ? el("p", { class: "faint" }, "Not in the bundled ATT&CK release: " + unknown.join(", ")) : null);
+  }
+
+  function metric(value, label) { return el("div", { class: "metric" }, el("div", { class: "value" }, value), el("div", { class: "label" }, label)); }
+
+  function techniqueDetail(id, technique, matrix, ownMatrix) {
+    const rules = rulesFor(matrix, id);
+    const own = new Set(rulesFor(ownMatrix, id));
+    const subs = (technique && technique.subs) || [];
+    const actions = [];
+    if (canMessage()) {
+      actions.push(el("button", { onclick: (event) => sendDraft(event.currentTarget, id, technique, rules.length) },
+        rules.length ? "Ask Claude to review this coverage" : "Ask Claude to plan a detection"));
+    }
+    if (hostCapabilities.openLinks && technique && technique.link) {
+      actions.push(el("button", { onclick: () => request("ui/open-link", { url: technique.link }).catch(() => {}) }, "Open in ATT&CK"));
+    }
+    return el("section", { class: "card detail" },
+      el("div", { class: "card-head" }, el("code", null, id), el("strong", null, technique ? technique.name : ""), el("span", { class: "spacer" }),
+        rules.length ? el("span", { class: "pill ok" }, plural(rules.length, "rule")) : el("span", { class: "pill error" }, "gap")),
+      el("div", { class: "card-body" },
+        subs.length ? el("div", null, el("div", { class: "faint" }, "Sub-techniques"),
+          el("div", { class: "sub-list" }, subs.map((sub) => {
+            const count = (matrix[sub.id] || []).length;
+            return el("span", { class: "chip " + heat(count), title: sub.name + " — " + (count ? plural(count, "rule") : "no rule") }, sub.id);
+          }))) : null,
+        el("div", { style: "margin-top:8px" }, objectListWithOrigin(rules, own)),
+        actions.length ? el("div", { class: "issue-actions" }, actions) : null));
+  }
+
+  function objectListWithOrigin(rules, own) {
+    if (!rules.length) return el("div", { class: "empty" }, "No rule detects this technique yet.");
+    const list = objectList(rules, "");
+    Array.from(list.children).forEach((item, index) => {
+      item.appendChild(el("span", { class: "pill " + (own.has(rules[index]) ? "info" : "neutral"), title: own.has(rules[index]) ? "The rule names this technique" : "Inherited from the rule's objective or threats" }, own.has(rules[index]) ? "own" : "inherited"));
+    });
+    return list;
+  }
+
+  async function sendDraft(button, id, technique, count) {
+    const name = technique ? technique.name : id;
+    const text = count
+      ? "Review opentide's detection coverage of " + id + " (" + name + "): call coverage with technique " + id + ", read the rules, and say what they miss."
+      : "Plan opentide detection content for " + id + " (" + name + "), which no rule covers yet: search for an existing threat or objective first, then propose the threat, objective and rule to add.";
+    button.disabled = true;
+    try { await sendToChat(text); button.textContent = "Sent to Claude"; }
+    catch (_) { button.textContent = "Could not send"; button.disabled = false; }
+  }
+
+  function renderTechnique(data) {
+    let technique = null;
+    if (attack && attack.tactics) {
+      for (const tactic of attack.tactics) for (const entry of tactic.techniques) {
+        if (entry.id === data.technique) technique = entry;
+        for (const sub of entry.subs || []) if (sub.id === data.technique) technique = sub;
+      }
+    }
+    const own = new Set(data.own_rules || []);
+    render(
+      header("Coverage of " + data.technique, data.covered ? el("span", { class: "pill ok" }, "covered") : el("span", { class: "pill error" }, "gap")),
+      technique ? el("p", { class: "muted", style: "margin-top:-6px" }, technique.name) : null,
+      (data.matched_techniques || []).length ? el("div", { class: "chips", style: "margin-bottom:10px" },
+        data.matched_techniques.map((id) => el("span", { class: "chip h1" }, id))) : null,
+      el("section", { class: "card" }, el("div", { class: "card-head" }, el("strong", null, "Rules"), el("span", { class: "faint" }, plural((data.rules || []).length, "rule"))),
+        el("div", { class: "card-body" }, objectListWithOrigin(data.rules || [], own))));
+  }
+
+  function renderCoverageList(matrix) {
+    const ids = Object.keys(matrix).sort();
+    render(header("ATT&CK coverage"), el("section", { class: "card" }, el("div", { class: "card-body" },
+      ids.length ? el("ul", { class: "objects" }, ids.map((id) => el("li", null, el("code", null, id), el("span", { class: "title" }), el("span", { class: "pill ok" }, plural(matrix[id].length, "rule")))))
+        : el("div", { class: "empty" }, "No rule maps to an ATT&CK technique yet."))));
+  }
+
+  // --------------------------------------------------------------- lineage
+  function renderLineage(data) {
+    if (data.error) return render(header("Lineage"), el("div", { class: "error-box" }, data.error));
+    if (data.found === false) return render(header("Lineage"), state("No threat, objective or rule has the UUID " + data.uuid + "."));
+    const lineage = data.lineage || data.graph || {};
+    const focus = data.uuid;
+    const column = (label, type, uuids) => el("div", { class: "column" },
+      el("h2", null, el("span", null, label), el("span", { class: "faint" }, String((uuids || []).length))),
+      (uuids || []).length ? uuids.map((uuid) => node(uuid, type, uuid === focus)) : el("div", { class: "empty" }, "None"));
+    const focused = catalogue.get(focus) || {};
+    const relations = data.graph && !("threats" in data.graph) ? Object.entries(data.graph) : [];
+    render(
+      header(focused.title || "Lineage", el("span", { class: "pill neutral" }, data.type || "object")),
+      el("p", { class: "faint", style: "margin-top:-6px" }, "Threat → objective → rule. " + (canCallTools() ? "Select an object to follow its lineage." : "")),
+      el("div", { class: "lineage" },
+        column("Threats", "threat", lineage.threats),
+        column("Objectives", "objective", lineage.objectives),
+        column("Rules", "rule", lineage.rules)),
+      relations.length ? el("section", { class: "card", style: "margin-top:10px" },
+        el("div", { class: "card-head" }, el("strong", null, "Threat chaining")),
+        el("div", { class: "card-body" }, relations.map(([relation, uuids]) => el("div", null, el("div", { class: "faint" }, relation), objectList(uuids, "None"))))) : null);
+  }
+
+  function node(uuid, type, isFocus) {
+    const object = catalogue.get(uuid) || {};
+    return el("button", {
+      class: "node" + (isFocus ? " focus" : ""),
+      title: uuid,
+      disabled: !canCallTools() || isFocus,
+      onclick: () => follow(uuid),
+    }, el("span", { class: "row" }, el("span", null, object.title || type), object.status ? el("span", { class: "meta" }, object.status) : null), el("span", { class: "uuid" }, shortUuid(uuid)));
+  }
+
+  async function follow(uuid) {
+    try { show(await callTool("get_chaining", { uuid })); }
+    catch (error) { render(header("Lineage"), el("div", { class: "error-box" }, error.message)); }
+  }
+
+  // ------------------------------------------------------------------ main
+  const renderers = { validation: renderValidation, coverage: renderCoverage, lineage: renderLineage };
+  let lastData = null;
+  function show(data) {
+    lastData = data;
+    const renderer = renderers[VIEW];
+    if (!renderer) return render(state("Unknown view " + VIEW + "."));
+    renderer(data);
+    // Titles arrive after the first paint; render again once they do.
+    if (VIEW !== "validation" && !catalogue.size) loadCatalogue().then(() => { if (lastData === data && catalogue.size) renderer(data); });
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

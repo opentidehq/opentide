@@ -377,6 +377,22 @@ def test_validation_report_over_stdio_carries_diagnostic_fields(tmp_path: Path) 
             process.wait(timeout=15)
 
 
+def test_apps_views_over_stdio(mcp_stdio: StdioClient) -> None:
+    """A host finds each bound tool's page from its _meta and reads it, whatever the protocol.
+
+    Hosts render from the tool's ``_meta.ui.resourceUri``; the server's own
+    ``extensions`` capability only exists from protocol 2026-07-28, which this
+    handshake does not negotiate.
+    """
+    mcp_stdio.handshake()
+    tools = {tool["name"]: tool for tool in mcp_stdio.request("tools/list")["result"]["tools"]}
+    uri = tools["coverage"]["_meta"]["ui"]["resourceUri"]
+    assert uri == "ui://opentide/coverage.html"
+    (content,) = mcp_stdio.request("resources/read", {"uri": uri})["result"]["contents"]
+    assert content["mimeType"] == "text/html;profile=mcp-app"
+    assert 'data-view="coverage"' in content["text"]
+
+
 def test_text_blocks_agree_with_structured_content(mcp_stdio: StdioClient) -> None:
     """A list-returning tool emits one text block per hit plus structuredContent."""
     mcp_stdio.handshake()
