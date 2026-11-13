@@ -210,3 +210,15 @@ def test_lint_reports_each_advisory_once(invoke_cli, tide_corpus_repo: Path) -> 
     payload = parse_cli_json(invoke_cli("lint", "--check", "queries", "--file", RULE))
     codes = [item["code"] for item in payload["findings"]]
     assert codes.count("google_secops_risk_score_missing") == 1
+
+
+def test_lint_reports_the_engine_query_warnings(invoke_cli, tide_corpus_repo: Path) -> None:
+    """``lint`` kept an engine warning only for a prefix with a language reference, and
+    ``yaral_`` had none, so ``yaral_unfiltered_event`` reached the editor alone."""
+    _rewrite(
+        tide_corpus_repo,
+        '      $e.metadata.event_type = "PROCESS_LAUNCH"\n',
+        '      $e.principal.hostname = "host"\n',
+    )
+    payload = parse_cli_json(invoke_cli("lint", "--file", RULE))
+    assert "yaral_unfiltered_event" in [item["code"] for item in payload["findings"]]
