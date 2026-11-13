@@ -1,17 +1,14 @@
-//! JSON documents as the oracle writes them: keys in insertion order, and
-//! `json.dumps(document, indent=4)` + `"\n"`'s bytes (Python's default
-//! `ensure_ascii`, so every character past ASCII is a `\uXXXX` escape).
+//! Generated JSON documents: keys in the order they are built in (a schema
+//! reads in that order), written by `serde_json`'s pretty printer at four
+//! spaces with a final newline, every character as UTF-8.
 //!
 //! The workspace's `serde_json` keeps object keys sorted (`preserve_order`
 //! is off: ADR 0001), so a generated document is a [`Json`], whose objects
-//! are `IndexMap`s, written through `serde_json`'s pretty printer with a
-//! formatter that escapes as Python does.
-
-use std::io;
+//! are `IndexMap`s.
 
 use indexmap::IndexMap;
 use serde::Serialize;
-use serde_json::ser::{CharEscape, Formatter, PrettyFormatter};
+use serde_json::ser::PrettyFormatter;
 
 /// An object: keys in insertion order.
 pub type Object = IndexMap<String, Json>;
@@ -77,19 +74,18 @@ impl Json {
         self.as_object().and_then(|map| map.get(key))
     }
 
-    /// The document as the oracle writes it: four-space indentation, `": "`
-    /// and `","` separators, non-ASCII escaped, and a final newline.
-    pub fn to_python_text(&self) -> String {
+    /// The document as a file: four-space indentation and a final newline.
+    pub fn to_text(&self) -> String {
         let mut out = Vec::new();
         let mut serializer =
-            serde_json::Serializer::with_formatter(&mut out, PythonFormatter::default());
+            serde_json::Serializer::with_formatter(&mut out, PrettyFormatter::with_indent(b"    "));
         // Writing into a Vec cannot fail, and a Json holds no map with
         // non-string keys.
         if self.serialize(&mut serializer).is_err() {
             return String::new();
         }
         out.push(b'\n');
-        // The formatter writes ASCII only.
+        // serde_json writes UTF-8.
         String::from_utf8(out).unwrap_or_default()
     }
 }
@@ -143,98 +139,6 @@ impl From<&serde_json::Value> for Json {
     }
 }
 
-/// `serde_json`'s pretty printer with four spaces, escaping strings as
-/// Python's `json` module does with `ensure_ascii`.
-struct PythonFormatter {
-    pretty: PrettyFormatter<'static>,
-}
-
-impl Default for PythonFormatter {
-    fn default() -> Self {
-        Self {
-            pretty: PrettyFormatter::with_indent(b"    "),
-        }
-    }
-}
-
-impl Formatter for PythonFormatter {
-    fn begin_array<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.begin_array(writer)
-    }
-
-    fn end_array<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.end_array(writer)
-    }
-
-    fn begin_array_value<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> io::Result<()> {
-        self.pretty.begin_array_value(writer, first)
-    }
-
-    fn end_array_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.end_array_value(writer)
-    }
-
-    fn begin_object<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.begin_object(writer)
-    }
-
-    fn end_object<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.end_object(writer)
-    }
-
-    fn begin_object_key<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> io::Result<()> {
-        self.pretty.begin_object_key(writer, first)
-    }
-
-    fn begin_object_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.begin_object_value(writer)
-    }
-
-    fn end_object_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.pretty.end_object_value(writer)
-    }
-
-    fn write_string_fragment<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        fragment: &str,
-    ) -> io::Result<()> {
-        // ASCII runs are written whole: a schema is megabytes of them, and
-        // a write per character was most of the time spent writing it.
-        let mut units = [0_u16; 2];
-        let mut run = 0;
-        for (at, character) in fragment.char_indices() {
-            if character.is_ascii() {
-                continue;
-            }
-            writer.write_all(&fragment.as_bytes()[run..at])?;
-            for unit in character.encode_utf16(&mut units) {
-                write!(writer, "\\u{unit:04x}")?;
-            }
-            run = at + character.len_utf8();
-        }
-        writer.write_all(&fragment.as_bytes()[run..])
-    }
-
-    fn write_char_escape<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        escape: CharEscape,
-    ) -> io::Result<()> {
-        // Python writes the same short escapes, and other control
-        // characters as lower-case `\u00XX`, as serde_json does.
-        self.pretty.write_char_escape(writer, escape)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,7 +156,7 @@ mod tests {
     fn keys_keep_their_insertion_order() {
         let document = object(&[("b", Json::from("1")), ("a", Json::from(true))]);
         assert_eq!(
-            document.to_python_text(),
+            document.to_text(),
             "{\n    \"b\": \"1\",\n    \"a\": true\n}\n"
         );
     }
@@ -269,18 +173,14 @@ mod tests {
             ("number", Json::Number(3.into())),
         ]);
         assert_eq!(
-            document.to_python_text(),
+            document.to_text(),
             "{\n    \"list\": [\n        \"x\",\n        []\n    ],\n    \"empty\": {},\n    \"null\": null,\n    \"number\": 3\n}\n"
         );
     }
 
     #[test]
-    fn non_ascii_is_escaped_as_python_does() {
-        // json.dumps("é — 😀\n\"\\\u{1}") in Python.
-        let text = Json::from("é — 😀\n\"\\\u{1}\u{7f}").to_python_text();
-        assert_eq!(
-            text,
-            "\"\\u00e9 \\u2014 \\ud83d\\ude00\\n\\\"\\\\\\u0001\u{7f}\"\n"
-        );
+    fn non_ascii_stays_utf8() {
+        let text = Json::from("é — 😀\n\"\\\u{1}").to_text();
+        assert_eq!(text, "\"é — 😀\\n\\\"\\\\\\u0001\"\n");
     }
 }

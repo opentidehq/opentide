@@ -1,7 +1,9 @@
 //! Replaying a cassette with wiremock: each recorded answer is served to the
 //! request in its place, in order, and [`Replay::verify`] then asserts that
-//! the requests received are the recorded ones, byte for byte once
-//! normalised ([`crate::redact`]), in the same order.
+//! the requests received are the recorded ones once normalised
+//! ([`crate::redact`]), in the same order. A JSON body matches when it holds
+//! the same data ([`same_body`]): key order, spacing and escapes are layout;
+//! any other body matches byte for byte.
 //!
 //! A cassette replays as many times as it is run through: after its last
 //! interaction the next request is compared with its first. Each pass must
@@ -88,7 +90,11 @@ struct InOrder {
 impl wiremock::Match for InOrder {
     fn matches(&self, request: &wiremock::Request) -> bool {
         self.next.load(Ordering::SeqCst) % self.len == self.index
-            && received(request, self.origin.as_deref(), &self.redaction) == self.expected
+            && differences(
+                &self.expected,
+                &received(request, self.origin.as_deref(), &self.redaction),
+            )
+            .is_none()
     }
 }
 
@@ -244,7 +250,7 @@ fn differences(want: &cassette::Request, got: &cassette::Request) -> Option<Stri
         ));
     }
     let (want_body, got_body) = (want.body.bytes(), got.body.bytes());
-    if want_body != got_body {
+    if !same_body(&want_body, &got_body) {
         let at = want_body
             .iter()
             .zip(&got_body)
@@ -257,4 +263,62 @@ fn differences(want: &cassette::Request, got: &cassette::Request) -> Option<Stri
         ));
     }
     None
+}
+
+/// Whether a request body sent says what the recorded one does: the same
+/// bytes, or, when both are JSON, the same data. JSON is compared as values:
+/// object keys in any order, any spacing, any escape (`\u00e9` or `é`); a
+/// string that itself holds a JSON object or array (a rule passed as text)
+/// is compared the same way. A body that is not JSON matches only byte for
+/// byte.
+pub fn same_body(want: &[u8], got: &[u8]) -> bool {
+    if want == got {
+        return true;
+    }
+    match (json(want), json(got)) {
+        (Some(want), Some(got)) => same_value(&want, &got),
+        _ => false,
+    }
+}
+
+/// *bytes* as JSON, when they are.
+fn json(bytes: &[u8]) -> Option<serde_json::Value> {
+    serde_json::from_slice(bytes).ok()
+}
+
+/// A JSON object or array held as text in a string.
+fn embedded(text: &str) -> Option<serde_json::Value> {
+    let trimmed = text.trim_start();
+    if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+        return None;
+    }
+    serde_json::from_str(text).ok()
+}
+
+/// Whether two JSON values hold the same data.
+fn same_value(want: &serde_json::Value, got: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (want, got) {
+        (Value::Object(want), Value::Object(got)) => {
+            want.len() == got.len()
+                && want
+                    .iter()
+                    .all(|(key, value)| got.get(key).is_some_and(|other| same_value(value, other)))
+        }
+        (Value::Array(want), Value::Array(got)) => {
+            want.len() == got.len()
+                && want
+                    .iter()
+                    .zip(got)
+                    .all(|(value, other)| same_value(value, other))
+        }
+        (Value::String(want), Value::String(got)) => {
+            want == got
+                || matches!(
+                    (embedded(want), embedded(got)),
+                    (Some(want), Some(got)) if same_value(&want, &got)
+                )
+        }
+        _ => want == got,
+    }
 }

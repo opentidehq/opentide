@@ -1,6 +1,6 @@
 //! CrowdStrike against the cassettes the Python client recorded
 //! (`tests/cassettes/crowdstrike/`): the deployer and the CQL runner send
-//! the Python client's requests, byte for byte and in order, and read the
+//! the Python client's requests, in order (a JSON body as the same data), and read the
 //! answers as it does (the outcomes `client.py` printed when it recorded).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -13,7 +13,6 @@ use cassette_support::{json, replay, rows, tenant, window};
 use opentide_compile::Json;
 use opentide_compile::json::Object;
 use opentide_connectors::ConnectorError;
-use opentide_connectors::body::python_json;
 use opentide_connectors::connector::{
     DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployRequest, Operation, QueryRequest, TenantContext,
 };
@@ -82,14 +81,14 @@ fn rule(name: &str, status: &str) -> Object {
 
 /// A create's body.
 fn create(name: &str) -> Vec<u8> {
-    python_json(&Json::Object(rule(name, "active"))).unwrap()
+    serde_json::to_vec(&Json::Object(rule(name, "active"))).unwrap()
 }
 
 /// An update's body: the one-rule list with the id last.
 fn update(id: &str, name: &str, status: &str) -> Vec<u8> {
     let mut body = rule(name, status);
     body.insert("id".into(), id.into());
-    python_json(&Json::Array(vec![Json::Object(body)])).unwrap()
+    serde_json::to_vec(&Json::Array(vec![Json::Object(body)])).unwrap()
 }
 
 fn registry() -> Registry {

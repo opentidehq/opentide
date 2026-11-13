@@ -521,17 +521,12 @@ fn format_scalar(value: &Value) -> String {
 }
 
 /// `_format_string`: bare when YAML reads it back as the same string, else
-/// JSON-quoted.
+/// double-quoted.
 fn format_string(value: &str) -> String {
     if value.is_empty() {
         return String::new();
     }
-    let quoted = || {
-        super::json::Json::from(value)
-            .to_python_text()
-            .trim_end()
-            .to_owned()
-    };
+    let quoted = || crate::node::double_quoted(value);
     if YAML_RESERVED.contains(&value.to_lowercase().as_str()) {
         return quoted();
     }
@@ -668,6 +663,7 @@ mod tests {
         assert_eq!(format_string("Single Event"), "\"Single Event\"");
         assert_eq!(format_string("*"), "\"*\"");
         assert_eq!(format_string("5m"), "5m");
+        assert_eq!(format_string("\u{e9}: x"), "\"\u{e9}: x\"");
     }
 
     #[test]

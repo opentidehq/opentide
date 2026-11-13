@@ -1,9 +1,7 @@
-//! JSON files as the exports write them: serde_json's pretty printer at an
-//! indent of `n` spaces (`json.dumps(..., indent=n)` lays a document out the
-//! same way), or one line with a space after each `,` and `:` (the explorer's
-//! files, which the explorer site reads), every character outside printable
-//! ASCII escaped as `\uXXXX` (`ensure_ascii`), so a committed export keeps its
-//! bytes.
+//! JSON as the exports write it, UTF-8 throughout: serde_json's pretty
+//! printer at an indent of `n` spaces, serde_json's compact line, or one
+//! line with a space after each `,` and `:` for a value that becomes text
+//! (the explorer's search content, where the space keeps words apart).
 
 use std::io;
 
@@ -39,73 +37,13 @@ impl Formatter for Spaced {
     }
 }
 
-/// A formatter with string contents escaped to ASCII.
-struct Ascii<F>(F);
-
-impl<F: Formatter> Formatter for Ascii<F> {
-    fn begin_array<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.begin_array(writer)
-    }
-    fn end_array<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.end_array(writer)
-    }
-    fn begin_array_value<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> io::Result<()> {
-        self.0.begin_array_value(writer, first)
-    }
-    fn end_array_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.end_array_value(writer)
-    }
-    fn begin_object<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.begin_object(writer)
-    }
-    fn end_object<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.end_object(writer)
-    }
-    fn begin_object_key<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> io::Result<()> {
-        self.0.begin_object_key(writer, first)
-    }
-    fn begin_object_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.begin_object_value(writer)
-    }
-    fn end_object_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        self.0.end_object_value(writer)
-    }
-    fn write_string_fragment<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        fragment: &str,
-    ) -> io::Result<()> {
-        let mut start = 0;
-        for (at, ch) in fragment.char_indices() {
-            if (' '..='~').contains(&ch) {
-                continue;
-            }
-            writer.write_all(&fragment.as_bytes()[start..at])?;
-            let mut units = [0u16; 2];
-            for unit in ch.encode_utf16(&mut units) {
-                write!(writer, "\\u{unit:04x}")?;
-            }
-            start = at + ch.len_utf8();
-        }
-        writer.write_all(&fragment.as_bytes()[start..])
-    }
-}
-
-/// `value` as a file: laid out at `indent` spaces, ASCII only, with a final newline.
+/// `value` as a file: laid out at `indent` spaces, with a final newline.
 pub fn pretty(value: &Json, indent: usize) -> String {
     let spaces = " ".repeat(indent);
     let mut bytes = Vec::new();
     let mut serializer = serde_json::Serializer::with_formatter(
         &mut bytes,
-        Ascii(PrettyFormatter::with_indent(spaces.as_bytes())),
+        PrettyFormatter::with_indent(spaces.as_bytes()),
     );
     // Writing to a Vec cannot fail; a float JSON cannot carry is written `null`.
     if value.serialize(&mut serializer).is_err() {
@@ -116,11 +54,11 @@ pub fn pretty(value: &Json, indent: usize) -> String {
     text
 }
 
-/// `value` on one line, `, ` and `: ` between items, ASCII only, without a
-/// final newline (`json.dumps(value)`'s layout).
+/// `value` as text on one line, `, ` and `: ` between items, without a final
+/// newline.
 pub fn line(value: &Json) -> String {
     let mut bytes = Vec::new();
-    let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, Ascii(Spaced));
+    let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, Spaced);
     // Writing to a Vec cannot fail; a float JSON cannot carry is written `null`.
     if value.serialize(&mut serializer).is_err() {
         bytes.clear();
@@ -128,8 +66,8 @@ pub fn line(value: &Json) -> String {
     String::from_utf8(bytes).unwrap_or_default()
 }
 
-/// `value` with every object's keys sorted (`sort_keys=True`): by code
-/// point, which is UTF-8 byte order.
+/// `value` with every object's keys sorted, by code point (UTF-8 byte
+/// order), so an export is the same whatever order its objects were read in.
 pub fn sorted(value: Json) -> Json {
     match value {
         Json::Object(object) => {
@@ -150,7 +88,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn laid_out_as_json_dumps_with_an_indent() {
+    fn laid_out_at_an_indent() {
         let mut object = Object::new();
         object.insert("b".into(), Json::Array(vec![]));
         object.insert("a".into(), Json::Object(Object::new()));
@@ -177,15 +115,15 @@ mod tests {
         object.insert("c".into(), Json::Object(inner));
         assert_eq!(
             line(&Json::Object(object)),
-            "{\"a\": [1, null], \"b\": {}, \"\\u00e9\": [], \"c\": {\"x\": true, \"y\": 1.5}}"
+            "{\"a\": [1, null], \"b\": {}, \"\u{e9}\": [], \"c\": {\"x\": true, \"y\": 1.5}}"
         );
     }
 
     #[test]
-    fn non_ascii_is_escaped() {
+    fn non_ascii_stays_utf8() {
         assert_eq!(
-            pretty(&Json::Str("é\u{7f}\u{1f600}\"\n".into()), 2),
-            "\"\\u00e9\\u007f\\ud83d\\ude00\\\"\\n\"\n"
+            pretty(&Json::Str("\u{e9}\u{7f}\u{1f600}\"\n".into()), 2),
+            "\"\u{e9}\u{7f}\u{1f600}\\\"\\n\"\n"
         );
     }
 }

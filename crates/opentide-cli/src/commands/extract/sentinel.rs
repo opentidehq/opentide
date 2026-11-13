@@ -113,62 +113,10 @@ pub(crate) fn flat_rule(rule: &CJson) -> CJson {
     snake_keys(&CJson::Object(merged))
 }
 
-/// The bytes `json.dump(value, f, indent=4)` writes: four spaces a level,
-/// `,` at a line's end and `": "` after a key, every character outside ASCII
-/// escaped.
+/// `value` as a file: serde_json's pretty printer at four spaces, UTF-8,
+/// with a final newline.
 pub(crate) fn json_indent4(value: &CJson) -> String {
-    fn string(text: &str) -> String {
-        opentide_connectors::body::python_json(text)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-            .unwrap_or_default()
-    }
-    fn write(value: &CJson, depth: usize, out: &mut String) {
-        let pad = |depth: usize| "    ".repeat(depth);
-        match value {
-            CJson::Null => out.push_str("null"),
-            CJson::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
-            CJson::Int(integer) => out.push_str(&integer.to_string()),
-            CJson::Float(float) => {
-                out.push_str(&opentide_schema::configuration::repr::float_text(*float));
-            }
-            CJson::Str(text) => out.push_str(&string(text)),
-            CJson::Array(items) if items.is_empty() => out.push_str("[]"),
-            CJson::Object(object) if object.is_empty() => out.push_str("{}"),
-            CJson::Array(items) => {
-                out.push('[');
-                for (index, item) in items.iter().enumerate() {
-                    if index > 0 {
-                        out.push(',');
-                    }
-                    out.push('\n');
-                    out.push_str(&pad(depth + 1));
-                    write(item, depth + 1, out);
-                }
-                out.push('\n');
-                out.push_str(&pad(depth));
-                out.push(']');
-            }
-            CJson::Object(object) => {
-                out.push('{');
-                for (index, (key, item)) in object.iter().enumerate() {
-                    if index > 0 {
-                        out.push(',');
-                    }
-                    out.push('\n');
-                    out.push_str(&pad(depth + 1));
-                    out.push_str(&string(key));
-                    out.push_str(": ");
-                    write(item, depth + 1, out);
-                }
-                out.push('\n');
-                out.push_str(&pad(depth));
-                out.push('}');
-            }
-        }
-    }
-    let mut out = String::new();
-    write(value, 0, &mut out);
-    out
+    opentide_compile::generate::json_text::pretty(value, 4)
 }
 
 // ------------------------------------------------------ the oracle's helpers
@@ -825,13 +773,13 @@ mod tests {
     }
 
     #[test]
-    fn the_dump_is_json_dump_with_an_indent_of_four() {
+    fn the_dump_is_indented_four_spaces() {
         let value = json(r#"[{"a": [], "b": {}, "c": [1, true, null], "d": "é—\"", "e": 1.5}]"#);
         assert_eq!(
             json_indent4(&value),
-            "[\n    {\n        \"a\": [],\n        \"b\": {},\n        \"c\": [\n            1,\n            true,\n            null\n        ],\n        \"d\": \"\\u00e9\\u2014\\\"\",\n        \"e\": 1.5\n    }\n]"
+            "[\n    {\n        \"a\": [],\n        \"b\": {},\n        \"c\": [\n            1,\n            true,\n            null\n        ],\n        \"d\": \"é—\\\"\",\n        \"e\": 1.5\n    }\n]\n"
         );
-        assert_eq!(json_indent4(&CJson::Array(Vec::new())), "[]");
+        assert_eq!(json_indent4(&CJson::Array(Vec::new())), "[]\n");
     }
 
     #[test]
