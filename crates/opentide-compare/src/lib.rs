@@ -10,9 +10,9 @@
 //! What is compared, for each target:
 //!
 //! - the exit code;
-//! - stdout and stderr: as JSON when both parse as one document (the data,
-//!   then the order of every object's keys, which is the oracle's contract,
-//!   then the bytes), else as bytes;
+//! - stdout and stderr: as JSON when both parse as one document, by the
+//!   data alone (key order, layout, escapes and the final newline are not
+//!   data), else as bytes;
 //! - every file the command created, changed or deleted: presence, mode and
 //!   bytes, the bytes as JSON or text as a stream is. A file only the oracle
 //!   wrote is approved missing only in its catalog cache
@@ -28,7 +28,7 @@ pub mod json;
 pub mod ledger;
 pub mod normalise;
 
-use json::{Json, JsonDifference, LAYOUTS};
+use json::{Json, JsonDifference};
 use ledger::{Ledger, Rule, Target, Usage};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -89,11 +89,6 @@ pub enum Kind {
     ExitCode,
     /// A JSON value differs, or is missing on one side.
     JsonValue,
-    /// An object has the same keys in another order.
-    JsonKeyOrder,
-    /// The JSON data and key order are equal, the bytes are not: layout,
-    /// escapes, the spelling of a number or the final newline.
-    JsonBytes,
     /// The bytes of a non-JSON target differ.
     Bytes,
     /// The oracle wrote or deleted a file the candidate left alone.
@@ -115,8 +110,6 @@ impl Kind {
         match self {
             Kind::ExitCode => "exit_code",
             Kind::JsonValue => "json_value",
-            Kind::JsonKeyOrder => "json_key_order",
-            Kind::JsonBytes => "json_bytes",
             Kind::Bytes => "bytes",
             Kind::FileMissing => "file_missing",
             Kind::FileExtra => "file_extra",
@@ -330,7 +323,7 @@ impl Comparison<'_> {
         }
         match (json::parse(oracle), json::parse(candidate)) {
             (Some(oracle_doc), Some(candidate_doc)) => {
-                self.json_content(target, oracle, candidate, &oracle_doc, candidate_doc);
+                self.json_content(target, &oracle_doc, candidate_doc);
             }
             _ => self.text_content(target, oracle, candidate),
         }
@@ -407,15 +400,7 @@ impl Comparison<'_> {
         true
     }
 
-    fn json_content(
-        &mut self,
-        target: &Target,
-        oracle: &[u8],
-        candidate: &[u8],
-        oracle_doc: &Json,
-        candidate_doc: Json,
-    ) {
-        let original = candidate_doc.clone();
+    fn json_content(&mut self, target: &Target, oracle_doc: &Json, candidate_doc: Json) {
         let mut applied = Vec::new();
         let entries: Vec<(usize, Rule)> = self
             .ledger
@@ -542,6 +527,9 @@ impl Comparison<'_> {
             self.approve(target, *index);
         }
 
+        // JSON is data: two documents agree when they parse into the same
+        // values. The order of an object's keys, the indentation, escapes and
+        // the final newline are layout, which no reader of the document sees.
         let values = json::value_differences(oracle_doc, &patched);
         if !values.is_empty() {
             let found = values
@@ -549,36 +537,6 @@ impl Comparison<'_> {
                 .map(|difference| json_difference(target, difference))
                 .collect();
             self.differ(found);
-            return;
-        }
-        let orders = json::key_order_differences(oracle_doc, &patched);
-        if !orders.is_empty() {
-            let found = orders
-                .iter()
-                .map(|difference| json_difference(target, difference))
-                .collect();
-            self.differ(found);
-            return;
-        }
-        // The data and key order agree. The bytes must too, which a run with
-        // no approved value shows directly (they differ, or we would not be
-        // here); with approved values, both sides must be the same layout of
-        // their own data.
-        let same_layout = !applied.is_empty()
-            && LAYOUTS.iter().any(|(layout, newline)| {
-                json::write(oracle_doc, *layout, *newline) == oracle
-                    && json::write(&original, *layout, *newline) == candidate
-            });
-        if !same_layout {
-            let (line, oracle_line, candidate_line) = first_different_line(oracle, candidate);
-            self.differ(vec![Difference {
-                target: target.to_string(),
-                kind: Kind::JsonBytes,
-                pointer: None,
-                oracle: oracle_line,
-                candidate: candidate_line,
-                at: Some(line),
-            }]);
         }
     }
 
@@ -916,13 +874,14 @@ fn json_difference(target: &Target, difference: &JsonDifference) -> Difference {
             ),
             at: None,
         },
+        // Key order is layout: the comparator never asks for it.
         JsonDifference::KeyOrder {
             pointer,
             oracle,
             candidate,
         } => Difference {
             target: target.to_string(),
-            kind: Kind::JsonKeyOrder,
+            kind: Kind::JsonValue,
             pointer: Some(json::format_pointer(pointer)),
             oracle: excerpt(&oracle.join(", ")),
             candidate: excerpt(&candidate.join(", ")),
@@ -1953,8 +1912,6 @@ changelog = "**x**"
         for kind in [
             Kind::ExitCode,
             Kind::JsonValue,
-            Kind::JsonKeyOrder,
-            Kind::JsonBytes,
             Kind::Bytes,
             Kind::FileMissing,
             Kind::FileExtra,

@@ -137,12 +137,12 @@ pub fn visibility_schema() -> Schema {
 }
 
 /// The text written for an editor schema: the hover annotations added, keys
-/// in `serde_json`'s order, four-space indentation, non-ASCII escaped, a
+/// in `serde_json`'s order, four-space indentation, UTF-8, a
 /// final newline.
 pub fn editor_text(schema: &Schema) -> String {
     let mut json = Json::from(schema.as_value());
     annotate_editor_schema(&mut json);
-    json.to_python_text()
+    json.to_text()
 }
 
 // --- the transforms -----------------------------------------------------------------------

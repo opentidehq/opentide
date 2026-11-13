@@ -361,7 +361,7 @@ pub fn snippets(config: &Node, templates: &[Artifact]) -> Result<Artifact, Strin
     }
     Ok(Artifact {
         path: settings.snippet_file,
-        text: Json::Object(document).to_python_text(),
+        text: Json::Object(document).to_text(),
     })
 }
 
@@ -377,7 +377,7 @@ pub fn router_artifact(config: &Node) -> Artifact {
     let ids = identifiers_for_families(&CORE_OBJECT_TYPES);
     Artifact {
         path: join(&settings.schemas_dir, &name),
-        text: router(&ids).to_python_text(),
+        text: router(&ids).to_text(),
     }
 }
 
