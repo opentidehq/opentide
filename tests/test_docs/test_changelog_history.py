@@ -18,9 +18,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG = ROOT / "CHANGELOG.md"
 
-#: The newest release merged from development, and the commit its tag names.
+#: The newest release merged from development, and the development commit merged last.
 MERGED_RELEASE = "0.28.0"
-MERGED_COMMIT = "3acbea603112e71cc31e3ee1c4285a2b06fa29d3"
+MERGED_COMMIT = "a15c78c738265f536ce13f17458e0244383fba1d"
 
 _SECTION = re.compile(r"\n(?=## \[)")
 

@@ -3,8 +3,9 @@ name: release-management
 description: >-
   Cut opentide releases with the release train (publish.yml): changelog, install pins, the
   lockstep version, release candidates, then one Run workflow that tags and publishes the
-  wheels, crates, npm packages and binaries with OIDC. Use when releasing, tagging v*, publishing
-  to PyPI, crates.io or npm, or preparing 0.x.y notes.
+  wheels, crates, npm packages and binaries with OIDC, and the follow-up review of the
+  opentidehq/skills agent skills. Use when releasing, tagging v*, publishing to PyPI, crates.io
+  or npm, or preparing 0.x.y notes.
 ---
 
 # Release management — opentide
@@ -310,6 +311,20 @@ Every release gets a tracking issue. Examples: [#285](https://github.com/opentid
 
 Milestones are optional; `setup-cli-v1` is the only precedent. The Cursor GitHub App token gets 403 on milestone creation, so a maintainer must create `0.x.y` first; agents can then assign issues to it.
 
+---
+
+### Step 5 — Bring the agent skills up to date
+
+[opentidehq/skills](https://github.com/opentidehq/skills) is what `opentide setup skills` and the opentide Agent Plugin install, so a release the skills do not describe teaches agents the previous one. Its `coverage.json` maps every platform key to a skill and records the capabilities (`can_deploy`, `can_validate`, `can_query`) and the last release reviewed (`reviewed_against`); its daily CI check compares that with the latest PyPI release's `opentide --json info` and opens a *Review skills against opentide 0.x.y* issue when they differ.
+
+After Step 3, read this release's `CHANGELOG.md` section and, in opentidehq/skills, follow [Keeping skills in step with opentide](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide):
+
+1. A new platform needs a platform skill naming `configurations.<key>` before the release is announced as supported by the plugin.
+2. Update the platform skills whose capabilities, rule types, languages or deploy behaviour changed, and any skill naming a renamed CLI command, flag or MCP tool.
+3. Bump `reviewed_against` to `0.x.y` in `coverage.json`, even when nothing else changed, and run `./scripts/check-opentide-coverage.sh --engine` with this release installed.
+
+Link that pull request from the tracking issue in Step 4.
+
 ## Failure table
 
 | Symptom | Cause / fix |
@@ -343,4 +358,5 @@ The registry jobs need `id-token: write` (already set on `pypi`, `crates`, `npm`
 - [`release-notes`](../release-notes/SKILL.md) — what the notes say, and the shape of each file
 - [`.github/release-notes/v0.22.0.md`](../../../.github/release-notes/v0.22.0.md) — a GitHub Release body
 - [`docs-maintenance`](../docs-maintenance/SKILL.md) — Fumadocs pages in Step 1
+- [opentidehq/skills `AGENTS.md`](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide) — Step 5
 - `AGENTS.md` — trunk, Conventional Commits, branch and PR workflow
