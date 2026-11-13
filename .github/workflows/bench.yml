@@ -2,8 +2,8 @@
 # (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
 # tests/bench/budgets.toml and to the last result of the comparison base.
 #
-# When: on every push to integration/unified-core, nightly on the default branch
-# (development), on demand, and on a pull request that carries the `perf` label (adding
+# When: on every push to integration/unified-core and development, nightly on the
+# default branch (development), on demand, and on a pull request that carries the `perf` label (adding
 # the label starts a run; every push then reruns it). A run measures each command as
 # fresh processes on one runner class, ubuntu-24.04 (4 vCPU, the class the baseline in
 # budgets.toml was recorded on): numbers from another class are not comparable.
@@ -29,7 +29,7 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
   push:
-    branches: [integration/unified-core]
+    branches: [development, integration/unified-core]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
@@ -49,10 +49,12 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'perf') &&
         (github.event.action != 'labeled' || github.event.label.name == 'perf'))
     # On the job, not the workflow, so that a skipped run (another label) cancels
-    # nothing. A new push to a PR replaces its run; the runs of a branch (pushes,
-    # nightly and manual runs) wait for each other instead.
+    # nothing, and per engine, so that a run's two jobs never wait for each other.
+    # A new push to a PR replaces its run; every other run (a push to
+    # integration/unified-core, the nightly, Run workflow) has a group of its own,
+    # its run id, so each push keeps a complete result (tests/test_ci/test_concurrency.py).
     concurrency:
-      group: bench-${{ github.ref }}-${{ matrix.engine }}
+      group: bench-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-${{ matrix.engine }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
