@@ -2695,6 +2695,7 @@ dependencies = [
  "percent-encoding",
  "rayon",
  "regex",
+ "schemars",
  "serde",
  "serde-saphyr",
  "serde_json",

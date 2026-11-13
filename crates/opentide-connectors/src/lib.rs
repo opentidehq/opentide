@@ -81,12 +81,12 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
     }
 }
 
-/// The built-in platforms with a connector, in the order Python lists them:
-/// CrowdStrike, HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint,
-/// Elastic and SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black
-/// Cloud (UC-4.3).
+/// The built-in platforms with a connector, in the order Python lists them
+/// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
+/// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
+/// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3).
 pub fn builtin() -> Registry {
-    let platforms: [Box<dyn Platform>; 9] = [
+    let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
         Box::new(defender::Defender::new()),
         Box::new(splunk::Splunk::new()),
@@ -97,9 +97,17 @@ pub fn builtin() -> Registry {
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
     ];
+    // The table's order, wherever a connector is listed above; a connector
+    // the table does not name would go last (the tests refuse one).
+    platforms.sort_by_key(|platform| {
+        plugin::BUILTIN
+            .iter()
+            .position(|id| *id == platform.id())
+            .unwrap_or(usize::MAX)
+    });
     let mut registry = Registry::new();
     for platform in platforms {
-        // Nine distinct identifiers: registering cannot be refused.
+        // Distinct identifiers: registering cannot be refused.
         let _ = registry.register(platform);
     }
     registry
@@ -172,6 +180,7 @@ mod tests {
     #[test]
     fn the_builtin_registry_holds_the_nine_platforms_and_what_each_can_do() {
         let registry = super::builtin();
+        assert_eq!(registry.ids(), super::plugin::BUILTIN);
         assert_eq!(
             registry.ids(),
             [
@@ -203,5 +212,15 @@ mod tests {
         assert_eq!(can("crowdstrike"), (true, false, true));
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
+        // The platform table says the same of each connector.
+        for row in opentide_schema::platforms::PLATFORMS {
+            let (_, live, query) = can(row.id);
+            assert_eq!(
+                (live, query),
+                (row.live_check, row.query_runner),
+                "{}",
+                row.id
+            );
+        }
     }
 }
