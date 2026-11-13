@@ -5,6 +5,7 @@ import type {
   Canceller,
   Capabilities,
   ConnectOptions,
+  DeployOptions,
   DeployOutcome,
   DeployPlanOptions,
   LintOptions,
@@ -58,6 +59,13 @@ const queryOptions: QueryOptions = { language: 's1ql', start: new Date(0).toISOS
 const found: Promise<QueryResult> = connection.query('x', queryOptions)
 const checked: Promise<LiveCheck> = connection.validateQuery('x')
 const deployed: Promise<DeployOutcome> = connection.deploy('id', 'create', new Uint8Array())
+// Dates and RFC 3339 strings for the window; an AbortSignal for one operation.
+const controller = new AbortController()
+const dated: QueryOptions = { start: new Date(0), end: '2026-11-12T10:00:00Z', signal: controller.signal }
+const aborted: Promise<QueryResult> = connection.query('x', dated)
+const timed: Promise<LiveCheck> = connection.validateQuery('x', { end: new Date(), signal: AbortSignal.timeout(1000) })
+const deployOptions: DeployOptions = { signal: controller.signal }
+const abortable: Promise<DeployOutcome> = connection.deploy('id', 'delete', '', deployOptions)
 async function read(): Promise<[string | null, string | null, string | null, Record<string, any>[]]> {
   const result = await found
   const check = await checked
@@ -67,10 +75,14 @@ async function read(): Promise<[string | null, string | null, string | null, Rec
 
 // @ts-expect-error: an operation deploy does not have
 connection.deploy('id', 'upsert', '{}')
+// @ts-expect-error: a window's instant is a Date or a string, not a number
+connection.query('x', { start: 0 })
+// @ts-expect-error: a signal is an AbortSignal
+connection.query('x', { signal: true })
 // @ts-expect-error: a check validate does not have
 ws.validate({ check: 'everything' })
 // @ts-expect-error: queries is error, warn or off
 ws.validate({ queries: 'loud' })
 
-export { cancelled, keys, known, live, read, sysdig }
+export { aborted, abortable, cancelled, keys, known, live, read, sysdig, timed }
 export { covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }

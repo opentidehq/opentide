@@ -69,9 +69,9 @@ export declare class Connection {
    * bytes, and resolves to the platform's identifier of the rule. Rejects
    * with `tenant_refused`, the other codes of `query`, and
    * `operation_unsupported` on a platform whose rules deploy only through
-   * `opentide deploy` (Elastic).
+   * `opentide deploy` (Elastic). `options.signal` aborts it.
    */
-  deploy(ruleId: string, operation: 'create' | 'update' | 'disable' | 'delete', body: string | Uint8Array): Promise<DeployOutcome>
+  deploy(ruleId: string, operation: 'create' | 'update' | 'disable' | 'delete', body: string | Uint8Array, options?: DeployOptions | undefined | null): Promise<DeployOutcome>
 }
 
 /**
@@ -202,6 +202,15 @@ export interface ConnectOptions {
   timeout?: number
 }
 
+/** `deploy`'s options: the signal that aborts it. */
+export interface DeployOptions {
+  /**
+   * Aborts this deploy alone, as `QueryOptions.signal` does a query. A
+   * deploy aborted after the tenant received it may have been applied.
+   */
+  signal?: AbortSignal
+}
+
 /** What `deploy` resolves to. */
 export interface DeployOutcome {
   /**
@@ -283,7 +292,10 @@ export interface QueryColumn {
   type: string | null
 }
 
-/** What `query` and `validateQuery` run: `opentide query`'s options. */
+/**
+ * What `query` and `validateQuery` run: `opentide query`'s options, and
+ * the signal that aborts the one operation.
+ */
 export interface QueryOptions {
   /**
    * The query's language (`kql`, `esql`, `s1ql`); empty or unset takes the
@@ -291,13 +303,13 @@ export interface QueryOptions {
    */
   language?: string
   /**
-   * Where the search starts: an RFC 3339 instant (`date.toISOString()`).
-   * Default: 24 hours before `end` for `query`, the minute before `end`
-   * for `validateQuery`.
+   * Where the search starts: a `Date` or an RFC 3339 instant
+   * (`2026-11-12T09:00:00Z`). Default: 24 hours before `end` for `query`,
+   * the minute before `end` for `validateQuery`.
    */
-  start?: string
-  /** Where the search ends: an RFC 3339 instant. Default: now. */
-  end?: string
+  start?: Date | string
+  /** Where the search ends: a `Date` or an RFC 3339 instant. Default: now. */
+  end?: Date | string
   /**
    * The most rows to return (default 100); `truncated` says there were
    * more.
@@ -312,6 +324,14 @@ export interface QueryOptions {
   dataView?: string
   /** How long, in seconds, an asynchronous search may run (default 120). */
   timeout?: number
+  /**
+   * Aborts this operation alone: when it aborts, the promise rejects with
+   * the code `interrupted` and the search is stopped on the tenant where
+   * the API allows it; the connection's other operations run on. A signal
+   * already aborted rejects at once. (`Connection.canceller` cancels
+   * every operation of the connection.)
+   */
+  signal?: AbortSignal
 }
 
 /** What `query` resolves to. */

@@ -10,7 +10,10 @@ test_query_runners.py``, ``test_sentinel_one_deployer.py``):
   other finishes at once;
 - a STAR rule update of an id the console does not hold is a 404.
 
-Standard library only; deterministic answers.
+``POST /__stand-in/reset`` forgets every rule and query, as a fresh start would:
+the cross-SDK conformance suite (``tests/conformance/``) runs each SDK's runner
+on one stand-in and resets it before each, so that every runner sees the same
+ids. Standard library only; deterministic answers.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ API = "/web/api/v2.1"
 RULES = API + "/cloud-detection/rules"
 PQ = API + "/dv/events/pq"
 PING = API + "/dv/events/pq-ping"
+RESET = "/__stand-in/reset"
 
 RULE_IDS: list[str] = []
 QUERIES: dict[str, dict[str, Any]] = {}
@@ -67,9 +71,14 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def do_POST(self) -> None:
+        path = urlsplit(self.path).path
+        if path == RESET:
+            RULE_IDS.clear()
+            QUERIES.clear()
+            self._json(200, {"reset": True})
+            return
         if not self._authorised():
             return
-        path = urlsplit(self.path).path
         body = self._read()
         if path == RULES:
             remote = str(1900000000000000001 + len(RULE_IDS))

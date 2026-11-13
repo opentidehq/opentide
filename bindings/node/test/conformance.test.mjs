@@ -9,17 +9,19 @@
 // byte-identical; tests/conformance/README.md says how a document is built,
 // the same way in each runner.
 //
-// Driven by xtask, OPENTIDE_CONFORMANCE_PLAN names the plan and
+// Driven by xtask, OPENTIDE_CONFORMANCE_PLAN names the plan (with the URLs of
+// the stand-in tenants xtask started, which every runner talks to) and
 // OPENTIDE_CONFORMANCE_OUT the folder to write; OPENTIDE_CONFORMANCE_DIVERGE
 // (test-only) makes this runner diverge on purpose. Without them, as part of
-// `npm test`, it runs every operation on the tide corpus under a temporary
-// folder.
+// `npm test`, it starts the stand-ins itself and runs every operation on the
+// tide corpus under a temporary folder.
 import assert from 'node:assert/strict'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, relative, sep } from 'node:path'
 import { test } from 'node:test'
 import { PACKAGE, REPO, tempDir, tideCorpus } from './corpus.mjs'
+import { standIn } from './stand_in.mjs'
 
 const require = createRequire(import.meta.url)
 const opentide = require(PACKAGE)
@@ -52,6 +54,12 @@ export function normalise(document) {
 function error(e) {
   if (typeof e?.code !== 'string') throw e
   return { error: { code: e.code, message: e.message } }
+}
+
+/** A tenant operation's error: its code, its message and the vendor's words. */
+function tenantError(e) {
+  if (typeof e?.code !== 'string') throw e
+  return { error: { code: e.code, message: e.message, detail: e.detail } }
 }
 
 /** Every file under `root`, by its path from `root` with `/`, as text. */
@@ -124,6 +132,10 @@ function call(ws, operation) {
       return ws.threats()
     case 'coverage':
       return ws.coverage(operation.technique)
+    case 'tenants':
+      return ws
+        .tenants(operation.platform)
+        .map((tenant) => ({ platform: tenant.platform, name: tenant.name, setup_keys: tenant.setupKeys }))
     case 'deploy_plan': {
       const plan = ws.deployPlan({
         strategies: o.strategies,
@@ -137,6 +149,88 @@ function call(ws, operation) {
     default:
       throw new Error(`unknown call ${operation.call}`)
   }
+}
+
+// The calls on a tenant (Connection), not on a workspace.
+const TENANT_CALLS = new Set(['query', 'validate_query', 'deploy'])
+
+/** `tenant`'s setup, each `{<stand-in>}` the URL that stand-in listens on. */
+function setup(tenant, urls) {
+  const out = {}
+  for (const [key, value] of Object.entries(tenant.setup)) {
+    out[key] = Object.entries(urls).reduce((text, [name, url]) => text.replaceAll(`{${name}}`, url), value)
+  }
+  return out
+}
+
+function connect(tenant, urls) {
+  try {
+    const config = new opentide.TenantConfig(tenant.platform, tenant.name, setup(tenant, urls))
+    return opentide.Connection.open(config, { environment: tenant.environment })
+  } catch (e) {
+    return tenantError(e)
+  }
+}
+
+/** A query's document, by the facade's names (`vendorQueryId` as `vendor_query_id`). */
+function queryDocument(result) {
+  return {
+    columns: result.columns,
+    rows: result.rows,
+    truncated: result.truncated,
+    partial: result.partial,
+    warnings: result.warnings,
+    vendor_query_id: result.vendorQueryId,
+    sent: result.sent,
+    language: result.language,
+  }
+}
+
+async function tenantCall(connection, operation) {
+  if (operation.call === 'deploy') {
+    const outcome = await connection.deploy(operation.rule_id, operation.operation, Buffer.from(operation.body, 'utf8'))
+    return { remote_id: outcome.remoteId, operation: outcome.operation }
+  }
+  const o = operation.options ?? {}
+  // The window's instants as Dates, as the Python runner passes datetimes.
+  const at = (text) => (text === undefined ? undefined : new Date(text))
+  const options = {
+    language: o.language,
+    start: at(o.start),
+    end: at(o.end),
+    limit: o.limit,
+    index: o.index,
+    dataView: o.data_view,
+    timeout: o.timeout,
+  }
+  if (operation.call === 'query') return queryDocument(await connection.query(operation.text, options))
+  const check = await connection.validateQuery(operation.text, options)
+  return {
+    result: check.result === null ? null : queryDocument(check.result),
+    errors: check.errors,
+    warnings: check.warnings,
+  }
+}
+
+async function tenant(connection, operation) {
+  if (!(connection instanceof opentide.Connection)) return connection
+  try {
+    return await tenantCall(connection, operation)
+  } catch (e) {
+    return tenantError(e)
+  }
+}
+
+function connectors() {
+  const platforms = opentide.platforms()
+  const capabilities = {}
+  for (const platform of platforms) {
+    const found = opentide.capabilities(platform)
+    if (found !== null) {
+      capabilities[platform] = { deploy: found.deploy, live_validation: found.liveValidation, query: found.query }
+    }
+  }
+  return { platforms, capabilities }
 }
 
 function guarded(ws, operation) {
@@ -174,15 +268,23 @@ function sorted(value) {
 }
 
 /** Writes the document of every operation on every corpus of `plan` under `out`. */
-export function runPlan(plan, out, { diverge = false } = {}) {
+export async function runPlan(plan, out, { diverge = false } = {}) {
   const written = []
+  const tenants = new Map((plan.tenants ?? []).map((t) => [t.name, t]))
+  const urls = plan.urls ?? {}
   for (const corpus of plan.corpora) {
     const opened = new Map()
+    const connected = new Map()
     for (const operation of plan.operations) {
       if (operation.corpora && !operation.corpora.includes(corpus.name.split('/')[0])) continue
       let document
       if (operation.call === 'run_json') {
         document = runJson(corpus.root, operation)
+      } else if (operation.call === 'connectors') {
+        document = connectors()
+      } else if (TENANT_CALLS.has(operation.call)) {
+        if (!connected.has(operation.tenant)) connected.set(operation.tenant, connect(tenants.get(operation.tenant), urls))
+        document = await tenant(connected.get(operation.tenant), operation)
       } else {
         const mode = operation.open ?? 'disk'
         if (!opened.has(mode)) opened.set(mode, open(corpus.root, mode))
@@ -202,31 +304,62 @@ export function runPlan(plan, out, { diverge = false } = {}) {
   return written
 }
 
+/** Every operation of the manifest on the tide corpus; its `urls` are the stand-ins' once `startStandIns` started them. */
 function standalonePlan() {
   const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'))
-  return { corpora: [{ name: 'tide_corpus', root: tideCorpus() }], operations: manifest.operations }
+  return {
+    corpora: [{ name: 'tide_corpus', root: tideCorpus() }],
+    operations: manifest.operations,
+    tenants: manifest.tenants,
+    stand_ins: manifest.stand_ins,
+    urls: {},
+  }
 }
 
-test('the Node runner writes every document', () => {
+/** Starts each stand-in tenant of `plan` for a run of this runner alone; resolves to their `stop()`. */
+async function startStandIns(plan) {
+  const started = []
+  for (const spec of plan.stand_ins) {
+    const tenant = await standIn(spec.name, spec.environment)
+    started.push(tenant)
+    plan.urls[spec.name] = tenant.url
+  }
+  return () => {
+    for (const tenant of started) tenant.stop()
+  }
+}
+
+const read = (out, name) => JSON.parse(readFileSync(join(out, 'tide_corpus', `${name}.json`), 'utf8'))
+
+test('the Node runner writes every document', async () => {
   const driven = process.env.OPENTIDE_CONFORMANCE_PLAN
   const plan = driven ? JSON.parse(readFileSync(driven, 'utf8')) : standalonePlan()
   const out = driven ? process.env.OPENTIDE_CONFORMANCE_OUT : tempDir()
-  const written = runPlan(plan, out, { diverge: Boolean(process.env.OPENTIDE_CONFORMANCE_DIVERGE) })
+  const stop = driven ? () => {} : await startStandIns(plan)
+  let written
+  try {
+    written = await runPlan(plan, out, { diverge: Boolean(process.env.OPENTIDE_CONFORMANCE_DIVERGE) })
+  } finally {
+    stop()
+  }
   assert.ok(written.length > 0, 'the plan names no operation')
   for (const path of written) JSON.parse(readFileSync(path, 'utf8'))
   if (!driven) {
     assert.equal(written.length, plan.operations.length)
-    const validate = JSON.parse(readFileSync(join(out, 'tide_corpus', 'validate.json'), 'utf8'))
+    const validate = read(out, 'validate')
     assert.equal(validate.failed, false)
     assert.equal(validate.exit_code, 0)
+    // The tenant operations reached the stand-ins.
+    assert.deepEqual(read(out, 'query-soc').rows[0], { 'src.process.name': 'cmd.exe', 'endpoint.name': 'ws-1' })
+    assert.deepEqual(read(out, 'deploy-soc-create'), { remote_id: '1900000000000000001', operation: 'create' })
   }
 })
 
-test('the divergence flag changes the bytes and not the data', () => {
+test('the divergence flag changes the bytes and not the data', async () => {
   const plan = standalonePlan()
   plan.operations = plan.operations.filter((operation) => operation.name === 'validate')
-  const [same] = runPlan(plan, tempDir())
-  const [diverged] = runPlan(plan, tempDir(), { diverge: true })
+  const [same] = await runPlan(plan, tempDir())
+  const [diverged] = await runPlan(plan, tempDir(), { diverge: true })
   const before = readFileSync(same, 'utf8')
   const after = readFileSync(diverged, 'utf8')
   assert.notEqual(before, after)

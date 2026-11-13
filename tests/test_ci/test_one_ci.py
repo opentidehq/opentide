@@ -263,6 +263,15 @@ TREE_BEFORE = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree
 TREE_AFTER = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"'
 
 
+NEXTEST = "cargo nextest run --workspace --locked --profile ci"
+
+
+def _runs_command(line: str, command: str) -> bool:
+    """The line is the command, or the command and its options (a shard's)."""
+    line = line.strip()
+    return line == command or (command == NEXTEST and line.startswith(command + " "))
+
+
 @pytest.mark.parametrize(
     ("job", "command"),
     [
@@ -270,11 +279,11 @@ TREE_AFTER = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-
         ("engine", "cargo clippy --workspace --all-targets --locked -- -D warnings"),
         ("engine", "cargo xtask check-layers"),
         ("engine", "cargo doc --no-deps --workspace --locked"),
-        ("engine-test", "cargo nextest run --workspace --locked --profile ci"),
-        ("engine-test", "cargo test --workspace --locked --doc"),
+        ("engine-test-part", NEXTEST),
+        ("engine-test-part", "cargo test --workspace --locked --doc"),
         # The tests leave the checkout as they found it (#931).
-        ("engine-test", TREE_BEFORE),
-        ("engine-test", TREE_AFTER),
+        ("engine-test-part", TREE_BEFORE),
+        ("engine-test-part", TREE_AFTER),
         ("engine-wasm", "bash scripts/engine/build-wasm.sh"),
         ("engine-wasm", "node scripts/engine/check-npm-packs.mjs"),
         (
@@ -296,7 +305,7 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     steps = [
         step
         for step in spec.get("steps") or []
-        if command in (line.strip() for line in str(step.get("run", "")).splitlines())
+        if any(_runs_command(line, command) for line in str(step.get("run", "")).splitlines())
     ]
     assert len(steps) == 1, (job, command)
     step = steps[0]
@@ -306,7 +315,11 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     # jobs exactly theirs (test_ci_scope.py).
     assert spec.get("if") == _scope().expected_condition(job), job
     # The doctests run once, on Linux; nothing else is conditional.
-    allowed = {("engine-test", "cargo test --workspace --locked --doc"): "runner.os == 'Linux'"}
+    allowed = {
+        ("engine-test-part", "cargo test --workspace --locked --doc"): (
+            "runner.os == 'Linux' && matrix.shard == 1"
+        )
+    }
     assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
     run = str(step["run"])
     assert not re.search(r"\|\|\s*(?:true|:)\b", run), (job, command)
@@ -315,15 +328,20 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
 def test_ci_fails_when_the_rust_tests_leave_a_file_in_the_checkout() -> None:
     """The checkout is noted before the tests and compared after them; a
     difference fails the job (#931)."""
-    steps = [str(step.get("run", "")) for step in _ci_jobs()["engine-test"].get("steps") or []]
+    jobs = _ci_jobs()
+    steps = [str(step.get("run", "")) for step in jobs["engine-test-part"].get("steps") or []]
 
     def index(command: str) -> int:
-        found = [i for i, run in enumerate(steps) if command in run.splitlines()]
+        found = [
+            i
+            for i, run in enumerate(steps)
+            if any(_runs_command(line, command) for line in run.splitlines())
+        ]
         assert len(found) == 1, command
         return found[0]
 
     before = index(TREE_BEFORE)
-    nextest = index("cargo nextest run --workspace --locked --profile ci")
+    nextest = index(NEXTEST)
     doctests = index("cargo test --workspace --locked --doc")
     guard = index(TREE_AFTER)
     assert before < nextest < doctests < guard
@@ -354,7 +372,9 @@ def test_every_cargo_job_denies_warnings() -> None:
             }
             assert env.get("RUSTFLAGS") == "-Dwarnings", (job_id, step.get("name"))
             checked.append(job_id)
-    assert {"engine", "engine-test", "engine-package", "bench", "clients", "lint"} <= set(checked)
+    assert {"engine", "engine-test-part", "engine-package", "bench", "clients", "lint"} <= set(
+        checked
+    )
 
 
 def test_the_oracles_are_required() -> None:
@@ -370,8 +390,22 @@ def test_rustdoc_denies_warnings() -> None:
 
 
 def test_nextest_runs_on_three_operating_systems() -> None:
-    matrix = _ci_jobs()["engine-test"]["strategy"]["matrix"]
-    assert matrix["os"] == ["ubuntu-latest", "macos-latest", "windows-latest"]
+    jobs = _ci_jobs()
+    assert jobs["engine-test"]["strategy"]["matrix"]["os"] == [
+        "ubuntu-latest",
+        "macos-latest",
+        "windows-latest",
+    ]
+    shards: dict[str, list[tuple[int, int]]] = {}
+    for cell in jobs["engine-test-part"]["strategy"]["matrix"]["include"]:
+        shards.setdefault(cell["os"], []).append((int(cell["shard"]), int(cell["shards"])))
+    assert list(shards) == ["ubuntu-latest", "macos-latest", "windows-latest"]
+    for os_name, cells in shards.items():
+        # Every partition of each OS runs, once: a missing shard would skip its tests.
+        count = cells[0][1]
+        assert sorted(cells) == [(n, count) for n in range(1, count + 1)], os_name
+    step = next(s for s in jobs["engine-test-part"]["steps"] if NEXTEST in str(s.get("run", "")))
+    assert "--partition hash:${{ matrix.shard }}/${{ matrix.shards }}" in str(step["run"])
 
 
 def test_the_fuzz_smoke_covers_every_target() -> None:
@@ -436,7 +470,21 @@ def _every_pull_request(jobs: dict[str, Any], job_id: str) -> bool:
     job = jobs[job_id]
     needs = job.get("needs") or []
     needs = [needs] if isinstance(needs, str) else needs
+    if job.get("if") == _scope().GATHER:
+        # It runs whatever its parts did (test_ci_scope.py, CI_GATHER).
+        return all(_every_pull_request(jobs, need) for need in needs)
     return "if" not in job and all(_every_pull_request(jobs, need) for need in needs)
+
+
+def _gathered(jobs: dict[str, Any]) -> set[str]:
+    """The jobs a gathering job stands for: its check is the required one."""
+    gather = _scope().GATHER
+    found: set[str] = set()
+    for job in jobs.values():
+        if job.get("if") == gather:
+            needs = job.get("needs") or []
+            found |= {needs} if isinstance(needs, str) else set(needs)
+    return found
 
 
 def _required_names(path: Path) -> list[str]:
@@ -444,8 +492,11 @@ def _required_names(path: Path) -> list[str]:
     workflow = _load(path)
     jobs = workflow["jobs"]
     names: list[str] = []
+    gathered = _gathered(jobs)
     for job_id, job in jobs.items():
         if not _every_pull_request(jobs, job_id) or job.get("continue-on-error") is True:
+            continue
+        if job_id in gathered:
             continue
         names += _expand(str(job.get("name", job_id)), job)
     return names

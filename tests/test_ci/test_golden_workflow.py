@@ -1,4 +1,4 @@
-"""golden.yml runs on every pull request into integration/unified-core (#803).
+"""golden.yml starts on every pull request into integration/unified-core (#803).
 
 Branch protection on ``integration/unified-core`` requires two of golden.yml's
 checks (the second list in ``.github/AGENTS.md``). A required check that never
@@ -6,9 +6,10 @@ starts blocks the merge, so the ``pull_request`` trigger takes no path or
 branch filter: the ``changes`` job (``Golden paths``) filters by path inside
 the workflow, and a job its ``if`` skips reports success.
 
-- ``Golden check (python)`` runs on every pull request into the integration
-  branch, on other bases when a golden input changed, and when the filter did
-  not succeed.
+- ``Golden check (python)`` runs on a pull request when a golden input changed,
+  with the ``full-ci`` label, and when the filter did not succeed. Since UC-6.2
+  (#841) its oracle is a frozen PyPI release, so a pull request that touches
+  none of its inputs cannot change its result (the maintainer's decision).
 - ``Golden determinism`` records every case twice (about 26 minutes): it is in
   ci.yml's full set, so on a pull request it runs only with the ``full-ci``
   label, and it is not required.
@@ -37,25 +38,25 @@ JOB_NAMES = {
     "check": "Golden check (python)",
     "determinism": "Golden determinism",
 }
-# The ones integration/unified-core requires: they run on every pull request
+# The ones integration/unified-core requires: they start on every pull request
 # into it (a job its `if` skips counts as passing).
 REQUIRED = ["changes", "check"]
 FULL_CI = "full-ci"
 
-# The pull_request path filter golden.yml had before #803, as bash patterns,
-# plus the renderers' oracle snapshots and their driver (UC-3.4, #826).
+# The check's inputs, as bash patterns: the cases and recordings, the inputs
+# the cases read, the renderers' oracle snapshots and their driver (UC-3.4,
+# #826), and the code that runs the oracle and compares its output.
 GOLDEN_PATHS = [
     "tests/golden/*",
     "tests/fixtures/tide_corpus/*",
     "scripts/golden/*",
     "crates/opentide-cli/tests/render/*",
     "tests/corpora/*",
-    "xtask/*",
-    ".cargo/*",
-    ".gitattributes",
-    "Cargo.toml",
-    "Cargo.lock",
-    "rust-toolchain.toml",
+    "xtask/src/golden/*",
+    "xtask/src/corpus/*",
+    "xtask/src/compare.rs",
+    "xtask/src/parallel.rs",
+    "crates/opentide-compare/*",
     ".github/workflows/golden.yml",
 ]
 
@@ -162,15 +163,20 @@ def test_the_integration_branch_requires_the_golden_jobs() -> None:
 
 @pytest.mark.parametrize("result", ["success", "failure", "skipped"])
 @pytest.mark.parametrize("golden", ["true", "false", ""])
-def test_the_check_runs_on_every_pull_request_into_integration(result: str, golden: str) -> None:
+def test_the_check_runs_on_every_full_ci_pull_request(result: str, golden: str) -> None:
     condition = _workflow()["jobs"]["check"]["if"]
-    assert _evaluate(condition, _context("pull_request", INTEGRATION, result, golden))
+    assert _evaluate(condition, _context("pull_request", INTEGRATION, result, golden, FULL_CI))
 
 
 @pytest.mark.parametrize(
     ("job", "event", "base", "result", "golden", "labels", "runs"),
     [
-        # Other bases keep the path filter.
+        # Every base takes the path filter, integration/unified-core too.
+        ("check", "pull_request", INTEGRATION, "success", "false", "", False),
+        ("check", "pull_request", INTEGRATION, "success", "true", "", True),
+        ("check", "pull_request", INTEGRATION, "failure", "", "", True),
+        ("check", "pull_request", INTEGRATION, "success", "false", "perf", False),
+        ("check", "pull_request", "development", "success", "false", FULL_CI, True),
         ("check", "pull_request", "development", "success", "false", "", False),
         ("check", "pull_request", "development", "success", "true", "", True),
         ("check", "pull_request", "feat/stacked", "success", "false", "", False),
@@ -314,19 +320,24 @@ def _pull_request(tmp_path: Path, change: dict[str, str | None]) -> Path:
         ({"tests/golden/cases/x/stdout": "new\n"}, "true"),
         ({"tests/fixtures/tide_corpus/a.yaml": "new\n"}, "true"),
         ({"tests/corpora/heavy/seed": "new\n"}, "true"),
-        ({"xtask/src/main.rs": "changed\n"}, "true"),
-        ({"xtask/src/main.rs": None}, "true"),
-        ({".cargo/config.toml": "new\n"}, "true"),
-        ({".gitattributes": "* text=auto\n"}, "true"),
-        ({"Cargo.toml": "[workspace]\n"}, "true"),
-        ({"Cargo.lock": "version = 4\n"}, "true"),
-        ({"rust-toolchain.toml": "[toolchain]\n"}, "true"),
+        ({"xtask/src/golden/run.rs": "changed\n"}, "true"),
+        ({"xtask/src/corpus/x.rs": "new\n"}, "true"),
+        ({"xtask/src/compare.rs": "new\n"}, "true"),
+        ({"crates/opentide-compare/src/json.rs": "new\n"}, "true"),
+        # The rest of the toolchain does not change the frozen oracle's output.
+        ({"xtask/src/main.rs": "changed\n"}, "false"),
+        ({"xtask/src/main.rs": None}, "false"),
+        ({".cargo/config.toml": "new\n"}, "false"),
+        ({".gitattributes": "* text=auto\n"}, "false"),
+        ({"Cargo.toml": "[workspace]\n"}, "false"),
+        ({"Cargo.lock": "version = 4\n"}, "false"),
+        ({"rust-toolchain.toml": "[toolchain]\n"}, "false"),
         ({".github/workflows/golden.yml": "name: Golden\n"}, "true"),
         # Near misses are not golden inputs.
         ({"crates/xtask/src/lib.rs": "new\n"}, "false"),
         ({"tests/golden.py": "new\n"}, "false"),
         ({".github/workflows/ci.yml": "name: CI\n"}, "false"),
-        ({"src/opentide/cli.py": "changed\n", "Cargo.lock": "version = 4\n"}, "true"),
+        ({"src/opentide/cli.py": "changed\n", "tests/golden/cases.toml": "x\n"}, "true"),
     ],
 )
 def test_the_filter_reads_the_pull_requests_changes(
@@ -340,12 +351,14 @@ def test_a_moved_golden_input_counts_from_its_old_path(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "base")
-    (repo / "xtask").mkdir()
-    (repo / "xtask" / "big.rs").write_text("fn main() {}\n" * 50, encoding="utf-8")
+    (repo / "xtask" / "src" / "golden").mkdir(parents=True)
+    (repo / "xtask" / "src" / "golden" / "big.rs").write_text(
+        "fn main() {}\n" * 50, encoding="utf-8"
+    )
     _commit(repo, "base")
     _git(repo, "switch", "-q", "-c", "topic")
     (repo / "elsewhere").mkdir()
-    _git(repo, "mv", "xtask/big.rs", "elsewhere/big.rs")
+    _git(repo, "mv", "xtask/src/golden/big.rs", "elsewhere/big.rs")
     _commit(repo, "move")
     _git(repo, "switch", "-q", "base")
     _git(repo, "merge", "-q", "--no-ff", "--no-edit", "topic")

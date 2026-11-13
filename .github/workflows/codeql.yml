@@ -47,7 +47,10 @@ jobs:
 
       - name: Install Python dependencies
         if: matrix.language == 'python'
-        run: uv sync --group dev
+        # The dependencies CodeQL models, not opentide itself: building the
+        # project compiled the Rust engine for minutes, and CodeQL reads the
+        # Python sources, never the extension (#841).
+        run: uv sync --group dev --no-install-project
 
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
