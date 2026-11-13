@@ -331,6 +331,28 @@ pub const PLATFORMS: &[Platform] = &[
         configuration_rank: 9,
     },
     Platform {
+        id: "graylog",
+        label: "Graylog",
+        configuration_name: "Graylog",
+        config_class: "GraylogConfig",
+        external_id: ExternalId::Text {
+            pattern: Some("[0-9a-f]{24}"),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["lucene"],
+        // The Graylog dialect of Lucene comes with the engine import (E1):
+        // until then no query is parsed offline, rather than parsed as
+        // Elastic's Lucene.
+        offline_languages: &[],
+        query_file_suffixes: &[],
+        cli_rank: 10,
+        connector_rank: 10,
+        configuration_rank: 10,
+    },
+    Platform {
         id: "google_secops",
         label: "Google Security Operations",
         configuration_name: "Google Security Operations",
@@ -348,9 +370,9 @@ pub const PLATFORMS: &[Platform] = &[
         // The offline YARA-L check arrives with the engine import (E1).
         offline_languages: &["yaral"],
         query_file_suffixes: &["yaral"],
-        cli_rank: 10,
-        connector_rank: 10,
-        configuration_rank: 10,
+        cli_rank: 11,
+        connector_rank: 11,
+        configuration_rank: 11,
     },
 ];
 
@@ -555,6 +577,7 @@ mod tests {
                 "elastic",
                 "sysdig",
                 "bitdefender",
+                "graylog",
                 "google_secops"
             ]
         );
@@ -571,6 +594,7 @@ mod tests {
                 "elastic",
                 "sysdig",
                 "bitdefender",
+                "graylog",
                 "google_secops"
             ]
         );
@@ -587,6 +611,7 @@ mod tests {
                 "elastic",
                 "sysdig",
                 "bitdefender",
+                "graylog",
                 "google_secops"
             ]
         );
@@ -603,6 +628,7 @@ mod tests {
                 "elastic",
                 "sysdig",
                 "bitdefender",
+                "graylog",
                 "google_secops"
             ]
         );
@@ -617,6 +643,7 @@ mod tests {
                 "crowdstrike",
                 "defender_for_endpoint",
                 "google_secops",
+                "graylog",
                 "sentinel_one",
                 "sysdig"
             ]
@@ -632,6 +659,7 @@ mod tests {
                 "defender_for_endpoint",
                 "elastic",
                 "google_secops",
+                "graylog",
                 "sentinel",
                 "sentinel_one",
                 "splunk"
@@ -648,6 +676,7 @@ mod tests {
                 "elastic",
                 "sysdig",
                 "bitdefender",
+                "graylog",
                 "google_secops"
             ]
         );
@@ -657,6 +686,23 @@ mod tests {
                 "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco", "yaral"
             ]
         );
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex() {
+        use super::{IdShape, external_id_problem};
+        assert!(!super::has_integer_id("graylog"));
+        assert_eq!(
+            external_id_problem("graylog", "65f1c0ffee0123456789abcd"),
+            None
+        );
+        for bad in ["65F1C0FFEE0123456789ABCD", "65f1c0ffee0123456789abc", "12"] {
+            assert_eq!(
+                external_id_problem("graylog", bad),
+                Some(IdShape::Pattern("[0-9a-f]{24}")),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

@@ -39,6 +39,7 @@ pub mod encode;
 pub mod env;
 pub mod error;
 pub mod google_secops;
+pub mod graylog;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
@@ -78,6 +79,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "sysdig" => sysdig::http_defaults(),
         "bitdefender" => bitdefender::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
+        "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
@@ -92,7 +94,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
-/// and Bitdefender GravityZone (the catch-up to 0.28.0).
+/// and Bitdefender GravityZone and Graylog (the catch-up to 0.28.0).
 pub fn builtin() -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
@@ -105,6 +107,7 @@ pub fn builtin() -> Registry {
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
         Box::new(bitdefender::Bitdefender),
+        Box::new(graylog::Graylog),
         // Application Default Credentials are the process's own ambient
         // credentials (google-auth's `default()` reads the process
         // environment): a caller with an environment of its own (the CLI)
@@ -190,7 +193,16 @@ mod tests {
                 toml::Value::Integer(3)
             ])
         );
-        assert!(!setup.contains_key("nested") && !setup.contains_key("none"));
+        // A table is kept, for the tenant's string tables (Graylog's
+        // `stream_ids`); a null has no TOML form and is left out.
+        assert_eq!(
+            setup["nested"],
+            toml::Value::Table(toml::map::Map::from_iter([(
+                "a".to_owned(),
+                toml::Value::Integer(1)
+            )]))
+        );
+        assert!(!setup.contains_key("none"));
         assert!(tenants[1].1.is_empty());
         assert!(super::tenant::configured(&config, "elastic").is_empty());
     }
@@ -212,6 +224,7 @@ mod tests {
                 "elastic",
                 "sysdig",
                 "bitdefender",
+                "graylog",
                 "google_secops"
             ]
         );
@@ -234,6 +247,7 @@ mod tests {
         assert_eq!(can("sysdig"), (true, false, false));
         assert_eq!(can("bitdefender"), (true, false, false));
         assert_eq!(can("google_secops"), (true, true, true));
+        assert_eq!(can("graylog"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);
