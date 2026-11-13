@@ -34,6 +34,7 @@ pub mod elastic;
 pub mod encode;
 pub mod env;
 pub mod error;
+pub mod google_secops;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
