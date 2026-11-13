@@ -22,6 +22,10 @@
 //!
 //! The recorded-HTTP harness that proves a connector sends what the Python
 //! client sends is `opentide-cassette`, a test crate.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
+//! `connectors` feature, and `plugins` for the plugin host).
 
 pub mod answer;
 pub mod carbon_black;

@@ -15,6 +15,9 @@ workspace = true
 
 [dependencies]
 opentide-core.workspace = true
+# The Sysdig block's exception shape, which the model checks for `validate`
+# (`falco::exception_diagnostics` leaves an exception it refuses to it).
+opentide-schema.workspace = true
 opentide-ecs.workspace = true
 opentide-kql.workspace = true
 opentide-spl.workspace = true

@@ -53,6 +53,11 @@ enum Command {
         /// dialects, `defender_for_endpoint` KQL against the Defender schema.
         #[arg(long)]
         platform: Option<String>,
+        /// Add a Tide object's platform-block findings, which `opentide lint`
+        /// reports and the server does not (the Elastic and Sysdig blocks'
+        /// advisories): what the engine says about the whole object.
+        #[arg(long)]
+        blocks: bool,
     },
     /// Highlight a file and print JSON tokens.
     Highlight {
@@ -95,7 +100,8 @@ fn main() -> Result<()> {
             file,
             language,
             platform,
-        }) => cmd_analyze(&file, language.as_deref(), platform.as_deref()),
+            blocks,
+        }) => cmd_analyze(&file, language.as_deref(), platform.as_deref(), blocks),
         Some(Command::Highlight {
             file,
             language,
@@ -121,7 +127,12 @@ fn detect_language(path: &Path, override_lang: Option<&str>) -> Result<LanguageI
         .with_context(|| format!("cannot detect language from extension {ext:?}; pass --language"))
 }
 
-fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> Result<()> {
+fn cmd_analyze(
+    file: &Path,
+    language: Option<&str>,
+    platform: Option<&str>,
+    blocks: bool,
+) -> Result<()> {
     // A bare file name is in the current directory: the filename checks
     // skip a path with no directory, as they do an unsaved buffer.
     let here;
@@ -169,6 +180,9 @@ fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> R
         _ => Vec::new(),
     };
     let host = MemoryWorkspace { files };
+    if blocks && language == LanguageId::TideYaml {
+        diagnostics.extend(opentide_analysis::analyze_blocks(&host, &text));
+    }
     let response = opentide_analysis::analyze(
         &host,
         AnalyzeRequest {

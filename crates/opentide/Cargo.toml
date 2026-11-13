@@ -70,6 +70,22 @@ default = ["schema", "workspace", "compile"]
 # The Tide models: threat vectors, detection objectives, detection rules, each
 # revision, the schema identifiers (`opentide::models`).
 schema = ["dep:opentide-schema"]
+# The analysis engine (`opentide::analysis`): check one query on its own and
+# highlight a text in any query language, without a workspace. The bindings'
+# `analyze_query` and `highlight` build on it (UC-5.1, #836).
+analysis = ["dep:opentide-analysis"]
+# The platform plugin host (`opentide::plugins`, UC-4.5, #835): the connectors'
+# traits a platform plugin implements, and the command line's host the Python
+# package installs so a run reaches the platforms its entry points register.
+# Heavy: it brings the connectors and the command line.
+plugins = ["connectors", "dep:opentide-cli"]
+# The Tide models as Python classes (`opentide::python`, UC-1.9, #815): the
+# `opentide._native.models` registration the Python package compiles in. Brings
+# PyO3 (opentide-schema's `python`).
+python = ["schema", "opentide-schema/python"]
+# PyO3's introspection data behind `python`, from which `cargo xtask stubs`
+# writes the generated stubs. Only that build turns it on.
+stubs = ["python", "opentide-schema/stubs"]
 # Opening a workspace, validate, lint, info, the catalogue and coverage.
 workspace = ["schema", "dep:opentide-workspace"]
 # The deploy plan: what `opentide deploy --dry-run` would send.
@@ -98,6 +114,7 @@ connectors = [
 
 [dependencies]
 opentide-schema = { workspace = true, optional = true }
+opentide-analysis = { workspace = true, optional = true }
 opentide-workspace = { workspace = true, optional = true }
 opentide-compile = { workspace = true, optional = true }
 opentide-cli = { workspace = true, optional = true }

@@ -7,6 +7,12 @@
 //! lower layer, or a lower tier of its own layer. Normal, build and dev
 //! dependencies all count, whatever their target. Every workspace member must
 //! be placed exactly once, and every crate the table places must be a member.
+//!
+//! A layer may also name the only workspace crates its crates may depend on
+//! (`may_depend_on`): the bindings and hosts wrap the `opentide` facade and
+//! nothing else from the workspace (UC-5.1, #836). Crates outside the
+//! workspace (their build tooling: pyo3, napi, wasm-bindgen) are not edges, so
+//! the rule leaves them alone.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -31,6 +37,11 @@ pub struct Layer {
     /// layer no crate is in yet has none.
     #[serde(default)]
     pub tiers: Vec<Vec<String>>,
+    /// The only workspace crates this layer's crates may depend on, of any
+    /// kind, when the layer narrows the downward rule; `None` when any crate
+    /// of a lower place will do.
+    #[serde(default)]
+    pub may_depend_on: Option<Vec<String>>,
 }
 
 impl LayerTable {
@@ -186,6 +197,20 @@ pub enum Violation {
         /// The dependency's kind.
         kind: DepKind,
     },
+    /// A dependency of a layer that names its only dependencies (the
+    /// bindings: the facade alone) on a workspace crate it does not name.
+    NotAllowed {
+        /// The crate that declares the dependency.
+        from: String,
+        /// The layer `from` is in.
+        layer: String,
+        /// The crate depended on.
+        to: String,
+        /// The dependency's kind.
+        kind: DepKind,
+        /// The workspace crates the layer may depend on.
+        allowed: Vec<String>,
+    },
 }
 
 impl fmt::Display for Violation {
@@ -220,6 +245,25 @@ impl fmt::Display for Violation {
                     "`{from}` ({from_place}) has a {kind} dependency on `{to}` ({to_place}), \
                      {direction}: a crate may depend only on crates of a lower layer, \
                      or of a lower tier of its own layer"
+                )
+            }
+            Self::NotAllowed {
+                from,
+                layer,
+                to,
+                kind,
+                allowed,
+            } => {
+                let allowed = allowed
+                    .iter()
+                    .map(|krate| format!("`{krate}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "`{from}` ({layer}) has a {kind} dependency on `{to}`: a crate of the \
+                     {layer} layer may depend only on {allowed} from the workspace; add what \
+                     it needs to the facade's API instead"
                 )
             }
         }
@@ -262,6 +306,7 @@ pub fn check(table: &LayerTable, metadata: &Metadata) -> Report {
     report.crates = members.len();
 
     let mut places: BTreeMap<&str, Place> = BTreeMap::new();
+    let mut only: BTreeMap<&str, &[String]> = BTreeMap::new();
     for (layer_index, layer) in table.layer.iter().enumerate() {
         for (tier_index, tier) in layer.tiers.iter().enumerate() {
             for krate in tier {
@@ -270,6 +315,9 @@ pub fn check(table: &LayerTable, metadata: &Metadata) -> Report {
                     layer: layer_index,
                     tier: tier_index,
                 };
+                if let Some(allowed) = &layer.may_depend_on {
+                    only.insert(krate.as_str(), allowed);
+                }
                 if places.insert(krate.as_str(), place).is_some() {
                     report.violations.push(Violation::Duplicate {
                         krate: krate.clone(),
@@ -311,6 +359,17 @@ pub fn check(table: &LayerTable, metadata: &Metadata) -> Report {
                     to: dependency.name.clone(),
                     to_place: to_place.clone(),
                     kind: DepKind::of(dependency),
+                });
+            } else if let Some(allowed) = only
+                .get(name)
+                .filter(|allowed| !allowed.contains(&dependency.name))
+            {
+                report.violations.push(Violation::NotAllowed {
+                    from: (*name).to_string(),
+                    layer: from_place.layer_name.clone(),
+                    to: dependency.name.clone(),
+                    kind: DepKind::of(dependency),
+                    allowed: allowed.to_vec(),
                 });
             }
         }
@@ -573,6 +632,70 @@ mod tests {
         );
     }
 
+    /// core < facade < bindings, which may depend on the facade alone.
+    const NARROWED: &str = r#"
+        [[layer]]
+        name = "foundation"
+        tiers = [["core"]]
+
+        [[layer]]
+        name = "facade"
+        tiers = [["facade"]]
+
+        [[layer]]
+        name = "bindings"
+        tiers = [["binding"]]
+        may_depend_on = ["facade"]
+    "#;
+
+    #[test]
+    fn a_narrowed_layer_may_depend_on_what_it_names_and_on_crates_outside_the_workspace() {
+        let report = check(
+            &table(NARROWED),
+            &metadata(&[
+                ("core", &[]),
+                ("facade", &[("core", None)]),
+                (
+                    "binding",
+                    &[
+                        ("facade", None),
+                        ("pyo3", None),
+                        ("pyo3-build-config", Some("build")),
+                    ],
+                ),
+            ]),
+        );
+        assert_eq!(report.violations, []);
+    }
+
+    #[test]
+    fn a_narrowed_layer_fails_a_downward_dependency_it_does_not_name() {
+        let report = check(
+            &table(NARROWED),
+            &metadata(&[
+                ("core", &[]),
+                ("facade", &[("core", None)]),
+                ("binding", &[("facade", None), ("core", Some("dev"))]),
+            ]),
+        );
+        assert_eq!(
+            report.violations,
+            [Violation::NotAllowed {
+                from: "binding".into(),
+                layer: "bindings".into(),
+                to: "core".into(),
+                kind: DepKind::Dev,
+                allowed: vec!["facade".into()],
+            }]
+        );
+        assert_eq!(
+            report.violations[0].to_string(),
+            "`binding` (bindings) has a dev dependency on `core`: a crate of the bindings \
+             layer may depend only on `facade` from the workspace; add what it needs to the \
+             facade's API instead"
+        );
+    }
+
     #[test]
     fn the_table_rejects_unknown_keys() {
         assert!(LayerTable::parse("[[layer]]\nname = \"x\"\ncrates = [\"a\"]\n").is_err());
@@ -729,19 +852,14 @@ mod tests {
         ),
         (
             "opentide-wasm",
-            &[
-                ("opentide-core", None),
-                ("opentide-analysis", None),
-                ("opentide-highlight", None),
-                ("opentide-lsp", None),
-            ],
+            &[("opentide", None), ("wasm-bindgen", None)],
         ),
         (
             "opentide-native",
             &[
-                ("opentide-analysis", None),
-                ("opentide-lsp", None),
-                ("opentide-compare", None),
+                ("opentide", None),
+                ("pyo3", None),
+                ("pyo3-build-config", Some("build")),
             ],
         ),
         (
@@ -782,7 +900,14 @@ mod tests {
                 ("opentide-compare", Some("dev")),
             ],
         ),
-        ("opentide-node", &[("opentide", None)]),
+        (
+            "opentide-node",
+            &[
+                ("opentide", None),
+                ("napi", None),
+                ("napi-build", Some("build")),
+            ],
+        ),
     ];
 
     /// Where `name` is in a copy of [`WORKSPACE`].
@@ -851,6 +976,49 @@ mod tests {
             [
                 "opentide-analysis -> xtask (build)",
                 "opentide-lsp -> opentide-wasm (dev)"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_repository_table_fails_a_binding_on_an_internal_crate() {
+        // UC-5.1 (#836): opentide-native and opentide-wasm back on the
+        // internal crates they used before the facade carried what they need.
+        let mut crates = WORKSPACE.to_vec();
+        let at = |name: &str| {
+            crates
+                .iter()
+                .position(|(krate, _)| *krate == name)
+                .expect("a member")
+        };
+        let (native, wasm) = (at("opentide-native"), at("opentide-wasm"));
+        crates[native] = (
+            "opentide-native",
+            &[
+                ("opentide", None),
+                ("opentide-analysis", None),
+                ("pyo3", None),
+            ],
+        );
+        crates[wasm] = (
+            "opentide-wasm",
+            &[("opentide-lsp", None), ("opentide-highlight", Some("dev"))],
+        );
+        let report = check(&table(REPOSITORY_TABLE), &metadata(&crates));
+        let edges: Vec<_> = report
+            .violations
+            .iter()
+            .map(|violation| match violation {
+                Violation::NotAllowed { from, to, kind, .. } => format!("{from} -> {to} ({kind})"),
+                other => other.to_string(),
+            })
+            .collect();
+        assert_eq!(
+            edges,
+            [
+                "opentide-native -> opentide-analysis (normal)",
+                "opentide-wasm -> opentide-lsp (normal)",
+                "opentide-wasm -> opentide-highlight (dev)",
             ]
         );
     }

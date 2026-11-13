@@ -21,7 +21,8 @@ exclude = [
     "tests/extract_sentinel/",
     "tests/extract_sentinel.rs",
 ]
-description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
+description = "opentide engine component: the command line (command tree, output modes, JSON envelope, exit codes, crash handler). Internal: depend on the opentide facade (its `cli` feature)."
+readme = "README.md"
 
 # The explain pages build.rs compiles in, which `scripts/engine/release.py
 # vendor` copies into the published crate (its `include_str!`s of

@@ -22,30 +22,30 @@ crate-type = ["cdylib"]
 # interpreter (3.14t) has no stable ABI, so it builds from the sdist.
 # generate-import-lib: a Windows build needs no python3.lib on the machine.
 pyo3 = { workspace = true, features = ["abi3-py310", "generate-import-lib"] }
-# The engine, from this workspace (crates/): `opentide.analysis` checks one
-# query and highlights a text with it.
-opentide-analysis.workspace = true
-# The Tide models as Python classes, opentide._native.models (UC-1.9, #815).
-opentide-schema = { workspace = true, features = ["python"] }
-# The command line, which the `opentide` console script runs in process
-# (`cli_main`, from `opentide._cli`).
-opentide-cli.workspace = true
-# The facade, which the SDK (`opentide._native.sdk`, `opentide.Workspace`,
-# UC-5.2, #837) binds one to one: the command line and the query engines too.
-# `connectors`: the tenant operations, async on tokio, which the SDK awaits
-# under asyncio through pyo3-async-runtimes (UC-5.2b).
-opentide = { path = "../../crates/opentide", features = ["cli", "connectors"] }
+# The facade, and only the facade (ADR 0005, UC-5.1 #836): this crate wraps it
+# and nothing else from the workspace.
+#   `cli`        the command line the `opentide` console script runs in process
+#                (`cli_main`, from `opentide._cli`), and `opentide::cli::main_with_version`.
+#   `analysis`   `opentide.analysis`: check one query and highlight a text.
+#   `python`     the Tide models as Python classes, opentide._native.models (UC-1.9, #815).
+#   `connectors` the tenant operations the SDK (`opentide._native.sdk`,
+#                `opentide.Workspace`, UC-5.2 #837) awaits under asyncio through
+#                pyo3-async-runtimes (UC-5.2b).
+#   `plugins`    the platform plugin host (UC-4.5 #835): plugins behind the
+#                connectors' traits, their query rows in the compiler's ordered JSON.
+opentide = { path = "../../crates/opentide", features = [
+    "cli",
+    "analysis",
+    "python",
+    "connectors",
+    "plugins",
+] }
 # The tenant operations as Python awaitables: each runs on pyo3-async-runtimes'
 # tokio runtime, started on the first call, without the GIL.
 pyo3-async-runtimes = { version = "0.30.0", features = ["tokio-runtime"] }
 # The SDK's documents, handed to Python as JSON text in the facade's key order.
 serde.workspace = true
 serde_json.workspace = true
-# The platform plugin host (UC-4.5, #835): plugins behind the connectors'
-# traits, called on the run's runtime's blocking threads, their query rows in
-# the compiler's ordered JSON.
-opentide-connectors.workspace = true
-opentide-compile.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
@@ -55,7 +55,7 @@ jiff.workspace = true
 # PyO3's introspection data, from which `cargo xtask stubs` writes the
 # generated stubs (src/opentide/_native/models.pyi and sdk.pyi). Only that build turns it
 # on: the wheel carries no introspection data.
-stubs = ["opentide-schema/stubs", "pyo3/experimental-inspect"]
+stubs = ["opentide/stubs", "pyo3/experimental-inspect"]
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

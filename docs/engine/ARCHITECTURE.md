@@ -76,7 +76,7 @@ queries). A key with no field row is `property`. LSP semantic tokens map
 
 **Elastic stack version.** ES|QL availability is checked against the lowest `setup.version` declared across a rule block's target tenants in `.opentide/configurations/platforms/elastic.toml` (the block's `tenants`, or every tenant). A target without a version, or no configuration, means the 8.19 floor (specifications#59). A declared 9.4+ or Serverless target also drops `esql_metadata_id`, because Kibana adds `METADATA _id` itself there.
 
-The object checks are `opentide-workspace`'s `validate`: the language server loads each root with `Workspace::open` over the disk and the editor's buffers, keeps it current with `Workspace::invalidate` (an edit, a watched file, `opentide/didChangeWorkspace`), and publishes `validate`'s findings with their ranges in UTF-16 (UC-2.6, #821; [OBJECTS.md](OBJECTS.md)). The engine adds its query and platform-block diagnostics inside `query: |`.
+The object checks are `opentide-workspace`'s `validate`: the language server loads each root with `Workspace::open` over the disk and the editor's buffers, keeps it current with `Workspace::invalidate` (an edit, a watched file, `opentide/didChangeWorkspace`), and publishes `validate`'s findings with their ranges in UTF-16 (UC-2.6, #821; [OBJECTS.md](OBJECTS.md)). The engine adds its query diagnostics inside `query: |`; the platform blocks are `validate`'s and `lint`'s alone (`opentide_analysis::analyze_blocks`), so no fault is published twice.
 
 ## Configuration TOML
 

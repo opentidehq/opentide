@@ -181,9 +181,13 @@ fn every_code_has_a_description_and_the_version_is_the_crate_version() {
     assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
 }
 
+/// UC-2.6 (#821): the analysis of a Tide object reads no other object of
+/// the workspace — its own checks are `validate`'s — so an unresolved
+/// reference is not a finding here, with or without an index of the
+/// workspace.
 #[test]
-fn analysis_with_a_prebuilt_index_matches_analyze() {
-    use opentide_analysis::{AnalyzeRequest, analyze, analyze_with_index, index_workspace};
+fn the_analysis_reads_no_other_object() {
+    use opentide_analysis::{AnalyzeRequest, analyze, index_workspace};
     let objective = "name: Parent\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n";
     let rule = "name: Child\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\ndetection_model: 00000000-0000-4000-8002-000000000009\n";
     let host = MemoryWorkspace {
@@ -197,12 +201,13 @@ fn analysis_with_a_prebuilt_index_matches_analyze() {
         language: LanguageId::TideYaml,
         text: rule.into(),
     };
-    let index = index_workspace(&host);
-    let codes = |diagnostics: Vec<opentide_analysis::Diagnostic>| {
-        diagnostics.into_iter().map(|d| d.code).collect::<Vec<_>>()
-    };
-    let indexed = codes(analyze_with_index(&host, &index, request.clone()).diagnostics);
-    assert_eq!(indexed, codes(analyze(&host, request).diagnostics));
+    assert_eq!(index_workspace(&host).len(), 2);
+    let found: Vec<String> = analyze(&host, request)
+        .diagnostics
+        .into_iter()
+        .map(|d| d.code)
+        .collect();
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
