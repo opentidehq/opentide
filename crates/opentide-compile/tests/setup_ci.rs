@@ -82,8 +82,59 @@ fn data(text: &str) -> Option<Json> {
     document.root().map(|root| Json::from_node(root))
 }
 
+/// The platforms the 0.23.0 recordings predate: the `platforms-after-0.23`
+/// difference of opentide-schema's `tests/oracle/config_cases.toml`, the one
+/// list the oracle tests share until the oracle moves to 0.28.0 (O2).
+fn platforms_after_the_oracle() -> Vec<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../opentide-schema/tests/oracle/config_cases.toml");
+    let cases: toml::Table = std::fs::read_to_string(path).unwrap().parse().unwrap();
+    cases["difference"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|difference| difference["id"].as_str() == Some("platforms-after-0.23"))
+        .flat_map(|difference| difference["fields"].as_array().unwrap().clone())
+        .map(|field| field.as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// `rendered` without the lines that name one variable the bundled files of
+/// `later` platforms reference: the header's `#   NAME` and a job's
+/// `NAME: ${{ secrets.NAME }}`. 0.28.0 lists and maps them
+/// (`platform_credential_names`); the 0.23.0 recordings could not.
+fn without_later_variables(rendered: &str, later: &[String]) -> String {
+    let texts: Vec<&str> = later
+        .iter()
+        .filter_map(|platform| {
+            opentide_schema::configuration::bundled::text(&format!("platforms/{platform}.toml"))
+        })
+        .collect();
+    let later_variable = |name: &str| {
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+            && texts.iter().any(|text| {
+                text.contains(&format!("${name}")) || text.contains(&format!("${{{name}}}"))
+            })
+    };
+    rendered
+        .split_inclusive('\n')
+        .filter(|line| {
+            let body = line.trim_start().trim_start_matches('#').trim();
+            let name = body.split(':').next().unwrap_or_default().trim();
+            let rest = body.get(name.len()..).unwrap_or_default().trim();
+            let only_names_it = rest.is_empty()
+                || rest.trim_start_matches(':').trim() == format!("${{{{ secrets.{name} }}}}");
+            !(only_names_it && later_variable(name))
+        })
+        .collect()
+}
+
 #[test]
 fn pipelines_are_the_oracles() {
+    let later = platforms_after_the_oracle();
     let mut problems = Vec::new();
     let found = cases();
     assert!(found.len() >= 12, "only {} cases", found.len());
@@ -94,7 +145,7 @@ fn pipelines_are_the_oracles() {
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
         let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
-            Ok(rendered) => rendered,
+            Ok(rendered) => without_later_variables(&rendered, &later),
             Err(error) => {
                 problems.push(format!("{name}: {error}"));
                 continue;

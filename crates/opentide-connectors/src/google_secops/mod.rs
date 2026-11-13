@@ -49,13 +49,18 @@ pub const COMPILE_WARNING: &str = "google_secops_compile_warning";
 /// A block `run_frequency` Google does not allow for the rule.
 pub const FREQUENCY_NOT_ALLOWED: &str = "google_secops_run_frequency_not_allowed";
 
-/// How an instance is reached: 60 s, and no transport-level retry (the
-/// client waits out 429 and 503 itself).
-pub fn http_defaults() -> HttpSettings {
+/// How an instance is reached: the caller's timeout (`for_tenant`'s), and no
+/// transport-level retry (the client waits out 429 and 503 itself).
+pub fn http_settings(timeout: std::time::Duration) -> HttpSettings {
     HttpSettings {
-        timeout: client::DEFAULT_TIMEOUT,
+        timeout,
         ..HttpSettings::default()
     }
+}
+
+/// [`http_settings`] at the client's default, 60 s (deploy's).
+pub fn http_defaults() -> HttpSettings {
+    http_settings(client::DEFAULT_TIMEOUT)
 }
 
 /// Where a tenant's requests go: its endpoint and instance resource.
