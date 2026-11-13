@@ -637,10 +637,12 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
         &["configurations", "harfanglab", "yara", "imports"],
     );
     if !imports.is_empty() {
+        // The generated `import "…"` is the item's: a finding the engine
+        // reports in it (an empty module name) lands on the item.
         for item in &imports {
-            b.synthetic("import \"", host, &yara_path);
+            b.synthetic("import \"", item.start, &item.path);
             b.push(&item.text, &item.map, &item.path, false);
-            b.synthetic("\"\n", host, &yara_path);
+            b.synthetic("\"\n", item.start, &item.path);
         }
         b.synthetic("\n", host, &yara_path);
     }
@@ -891,8 +893,7 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
 }
 
 /// A finding of the YARA engine on an assembled rule, as the block reports
-/// it: what the constraint codes report instead is dropped, and the rest is
-/// kept, on the bytes the author wrote. A finding inside generated text (an
+/// it, on the bytes the author wrote. A finding inside generated text (an
 /// unclosed condition found at the closing brace) moves to the nearest byte
 /// of the field it belongs to, or, when that field has none, onto its key.
 /// No error is lost.
@@ -904,11 +905,11 @@ pub(crate) fn on_assembled(
     if inj.parts.is_empty() {
         return Some(d);
     }
-    if matches!(
-        d.code.as_str(),
-        // `harfanglab_yara_import` and the block's own checks report these.
-        codes::YARA_UNKNOWN_MODULE | codes::YARA_EMPTY_SIGNATURE
-    ) {
+    // An unknown module stays the engine's `yara_unknown_module`, on the
+    // import: `harfanglab_yara_import` is the block's (`block_diagnostics`,
+    // which `validate` and the editor do not report), so dropping it here
+    // would leave them silent on the import.
+    if d.code == codes::YARA_EMPTY_SIGNATURE {
         return None;
     }
     let len = inj.inner.len();

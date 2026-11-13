@@ -150,6 +150,17 @@ fn decomposed_flow_imports_read_as_deploy_reads_them() {
                 "configurations.harfanglab.yara.imports.2",
                 "'"
             ),
+            row(
+                "yara_unknown_module",
+                "configurations.harfanglab.yara.imports.1",
+                "foo"
+            ),
+            // The empty module name lands on its item, not in generated text.
+            row(
+                "yara_unknown_module",
+                "configurations.harfanglab.yara.imports.2",
+                "'"
+            ),
         ]
     );
 }
@@ -197,6 +208,13 @@ fn decomposed_imports_and_headers_and_rule_names() {
                 "yara_module_unconfirmed",
                 "configurations.harfanglab.yara.imports.2",
                 "dotnet"
+            ),
+            // The engine's finding on the same import, which `validate` and
+            // the editor report (the block's code is `--blocks`' only).
+            row(
+                "yara_unknown_module",
+                "configurations.harfanglab.yara.imports.1",
+                "foo"
             ),
         ]
     );
