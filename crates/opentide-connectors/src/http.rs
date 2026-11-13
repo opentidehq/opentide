@@ -80,10 +80,16 @@ impl HttpClient {
             proxies: &proxies,
             env,
         })
-        .map_err(|message| ConnectorError::Setup {
-            platform: label.platform.clone(),
-            tenant: label.tenant.clone(),
-            message,
+        .map_err(|error| match error {
+            transport::MakeError::Setup(message) => ConnectorError::Setup {
+                platform: label.platform.clone(),
+                tenant: label.tenant.clone(),
+                message,
+            },
+            transport::MakeError::NetworkUnavailable => ConnectorError::NetworkUnavailable {
+                platform: label.platform.clone(),
+                tenant: label.tenant.clone(),
+            },
         })?;
         Ok(Self {
             transport,

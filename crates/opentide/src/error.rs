@@ -17,7 +17,7 @@ use std::path::PathBuf;
 /// | [`Error::Usage`] | the command line's usage code (`usage_missing_option`, `usage_invalid_choice`, `usage_invalid_value`) |
 /// | [`Error::NoDocument`] | `no_json_document` |
 /// | [`Error::Lsp`] | `lsp_failed` |
-/// | [`Error::Connector`] | `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported`, `runtime_unavailable` |
+/// | [`Error::Connector`] | `tenant_unreachable`, `tenant_timeout`, `tenant_gateway`, `tenant_answer_invalid`, `tenant_setup_invalid`, `credential_unset`, `authentication_failed`, `tenant_refused`, `query_timed_out`, `connector_crashed`, `interrupted`, `operation_unsupported`, `runtime_unavailable`, `network_unavailable` (the WASI build) |
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {

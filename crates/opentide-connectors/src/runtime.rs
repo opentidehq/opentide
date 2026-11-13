@@ -35,6 +35,21 @@ pub fn builder() -> tokio::runtime::Builder {
     }
 }
 
+/// Runs *work* on a thread of its own and waits for it: `None` when it
+/// panicked. A runtime cannot start on a thread that is already driving
+/// one, so a blocking caller inside a command hands the work to this. On
+/// WASI, which has no threads (a spawn traps), it runs on the caller's.
+pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> Option<T> {
+    #[cfg(not(target_os = "wasi"))]
+    {
+        std::thread::scope(|scope| scope.spawn(work).join().ok())
+    }
+    #[cfg(target_os = "wasi")]
+    {
+        Some(work())
+    }
+}
+
 /// Runs *work* to completion on a runtime of its own.
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
     let runtime = builder()

@@ -14,9 +14,9 @@
 //!   editor's own HTTP stack makes the call.
 //!
 //! What stays above the trait, in `HttpClient`, for both: the retries, the
-//! in-flight limit, cancellation and the mapping to [`ConnectorError`]
-//! (crate::ConnectorError). A transport only reports which way an exchange
-//! failed ([`TransportFailure`]).
+//! in-flight limit, cancellation and the mapping to
+//! [`ConnectorError`](crate::ConnectorError). A transport only reports which
+//! way an exchange failed ([`TransportFailure`]).
 
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -31,7 +31,7 @@ use crate::http::HttpSettings;
 use crate::proxy::ProxySettings;
 use crate::{Environment, TenantLabel};
 
-pub use http::header::{HeaderMap, HeaderName, HeaderValue};
+pub use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 pub use http::{Method, StatusCode};
 
 /// A request, whole: method, URL, headers in the order written, its body and
@@ -444,33 +444,48 @@ impl Drop for Installed {
     }
 }
 
+/// Why a tenant's transport could not be made.
+#[derive(Debug)]
+pub(crate) enum MakeError {
+    /// A setting the transport cannot honour: the setup failure's text.
+    Setup(String),
+    /// The WASI build with no transport installed: no network at all.
+    #[cfg_attr(
+        not(target_os = "wasi"),
+        expect(
+            dead_code,
+            reason = "only the WASI build's default transport has no network"
+        )
+    )]
+    NetworkUnavailable,
+}
+
 /// The transport of the tenant *spec* describes: the installed factory's,
 /// else the build's default.
-pub(crate) fn make(spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+pub(crate) fn make(spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, MakeError> {
     let installed = INSTALLED
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     if let Some(factory) = installed {
-        return factory.make(spec);
+        return factory.make(spec).map_err(MakeError::Setup);
     }
     default(spec)
 }
 
 #[cfg(not(target_os = "wasi"))]
-fn default(spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
-    Ok(Arc::new(ReqwestTransport::new(spec)?))
+fn default(spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, MakeError> {
+    Ok(Arc::new(
+        ReqwestTransport::new(spec).map_err(MakeError::Setup)?,
+    ))
 }
 
 #[cfg(target_os = "wasi")]
-fn default(_spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
-    Err(NETWORK_UNAVAILABLE.to_owned())
+fn default(_spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, MakeError> {
+    // The host gives the process no sockets: only `opentide serve`, with a
+    // client that answers `opentide/fetch`, reaches a tenant.
+    Err(MakeError::NetworkUnavailable)
 }
-
-/// The setup failure of every tenant of the WASI build when no transport is
-/// installed: the host gives the process no sockets, so only `opentide
-/// serve`, with a client that answers `opentide/fetch`, reaches a tenant.
-pub const NETWORK_UNAVAILABLE: &str = "this command needs the network; run the opentide CLI";
 
 /// The native transport: reqwest on rustls.
 #[cfg(not(target_os = "wasi"))]
@@ -583,5 +598,106 @@ impl Transport for ReqwestTransport {
                 outcome = exchange => outcome,
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A transport that answers every request with 204 and names the tenant
+    /// it was made for.
+    #[derive(Debug)]
+    struct Stub(String);
+
+    impl Transport for Stub {
+        fn execute<'a>(
+            &'a self,
+            request: Request,
+            _cancel: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Response, TransportFailure>> {
+            Box::pin(async move {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "x-tenant",
+                    HeaderValue::from_str(&self.0).map_err(|_| TransportFailure::Timeout)?,
+                );
+                Ok(Response::new(
+                    StatusCode::NO_CONTENT,
+                    headers,
+                    request.url().clone(),
+                    (Duration::ZERO, Duration::ZERO),
+                    Ok(Vec::new()),
+                ))
+            })
+        }
+    }
+
+    struct Stubs;
+
+    impl TransportFactory for Stubs {
+        fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+            if spec.label.tenant == "refused" {
+                return Err("a setting the stub cannot honour".to_owned());
+            }
+            Ok(Arc::new(Stub(spec.label.tenant.clone())))
+        }
+    }
+
+    #[test]
+    fn an_installed_factory_makes_every_clients_transport_until_its_guard_drops() {
+        use crate::{ConnectorError, HttpClient, HttpSettings};
+        let client = |tenant: &str| {
+            HttpClient::new(
+                &TenantLabel::new("splunk", tenant),
+                &HttpSettings::default(),
+                &Environment::default(),
+                None,
+            )
+        };
+        let installed = install(Arc::new(Stubs));
+        let lab = client("lab").map_err(|error| error.to_string());
+        let Ok(lab) = lab else {
+            panic!("{lab:?}");
+        };
+        let request = lab
+            .request(Method::GET, "https://splunk.invalid:8089/q")
+            .build();
+        let Ok(request) = request else {
+            panic!("{request:?}");
+        };
+        let answer = crate::runtime::block_on(lab.send(request, &CancellationToken::new()));
+        let Ok(Ok(answer)) = answer else {
+            panic!("{answer:?}");
+        };
+        assert_eq!(answer.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            answer
+                .headers()
+                .get("x-tenant")
+                .and_then(|value| value.to_str().ok()),
+            Some("lab")
+        );
+        assert!(matches!(
+            client("refused"),
+            Err(ConnectorError::Setup { message, .. }) if message == "a setting the stub cannot honour"
+        ));
+        drop(installed);
+        // The build's own transport again.
+        assert!(client("refused").is_ok());
+    }
+
+    #[test]
+    fn a_build_without_a_network_names_its_failure_code() {
+        let error = crate::ConnectorError::NetworkUnavailable {
+            platform: "splunk".into(),
+            tenant: "lab".into(),
+        };
+        assert_eq!(error.failure_code(), crate::error::NETWORK_UNAVAILABLE);
+        assert_eq!(
+            error.to_string(),
+            "this command needs the network, which the WASI build of opentide does not have; \
+             run the opentide CLI"
+        );
     }
 }

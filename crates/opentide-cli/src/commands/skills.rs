@@ -285,10 +285,8 @@ fn get(url: &str, accept: Option<&str>, network: Network<'_>) -> Option<Vec<u8>>
             let work = async {
                 let mut request = client.request(opentide_connectors::transport::Method::GET, url);
                 if let Some(accept) = accept {
-                    request = request.header(
-                        opentide_connectors::transport::HeaderName::from_static("accept"),
-                        accept,
-                    );
+                    request =
+                        request.header(opentide_connectors::transport::header::ACCEPT, accept);
                 }
                 let answer = client.send(request.build().ok()?, &cancel).await.ok()?;
                 if !answer.status().is_success() {
