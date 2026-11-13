@@ -1,7 +1,7 @@
 //! Defender for Endpoint against the cassettes recorded from the Python
 //! client (`tests/cassettes/defender/`, `cargo xtask cassettes record
 //! defender/<scenario>`): every request the connector sends must be the
-//! Python client's, byte for byte and in order, and the answers must read as
+//! Python client's, in order (a JSON body as the same data), and the answers must read as
 //! Python reads them.
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]

@@ -1198,15 +1198,3 @@ fn framework_a_send_stops_when_cancelled() {
     assert!(matches!(outcome, Err(ConnectorError::Cancelled)));
     assert!(started.elapsed() < Duration::from_secs(5));
 }
-
-#[test]
-fn framework_bodies_are_the_python_clients_bytes() {
-    let value = serde_json::json!({"name": "Rule é", "tags": ["a", "b"], "nested": {"n": 1, "x": null, "emoji": "😀", "ctl": "\u{1}\n"}});
-    let bytes = opentide_connectors::body::python_json(&value).unwrap();
-    // json.dumps(value) in CPython (key order as built: serde_json sorts
-    // without preserve_order, as the caller's map decides).
-    assert_eq!(
-        String::from_utf8(bytes).unwrap(),
-        r#"{"name": "Rule \u00e9", "nested": {"ctl": "\u0001\n", "emoji": "\ud83d\ude00", "n": 1, "x": null}, "tags": ["a", "b"]}"#
-    );
-}

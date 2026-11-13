@@ -20,7 +20,6 @@ use opentide_compile::Json;
 use opentide_compile::json::Object;
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
 };
@@ -185,7 +184,7 @@ impl<'a> Client<'a> {
     }
 
     fn serialise(&self, value: &Json) -> Result<Vec<u8>, ConnectorError> {
-        python_json(value).map_err(|error| ConnectorError::Setup {
+        serde_json::to_vec(value).map_err(|error| ConnectorError::Setup {
             platform: PLATFORM.to_owned(),
             tenant: self.tenant().to_owned(),
             message: error.to_string(),
