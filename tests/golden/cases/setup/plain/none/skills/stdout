@@ -1,7 +1,8 @@
   .agents/skills/opentide-detection-rule/SKILL.md
   .agents/skills/detection-engineering/SKILL.md
+  .agents/skills/detection-engineering/references/kql.md
   AGENTS.md
-  .cursor/skills/opentide-detection-rule/SKILL.md   Cursor configuration
-  .cursor/skills/detection-engineering/SKILL.md     Cursor configuration
+  .cursor/skills/opentide-detection-rule/SKILL.md          Cursor configuration
+  .cursor/skills/detection-engineering/SKILL.md            Cursor configuration
 
-✓ Wrote 5 files
+✓ Wrote 6 files

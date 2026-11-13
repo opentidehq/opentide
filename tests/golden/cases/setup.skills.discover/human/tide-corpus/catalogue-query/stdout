@@ -1,7 +1,12 @@
+[1mbitdefender-gravityzone[0m      [2mBitdefender GravityZone (EDR/XDR) custom detection rule authoring for…[0m
 [1mcarbon-black-cloud[0m           [2mVMware Carbon Black Cloud Enterprise EDR authoring guidance…[0m
 [1mcrowdstrike-falcon[0m           [2mCrowdStrike Falcon detection engineering — distinguishes Falcon…[0m
 [1mdetection-engineering[0m        [2mDetection engineering lifecycle across the opentide threat → objective…[0m
+[1melastic-security[0m             [2mElastic Security detection engineering for opentide's `elastic`…[0m
 [1memail-and-collaboration[0m      [2mM365 email and collaboration security telemetry for detection…[0m
+[1mexabeam-siem[0m                 [2mExabeam New-Scale SIEM detection engineering for opentide: correlation…[0m
+[1mgoogle-secops[0m                [2mGoogle Security Operations (Google SecOps, formerly Chronicle)…[0m
+[1mgraylog[0m                      [2mGraylog detection engineering for opentide — event definitions of the…[0m
 [1mharfanglab[0m                   [2mHarfangLab orb / EDR detection engineering — Sigma rule authoring in…[0m
 [1mkusto-query-language[0m         [2mPlatform-agnostic Kusto Query Language (KQL) patterns, optimisation…[0m
 [1mlinux-internals[0m              [2mLinux operating system internals for detection engineering — process…[0m
@@ -12,6 +17,7 @@
 [1mopentide-rule[0m                [2mAuthors opentide Detection Rule objects — structured descriptions…[0m
 [1msentinelone-singularity[0m      [2mSentinelOne Singularity detection engineering — explicit distinction…[0m
 [1msplunk-spl-processing[0m        [2mSplunk Enterprise and Enterprise Security SPL authoring for detection…[0m
+[1msysdig-secure[0m                [2mSysdig Secure and Falco detection engineering for opentide…[0m
 [1mthreat-hunting[0m               [2mThreat hunting hypothesis discipline using the ABLE framework (Actor…[0m
 [1mopentide-detection-rule[0m      [2mAuthor rules as rule::1.1 YAML under objects/rules/.[0m
-[1;32m✓[0m 16 skills match 'rule' · 0 installed · opentidehq/skills@main
+[1;32m✓[0m 22 skills match 'rule' · 0 installed · opentidehq/skills@main

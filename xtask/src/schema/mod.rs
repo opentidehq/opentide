@@ -201,8 +201,8 @@ fn since_oracle_model_prefixes() -> Vec<String> {
         .collect()
 }
 
-/// A property the models have and the oracle's do not: a field development
-/// added after the oracle's release (0.23.0), ported on purpose.
+/// A property the models have and the oracle's do not, ported or written on
+/// purpose.
 #[derive(Debug, Clone, Copy)]
 pub struct ApprovedProperty {
     /// The models that hold it, by Pydantic class name.
@@ -226,14 +226,15 @@ pub const APPROVED_PROPERTIES: &[ApprovedProperty] = &[ApprovedProperty {
         "DetectionRule_v1_1",
     ],
     paths: &[
-        "/properties/advanced",
-        "/properties/splunk/properties/advanced",
-        "/properties/configurations/properties/splunk/properties/advanced",
+        "/properties/advanced/additionalProperties/description",
+        "/properties/splunk/properties/advanced/additionalProperties/description",
+        "/properties/configurations/properties/splunk/properties/advanced/additionalProperties/description",
     ],
-    reason: "0.24.0 (#878): a Splunk block's `advanced` table is a field of the \
-             platform::splunk::1.0 layout again; the oracle (0.23.0) refused it as a \
-             splunk::2.x key",
-    changelog: "**A Splunk block's `advanced` table validates and deploys again**",
+    reason: "the Rust model's value type of a Splunk block's `advanced` table documents \
+             what a value may be (a scalar or null), the hover text an editor shows; the \
+             oracle's schema describes the table alone. The values it accepts are the \
+             same (schema-descriptions, #900)",
+    changelog: "**The editor schemas read differently, and accept the same files**",
 }];
 
 /// Whether `difference` (a line of [`normalise::differences`]) is a
@@ -574,28 +575,29 @@ mod tests {
 
     #[test]
     fn an_approved_property_is_one_the_oracle_lacks_at_its_path() {
-        let added = "/properties/advanced: pydantic (absent), rust {\"type\":\"object\"}";
-        assert_eq!(approved_property("SplunkConfig", added), Some(0));
+        let path = "/properties/advanced/additionalProperties/description";
+        let added = format!("{path}: pydantic (absent), rust \"A value\"");
+        assert_eq!(approved_property("SplunkConfig", &added), Some(0));
         // Another model, another path, or a property both have.
-        assert_eq!(approved_property("SentinelConfig", added), None);
+        assert_eq!(approved_property("SentinelConfig", &added), None);
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advancedx: pydantic (absent), rust {}"
+                "/properties/advanced: pydantic (absent), rust {}"
             ),
             None
         );
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advanced/type: pydantic \"object\", rust \"array\""
+                &format!("{path}: pydantic \"Other\", rust \"A value\"")
             ),
             None
         );
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advanced: pydantic {}, rust (absent)"
+                &format!("{path}: pydantic \"A value\", rust (absent)")
             ),
             None
         );
@@ -608,12 +610,13 @@ mod tests {
     /// reported stale.
     #[test]
     fn approved_properties_pass_and_go_stale() {
+        const VALUE: &str = "A `savedsearches.conf` value";
         let mut schemas = serde_json::Map::new();
         for (name, schema) in rust_schemas() {
             let mut schema = schema;
             for entry in APPROVED_PROPERTIES {
                 if entry.models.contains(&name) {
-                    remove_property(&mut schema, "advanced");
+                    remove_description(&mut schema, VALUE);
                 }
             }
             schemas.insert(name.to_owned(), schema);
@@ -634,7 +637,7 @@ mod tests {
             compared.last(),
             Some(&("(approvals)".to_owned(), Vec::new()))
         );
-        // The oracle with the property too: the approval is stale.
+        // The oracle with the description too: the approval is stale.
         let mut full = serde_json::Map::new();
         for (name, schema) in rust_schemas() {
             full.insert(name.to_owned(), schema);
@@ -646,21 +649,25 @@ mod tests {
         assert!(stale[0].starts_with("stale: "), "{stale:?}");
     }
 
-    /// Removes every property named `name` from `schema`, its definitions
-    /// included.
-    fn remove_property(schema: &mut Value, name: &str) {
+    /// Removes every `description` that starts with `prefix` from `schema`,
+    /// its definitions included.
+    fn remove_description(schema: &mut Value, prefix: &str) {
         match schema {
             Value::Object(map) => {
-                if let Some(Value::Object(properties)) = map.get_mut("properties") {
-                    properties.remove(name);
+                if map
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .is_some_and(|text| text.starts_with(prefix))
+                {
+                    map.remove("description");
                 }
                 for value in map.values_mut() {
-                    remove_property(value, name);
+                    remove_description(value, prefix);
                 }
             }
             Value::Array(items) => items
                 .iter_mut()
-                .for_each(|item| remove_property(item, name)),
+                .for_each(|item| remove_description(item, prefix)),
             _ => {}
         }
     }

@@ -1,0 +1,4 @@
+✗ 86 findings in 80 files · 6 errors, 70 warnings, 10 notes
+→ opentide lint --fix · rename 2 files to match their names
+→ opentide lint --strict --verbose · show 10 notes, such as a missing optional field
+tip: add --json for machine-readable output

@@ -23,7 +23,10 @@
 │                                                          sentinel_one,       │
 │                                                          carbon_black_cloud, │
 │                                                          harfanglab,         │
-│                                                          elastic, sysdig     │
+│                                                          elastic, sysdig,    │
+│                                                          bitdefender,        │
+│                                                          graylog, exabeam,   │
+│                                                          google_secops       │
 │ --ci                                           PROVIDER  CI/CD pipeline to   │
 │                                                          write: github,      │
 │                                                          gitlab, azure or    │

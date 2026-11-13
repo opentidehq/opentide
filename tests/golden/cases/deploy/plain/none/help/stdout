@@ -11,7 +11,9 @@
 │                                                        sentinel_one,         │
 │                                                        carbon_black_cloud,   │
 │                                                        harfanglab, elastic,  │
-│                                                        sysdig                │
+│                                                        sysdig, bitdefender,  │
+│                                                        graylog, exabeam,     │
+│                                                        google_secops         │
 │ --strategy                                   <str>     Status strategy this  │
 │                                                        run deploys           │
 │                                                        (repeatable).         │

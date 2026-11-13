@@ -1,0 +1,160 @@
+{
+  "format": 1,
+  "scenario": "graylog/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/graylog/client.py",
+    "query"
+  ],
+  "digest": "sha256:087af54600aa386f89ce77523415e5bacc078c16bbda1b5dadc3aca59143a1ce",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://graylog-tenant.invalid/api/system",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"facility\": \"graylog-server\", \"hostname\": \"127.0.0.1\", \"version\": \"7.2.2+94adc86\", \"is_processing\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/search/messages",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"timerange\": {\"type\": \"absolute\", \"from\": \"2026-10-26T08:00:00.000Z\", \"to\": \"2026-10-27T08:00:00.250Z\"}, \"size\": 2, \"sort\": \"timestamp\", \"sort_order\": \"desc\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"schema\": [{\"field\": \"timestamp\", \"type\": \"date\"}, {\"field\": \"source\", \"type\": \"string\"}, {\"field\": \"message\", \"type\": \"string\"}, {\"field\": \"EventID\", \"type\": \"string\"}], \"datarows\": [[\"2026-10-26T09:00:00.000Z\", \"ws-01\", \"powershell.exe -enc ZQBj\", \"1\"], [\"2026-10-26T08:30:00.000Z\", \"ws-02\", \"powershell.exe -encodedcommand ZQBj\", \"1\"]], \"metadata\": {\"effective_timerange\": {\"type\": \"absolute\", \"from\": \"2026-10-26T08:00:00.000Z\", \"to\": \"2026-10-27T08:00:00.250Z\"}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://graylog-63.invalid/api/system",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"facility\": \"graylog-server\", \"hostname\": \"127.0.0.1\", \"version\": \"7.2.2+94adc86\", \"is_processing\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-63.invalid/api/search/messages",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"timerange\": {\"type\": \"absolute\", \"from\": \"2026-10-26T08:00:00.000Z\", \"to\": \"2026-10-27T08:00:00.250Z\"}, \"size\": 2, \"sort\": \"timestamp\", \"sort_order\": \"desc\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"schema\": [{\"field\": \"timestamp\", \"type\": \"date\"}, {\"field\": \"source\", \"type\": \"string\"}, {\"field\": \"message\", \"type\": \"string\"}, {\"field\": \"EventID\", \"type\": \"string\"}], \"datarows\": [[\"2026-10-26T09:00:00.000Z\", \"ws-01\", \"powershell.exe -enc ZQBj\", \"1\"], [\"2026-10-26T08:30:00.000Z\", \"ws-02\", \"powershell.exe -encodedcommand ZQBj\", \"1\"]], \"metadata\": {\"effective_timerange\": {\"type\": \"absolute\", \"from\": \"2026-10-26T08:00:00.000Z\", \"to\": \"2026-10-27T08:00:00.250Z\"}}}"
+      }
+    }
+  ]
+}

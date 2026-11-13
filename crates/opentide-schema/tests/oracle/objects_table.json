@@ -1,5 +1,5 @@
 {
- "oracle": "0.23.0",
+ "oracle": "0.28.1",
  "cases": [
   {
    "id": "rule-1-1-minimal",
@@ -5066,94 +5066,27 @@
    "id": "platform-harfanglab-full",
    "family": "rule",
    "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe, modifiers: [endswith]}\n      - {name: l, field: CommandLine, value: [a, b]}\n      - {name: b, field: Signed, value: false}\n      - {name: i, field: Pid, value: 4}\n      - {name: f, field: Score, value: 1.5}\n      condition: s and l\n      false_positives: [admin]\n    maturity: Stable\n    confidence: High\n    action: Block\n    tags: [attack.t1059]\n    yara:\n      meta: {context: [file], os: Windows, arch: [x64], score: High, classification: c}\n      strings: '$a = \"x\"'\n      condition: $a\n      imports: [pe]\n",
-   "value": {
-    "name": "Rule",
-    "metadata": {
-     "uuid": "00000000-0000-4000-8000-000000000001",
-     "schema": "rule::1.1",
-     "version": 1,
-     "created": "2026-01-01",
-     "modified": "2026-01-02",
-     "tlp": "clear"
-    },
-    "description": "d",
-    "techniques": [],
-    "platforms": {},
-    "configurations": {
-     "harfanglab": {
-      "enabled": false,
-      "name": "",
-      "status": "STAGING",
-      "maturity": "Stable",
-      "confidence": "High",
-      "action": "Block",
-      "tags": [
-       "attack.t1059"
-      ],
-      "sigma": {
-       "logsource": {
-        "category": "process_creation",
-        "product": "windows"
-       },
-       "selections": [
-        {
-         "name": "s",
-         "field": "Image",
-         "value": "x.exe",
-         "modifiers": [
-          "endswith"
-         ]
-        },
-        {
-         "name": "l",
-         "field": "CommandLine",
-         "value": [
-          "a",
-          "b"
-         ]
-        },
-        {
-         "name": "b",
-         "field": "Signed",
-         "value": false
-        },
-        {
-         "name": "i",
-         "field": "Pid",
-         "value": 4
-        },
-        {
-         "name": "f",
-         "field": "Score",
-         "value": 1.5
-        }
-       ],
-       "condition": "s and l",
-       "false_positives": [
-        "admin"
-       ]
-      },
-      "yara": {
-       "meta": {
-        "context": [
-         "file"
-        ],
-        "os": "Windows",
-        "arch": [
-         "x64"
-        ],
-        "score": "High",
-        "classification": "c"
-       },
-       "strings": "$a = \"x\"",
-       "condition": "$a",
-       "imports": [
-        "pe"
-       ]
-      }
-     }
+   "errors": [
+    {
+     "type": "value_error",
+     "field_path": [
+      "configurations",
+      "harfanglab"
+     ],
+     "msg": "Value error, HarfangLabConfig validation failed with code(s): harfanglab_rule_kind",
+     "input": null,
+     "ctx": {
+      "error": "HarfangLabConfig validation failed with code(s): harfanglab_rule_kind"
+     },
+     "span": [
+      11,
+      3,
+      13,
+      true
+     ],
+     "yaml_line": 11
     }
-   }
+   ]
   },
   {
    "id": "platform-harfanglab-defaults",
@@ -5460,25 +5393,6 @@
       13,
       12,
       16,
-      false
-     ],
-     "yaml_line": null
-    },
-    {
-     "type": "missing",
-     "field_path": [
-      "configurations",
-      "harfanglab",
-      "yara",
-      "condition"
-     ],
-     "msg": "Field required",
-     "input": null,
-     "ctx": {},
-     "span": [
-      13,
-      5,
-      9,
       false
      ],
      "yaml_line": null

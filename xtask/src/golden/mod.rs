@@ -53,11 +53,12 @@ commands:
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
   check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
-        [--recordings DIR]
+        [--recordings DIR] [--report FILE] [--keep DIR]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
   diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--recordings DIR]
+       [--report FILE] [--keep DIR]
              check, printing every difference in full
   lock [--oracle FILE]
              rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
@@ -76,6 +77,10 @@ commands:
                `node` on PATH, which runs the same command line in-process
                (UC-5.3). `--runner node` alone implies --engine rust
 --report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
+--keep DIR     with --engine rust: write each differing case's candidate run into
+               DIR/cases and DIR/blobs, in the recordings' format (normalised as a
+               recording is, before the comparison's version rule), to read or to
+               re-base ledger entries against
 --oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
                of the next oracle: tests/golden/ORACLE.next); `record` with it
                needs --out, so that the committed recordings stay the ORACLE's
@@ -131,6 +136,9 @@ struct Command {
     determinism: bool,
     jobs: Option<usize>,
     report: Option<PathBuf>,
+    /// `--keep DIR` (`check`, `diff` with `--engine rust`): where each
+    /// differing case's candidate run is written, as a recording.
+    keep: Option<PathBuf>,
     /// `--oracle FILE`: another oracle file than `tests/golden/ORACLE`.
     oracle: Option<PathBuf>,
     /// `--out DIR` (`record`): the recordings' root instead of `tests/golden`.
@@ -160,6 +168,7 @@ fn parse(args: &[String]) -> Result<Command> {
         determinism: false,
         jobs: None,
         report: None,
+        keep: None,
         oracle: None,
         out: None,
         recordings: None,
@@ -188,6 +197,9 @@ fn parse(args: &[String]) -> Result<Command> {
             "--report" if command.verb != Verb::Record => {
                 command.report = Some(PathBuf::from(value()?));
             }
+            "--keep" if matches!(command.verb, Verb::Check | Verb::Diff) => {
+                command.keep = Some(PathBuf::from(value()?));
+            }
             "--jobs" => {
                 let jobs: usize = value()?.parse().context("--jobs needs a number")?;
                 command.jobs = Some(jobs.max(1));
@@ -207,6 +219,9 @@ fn parse(args: &[String]) -> Result<Command> {
         && (command.engine != "python" || command.runner != Runner::Python)
     {
         bail!("only the oracle records: `record` takes no --engine or --runner");
+    }
+    if command.keep.is_some() && command.engine != "rust" && command.runner != Runner::Node {
+        bail!("--keep writes the candidate runs of --engine rust");
     }
     if command.runner == Runner::Node {
         if !engine_given {
@@ -417,6 +432,7 @@ impl Command {
                     self.report.as_deref(),
                     self.verb == Verb::Diff,
                     (&oracle.version, candidate_version.as_deref().unwrap_or("")),
+                    self.keep.as_deref(),
                 )
             }
             _ => self.check(layout, oracle, &all, &selected, &ctx, jobs),
@@ -647,9 +663,13 @@ fn prepare_fixtures(
         std::fs::create_dir(&ws).with_context(|| format!("create {}", ws.display()))?;
         spec.materialise(repo, &ws)
             .with_context(|| format!("generate fixture `{name}`"))?;
+        // The copy is the materialised workspace: its edits and its push are
+        // in it already, so each case's copy applies them no second time.
         let copy = fixture::FixtureSpec {
             kind: fixture::FixtureKind::Copy,
             source: Some(ws.to_string_lossy().into_owned()),
+            edits: Vec::new(),
+            pushed: Vec::new(),
             ..spec.clone()
         };
         out.insert(name.clone(), copy);
@@ -859,6 +879,51 @@ fn read(path: &Path) -> Result<String> {
 mod tests {
     use super::*;
 
+    /// A generated fixture with an edit is generated and edited once; each
+    /// case's copy of it applies the edit no second time (an edit that writes
+    /// a new file would otherwise find it there and fail).
+    #[test]
+    fn a_generated_fixture_is_edited_once() {
+        let spec = Spec::parse(
+            r#"
+[defaults]
+modes = ["json"]
+fixtures = ["made"]
+timeout_secs = 10
+
+[fixtures.made]
+kind = "generated"
+argv = ["sh", "-c", "echo made > {out}/a.txt"]
+edits = [{ path = "b.txt", find = "", replace = "edited\n" }]
+
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+modes = ["json"]
+fixtures = ["made"]
+"#,
+        )
+        .unwrap();
+        let cases = spec.expand().unwrap();
+        let repo = tempfile::tempdir().unwrap();
+        let (fixtures, _guards) = prepare_fixtures(&spec.fixtures, &cases, repo.path()).unwrap();
+        let copy = &fixtures["made"];
+        assert!(copy.edits.is_empty() && copy.pushed.is_empty());
+        for _ in 0..2 {
+            let dest = tempfile::tempdir().unwrap();
+            copy.materialise(repo.path(), dest.path()).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(dest.path().join("b.txt")).unwrap(),
+                "edited\n"
+            );
+            assert_eq!(
+                std::fs::read_to_string(dest.path().join("a.txt")).unwrap(),
+                "made\n"
+            );
+        }
+    }
+
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| (*s).to_owned()).collect()
     }
@@ -994,6 +1059,7 @@ fixtures = ["none", "empty"]
             determinism,
             jobs: Some(2),
             report: None,
+            keep: None,
             oracle: None,
             out: None,
             recordings: None,

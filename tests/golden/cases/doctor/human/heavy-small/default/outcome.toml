@@ -37,5 +37,5 @@ path = "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1000027
-blob = "9c005838e0ed2a0e86838344008eff9e55c24261f2df642a8adfb3c63aa8c469"
+size = 1133851
+blob = "d6aa3b9aa10fe5ece8b1baa3254fd8fb463944ef29c5d92c99f3e7742393c7b1"

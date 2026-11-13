@@ -1,0 +1,2 @@
+✓ 12 notes in 12 files
+→ opentide lint --strict --check metadata --verbose · show 12 notes, such as a missing optional field

@@ -31,8 +31,8 @@ path = "ws/.opentide/lsp/catalogs/generated/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1000027
-blob = "9c005838e0ed2a0e86838344008eff9e55c24261f2df642a8adfb3c63aa8c469"
+size = 1133851
+blob = "d6aa3b9aa10fe5ece8b1baa3254fd8fb463944ef29c5d92c99f3e7742393c7b1"
 
 [[files]]
 path = "ws/.opentide/schemas"
@@ -60,16 +60,16 @@ path = "ws/.opentide/schemas/rule.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5035507
-blob = "97bbfa205a36004fd87284aa73e104b0a41d39d39fe804443b2a5090ad4aea59"
+size = 5126672
+blob = "f5dd5d0eaf27213c80b5baebbe20a71ef1dd6f27070f851c3cfea5b07a9ccd90"
 
 [[files]]
 path = "ws/.opentide/schemas/rule.1.1.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5037717
-blob = "15d2d6288cf937f5b69520d0f501bf4caaa9284856b0a8981cf4dcb4698e5bf2"
+size = 5128882
+blob = "be9eff98fc25755d07d17d5578ffc51b9ae71c8188ea7acbe1507504669ba901"
 
 [[files]]
 path = "ws/.opentide/schemas/threat.1.0.schema.json"
@@ -138,7 +138,7 @@ path = "ws/.opentide/templates/platforms/harfanglab.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 626
+size = 655
 
 [[files]]
 path = "ws/.opentide/templates/platforms/sentinel.template.yaml"
@@ -173,14 +173,14 @@ path = "ws/.opentide/templates/rule.1.0.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 9214
+size = 12295
 
 [[files]]
 path = "ws/.opentide/templates/rule.1.1.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 9238
+size = 12319
 
 [[files]]
 path = "ws/.opentide/templates/threat.1.0.template.yaml"
