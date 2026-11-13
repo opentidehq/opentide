@@ -647,9 +647,13 @@ fn prepare_fixtures(
         std::fs::create_dir(&ws).with_context(|| format!("create {}", ws.display()))?;
         spec.materialise(repo, &ws)
             .with_context(|| format!("generate fixture `{name}`"))?;
+        // The copy is the materialised workspace: its edits and its push are
+        // in it already, so each case's copy applies them no second time.
         let copy = fixture::FixtureSpec {
             kind: fixture::FixtureKind::Copy,
             source: Some(ws.to_string_lossy().into_owned()),
+            edits: Vec::new(),
+            pushed: Vec::new(),
             ..spec.clone()
         };
         out.insert(name.clone(), copy);
@@ -858,6 +862,51 @@ fn read(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A generated fixture with an edit is generated and edited once; each
+    /// case's copy of it applies the edit no second time (an edit that writes
+    /// a new file would otherwise find it there and fail).
+    #[test]
+    fn a_generated_fixture_is_edited_once() {
+        let spec = Spec::parse(
+            r#"
+[defaults]
+modes = ["json"]
+fixtures = ["made"]
+timeout_secs = 10
+
+[fixtures.made]
+kind = "generated"
+argv = ["sh", "-c", "echo made > {out}/a.txt"]
+edits = [{ path = "b.txt", find = "", replace = "edited\n" }]
+
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+modes = ["json"]
+fixtures = ["made"]
+"#,
+        )
+        .unwrap();
+        let cases = spec.expand().unwrap();
+        let repo = tempfile::tempdir().unwrap();
+        let (fixtures, _guards) = prepare_fixtures(&spec.fixtures, &cases, repo.path()).unwrap();
+        let copy = &fixtures["made"];
+        assert!(copy.edits.is_empty() && copy.pushed.is_empty());
+        for _ in 0..2 {
+            let dest = tempfile::tempdir().unwrap();
+            copy.materialise(repo.path(), dest.path()).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(dest.path().join("b.txt")).unwrap(),
+                "edited\n"
+            );
+            assert_eq!(
+                std::fs::read_to_string(dest.path().join("a.txt")).unwrap(),
+                "made\n"
+            );
+        }
+    }
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| (*s).to_owned()).collect()
