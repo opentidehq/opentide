@@ -471,6 +471,18 @@ pub fn check_object(
                 issues.push(issue);
             }
         }
+        if subject.family == "rule" {
+            use opentide_schema::objects::platform::google_secops::advisories::{
+                SECTION_ALIAS, aliased_sections,
+            };
+            issues.extend(aliased_sections(root).into_iter().map(|alias| {
+                let mut diagnostic = new(SECTION_ALIAS, alias.message())
+                    .at(alias.field_path())
+                    .suggest(Some(alias.suggestion()));
+                diagnostic.yaml_line = Some(alias.yaml_line);
+                diagnostic
+            }));
+        }
         issues.extend(references(subject, root, graph));
         if subject.family == "threat" {
             issues.extend(chaining(subject, root, graph));
