@@ -2697,7 +2697,7 @@ jobs:
             if [[ "${REPORT_ONLY:-false}" == true ]]; then
               # The catch-up train: the ledger is being re-based on the next
               # oracle (O2), so a stale entry is reported, not gated.
-              echo "${stale}" | sed 's/^error: /::warning::report only: /'
+              echo "${stale//error: /::warning::report only: }"
               echo "tests/golden/REPORT_ONLY is present: stale entries reported, not gated"
               exit 0
             fi
