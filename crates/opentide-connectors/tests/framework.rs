@@ -476,6 +476,58 @@ fn framework_a_connect_timeout_is_unreachable() {
     );
 }
 
+/// A cancelled connection's requests stop with `Cancelled`, every time,
+/// even when the request would fail at once. reqwest answers a scheme it
+/// does not send (`ftp://`) on the request's first poll, as a refused
+/// connection on loopback sometimes is; with both branches of a `select!`
+/// ready, an unbiased one picked the request's failure about one call in
+/// four, and the Node binding's `a_connection_runs_its_operations_on_the_runtime`
+/// read `tenant_unreachable` for `interrupted` now and then.
+#[test]
+fn framework_a_cancelled_connection_is_interrupted_every_time() {
+    let client = HttpClient::new(
+        &label("cancelled"),
+        &HttpSettings::default(),
+        &Environment::default(),
+        None,
+    )
+    .unwrap();
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for _ in 0..200 {
+            let request = client
+                .request(reqwest::Method::GET, "ftp://127.0.0.1/q")
+                .build()
+                .unwrap();
+            outcomes.push(client.send(request, &cancel).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    let answered: Vec<_> = outcomes
+        .iter()
+        .filter(|outcome| !matches!(outcome, Err(ConnectorError::Cancelled)))
+        .collect();
+    assert!(
+        answered.is_empty(),
+        "{} of 200 not cancelled: {:?}",
+        answered.len(),
+        answered.first()
+    );
+    // Not cancelled, the same request fails at once: the race was real.
+    let request = client
+        .request(reqwest::Method::GET, "ftp://127.0.0.1/q")
+        .build()
+        .unwrap();
+    let failure = block_on(client.send(request, &CancellationToken::new())).unwrap();
+    assert!(
+        !matches!(failure, Err(ConnectorError::Cancelled)),
+        "{failure:?}"
+    );
+}
+
 #[test]
 fn framework_a_connection_that_fails_is_retried_for_any_method() {
     let env_for = |url: &str| Environment::from_pairs([("HTTPS_PROXY", url)]);

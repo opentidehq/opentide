@@ -337,6 +337,7 @@ impl SentinelOne {
                 });
             }
             tokio::select! {
+                biased;
                 () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }

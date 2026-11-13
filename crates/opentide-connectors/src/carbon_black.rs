@@ -594,6 +594,7 @@ impl CarbonBlack {
                 });
             }
             tokio::select! {
+                biased;
                 () = cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(POLL_DELAY) => {}
             }
