@@ -30,12 +30,18 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
 import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -973,8 +979,6 @@ def test_engine_lint_builds_xtask_once() -> None:
 def _workspace_packages() -> dict[str, Path]:
     """Every member of the root Cargo.toml's workspace: its package name and
     directory."""
-    import tomllib
-
     manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
     packages = {}
     for member in manifest["workspace"]["members"]:
