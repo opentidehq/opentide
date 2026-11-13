@@ -140,3 +140,19 @@ def test_preflight_names_the_missing_secret(secret: str) -> None:
     """A maintainer reading the failure needs to know what to configure."""
     preflight = next(step for step in _steps() if "HAS_APP" in str(step.get("if", "")))
     assert secret in str(preflight["run"])
+
+
+def test_the_ingest_runs_the_rust_port_of_this_checkout() -> None:
+    """The ingest is ``cargo xtask vocab ingest`` (UC-6.3), not the removed Python package.
+
+    It ran from an old commit (``INGEST_REV``) while the Python implementation was
+    gone and the port was not there; nothing of that may come back.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "cargo xtask vocab ingest --apply" in text
+    assert "cargo xtask vocab sync" in text
+    for gone in ("INGEST_REV", "git worktree", "scripts/vocabulary/", "uv run", "uv sync"):
+        assert gone not in text, gone
+    steps = _steps()
+    names = [step.get("name", "") for step in steps]
+    assert names.index("Set up Rust") < names.index("Fetch and merge upstream vocabularies")
