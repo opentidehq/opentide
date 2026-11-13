@@ -153,7 +153,9 @@ Analyze (actions)
 ```
 
 Branch protection on `integration/unified-core` requires every check above and the two of
-[`golden.yml`](workflows/golden.yml) below, which run on every pull request into it (#803).
+[`golden.yml`](workflows/golden.yml) below, which start on every pull request into it (#803);
+the check's job is skipped, which reports success, unless a golden input changed or the pull
+request has the `full-ci` label.
 `tests/test_ci/test_golden_workflow.py` fails when this list and golden.yml's jobs differ, or
 when golden.yml's `pull_request` trigger gets a path or branch filter back: a required check
 that never starts blocks the merge.
@@ -166,9 +168,10 @@ Golden check (python)
 
 `Golden determinism` (recording every case twice, about 26 minutes) is in the full set:
 nightly, on every push and Run workflow, and on a pull request only with the `full-ci` label; it
-is no longer required. `Golden check (python)` (about 8 minutes) runs on every pull request into
-`integration/unified-core`, and on other bases when a golden input changed; `Golden compare`
-(ci.yml) on every pull request.
+is no longer required. `Golden check (python)` (about 20 minutes) runs on a pull request only
+when a golden input changed or with the `full-ci` label: since UC-6.2 (#841) its oracle is a frozen
+PyPI release, so a pull request that touches none of its inputs cannot change its result.
+`Golden compare` (ci.yml) runs on every pull request.
 `Golden paths` is the filter, and is required so that it cannot fail unnoticed (its dependants
 also run when it fails).
 
@@ -226,9 +229,9 @@ removed from the rule too, or every pull request that does not run it waits for 
   `golden record --check-determinism` against the committed recordings of the frozen Python CLI
   (`tests/golden/README.md`) on every push to `development` and `integration/unified-core`,
   nightly and on demand. On a pull request its `Golden paths` job reads whether the pull request
-  touches `tests/golden/`, `tests/corpora/`, the tide corpus, `xtask/`, `.cargo/`, `Cargo.*`,
-  `rust-toolchain.toml`, `.gitattributes` or golden.yml: the check runs when it does, and on
-  every pull request into `integration/unified-core`. The determinism run is in the full set
+  touches `tests/golden/`, `tests/corpora/`, the tide corpus, the render tests' inputs,
+  `scripts/golden/`, xtask's golden, corpus, compare and parallel code, `crates/opentide-compare/`
+  or golden.yml: the check runs when it does, or with the `full-ci` label. The determinism run is in the full set
   (the `full-ci` label on a pull request). The trigger itself has no path filter, so
   `integration/unified-core` requires `Golden paths` and the check (Required checks, above).
 - [`docs.yml`](workflows/docs.yml) (`scripts/validate-docs.sh`) and
