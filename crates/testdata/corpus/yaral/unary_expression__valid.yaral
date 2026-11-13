@@ -1,0 +1,2 @@
+// prod:unary_expression valid
+#e > 0 and !$f

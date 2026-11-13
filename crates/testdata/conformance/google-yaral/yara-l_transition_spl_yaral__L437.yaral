@@ -1,0 +1,18 @@
+events:
+  //Filter for successful login events
+  metadata.event_type = "USER_LOGIN"
+  principal.user.userid != ""
+
+match:
+  //Group by each unique user ID, aggregated over a calendar day.
+  principal.user.userid by day
+
+outcome:
+  //Count how many successful logins occurred for this user on this specific day.
+  $daily_success_count = count(metadata.id)
+
+  //Get the timestamp of the FIRST event within this daily group.
+  $first_event_time = window.first(metadata.event_timestamp.seconds, timestamp.get_timestamp(metadata.event_timestamp.seconds))
+
+  //Get the timestamp of the LAST event within this daily group.
+  $last_event_time = window.last(metadata.event_timestamp.seconds, timestamp.get_timestamp(metadata.event_timestamp.seconds))

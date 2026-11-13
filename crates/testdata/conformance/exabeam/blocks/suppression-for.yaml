@@ -1,0 +1,19 @@
+name: Suppression for
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000135
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case suppression-for.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    suppression: {for: 1y}
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'

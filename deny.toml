@@ -134,6 +134,12 @@ skip = [
   # napi-derive (the Node binding, UC-5.3) with 0.12.
   { crate = "convert_case@0.10.0", reason = "only derive_more-impl 2.1 (crossterm, opentide-cli's setup wizard) uses it, a proc macro run at compile time; napi-derive (the Node binding's TypeScript names) uses convert_case 0.12. Neither links into an artifact" },
   { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
+  # yara-x-parser 1.23 (opentide-yara's verdict parser, language-server 0.13.0)
+  # is pinned exactly (=1.23.0) and brings rowan 0.17, which is on hashbrown
+  # 0.14 and rustc-hash 1, and itertools 0.15, a release past ratatui's.
+  { crate = "hashbrown@0.14.5", reason = "rowan 0.17 (yara-x-parser 1.23, opentide-yara) uses hashbrown 0.14; indexmap and the rest of the graph use 0.17" },
+  { crate = "rustc-hash@1.1.0", reason = "rowan 0.17 (yara-x-parser 1.23, opentide-yara) uses rustc-hash 1; the rest of the graph uses 2" },
+  { crate = "itertools@0.14.0", reason = "ratatui-core 0.1 (opentide-cli's tui) uses itertools 0.14; yara-x-parser 1.23 (opentide-yara) uses 0.15" },
 ]
 
 # Every crate comes from crates.io. A git or another registry's crate fails

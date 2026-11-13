@@ -127,7 +127,74 @@ pub const APPROVED: &[Approved] = &[
                     query Next-Gen SIEM would refuse**",
         applies: crowdstrike_cql,
     },
+    Approved {
+        id: "splunk-advanced",
+        reason: "a Splunk block's `advanced` table is a field of the platform::splunk::1.0 \
+                 layout again (0.24.0, #878), the only place a rule sets savedsearches.conf \
+                 keys no other field sets; the oracle (0.23.0) refused it as an unknown key",
+        changelog: "**A Splunk block's `advanced` table validates and deploys again**",
+        applies: splunk_advanced,
+    },
+    Approved {
+        id: "legacy-text-id-crash",
+        reason: "a legacy `rule_id::<tenant>` key whose id is text is `external_id_in_rule` \
+                 (0.26.0, #913); the oracle (0.23.0) read the tenant as a schema version and \
+                 crashed before it wrote a report",
+        changelog: "**`validate` no longer crashes on a legacy external-id key with a text value**",
+        applies: legacy_text_id_crash,
+    },
+    Approved {
+        id: "sentinel-durations",
+        reason: "KG-01 (#810): a Sentinel duration deploy cannot read (`frequency: hourly`) is \
+                 the model's `schema_validation` on the field, from every run, where the oracle \
+                 reported it only from the compile check, as `compile_invalid_rule` on the \
+                 platform's block, in the same words",
+        changelog: "**Sentinel durations are checked when the rule is validated**",
+        applies: sentinel_durations,
+    },
+    Approved {
+        id: "elastic-severity-mapping",
+        reason: "KG-09 (#817): the Elastic compiler reads a `severity` block without `mapping` \
+                 as no mapping, as the documented shape allows, so the compile check passes the \
+                 rule, where the oracle's compiler failed on the missing key (`compile_failed`, \
+                 `'mapping'`)",
+        changelog: "**An Elastic rule whose `severity` has no `mapping` validates and deploys**",
+        applies: elastic_severity_mapping,
+    },
+    Approved {
+        id: "compile-empty-key-frame",
+        reason: "a compile finding on a key left empty (`response:`) is framed at that key, \
+                 where the oracle's ruamel placed the empty value on the next key's line; the \
+                 finding, its `field_path` and its `yaml_line` (the key's line) are the same \
+                 (#817)",
+        changelog: "**`opentide validate` fails a rule a deploy cannot compile, as 0.23.0 did**",
+        applies: compile_empty_key_frame,
+    },
 ];
+
+/// The oracle's `schema_validation` of a Splunk block's `advanced` table,
+/// which the Rust run accepts.
+fn splunk_advanced(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), None) = (oracle, rust) else {
+        return false;
+    };
+    code(oracle) == "schema_validation"
+        && oracle["field_path"] == json!(["configurations", "splunk", "advanced"])
+        && oracle["message"] == json!("Extra inputs are not permitted")
+}
+
+/// A case the oracle crashed on with #913's error (its `failure`, no
+/// report), which the Rust run validates.
+fn legacy_text_id_crash(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    rust == &json!("a report")
+        && oracle["code"] == json!("internal")
+        && oracle["message"].as_str().is_some_and(|message| {
+            message.starts_with("ValueError: invalid literal for int() with base 10: ")
+        })
+}
 
 /// The parts of a `--fix` case no approved finding explains.
 const FIX_PARTS: [&str; 7] = [
@@ -327,6 +394,67 @@ fn without_since_oracle_items(text: &str) -> String {
             .replace(&format!(", {id}"), "");
     }
     out
+}
+
+/// KG-01: the oracle's `compile_invalid_rule` on a Sentinel block for a
+/// duration it cannot read, and the Rust model's `schema_validation` on the
+/// duration's own field, in the same words.
+fn sentinel_durations(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    const DURATION: &str = "is not an ISO 8601 duration";
+    match (oracle, rust) {
+        (Some(oracle), None) => {
+            code(oracle) == "compile_invalid_rule"
+                && oracle["field_path"] == json!(["configurations", "sentinel"])
+                && oracle["message"]
+                    .as_str()
+                    .is_some_and(|m| m.starts_with("Duration ") && m.contains(DURATION))
+        }
+        (None, Some(rust)) => {
+            code(rust) == "schema_validation"
+                && rust["field_path"].as_array().is_some_and(|path| {
+                    path.len() > 2 && path[..2] == [json!("configurations"), json!("sentinel")]
+                })
+                && rust["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains(DURATION))
+        }
+        _ => false,
+    }
+}
+
+/// KG-09: the oracle's `compile_failed` on an Elastic block whose `severity`
+/// has no `mapping`, which the Rust compiler compiles.
+fn elastic_severity_mapping(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), None) = (oracle, rust) else {
+        return false;
+    };
+    code(oracle) == "compile_failed"
+        && oracle["context"]["platform"] == "elastic"
+        && oracle["message"] == "Elastic cannot compile this rule: 'mapping'"
+}
+
+/// The same compile finding, framed at the empty key the oracle framed on
+/// the next key's line: everything but the frame is the oracle's.
+fn compile_empty_key_frame(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    let (Some(oracle), Some(rust)) = (oracle, rust) else {
+        return false;
+    };
+    let frame = ["line", "column", "end_line", "end_column"];
+    let unframed = |finding: &Json| {
+        finding.as_object().map(|object| {
+            object
+                .iter()
+                .filter(|(key, _)| !frame.contains(&key.as_str()))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect::<BTreeMap<_, _>>()
+        })
+    };
+    code(oracle).starts_with("compile_")
+        && unframed(oracle) == unframed(rust)
+        && rust["line"].as_u64().is_some_and(|line| {
+            rust["yaml_line"].as_u64() == Some(line - 1)
+                && oracle["line"].as_u64().is_some_and(|theirs| theirs > line)
+        })
 }
 
 /// The arguments of a recorded case, as `validate` options.
@@ -536,7 +664,8 @@ fn run_case(
             out.push(Difference {
                 case: case.id.clone(),
                 what: "report".to_owned(),
-                oracle: None,
+                // What the oracle printed instead: its failure.
+                oracle: Some(recorded["failure"].clone()),
                 rust: Some(json!("a report")),
                 oracle_list: Arc::from(Vec::new()),
             });
@@ -556,6 +685,7 @@ fn run_case(
             .as_ref()
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
         platform_configurations: None,
+        compile_check: Some(&opentide_compile::validate::Compilers),
     };
     let validation = match args.fix {
         None => workspace.validate(&options),
@@ -914,7 +1044,10 @@ pub fn run(args: &[String]) -> Result<u8> {
             .or_insert(true) &= explained;
     }
     for difference in &differences {
-        let rule = if is_list(difference) || difference.what == QUERIES_CHECKED {
+        let rule = if is_list(difference)
+            || difference.what == QUERIES_CHECKED
+            || difference.what == "report"
+        {
             rule_of(difference)
         } else {
             None
@@ -984,6 +1117,25 @@ mod tests {
         assert_eq!(report["issues"][0]["message"], "a");
     }
     use super::*;
+
+    #[test]
+    fn the_catchup_rules_name_one_finding_and_one_crash() {
+        let refused = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
+            "field_path": ["configurations", "splunk", "advanced"]});
+        assert!(splunk_advanced(Some(&refused), None, &[]));
+        assert!(!splunk_advanced(Some(&refused), Some(&refused), &[]));
+        let other = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
+            "field_path": ["configurations", "splunk", "search"]});
+        assert!(!splunk_advanced(Some(&other), None, &[]));
+
+        let crash = json!({"code": "internal",
+            "message": "ValueError: invalid literal for int() with base 10: 'prod'"});
+        let report = json!("a report");
+        assert!(legacy_text_id_crash(Some(&crash), Some(&report), &[]));
+        let other = json!({"code": "internal", "message": "KeyError: 'x'"});
+        assert!(!legacy_text_id_crash(Some(&other), Some(&report), &[]));
+        assert!(!legacy_text_id_crash(None, Some(&report), &[]));
+    }
 
     fn argv(args: &[&str]) -> Vec<String> {
         ["opentide", "--json", "validate"]

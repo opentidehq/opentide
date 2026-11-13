@@ -3,8 +3,8 @@ title: Diagnostic codes
 description: What each opentide diagnostic code means, an example, and how to fix it.
 ---
 
-<!-- Generated from src/opentide/data/diagnostics/ by
-     scripts/build/render_diagnostics_docs.py. Edit the pages there. -->
+<!-- Generated from src/opentide/data/diagnostics/ and the analysis engine's codes by
+     `cargo xtask codegen`. Edit the pages there. -->
 
 # Diagnostic codes
 
@@ -16,6 +16,21 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target. |
+| [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`. |
+| [`bitdefender_criteria_combination`](#bitdefender_criteria_combination) | The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion. |
+| [`bitdefender_criterion_field`](#bitdefender_criterion_field) | The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list). |
+| [`bitdefender_criterion_relation`](#bitdefender_criterion_relation) | The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`. |
+| [`bitdefender_criterion_shape`](#bitdefender_criterion_shape) | A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value. |
+| [`bitdefender_criterion_value`](#bitdefender_criterion_value) | The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535. |
+| [`bitdefender_registry_full_hive`](#bitdefender_registry_full_hive) | A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`. |
+| [`bitdefender_rule_kind`](#bitdefender_rule_kind) | A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule). |
+| [`bitdefender_severity`](#bitdefender_severity) | `severity` is not `Low`, `Medium`, or `High`. |
+| [`bitdefender_severity_collapsed`](#bitdefender_severity_collapsed) | `response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`. |
+| [`bitdefender_target`](#bitdefender_target) | `detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused. |
+| [`bitdefender_targets_shape`](#bitdefender_targets_shape) | `targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias. |
+| [`bitdefender_yara_ascii`](#bitdefender_yara_ascii) | A Bitdefender YARA signature holds a character that is not ASCII. |
+| [`bitdefender_yara_size`](#bitdefender_yara_size) | A Bitdefender YARA signature is longer than 30,000 characters. |
 | [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
 | [`chaining_relation_unknown`](#chaining_relation_unknown) | A threat's chaining relation is not a known relation. |
 | [`changed_diff`](#changed_diff) | `share push --changed` could not calculate which objects changed. |
@@ -38,7 +53,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cql_duplicate_parameter`](#cql_duplicate_parameter) | A CQL function parameter is given more than once. |
 | [`cql_event_function_after_aggregate`](#cql_event_function_after_aggregate) | A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190. |
 | [`cql_free_text_after_aggregate`](#cql_free_text_after_aggregate) | A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190. |
-| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields. |
+| [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields. |
 | [`cql_match_guard`](#cql_match_guard) | A CQL match guard is an aggregate function; a guard must be a filter. |
 | [`cql_missing_parameter`](#cql_missing_parameter) | A CQL function call leaves out a required parameter. |
 | [`cql_parameter_value`](#cql_parameter_value) | A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds. |
@@ -93,6 +108,57 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`esql_unknown_command`](#esql_unknown_command) | The ES|QL command is not one Elasticsearch knows. |
 | [`esql_unknown_function`](#esql_unknown_function) | The ES|QL function is not in the Elasticsearch function catalog. |
 | [`esql_unknown_type`](#esql_unknown_type) | The ::type cast names a type no Elasticsearch release can cast to. |
+| [`exabeam_advanced_in_rule`](#exabeam_advanced_in_rule) | A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only. |
+| [`exabeam_bare_wildcard`](#exabeam_bare_wildcard) | A * alone is not an Exabeam query term. |
+| [`exabeam_clause_order`](#exabeam_clause_order) | Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT. |
+| [`exabeam_context_table_limit`](#exabeam_context_table_limit) | An Exabeam query has more than two context table lookups. |
+| [`exabeam_context_table_or`](#exabeam_context_table_or) | An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only. |
+| [`exabeam_context_table_trigger`](#exabeam_context_table_trigger) | An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match. |
+| [`exabeam_correlation`](#exabeam_correlation) | An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by. |
+| [`exabeam_correlation_window`](#exabeam_correlation_window) | An Exabeam correlation window is shorter than the longest sequence threshold window. |
+| [`exabeam_duration`](#exabeam_duration) | An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes. |
+| [`exabeam_email`](#exabeam_email) | An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank. |
+| [`exabeam_foreach_clause`](#exabeam_foreach_clause) | An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY. |
+| [`exabeam_foreach_position`](#exabeam_foreach_position) | An Exabeam FOREACH is the first statement; it runs on the result of a preceding query. |
+| [`exabeam_foreach_reference`](#exabeam_foreach_reference) | An Exabeam @field reference is outside a FOREACH sub-query. |
+| [`exabeam_free_text_special`](#exabeam_free_text_special) | Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes. |
+| [`exabeam_function_arity`](#exabeam_function_arity) | An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern. |
+| [`exabeam_group_by`](#exabeam_group_by) | An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty). |
+| [`exabeam_group_by_column`](#exabeam_group_by_column) | An Exabeam selected column is neither in GROUP-BY nor aggregated. |
+| [`exabeam_group_by_select_star`](#exabeam_group_by_select_star) | An Exabeam GROUP-BY is combined with SELECT *. |
+| [`exabeam_implicit_and`](#exabeam_implicit_and) | Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND. |
+| [`exabeam_implicit_operator`](#exabeam_implicit_operator) | An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT. |
+| [`exabeam_ipv6_range`](#exabeam_ipv6_range) | An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only. |
+| [`exabeam_keyword_case`](#exabeam_keyword_case) | An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case. |
+| [`exabeam_leading_slash`](#exabeam_leading_slash) | An Exabeam query cannot start with /. |
+| [`exabeam_legacy_regex`](#exabeam_legacy_regex) | An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path. |
+| [`exabeam_mixed_boolean`](#exabeam_mixed_boolean) | Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence. |
+| [`exabeam_name_duplicate`](#exabeam_name_duplicate) | Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case. |
+| [`exabeam_name_length`](#exabeam_name_length) | The Exabeam rule name is longer than 128 characters. |
+| [`exabeam_not_equal`](#exabeam_not_equal) | Exabeam filters have no != operator; write NOT field:value. |
+| [`exabeam_outcome`](#exabeam_outcome) | An Exabeam outcome is not alert, case or none. |
+| [`exabeam_outcome_silent`](#exabeam_outcome_silent) | An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event. |
+| [`exabeam_parse_error`](#exabeam_parse_error) | The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number. |
+| [`exabeam_pipe_limit`](#exabeam_pipe_limit) | An Exabeam query has more than five pipes. |
+| [`exabeam_pipe_misuse`](#exabeam_pipe_misuse) | An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE. |
+| [`exabeam_range`](#exabeam_range) | The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network. |
+| [`exabeam_regex`](#exabeam_regex) | The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier. |
+| [`exabeam_reserved_alias`](#exabeam_reserved_alias) | An Exabeam AS name is one of the Search guide's reserved words. |
+| [`exabeam_rgx_extract_limit`](#exabeam_rgx_extract_limit) | An Exabeam query has more than three RGX_EXTRACT calls. |
+| [`exabeam_schedule`](#exabeam_schedule) | An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take. |
+| [`exabeam_sequences`](#exabeam_sequences) | An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query. |
+| [`exabeam_severity`](#exabeam_severity) | An Exabeam severity is not none, low, medium, high or critical. |
+| [`exabeam_single_group`](#exabeam_single_group) | Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them. |
+| [`exabeam_string_field_number`](#exabeam_string_field_number) | An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes. |
+| [`exabeam_threshold_function`](#exabeam_threshold_function) | An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing. |
+| [`exabeam_threshold_operator`](#exabeam_threshold_operator) | An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value. |
+| [`exabeam_threshold_value`](#exabeam_threshold_value) | An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer. |
+| [`exabeam_time_exact`](#exabeam_time_exact) | An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only. |
+| [`exabeam_unknown_field`](#exabeam_unknown_field) | The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it. |
+| [`exabeam_unknown_function`](#exabeam_unknown_function) | The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT. |
+| [`exabeam_unknown_value`](#exabeam_unknown_value) | An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it. |
+| [`exabeam_unquoted_value`](#exabeam_unquoted_value) | An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes. |
+| [`exabeam_wildcard_in_phrase`](#exabeam_wildcard_in_phrase) | A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
 | [`external_id_shape`](#external_id_shape) | A vendor rule id in deployment state has the wrong form. |
 | [`falco_append_condition`](#falco_append_condition) | A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not. |
@@ -150,6 +216,29 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`google_secops_tenant_unauthorized`](#google_secops_tenant_unauthorized) | A Google SecOps instance refused opentide's credentials. |
 | [`google_secops_tenant_unreachable`](#google_secops_tenant_unreachable) | A Google SecOps instance did not answer, so no rule was deployed to it. |
 | [`google_secops_verify_failed`](#google_secops_verify_failed) | Google SecOps does not compile a rule, so deploy neither creates nor updates it. |
+| [`graylog_aggregation`](#graylog_aggregation) | A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments. |
+| [`graylog_analyzed_field`](#graylog_analyzed_field) | A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value. |
+| [`graylog_double_backslash`](#graylog_double_backslash) | A Graylog query holds four backslashes in a row: `\\` is already one literal backslash, so `\\\\` matches two. |
+| [`graylog_event_field`](#graylog_event_field) | A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`. |
+| [`graylog_event_key`](#graylog_event_key) | A Graylog `event_key` item is not an `event_fields` name. |
+| [`graylog_event_limit`](#graylog_event_limit) | A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation. |
+| [`graylog_field_name`](#graylog_field_name) | A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`). |
+| [`graylog_leading_wildcard`](#graylog_leading_wildcard) | A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form. |
+| [`graylog_list_shape`](#graylog_list_shape) | A Graylog list field is not one string or a list of distinct non-blank strings. |
+| [`graylog_open_range`](#graylog_open_range) | A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`. |
+| [`graylog_overlapping_window`](#graylog_overlapping_window) | A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run. |
+| [`graylog_priority`](#graylog_priority) | A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`. |
+| [`graylog_query_blank`](#graylog_query_blank) | A Graylog block's `query` is missing or blank. |
+| [`graylog_regex_operator`](#graylog_regex_operator) | A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character. |
+| [`graylog_regex_quote`](#graylog_regex_quote) | A Graylog regex holds an unescaped `"`, which Lucene reads as a quoted literal, not the character: escape it as `\"`. |
+| [`graylog_regex_unsupported`](#graylog_regex_unsupported) | A Graylog regex uses an inline flag, a `(?…)` group, `\b`, `\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query. |
+| [`graylog_schedule`](#graylog_schedule) | A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`. |
+| [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
+| [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho. |
+| [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
+| [`harfanglab_yara_import`](#harfanglab_yara_import) | A decomposed HarfangLab YARA imports entry is not a module the YARA language knows. |
+| [`harfanglab_yara_rule_name`](#harfanglab_yara_rule_name) | The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore. |
+| [`harfanglab_yara_section_header`](#harfanglab_yara_section_header) | A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself. |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
 | [`interrupted`](#interrupted) | The command was stopped before it finished: an `opentide serve` client cancelled the run. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
@@ -285,6 +374,64 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
 | [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
+| [`yara_duplicate_rule`](#yara_duplicate_rule) | Two YARA rules in one signature have the same name. |
+| [`yara_duplicate_string`](#yara_duplicate_string) | Two strings of one YARA rule have the same identifier. |
+| [`yara_duplicate_tag`](#yara_duplicate_tag) | A YARA rule repeats a tag. |
+| [`yara_empty_signature`](#yara_empty_signature) | The YARA signature has no rule, or only private or global rules. |
+| [`yara_entrypoint_deprecated`](#yara_entrypoint_deprecated) | entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point. |
+| [`yara_hex_string`](#yara_hex_string) | A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives. |
+| [`yara_include`](#yara_include) | A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it. |
+| [`yara_meta_missing`](#yara_meta_missing) | A non-private YARA rule lacks a meta key the platform profile recommends. |
+| [`yara_module_not_imported`](#yara_module_not_imported) | A YARA module field or function is used without importing its module. |
+| [`yara_module_unconfirmed`](#yara_module_unconfirmed) | The YARA module is known but not confirmed on the platform's agents. |
+| [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
+| [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as libyara 4.5 reads it. |
+| [`yara_regexp`](#yara_regexp) | A YARA regular expression is invalid. |
+| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible. |
+| [`yara_signature_alias`](#yara_signature_alias) | A YARA signature is a YAML alias instead of text written out in its own block. |
+| [`yara_slow_pattern`](#yara_slow_pattern) | libyara warns that this YARA string or loop may slow scanning down. |
+| [`yara_string_modifier`](#yara_string_modifier) | libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
+| [`yara_suspicious_expression`](#yara_suspicious_expression) | A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean. |
+| [`yara_type`](#yara_type) | A YARA operator or function is applied to a value of the wrong type. |
+| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds. |
+| [`yara_undefined_string`](#yara_undefined_string) | A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define. |
+| [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module libyara does not ship. |
+| [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
+| [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which libyara refuses unless the condition uses them. |
+| [`yara_x_incompatible`](#yara_x_incompatible) | libyara 4.5 compiles this YARA but YARA-X 1.x refuses it. |
+| [`yaral_condition_shape`](#yaral_condition_shape) | The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event. |
+| [`yaral_deprecated_field`](#yaral_deprecated_field) | The UDM field is deprecated. |
+| [`yaral_enum_value`](#yaral_enum_value) | The value is not one of the enumerated UDM field's values. |
+| [`yaral_export_value`](#yaral_export_value) | An `export` `write_row` value is not an outcome variable: Google exports outcome variables only. |
+| [`yaral_function_unavailable`](#yaral_function_unavailable) | The function exists, but not in this profile (rules or search). |
+| [`yaral_leading_wildcard_regex`](#yaral_leading_wildcard_regex) | The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time. |
+| [`yaral_match_shape`](#yaral_match_shape) | The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`. |
+| [`yaral_match_variable`](#yaral_match_variable) | A `match` name is not a placeholder bound in `events`. |
+| [`yaral_match_window`](#yaral_match_window) | The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d. |
+| [`yaral_meta_duplicate`](#yaral_meta_duplicate) | A meta key appears twice, or a meta value is not a double-quoted string. |
+| [`yaral_multi_event_match`](#yaral_multi_event_match) | A rule with two or more event variables has no `match` section. |
+| [`yaral_nocase_on_enum`](#yaral_nocase_on_enum) | `nocase` is applied to a comparison with an enumerated UDM field. |
+| [`yaral_option`](#yaral_option) | An unknown option, or an option value of the wrong kind. |
+| [`yaral_outcome_aggregation`](#yaral_outcome_aggregation) | With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable. |
+| [`yaral_outcome_limit`](#yaral_outcome_limit) | A rule or search assigns more than 20 outcome variables. |
+| [`yaral_parse_error`](#yaral_parse_error) | The YARA-L text does not parse, or a text holds a second rule. |
+| [`yaral_reference_list_deprecated`](#yaral_reference_list_deprecated) | Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`). |
+| [`yaral_reference_list_limit`](#yaral_reference_list_limit) | More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2). |
+| [`yaral_regex`](#yaral_regex) | The regular expression is not valid RE2. |
+| [`yaral_reserved_identifier`](#yaral_reserved_identifier) | A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`. |
+| [`yaral_section_alias`](#yaral_section_alias) | A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys. |
+| [`yaral_section_empty`](#yaral_section_empty) | A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`). |
+| [`yaral_section_header`](#yaral_section_header) | A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only. |
+| [`yaral_section_missing`](#yaral_section_missing) | A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule. |
+| [`yaral_section_order`](#yaral_section_order) | A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export). |
+| [`yaral_section_unavailable`](#yaral_section_unavailable) | The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections. |
+| [`yaral_string_escape`](#yaral_string_escape) | A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles. |
+| [`yaral_type`](#yaral_type) | An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number. |
+| [`yaral_undefined_variable`](#yaral_undefined_variable) | A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`. |
+| [`yaral_unfiltered_event`](#yaral_unfiltered_event) | An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event. |
+| [`yaral_unknown_function`](#yaral_unknown_function) | The function is not in Google's YARA-L function list, or it takes a different number of arguments. |
+| [`yaral_unknown_udm_field`](#yaral_unknown_udm_field) | The field path is not in the Unified Data Model. |
+| [`yaral_window_bound`](#yaral_window_bound) | `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window. |
 
 ## analysis_engine
 
@@ -359,6 +506,246 @@ assets = ["domain-controller"]   # declared as domain-controllers
 ### How to fix
 
 Correct the asset name, or declare the asset under `[[assets]]`.
+
+## bitdefender_action_scope
+
+An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_contains_no_wildcard
+
+A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_criteria_combination
+
+The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_criterion_field
+
+The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_criterion_relation
+
+The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_criterion_shape
+
+A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_criterion_value
+
+The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_registry_full_hive
+
+A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_rule_kind
+
+A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_severity
+
+`severity` is not `Low`, `Medium`, or `High`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_severity_collapsed
+
+`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_target
+
+`detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_targets_shape
+
+`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_yara_ascii
+
+A Bitdefender YARA signature holds a character that is not ASCII.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## bitdefender_yara_size
+
+A Bitdefender YARA signature is longer than 30,000 characters.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
 
 ## cbc_unknown_field
 
@@ -727,7 +1114,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## cql_link_outside_correlate
 
-The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields.
 
 Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -1633,6 +2020,822 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [ES|QL reference](https://www.elastic.co/docs/reference/query-languages/esql) describes the syntax and the commands the engine checks against.
 
+## exabeam_advanced_in_rule
+
+A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_bare_wildcard
+
+A * alone is not an Exabeam query term.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_clause_order
+
+Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_context_table_limit
+
+An Exabeam query has more than two context table lookups.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_context_table_or
+
+An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_context_table_trigger
+
+An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_correlation
+
+An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_correlation_window
+
+An Exabeam correlation window is shorter than the longest sequence threshold window.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_duration
+
+An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_email
+
+An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_foreach_clause
+
+An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_foreach_position
+
+An Exabeam FOREACH is the first statement; it runs on the result of a preceding query.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_foreach_reference
+
+An Exabeam @field reference is outside a FOREACH sub-query.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_free_text_special
+
+Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_function_arity
+
+An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_group_by
+
+An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_group_by_column
+
+An Exabeam selected column is neither in GROUP-BY nor aggregated.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_group_by_select_star
+
+An Exabeam GROUP-BY is combined with SELECT *.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_implicit_and
+
+Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_implicit_operator
+
+An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_ipv6_range
+
+An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_keyword_case
+
+An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_leading_slash
+
+An Exabeam query cannot start with /.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_legacy_regex
+
+An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_mixed_boolean
+
+Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_name_duplicate
+
+Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_name_length
+
+The Exabeam rule name is longer than 128 characters.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_not_equal
+
+Exabeam filters have no != operator; write NOT field:value.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_outcome
+
+An Exabeam outcome is not alert, case or none.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_outcome_silent
+
+An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_parse_error
+
+The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_pipe_limit
+
+An Exabeam query has more than five pipes.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_pipe_misuse
+
+An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_range
+
+The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_regex
+
+The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_reserved_alias
+
+An Exabeam AS name is one of the Search guide's reserved words.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_rgx_extract_limit
+
+An Exabeam query has more than three RGX_EXTRACT calls.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_schedule
+
+An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_sequences
+
+An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_severity
+
+An Exabeam severity is not none, low, medium, high or critical.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_single_group
+
+Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_string_field_number
+
+An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_threshold_function
+
+An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_threshold_operator
+
+An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_threshold_value
+
+An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_time_exact
+
+An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_unknown_field
+
+The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_unknown_function
+
+The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_unknown_value
+
+An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_unquoted_value
+
+An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## exabeam_wildcard_in_phrase
+
+A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
 ## external_id_in_rule
 
 A rule still carries a vendor rule id key, which belongs in deployment state.
@@ -2159,7 +3362,7 @@ Severity: error. Reported by `opentide validate query --platform google_secops -
 
 ### Example
 
-```text
+```text illustrative
 google_secops_compile_error: configurations.google_secops.condition line 1, column 1: event variable $success is not used
 ```
 
@@ -2175,7 +3378,7 @@ Severity: warning. Reported by `opentide validate query --platform google_secops
 
 ### Example
 
-```text
+```text illustrative
 google_secops_compile_warning: configurations.google_secops.events line 2, column 5: reference lists are deprecated
 ```
 
@@ -2191,7 +3394,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_create_no_id: rules.create for password_spray answered name None, which does not end in a rule id
 ```
 
@@ -2207,7 +3410,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_create_unconfirmed: the create of rule password_spray got no answer (read timed out)
 ```
 
@@ -2223,7 +3426,7 @@ Severity: error. Reported by `opentide deploy`, `opentide validate query --live`
 
 ### Example
 
-```text
+```text illustrative
 google_secops_credentials_missing: the credentials variable GOOGLE_SECOPS_CREDENTIALS is not set
 ```
 
@@ -2239,7 +3442,7 @@ Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant wit
 
 ### Example
 
-```text
+```text illustrative
 google_secops_delete_refused: Google refused to delete rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 because it has detections or retrohunts; it is archived instead
 ```
 
@@ -2255,7 +3458,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_deployment_failed: rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 is bound, but its run state could not be set
 ```
 
@@ -2332,7 +3535,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_request_failed: INVALID_ARGUMENT: the rule text is too long
 ```
 
@@ -2367,7 +3570,7 @@ Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (go
 
 ### Example
 
-```text
+```text illustrative
 google_secops_rule_compilation_failed: Google reports the rule's compilation as FAILED
 ```
 
@@ -2383,7 +3586,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_rule_conflict: rule ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1 changed between its read and the update (etag mismatch)
 ```
 
@@ -2399,7 +3602,7 @@ Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (go
 
 ### Example
 
-```text
+```text illustrative
 google_secops_rule_execution_limited: Google reports the rule's execution as PAUSED: it is not run at all
 ```
 
@@ -2434,7 +3637,7 @@ Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (go
 
 ### Example
 
-```text
+```text illustrative
 google_secops_rule_missing: the recorded rule no longer exists on the instance; its id is removed
 ```
 
@@ -2468,7 +3671,7 @@ Severity: warning. Reported by `opentide deploy` on a `google_secops` tenant (go
 
 ### Example
 
-```text
+```text illustrative
 google_secops_rule_recreated: the recorded rule no longer exists on the instance; creating it again
 ```
 
@@ -2502,7 +3705,7 @@ Severity: error. Reported by `opentide deploy` before any write, and by `opentid
 
 ### Example
 
-```text
+```text illustrative
 google_secops_run_frequency_not_allowed: run_frequency LIVE is not one Google allows for this rule (LIVE_CUSTOMIZABLE, HOURLY_CUSTOMIZABLE, DAILY); nothing was written
 ```
 
@@ -2556,7 +3759,7 @@ Severity: error. Reported by `opentide deploy` and `opentide validate query --li
 
 ### Example
 
-```text
+```text illustrative
 google_secops_tenant_unauthorized: tenant secops-eu refused the request (HTTP 403 PERMISSION_DENIED): Permission 'chronicle.rules.create' denied
 ```
 
@@ -2572,7 +3775,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_tenant_unreachable: HTTPSConnectionPool(host='eu-chronicle.googleapis.com', port=443): Read timed out
 ```
 
@@ -2588,13 +3791,381 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 
 ### Example
 
-```text
+```text illustrative
 google_secops_verify_failed: Google SecOps does not compile rule password_spray: configurations.google_secops.events line 3, column 5: field principal.nope does not exist
 ```
 
 ### How to fix
 
 Fix the section the diagnostic names and run `opentide validate query --platform google_secops --live`, which asks the same compiler without deploying.
+
+## graylog_aggregation
+
+A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_analyzed_field
+
+A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_double_backslash
+
+A Graylog query holds four backslashes in a row: `\\` is already one literal backslash, so `\\\\` matches two.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_event_field
+
+A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_event_key
+
+A Graylog `event_key` item is not an `event_fields` name.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_event_limit
+
+A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_field_name
+
+A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_leading_wildcard
+
+A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_list_shape
+
+A Graylog list field is not one string or a list of distinct non-blank strings.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_open_range
+
+A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_overlapping_window
+
+A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_priority
+
+A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_query_blank
+
+A Graylog block's `query` is missing or blank.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_regex_operator
+
+A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_regex_quote
+
+A Graylog regex holds an unescaped `"`, which Lucene reads as a quoted literal, not the character: escape it as `\"`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_regex_unsupported
+
+A Graylog regex uses an inline flag, a `(?…)` group, `\b`, `\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## graylog_schedule
+
+A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_rule_kind
+
+A HarfangLab block sets both sigma and yara; a block is one kind.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_context
+
+A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_form
+
+A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_import
+
+A decomposed HarfangLab YARA imports entry is not a module the YARA language knows.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_rule_name
+
+The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## harfanglab_yara_section_header
+
+A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
 
 ## internal
 
@@ -4875,3 +6446,931 @@ metadata:
 ### How to fix
 
 Open the file at the line and column the diagnostic names. The note says what the parser was reading when it gave up, and where that started: an unclosed `[` or `{`, a missing quote, a tab used for indentation, or a key indented under a scalar. A key repeated in the same mapping is reported here too. A file whose top level is a list (`- name: …`) or a single value is reported as "expected a mapping at the top of the file": an object file is one mapping of keys such as `name`, `metadata` and `description`. The file is not indexed until it parses, so no other check can see it.
+
+## yara_duplicate_rule
+
+Two YARA rules in one signature have the same name.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_duplicate_string
+
+Two strings of one YARA rule have the same identifier.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_duplicate_tag
+
+A YARA rule repeats a tag.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_empty_signature
+
+The YARA signature has no rule, or only private or global rules.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_entrypoint_deprecated
+
+entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_hex_string
+
+A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_include
+
+A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_meta_missing
+
+A non-private YARA rule lacks a meta key the platform profile recommends.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_module_not_imported
+
+A YARA module field or function is used without importing its module.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_module_unconfirmed
+
+The YARA module is known but not confirmed on the platform's agents.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_number_out_of_range
+
+A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_parse_error
+
+The YARA signature does not parse as libyara 4.5 reads it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_regexp
+
+A YARA regular expression is invalid.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_rule_identifier_conflict
+
+A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_signature_alias
+
+A YARA signature is a YAML alias instead of text written out in its own block.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_slow_pattern
+
+libyara warns that this YARA string or loop may slow scanning down.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_string_modifier
+
+libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_suspicious_expression
+
+A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_type
+
+A YARA operator or function is applied to a value of the wrong type.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_undefined_identifier
+
+A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_undefined_string
+
+A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_unknown_module
+
+A YARA import names a module libyara does not ship.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_unknown_module_member
+
+The YARA module has no such field or function, or the function takes other arguments.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_unreferenced_string
+
+A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yara_x_incompatible
+
+libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_condition_shape
+
+The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_deprecated_field
+
+The UDM field is deprecated.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_enum_value
+
+The value is not one of the enumerated UDM field's values.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_export_value
+
+An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_function_unavailable
+
+The function exists, but not in this profile (rules or search).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_leading_wildcard_regex
+
+The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_match_shape
+
+The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_match_variable
+
+A `match` name is not a placeholder bound in `events`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_match_window
+
+The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_meta_duplicate
+
+A meta key appears twice, or a meta value is not a double-quoted string.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_multi_event_match
+
+A rule with two or more event variables has no `match` section.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_nocase_on_enum
+
+`nocase` is applied to a comparison with an enumerated UDM field.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_option
+
+An unknown option, or an option value of the wrong kind.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_outcome_aggregation
+
+With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_outcome_limit
+
+A rule or search assigns more than 20 outcome variables.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_parse_error
+
+The YARA-L text does not parse, or a text holds a second rule.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_reference_list_deprecated
+
+Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_reference_list_limit
+
+More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_regex
+
+The regular expression is not valid RE2.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_reserved_identifier
+
+A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_alias
+
+A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_empty
+
+A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_header
+
+A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_missing
+
+A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_order
+
+A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_section_unavailable
+
+The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_string_escape
+
+A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_type
+
+An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_undefined_variable
+
+A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_unfiltered_event
+
+An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_unknown_function
+
+The function is not in Google's YARA-L function list, or it takes a different number of arguments.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_unknown_udm_field
+
+The field path is not in the Unified Data Model.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## yaral_window_bound
+
+`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.

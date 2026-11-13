@@ -243,7 +243,7 @@ One new runtime dependency, `textual`, for `opentide tui`.
 
 | Command | Budget (warm cache) | How |
 |---------|---------------------|-----|
-| `opentide --version` | < 120 ms | Answered in `main()` before Typer is imported |
+| `opentide --version` | under 120 ms | Answered in `main()` before Typer is imported |
 | `opentide --help`, completion | Import no engine module | Commands load lazily from modules; help text comes from a static registry; `opentide/__init__` resolves `Opentide` lazily |
 
 Tests assert the import graph (which modules a command imports), not wall-clock time, so they hold on every Python version in the CI matrix.

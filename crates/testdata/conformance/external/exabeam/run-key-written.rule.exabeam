@@ -1,0 +1,3 @@
+activity_type:"registry-modify"
+AND registry_path:WLDi("*\\Software\\Microsoft\\Windows\\CurrentVersion\\Run*")
+AND NOT process_path:RGXi("^c:\\\\program files( \\(x86\\))?\\\\")

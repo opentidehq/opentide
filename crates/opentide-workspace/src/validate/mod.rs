@@ -11,11 +11,15 @@
 //! | `configuration` | `missing_field`, `unknown_key`, `schema_validation`, `promotion_target_unknown`; warnings `asset_unknown` |
 //! | `sharing-config` | `sharing.toml`'s codes |
 //! | `queries` | the query engines' codes, from the host's [`QueryCheck`] (UC-2.5, #820) |
+//! | `schema`, once nothing else failed | `compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, `compile_invalid_rule`, `compile_failed`, from the host's [`CompileCheck`] |
 //! | every run | `nested_object_file` (warning), `scope_no_match` |
 //!
 //! The online part of `cve` asks the host's [`CveCheck`] (UC-4.4, #834);
-//! without one it reports nothing. Not here yet: the compile check
-//! (`compile_*`, the deploy payload's; Phase 3, `opentide-compile`).
+//! without one it reports nothing. The compile check (#660; UC-2.2, #817)
+//! compiles each rule a deploy would compile with the platforms' offline
+//! compilers, which sit above this crate (`opentide-compile`'s
+//! `validate::Compilers`): the host passes them as [`Options::compile_check`];
+//! without them it reports nothing.
 
 pub mod annotate;
 pub mod objects;
@@ -269,6 +273,48 @@ pub trait CveCheck: Sync {
     fn lookup(&self, threat: &str, id: &str) -> CveLookup;
 }
 
+/// A rule the compile check reads.
+#[derive(Debug, Clone, Copy)]
+pub struct CompileRule<'a> {
+    /// Its file.
+    pub path: &'a Path,
+    /// Its document's root mapping.
+    pub root: &'a Node,
+}
+
+/// A rule a platform's offline compiler refuses (`compile_issues`): the
+/// compiler's code, reason and hint, and the key at fault.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileFailure {
+    /// The platform (`sentinel`).
+    pub platform: String,
+    /// `compile_missing_field`, `compile_invalid_value`, `compile_empty_block`,
+    /// `compile_invalid_rule` or `compile_failed`.
+    pub code: String,
+    /// The reason, in the reader's words.
+    pub message: String,
+    /// What to do, when known.
+    pub hint: Option<String>,
+    /// The key at fault, from the rule's root; empty when the compiler names
+    /// none (the finding is then the platform's block).
+    pub field_path: Vec<String>,
+}
+
+/// The compile check (#660), which the host supplies: the platform compilers
+/// sit above this crate (`opentide-compile`'s `validate::Compilers`, UC-2.2,
+/// #817). What a deploy would compile must compile.
+pub trait CompileCheck: Sync {
+    /// For each of `rules`, in order, every platform of `enabled` with an
+    /// offline compiler whose block's status deploys and whose compiler
+    /// refuses the rule, by platform name.
+    fn check(
+        &self,
+        ws: &Workspace,
+        rules: &[CompileRule<'_>],
+        enabled: &BTreeSet<String>,
+    ) -> Vec<Vec<CompileFailure>>;
+}
+
 /// One finding of a plugin platform's own check of a rule's block
 /// ([`PlatformConfigurations`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -316,6 +362,9 @@ pub struct Options<'a> {
     /// The plugin platforms' block checks; without one a block of a
     /// platform that is not built in is an extra key.
     pub platform_configurations: Option<&'a dyn PlatformConfigurations>,
+    /// The platform compilers (the compile check); without them nothing is
+    /// compiled.
+    pub compile_check: Option<&'a dyn CompileCheck>,
 }
 
 impl std::fmt::Debug for Options<'_> {
@@ -331,6 +380,7 @@ impl std::fmt::Debug for Options<'_> {
                 "platform_configurations",
                 &self.platform_configurations.is_some(),
             )
+            .field("compile_check", &self.compile_check.is_some())
             .finish()
     }
 }
@@ -712,6 +762,78 @@ fn plugin_blocks(
             }
         }
     }
+}
+
+/// The compile check's findings (`_compile_issues`, `compile_issues`): one
+/// error per rule and platform whose compiler refuses it, at the key at
+/// fault, else the platform's block, its line the deepest key of that path
+/// the file has.
+fn compile_findings(
+    ws: &Workspace,
+    compile: &dyn CompileCheck,
+    work: &[Subject<'_>],
+    enabled: &BTreeSet<String>,
+) -> Vec<Diagnostic> {
+    let rules: Vec<(&Subject<'_>, CompileRule<'_>)> = work
+        .iter()
+        .filter(|subject| subject.family == "rule")
+        .filter_map(|subject| {
+            let root = subject.document.root()?;
+            Some((
+                subject,
+                CompileRule {
+                    path: subject.path,
+                    root: root.as_ref(),
+                },
+            ))
+        })
+        .collect();
+    let inputs: Vec<CompileRule<'_>> = rules.iter().map(|(_, rule)| *rule).collect();
+    let found = compile.check(ws, &inputs, enabled);
+    let mut findings = Vec::new();
+    for ((subject, _), failures) in rules.iter().zip(found) {
+        for failure in failures {
+            let field_path = if failure.field_path.is_empty() {
+                vec!["configurations".to_owned(), failure.platform.clone()]
+            } else {
+                failure.field_path
+            };
+            let mut diagnostic = Diagnostic::error(failure.code, failure.message)
+                .object(subject.uuid, "rule")
+                .file(subject.path)
+                .at(field_path)
+                .suggest(failure.hint)
+                .with("platform", failure.platform);
+            diagnostic.yaml_line = nearest_key_line(root_of(subject), &diagnostic.field_path);
+            findings.push(diagnostic);
+        }
+    }
+    findings
+}
+
+fn root_of<'d>(subject: &Subject<'d>) -> Option<&'d Node> {
+    subject.document.root().map(AsRef::as_ref)
+}
+
+/// The line, from 0, of the deepest key of `field_path` the document has:
+/// the key at fault, or the block that should hold it (`_nearest_line`).
+fn nearest_key_line(root: Option<&Node>, field_path: &[String]) -> Option<usize> {
+    let mut node = root?;
+    let mut line = None;
+    for part in field_path {
+        let Value::Map(entries) = &node.value else {
+            break;
+        };
+        let Some(entry) = entries
+            .iter()
+            .find(|entry| entry.key.value.as_str() == Some(part.as_str()))
+        else {
+            break;
+        };
+        line = entry.key.start.line.checked_sub(1);
+        node = &entry.value;
+    }
+    line
 }
 
 /// Python's sort key of an error (`sort_issues`).
@@ -1100,6 +1222,15 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
                 };
                 issues.extend(objects::check_object(&subject, &graph, uuid_only, fs, &root).issues);
             }
+        }
+        // What a deploy would compile must compile (#660), checked only once
+        // nothing else failed: a malformed rule, or one naming an object
+        // that failed to load, is reported once, for its cause (KG-10).
+        if let (Some(compile), Some(enabled)) = (options.compile_check, graph.enabled.as_ref())
+            && !enabled.is_empty()
+            && issues.is_empty()
+        {
+            issues.extend(compile_findings(ws, compile, &work, enabled));
         }
     }
     let mut stats = Stats {

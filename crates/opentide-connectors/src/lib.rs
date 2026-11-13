@@ -139,8 +139,8 @@ mod tests {
             super::sentinel::http_settings(Duration::from_secs(300))
         );
         assert_eq!(
-            super::http_settings("sentinel", Duration::from_secs(900)).timeout,
-            super::sentinel::http_settings(Duration::from_secs(900)).timeout
+            super::http_settings("sentinel", Duration::from_mins(15)).timeout,
+            super::sentinel::http_settings(Duration::from_mins(15)).timeout
         );
         assert_eq!(
             super::http_settings("defender_for_endpoint", timeout),

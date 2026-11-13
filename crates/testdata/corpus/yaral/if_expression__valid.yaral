@@ -1,0 +1,11 @@
+// prod:if_expression valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  outcome:
+    $risk_score = if($e.security_result.action = "BLOCK", 80, 20)
+  condition:
+    $e
+}

@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use opentide_compile::validate::Compilers;
 use opentide_workspace::fix::{apply_reason, fix_command, fix_phrase, plural};
 use opentide_workspace::validate::{
     Check, Options, QueriesMode, STRICT_EXEMPT_WARNINGS, Selection, Validation,
@@ -306,6 +307,7 @@ pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
             .as_ref()
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
         platform_configurations: crate::plugins::configurations(),
+        compile_check: Some(&Compilers),
     };
     let validation = ws.validate(&options);
     Ok(run_of(validation, ws.root()))
@@ -405,6 +407,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             .as_ref()
             .map(|cve| cve as &dyn opentide_workspace::validate::CveCheck),
         platform_configurations: crate::plugins::configurations(),
+        compile_check: Some(&Compilers),
     };
     let check_name = args.check.map(Check::name);
     let rerun_fix = fix_command(check_name, queries_flag(queries), &args.selection);
