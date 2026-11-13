@@ -85,6 +85,16 @@ impl<R: Read> Lines<R> {
         }
     }
 
+    /// The next line already read, without reading more: `None` when no
+    /// whole line is waiting (a last line without its `\n` waits for the end
+    /// of input).
+    pub fn buffered_line(&mut self) -> Option<Vec<u8>> {
+        let end = self.pending.iter().position(|byte| *byte == b'\n')?;
+        let mut line: Vec<u8> = self.pending.drain(..=end).collect();
+        line.pop();
+        Some(line)
+    }
+
     /// The next line, reading as much as it takes; `None` at the end of
     /// input (or once reading fails).
     pub fn next_line(&mut self) -> Option<Vec<u8>> {
@@ -333,30 +343,41 @@ impl Server {
     }
 
     /// Reads one line of the inline input ([`Server::read_inline`]) and takes
-    /// it, as the reading thread does; at the end of input, closes it.
-    /// Returns whether a line came. A part of the server that waits for the
+    /// it, with every other whole line that read brought, as the reading
+    /// thread takes lines as fast as they come; at the end of input, closes
+    /// it. Returns whether a line came. A part of the server that waits for the
     /// client's answer to a request of its own (a host-handled request)
     /// pumps until that answer is taken; the other messages queue as usual.
     /// Without inline input it reads nothing and returns `false`.
     pub fn pump(&self) -> bool {
-        let line = {
+        let lines = {
             let mut inline = self
                 .inner
                 .inline
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
-            let Some(lines) = inline.as_mut() else {
+            let Some(source) = inline.as_mut() else {
                 return false;
             };
-            let line = lines.next_line();
-            if line.is_none() {
-                *inline = None;
+            match source.next_line() {
+                Some(first) => {
+                    let mut lines = vec![first];
+                    while let Some(line) = source.buffered_line() {
+                        lines.push(line);
+                    }
+                    Some(lines)
+                }
+                None => {
+                    *inline = None;
+                    None
+                }
             }
-            line
         };
-        match line {
-            Some(line) => {
-                self.receive(&line);
+        match lines {
+            Some(lines) => {
+                for line in lines {
+                    self.receive(&line);
+                }
                 true
             }
             None => {

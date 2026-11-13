@@ -447,10 +447,11 @@ impl Command {
     /// leaves entries unused: only a whole run finds stale ones, or every part
     /// of one together (CI's `Golden compare` gathers the parts' `--unused`).
     /// The ledger is the committed oracle's: against a preview's recordings
-    /// its entries are not judged stale.
+    /// its entries are not judged stale. A WASI run leaves the network cases
+    /// out, as a filter would, so it judges none either: the native runs do.
     fn stale_check(&self, layout: &Layout) -> crate::compare::StaleCheck<'_> {
         use crate::compare::StaleCheck;
-        if self.filter.is_some() || !layout.committed() {
+        if self.filter.is_some() || self.runner == Runner::Wasi || !layout.committed() {
             StaleCheck::Skip
         } else if self.partition.is_some() {
             StaleCheck::Write(self.unused.as_deref())
@@ -470,7 +471,7 @@ impl Command {
             // out, each named with its reason (ADR 0007's amendment).
             let exclusions =
                 wasi::Exclusions::parse(&read(&layout.golden.join("WASI_EXCLUDED.toml"))?)?;
-            let problems = exclusions.problems(&all);
+            let problems = exclusions.problems(&all, &layout.cases());
             if !problems.is_empty() {
                 bail!(
                     "tests/golden/WASI_EXCLUDED.toml:\n  {}",

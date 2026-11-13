@@ -145,6 +145,7 @@ pub fn serve(
 mod stdio {
     //! stdin for JSON-RPC alone.
 
+    #[cfg(not(target_os = "wasi"))]
     use std::fs::File;
 
     /// A duplicate of stdin for the requests; on Unix descriptor 0 then

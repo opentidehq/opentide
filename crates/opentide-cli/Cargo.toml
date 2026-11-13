@@ -143,7 +143,6 @@ tokio = { version = "1.48", default-features = false, features = ["rt", "io-util
 # environment names. Under WASI the connectors answer every request with
 # their network-unavailable failure (wasm32-wasip1 has no sockets).
 opentide-connectors.workspace = true
-reqwest.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 # `opentide serve`'s `opentide/fetch` (src/serve/fetch.rs): request and answer bodies.
 base64.workspace = true

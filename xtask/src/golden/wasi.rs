@@ -7,7 +7,8 @@
 //! nature and is left out without being listed. Every other case left out is
 //! listed in `tests/golden/WASI_EXCLUDED.toml` with its reason, and each
 //! entry must name cases that show they need the network: a fixture with
-//! tenants, a MISP instance or CVE lookups, or a command that sends requests
+//! tenants, a MISP instance or CVE lookups, a command that sends requests,
+//! or a recording in which the oracle's own request was refused
 //! ([`needs_network`]). The tests hold the committed list to that.
 
 use anyhow::{Context, Result, bail};
@@ -34,6 +35,11 @@ pub const NETWORK_COMMANDS: &[&str] = &[
     "setup skills",
     "plugin",
 ];
+
+/// What the oracle prints when the harness refuses one of its requests (every
+/// case runs behind a proxy that refuses, unless a cassette serves it): a
+/// recording that holds one of these shows its case sent a request.
+pub const REFUSED_REQUEST: &[&str] = &["ProxyError", "HTTPSConnectionPool"];
 
 /// `tests/golden/WASI_EXCLUDED.toml`.
 #[derive(Debug, Default, Deserialize)]
@@ -87,7 +93,8 @@ impl Exclusions {
 
     /// The entries that break the rules: an entry that leaves out no case of
     /// `all`, or one of whose cases shows no need of the network.
-    pub fn problems(&self, all: &[Case]) -> Vec<String> {
+    /// `recordings` is the cases' folder (`tests/golden/cases`).
+    pub fn problems(&self, all: &[Case], recordings: &std::path::Path) -> Vec<String> {
         let mut problems = Vec::new();
         for entry in &self.cases {
             let named: Vec<&Case> = all
@@ -98,7 +105,7 @@ impl Exclusions {
                 problems.push(format!("`{}` names no case", entry.id));
             }
             for case in named {
-                if case.cassette.is_none() && !needs_network(case) {
+                if case.cassette.is_none() && !needs_network(case, recordings) {
                     problems.push(format!(
                         "`{}` leaves out {}, which shows no need of the network: \
                          only network cases may be left out of the WASI run",
@@ -112,13 +119,20 @@ impl Exclusions {
 }
 
 /// Whether `case` shows it needs the network: its fixture reaches tenants,
-/// MISP or CVE lookups, or its command sends requests.
-pub fn needs_network(case: &Case) -> bool {
+/// MISP or CVE lookups, its command sends requests, or its recording under
+/// `recordings` shows the oracle's request refused ([`REFUSED_REQUEST`]).
+pub fn needs_network(case: &Case, recordings: &std::path::Path) -> bool {
     NETWORK_FIXTURES
         .iter()
         .any(|fixture| case.fixture.starts_with(fixture))
         || NETWORK_COMMANDS.iter().any(|command| {
             case.command == *command || case.command.starts_with(&format!("{command} "))
+        })
+        || ["stdout", "stderr"].iter().any(|stream| {
+            std::fs::read(recordings.join(&case.id).join(stream)).is_ok_and(|bytes| {
+                let text = String::from_utf8_lossy(&bytes);
+                REFUSED_REQUEST.iter().any(|marker| text.contains(marker))
+            })
         })
 }
 
@@ -153,7 +167,7 @@ mod tests {
         let text = std::fs::read_to_string(root.join("tests/golden/WASI_EXCLUDED.toml")).unwrap();
         let exclusions = Exclusions::parse(&text).unwrap();
         assert_eq!(
-            exclusions.problems(&repository_cases()),
+            exclusions.problems(&repository_cases(), &root.join("tests/golden/cases")),
             Vec::<String>::new()
         );
     }
@@ -165,7 +179,8 @@ mod tests {
             "[[case]]\nid = \"validate/*\"\nreason = \"slow\"\n[[case]]\nid = \"nope/*\"\nreason = \"x\"\n",
         )
         .unwrap();
-        let problems = exclusions.problems(&cases);
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let problems = exclusions.problems(&cases, &root.join("tests/golden/cases"));
         assert!(
             problems.iter().any(|p| p.contains("only network cases")),
             "{problems:?}"
@@ -194,6 +209,27 @@ mod tests {
             .find(|case| case.command == "validate")
             .unwrap();
         assert_eq!(exclusions.reason(validate), None);
+    }
+
+    #[test]
+    fn a_recorded_refused_request_is_evidence_of_the_network() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let recordings = root.join("tests/golden/cases");
+        let cases = repository_cases();
+        let case = |id: &str| cases.iter().find(|case| case.id == id).unwrap();
+        // `doctor` asks PyPI for the newest release; `--offline` does not.
+        assert!(needs_network(
+            case("doctor/json/tide-corpus/default"),
+            &recordings
+        ));
+        assert!(!needs_network(
+            case("doctor/json/tide-corpus/offline"),
+            &recordings
+        ));
+        assert!(!needs_network(
+            case("validate/json/tide-corpus/default"),
+            &recordings
+        ));
     }
 
     #[test]

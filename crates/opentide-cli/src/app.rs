@@ -2893,6 +2893,31 @@ pub fn exit(argv: &[String], version: &str) -> ! {
     std::process::exit(main(argv, version))
 }
 
+/// The width of the terminal stderr (else stdout) is, when either is one.
+#[cfg(not(target_os = "wasi"))]
+fn terminal_width() -> Option<usize> {
+    terminal_size::terminal_size_of(std::io::stderr())
+        .or_else(|| terminal_size::terminal_size_of(std::io::stdout()))
+        .map(|(width, _)| usize::from(width.0))
+}
+
+/// The variable a WASI host sets to its terminal's width: WASI preview 1
+/// has no call that tells a terminal's size, which the host knows (VS Code's
+/// pseudoterminal; the golden harness's pty).
+pub const TERMINAL_WIDTH_VARIABLE: &str = "OPENTIDE_TERMINAL_WIDTH";
+
+/// WASI: the width the host names ([`TERMINAL_WIDTH_VARIABLE`]), as
+/// natively the terminal itself tells it. The host sets it only when it
+/// gives the module a terminal.
+#[cfg(target_os = "wasi")]
+fn terminal_width() -> Option<usize> {
+    std::env::var(TERMINAL_WIDTH_VARIABLE)
+        .ok()?
+        .parse::<usize>()
+        .ok()
+        .filter(|width| *width > 0)
+}
+
 /// WASI gives a module no working directory: the host names it in `PWD`
 /// (a folder it preopened), as a shell does, and relative paths resolve
 /// against it from here on. Elsewhere the process has its own.
@@ -2940,9 +2965,7 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         stderr_tty: std::io::stderr().is_terminal(),
         log_sink: stderr_sink,
         cwd,
-        width: terminal_size::terminal_size_of(std::io::stderr())
-            .or_else(|| terminal_size::terminal_size_of(std::io::stdout()))
-            .map(|(width, _)| usize::from(width.0)),
+        width: terminal_width(),
         interrupt,
     };
     let mut out = std::io::stdout().lock();
@@ -3897,7 +3920,9 @@ mod tests {
                     None,
                 )?;
                 let error = opentide_connectors::runtime::block_on(async {
-                    let request = client.request(reqwest::Method::GET, &url).build()?;
+                    let request = client
+                        .request(opentide_connectors::transport::Method::GET, &url)
+                        .build()?;
                     let cancel = tokio_util::sync::CancellationToken::new();
                     Ok::<_, opentide_connectors::transport::BuildError>(
                         client.send(request, &cancel).await,

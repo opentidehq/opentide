@@ -75,6 +75,11 @@ for target in "${targets[@]}"; do
       # The command line under WASI (ADR 0007's amendment): no terminal UI, no
       # threads; requests to the network fail with network_unavailable.
       rustup target add wasm32-wasip1 >/dev/null
+      # The version the module reports: the release's (OPENTIDE_VERSION, as
+      # the release train sets it), else a development one of the shape an
+      # editable install of the Python package reports (`0.1.devN+g<sha>`),
+      # never the engine crates' own.
+      OPENTIDE_VERSION="${OPENTIDE_VERSION:-0.1.dev0+wasi}" \
       CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot -Oz" \
@@ -82,14 +87,26 @@ for target in "${targets[@]}"; do
           --no-default-features --target wasm32-wasip1
       built="$root/target/wasm32-wasip1/wasi/opentide-cli.wasm"
       out="$root/target/wasm32-wasip1/wasi/opentide.wasm"
-      # binaryen's wasm-opt (pinned; npm's build of it needs no install). It
-      # reads the features to allow from the module's target_features section.
-      npx --yes binaryen@132.0.0 wasm-opt -Oz "$built" -o "$out"
+      # OPENTIDE_WASM_OPT=1: binaryen's wasm-opt as well. Measured on this
+      # module it saves about 2% of the gzip size (6.85 to 6.70 MB) for
+      # minutes of CPU, so it is the release's step, not every CI run's.
+      # binaryen is pinned; npm's build of it needs no install. The
+      # stripped module has no target_features section, so the features are
+      # named: those rustc enables for wasm32-wasip1 by default.
+      if [[ "${OPENTIDE_WASM_OPT:-0}" == 1 ]]; then
+        npx --yes --package=binaryen@132.0.0 wasm-opt -Oz \
+          --enable-bulk-memory --enable-bulk-memory-opt --enable-multivalue \
+          --enable-mutable-globals --enable-nontrapping-float-to-int \
+          --enable-reference-types --enable-sign-ext \
+          "$built" -o "$out"
+      else
+        cp "$built" "$out"
+      fi
       raw=$(wc -c <"$out")
       gz=$(gzip -9c "$out" | wc -c)
-      # The .vsix is a zip: the module's deflated size is what it adds. The
-      # budget leaves the extension's own code and assets room under 15 MiB.
-      budget=$((12 * 1024 * 1024))
+      # The .vsix is a zip: the module's deflated size is what it adds, held
+      # to the .vsix's own 15 MiB (plan §11, ADR 0007's amendment).
+      budget=$((15 * 1024 * 1024))
       echo "opentide.wasm: ${raw} bytes, ${gz} bytes gzip -9 (budget ${budget} gzip)"
       if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
         echo "| \`opentide.wasm\` | ${raw} B raw | ${gz} B gzip -9 | budget ${budget} B |" >>"$GITHUB_STEP_SUMMARY"
@@ -109,7 +126,13 @@ for target in "${targets[@]}"; do
       CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
-        cargo clippy --locked -p opentide-lsp --target wasm32-wasip1 --lib --bins -- -D warnings ;;
+        cargo clippy --locked -p opentide-lsp --target wasm32-wasip1 --lib --bins -- -D warnings
+      # The command line's WASI paths (`cfg(target_os = "wasi")`), as `cli` builds it.
+      CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
+      AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
+      CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
+        cargo clippy --locked -p opentide-cli --no-default-features --target wasm32-wasip1 \
+          --lib --bins -- -D warnings ;;
     *)
       echo "unknown target: $target (browser, wasi, cli or clippy)"
       exit 2 ;;

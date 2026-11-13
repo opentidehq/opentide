@@ -92,31 +92,27 @@ pub fn fetch_latest(env: &Environment, proxy: Option<&str>) -> Result<String, Fa
         .ok()
         .and_then(|url| client.route(&url))
         .is_some();
-    std::thread::scope(|scope| {
-        scope
-            .spawn(|| {
-                opentide_connectors::runtime::block_on(async {
-                    let cancel = CancellationToken::new();
-                    let request = client
-                        .request(reqwest::Method::GET, PYPI_URL)
-                        .build()
-                        .map_err(|_| Failed("InvalidURL"))?;
-                    let answer = client
-                        .send(request, &cancel)
-                        .await
-                        .map_err(|error| Failed(request_error_name(&error, proxied)))?;
-                    let status = answer.status().as_u16();
-                    let body = client
-                        .bytes(answer, &cancel)
-                        .await
-                        .map_err(|error| Failed(request_error_name(&error, proxied)))?;
-                    version_of(status, &body)
-                })
-                .unwrap_or(Err(Failed("RuntimeError")))
-            })
-            .join()
-            .unwrap_or(Err(Failed("RuntimeError")))
+    crate::threads::run_apart(|| {
+        opentide_connectors::runtime::block_on(async {
+            let cancel = CancellationToken::new();
+            let request = client
+                .request(opentide_connectors::transport::Method::GET, PYPI_URL)
+                .build()
+                .map_err(|_| Failed("InvalidURL"))?;
+            let answer = client
+                .send(request, &cancel)
+                .await
+                .map_err(|error| Failed(request_error_name(&error, proxied)))?;
+            let status = answer.status().as_u16();
+            let body = client
+                .bytes(answer, &cancel)
+                .await
+                .map_err(|error| Failed(request_error_name(&error, proxied)))?;
+            version_of(status, &body)
+        })
+        .unwrap_or(Err(Failed("RuntimeError")))
     })
+    .unwrap_or(Err(Failed("RuntimeError")))
 }
 
 /// Whether `latest` is a newer release than `installed` (PEP 440, as

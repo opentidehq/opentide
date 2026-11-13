@@ -431,7 +431,20 @@ pub fn wasi_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
     std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
     crate::script::write_executable(
         &bin_dir.join("opentide"),
-        &format!("#!/bin/sh\nexport PWD=\"$(pwd)\"\nexec {command} \"$@\"\n"),
+        &format!(
+            "#!/bin/sh\nexport PWD=\"$(pwd)\"\n\
+             # WASI cannot ask a terminal its size: the width of the one this runs\n\
+             # at goes in, as a host passes its pseudoterminal's (opentide-cli,\n\
+             # app::TERMINAL_WIDTH_VARIABLE).\n\
+             for fd in 2 1; do\n\
+             \x20 if [ -t \"$fd\" ]; then\n\
+             \x20   OPENTIDE_TERMINAL_WIDTH=$(stty size <&\"$fd\" 2>/dev/null | cut -d' ' -f2)\n\
+             \x20   export OPENTIDE_TERMINAL_WIDTH\n\
+             \x20   break\n\
+             \x20 fi\n\
+             done\n\
+             exec {command} \"$@\"\n"
+        ),
     )?;
     Ok(crate::golden::run::Engine {
         name: "wasi".into(),
