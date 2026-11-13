@@ -11,7 +11,8 @@ name: CI
 #   Windows CLI smoke, the facade crate's every feature and semver checks, the
 #   Node package and its install from a local registry, the installable wheels
 #   and npm tarballs as run artifacts, the cross-SDK conformance suite on three
-#   OSes, LSP clients and benchmarks. It runs nightly, on every push to
+#   OSes, the query fault kinds against the Rust engine, LSP clients and
+#   benchmarks. It runs nightly, on every push to
 #   development and integration/unified-core, on Run workflow, and on a pull
 #   request that carries the `full-ci` label (read at each push: add the label,
 #   then push, or Run workflow on the branch). Each of these jobs has an `if`
@@ -32,10 +33,12 @@ on:
     - cron: "11 1 * * *"
 
 concurrency:
-  # The event in the group, so that the nightly run and a push to development
-  # do not cancel each other.
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to development, integration/unified-core or main, the nightly, Run
+  # workflow) has a group of its own, its run id, so none cancels another and
+  # each push to a base branch gets a complete run (tests/test_ci/test_concurrency.py).
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -362,6 +365,12 @@ jobs:
       # (xtask/layers.toml, plan §4).
       - name: crate layers
         run: cargo xtask check-layers
+
+      # The deploy cassettes (tests/cassettes, #831): one per scenario of
+      # scenarios.toml, each recorded from the oracle and redacted, none
+      # edited by hand. It reads the files only.
+      - name: deploy cassettes
+        run: cargo xtask cassettes check
 
       # The artifacts generated from the Rust model (opentide-schema's
       # `generate`): the committed platform templates are current, and the
@@ -1474,6 +1483,15 @@ jobs:
       - name: Fault catalogue against the oracle
         if: matrix.part == 'faults'
         run: cargo xtask corpus faults --check --engine python --report "$RUNNER_TEMP/faults.json"
+      # The platform-block and configuration fault kinds through the Rust
+      # validate, finding for finding against the oracle (UC-1.4 #810, UC-1.5
+      # #811); `corpus-queries` compares the query kinds in the full set.
+      - name: Platform fault kinds against the Rust engine
+        if: matrix.part == 'faults'
+        run: cargo xtask corpus faults --check --engine rust --only platforms
+      - name: Configuration fault kinds against the Rust engine
+        if: matrix.part == 'faults'
+        run: cargo xtask corpus faults --check --engine rust --only configuration
       - name: Upload the fault report
         if: ${{ matrix.part == 'faults' && !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1514,6 +1532,12 @@ jobs:
       - name: Workspace index against the oracle (registry diff)
         if: matrix.part == 'diffs'
         run: cargo xtask registry diff --against python --corpus all
+      # opentide_schema::configuration::resolve against the oracle's (UC-1.5,
+      # #811): every fixture and generated workspace's resolved configuration
+      # and its `validate --check configuration` findings.
+      - name: Configuration resolution against the oracle (config diff)
+        if: matrix.part == 'diffs'
+        run: cargo xtask config diff --against python
       # opentide-compile's request bodies against the oracle's (UC-3.1, #823):
       # every Sentinel, Elastic and Sysdig block of every rule of every corpus,
       # the dry run's body, each tenant's and the dry run's payload entry, byte
@@ -1597,6 +1621,58 @@ jobs:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
 
+
+  # The query fault kinds through the Rust validate and lint with the query
+  # engines, finding for finding against the oracle (UC-2.5, #820; UC-3.5b):
+  # about eight minutes on four cores, so in the full set, not a corpus part.
+  # It reads the corpus parts' caches and saves none.
+  corpus-queries:
+    name: Corpus (query fault kinds) against opentide 0.23.0
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    # corpus-part's, which rust-cache hashes into the key it reads.
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_INCREMENTAL: "0"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: corpus
+          save-if: false
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: sccache@0.19.0
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'crates/**/*.rs', 'bindings/**/*.rs', 'xtask/**/*.rs') }}
+          restore-keys: sccache-corpus-
+      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/oracle"
+          uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
+            -r tests/corpora/oracle-requirements.txt
+          echo "OPENTIDE_ORACLE=$RUNNER_TEMP/oracle/bin/opentide" >> "$GITHUB_ENV"
+      - name: Query fault kinds against the Rust engine
+        run: cargo xtask corpus faults --check --engine rust --only queries
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
 
   # The required check `Corpus (generator, faults, coverage) against opentide
   # 0.23.0`: it passes only when every part did. `!cancelled()`, not the

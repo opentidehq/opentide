@@ -10,7 +10,8 @@ The full set adds everything else (Python 3.11-3.13, the engine release dry
 run, WebAssembly, crate packaging, grammars, the Elastic sweep, fuzz smoke,
 the Windows CLI smoke, the facade crate's every feature and semver checks, the
 Node package and its install from a local registry, the installable wheels and
-npm tarballs (run artifacts), the cross-SDK conformance suite, LSP clients,
+npm tarballs (run artifacts), the cross-SDK conformance suite, the query
+fault kinds against the Rust engine (``corpus-queries``), LSP clients,
 benchmarks, the E2E tests marked ``full_set``, Rust coverage, golden
 determinism, the docs check and the publish dry run). It runs nightly, on
 every push to development and integration/unified-core, on Run workflow, and
@@ -92,6 +93,7 @@ CI_FULL = {
     "npm-install",
     "packages",
     "conformance",
+    "corpus-queries",
 }
 # ci.yml's jobs in the full set and on a pull request that changes their inputs.
 CI_PATHS = {
@@ -230,6 +232,46 @@ def test_python_runs_oldest_and_newest_on_a_pull_request_and_every_version_in_th
         f"uv run pytest tests/ --no-cov -q -n 4 {marker}"
     ]
     assert jobs["test"]["name"] == jobs["test-full"]["name"]
+
+
+# The comparisons with the oracle and its recordings that gate CI: (job, the
+# matrix part that runs the step or None, the command). The fast ones are core
+# gates; the query fault kinds (about eight minutes) run in the full set.
+COMPARISONS = [
+    ("engine", None, "cargo xtask cassettes check"),
+    ("corpus-part", "faults", "cargo xtask corpus faults --check --engine rust --only platforms"),
+    (
+        "corpus-part",
+        "faults",
+        "cargo xtask corpus faults --check --engine rust --only configuration",
+    ),
+    ("corpus-part", "diffs", "cargo xtask config diff --against python"),
+    ("corpus-queries", None, "cargo xtask corpus faults --check --engine rust --only queries"),
+]
+
+
+@pytest.mark.parametrize(("job_id", "part", "command"), COMPARISONS)
+def test_each_comparison_runs_in_its_scope(job_id: str, part: str | None, command: str) -> None:
+    job = _ci_jobs()[job_id]
+    steps = [step for step in job["steps"] if str(step.get("run", "")).strip() == command]
+    assert len(steps) == 1, f"{job_id} runs `{command}` once"
+    (step,) = steps
+    if part is None:
+        assert "if" not in step, f"{job_id}: `{command}` runs whenever the job does"
+    else:
+        assert step.get("if") == f"matrix.part == '{part}'", (job_id, command)
+        assert part in job["strategy"]["matrix"]["part"], part
+    in_core = job_id in CI_CORE
+    assert in_core is (job_id != "corpus-queries"), job_id
+
+
+def test_the_query_fault_kinds_read_the_oracle_and_the_corpus_caches() -> None:
+    jobs = _ci_jobs()
+    job, corpus = jobs["corpus-queries"], jobs["corpus-part"]
+    runs = "\n".join(str(step.get("run", "")) for step in job["steps"])
+    assert "oracle-requirements.txt" in runs and "OPENTIDE_ORACLE=" in runs
+    for name in ("RUSTFLAGS", "CARGO_INCREMENTAL", "RUSTC_WRAPPER", "SCCACHE_DIR"):
+        assert job["env"][name] == corpus["env"][name], name
 
 
 def test_ci_runs_on_every_pull_request_push_nightly_and_on_demand() -> None:
