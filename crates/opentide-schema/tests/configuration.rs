@@ -295,6 +295,31 @@ fn compare(
     })
 }
 
+/// Whether `path` is the bundled configuration of a platform the recorded
+/// oracle lacks (`opentide_schema::platforms::SINCE_ORACLE`).
+fn is_since_oracle_platform_file(path: &str) -> bool {
+    path.strip_prefix("platforms/")
+        .and_then(|name| name.strip_suffix(".toml"))
+        .is_some_and(opentide_schema::platforms::after_oracle)
+}
+
+/// Removes, at any depth, every object member whose key names a platform the
+/// recorded oracle lacks (`SINCE_ORACLE`), so a case that configures such a
+/// platform compares with a recording that predates it. On 0.23.0 output no
+/// such key exists, so this changes nothing until a row lands.
+fn drop_since_oracle(value: &mut Json) {
+    match value {
+        Json::Object(members) => {
+            members.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
+            for member in members.values_mut() {
+                drop_since_oracle(member);
+            }
+        }
+        Json::Array(items) => items.iter_mut().for_each(drop_since_oracle),
+        _ => {}
+    }
+}
+
 #[test]
 fn configuration_cases_match_the_oracle_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
@@ -321,6 +346,8 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             "sharing" => sharing_case(case),
             other => panic!("{id}: unknown kind {other}"),
         };
+        let mut rust = rust;
+        drop_since_oracle(&mut rust);
         let oracle = &table["cases"][id];
         // One difference's name, or a list of them: their fields together.
         let names: Vec<&str> = match case.get("difference") {
@@ -380,30 +407,22 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 #[test]
 fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    // The platforms the 0.23.0 oracle predates (the `platforms-after-0.23`
-    // difference of config_cases.toml) bring a bundled file it does not list.
-    let cases: toml::Value = toml::from_str(CASES).unwrap();
-    let later: Vec<String> = cases["difference"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|difference| difference["id"].as_str() == Some("platforms-after-0.23"))
-        .flat_map(|difference| strings(difference.get("fields")))
-        .map(|platform| format!("platforms/{platform}.toml"))
-        .collect();
     let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
-    let compiled: Vec<&str> = every
-        .iter()
-        .copied()
-        .filter(|path| !later.iter().any(|added| added == path))
-        .collect();
     let oracle: Vec<&str> = table["bundled"]
         .as_array()
         .unwrap()
         .iter()
         .map(|path| path.as_str().unwrap())
         .collect();
-    assert_eq!(compiled, oracle);
+    // The recorded oracle (0.23.0) predates the platforms the train ports onto
+    // it; leave their bundled configuration out before comparing with it, and
+    // compare the whole set with the folder on disk (both live).
+    let without_since_oracle: Vec<&str> = every
+        .iter()
+        .copied()
+        .filter(|path| !is_since_oracle_platform_file(path))
+        .collect();
+    assert_eq!(without_since_oracle, oracle);
     let folder =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/opentide/data/configurations");
     let mut on_disk = Vec::new();

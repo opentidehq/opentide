@@ -9,21 +9,23 @@
 //! section states come from [`super::facts`], and every platform setting
 //! from [`super::settings`].
 //!
-//! Diagrams are drawn by the `mermaid.md.j2` template from nodes and edges
-//! built here; the root README is the `index.md.j2` template.
+//! Diagrams are built by [`super::diagrams`] and written as Mermaid by
+//! [`super::mermaid`]. The root README is the catalogue overview: the
+//! sections, the threat landscape, the deployment status and the coverage
+//! by kill-chain phase and ATT&CK tactic.
 
-use minijinja::{AutoEscape, Environment};
-use serde::Serialize;
+use std::collections::HashSet;
 
 use super::Settings;
-use super::catalog::{Catalog, Direction, Graph, Model, Record, RuleModel, Scope};
+use super::catalog::{Catalog, Graph, Model, Record, RuleModel, Scope};
 use super::cve;
+use super::diagrams;
 use super::facts::{
     Block, Environment as Deployment, PlatformDeployment, TenantScope, TenantTarget,
     rule_deployments,
 };
 use super::flavor::Flavor;
-use super::mermaid::{Edge, Flowchart, Node as ChartNode, Shape};
+use super::mermaid::NodeKind;
 use super::page::{Callout, Page, Section, callout, code_block, key_value_table, paragraph, table};
 use super::platforms::{self, TEXT, platform_label};
 use super::settings::{Settings as BlockSettings, flatten};
@@ -31,58 +33,6 @@ use super::text::{first_sentence, inline_code, join, join_lines, plural, table_c
 use super::vocab::{Enriched, Vocab};
 use crate::json::Json;
 use crate::strategy::StatusStrategy;
-
-const TEMPLATES: [(&str, &str); 2] = [
-    ("index.md.j2", include_str!("templates/index.md.j2")),
-    ("mermaid.md.j2", include_str!("templates/mermaid.md.j2")),
-];
-
-/// The template environment: the templates, with the filters they use.
-pub struct Templates {
-    env: Environment<'static>,
-}
-
-impl Default for Templates {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Templates {
-    /// The bundled templates.
-    ///
-    /// # Panics
-    ///
-    /// Never: the bundled templates parse (`templates_parse` tests them).
-    #[expect(
-        clippy::expect_used,
-        reason = "the bundled templates are tested to parse"
-    )]
-    pub fn new() -> Self {
-        let mut env = Environment::new();
-        env.set_trim_blocks(true);
-        env.set_lstrip_blocks(true);
-        env.set_keep_trailing_newline(true);
-        env.set_auto_escape_callback(|_| AutoEscape::None);
-        for (name, source) in TEMPLATES {
-            env.add_template(name, source)
-                .expect("the bundled templates parse");
-        }
-        Self { env }
-    }
-
-    /// Renders the template `name` with `context`.
-    ///
-    /// # Errors
-    ///
-    /// The template failed: a bug, reported as the phase's error.
-    pub fn render(&self, name: &str, context: impl Serialize) -> Result<String, String> {
-        self.env
-            .get_template(name)
-            .and_then(|template| template.render(context))
-            .map_err(|error| format!("template {name}: {error:#}"))
-    }
-}
 
 /// What renders pages: the catalogue, the settings, the vocabularies and
 /// the deployment facts.
@@ -93,17 +43,8 @@ pub struct Pages<'a, 'i> {
     pub settings: &'a Settings,
     /// The vocabularies.
     pub vocab: Vocab<'a>,
-    /// The templates.
-    pub templates: &'a Templates,
     /// The workspace's statuses, tenants and deployment state.
     pub deployment: &'a Deployment,
-}
-
-#[derive(Serialize)]
-struct IndexPage {
-    title: String,
-    toc: &'static str,
-    table: String,
 }
 
 /// The metadata fields every object has.
@@ -178,19 +119,23 @@ macro_rules! rule_view {
 struct Kind {
     noun: &'static str,
     index_title: &'static str,
+    node: NodeKind,
 }
 
 const RULE: Kind = Kind {
     noun: "Detection rule",
     index_title: "Detection rules",
+    node: NodeKind::Rule,
 };
 const OBJECTIVE: Kind = Kind {
     noun: "Detection objective",
     index_title: "Detection objectives",
+    node: NodeKind::Objective,
 };
 const THREAT: Kind = Kind {
     noun: "Threat vector",
     index_title: "Threat vectors",
+    node: NodeKind::Threat,
 };
 
 /// Block keys the Deployment table and each platform's summary line already
@@ -564,128 +509,22 @@ impl Pages<'_, '_> {
 
     /// The coverage diagram, else the relations diagram, and the table of
     /// related objects.
-    fn coverage_section(&self, uuid: &str, name: &str, from: &str) -> Result<Section, String> {
-        let graph = self.catalog.coverage_graph(uuid);
-        let (title, diagram) = if graph.is_empty() {
-            ("Relations", self.relations_diagram(uuid, name)?)
-        } else {
-            (
-                "Detection coverage",
-                self.typed_graph(&graph, uuid, "TB", true)?,
-            )
+    fn coverage_section(&self, kind: Kind, uuid: &str, name: &str, from: &str) -> Section {
+        let coverage =
+            diagrams::coverage(self.catalog, uuid, name).filter(|diagram| !diagram.is_trivial());
+        let (title, diagram) = match coverage {
+            Some(diagram) => ("Detection coverage", Some(diagram)),
+            None => (
+                "Relations",
+                diagrams::relations(self.catalog, uuid, name, kind.node, self.settings.direction),
+            ),
         };
-        Ok(
-            Section::new(title, [diagram]).with_children(vec![Section::new(
+        Section::new(title, [diagrams::fenced(self.flavor(), diagram.as_ref())]).with_children(
+            vec![Section::new(
                 "Related objects",
                 [self.related_table(uuid, from)],
-            )]),
+            )],
         )
-    }
-
-    /// The page's object and the objects related to it, grouped by type.
-    fn relations_diagram(&self, uuid: &str, name: &str) -> Result<String, String> {
-        let related = self.catalog.related(uuid, self.settings.direction);
-        if related.is_empty() {
-            return Ok(String::new());
-        }
-        let mut nodes = vec![ChartNode::new(uuid, name, Shape::Rect)];
-        let mut edges = Vec::new();
-        let mut groups: Vec<(String, Vec<String>)> = Vec::new();
-        for entry in &related {
-            nodes.push(ChartNode::new(
-                &entry.uuid,
-                &entry.name,
-                Shape::of(Some(&entry.object_type)),
-            ));
-            let (source, target) = if entry.direction == Direction::Upstream {
-                (entry.uuid.as_str(), uuid)
-            } else {
-                (uuid, entry.uuid.as_str())
-            };
-            edges.push(Edge::new(source, target, Some(&entry.object_type), false));
-            let title = title_case(&entry.object_type);
-            match groups.iter_mut().find(|(existing, _)| *existing == title) {
-                Some((_, members)) => members.push(entry.uuid.clone()),
-                None => groups.push((title, vec![entry.uuid.clone()])),
-            }
-        }
-        let chart = Flowchart::new(
-            self.flavor().diagram_type(),
-            "TB",
-            nodes,
-            edges,
-            self.flavor().subgraphs().then_some(groups),
-        );
-        self.fence(&chart)
-    }
-
-    /// A coverage or chaining graph as a flowchart, its nodes grouped by
-    /// type (`by_type`, the page's own object left out) or by kill chain.
-    fn typed_graph(
-        &self,
-        graph: &Graph,
-        current: &str,
-        direction: &'static str,
-        by_type: bool,
-    ) -> Result<String, String> {
-        let nodes = graph
-            .nodes
-            .iter()
-            .map(|node| ChartNode::new(&node.uuid, &node.name, Shape::of(Some(node.object_type))))
-            .collect();
-        let edges = graph
-            .edges
-            .iter()
-            .map(|edge| {
-                Edge::new(
-                    &edge.source,
-                    &edge.target,
-                    edge.label.as_deref(),
-                    edge.both_ways,
-                )
-            })
-            .collect();
-        let groups = self.flavor().subgraphs().then(|| {
-            let mut groups: Vec<(String, Vec<String>)> = Vec::new();
-            for node in &graph.nodes {
-                if by_type && node.uuid == current {
-                    continue;
-                }
-                let title = if by_type {
-                    match node.object_type {
-                        "threat" => "Threats".to_owned(),
-                        "objective" => "Objectives".to_owned(),
-                        "rule" => "Rules".to_owned(),
-                        "signal" => "Signals".to_owned(),
-                        other => title_case(other),
-                    }
-                } else {
-                    node.killchain.clone().unwrap_or_default()
-                };
-                if title.is_empty() {
-                    continue;
-                }
-                match groups.iter_mut().find(|(existing, _)| *existing == title) {
-                    Some((_, members)) => members.push(node.uuid.clone()),
-                    None => groups.push((title, vec![node.uuid.clone()])),
-                }
-            }
-            groups
-        });
-        let groups = groups.filter(|groups| !groups.is_empty());
-        let kind = self.flavor().diagram_type();
-        self.fence(&Flowchart::new(kind, direction, nodes, edges, groups))
-    }
-
-    /// The flowchart in the flavour's Mermaid fence.
-    fn fence(&self, chart: &Flowchart) -> Result<String, String> {
-        let body = self.templates.render("mermaid.md.j2", chart)?;
-        let body = self.flavor().diagram(body.trim_end_matches('\n'));
-        Ok(if self.flavor() == Flavor::AzureDevops {
-            format!("::: mermaid\n{body}\n:::\n")
-        } else {
-            format!("```mermaid\n{body}\n```\n")
-        })
     }
 
     // ---- rules ---------------------------------------------------------
@@ -721,12 +560,19 @@ impl Pages<'_, '_> {
         );
         let mut page = self.page(RULE, rule.name, &rule.meta, rule.description);
         page.add_lead([self.rule_overview(&rule, &deployments)]);
+        let map = diagrams::deployment(&record.uuid, rule.name, &deployments);
         page.add(
-            Section::new("Deployment", [deployment_body(self.flavor(), &deployments)])
-                .with_children(vec![Section::new(
-                    "Tenant targeting",
-                    [tenants_body(&deployments)],
-                )]),
+            Section::new(
+                "Deployment",
+                [
+                    deployment_body(self.flavor(), &deployments),
+                    diagrams::fenced(self.flavor(), map.as_ref()),
+                ],
+            )
+            .with_children(vec![Section::new(
+                "Tenant targeting",
+                [tenants_body(&deployments)],
+            )]),
         );
         let configurations = blocks
             .iter()
@@ -746,7 +592,7 @@ impl Pages<'_, '_> {
             "ATT&CK techniques",
             [self.attack_table(rule.techniques, None)],
         ));
-        page.add(self.coverage_section(&record.uuid, &record.name, "rules")?);
+        page.add(self.coverage_section(RULE, &record.uuid, &record.name, "rules"));
         page.add(self.references_section(rule.references));
         page.add(self.metadata_section(&rule.meta));
         Ok(page.render())
@@ -893,7 +739,7 @@ impl Pages<'_, '_> {
             "ATT&CK techniques",
             [self.attack_table(&techniques, Some(&detections))],
         ));
-        page.add(self.coverage_section(&record.uuid, &record.name, "objectives")?);
+        page.add(self.coverage_section(OBJECTIVE, &record.uuid, &record.name, "objectives"));
         page.add(self.references_section(objective.references.as_ref()));
         page.add(self.metadata_section(&meta));
         // The summary links each signal's heading, so it is written once the
@@ -1266,9 +1112,16 @@ impl Pages<'_, '_> {
         let body = &threat.threat;
         let meta = meta!(&threat.metadata);
         let (objectives, rules) = coverage_counts(&self.catalog.coverage_graph(&record.uuid));
-        let ids = cve::identifiers(body.cve.as_deref().unwrap_or_default());
+        let cves = cve::CveFindings::lookup(
+            cve::identifiers(body.cve.as_deref().unwrap_or_default()),
+            self.settings.cve_details,
+            &self.settings.cve_source,
+        );
         let mut page = self.page(THREAT, &threat.name, &meta, &body.description);
-        page.add_lead([self.threat_overview(threat, objectives, rules, ids.len())]);
+        page.add_lead([self.threat_overview(threat, objectives, rules, &cves)]);
+        if let Some(warning) = cves.exploited_warning() {
+            page.add_lead([callout(self.flavor(), Callout::Warning, &warning)]);
+        }
         if objectives == 0 {
             page.add_lead([callout(
                 self.flavor(),
@@ -1294,6 +1147,7 @@ impl Pages<'_, '_> {
                     paragraph(&format!("**Terrain:** {}", body.terrain.trim()))
                 },
                 self.killchain_strip(&killchain_phases(body.killchain.as_ref())),
+                self.killchain_map(&record.uuid, &killchain_phases(body.killchain.as_ref())),
                 self.assessment_table(body),
             ],
         ));
@@ -1304,23 +1158,22 @@ impl Pages<'_, '_> {
             "ATT&CK techniques",
             [self.attack_table(&body.mitre_attack, Some(&detections))],
         ));
-        page.add(Section::new(
-            "CVE",
-            [if ids.is_empty() {
-                String::new()
-            } else {
-                self.cve_body(&ids)
-            }],
-        ));
+        page.add(Section::new("CVE", [self.cve_body(&cves)]));
         page.add(
-            Section::new("Chaining", [self.chaining_diagram(record, &threat.name)?]).with_children(
-                vec![Section::new(
-                    "Chaining relations",
-                    [self.chaining_table(threat)],
+            Section::new(
+                "Chaining",
+                [diagrams::fenced(
+                    self.flavor(),
+                    diagrams::chaining(self.catalog, &self.vocab, &record.uuid, &threat.name)
+                        .as_ref(),
                 )],
-            ),
+            )
+            .with_children(vec![Section::new(
+                "Chaining relations",
+                [self.chaining_table(threat)],
+            )]),
         );
-        page.add(self.coverage_section(&record.uuid, &record.name, "threats")?);
+        page.add(self.coverage_section(THREAT, &record.uuid, &record.name, "threats"));
         page.add(self.references_section(threat.references.as_ref()));
         page.add(self.metadata_section(&meta));
         Ok(page.render())
@@ -1331,7 +1184,7 @@ impl Pages<'_, '_> {
         threat: &opentide_schema::objects::ThreatVector,
         objectives: usize,
         rules: usize,
-        cves: usize,
+        cves: &cve::CveFindings,
     ) -> String {
         let body = &threat.threat;
         let detection = if objectives == 0 {
@@ -1372,14 +1225,7 @@ impl Pages<'_, '_> {
             ),
             ("Actors", table_cell(&actors.join(", "))),
             ("ATT&CK", self.technique_links(&body.mitre_attack)),
-            (
-                "CVE",
-                if cves == 0 {
-                    String::new()
-                } else {
-                    plural(cves, "CVE")
-                },
-            ),
+            ("CVE", cves.overview()),
             ("Detection coverage", detection),
         ];
         key_value_table(&rows, ["Property", "Value"])
@@ -1587,125 +1433,85 @@ impl Pages<'_, '_> {
         table(&["Relation", "Threat vector", "Family", "Meaning"], &rows)
     }
 
-    /// The chaining network of the threat, or its own chain.
-    fn chaining_diagram(&self, record: &Record, name: &str) -> Result<String, String> {
-        let network = self.catalog.chaining_network(&record.uuid, &self.vocab);
-        if !network.is_empty() {
-            return self.typed_graph(&network, &record.uuid, "LR", false);
+    /// The kill-chain map: the threat's own phases, and those of the threats
+    /// chained to it.
+    fn killchain_map(&self, uuid: &str, phases: &[String]) -> String {
+        let network = self.catalog.chaining_network(uuid, &self.vocab);
+        let mut related: Vec<(String, Vec<String>)> = Vec::new();
+        for node in &network.nodes {
+            let Some(phase) = node.killchain.as_ref().filter(|_| node.uuid != uuid) else {
+                continue;
+            };
+            match related.iter_mut().find(|(known, _)| known == phase) {
+                Some((_, names)) => names.push(node.name.clone()),
+                None => related.push((phase.clone(), vec![node.name.clone()])),
+            }
         }
-        let chain = self.catalog.chaining_entries(&record.uuid, &self.vocab);
-        if chain.is_empty() {
-            return Ok(String::new());
-        }
-        let mut nodes = vec![ChartNode::new(&record.uuid, name, Shape::Hex)];
-        let mut edges = Vec::new();
-        let mut previous = record.uuid.clone();
-        for entry in &chain {
-            nodes.push(ChartNode::new(&entry.uuid, &entry.name, Shape::Hex));
-            edges.push(Edge::new(
-                &previous,
-                &entry.uuid,
-                entry.relation.as_deref(),
-                false,
-            ));
-            previous.clone_from(&entry.uuid);
-        }
-        self.fence(&Flowchart::new(
-            self.flavor().diagram_type(),
-            "LR",
-            nodes,
-            edges,
-            None,
-        ))
+        diagrams::fenced(
+            self.flavor(),
+            diagrams::threat_killchain(&self.vocab, phases, &related).as_ref(),
+        )
     }
 
-    /// The CVE section: each identifier as a link to its record page, or,
-    /// with `[cve] retrieve_details` on, a row of each record's details.
-    fn cve_body(&self, ids: &[String]) -> String {
+    /// The CVE section (`render_cves`): each identifier as a link to its
+    /// record page, or, with `[cve] retrieve_details` on, a row of each
+    /// record's severity, exploit likelihood, exploitation and weakness, and
+    /// a line of what it is, affects and scores. Empty without identifiers.
+    fn cve_body(&self, findings: &cve::CveFindings) -> String {
+        if findings.identifiers.is_empty() {
+            return String::new();
+        }
         let links = &self.settings.cve;
         let link = |id: &str| Flavor::link(id, &links.page_url(id));
         let note = paragraph(
             "Identifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
              which aggregates CVE, GHSA, CSAF, NVD, and related feeds.",
         );
-        if !self.settings.cve_details {
-            let bullets = ids.iter().fold(String::new(), |mut out, id| {
-                use std::fmt::Write as _;
-                let _ = writeln!(out, "- {}", link(id));
-                out
-            });
+        if !findings.enriched() {
+            let bullets = findings
+                .identifiers
+                .iter()
+                .fold(String::new(), |mut out, id| {
+                    use std::fmt::Write as _;
+                    let _ = writeln!(out, "- {}", link(id));
+                    out
+                });
             return note + &bullets;
         }
-        let mut rows: Vec<[String; 4]> = Vec::new();
-        let mut missing: Vec<&str> = Vec::new();
-        let mut unreachable = false;
-        for id in ids {
-            match self.settings.cve_source.get(id) {
-                cve::CveDetail::Unavailable => {
-                    unreachable = true;
-                    rows.push([
-                        link(id),
-                        "-".to_owned(),
-                        "-".to_owned(),
-                        "Details unavailable from Vulnerability-Lookup.".to_owned(),
-                    ]);
-                }
-                cve::CveDetail::NotFound => {
-                    missing.push(id);
-                    rows.push([
-                        link(id),
-                        "-".to_owned(),
-                        "-".to_owned(),
-                        "Not found in Vulnerability-Lookup.".to_owned(),
-                    ]);
-                }
-                cve::CveDetail::Found(record) => {
-                    let ident = if record.identifier.is_empty() {
-                        id.as_str()
-                    } else {
-                        record.identifier.as_str()
-                    };
-                    let url = if record.page_url.is_empty() {
-                        links.page_url(ident)
-                    } else {
-                        record.page_url.clone()
-                    };
-                    let mut label = Flavor::link(ident, &url);
-                    let aliases: Vec<String> = record
-                        .aliases
-                        .iter()
-                        .filter(|alias| alias.as_str() != ident)
-                        .map(|alias| link(alias))
-                        .collect();
-                    if !aliases.is_empty() {
-                        label = format!("{label}<br>{}", aliases.join(", "));
-                    }
-                    let summary = record
-                        .title
-                        .as_deref()
-                        .filter(|text| !text.is_empty())
-                        .or(record
-                            .description
-                            .as_deref()
-                            .filter(|text| !text.is_empty()))
-                        .unwrap_or("-");
-                    rows.push([
-                        label,
-                        record.published.clone().unwrap_or_else(|| "-".to_owned()),
-                        record
-                            .severity
-                            .clone()
-                            .or_else(|| record.state.clone())
-                            .unwrap_or_else(|| "-".to_owned()),
-                        table_cell(&cve::truncate(summary, 280)),
-                    ]);
-                }
-            }
+        let mut rows: Vec<[String; 6]> = Vec::new();
+        let mut details: Vec<String> = Vec::new();
+        for (id, detail) in findings.identifiers.iter().zip(&findings.details) {
+            let cve::CveDetail::Found(record) = detail else {
+                let text = if matches!(detail, cve::CveDetail::NotFound) {
+                    "Not found in Vulnerability-Lookup."
+                } else {
+                    "Details unavailable from Vulnerability-Lookup."
+                };
+                let dash = || "-".to_owned();
+                rows.push([link(id), dash(), dash(), dash(), dash(), text.to_owned()]);
+                continue;
+            };
+            rows.push(Self::cve_row(record, id, &link));
+            details.push(cve::detail_line(record));
         }
         let mut parts = vec![
             note,
-            table(&["Identifier", "Published", "Severity", "Summary"], &rows),
+            table(
+                &[
+                    "Identifier",
+                    "Severity",
+                    "EPSS",
+                    "Exploitation",
+                    "Weakness",
+                    "Published",
+                ],
+                &rows,
+            ),
         ];
+        if !details.is_empty() {
+            parts.push(details.join("\n") + "\n");
+        }
+        let missing = findings.missing();
         if !missing.is_empty() {
             parts.push(paragraph(&format!(
                 "Could not resolve: {}.",
@@ -1716,13 +1522,92 @@ impl Pages<'_, '_> {
                     .join(", ")
             )));
         }
-        if unreachable {
+        if findings.unreachable() {
             parts.push(paragraph(
                 "Vulnerability-Lookup was unreachable for at least one identifier; links still \
                  point at the CIRCL record page.",
             ));
         }
+        if findings.epss_unavailable() {
+            parts.push(paragraph(
+                "Vulnerability-Lookup returned no EPSS score for at least one identifier; those \
+                 rows show none.",
+            ));
+        }
+        parts.push(paragraph(
+            "*EPSS: FIRST's probability of exploitation in the next 30 days. Exploitation: \
+             CISA's Known Exploited Vulnerabilities catalog, else its SSVC assessment.*",
+        ));
         join(parts)
+    }
+
+    /// One record's row of the CVE table (`_cve_row`).
+    fn cve_row(record: &cve::CveRecord, id: &str, link: &dyn Fn(&str) -> String) -> [String; 6] {
+        let ident = if record.identifier.is_empty() {
+            id
+        } else {
+            record.identifier.as_str()
+        };
+        let mut label = if record.page_url.is_empty() {
+            link(ident)
+        } else {
+            Flavor::link(ident, &record.page_url)
+        };
+        let aliases: Vec<String> = record
+            .aliases
+            .iter()
+            .filter(|alias| alias.as_str() != ident)
+            .map(|alias| link(alias))
+            .collect();
+        if !aliases.is_empty() {
+            label = format!("{label}<br>{}", aliases.join(", "));
+        }
+        let severity = match &record.cvss {
+            Some(cvss) => format!(
+                "{}<br>CVSS {}",
+                format!("**{:.1}** {}", cvss.score, cvss.severity).trim(),
+                cvss.version
+            ),
+            None => table_cell(
+                record
+                    .severity
+                    .as_deref()
+                    .or(record.state.as_deref())
+                    .unwrap_or("-"),
+            ),
+        };
+        let likelihood = match &record.epss {
+            cve::EpssDetail::Score(epss) => format!(
+                "{}<br>top {}",
+                cve::share(epss.probability),
+                cve::share(1.0 - epss.percentile)
+            ),
+            _ => "-".to_owned(),
+        };
+        let weakness = join_lines(record.weaknesses.iter().map(|weakness| {
+            let url = weakness.url();
+            let mut cell = if url.is_empty() {
+                weakness.identifier.clone()
+            } else {
+                Flavor::link(&weakness.identifier, &url)
+            };
+            if !weakness.name.is_empty() {
+                cell = format!("{cell} {}", table_cell(&weakness.name));
+            }
+            cell
+        }));
+        [
+            label,
+            severity,
+            likelihood,
+            cve::exploitation(record),
+            if weakness.is_empty() {
+                "-".to_owned()
+            } else {
+                weakness
+            },
+            record.published.clone().unwrap_or_else(|| "-".to_owned()),
+        ]
     }
 
     // ---- indexes -------------------------------------------------------
@@ -2064,39 +1949,447 @@ impl Pages<'_, '_> {
         sections
     }
 
-    /// The root README: a row per folder.
+    /// The root README, the catalogue overview (`render_root_index`): the
+    /// folders, the threat landscape, the platform blocks by status, and the
+    /// coverage, by kill-chain phase and by ATT&CK tactic.
     ///
     /// # Errors
     ///
-    /// A template failed.
+    /// None yet: the result keeps room for a failing section.
     pub fn root_index(&self) -> Result<String, String> {
+        let summaries = [
+            (
+                Scope::Rules,
+                "Deployable queries, where they run and at which status",
+            ),
+            (
+                Scope::Objectives,
+                "What to detect about a threat, as signals rules implement",
+            ),
+            (
+                Scope::Threats,
+                "Adversary behaviours, assessed, chained and covered",
+            ),
+        ];
         let mut rows = Vec::new();
-        for (scope, title) in SECTIONS {
-            let mut section = title.to_owned();
-            if self.settings.icons {
-                section = format!("{} {title}", icon(scope));
-            }
-            let mut row = vec![
-                Flavor::link(&section, &format!("{}/README.md", scope.folder())),
-                scope.folder().to_owned(),
-            ];
+        for ((scope, title), (_, summary)) in FOLDER_TITLES.iter().zip(summaries) {
+            let label = if self.settings.icons {
+                format!("{} {title}", icon(*scope))
+            } else {
+                (*title).to_owned()
+            };
+            let mut row = vec![self.flavor().render_link(
+                &label,
+                &format!("{}/README.md", scope.folder()),
+                false,
+            )];
             if self.settings.relation_counts {
-                row.push(self.catalog.records(scope).len().to_string());
+                row.push(self.catalog.records(*scope).len().to_string());
             }
+            row.push(summary.to_owned());
             rows.push(row);
         }
-        let mut headers = vec!["Section", "Folder"];
+        let mut headers = vec!["Section"];
         if self.settings.relation_counts {
             headers.push("Objects");
         }
-        let table = self.index_table(&headers, &rows);
-        self.templates.render(
-            "index.md.j2",
-            IndexPage {
-                title: "opentide Documentation".to_owned(),
-                toc: "",
-                table,
-            },
+        headers.push("Holds");
+        let mut page = Page::new(self.flavor(), "Detection catalogue", false, String::new());
+        page.add_lead([
+            paragraph(&format!(
+                "{}, {} and {}, documented by opentide from the catalogue's YAML.",
+                plural(self.catalog.threats.len(), "threat vector"),
+                plural(self.catalog.objectives.len(), "detection objective"),
+                plural(self.catalog.rules.len(), "detection rule"),
+            )),
+            self.index_table(&headers, &rows),
+        ]);
+        page.add(Section::new("Threat landscape", [self.landscape()]));
+        page.add(Section::new(
+            "Deployment status",
+            [self.status_pie(), self.status_matrix(&self.catalog.rules)],
+        ));
+        page.add(
+            Section::new("Coverage", [self.coverage_summary()]).with_children(vec![
+                Section::new("Kill-chain coverage", [self.killchain_coverage()]),
+                Section::new("ATT&CK coverage", [self.attack_coverage()]),
+            ]),
+        );
+        Ok(page.render())
+    }
+
+    /// The threat vectors at least one objective names.
+    fn addressed(&self) -> HashSet<String> {
+        self.catalog
+            .objectives
+            .iter()
+            .filter_map(|record| match &record.model {
+                Model::Objective(objective) => objective.objective.threats.as_ref(),
+                _ => None,
+            })
+            .flatten()
+            .cloned()
+            .collect()
+    }
+
+    fn landscape(&self) -> String {
+        let threats: Vec<diagrams::LandscapeThreat<'_>> = self
+            .catalog
+            .threats
+            .iter()
+            .filter_map(|record| {
+                let Model::Threat(threat) = &record.model else {
+                    return None;
+                };
+                let phase = match &threat.threat.killchain {
+                    Some(opentide_schema::objects::Killchain::One(phase)) => phase.as_str(),
+                    Some(opentide_schema::objects::Killchain::Many(phases)) => {
+                        phases.first().map_or("", String::as_str)
+                    }
+                    None => "",
+                };
+                let chaining = threat
+                    .threat
+                    .chaining
+                    .iter()
+                    .flatten()
+                    .filter_map(|entry| {
+                        let target = super::catalog::chain_target(entry)?;
+                        let relation = entry
+                            .get("relation")
+                            .map(|text| text.trim().to_owned())
+                            .unwrap_or_default();
+                        Some((target, relation))
+                    })
+                    .collect();
+                Some(diagrams::LandscapeThreat {
+                    uuid: &threat.metadata.uuid,
+                    name: &threat.name,
+                    phase,
+                    chaining,
+                })
+            })
+            .collect();
+        diagrams::fenced(
+            self.flavor(),
+            diagrams::landscape(&self.vocab, &threats, &self.addressed()).as_ref(),
+        )
+    }
+
+    /// Platform blocks by status, as a Mermaid pie chart: the slices
+    /// largest first, each coloured by its status's strategy.
+    fn status_pie(&self) -> String {
+        let mut counts: Vec<(String, usize)> = Vec::new();
+        for record in &self.catalog.rules {
+            for (_, status) in self.rule_statuses(&record.uuid) {
+                match counts.iter_mut().find(|(known, _)| *known == status) {
+                    Some((_, count)) => *count += 1,
+                    None => counts.push((status, 1)),
+                }
+            }
+        }
+        if counts.is_empty() {
+            return String::new();
+        }
+        let count_of = |name: &str| {
+            counts
+                .iter()
+                .find(|(known, _)| known == name)
+                .map_or(0, |(_, count)| *count)
+        };
+        let definitions = &self.deployment.statuses;
+        let mut ordered: Vec<String> = Vec::new();
+        for definition in definitions {
+            if count_of(&definition.name) > 0 && !ordered.contains(&definition.name) {
+                ordered.push(definition.name.clone());
+            }
+        }
+        let mut rest: Vec<String> = counts
+            .iter()
+            .map(|(name, _)| name.clone())
+            .filter(|name| !ordered.contains(name))
+            .collect();
+        rest.sort();
+        ordered.extend(rest);
+        // Mermaid draws slices largest first, in a stable order, and colours
+        // them pie1, pie2… in that order: sort the same way.
+        ordered.sort_by_key(|name| std::cmp::Reverse(count_of(name)));
+        let colours = status_colours(definitions);
+        let mut theme = crate::json::Object::new();
+        for (index, name) in ordered.iter().enumerate() {
+            let colour = colours
+                .iter()
+                .find(|(known, _)| known == name)
+                .map_or(UNKNOWN_COLOUR, |(_, colour)| *colour);
+            theme.insert(format!("pie{}", index + 1), Json::from(colour));
+        }
+        theme.insert("pieStrokeColor".into(), Json::from("#ffffff"));
+        theme.insert("pieOuterStrokeWidth".into(), Json::from("0px"));
+        let mut pie = crate::json::Object::new();
+        pie.insert("useWidth".into(), Json::Int(640));
+        let mut init = crate::json::Object::new();
+        init.insert("themeVariables".into(), Json::Object(theme));
+        init.insert("pie".into(), Json::Object(pie));
+        let mut lines = vec![
+            format!("%%{{init: {}}}%%", Json::Object(init).to_compact()),
+            "pie showData title Platform blocks by status".to_owned(),
+        ];
+        for name in &ordered {
+            lines.push(format!(
+                "    \"{}\" : {}",
+                name.replace('"', "'"),
+                count_of(name)
+            ));
+        }
+        self.flavor().mermaid_fence(&lines.join("\n"))
+    }
+
+    /// How much of the catalogue is detected, from the objects' own links.
+    fn coverage_summary(&self) -> String {
+        let rules = &self.catalog.rules;
+        let objectives = &self.catalog.objectives;
+        let threats = &self.catalog.threats;
+        if rules.is_empty() && objectives.is_empty() && threats.is_empty() {
+            return String::new();
+        }
+        let implemented: HashSet<&str> = rules
+            .iter()
+            .filter_map(|record| super::catalog::rule_detection_model(&record.model))
+            .filter(|model| !model.is_empty())
+            .collect();
+        let addressed = self.addressed();
+        let objective_models: Vec<&opentide_schema::objects::ObjectiveV1_0> = objectives
+            .iter()
+            .filter_map(|record| match &record.model {
+                Model::Objective(objective) => Some(objective.as_ref()),
+                _ => None,
+            })
+            .collect();
+        let signals: Vec<&str> = objective_models
+            .iter()
+            .flat_map(|objective| objective.objective.signals.iter())
+            .map(|signal| signal.uuid.as_str())
+            .collect();
+        let objectives_done = objective_models
+            .iter()
+            .filter(|objective| {
+                implemented.contains(objective.metadata.uuid.as_str())
+                    || objective
+                        .objective
+                        .signals
+                        .iter()
+                        .any(|signal| implemented.contains(signal.uuid.as_str()))
+            })
+            .count();
+        let mut techniques: Vec<&String> = rules
+            .iter()
+            .flat_map(|record| rule_techniques(&record.model))
+            .collect();
+        techniques.sort();
+        techniques.dedup();
+        let ratio = |done: usize, total: usize| {
+            if total == 0 {
+                format!("{done} of {total}")
+            } else {
+                format!("{done} of {total} ({}%)", percent(done, total))
+            }
+        };
+        let rows = [
+            [
+                "Threat vectors addressed by an objective".to_owned(),
+                ratio(
+                    threats
+                        .iter()
+                        .filter(|record| addressed.contains(&record.uuid))
+                        .count(),
+                    threats.len(),
+                ),
+            ],
+            [
+                "Objectives implemented by a rule".to_owned(),
+                ratio(objectives_done, objective_models.len()),
+            ],
+            [
+                "Signals implemented by a rule".to_owned(),
+                ratio(
+                    signals
+                        .iter()
+                        .filter(|signal| implemented.contains(**signal))
+                        .count(),
+                    signals.len(),
+                ),
+            ],
+            [
+                "ATT&CK techniques detected by rules".to_owned(),
+                techniques.len().to_string(),
+            ],
+        ];
+        table(&["Measure", "Value"], &rows)
+    }
+
+    /// Per kill-chain phase: its threat vectors, and how many an objective
+    /// addresses; a threat counts in every phase it lists.
+    fn killchain_coverage(&self) -> String {
+        let addressed = self.addressed();
+        let mut flags: Vec<(String, Vec<bool>)> = Vec::new();
+        let mut unphased: Vec<bool> = Vec::new();
+        for record in &self.catalog.threats {
+            let phases = record_phases(record);
+            let done = addressed.contains(&record.uuid);
+            if phases.is_empty() {
+                unphased.push(done);
+            }
+            for phase in phases {
+                match flags.iter_mut().find(|(known, _)| *known == phase) {
+                    Some((_, group)) => group.push(done),
+                    None => flags.push((phase, vec![done])),
+                }
+            }
+        }
+        if !unphased.is_empty() {
+            flags.push((String::new(), unphased));
+        }
+        let order = self.vocab.order("killchain");
+        flags.sort_by_key(|(phase, _)| {
+            (
+                phase.is_empty(),
+                order
+                    .iter()
+                    .position(|known| known == phase)
+                    .unwrap_or(order.len()),
+                phase.clone(),
+            )
+        });
+        if flags.is_empty() {
+            return String::new();
+        }
+        let rows: Vec<[String; 5]> = flags
+            .iter()
+            .map(|(phase, group)| {
+                let done = group.iter().filter(|flag| **flag).count();
+                let stage = if phase.is_empty() {
+                    String::new()
+                } else {
+                    self.vocab.killchain_stage(phase)
+                };
+                [
+                    if phase.is_empty() {
+                        "*No phase*".to_owned()
+                    } else {
+                        phase.clone()
+                    },
+                    if stage.is_empty() {
+                        "-".to_owned()
+                    } else {
+                        stage
+                    },
+                    group.len().to_string(),
+                    done.to_string(),
+                    format!("{}%", percent(done, group.len())),
+                ]
+            })
+            .collect();
+        let table = table(
+            &[
+                "Kill-chain phase",
+                "Stage",
+                "Threat vectors",
+                "Addressed by an objective",
+                "Coverage",
+            ],
+            &rows,
+        );
+        join([
+            diagrams::fenced(
+                self.flavor(),
+                diagrams::killchain_coverage(&self.vocab, &flags).as_ref(),
+            ),
+            table,
+        ])
+    }
+
+    /// Per ATT&CK tactic, in matrix order: the techniques threat vectors
+    /// use, and how many rules detect, a sub-technique counting for its
+    /// parent.
+    fn attack_coverage(&self) -> String {
+        let mut used: Vec<&String> = Vec::new();
+        for record in &self.catalog.threats {
+            if let Model::Threat(threat) = &record.model {
+                for technique in &threat.threat.mitre_attack {
+                    if !used.contains(&technique) {
+                        used.push(technique);
+                    }
+                }
+            }
+        }
+        let detected: Vec<&String> = self
+            .catalog
+            .rules
+            .iter()
+            .flat_map(|record| rule_techniques(&record.model))
+            .collect();
+        let order = self.vocab.attack_tactics();
+        let mut by_tactic: Vec<(String, Vec<&String>)> = Vec::new();
+        for technique in used {
+            let mut tactics = self.vocab.technique_tactics(technique, &order);
+            if tactics.is_empty() {
+                tactics.push("Unmapped".to_owned());
+            }
+            for tactic in tactics {
+                match by_tactic.iter_mut().find(|(known, _)| *known == tactic) {
+                    Some((_, list)) => list.push(technique),
+                    None => by_tactic.push((tactic, vec![technique])),
+                }
+            }
+        }
+        if by_tactic.is_empty() {
+            return String::new();
+        }
+        by_tactic.sort_by_key(|(tactic, _)| {
+            (
+                order
+                    .iter()
+                    .position(|known| known == tactic)
+                    .unwrap_or(order.len()),
+                tactic.clone(),
+            )
+        });
+        let rows: Vec<[String; 5]> = by_tactic
+            .iter_mut()
+            .map(|(tactic, techniques)| {
+                techniques.sort();
+                let gaps: Vec<String> = techniques
+                    .iter()
+                    .filter(|technique| {
+                        !detected
+                            .iter()
+                            .any(|found| covers_technique(found, technique))
+                    })
+                    .map(|technique| inline_code(technique))
+                    .collect();
+                let done = techniques.len() - gaps.len();
+                [
+                    tactic.clone(),
+                    techniques.len().to_string(),
+                    done.to_string(),
+                    format!("{}%", percent(done, techniques.len())),
+                    if gaps.is_empty() {
+                        "-".to_owned()
+                    } else {
+                        gaps.join(", ")
+                    },
+                ]
+            })
+            .collect();
+        table(
+            &[
+                "Tactic",
+                "Techniques in threat vectors",
+                "Detected by a rule",
+                "Coverage",
+                "Not detected",
+            ],
+            &rows,
         )
     }
 
@@ -2111,19 +2404,63 @@ impl Pages<'_, '_> {
     }
 }
 
-/// The folders, in the order the root README lists them.
-pub const SECTIONS: [(Scope, &str); 3] = [
-    (Scope::Rules, "Detection Rules"),
-    (Scope::Objectives, "Detection Objectives"),
-    (Scope::Threats, "Threat Vectors"),
-];
-
 /// The folder indexes' titles.
 pub const FOLDER_TITLES: [(Scope, &str); 3] = [
     (Scope::Rules, "Detection rules"),
     (Scope::Objectives, "Detection objectives"),
     (Scope::Threats, "Threat vectors"),
 ];
+
+/// The colour of a status no strategy colours.
+const UNKNOWN_COLOUR: &str = "#475467";
+
+/// A colour per configured status: its strategy's hue, lightest first,
+/// deeper later in the lifecycle (grey never deploys, amber is preview,
+/// blue both runs, green release, red retiring).
+fn status_colours(definitions: &[super::facts::StatusDefinition]) -> Vec<(String, &'static str)> {
+    let palettes: [(StatusStrategy, &[&str]); 6] = [
+        (StatusStrategy::Inert, &["#d0d5dd", "#98a2b3", "#667085"]),
+        (
+            StatusStrategy::Preview,
+            &["#fedf89", "#fec84b", "#fdb022", "#f79009"],
+        ),
+        (StatusStrategy::Universal, &["#84caff", "#2e90fa"]),
+        (StatusStrategy::Release, &["#6ce9a6", "#12b76a", "#039855"]),
+        (StatusStrategy::Disablement, &["#fda29b", "#f97066"]),
+        (StatusStrategy::Deletion, &["#d92d20", "#b42318"]),
+    ];
+    let mut colours: Vec<(String, &'static str)> = Vec::new();
+    for (strategy, palette) in palettes {
+        let names: Vec<&String> = definitions
+            .iter()
+            .filter(|definition| definition.strategy == strategy)
+            .map(|definition| &definition.name)
+            .collect();
+        let offset = palette.len().saturating_sub(names.len());
+        for (index, name) in names.into_iter().enumerate() {
+            let colour = palette[(offset + index).min(palette.len() - 1)];
+            match colours.iter_mut().find(|(known, _)| known == name) {
+                Some((_, existing)) => *existing = colour,
+                None => colours.push((name.clone(), colour)),
+            }
+        }
+    }
+    colours
+}
+
+/// `done` of `total` as a whole percentage, rounded half to even as
+/// Python's `round` rounds it.
+fn percent(done: usize, total: usize) -> String {
+    if total == 0 {
+        return "0".to_owned();
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "catalogue counts are far below 2^52"
+    )]
+    let share = 100.0 * done as f64 / total as f64;
+    format!("{}", share.round_ties_even())
+}
 
 fn icon(scope: Scope) -> &'static str {
     match scope {

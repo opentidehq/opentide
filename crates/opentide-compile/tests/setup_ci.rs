@@ -77,25 +77,36 @@ fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
     (oracle != rendered).then(|| "line endings differ".to_owned())
 }
 
+/// The pipeline with every line that mentions a platform the recorded oracle
+/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) removed: its id in
+/// underscore or hyphen form, matched case-insensitively, which also catches
+/// its credential variables (`$EXABEAM_CLIENT_ID`). No other platform id is a
+/// substring of these, and 0.23.0 output holds none of them, so a 0.23.0
+/// render is returned unchanged.
+fn without_since_oracle_lines(text: &str) -> String {
+    let tokens: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
+        .iter()
+        .flat_map(|id| [(*id).to_owned(), id.replace('_', "-")])
+        .collect();
+    text.split_inclusive('\n')
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            !tokens.iter().any(|token| lower.contains(token.as_str()))
+        })
+        .collect()
+}
+
 fn data(text: &str) -> Option<Json> {
     let document = opentide_schema::node::load(text).ok()?;
     document.root().map(|root| Json::from_node(root))
 }
 
-/// The platforms the 0.23.0 recordings predate: the `platforms-after-0.23`
-/// difference of opentide-schema's `tests/oracle/config_cases.toml`, the one
-/// list the oracle tests share until the oracle moves to 0.28.0 (O2).
+/// The platforms the 0.23.0 recordings predate
+/// (`opentide_schema::platforms::SINCE_ORACLE`, emptied at O2).
 fn platforms_after_the_oracle() -> Vec<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../opentide-schema/tests/oracle/config_cases.toml");
-    let cases: toml::Table = std::fs::read_to_string(path).unwrap().parse().unwrap();
-    cases["difference"]
-        .as_array()
-        .unwrap()
+    opentide_schema::platforms::SINCE_ORACLE
         .iter()
-        .filter(|difference| difference["id"].as_str() == Some("platforms-after-0.23"))
-        .flat_map(|difference| difference["fields"].as_array().unwrap().clone())
-        .map(|field| field.as_str().unwrap().to_owned())
+        .map(|id| (*id).to_owned())
         .collect()
 }
 
@@ -166,6 +177,11 @@ fn pipelines_are_the_oracles() {
         if let Some(dir) = std::env::var_os("OPENTIDE_CI_RENDERED") {
             std::fs::write(Path::new(&dir).join(format!("{name}.yml")), &rendered).unwrap();
         }
+        // The recorded pipeline (0.23.0) predates the platforms the train ports
+        // onto it; their bundled credentials and query stages add lines the
+        // oracle lacks. Drop those lines before comparing. On this oracle none
+        // are present, so this is a no-op until a row lands.
+        let rendered = without_since_oracle_lines(&rendered);
         let same_data = data(&rendered).is_some() && data(&oracle) == data(&rendered);
         if !same_data {
             problems.push(format!(

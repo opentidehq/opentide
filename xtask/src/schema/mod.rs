@@ -180,10 +180,23 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
     ]
 }
 
-/// The models of the platforms the 0.23.0 oracle predates: it writes no
-/// schema for them (until O2 moves the oracle; then the platform table's
-/// `SINCE_ORACLE` list says which).
-const SINCE_ORACLE_MODELS: [&str; 1] = ["GoogleSecopsConfig"];
+/// The model-name prefixes of the platforms the recorded oracle lacks
+/// (`opentide_schema::platforms::SINCE_ORACLE`): each such platform's config
+/// class without its `Config` suffix (`ExabeamConfig` -> `Exabeam`), which its
+/// nested models also share. A platform with no row yet contributes none.
+fn since_oracle_model_prefixes() -> Vec<String> {
+    platform::PLATFORM_CONFIG_MODELS
+        .iter()
+        .filter(|entry| opentide_schema::platforms::after_oracle(entry.key))
+        .map(|entry| {
+            entry
+                .model
+                .strip_suffix("Config")
+                .unwrap_or(entry.model)
+                .to_owned()
+        })
+        .collect()
+}
 
 /// Compares the oracle's schemas (`probe.py schemas`) with the models'. The
 /// differences by model; an empty list passes.
@@ -204,8 +217,15 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
             )],
         ));
     }
+    let after_oracle = since_oracle_model_prefixes();
     for (name, rust) in rust_schemas() {
-        if SINCE_ORACLE_MODELS.contains(&name) && oracle["schemas"].get(name).is_none() {
+        // The recorded probe (0.23.0) lacks the models of the platforms the
+        // train ports onto it; skip those, keyed by their config class's
+        // prefix. On this oracle no such prefix exists, so this is a no-op.
+        if after_oracle
+            .iter()
+            .any(|prefix| name.starts_with(prefix.as_str()))
+        {
             continue;
         }
         let pydantic = oracle["schemas"]

@@ -14,6 +14,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
+use opentide_schema::platforms::IdShape;
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = opentide_workspace::state::SCHEMA_ID;
@@ -120,12 +121,6 @@ impl ExternalId {
     }
 }
 
-fn canonical_decimal(text: &str) -> bool {
-    text == "0"
-        || (text.starts_with(|c: char| ('1'..='9').contains(&c))
-            && text.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
 /// *value* as the shard stores it, or `external_id_shape`
 /// (`normalise_external_id`).
 pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<String, StateError> {
@@ -139,18 +134,22 @@ pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<Strin
             "external_id_shape",
             format!("{platform} external id is empty"),
         )),
-        ExternalId::Text(text)
-            if opentide_schema::platforms::has_integer_id(platform) && !canonical_decimal(text) =>
-        {
-            Err(StateError::new(
-                "external_id_shape",
-                format!(
-                    "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
+        ExternalId::Text(text) => {
+            match opentide_schema::platforms::external_id_problem(platform, text) {
+                Some(IdShape::CanonicalDecimal) => Err(StateError::new(
+                    "external_id_shape",
+                    format!(
+                        "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
                      no leading zeroes)"
-                ),
-            ))
+                    ),
+                )),
+                Some(IdShape::Pattern(pattern)) => Err(StateError::new(
+                    "external_id_shape",
+                    format!("{platform} external id {text:?} does not match {pattern:?}"),
+                )),
+                None => Ok(text.clone()),
+            }
         }
-        ExternalId::Text(text) => Ok(text.clone()),
     }
 }
 
@@ -714,6 +713,20 @@ mod tests {
         );
         assert!(normalise_external_id("crowdstrike", &ExternalId::Text(" ".into())).is_err());
         assert!(normalise_external_id("sysdig", &ExternalId::Int(-1)).is_err());
+        // Google SecOps' row pins its ids to `ru_<uuid>` (#1064).
+        let rule_id = "ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1";
+        assert_eq!(
+            normalise_external_id("google_secops", &ExternalId::Text(rule_id.into())).unwrap(),
+            rule_id
+        );
+        let refused =
+            normalise_external_id("google_secops", &ExternalId::Text("rule-1".into())).unwrap_err();
+        assert_eq!(refused.code, "external_id_shape");
+        assert_eq!(
+            refused.message,
+            "google_secops external id \"rule-1\" does not match \
+             \"^ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\""
+        );
     }
 
     #[test]

@@ -1,0 +1,18 @@
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mimport from elastic[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mRetrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules/_find?page=1&per_page=100
+[1;33mwarning: [0mRetrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules/_find?page=1&per_page=100
+[1;33mwarning: [0mRetrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after 
+connection broken by 'NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to 
+establish a new connection: [Errno 111] Connection refused")': 
+/s/soc/api/detection_engine/rules/_find?page=1&per_page=100
+[?25h[1A[2K  [1;31m✗[0m  [1mimport from elastic[0m [2m<SECONDS>[0m
+[1;31merror:[0m ProxyError: HTTPSConnectionPool(host='kibana.elastic.invalid', port=443): Max retries
+       exceeded with url: /s/soc/api/detection_engine/rules/_find?page=1&per_page=100 (Caused by
+       ProxyError('Unable to connect to proxy',
+       NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new
+       connection: [Errno 111] Connection refused")))

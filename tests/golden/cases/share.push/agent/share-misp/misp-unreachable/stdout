@@ -1,0 +1,18 @@
+misp-prod
+  ✗ failed   Shared Objective       …000000000002  validation error
+  ○ skipped  Rule still in staging  …000000000014  status not shared
+  ○ skipped  Rule marked red        …000000000015  TLP above max_tlp
+  ✗ failed   Shared Actor           …000000000001  connectivity failed
+  ✗ failed   Shared rule to create  …000000000011  connectivity failed
+  ✗ failed   Shared rule to update  …000000000012  connectivity failed
+  ✗ failed   Shared rule unchanged  …000000000013  connectivity failed
+
+misp-locked
+  ○ skipped  Shared Actor           …000000000001  type not shared
+  ○ skipped  Shared Objective       …000000000002  type not shared
+  ○ skipped  Rule still in staging  …000000000014  status not shared
+  ○ skipped  Rule marked red        …000000000015  TLP above max_tlp
+  ✗ failed   Shared rule to create  …000000000011  connectivity failed
+  ✗ failed   Shared rule to update  …000000000012  connectivity failed
+  ✗ failed   Shared rule unchanged  …000000000013  connectivity failed
+

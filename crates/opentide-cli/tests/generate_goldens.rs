@@ -1071,20 +1071,28 @@ fn docs_preview_shards_refresh_signals_and_references() {
     }
     assert!(!page.contains("Suspicious logon signal"), "{page}");
     let threat = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
-    assert!(
-        threat.contains(
-            "00000000_0000_4000_8001_00000000cccc -->|preceeds| \
-             00000000_0000_4000_8001_000000000001\n"
-        ),
-        "{threat}"
-    );
+    // The pull request's threat chains into this one: the page's own threat
+    // first (thr1, outlined), the shard's second, linked the `preceeds` way.
+    let section = &threat[threat.find("## Chaining").unwrap()..];
+    for line in [
+        "    thr1{{\"Simulated Actor\"}}\n",
+        "    thr2{{\"Chained Actor\"}}\n",
+        "    thr2 -->|\"preceeds\"| thr1\n",
+        "    class thr1 focus\n",
+    ] {
+        assert!(section.contains(line), "{line}: {threat}");
+    }
 }
 
-/// A stand-in Vulnerability-Lookup on the loopback: each request's line is
-/// recorded, and the record of `CVE-2024-3094` is known, every other
-/// identifier is not (`{}`).
+/// A stand-in Vulnerability-Lookup on the loopback, answering the records
+/// and the EPSS score opentide 0.28.1 recorded from vulnerability.circl.lu
+/// (`tests/fixtures/vulnerability_lookup/`): each request's line is
+/// recorded, CVE-2024-3094's EPSS score answers 503, and every other
+/// identifier is not known (`{}`).
 fn vulnerability_lookup() -> (String, Arc<Mutex<Vec<String>>>) {
     use std::io::{BufRead, BufReader, Write};
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/vulnerability_lookup");
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -1100,14 +1108,27 @@ fn vulnerability_lookup() -> (String, Arc<Mutex<Vec<String>>>) {
                 header.clear();
             }
             log.lock().unwrap().push(line.trim().to_owned());
-            let body = if line.contains("/CVE-2024-3094") {
-                r#"{"cveMetadata": {"cveId": "CVE-2024-3094", "datePublished": "2024-03-29T16:51:12Z", "state": "PUBLISHED"}, "containers": {"cna": {"title": "xz | backdoor", "metrics": [{"cvssV3_1": {"baseSeverity": "CRITICAL", "baseScore": 10.0}}]}}, "vulnerability-lookup:linked": {"github": [{"id": "GHSA-rxwq-x6h5-qc8m"}]}}"#
+            let target = line.split(' ').nth(1).unwrap_or_default();
+            let path = target.split('?').next().unwrap_or_default();
+            let (status, body) = match path {
+                "/api/epss/CVE-2024-3094" => ("503 Service Unavailable", String::new()),
+                "/api/vulnerability/CVE-2023-4966" => ("200 OK", "cve-2023-4966.json".to_owned()),
+                "/api/vulnerability/CVE-2024-3094" => ("200 OK", "cve-2024-3094.json".to_owned()),
+                "/api/epss/CVE-2023-4966" => ("200 OK", "epss-cve-2023-4966.json".to_owned()),
+                _ => ("200 OK", String::new()),
+            };
+            let body = if body.is_empty() {
+                if status.starts_with("200") {
+                    "{}".to_owned()
+                } else {
+                    String::new()
+                }
             } else {
-                "{}"
+                std::fs::read_to_string(fixtures.join(body)).unwrap()
             };
             let _ = write!(
                 stream,
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             );
         }
@@ -1116,9 +1137,13 @@ fn vulnerability_lookup() -> (String, Arc<Mutex<Vec<String>>>) {
 }
 
 /// A threat that lists CVEs, with `[cve] retrieve_details` on (the default):
-/// its page is a table of each record's details, asked of Vulnerability-Lookup
-/// once per identifier with its linked records (UC-4.4, #834); with the
-/// setting off, the CVEs are links.
+/// its page is a table of each record's severity, EPSS score, exploitation
+/// and weakness, asked of Vulnerability-Lookup once per identifier with its
+/// linked records, then each CVE's EPSS score (UC-4.4, #834; 0.26.0); the
+/// overview counts the CVEs with the highest score, and a warning names the
+/// one CISA lists as exploited. With the setting off, the CVEs are links.
+/// The page's CVE parts are opentide 0.28.1's, byte for byte, on the same
+/// stand-in.
 #[test]
 fn docs_with_cve_details_fetch_each_record() {
     let scratch = tempfile::tempdir().unwrap();
@@ -1126,7 +1151,9 @@ fn docs_with_cve_details_fetch_each_record() {
     fixture("tide-corpus", &ws);
     let threat = ws.join("Objects/Threat Vectors/threat-0001-simulated-actor.yaml");
     let mut text = std::fs::read_to_string(&threat).unwrap();
-    text.push_str("  cve:\n    - CVE-2024-3094\n    - cve-2024-9999\n    - GCVE-0-2024-3094\n");
+    text.push_str(
+        "  cve:\n    - CVE-2023-4966\n    - CVE-2024-3094\n    - cve-2024-9999\n    - GCVE-0-2024-3094\n",
+    );
     std::fs::write(&threat, text).unwrap();
     let (base, seen) = vulnerability_lookup();
     std::fs::write(
@@ -1137,6 +1164,17 @@ fn docs_with_cve_details_fetch_each_record() {
     let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "threats"]);
     assert_eq!(code, 0, "{stdout}");
     let page = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
+    assert!(
+        page.contains("\n| CVE | 3 CVEs (highest CVSS 10.0, 1 known exploited) |\n"),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "\n> **Warning:** `CVE-2023-4966` (CISA KEV since 2023-10-18) is known to be \
+             exploited in the wild.\n"
+        ),
+        "{page}"
+    );
     let section = &page[page.find("## CVE").unwrap()..];
     // The CVE section ends where the next one, Detection coverage, begins.
     let section = &section[..section.find("\n## Detection coverage").unwrap()];
@@ -1147,21 +1185,66 @@ fn docs_with_cve_details_fetch_each_record() {
         format!(
             "## CVE\n\nIdentifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
              which aggregates CVE, GHSA, CSAF, NVD, and related feeds.\n\n\
-             | Identifier | Published | Severity | Summary |\n\
-             | --- | --- | --- | --- |\n\
-             | [CVE-2024-3094]({PAGES}CVE-2024-3094)<br>[GHSA-rxwq-x6h5-qc8m]({PAGES}GHSA-rxwq-x6h5-qc8m) \
-             | 2024-03-29 | CRITICAL (10.0) | xz \\| backdoor |\n\
-             | [CVE-2024-9999]({PAGES}CVE-2024-9999) | - | - | Not found in Vulnerability-Lookup. |\n\n\
-             Could not resolve: `CVE-2024-9999`.\n"
+             | Identifier | Severity | EPSS | Exploitation | Weakness | Published |\n\
+             | --- | --- | --- | --- | --- | --- |\n\
+             | [CVE-2023-4966]({PAGES}CVE-2023-4966) | **9.4** CRITICAL<br>CVSS 3.1 | 94.3%<br>top 0.3% \
+             | **Known exploited**<br>CISA KEV, 2023-10-18 \
+             | [CWE-119](https://cwe.mitre.org/data/definitions/119.html) Improper Restriction of \
+             Operations within the Bounds of a Memory Buffer | 2023-10-10 |\n\
+             | [CVE-2024-3094]({PAGES}CVE-2024-3094) | **10.0** CRITICAL<br>CVSS 3.1 | - \
+             | None reported<br>CISA SSVC \
+             | [CWE-506](https://cwe.mitre.org/data/definitions/506.html) Embedded Malicious Code \
+             | 2024-03-29 |\n\
+             | [CVE-2024-9999]({PAGES}CVE-2024-9999) | - | - | - | - | Not found in Vulnerability-Lookup. |\n\n\
+             - **CVE-2023-4966**: Unauthenticated sensitive information disclosure. Affects Citrix \
+             NetScaler ADC, Citrix NetScaler Gateway. Vector \
+             `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`.\n\
+             - **CVE-2024-3094**: Xz: malicious code in distributed source. Affects xz, Red Hat \
+             Enterprise Linux 10, Red Hat Enterprise Linux 6, Red Hat Enterprise Linux 7 and 1 more. \
+             Vector `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H`.\n\n\
+             Could not resolve: `CVE-2024-9999`.\n\n\
+             Vulnerability-Lookup returned no EPSS score for at least one identifier; those rows \
+             show none.\n\n\
+             *EPSS: FIRST's probability of exploitation in the next 30 days. Exploitation: CISA's \
+             Known Exploited Vulnerabilities catalog, else its SSVC assessment.*\n"
         )
     );
-    // GCVE-0-2024-3094 is CVE-2024-3094: one row, one request each.
+    // GCVE-0-2024-3094 is CVE-2024-3094: one row, one request each; a CVE
+    // the instance does not know has no EPSS request.
     assert_eq!(
         *seen.lock().unwrap(),
         [
+            "GET /api/vulnerability/CVE-2023-4966?with_linked=true HTTP/1.1",
+            "GET /api/epss/CVE-2023-4966 HTTP/1.1",
             "GET /api/vulnerability/CVE-2024-3094?with_linked=true HTTP/1.1",
-            "GET /api/vulnerability/CVE-2024-9999?with_linked=true HTTP/1.1"
+            "GET /api/epss/CVE-2024-3094 HTTP/1.1",
+            "GET /api/vulnerability/CVE-2024-9999?with_linked=true HTTP/1.1",
         ]
+    );
+    // An instance that cannot be reached: each row says so, and no warning.
+    std::fs::write(
+        ws.join(".opentide/configurations/documentation.toml"),
+        "[cve]\nbase_url = \"http://127.0.0.1:1\"\ntimeout = 2\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs", "threats"]);
+    assert_eq!(code, 0, "{stdout}");
+    let page = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
+    assert!(page.contains("\n| CVE | 3 CVEs |\n"), "{page}");
+    assert!(!page.contains("exploited in the wild"), "{page}");
+    assert!(
+        page.contains(&format!(
+            "| [CVE-2023-4966]({PAGES}CVE-2023-4966) | - | - | - | - | Details unavailable from \
+             Vulnerability-Lookup. |\n"
+        )),
+        "{page}"
+    );
+    assert!(
+        page.contains(
+            "\nVulnerability-Lookup was unreachable for at least one identifier; links still \
+             point at the CIRCL record page.\n"
+        ),
+        "{page}"
     );
     // With the setting off, the page lists the CVEs as links, and asks nothing.
     std::fs::write(
@@ -1173,10 +1256,11 @@ fn docs_with_cve_details_fetch_each_record() {
     assert_eq!(code, 0, "{stdout}");
     let page = std::fs::read_to_string(ws.join("docs/threats/simulated-actor.md")).unwrap();
     assert!(
-        page.contains("- [CVE-2024-3094](https://vulnerability.circl.lu/vuln/CVE-2024-3094)\n"),
+        page.contains("- [CVE-2023-4966](https://vulnerability.circl.lu/vuln/CVE-2023-4966)\n"),
         "{page}"
     );
-    assert_eq!(seen.lock().unwrap().len(), 2);
+    assert!(page.contains("\n| CVE | 3 CVEs |\n"), "{page}");
+    assert_eq!(seen.lock().unwrap().len(), 5);
 }
 
 /// `[paths.core] docs_folder` (CoreTIDE's docs folder) is not a key of

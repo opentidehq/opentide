@@ -1,0 +1,10 @@
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 0 to disable, 1 to delete
+
+Deploying to crowdstrike / lab · 3 rules
+  [1/3] · skipped   CrowdStrike create rule  not attempted after a failure
+  [2/3] · skipped   CrowdStrike update rule  not attempted after a failure
+  [3/3] · skipped   CrowdStrike retire rule  not attempted after a failure
+✗ crowdstrike · 0 deployed, 0 failed, 3 not attempted · <SECONDS>
+error: Platform deployment failed · system: crowdstrike · detail: ProxyError: HTTPSConnectionPool(host='api.eu-1.crowdstrike.com', port=443): Max retries exceeded with url: /oauth2/token (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+error: Deployment to crowdstrike failed: ProxyError: HTTPSConnectionPool(host='api.eu-1.crowdstrike.com', port=443): Max retries exceeded with url: /oauth2/token (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))

@@ -25,12 +25,6 @@
 # difference no case names.
 
 [[difference]]
-id = "platforms-after-0.23"
-reason = "The bundled configuration has a file for each platform opentide gained after the 0.23.0 oracle (catch-up plan, 0.24.0 to 0.28.0), so a resolved workspace holds its `platforms` and `systems` entry, which the oracle's lacks. Each port adds its platform's key to `fields`; the difference goes when the oracle moves to 0.28.0 (O2)."
-fields = ["google_secops"]
-changelog = "**Google Security Operations**"
-
-[[difference]]
 id = "toml-parse-message"
 reason = "A configuration file that is not TOML is refused by the toml_edit crate, which says what is wrong (`expected `=``, `invalid table header`) where the oracle said `TOMLDecodeError` or tomllib's own words; the position is the crate's."
 fields = ["message"]
@@ -493,26 +487,26 @@ text = "[[misp]]\nname = \"it's\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_
 
 [[case]]
 id = "workspace-bundled"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = {}
 
 [[case]]
 id = "workspace-overrides"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "deployment.toml" = "default_responders = \"soc\"\n[[responders]]\nname = \"soc\"\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\nurl = \"$URL\"\nport = 8089\napp = \"search\"\ntoken = \"$TOKEN\"\n", "visibility.toml" = "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"d\"\nsystem = \"sentinel\"\n", "notes.txt" = "not read", "extra.toml" = "a = 1\n", "custom/one.toml" = "b = [1, 2.5, true]\n" }
 parent = { "deployment.toml" = "default_responders = \"cert\"\n", "platforms/elastic.toml" = "[platform]\nenabled = true\n" }
 
 [[case]]
 id = "workspace-findings"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "deployment.toml" = "colour = \"blue\"\n[promotion]\npromotion_target = \"NOPE\"\n", "documentation.toml" = "flavor = 5\n", "paths.toml" = "objects = [\"x\"]\n", "platforms/sentinel.toml" = "[platform]\ncolour = 1\n", "platforms/foo.toml" = "x = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
 
 [[case]]
 id = "workspace-cross-checks"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "deployment.toml" = "[promotion]\npromotion_target = \"NOPE\"\n[[responders]]\nname = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
 
@@ -544,19 +538,19 @@ files = { "documentation.toml" = "[cve]\nproxy = \"http://p\"\n" }
 
 [[case]]
 id = "workspace-hidden-and-private"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { ".hidden/a.toml" = "a = 1\n", "__cache__/b.toml" = "b = 1\n", ".dot.toml" = "c = 1\n", "folder/.h.toml" = "d = 1\n", "folder/x.y.toml" = "e = 1\n", "sharing.toml" = "[[misp]]\nname = \"a\"\n" }
 
 [[case]]
 id = "workspace-systems-file"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "systems.toml" = "[splunk.platform]\nenabled = true\n" }
 
 [[case]]
 id = "workspace-empty-visibility"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "platforms.toml" = "[splunk]\nplatform = 1\n" }
 
@@ -732,7 +726,7 @@ parent = { "systems/splunk.toml" = "x = 1\n" }
 # and replaces the folder.
 [[case]]
 id = "workspace-file-and-folder"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "platforms.toml" = "[splunk]\nx = 1\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n" }
 
@@ -752,7 +746,7 @@ difference = "toml-parse-message"
 
 [[case]]
 id = "workspace-integer-range"
-difference = ["lint-recommended-check", "platforms-after-0.23"]
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "custom.toml" = "a = 9223372036854775807\nb = -9223372036854775808\n" }
 
@@ -766,7 +760,7 @@ difference = "toml-integer-range"
 id = "workspace-datetimes"
 kind = "workspace"
 files = { "custom.toml" = "plain = 1979-05-27T07:32:00Z\nlocal = 1979-05-27T07:32:00\nmicros = 07:32:00.123456\ndt_fraction = 1979-05-27 07:32:00.5Z\ndt_offset = 1979-05-27T07:32:00-00:00\ntime_nanos = 07:32:00.123456789\n" }
-difference = ["toml-datetime-text", "lint-recommended-check", "platforms-after-0.23"]
+difference = ["toml-datetime-text", "lint-recommended-check"]
 
 [[case]]
 id = "sharing-datetime-entry"
