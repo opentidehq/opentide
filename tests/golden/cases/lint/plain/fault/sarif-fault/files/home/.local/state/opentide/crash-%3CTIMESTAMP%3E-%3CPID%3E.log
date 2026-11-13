@@ -1,0 +1,111 @@
+opentide crash log
+
+time: 0000-00-00T00:00:00Z
+opentide: 0.28.1
+python: 3.13.14 (CPython)
+os: Linux <KERNEL> (x86_64)
+command: opentide lint
+arguments: lint --format sarif --output opentide-reports/lint.sarif
+output mode: plain
+
+environment:
+  ALL_PROXY=http://127.0.0.1:9
+  HTTPS_PROXY=http://127.0.0.1:9
+  HTTP_PROXY=http://127.0.0.1:9
+  OPENTIDE_DATA_ROOT=<ENGINE>/lib/python3.13/site-packages/opentide/data
+  OPENTIDE_REPO_ROOT=<WS>
+  OPENTIDE_TIDE_WORKSPACE=<WS>
+  all_proxy=http://127.0.0.1:9
+  http_proxy=http://127.0.0.1:9
+  https_proxy=http://127.0.0.1:9
+
+Traceback (most recent call last):
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/cli/__init__.py", line 116, in main
+    app()
+    ~~~^^
+  File "<ENGINE>/lib/python3.13/site-packages/typer/main.py", line 1154, in __call__
+    raise e
+  File "<ENGINE>/lib/python3.13/site-packages/typer/main.py", line 1137, in __call__
+    return get_command(self)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/typer/_click/core.py", line 809, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/cli/lazy.py", line 152, in main
+    return super().main(
+           ~~~~~~~~~~~~^
+        args=args,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **extra,
+        ^^^^^^^^
+    )
+    ^
+  File "<ENGINE>/lib/python3.13/site-packages/typer/core.py", line 1197, in main
+    return _main(
+        self,
+    ...<6 lines>...
+        **extra,
+    )
+  File "<ENGINE>/lib/python3.13/site-packages/typer/core.py", line 187, in _main
+    rv = self.invoke(ctx)
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/cli/lazy.py", line 203, in invoke
+    return super().invoke(ctx)
+           ~~~~~~~~~~~~~~^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/typer/core.py", line 1119, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/typer/_click/core.py", line 748, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/typer/_click/core.py", line 490, in invoke
+    return callback(*args, **kwargs)
+  File "<ENGINE>/lib/python3.13/site-packages/typer/main.py", line 1519, in wrapper
+    return callback(**use_params)
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/cli/commands/lint.py", line 66, in lint_cmd
+    result = run_lint(
+        cli.repo,
+    ...<4 lines>...
+        changed=changed,
+    )
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/cli/services/lint.py", line 1038, in run_lint
+    findings.extend(_recommended_findings(shown))
+                    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/cli/services/lint.py", line 655, in _recommended_findings
+    fields = recommended_fields(schema_id)
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/lsp_catalog.py", line 272, in recommended_fields
+    schema = generate_schema_for_identifier(schema_id)
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/pydantic_schemas.py", line 51, in generate_schema_for_identifier
+    raw = gen_json_schema(
+        build_schema_source_for_identifier(schema_id),
+        schema_id=schema_id,
+    )
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/schema_pipeline.py", line 927, in gen_json_schema
+    gen_json_schema(dictionary[field], schema_id=schema_id)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/schema_pipeline.py", line 927, in gen_json_schema
+    gen_json_schema(dictionary[field], schema_id=schema_id)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/schema_pipeline.py", line 927, in gen_json_schema
+    gen_json_schema(dictionary[field], schema_id=schema_id)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  [Previous line repeated 2 more times]
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/schema_pipeline.py", line 855, in gen_json_schema
+    values_list, descriptions_list = VocabularyResolver.Statuses().resolve()
+                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/generation/schema_pipeline.py", line 480, in resolve
+    for status in Opentide.Configurations.Deployment.statuses:
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/core/registry.py", line 342, in statuses
+    return cast(list[Any], ConfigurationsLoader.statuses_from(self.model.statuses))
+                                                              ^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/core/registry.py", line 312, in model
+    return ConfigurationsLoader.load_deployment(self.Index)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/loading/config_loader.py", line 41, in load_deployment
+    loaded = validate_configuration(
+        DeploymentConfiguration, document, file_key="***"
+    )
+  File "<ENGINE>/lib/python3.13/site-packages/opentide/models/configuration/loading.py", line 123, in validate_configuration
+    raise ConfigurationError(file_key, errors)
+opentide.models.configuration.loading.ConfigurationError: deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key

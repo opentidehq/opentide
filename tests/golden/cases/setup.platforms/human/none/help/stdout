@@ -14,6 +14,10 @@
 [2m│[0m [1;36m-[0m[1;36m-harfanglab[0m                     [1;33m     [0m  Enable HarfangLab                                        [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-elastic[0m                        [1;33m     [0m  Enable Elastic Security                                  [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-sysdig[0m                         [1;33m     [0m  Enable Sysdig Secure (Falco)                             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-bitdefender[0m                    [1;33m     [0m  Enable Bitdefender GravityZone                           [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-graylog[0m                        [1;33m     [0m  Enable Graylog                                           [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-exabeam[0m                        [1;33m     [0m  Enable Exabeam New-Scale SIEM                            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-google[0m[1;36m-secops[0m                  [1;33m     [0m  Enable Google Security Operations (YARA-L)               [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-plan[0m                           [1;33m     [0m  List the files each step would write, and write nothing  [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-yes[0m                    [1;32m-y[0m      [1;33m     [0m  Write without asking for confirmation                    [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-help[0m                           [1;33m     [0m  Show this message and exit.                              [2m│[0m

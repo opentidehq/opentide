@@ -16,7 +16,9 @@
 │                                           splunk, crowdstrike,               │
 │                                           defender_for_endpoint,             │
 │                                           sentinel_one, carbon_black_cloud,  │
-│                                           harfanglab, elastic, sysdig        │
+│                                           harfanglab, elastic, sysdig,       │
+│                                           bitdefender, graylog, exabeam,     │
+│                                           google_secops                      │
 │                                           [required]                         │
 │    --tenant            <str>              Run on this tenant (repeatable),   │
 │                                           or 'all'. Default: the only tenant │
@@ -37,8 +39,8 @@
 │                                           [default: 100]                     │
 │    --language          <str>              Elastic only: esql (default), eql, │
 │                                           lucene or kuery                    │
-│    --index             <str>              Elastic index pattern or           │
-│                                           CrowdStrike repository             │
+│    --index             <str>              Elastic index pattern, CrowdStrike │
+│                                           repository or Graylog stream alias │
 │                                           (repeatable)                       │
 │    --timeout           <float>            Seconds to wait for a search to    │
 │                                           finish                             │

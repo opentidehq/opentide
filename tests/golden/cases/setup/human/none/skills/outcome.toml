@@ -24,7 +24,20 @@ path = "ws/.agents/skills/detection-engineering/SKILL.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1274
+size = 139
+
+[[files]]
+path = "ws/.agents/skills/detection-engineering/references"
+change = "created"
+kind = "dir"
+mode = "0755"
+
+[[files]]
+path = "ws/.agents/skills/detection-engineering/references/kql.md"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 6
 
 [[files]]
 path = "ws/.agents/skills/opentide-detection-rule"
@@ -37,7 +50,7 @@ path = "ws/.agents/skills/opentide-detection-rule/SKILL.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1331
+size = 1934
 
 [[files]]
 path = "ws/.cursor"
@@ -62,7 +75,20 @@ path = "ws/.cursor/skills/detection-engineering/SKILL.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1274
+size = 139
+
+[[files]]
+path = "ws/.cursor/skills/detection-engineering/references"
+change = "created"
+kind = "dir"
+mode = "0755"
+
+[[files]]
+path = "ws/.cursor/skills/detection-engineering/references/kql.md"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 6
 
 [[files]]
 path = "ws/.cursor/skills/opentide-detection-rule"
@@ -75,7 +101,7 @@ path = "ws/.cursor/skills/opentide-detection-rule/SKILL.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1331
+size = 1934
 
 [[files]]
 path = "ws/AGENTS.md"

@@ -1,3 +1,15 @@
-✗ 86 findings in 80 files · 6 errors, 70 warnings, 10 notes
-→ opentide lint --fix · rename 2 files to match their names
-tip: add --json for machine-readable output
+error: Malformed object yaml · path: objects/threats/encoded-exfiltration-threat-0030.yaml · error: expected a mapping at the top of the file, found an empty file
+error: Malformed object yaml · path: objects/rules/encoded-relay-rule-0014.yaml · error: '2026-02-30' is not a valid date (day is out of range for month) at line 9, column 13
+error: Malformed object yaml · path: objects/rules/encoded-spray-rule-0023.yaml · error: did not find expected ',' or ']' at line 53, column 1 (while parsing a flow sequence that starts at line 52, column 9)
+error: Malformed object yaml · path: objects/rules/lateral-injection-rule-0024.yaml · error: found character that cannot start any token at line 68, column 1 (while scanning for the next token)
+error: Malformed object yaml · path: objects/rules/rogue-relay-rule-0035.yaml · error: did not find expected ',' or ']' at line 59, column 1 (while parsing a flow sequence that starts at line 58, column 9)
+error: Missing identifier from model · file: <WS>/objects/rules/staged-implant-rule-0006.yaml
+error: Logsource invalid assets · logsource: Ghost1 · invalid_assets: ghost-1
+error: Logsource invalid assets · logsource: Ghost2 · invalid_assets: ghost-2
+error: Logsource invalid assets · logsource: Ghost3 · invalid_assets: ghost-3
+error: Logsource invalid assets · logsource: Ghost4 · invalid_assets: ghost-4
+error: Logsource invalid assets · logsource: Ghost5 · invalid_assets: ghost-5
+error[internal]: ConfigurationError: deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key
+  note: crash log, with credentials and tenant names redacted: <HOME>/.local/state/opentide/crash-<TIMESTAMP>-<PID>.log
+  help: this is a bug in opentide; report it: https://github.com/opentidehq/opentide/issues/new?title=Crash+in+opentide+lint&body=%23%23%23+What+happened%0A%0A%3C%21--+What+you+ran+and+what+you+expected.+--%3E%0A%0A%23%23%23+Environment%0A%0A-+opentide%3A+0.28.1%0A-+Python%3A+3.13.14+%28CPython%29%0A-+OS%3A+Linux+<KERNEL>+%28x86_64%29%0A-+Command%3A+%60opentide+lint%60%0A%0A%23%23%23+Crash+log%0A%0A%3C%21--+Attach+the+crash+log+opentide+printed.+Credentials%2C+tokens+and+tenant+names+are+redacted%3B+read+it+before+you+attach+it.+--%3E
+  help: add --debug to see the traceback

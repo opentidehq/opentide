@@ -2319,8 +2319,10 @@ args = ["setup", "skills", "show", "no-such-skill"]
 fixtures = ["none"]
 cassette = "skills/manifest"
 
-# Installing skills (UC-4.4d, #834): the starter skills ship with opentide, so
-# a fresh install reads only the catalogue (skills/manifest); --install of a
+# Installing skills (UC-4.4d, #834): the starter skills ship with opentide;
+# since opentide 0.28.1 (#1015) an install or a plan of them reads the
+# catalogue, then the tree and files of each starter skill it lists, so those
+# cases replay the stand-in repository (skills/catalogue-first); --install of a
 # remote skill reads the stand-in repository of tests/cassettes/skills/tenant.py
 # (skills/install, skills/broken); --plugin with Claude Code alone reads
 # nothing. A case without a cassette has the network refused.
@@ -2330,21 +2332,21 @@ command = "setup skills"
 variant = "fresh"
 args = ["setup", "skills", "--cursor", "--claude-code", "--github-copilot", "--name", "Detections", "--yes"]
 fixtures = ["none"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup skills"
 variant = "merge"
 args = ["setup", "skills", "--cursor", "--claude-code", "--generic", "--github-copilot", "--yes"]
 fixtures = ["skills-merge"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup skills"
 variant = "merge-plan"
 args = ["setup", "skills", "--cursor", "--claude-code", "--plan"]
 fixtures = ["skills-merge"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup skills"
@@ -2382,7 +2384,7 @@ cassette = "skills/broken"
 # opentide 0.28.1 (#1015): the catalogue lists detection-engineering, so the
 # starter skills install its copy; when a file of it cannot be downloaded,
 # the package's copy is written, or an installed copy (skills-merge) kept,
-# with a warning. Definitions only until O2 records them from 0.28.1.
+# with a warning.
 [[case]]
 command = "setup skills"
 variant = "catalogue-first"
@@ -2422,14 +2424,14 @@ command = "setup"
 variant = "skills"
 args = ["setup", "--skills", "generic", "--skills", "cursor", "--yes"]
 fixtures = ["none"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup"
 variant = "skills-plan"
 args = ["setup", "--skills", "claude-code", "--plan"]
 fixtures = ["skills-merge"]
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [[case]]
 command = "setup"

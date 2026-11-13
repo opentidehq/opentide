@@ -11,8 +11,8 @@
 
 [1;31merror[deployment_state_platform][0m[1m:[0m
   [1m<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names[0m
-  [1mplatform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external[0m
-  [1mids[0m
+  [1mplatform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam,[0m
+  [1mgoogle_secops, sentinel_one, sysdig store external ids[0m
   [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json\.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json]8;;\
 
 [1;31merror[invalid_ref][0m[1m: [0m[1mUnknown threat reference '00000000-0000-4000-8000-00000000beef'[0m

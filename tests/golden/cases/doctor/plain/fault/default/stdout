@@ -1,5 +1,5 @@
 ✓ Python 3.13.14 · python_version
-✓ opentide 0.23.0 · opentide_version
+✓ opentide 0.28.1 · opentide_version
 ! Could not ask PyPI for the latest release (ProxyError) · opentide_latest
   → check the network or --proxy, or pass --offline to skip network checks
 ✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
@@ -23,7 +23,7 @@
 ✓ carbon_black_cloud: cbc_sdk import · platform_sdk
 ✓ elastic: requests import · platform_sdk
 ✓ sysdig: requests import · platform_sdk
-✓ The analysis engine (language server 0.11.0) loads · analysis_engine
+✓ The analysis engine (language server 0.16.1) loads · analysis_engine
 ! sentinel/sentinel-staging: 5 of 5 variables unset: SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID · credentials
   → set SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID in the environment (or a .env file you load)
 ! sentinel/sentinel-production: 5 of 5 variables unset: SENTINEL_PRODUCTION_CLIENT_ID, SENTINEL_PRODUCTION_CLIENT_SECRET, SENTINEL_PRODUCTION_SUBSCRIPTION_ID, SENTINEL_PRODUCTION_TENANT_ID, SENTINEL_PRODUCTION_WORKSPACE_ID · credentials

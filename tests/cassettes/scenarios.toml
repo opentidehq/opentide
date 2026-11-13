@@ -26,7 +26,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "skills/manifest"
-description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; every skills golden case replays it."
+description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; the skills golden cases that read only the catalogue replay it."
 client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
 cwd = "tmp"
 

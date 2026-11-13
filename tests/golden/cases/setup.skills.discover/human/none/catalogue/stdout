@@ -1,11 +1,16 @@
 [1mactive-directory[0m              [2mActive Directory internals for detection engineering — Kerberos…[0m
 [1mamazon-web-services[0m           [2mAWS security telemetry and internals for detection engineering…[0m
+[1mbitdefender-gravityzone[0m       [2mBitdefender GravityZone (EDR/XDR) custom detection rule authoring for…[0m
 [1mcarbon-black-cloud[0m            [2mVMware Carbon Black Cloud Enterprise EDR authoring guidance…[0m
 [1mcrowdstrike-falcon[0m            [2mCrowdStrike Falcon detection engineering — distinguishes Falcon…[0m
 [1mdetection-engineering[0m         [2mDetection engineering lifecycle across the opentide threat →…[0m
+[1melastic-security[0m              [2mElastic Security detection engineering for opentide's `elastic`…[0m
 [1memail-and-collaboration[0m       [2mM365 email and collaboration security telemetry for detection…[0m
 [1mentra-id[0m                      [2mMicrosoft Entra ID (formerly Azure AD) — identity platform internals…[0m
+[1mexabeam-siem[0m                  [2mExabeam New-Scale SIEM detection engineering for opentide…[0m
 [1mgoogle-cloud-platform[0m         [2mGoogle Cloud Platform security telemetry for detection engineering…[0m
+[1mgoogle-secops[0m                 [2mGoogle Security Operations (Google SecOps, formerly Chronicle)…[0m
+[1mgraylog[0m                       [2mGraylog detection engineering for opentide — event definitions of the…[0m
 [1mharfanglab[0m                    [2mHarfangLab orb / EDR detection engineering — Sigma rule authoring in…[0m
 [1midentity-providers[0m            [2mCross-vendor identity mechanics for detection engineering…[0m
 [1mkusto-query-language[0m          [2mPlatform-agnostic Kusto Query Language (KQL) patterns, optimisation…[0m
@@ -23,10 +28,11 @@
 [1mopentide-visibility[0m           [2mModels the detection estate in the opentide visibility configuration…[0m
 [1msentinelone-singularity[0m       [2mSentinelOne Singularity detection engineering — explicit distinction…[0m
 [1msplunk-spl-processing[0m         [2mSplunk Enterprise and Enterprise Security SPL authoring for detection…[0m
+[1msysdig-secure[0m                 [2mSysdig Secure and Falco detection engineering for opentide…[0m
 [1mthreat-hunting[0m                [2mThreat hunting hypothesis discipline using the ABLE framework (Actor…[0m
 [1mwindows-event-logs[0m            [2mWindows native event log authoring guidance for detection engineering…[0m
 [1mwindows-internals[0m             [2mWindows operating system internals relevant for detection engineering…[0m
 [1mopentide-detection-objective[0m  [2mAuthor objectives as objective::1.0 YAML under objects/objectives/.[0m
 [1mopentide-detection-rule[0m       [2mAuthor rules as rule::1.1 YAML under objects/rules/.[0m
 [1mopentide-threat-vector[0m        [2mAuthor threats as threat::1.0 YAML under objects/threats/.[0m
-[1;32m✓[0m 31 skills available · 0 installed · opentidehq/skills@main
+[1;32m✓[0m 37 skills available · 0 installed · opentidehq/skills@main

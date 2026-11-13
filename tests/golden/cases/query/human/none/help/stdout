@@ -13,7 +13,8 @@
 [2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
 [2m│[0m [31m*[0m  [1;36m-[0m[1;36m-platform[0m          [1;33mPLATFORM         [0m  Detection platform: sentinel, splunk, crowdstrike,     [2m│[0m
 [2m│[0m                                           defender_for_endpoint, sentinel_one,                   [2m│[0m
-[2m│[0m                                           carbon_black_cloud, harfanglab, elastic, sysdig        [2m│[0m
+[2m│[0m                                           carbon_black_cloud, harfanglab, elastic, sysdig,       [2m│[0m
+[2m│[0m                                           bitdefender, graylog, exabeam, google_secops           [2m│[0m
 [2m│[0m                                           [2;31m[required]                                            [0m [2m│[0m
 [2m│[0m    [1;36m-[0m[1;36m-tenant[0m            [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m            [0m  Run on this tenant (repeatable), or 'all'. Default:    [2m│[0m
 [2m│[0m                                           the only tenant configured                             [2m│[0m
@@ -28,8 +29,8 @@
 [2m│[0m    [1;36m-[0m[1;36m-to[0m                [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m            [0m  End of the window, ISO-8601. Default: now              [2m│[0m
 [2m│[0m    [1;36m-[0m[1;36m-limit[0m             [1;2;33m<[0m[1;33mint[0m[1;2;33m>[0m[1;33m            [0m  Rows per tenant, at most 5000 [2m[default: 100][0m           [2m│[0m
 [2m│[0m    [1;36m-[0m[1;36m-language[0m          [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m            [0m  Elastic only: esql (default), eql, lucene or kuery     [2m│[0m
-[2m│[0m    [1;36m-[0m[1;36m-index[0m             [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m            [0m  Elastic index pattern or CrowdStrike repository        [2m│[0m
-[2m│[0m                                           (repeatable)                                           [2m│[0m
+[2m│[0m    [1;36m-[0m[1;36m-index[0m             [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m            [0m  Elastic index pattern, CrowdStrike repository or       [2m│[0m
+[2m│[0m                                           Graylog stream alias (repeatable)                      [2m│[0m
 [2m│[0m    [1;36m-[0m[1;36m-timeout[0m           [1;2;33m<[0m[1;33mfloat[0m[1;2;33m>[0m[1;33m          [0m  Seconds to wait for a search to finish                 [2m│[0m
 [2m│[0m                                           [2m[default: 120.0]                      [0m                 [2m│[0m
 [2m│[0m    [1;36m-[0m[1;36m-columns[0m           [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m            [0m  Comma-separated columns the table shows                [2m│[0m

@@ -1,0 +1,4 @@
+[1;33mwarning: [0mSkill kept installed copy · slug: detection-engineering · source: opentidehq/skills · ref: 
+main
+[1;33mwarning:[0m Kept the installed .agents/skills/detection-engineering: its files could not be downloaded
+         from opentidehq/skills@main. Run the command again to update it.
