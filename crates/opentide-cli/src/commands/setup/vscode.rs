@@ -827,7 +827,7 @@ mod tests {
         assert_eq!(
             after.as_deref(),
             Some(
-                "{\n  \"recommendations\": [\n    \"opentidehq.opentide\"\n  ],\n  \"\\u00e9\": 1\n}\n"
+                "{\n  \"recommendations\": [\n    \"opentidehq.opentide\"\n  ],\n  \"\u{e9}\": 1\n}\n"
             )
         );
         let commented = "{\"recommendations\": \"x\" // mine\n}";
