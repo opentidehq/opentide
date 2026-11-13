@@ -186,6 +186,13 @@ uv run ruff check src/opentide tests scripts
 echo "==> Ruff format"
 uv run ruff format --check src/opentide tests scripts
 
+if command -v actionlint >/dev/null 2>&1; then
+  echo "==> actionlint (the workflows; shellcheck over their scripts when installed)"
+  actionlint
+else
+  echo "==> actionlint not installed: skipped (CI's lint job runs it)"
+fi
+
 echo "==> Ty type check"
 uv run ty check src/opentide
 

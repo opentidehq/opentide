@@ -360,6 +360,8 @@ jobs:
           # the one hatch-vcs gives this commit. hatch-vcs reads any tag ending
           # in a version, the old `engine-v*` too: drop those from this job's
           # own clone so only opentide's `v*` tags count.
+          # WHEEL_VERSION is the step's env (the release's version, or empty).
+          # shellcheck disable=SC2153
           wheel_version="${WHEEL_VERSION}"
           if [ -z "${wheel_version}" ]; then
             git tag --list 'engine-v*' | xargs -r git tag -d >/dev/null

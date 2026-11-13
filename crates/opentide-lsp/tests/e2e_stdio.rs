@@ -1013,7 +1013,10 @@ fn sysdig_lists_follow_falcos_load_order_over_stdio() {
             .any(|c| c.starts_with("falco_") || c.starts_with("sysdig_")),
         "{codes:?}"
     );
-    // l1 names itself: the name stays literal, a warning; as an event it is unknown.
+    // l1 names itself: the name stays literal, so as an event it is unknown.
+    // The advisory on the item itself (`sysdig_list_self_reference`) is
+    // `opentide lint`'s, and the block's constraints are `validate`'s: the
+    // editor publishes no `sysdig_*` code of its own (UC-2.6, #821).
     let codes = published_codes(
         &mut lsp,
         "file:///tmp/objects/rules/lists-self.yaml",
@@ -1021,17 +1024,10 @@ fn sysdig_lists_follow_falcos_load_order_over_stdio() {
         &rule("    - name: l1\n      items: [l1, execve]\n"),
     );
     assert!(
-        codes.iter().any(|c| c == "sysdig_list_self_reference"),
-        "{codes:?}"
-    );
-    assert!(
         codes.iter().any(|c| c == "falco_unknown_event"),
         "{codes:?}"
     );
-    assert!(
-        !codes.iter().any(|c| c == "sysdig_definition_order"),
-        "{codes:?}"
-    );
+    assert!(!codes.iter().any(|c| c.starts_with("sysdig_")), "{codes:?}");
 }
 
 #[test]
@@ -2170,4 +2166,120 @@ fn a_definition_in_a_web_workspace_is_the_other_documents_own_uri() {
         result
     };
     assert_eq!(location["uri"], objective_uri.as_str(), "{definition}");
+}
+
+/// #821: a fault of a Sysdig block is `validate`'s, reported once. The
+/// editor had its own walk of the block (`sysdig_priority`, published beside
+/// `validate`'s `schema_validation` naming the same constraint), so the same
+/// fault showed twice.
+#[test]
+fn a_sysdig_block_fault_is_published_once() {
+    let scratch = Scratch::new("sysdig-once");
+    let root = &scratch.0;
+    std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+    let rule = "\
+name: Loud priority
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000081
+  schema: rule::1.0
+configurations:
+  sysdig:
+    status: STAGING
+    priority: LOUD
+    condition: spawned_process and proc.name = bash
+    output: shell
+";
+    let path = root.join("objects/rules/loud-priority.yaml");
+    std::fs::write(&path, rule).unwrap();
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
+    );
+    lsp.notify("initialized", json!({}));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": file_uri(&path), "languageId": "opentide-yaml",
+            "version": 1, "text": rule } }),
+    );
+    let diagnostics = published_for(&mut lsp, &file_uri(&path));
+    // Every finding about the priority, whatever its code: the line of
+    // `priority: LOUD` (from 0), or a message that names the constraint.
+    let about_priority: Vec<&Value> = diagnostics
+        .iter()
+        .filter(|d| {
+            d["range"]["start"]["line"] == 7
+                || d["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains("sysdig_priority"))
+        })
+        .collect();
+    assert_eq!(about_priority.len(), 1, "{diagnostics:#?}");
+
+    // The block's other advisories are `opentide lint`'s too: a tuning of a
+    // rule the Falco default rules do not have is not published here.
+    let tuning = "\
+name: Tuning
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000082
+  schema: rule::1.0
+configurations:
+  sysdig:
+    status: STAGING
+    append_to_rule: No Such Falco Rule
+    condition: proc.name = bash
+";
+    let path = root.join("objects/rules/tuning.yaml");
+    std::fs::write(&path, tuning).unwrap();
+    let codes = published_codes(&mut lsp, &file_uri(&path), "opentide-yaml", tuning);
+    assert!(
+        !codes.iter().any(|c| c == "falco_unknown_rule"),
+        "{codes:?}"
+    );
+}
+
+/// `analyze --blocks` adds a Tide object's platform-block findings, which
+/// `opentide lint` reports and the server does not (UC-2.6, #821): the
+/// Falco oracle reads the engine's whole judgement of a rule this way.
+#[test]
+fn analyze_blocks_adds_the_platform_block_findings() {
+    let scratch = Scratch::new("analyze-blocks");
+    let rules = scratch.0.join("objects/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    let file = rules.join("self-list.yaml");
+    std::fs::write(
+        &file,
+        "name: Self list\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000084\n  \
+         schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n    \
+         condition: proc.name in (l1)\n    lists:\n    - name: l1\n      items: [l1, bash]\n",
+    )
+    .unwrap();
+    let codes = |extra: &[&str]| -> Vec<String> {
+        let out = Command::new(bin())
+            .arg("analyze")
+            .arg(&file)
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let found: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap();
+        found
+            .iter()
+            .map(|d| d["code"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let plain = codes(&[]);
+    assert!(
+        !plain.iter().any(|c| c == "sysdig_list_self_reference"),
+        "{plain:?}"
+    );
+    let blocks = codes(&["--blocks"]);
+    assert!(
+        blocks.iter().any(|c| c == "sysdig_list_self_reference"),
+        "{blocks:?}"
+    );
 }

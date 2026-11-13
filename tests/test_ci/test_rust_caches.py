@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import yaml
+from tests.test_ci import ci_matrix
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -76,18 +77,8 @@ def _env(block: dict[str, Any]) -> dict[str, str]:
 
 
 def _cells(job: dict[str, Any]) -> list[dict[str, str]]:
-    """The job's matrix cells (one empty cell without a matrix): the product of
-    its axes, or its `include` entries when it has no axes."""
-    matrix = (job.get("strategy") or {}).get("matrix") or {}
-    if isinstance(matrix, str):
-        return [{}]
-    axes = {k: v for k, v in matrix.items() if k not in ("include", "exclude")}
-    cells: list[dict[str, str]] = [{}]
-    for name, values in axes.items():
-        cells = [{**cell, name: str(value)} for cell in cells for value in values]
-    if not axes and matrix.get("include"):
-        cells = [{str(k): str(v) for k, v in entry.items()} for entry in matrix["include"]]
-    return cells
+    """The job's matrix cells in the full set (a superset of a pull request's)."""
+    return ci_matrix.cells(job, "full")
 
 
 def _resolve(value: Any, cell: dict[str, str]) -> str | None:

@@ -484,11 +484,15 @@ fn the_first_diagnostics_do_not_build_the_editor_index() {
     assert_eq!(parsed, 0, "the index read the workspace's parses");
 }
 
-/// #914: an Elastic rule's advisories still read the objects on disk: a
-/// technique it inherits through `detection_model` that is not Enterprise
-/// ATT&CK is reported on its first diagnostics.
+/// #821 (UC-2.6): an Elastic rule's advisories are not the editor's. The
+/// language server publishes `validate`'s findings, and the Elastic block's
+/// advisories are `opentide lint`'s, so a technique the rule inherits
+/// through `detection_model` that is not Enterprise ATT&CK
+/// (`technique_not_enterprise`, which lint reports:
+/// `lint_reports_every_elastic_block_advisory`) is not published, and the
+/// editor's index is not read for the first diagnostics.
 #[test]
-fn an_elastic_rule_reads_the_techniques_it_inherits() {
+fn an_elastic_rule_publishes_no_advisory_of_its_own() {
     let scratch = workspace("lazy-index-elastic", false);
     let root = &scratch.0;
     let objective = fixture(OBJECTIVE).replacen(
@@ -512,24 +516,21 @@ fn an_elastic_rule_reads_the_techniques_it_inherits() {
     );
     open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
     let diagnostics = published_for(&mut lsp, &rule_uri);
-    let inherited = diagnostics
-        .iter()
-        .find(|d| d["code"] == "technique_not_enterprise")
-        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
     assert!(
-        inherited["message"].as_str().unwrap().contains("T1626"),
-        "{inherited}"
+        !diagnostics
+            .iter()
+            .any(|d| d["code"] == "technique_not_enterprise"),
+        "{diagnostics:#?}"
     );
+    assert_eq!(editor_indexed(&mut lsp), 0);
 }
 
-/// #821: the first diagnostics of an Elastic rule index the objects its
-/// advisories look up (the objective `detection_model` names and that
-/// objective's threats), not every object of the root: a technique it
-/// inherits through the objective's threat is still reported, and objects
-/// that name neither are left for the first request that reads the whole
-/// index.
+/// #821 (UC-2.6): no object of the root is indexed by the editor for an
+/// Elastic rule's first diagnostics, now that the platform-block advisories
+/// that looked up the objects it inherits from are `lint`'s alone. The index
+/// is still built, every file at once, on the first request that reads it.
 #[test]
-fn an_elastic_rule_indexes_only_the_objects_it_inherits_from() {
+fn an_elastic_rule_indexes_nothing_of_the_root_for_its_diagnostics() {
     let scratch = workspace("scoped-index-elastic", true);
     let root = &scratch.0;
     let threats = root.join("objects/threats");
@@ -557,19 +558,10 @@ fn an_elastic_rule_indexes_only_the_objects_it_inherits_from() {
         fixture(RULE)
     );
     open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
-    let diagnostics = published_for(&mut lsp, &rule_uri);
-    let inherited = diagnostics
-        .iter()
-        .find(|d| d["code"] == "technique_not_enterprise")
-        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
-    assert!(
-        inherited["message"].as_str().unwrap().contains("T1626"),
-        "{inherited}"
-    );
-    // The rule's file, the objective and its threat; not the 4 others.
-    assert_eq!(editor_indexed(&mut lsp), 3);
+    published_for(&mut lsp, &rule_uri);
+    assert_eq!(editor_indexed(&mut lsp), 0);
 
-    // A request that reads the whole index indexes the rest.
+    // A request that reads the whole index indexes every object.
     let symbols = lsp.request("workspace/symbol", json!({ "query": "Other Actor" }));
     assert_eq!(symbols["result"].as_array().unwrap().len(), 4, "{symbols}");
     assert_eq!(editor_indexed(&mut lsp), 7);

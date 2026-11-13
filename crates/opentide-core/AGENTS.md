@@ -28,10 +28,13 @@ crate depends on it.
   never port a Python library instead. A check that reports only near misses (whether it reports
   at all, or at which severity, is invariant 3) may keep its own threshold, measured with strsim,
   and picks among the names within it with `suggest::best`.
-- `duration` and `falco` are the one copy of the rules both Sysdig and Elastic engines judge by
-  (opentide-schema's `elastic_rule_shape` and `sysdig_rule_shape`, opentide-tide's `elastic` and
-  `sysdig`); never a second table in either crate. `xtask/tests/sysdig_engines.rs` runs both
-  Sysdig engines on the model's oracle cases.
+- `duration` and `falco` are the one copy of the rules the model and the engine judge by
+  (opentide-schema's `elastic_rule_shape` and `sysdig_rule_shape`, opentide-tide's `elastic`,
+  `falco` and `sysdig`); never a second table in either crate. Since UC-2.6 ([#821]) the Sysdig
+  block's constraints are opentide-schema's alone: opentide-tide's `sysdig` keeps only
+  `sysdig_list_self_reference`, so there is no second constraint engine to hold to the first.
+
+[#821]: https://github.com/opentidehq/opentide/issues/821
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).
   What it reads differently from the oracle is `crates/opentide-schema/YAML.md`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.

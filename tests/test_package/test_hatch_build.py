@@ -178,9 +178,10 @@ def test_the_engine_crate_is_a_member_of_the_root_workspace() -> None:
     assert "bindings/python" in root["workspace"]["members"]
     assert "workspace" not in manifest
     assert not (ROOT / "bindings" / "python" / "Cargo.lock").exists()
-    crate = "opentide-analysis"
-    assert manifest["dependencies"][crate] == {"workspace": True}
-    assert root["workspace"]["dependencies"][crate]["path"] == f"crates/{crate}"
+    # The engine comes through the facade alone (UC-5.1, #836), by path in this workspace.
+    assert manifest["dependencies"]["opentide"]["path"] == "../../crates/opentide"
+    internal = sorted(name for name in manifest["dependencies"] if name.startswith("opentide-"))
+    assert internal == []
     # hatch_build.py builds an editable install with it.
     assert root["profile"]["develop"]["inherits"] == "release"
 
