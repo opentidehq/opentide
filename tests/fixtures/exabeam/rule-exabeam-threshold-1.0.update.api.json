@@ -1,0 +1,53 @@
+{
+  "method": "PUT",
+  "path": "/correlation-rules/v2/rules/016dbc1d-a727-43df-a143-9546dcc81a5a",
+  "body": {
+    "name": "Password spraying from outside the network",
+    "description": "One external source address fails to log in as more than three different users within thirty minutes.\n\nATT&CK: T1110.003\nopentide: 00000000-0000-4000-8003-000000000071",
+    "severity": "high",
+    "enabled": true,
+    "testMode": false,
+    "sequencesConfig": {
+      "sequences": [
+        {
+          "name": "Failed logins from outside",
+          "query": "activity_type:\"app-login\" AND outcome:\"fail\"\nAND NOT src_ip:[10.0.0.0/8] AND NOT src_ip:[172.16.0.0/12] AND NOT src_ip:[192.168.0.0/16]",
+          "condition": {
+            "triggerOnAnyMatch": false,
+            "groupByOption": true,
+            "groupBy": [
+              "src_ip"
+            ],
+            "functionType": "unique_count",
+            "subject": "field",
+            "field": "user",
+            "operator": "more_than",
+            "value": "3",
+            "time": 30,
+            "unit": "minutes"
+          }
+        }
+      ],
+      "outcomes": {
+        "sendAlertTriage": false,
+        "createCase": true,
+        "sendEmail": false,
+        "case": {
+          "description": "Password spraying from outside the network"
+        }
+      }
+    },
+    "suppressConfig": {
+      "suppressOption": true,
+      "suppressTime": 1,
+      "suppressUnit": "hours",
+      "granularSuppressOption": true,
+      "suppressGroupFields": [
+        "src_ip"
+      ]
+    },
+    "delayConfig": {
+      "delay": false
+    }
+  }
+}

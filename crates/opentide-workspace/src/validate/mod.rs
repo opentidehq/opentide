@@ -553,6 +553,63 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// `exabeam_name_duplicate` and `exabeam_name_length`: the cross-rule check of
+/// Exabeam rule names (`exabeam::name_findings`), over every rule in the
+/// workspace, reported on the rules this run validates (`work`). Two enabled Exabeam blocks that
+/// resolve to one name (case-insensitively) are a duplicate; a block with no
+/// `name` whose rule name is over the limit is too long.
+fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
+    use opentide_schema::objects::platform::exabeam;
+    let mut rules: Vec<(String, &Node, &Path)> = Vec::new();
+    for source in &index.sources {
+        if source.family != "rule" {
+            continue;
+        }
+        let Some(root) = source.document.root() else {
+            continue;
+        };
+        let Some(uuid) = root
+            .get("metadata")
+            .filter(|m| matches!(m.value, Value::Map(_)))
+            .and_then(|m| m.get("uuid"))
+            .filter(|uuid| crate::index::truthy(uuid))
+        else {
+            continue;
+        };
+        rules.push((uuid.value.to_string(), root, &source.path));
+    }
+    let pairs: Vec<(&str, &Node)> = rules
+        .iter()
+        .map(|(uuid, root, _)| (uuid.as_str(), *root))
+        .collect();
+    // The rules this run validates: the subjects already in scope.
+    let in_scope: Vec<&str> = work
+        .iter()
+        .filter(|subject| subject.family == "rule")
+        .map(|subject| subject.uuid)
+        .collect();
+    let mut out = Vec::new();
+    for finding in exabeam::name_findings(&pairs, in_scope.iter().copied()) {
+        let Some((_, _, path)) = rules.iter().find(|(uuid, _, _)| *uuid == finding.uuid) else {
+            continue;
+        };
+        let mut diagnostic = Diagnostic::error(finding.code, finding.message)
+            .object(finding.uuid.clone(), "rule")
+            .file(*path)
+            .at([
+                "configurations".to_owned(),
+                "exabeam".to_owned(),
+                "name".to_owned(),
+            ])
+            .suggest(Some(finding.suggestion.to_owned()));
+        if let Some(value) = finding.value {
+            diagnostic = diagnostic.with("value", value);
+        }
+        out.push(diagnostic);
+    }
+    out
+}
+
 /// `google_secops_name_duplicate`: each rule in scope whose enabled Google
 /// SecOps block resolves to the YARA-L rule name of another rule's, compared
 /// case-insensitively (`google_secops_name_issues`).
@@ -1195,6 +1252,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
             plugin_blocks(plugins, &work, &mut issues, &mut warnings);
         }
         if checks.schema {
+            issues.extend(exabeam_names(index, &work));
             issues.extend(name_duplicates(index, &work));
         }
         // Every file that writes an invalid UUID is reported, also one whose

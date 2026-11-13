@@ -38,6 +38,7 @@ pub mod elastic;
 pub mod encode;
 pub mod env;
 pub mod error;
+pub mod exabeam;
 pub mod google_secops;
 pub mod graylog;
 pub mod harfanglab;
@@ -78,6 +79,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "harfanglab" => harfanglab::http_defaults(),
         "sysdig" => sysdig::http_defaults(),
         "bitdefender" => bitdefender::http_defaults(),
+        "exabeam" => exabeam::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
         "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
@@ -94,7 +96,8 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
-/// and Bitdefender GravityZone and Graylog (the catch-up to 0.28.0).
+/// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
+/// New-Scale SIEM (P-EX).
 pub fn builtin() -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
@@ -108,6 +111,7 @@ pub fn builtin() -> Registry {
         Box::new(sysdig::Sysdig),
         Box::new(bitdefender::Bitdefender),
         Box::new(graylog::Graylog),
+        Box::new(exabeam::Exabeam::new()),
         // Application Default Credentials are the process's own ambient
         // credentials (google-auth's `default()` reads the process
         // environment): a caller with an environment of its own (the CLI)
@@ -160,6 +164,10 @@ mod tests {
         assert_eq!(
             super::http_settings("sysdig", timeout),
             super::sysdig::http_defaults()
+        );
+        assert_eq!(
+            super::http_settings("exabeam", timeout),
+            super::exabeam::http_defaults()
         );
         assert_eq!(
             super::http_settings("unknown", timeout),
@@ -225,6 +233,7 @@ mod tests {
                 "sysdig",
                 "bitdefender",
                 "graylog",
+                "exabeam",
                 "google_secops"
             ]
         );
@@ -246,6 +255,7 @@ mod tests {
         assert_eq!(can("harfanglab"), (true, false, true));
         assert_eq!(can("sysdig"), (true, false, false));
         assert_eq!(can("bitdefender"), (true, false, false));
+        assert_eq!(can("exabeam"), (true, true, true));
         assert_eq!(can("google_secops"), (true, true, true));
         assert_eq!(can("graylog"), (true, true, true));
         // The platform table says the same of each connector.

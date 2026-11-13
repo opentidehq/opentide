@@ -1,6 +1,6 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig and platform plugins assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Exabeam and platform plugins assign, and why the files must be committed.
 ---
 
 # Deployment state
@@ -30,7 +30,7 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
 deployed to one of the four platforms (Defender for Endpoint, SentinelOne,
-CrowdStrike, and Sysdig), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
+CrowdStrike, Sysdig, and Exabeam), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
 platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black, and Elastic
 address rules by `metadata.uuid` or by title and never get one.
 
@@ -53,7 +53,7 @@ address rules by `metadata.uuid` or by title and never get one.
 - Tenant keys are the tenant `name` from `.opentide/configurations/platforms/<platform>.toml`, with surrounding spaces removed. A stored key that itself has surrounding spaces (`" contoso "`) is invalid. Renaming a tenant orphans its entry, and the next deploy creates a new remote rule.
 - Only the canonical spelling is read. An uppercase, unhyphenated or `.JSON` file name, or a second file for the same rule, is `deployment_state_uuid_mismatch` and the rule is refused: a case-sensitive checkout would not find such a file, and deploy would create a second remote rule.
 - An empty `platforms` map, or an empty map for one platform, reads as no binding. Writers never leave one behind.
-- Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). CrowdStrike ids, and the ids a platform plugin returns, are stored exactly as the platform returned them.
+- Ids are JSON strings. Defender and SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). Exabeam ids are a lower-case canonical UUID (`016dbc1d-a727-43df-a143-9546dcc81a5a`): deploy lower-cases the id Exabeam returns, and a shard that holds another spelling is `deployment_state_shape`. CrowdStrike ids, and the ids a platform plugin returns, are stored exactly as the platform returned them.
 - A platform plugin's ids sit under its identifier (`platforms.acme`). Any platform identifier that is not a built-in platform's is accepted, whether or not the plugin is installed where the shard is read.
 - Keys are sorted, the indent is two spaces, and the file ends with one newline, so a deploy that touches one tenant changes one line in review.
 

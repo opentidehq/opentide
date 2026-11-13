@@ -178,6 +178,7 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("SysdigConfig", of::<platform::SysdigConfig>()),
         ("BitdefenderConfig", of::<platform::BitdefenderConfig>()),
         ("GraylogConfig", of::<platform::GraylogConfig>()),
+        ("ExabeamConfig", of::<platform::ExabeamConfig>()),
         ("GoogleSecopsConfig", of::<platform::GoogleSecopsConfig>()),
     ]
 }
@@ -674,7 +675,7 @@ mod tests {
     #[test]
     fn every_model_and_every_platform_block_has_a_schema() {
         let schemas = rust_schemas();
-        assert_eq!(schemas.len(), 32);
+        assert_eq!(schemas.len(), 33);
         for entry in platform::PLATFORM_CONFIG_MODELS {
             assert!(
                 schemas.iter().any(|(name, _)| *name == entry.model),
