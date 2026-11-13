@@ -187,7 +187,7 @@ fn annotate_enum(node: &mut Object) {
     {
         let plain = markdown
             .iter()
-            .map(|item| Json::from(plain_text(&python_str(item), true)))
+            .map(|item| Json::from(plain_text(&item_text(item), true)))
             .collect();
         node.insert("enumDescriptions".to_owned(), Json::Array(plain));
     }
@@ -198,14 +198,11 @@ fn annotate_enum(node: &mut Object) {
     }
 }
 
-/// `str(item)` for the values a description list holds.
-fn python_str(item: &Json) -> String {
+/// A description list's value as text: a string as it is, anything else as
+/// its JSON.
+fn item_text(item: &Json) -> String {
     match item {
         Json::String(text) => text.clone(),
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
-        Json::Number(number) => number.to_string(),
         other => other.to_text().trim_end().to_owned(),
     }
 }

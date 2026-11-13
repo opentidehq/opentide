@@ -17,7 +17,7 @@ use opentide_workspace::config::Configuration;
 use opentide_workspace::{Index, index::truthy};
 
 use super::json_text::{pretty, sorted};
-use super::relations::{Relations, py_str};
+use super::relations::{Relations, node_text};
 use super::{Cause, Output, PhaseError};
 use crate::json::{Json, Object};
 
@@ -111,7 +111,7 @@ impl Settings {
             .map(|names| match &names.value {
                 Value::Map(entries) => entries
                     .iter()
-                    .map(|entry| (py_str(&entry.key), py_str(&entry.value)))
+                    .map(|entry| (node_text(&entry.key), node_text(&entry.value)))
                     .collect(),
                 _ => IndexMap::new(),
             })
@@ -167,7 +167,7 @@ fn techniques_of(
             let name = root
                 .get("name")
                 .filter(|name| truthy(name))
-                .map(|name| py_str(name))
+                .map(|name| node_text(name))
                 .unwrap_or_default();
             Some((
                 caseless::default_case_fold_str(&name),
@@ -185,7 +185,7 @@ fn techniques_of(
         let fail = |key: &str| PhaseError::rendering(uuid, &Cause::MissingKey(key.into()));
         let name = root
             .get("name")
-            .map(|name| py_str(name))
+            .map(|name| node_text(name))
             .ok_or_else(|| fail("name"))?;
         root.get("metadata")
             .ok_or_else(|| fail("metadata"))?
@@ -274,7 +274,7 @@ fn description(root: &Node, section: Option<&str>) -> String {
     };
     holder
         .and_then(|holder| holder.get("description"))
-        .map_or_else(String::new, |value| py_str(value))
+        .map_or_else(String::new, |value| node_text(value))
 }
 
 /// A vocabulary entry by key, after its stage prefix, or by `legacy`
@@ -313,7 +313,7 @@ fn actor_names(actors: &Node, vocabularies: &Vocabularies) -> Vec<String> {
             let raw = actor
                 .get("name")
                 .filter(|name| truthy(name))
-                .map(|name| py_str(name))
+                .map(|name| node_text(name))
                 .unwrap_or_default();
             let token = raw.split(" #").next().unwrap_or_default().trim().to_owned();
             let identifier = token
@@ -337,7 +337,7 @@ fn chaining_text(chains: &Node) -> Result<String, Cause> {
     };
     let mut flat: IndexMap<String, Vec<String>> = IndexMap::new();
     for chain in items {
-        let relation = py_str(required(chain, "relation")?);
+        let relation = node_text(required(chain, "relation")?);
         let vector = required(chain, "vector")?;
         flat.entry(relation)
             .or_default()
@@ -357,7 +357,7 @@ fn joined(node: &Node) -> String {
     match &node.value {
         Value::Seq(items) => items
             .iter()
-            .map(|item| py_str(item))
+            .map(|item| node_text(item))
             .collect::<Vec<_>>()
             .join(", "),
         // `", ".join` of a string joins its characters.
@@ -388,7 +388,7 @@ fn row(
         .ok_or_else(|| Cause::MissingKey(family.to_owned()))?;
     let metadata = required(root, "metadata")?;
     let tlp = Json::from_node(required(metadata, "tlp")?);
-    let version = py_str(required(metadata, "version")?);
+    let version = node_text(required(metadata, "version")?);
     let created = Json::from_node(required(metadata, "created")?);
     let modified = Json::from_node(required(metadata, "modified")?);
     let children = relations.children(uuid)?.join(", ");
@@ -486,7 +486,7 @@ fn revisions(index: &Index, settings: &Settings) -> Output {
                 .map(AsRef::as_ref)
                 .filter(|metadata| truthy(metadata));
             let field = |key: &str| metadata.and_then(|metadata| metadata.get(key));
-            let version = field("version").map_or_else(String::new, |version| py_str(version));
+            let version = field("version").map_or_else(String::new, |version| node_text(version));
             if version.is_empty() {
                 continue;
             }

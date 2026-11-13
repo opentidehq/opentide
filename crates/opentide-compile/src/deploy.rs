@@ -110,14 +110,11 @@ pub fn tenant_name(tenant: &Json) -> &str {
         .unwrap_or_default()
 }
 
-/// A value as Python's `str()` writes it: a string as is, a number or a
-/// boolean as its text.
+/// A value as text: a string as it is, anything else as its JSON (`42`,
+/// `1.5`, `true`, `null`).
 pub fn text(value: &Json) -> String {
     match value {
         Json::Str(text) => text.clone(),
-        Json::Bool(flag) => if *flag { "True" } else { "False" }.to_owned(),
-        Json::Null => "None".to_owned(),
-        Json::Float(float) => opentide_schema::configuration::repr::float_text(*float),
         other => other.to_compact(),
     }
 }
@@ -181,12 +178,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn values_are_written_as_python_writes_them() {
+    fn values_are_written_as_text_and_json() {
         assert_eq!(text(&Json::Int(42)), "42");
         assert_eq!(text(&Json::Str("x".into())), "x");
-        assert_eq!(text(&Json::Bool(true)), "True");
+        assert_eq!(text(&Json::Bool(true)), "true");
         assert_eq!(text(&Json::Float(1.5)), "1.5");
-        assert_eq!(text(&Json::Null), "None");
+        assert_eq!(text(&Json::Null), "null");
     }
 
     #[test]

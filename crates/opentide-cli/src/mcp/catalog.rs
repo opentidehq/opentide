@@ -227,7 +227,7 @@ pub fn search(index: &Index, query: &str, filters: &Filters) -> Vec<Json> {
             }
             let text = |key: &str| match body.get(key).map(|node| &node.value) {
                 None => String::new(),
-                Some(Value::Null) => "None".to_owned(),
+                Some(Value::Null) => String::new(),
                 Some(value) => value.to_string(),
             };
             let haystack =

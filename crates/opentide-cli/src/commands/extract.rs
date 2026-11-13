@@ -389,7 +389,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
         .ok_or_else(|| key_error("period"))?;
     let period = match period {
         CJson::Str(text) => text.clone(),
-        other => opentide_connectors::python::python_str(other),
+        other => opentide_connectors::text::json_text(other),
     };
     let schedule = if period == "0" {
         "NRT".to_owned()
@@ -420,7 +420,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
     } else {
         let contributor = match modified_by {
             CJson::Str(text) => text.clone(),
-            other => opentide_connectors::python::python_str(other),
+            other => opentide_connectors::text::json_text(other),
         };
         strip(&format(
             CONTRIBUTORS_TEMPLATE,
@@ -436,7 +436,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
             .iter()
             .map(|item| match item {
                 CJson::Str(text) => text.clone(),
-                other => opentide_connectors::python::python_str(other),
+                other => opentide_connectors::text::json_text(other),
             })
             .collect();
         let list = format!("- {}", names.join("\n        - "));
@@ -596,7 +596,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                 CJson::Int(number) => super::deploy_state::ExternalId::Int(*number),
                 CJson::Str(text) => super::deploy_state::ExternalId::Text(text.clone()),
                 other => super::deploy_state::ExternalId::Text(
-                    opentide_connectors::python::python_str(other),
+                    opentide_connectors::text::json_text(other),
                 ),
             };
             record_external_id(&root, &detector, &configured.name, &external)?;
@@ -616,7 +616,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         {
             let shown = first
                 .get("displayName")
-                .map(opentide_connectors::python::python_str)
+                .map(opentide_connectors::text::json_text)
                 .unwrap_or_default();
             tracing::warn!(
                 rule = shown.as_str(),
@@ -818,7 +818,7 @@ fn truthy<'j>(rule: &'j CJson, key: &str) -> Option<&'j CJson> {
 }
 
 fn py(value: &CJson) -> String {
-    opentide_connectors::python::python_str(value)
+    opentide_connectors::text::json_text(value)
 }
 
 fn object(members: Vec<(&str, CJson)>) -> CJson {

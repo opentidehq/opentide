@@ -3,7 +3,6 @@
 //! to the tenant before the query, their filters after it.
 
 use indexmap::IndexMap;
-use opentide_schema::configuration::repr::float_text;
 
 use crate::json::Json;
 
@@ -25,13 +24,32 @@ pub fn kql_string(value: &str) -> String {
     out
 }
 
+/// A float as a KQL `real` literal: the shortest digits that read back, with
+/// a decimal point or an exponent so that KQL reads a real and not a long
+/// (`1.0`, `1.5e-7`), and `real(nan)`, `real(+inf)`, `real(-inf)` for the
+/// values no digits write.
+fn kql_real(float: f64) -> String {
+    if float.is_nan() {
+        "real(nan)".to_owned()
+    } else if float.is_infinite() {
+        if float > 0.0 {
+            "real(+inf)"
+        } else {
+            "real(-inf)"
+        }
+        .to_owned()
+    } else {
+        format!("{float:?}")
+    }
+}
+
 /// A `let` value as KQL writes it, or `None` for a type KQL has no literal for
 /// (the oracle skips it with a warning).
 fn let_literal(value: &Json) -> Option<String> {
     match value {
         Json::Bool(flag) => Some(if *flag { "true" } else { "false" }.to_owned()),
         Json::Int(integer) => Some(integer.to_string()),
-        Json::Float(float) => Some(float_text(*float)),
+        Json::Float(float) => Some(kql_real(*float)),
         Json::Str(text) => Some(kql_string(text)),
         Json::Null | Json::Array(_) | Json::Object(_) => None,
     }

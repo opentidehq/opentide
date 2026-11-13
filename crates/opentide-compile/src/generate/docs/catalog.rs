@@ -499,7 +499,7 @@ impl<'i> Catalog<'i> {
                             ));
                         }
                     };
-                    let status = crate::generate::relations::py_str(status);
+                    let status = crate::generate::relations::node_text(status);
                     let strategy =
                         self.statuses
                             .strategy(&status)
