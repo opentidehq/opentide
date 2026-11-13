@@ -29,7 +29,6 @@ use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
 use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::elastic::{Elastic, ElasticError};
-use opentide_connectors::python::python_string_repr;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
@@ -856,7 +855,7 @@ pub(crate) fn batches(
     for uuid in uuids {
         let Some(rule) = rule_of(workspace, uuid) else {
             // The registry's `KeyError`, as `str()` reads it.
-            return Err(python_string_repr(uuid));
+            return Err(format!("{uuid:?}"));
         };
         let (block, strategy) = block_strategy(&rule, platform, cx)?;
         for tenant in opentide_compile::plan::rule_tenants(&tenants, &block, strategy, runs, wide) {
@@ -1161,10 +1160,7 @@ fn required(block: &CJson, key: &str, name: &str, platform: &str) -> Result<Stri
         .map(str::trim)
         .unwrap_or_default();
     if text.is_empty() {
-        return Err(format!(
-            "rule {} has an empty {platform} query",
-            python_string_repr(name)
-        ));
+        return Err(format!("rule {name:?} has an empty {platform} query"));
     }
     Ok(text.to_owned())
 }
@@ -1174,10 +1170,7 @@ fn required(block: &CJson, key: &str, name: &str, platform: &str) -> Result<Stri
 fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<RuleQuery>, String> {
     let name = rule.name.as_str();
     let Some(block) = rule.block(platform) else {
-        return Err(format!(
-            "rule {} has no {platform} configuration",
-            python_string_repr(name)
-        ));
+        return Err(format!("rule {name:?} has no {platform} configuration"));
     };
     match platform {
         "sentinel" | "defender_for_endpoint" => {
@@ -1226,10 +1219,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
                 let subs = match correlation.get("sub_queries") {
                     Some(CJson::Array(items)) if !items.is_empty() => items,
                     _ => {
-                        return Err(format!(
-                            "rule {} has no SentinelOne sub-queries",
-                            python_string_repr(name)
-                        ));
+                        return Err(format!("rule {name:?} has no SentinelOne sub-queries"));
                     }
                 };
                 return subs
@@ -1243,10 +1233,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
                     })
                     .collect();
             }
-            Err(format!(
-                "rule {} has no SentinelOne query",
-                python_string_repr(name)
-            ))
+            Err(format!("rule {name:?} has no SentinelOne query"))
         }
         _ => Err(format!("{platform} rules cannot be queried")),
     }
@@ -2076,11 +2063,11 @@ mod tests {
         assert_eq!(s1[1].label.as_deref(), Some("sub-query 2"));
         assert_eq!(
             rule_queries(&r, "sentinel").unwrap_err(),
-            "rule 'R' has an empty sentinel query"
+            "rule \"R\" has an empty sentinel query"
         );
         assert_eq!(
             rule_queries(&r, "splunk").unwrap_err(),
-            "rule 'R' has no splunk configuration"
+            "rule \"R\" has no splunk configuration"
         );
         let defender = rule_queries(&r, "defender_for_endpoint").unwrap();
         assert_eq!(defender[0].text_for("lab"), "T\n| where a");

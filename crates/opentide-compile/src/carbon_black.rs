@@ -12,7 +12,7 @@ use crate::Context;
 use crate::deploy::{self, Write};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
-use crate::strategy::{StatusStrategy, python_repr};
+use crate::strategy::StatusStrategy;
 
 /// The platform's key under `configurations`.
 pub const PLATFORM: &str = "carbon_black_cloud";
@@ -28,7 +28,7 @@ fn severity(name: &str) -> Result<i64, CompileError> {
         "Medium" => 6,
         "High" => 8,
         "Critical" => 10,
-        other => return Err(CompileError::failed(DISPLAY, &python_repr(other))),
+        other => return Err(CompileError::failed(DISPLAY, &format!("{other:?}"))),
     })
 }
 
@@ -223,7 +223,7 @@ mod tests {
         assert_eq!(severity("Critical").unwrap(), 10);
         assert_eq!(
             severity("x").unwrap_err().reason,
-            "Carbon Black Cloud cannot compile this rule: 'x'"
+            "Carbon Black Cloud cannot compile this rule: \"x\""
         );
     }
 }

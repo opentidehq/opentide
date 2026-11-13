@@ -15,7 +15,7 @@ pub fn python_str(value: &Json) -> String {
 
 /// Python's `repr` of a parsed JSON value (`{'a': [1, None]}`), as an
 /// error message that interpolates a body prints it.
-pub fn python_repr(value: &Json) -> String {
+fn python_repr(value: &Json) -> String {
     match value {
         Json::Null => "None".to_owned(),
         Json::Bool(true) => "True".to_owned(),
@@ -39,7 +39,7 @@ pub fn python_repr(value: &Json) -> String {
 
 /// Python's `repr` of a string: single quotes unless the text holds one and
 /// no double quote.
-pub fn python_string_repr(text: &str) -> String {
+fn python_string_repr(text: &str) -> String {
     let quote = if text.contains('\'') && !text.contains('"') {
         '"'
     } else {
@@ -67,35 +67,6 @@ pub fn python_string_repr(text: &str) -> String {
     out
 }
 
-/// Python's `repr` of bytes (`b'...'`), as an error that interpolates a raw
-/// body prints it.
-pub fn python_bytes_repr(bytes: &[u8]) -> String {
-    let quote = if bytes.contains(&b'\'') && !bytes.contains(&b'"') {
-        b'"'
-    } else {
-        b'\''
-    };
-    let mut out = String::with_capacity(bytes.len() + 3);
-    out.push('b');
-    out.push(char::from(quote));
-    for &byte in bytes {
-        match byte {
-            b'\\' => out.push_str("\\\\"),
-            b'\n' => out.push_str("\\n"),
-            b'\r' => out.push_str("\\r"),
-            b'\t' => out.push_str("\\t"),
-            b if b == quote => {
-                out.push('\\');
-                out.push(char::from(b));
-            }
-            b if !(0x20..0x7f).contains(&b) => out.push_str(&format!("\\x{b:02x}")),
-            b => out.push(char::from(b)),
-        }
-    }
-    out.push(char::from(quote));
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,10 +82,5 @@ mod tests {
         );
         assert_eq!(python_str(&Json::Str("x".into())), "x");
         assert_eq!(python_string_repr("a\tb'\""), "'a\\tb\\'\"'");
-        assert_eq!(python_bytes_repr(b""), "b''");
-        assert_eq!(
-            python_bytes_repr(b"{\"a\": 'x'}\n\xc3"),
-            "b'{\"a\": \\'x\\'}\\n\\xc3'"
-        );
     }
 }

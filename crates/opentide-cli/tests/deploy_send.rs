@@ -666,7 +666,7 @@ fn deployment_state_refuses_or_skips_rules_before_any_request() {
             .1
             .as_deref()
             .unwrap()
-            .contains("records object_uuid 'x'"),
+            .contains("records object_uuid \"x\""),
         "{rows:?}"
     );
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
