@@ -9,7 +9,8 @@
 //! ([`tls`]); a Rust client is then run against the same cassette through
 //! the proxy in replay mode, or straight against a [`replay::Replay`]
 //! (wiremock), which serves the recorded answers in order and asserts that
-//! the requests are the recorded ones, byte for byte.
+//! the requests are the recorded ones: a JSON body as the same data, any
+//! other byte for byte ([`replay::same_body`]).
 //!
 //! Test tooling: never shipped.
 
