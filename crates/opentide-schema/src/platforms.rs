@@ -313,6 +313,26 @@ pub const PLATFORMS: &[Platform] = &[
 /// How many platforms are built in.
 pub const COUNT: usize = PLATFORMS.len();
 
+/// Platforms the recorded golden oracle (opentide 0.23.0) lacks: those the
+/// catch-up train ports onto it after it was recorded (the plan's §4). The
+/// oracle-comparing tests leave these out before comparing, so a new
+/// platform's row does not break a comparison with a recording that predates
+/// it; the live-table tests (orders, capabilities, the router) still hold the
+/// whole table. O2 re-records from 0.28.x and empties this list.
+///
+/// Every id is listed up front, before its row lands, which is harmless: an id
+/// with no row filters nothing. The guard test
+/// (`tests/since_oracle.rs`) keeps the list empty wherever the report-only
+/// marker (`tests/golden/REPORT_ONLY`) is absent, so it cannot reach
+/// integration with the oracle still 0.23.0.
+pub const SINCE_ORACLE: &[&str] = &["bitdefender", "exabeam", "google_secops", "graylog"];
+
+/// Whether `id` names a platform the recorded oracle lacks ([`SINCE_ORACLE`]).
+#[must_use]
+pub fn after_oracle(id: &str) -> bool {
+    SINCE_ORACLE.contains(&id)
+}
+
 impl Platform {
     /// Its rank in `order` (its index in the table for [`Order::Container`];
     /// none for [`Order::Name`], which sorts).

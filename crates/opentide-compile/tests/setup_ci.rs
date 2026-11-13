@@ -77,6 +77,25 @@ fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
     (oracle != rendered).then(|| "line endings differ".to_owned())
 }
 
+/// The pipeline with every line that mentions a platform the recorded oracle
+/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) removed: its id in
+/// underscore or hyphen form, matched case-insensitively, which also catches
+/// its credential variables (`$EXABEAM_CLIENT_ID`). No other platform id is a
+/// substring of these, and 0.23.0 output holds none of them, so a 0.23.0
+/// render is returned unchanged.
+fn without_since_oracle_lines(text: &str) -> String {
+    let tokens: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
+        .iter()
+        .flat_map(|id| [(*id).to_owned(), id.replace('_', "-")])
+        .collect();
+    text.split_inclusive('\n')
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            !tokens.iter().any(|token| lower.contains(token.as_str()))
+        })
+        .collect()
+}
+
 fn data(text: &str) -> Option<Json> {
     let document = opentide_schema::node::load(text).ok()?;
     document.root().map(|root| Json::from_node(root))
@@ -115,6 +134,11 @@ fn pipelines_are_the_oracles() {
         if let Some(dir) = std::env::var_os("OPENTIDE_CI_RENDERED") {
             std::fs::write(Path::new(&dir).join(format!("{name}.yml")), &rendered).unwrap();
         }
+        // The recorded pipeline (0.23.0) predates the platforms the train ports
+        // onto it; their bundled credentials and query stages add lines the
+        // oracle lacks. Drop those lines before comparing. On this oracle none
+        // are present, so this is a no-op until a row lands.
+        let rendered = without_since_oracle_lines(&rendered);
         let same_data = data(&rendered).is_some() && data(&oracle) == data(&rendered);
         if !same_data {
             problems.push(format!(
