@@ -91,7 +91,7 @@ by the other Python jobs), `engine-check`, `engine-wasm`, `engine-package`, `eng
 **Compiler caches (sccache, #841):** rust-cache drops the workspace's own crates before saving, so
 every job recompiled them from a fresh checkout (two to three minutes a job). The jobs that compile
 the most on every pull request also wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from
-taiki-e/install-action), whose directory (`SCCACHE_DIR`, beside the checkout) actions/cache keeps
+taiki-e/install-action), whose directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path with `..`) actions/cache keeps
 under `sccache-<name>-<hash of the Rust sources>`: by content, so only what a change touches
 compiles again. Each name has one job that saves it (`actions/cache/save`, only when the key
 missed), as rust-cache's: `python-engine` (`test`'s 3.14 cell; the other Python jobs restore it),

@@ -115,8 +115,10 @@ jobs:
     env:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -356,8 +358,10 @@ jobs:
       # changed snapshot fails the test (crates/AGENTS.md, Snapshots).
       INSTA_UPDATE: "no"
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -937,8 +941,10 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_TERM_COLOR: always
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1110,8 +1116,10 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_TERM_COLOR: always
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1192,8 +1200,10 @@ jobs:
       RUSTFLAGS: "-Dwarnings"
       CARGO_INCREMENTAL: "0"
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1389,8 +1399,10 @@ jobs:
     env:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
 
     steps:
       # PR head commit (not merge commit) so coverage line numbers map to the diff.
@@ -1538,8 +1550,10 @@ jobs:
     env:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1605,8 +1619,10 @@ jobs:
     env:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1687,8 +1703,10 @@ jobs:
     env:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1745,8 +1763,10 @@ jobs:
     env:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1815,8 +1835,10 @@ jobs:
       RUSTFLAGS: -Dwarnings
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/../.sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

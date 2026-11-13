@@ -300,7 +300,12 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
         assert cargo and installs[0] < min(cargo), f"{job_id}: install sccache before cargo"
         restores = [s for s in steps if str(s.get("uses", "")).startswith(SCCACHE_RESTORE)]
         assert len(restores) == 1, f"{job_id}: restore a compiler cache"
-        assert (jobs[job_id].get("env") or {}).get("SCCACHE_DIR"), job_id
+        directory = str((jobs[job_id].get("env") or {}).get("SCCACHE_DIR", ""))
+        # actions/cache refuses a path with `..` (a warning, and nothing saved).
+        assert directory and ".." not in directory.split("/"), (job_id, directory)
+        assert directory == "${{ github.workspace }}/.sccache", (job_id, directory)
+    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".sccache/" in ignored, "engine-test fails when the tests leave a file git shows"
 
 
 def test_every_compiler_cache_has_one_saver_and_its_readers_restore_its_name() -> None:
