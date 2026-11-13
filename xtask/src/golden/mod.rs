@@ -1111,7 +1111,6 @@ fixtures = ["none", "empty"]
     /// A repository with `cases.toml`, and an engine that is [`FAKE_ENGINE`].
     #[cfg(unix)]
     fn fake_repository() -> (tempfile::TempDir, Layout, Oracle, run::Engine) {
-        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
         let golden = repo.join("tests/golden");
@@ -1120,9 +1119,7 @@ fixtures = ["none", "empty"]
         let install = dir.path().join("engine");
         let bin = install.join("bin");
         std::fs::create_dir_all(&bin).unwrap();
-        std::fs::write(bin.join("opentide"), FAKE_ENGINE).unwrap();
-        std::fs::set_permissions(bin.join("opentide"), std::fs::Permissions::from_mode(0o755))
-            .unwrap();
+        crate::script::write_executable(&bin.join("opentide"), FAKE_ENGINE).unwrap();
         let layout = Layout {
             recordings: golden.clone(),
             golden,

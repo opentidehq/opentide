@@ -321,7 +321,6 @@ pub fn candidate_version(opentide: &Path) -> Result<String> {
 /// `PATH` is the harness's own).
 #[cfg(unix)]
 pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
-    use std::os::unix::fs::PermissionsExt;
     let package = repo.join("bindings").join("node");
     let cli = package.join("cli.js");
     let built = std::fs::read_dir(&package)
@@ -350,17 +349,14 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
     let bin_dir = target.join("golden-node");
     std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
     let launcher = bin_dir.join("opentide");
-    std::fs::write(
+    crate::script::write_executable(
         &launcher,
-        format!(
+        &format!(
             "#!/bin/sh\nexec {} {} \"$@\"\n",
             quoted(&node)?,
             quoted(&cli)?
         ),
-    )
-    .with_context(|| format!("write {}", launcher.display()))?;
-    std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755))
-        .with_context(|| format!("make {} executable", launcher.display()))?;
+    )?;
     Ok(crate::golden::run::Engine {
         name: "node".into(),
         bin_dir,

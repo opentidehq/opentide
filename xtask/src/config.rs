@@ -461,10 +461,8 @@ mod tests {
 
     #[cfg(unix)]
     fn fake_python(dir: &Path, body: &str) -> PathBuf {
-        use std::os::unix::fs::PermissionsExt as _;
         let path = dir.join("python");
-        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::script::write_executable(&path, &format!("#!/bin/sh\n{body}\n")).unwrap();
         path
     }
 
