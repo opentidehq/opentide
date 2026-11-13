@@ -7,8 +7,9 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-# Published with content, once commands run on it (docs/internal/publishing.md).
-publish = false
+# Published by the release train (publish.yml, UC-5.5), for the facade's `cli`
+# feature. Its explain pages and MCP templates come from src/opentide/data
+# (build.rs, OPENTIDE_ASSETS), which `release.py vendor` copies into the package.
 # The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
 # oracles: the explain pages it holds quote vendor SDK names the licence scan
 # keeps out of release artifacts (scripts/engine/license-scan.sh).
@@ -21,6 +22,12 @@ exclude = [
     "tests/extract_sentinel.rs",
 ]
 description = "The opentide command line: command tree, output modes, JSON envelope, exit codes, crash handler"
+
+# The explain pages build.rs compiles in, which `scripts/engine/release.py
+# vendor` copies into the published crate (its `include_str!`s of
+# OPENTIDE_ASSETS, the MCP host templates, are found in the sources).
+[package.metadata.opentide]
+assets = ["src/opentide/data/diagnostics"]
 
 [lints]
 workspace = true
@@ -42,9 +49,14 @@ doc = false
 
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }
-# `--show-completion` and `--install-completion` (#841): each shell's script
-# from the command tree, as clap's own crate writes it.
-clap_complete = "4.6"
+# Shell completion (#841): `--show-completion` and `--install-completion`
+# write clap_complete's registration for each shell, and a Tab press runs the
+# binary with `_OPENTIDE_COMPLETE` set (`CompleteEnv`), which completes the
+# command line from the clap tree and the workspace's values from the
+# completers in `commands/completion/values.rs`. `unstable-dynamic` is the
+# feature that holds `CompleteEnv` and `ArgValueCompleter`: outside
+# clap_complete's semver promise, so the version is pinned to the minor.
+clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
 comfy-table = { version = "7.2", default-features = false }
 ctrlc = "3.4"
@@ -142,11 +154,9 @@ signal-hook = { version = "0.3", default-features = false, features = ["iterator
 # `tests/lsp_start.rs`: the Ctrl-C (SIGINT) a person sends `lsp start`.
 rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "pty", "termios"] }
 # `tests/tui_pty.rs`: `opentide tui` driven in a pseudo-terminal (open, run
-# validate, quit), as a person at a terminal runs it. rexpect, the rust-cli
-# expect crate: expectrl reaches the unmaintained pin-utils through nix 0.26
-# (RUSTSEC-2026-0441), which cargo deny refuses. vt100 reads what the UI drew
-# back into a screen: ratatui writes only the cells that changed.
-rexpect = "0.7"
+# validate, quit) through portable-pty, as a person at a terminal runs it.
+# vt100 reads what the UI drew back into a screen: ratatui writes only the
+# cells that changed.
 vt100 = "0.18"
 
 [dev-dependencies]
@@ -155,8 +165,9 @@ opentide-cassette.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"
-# The `setup` wizard's pseudo-terminal test (tests/setup_wizard.rs), on
-# wezterm's portable-pty: a pty on Unix, ConPTY on Windows.
+# The pseudo-terminal tests (tests/setup_wizard.rs, tests/tui_pty.rs), on
+# wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
+# that drives a run at a terminal.
 portable-pty = "0.9"
 # The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
 

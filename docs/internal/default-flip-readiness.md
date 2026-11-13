@@ -72,6 +72,7 @@ Python server's, frozen.
 
 | What | Why | Where it runs now |
 |------|-----|-------------------|
-| The vocabulary ingest (ATT&CK STIX, MISP actors, malapi: `opentide.vocabulary`, `scripts/vocabulary/`) | Maintainer tooling not yet ported to `cargo xtask vocab`; it writes into specifications only | From the last commit that has it (`INGEST_REV` in `.github/workflows/vocab-upstream.yml`, [`scripts/vocabulary/README.md`](https://github.com/opentidehq/opentide/blob/development/scripts/vocabulary/README.md)) |
-| The check of the model field docstrings against the specifications' field tables | It read the Pydantic models' docstrings; the Rust models' docs have no such check yet | Not run: a follow-up |
+| The vocabulary ingest (ATT&CK STIX, MISP actors: `opentide.vocabulary`, `scripts/vocabulary/`) | Ported in UC-6.3: `cargo xtask vocab ingest`, the same data as the Python ingest's files, laid out by the `toml` crate | `.github/workflows/vocab-upstream.yml` ([`scripts/vocabulary/README.md`](https://github.com/opentidehq/opentide/blob/development/scripts/vocabulary/README.md)) |
+| The MalAPI scrape (`generate_malapi.py`) | Run by hand, never in CI; a port needs an HTML parser crate | From the last commit that has it ([`scripts/vocabulary/README.md`](https://github.com/opentidehq/opentide/blob/development/scripts/vocabulary/README.md), "Not ported") |
+| The check of the model field docstrings against the specifications' field tables | It read the Pydantic models' docstrings | Ported in UC-6.3: `cargo xtask spec-fields` reads the Rust models' descriptions; ci.yml's `lint` job |
 | The 48-case matrix of GitLab pipelines the Python renderer was linted on | The renderer is Rust's; the lint job now lints what `opentide setup ci gitlab` writes on the tide corpus, with and without platforms | `gitlab-ci-lint` |

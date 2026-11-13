@@ -42,47 +42,57 @@ const BUNDLED: [Bundled; 4] = [
         "detection-engineering",
         &[(
             "SKILL.md",
-            include_bytes!(
-                "../../../../../src/opentide/data/setup/skills/authoring/detection-engineering/SKILL.md"
-            ),
+            include_bytes!(concat!(
+                env!("OPENTIDE_ASSETS"),
+                "/src/opentide/data/setup/skills/authoring/detection-engineering/SKILL.md"
+            )),
         )],
     ),
     (
         "opentide-detection-objective",
         &[(
             "SKILL.md",
-            include_bytes!(
-                "../../../../../src/opentide/data/setup/skills/authoring/opentide-detection-objective/SKILL.md"
-            ),
+            include_bytes!(concat!(
+                env!("OPENTIDE_ASSETS"),
+                "/src/opentide/data/setup/skills/authoring/opentide-detection-objective/SKILL.md"
+            )),
         )],
     ),
     (
         "opentide-detection-rule",
         &[(
             "SKILL.md",
-            include_bytes!(
-                "../../../../../src/opentide/data/setup/skills/authoring/opentide-detection-rule/SKILL.md"
-            ),
+            include_bytes!(concat!(
+                env!("OPENTIDE_ASSETS"),
+                "/src/opentide/data/setup/skills/authoring/opentide-detection-rule/SKILL.md"
+            )),
         )],
     ),
     (
         "opentide-threat-vector",
         &[(
             "SKILL.md",
-            include_bytes!(
-                "../../../../../src/opentide/data/setup/skills/authoring/opentide-threat-vector/SKILL.md"
-            ),
+            include_bytes!(concat!(
+                env!("OPENTIDE_ASSETS"),
+                "/src/opentide/data/setup/skills/authoring/opentide-threat-vector/SKILL.md"
+            )),
         )],
     ),
 ];
 
 /// The entrypoint templates (`data/setup/skills/`).
-const CLAUDE_TEMPLATE: &str =
-    include_str!("../../../../../src/opentide/data/setup/skills/CLAUDE.md.template");
-const AGENTS_TEMPLATE: &str =
-    include_str!("../../../../../src/opentide/data/setup/skills/AGENTS.md.template");
-const COPILOT_TEMPLATE: &str =
-    include_str!("../../../../../src/opentide/data/setup/skills/copilot-instructions.md");
+const CLAUDE_TEMPLATE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/src/opentide/data/setup/skills/CLAUDE.md.template"
+));
+const AGENTS_TEMPLATE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/src/opentide/data/setup/skills/AGENTS.md.template"
+));
+const COPILOT_TEMPLATE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/src/opentide/data/setup/skills/copilot-instructions.md"
+));
 
 /// The preview deploy the templates name (`render_agent_entrypoint`).
 const DEPLOY: &str = "opentide deploy --dry-run --strategy PREVIEW --all";

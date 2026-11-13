@@ -4,7 +4,7 @@ The workflow runs on pull requests, including ones that change it, so the
 property that matters is structural: no job can mint the OIDC token that
 trusted publishing on crates.io, npm and PyPI exchanges for an upload token, no
 secret is read, and every publish command is a dry run. It also has to stay a
-faithful rehearsal: the wheel and sdist built the way ``publish-pypi.yml``
+faithful rehearsal: the wheel and sdist built the way ``publish.yml``
 builds them, npm new enough for trusted publishing, and every placeholder in
 ``publishing/placeholders/`` covered (UC-0.1, #799).
 """
@@ -21,7 +21,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-dry-run.yml"
-PUBLISH_PYPI = ROOT / ".github" / "workflows" / "publish-pypi.yml"
+PUBLISH = ROOT / ".github" / "workflows" / "publish.yml"
+#: The release's wheel build (publish.yml calls it).
+PACKAGES = ROOT / ".github" / "workflows" / "build-packages.yml"
 PLACEHOLDERS = ROOT / "publishing" / "placeholders"
 #: What trusted publishing on npm needs (docs.npmjs.com/trusted-publishers).
 NPM_FLOOR = (11, 5, 1)
@@ -354,7 +356,7 @@ def test_npm_is_new_enough_for_trusted_publishing(workflow: dict[Any, Any]) -> N
 
 
 def test_pypi_job_builds_as_the_release_does(workflow: dict[Any, Any]) -> None:
-    release = _load(PUBLISH_PYPI)
+    release = _load(PACKAGES)
     release_runs = "\n".join(_runs(release))
     runs = "\n".join(_runs(workflow, "pypi"))
     (cibuildwheel,) = set(re.findall(r"cibuildwheel==[\w.]+", release_runs))
@@ -392,5 +394,5 @@ def test_pypi_job_refuses_what_the_release_refuses(workflow: dict[Any, Any]) -> 
     # The publish job rejects a dev or local version before it compares the
     # version with the guard's; the rehearsal keeps the same check.
     check = 'any("dev" in v or "+" in v for v in versions)'
-    assert check in "\n".join(_runs(_load(PUBLISH_PYPI), "publish"))
+    assert check in "\n".join(_runs(_load(PUBLISH), "pypi"))
     assert check in "\n".join(_runs(workflow, "pypi"))

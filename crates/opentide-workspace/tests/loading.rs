@@ -423,6 +423,26 @@ mod loading {
         assert_eq!(error.code(), Some("config_parse"));
     }
 
+    /// `sharing.toml` has a loader of its own (`_SKIPPED_CONFIG_FILES`):
+    /// one that is not UTF-8, or not TOML, does not stop the workspace,
+    /// where another configuration file that is not UTF-8 does.
+    #[test]
+    fn a_sharing_toml_that_does_not_read_does_not_stop_the_workspace() {
+        let rules = open(&sample()).index().rules().count();
+        for bytes in [&b"\xff\xfe[x]\n"[..], b"[blocks\n"] {
+            let fs = sample();
+            fs.write("/ws/.opentide/configurations/sharing.toml", bytes.to_vec());
+            assert_eq!(open(&fs).index().rules().count(), rules, "{bytes:?}");
+        }
+        let fs = sample();
+        fs.write(
+            "/ws/.opentide/configurations/lint.toml",
+            b"\xff\xfe[x]\n".to_vec(),
+        );
+        let error = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap_err();
+        assert!(error.to_string().contains("not UTF-8"), "{error}");
+    }
+
     #[test]
     fn the_parent_instance_is_merged_unless_tide_workspace_is_set() {
         let fs = Arc::new(MemoryFs::new());

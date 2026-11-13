@@ -14,14 +14,73 @@
 //! | fish | `~/.config/fish/completions/opentide.fish` | fish itself |
 //! | powershell, pwsh | appended to the shell's `$PROFILE` | the profile |
 //!
-//! The scripts are clap's, which complete the commands, options and choices
-//! from the script itself: they no longer run opentide on each Tab press, so
-//! they keep working whatever Python is installed.
+//! Each script is clap_complete's registration for the shell
+//! (`CompleteEnv`, the `unstable-dynamic` feature): a Tab press runs
+//! `opentide` with [`VAR`] naming the shell and the command line after `--`,
+//! and [`answer`] prints the candidates. They come from the command tree
+//! (commands, options, choices) and, for the values a workspace holds
+//! (`--uuid`, `--file`, `--technique`, `--platform`, `--tenant`, `explain`'s
+//! code, ...), from the completers of [`values`].
+
+pub mod values;
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::catalog::PROGRAM;
+use crate::env::Env;
+
+/// The variable a registration sets to ask `opentide` for completions, the
+/// shell's name its value. Typer's scripts set it too, to `complete_<shell>`.
+pub const VAR: &str = "_OPENTIDE_COMPLETE";
+
+/// Answers the shell's request for completions when [`VAR`] names one, and
+/// returns the exit code; `None` for a run that is not one, which goes on.
+///
+/// `argv` is the command line without the program's name: the shell passes
+/// `-- opentide <words>`. With no `--`, it prints the shell's registration,
+/// as `--show-completion` does. Only the candidates reach stdout.
+pub fn answer(argv: &[String], env: &Env, cwd: Option<&Path>) -> Option<i32> {
+    let shell = env
+        .get(VAR)
+        .filter(|shell| !shell.is_empty() && *shell != "0")?;
+    if shell.starts_with("complete_") || shell.starts_with("source_") {
+        // A script opentide 0.23.0 or earlier installed, which asks Typer.
+        let _ignored = writeln!(
+            std::io::stderr(),
+            "opentide: this shell's completion script is out of date; \
+             replace it with: {PROGRAM} --install-completion"
+        );
+        return Some(1);
+    }
+    let words = argv
+        .iter()
+        .position(|word| word == "--")
+        .map_or(&[][..], |at| &argv[at + 1..]);
+    let context = Arc::new(values::Context::new(
+        words,
+        shell,
+        cwd.map(Path::to_path_buf).unwrap_or_default(),
+        env,
+    ));
+    let command_line = std::iter::once(PROGRAM.to_owned()).chain(argv.iter().cloned());
+    let completed = clap_complete::CompleteEnv::with_factory(|| {
+        values::attach(crate::catalog::root(), &context)
+    })
+    .var(VAR)
+    .bin(PROGRAM)
+    .completer(PROGRAM)
+    .try_complete(command_line, cwd);
+    match completed {
+        Ok(true) => Some(0),
+        Ok(false) => None,
+        Err(error) => {
+            let _ignored = error.print();
+            Some(error.exit_code())
+        }
+    }
+}
 
 /// The shells a script is written for, as the options name them.
 pub const SHELLS: &[&str] = &["bash", "zsh", "fish", "powershell", "pwsh"];
@@ -96,18 +155,33 @@ fn parent_shells() -> Vec<String> {
     names
 }
 
-/// The completion script of `shell` for the command tree `root`.
-pub fn script(root: &clap::Command, shell: &str) -> String {
-    let generator = match shell {
-        "zsh" => clap_complete::Shell::Zsh,
-        "fish" => clap_complete::Shell::Fish,
-        "powershell" | "pwsh" => clap_complete::Shell::PowerShell,
-        _ => clap_complete::Shell::Bash,
-    };
-    let mut command = root.clone();
+/// The completion script of `shell`: clap_complete's registration, which
+/// runs `opentide` (found on `PATH`) on each Tab press.
+///
+/// zsh's also completes when `compinit` loads it from `fpath` as
+/// `_opentide`: run that way, the file's body is the completion function, so
+/// it completes the first Tab press as well as registering itself.
+pub fn script(shell: &str) -> String {
+    let shells = clap_complete::env::Shells::builtins();
     let mut bytes = Vec::new();
-    clap_complete::generate(generator, &mut command, PROGRAM, &mut bytes);
-    String::from_utf8_lossy(&bytes).into_owned()
+    if let Some(completer) = shells.completer(shell) {
+        // Writing to a Vec cannot fail.
+        let _ignored = completer.write_registration(VAR, PROGRAM, PROGRAM, PROGRAM, &mut bytes);
+    }
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if shell == "zsh" {
+        let function = format!("_clap_dynamic_completer_{}", PROGRAM.replace('-', "_"));
+        text.push_str(&format!(
+            "if [ \"$funcstack[1]\" = \"_{PROGRAM}\" ]; then\n    {function} \"$@\"\nfi\n"
+        ));
+    }
+    text
+}
+
+/// The line of PowerShell's registration that tells it from Typer's and
+/// from an earlier opentide's, which a profile may still hold.
+fn powershell_marker() -> String {
+    format!("$env:{VAR} = \"powershell\"")
 }
 
 /// Where `--install-completion` put a script, and how to load it now.
@@ -209,7 +283,7 @@ pub fn install(
                 },
                 Path::to_path_buf,
             );
-            let marker = format!("Register-ArgumentCompleter -Native -CommandName '{PROGRAM}'");
+            let marker = powershell_marker();
             let existing = std::fs::read_to_string(&path).unwrap_or_default();
             if !existing.contains(&marker) {
                 if let Some(parent) = path.parent() {
@@ -309,18 +383,37 @@ mod tests {
     }
 
     #[test]
-    fn each_shell_gets_clap_s_script() {
-        let root = crate::catalog::root();
-        assert!(script(&root, "bash").contains("complete -F _opentide"));
-        assert!(script(&root, "zsh").starts_with("#compdef opentide"));
-        assert!(script(&root, "fish").contains("complete -c opentide"));
-        assert!(
-            script(&root, "pwsh")
-                .contains("Register-ArgumentCompleter -Native -CommandName 'opentide'")
-        );
-        // The commands and their options are in it.
-        let bash = script(&root, "bash");
-        assert!(bash.contains("validate") && bash.contains("--dry-run"));
+    fn each_shell_gets_the_registration_that_asks_opentide() {
+        let bash = script("bash");
+        assert!(bash.contains("complete -o nospace -o bashdefault"));
+        assert!(bash.contains("_OPENTIDE_COMPLETE=\"bash\""));
+        assert!(bash.contains("\"opentide\" -- \"${words[@]}\""));
+        let zsh = script("zsh");
+        assert!(zsh.starts_with("#compdef opentide"));
+        assert!(zsh.contains("compdef _clap_dynamic_completer_opentide opentide"));
+        // Loaded from fpath, the first Tab press completes too.
+        assert!(zsh.ends_with(
+            "if [ \"$funcstack[1]\" = \"_opentide\" ]; then\n    \
+             _clap_dynamic_completer_opentide \"$@\"\nfi\n"
+        ));
+        assert!(script("fish").contains("complete --keep-order --exclusive --command opentide"));
+        assert!(script("fish").contains("_OPENTIDE_COMPLETE=fish opentide --"));
+        for shell in ["powershell", "pwsh"] {
+            let text = script(shell);
+            assert!(text.contains("Register-ArgumentCompleter -Native -CommandName opentide"));
+            assert!(text.contains(&powershell_marker()));
+        }
+    }
+
+    #[test]
+    fn a_run_without_the_variable_is_not_a_completion() {
+        let argv = vec!["--".to_owned(), "opentide".to_owned(), String::new()];
+        assert_eq!(answer(&argv, &Env::default(), None), None);
+        let off = Env::from_pairs([(VAR, "0")]);
+        assert_eq!(answer(&argv, &off, None), None);
+        // Typer's request, from a script 0.23.0 or earlier installed.
+        let typer = Env::from_pairs([(VAR, "complete_bash")]);
+        assert_eq!(answer(&argv, &typer, None), Some(1));
     }
 
     #[test]
@@ -356,12 +449,17 @@ mod tests {
         let fish = install("fish", "F", home.path(), None).unwrap();
         assert_eq!(std::fs::read_to_string(fish.path).unwrap(), "F");
         let profile = home.path().join("profile.ps1");
-        let script = "Register-ArgumentCompleter -Native -CommandName 'opentide' {}";
-        install("pwsh", script, home.path(), Some(&profile)).unwrap();
-        install("pwsh", script, home.path(), Some(&profile)).unwrap();
+        // A profile holding Typer's registration gets clap's after it, which
+        // PowerShell then uses; once.
+        let typer = "Register-ArgumentCompleter -Native -CommandName opentide \
+                     -ScriptBlock $scriptblock";
+        std::fs::write(&profile, format!("{typer}\n")).unwrap();
+        let script = script("pwsh");
+        install("pwsh", &script, home.path(), Some(&profile)).unwrap();
+        install("pwsh", &script, home.path(), Some(&profile)).unwrap();
         assert_eq!(
             std::fs::read_to_string(&profile).unwrap(),
-            format!("{script}\n")
+            format!("{typer}\n{script}\n")
         );
     }
 

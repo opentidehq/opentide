@@ -57,13 +57,15 @@ pub struct FixtureSpec {
     pub pushed: Vec<Edit>,
 }
 
-/// One edit of a fixture file: `find` occurs exactly once and becomes `replace`.
+/// One edit of a fixture file: `find` occurs exactly once and becomes
+/// `replace`; an empty `find` writes `replace` as a new file, which must not
+/// exist yet.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Edit {
     /// The file, relative to the workspace.
     pub path: String,
-    /// The text to replace; it must occur once.
+    /// The text to replace; it must occur once. Empty: the file is new.
     pub find: String,
     /// What it becomes.
     pub replace: String,
@@ -180,10 +182,24 @@ impl FixtureSpec {
     }
 }
 
-/// Applies `edits` to the workspace `dest`, each to exactly one place.
+/// Applies `edits` to the workspace `dest`, each to exactly one place; an
+/// edit with an empty `find` writes a file the workspace does not have.
 fn apply(dest: &Path, edits: &[Edit]) -> Result<()> {
     for edit in edits {
         let path = dest.join(&edit.path);
+        if edit.find.is_empty() {
+            ensure!(
+                !path.exists(),
+                "fixture edit: {} exists; an empty `find` writes a new file",
+                edit.path
+            );
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("create {}", parent.display()))?;
+            }
+            fs::write(&path, &edit.replace).with_context(|| format!("write {}", path.display()))?;
+            continue;
+        }
         let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         ensure!(
             text.matches(edit.find.as_str()).count() == 1,
@@ -755,6 +771,30 @@ mod tests {
         assert_eq!(
             fs::read_to_string(dest.path().join("r.yaml")).unwrap(),
             "severity: high\nalert: High\n"
+        );
+        // An empty `find` writes a new file, never over one.
+        let new_file = |path: &str| FixtureSpec {
+            source: Some("src".into()),
+            edits: vec![Edit {
+                path: path.into(),
+                find: String::new(),
+                replace: "[promotion]\n".into(),
+            }],
+            ..spec(FixtureKind::Copy)
+        };
+        let dest = tempfile::tempdir().unwrap();
+        new_file("conf/d.toml")
+            .materialise(repo.path(), dest.path())
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(dest.path().join("conf/d.toml")).unwrap(),
+            "[promotion]\n"
+        );
+        let dest = tempfile::tempdir().unwrap();
+        assert!(
+            new_file("r.yaml")
+                .materialise(repo.path(), dest.path())
+                .is_err()
         );
         // Twice, or not at all: the edit is ambiguous or stale.
         for find in ["High", "nowhere"] {

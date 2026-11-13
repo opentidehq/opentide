@@ -68,9 +68,9 @@ opentide-cli = { path = "crates/opentide-cli", version = "=0.12.0" }
 opentide-compile = { path = "crates/opentide-compile", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
-opentide-compare = { path = "crates/opentide-compare", version = "=0.12.0" }
+opentide-compare = { path = "crates/opentide-compare" }
 opentide-connectors = { path = "crates/opentide-connectors", version = "=0.12.0" }
-opentide-cassette = { path = "crates/opentide-cassette", version = "=0.12.0" }
+opentide-cassette = { path = "crates/opentide-cassette" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

@@ -8,19 +8,18 @@ import { MANIFEST, PACKAGE } from './corpus.mjs'
 
 const read = (path) => JSON.parse(readFileSync(join(PACKAGE, path), 'utf8'))
 
-/** The npm platform name of each Rust target, as napi-rs names them. */
+/** The npm platform name of each Rust target, as napi-rs names them. No musl:
+ * the maintainer decided against musl builds (docs/internal/publishing.md). */
 const PLATFORMS = {
   'x86_64-unknown-linux-gnu': 'linux-x64-gnu',
   'aarch64-unknown-linux-gnu': 'linux-arm64-gnu',
-  'x86_64-unknown-linux-musl': 'linux-x64-musl',
-  'aarch64-unknown-linux-musl': 'linux-arm64-musl',
   'x86_64-apple-darwin': 'darwin-x64',
   'aarch64-apple-darwin': 'darwin-arm64',
   'x86_64-pc-windows-msvc': 'win32-x64-msvc',
   'aarch64-pc-windows-msvc': 'win32-arm64-msvc',
 }
 
-test('the eight targets each have a native package, an optional dependency', () => {
+test('the six targets each have a native package, an optional dependency', () => {
   assert.deepEqual(MANIFEST.napi.targets, Object.keys(PLATFORMS))
   const dirs = readdirSync(join(PACKAGE, 'npm')).sort()
   assert.deepEqual(dirs, Object.values(PLATFORMS).sort())
