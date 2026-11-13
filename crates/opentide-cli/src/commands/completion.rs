@@ -341,7 +341,10 @@ mod tests {
             text,
             format!(
                 "alias ll='ls -l'\nsource '{}'\n",
-                home.path().join(".bash_completions/opentide.sh").display()
+                home.path()
+                    .join(".bash_completions")
+                    .join("opentide.sh")
+                    .display()
             )
         );
         install("zsh", "Z", home.path(), None).unwrap();

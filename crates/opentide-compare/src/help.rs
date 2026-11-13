@@ -405,7 +405,8 @@ fn word_matches(oracle: &str, candidate: &str) -> bool {
     }
 }
 
-/// Whether two texts say the same, word by word ([`word_matches`]).
+/// Whether two texts say the same, word by word: a word Rich cut short with
+/// `…` matches any word that begins with what is left of it.
 pub fn text_matches(oracle: &str, candidate: &str) -> bool {
     let oracle: Vec<&str> = oracle.split_whitespace().collect();
     let candidate: Vec<&str> = candidate.split_whitespace().collect();

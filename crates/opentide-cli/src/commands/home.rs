@@ -580,7 +580,11 @@ mod tests {
         .unwrap();
         std::fs::write(platforms.join("broken.toml"), "[platform\n").unwrap();
         let facts = gather("1", root, None);
-        assert_eq!(facts.workspace.as_deref(), Some(root));
+        // The workspace is found from the resolved path: on macOS the
+        // temporary folder is under /private, on Windows its short name
+        // (RUNNER~1) becomes the long one.
+        let resolved = opentide_workspace::FileSystem::resolve(&opentide_workspace::OsFs, root);
+        assert_eq!(facts.workspace.as_deref(), Some(resolved.as_path()));
         assert_eq!(facts.catalogue[0], ("rules".to_owned(), 1));
         assert!(!facts.schemas);
         assert_eq!(facts.platforms, [("splunk".to_owned(), 1)]);
