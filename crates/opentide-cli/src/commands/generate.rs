@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use opentide_compile::generate::docs::catalog::{Catalog, Scope};
 use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
-use opentide_compile::generate::docs::render::{Pages, Templates};
+use opentide_compile::generate::docs::render::Pages;
 use opentide_compile::generate::docs::vocab::Vocab;
 use opentide_compile::generate::docs::{
     Counts, FlavorHints, Settings as DocsSettings, changed, index_pages, inflight as docs_inflight,
@@ -510,7 +510,6 @@ fn docs_phase(
     let catalog =
         Catalog::build(index, Statuses::from_resolved(resolved)).map_err(|error| error.detail)?;
     let vocabularies = Vocabularies::bundled();
-    let templates = Templates::new();
     // What deploy would do with each rule: the statuses, the enabled
     // platforms, their tenants (never their credentials) and the state's ids.
     let config = opentide_compile::Json::from_node(&resolved.tree);
@@ -526,7 +525,6 @@ fn docs_phase(
         catalog: &catalog,
         settings: &settings,
         vocab: Vocab::new(&vocabularies),
-        templates: &templates,
         deployment: &deployment,
     };
     let output_text = Json::str(settings.output.to_string_lossy().as_ref());
