@@ -76,8 +76,8 @@ What is recorded (the README has the detail):
 `cargo xtask golden check --engine rust` runs every case through this repository's CLI (the
 console script of `.venv`, which runs the Rust core in process) and compares each run with the
 oracle's recording through `opentide-compare`: stdout, stderr, the exit code, the files and the
-JSON document (structurally, then byte for byte), with the goldens' normalisation. JSON key order
-counts: the oracle's order is the contract. `--runner node` launches the npm package's bin
+JSON document (by its data: key order, indentation, escapes and the final newline are layout, not
+compared), with the goldens' normalisation. Everything else is compared byte for byte. `--runner node` launches the npm package's bin
 instead. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
 report.
 

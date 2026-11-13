@@ -21,7 +21,6 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use crate::answer::Answer;
-use crate::body::python_json;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
     QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
@@ -290,8 +289,8 @@ impl<'a> Session<'a> {
             end: request.window.end.as_millisecond(),
             is_live: false,
         };
-        let body =
-            python_json(&start).map_err(|error| refused(self.cx, error.to_string(), None))?;
+        let body = serde_json::to_vec(&start)
+            .map_err(|error| refused(self.cx, error.to_string(), None))?;
         let started = self
             .send(
                 self.request(reqwest::Method::POST, &jobs).body(body),
@@ -387,6 +386,7 @@ impl<'a> Session<'a> {
                 });
             }
             tokio::select! {
+                biased;
                 () = self.cx.cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }

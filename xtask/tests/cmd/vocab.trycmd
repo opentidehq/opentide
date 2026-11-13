@@ -45,4 +45,25 @@ $ xtask vocab ingest --bogus
 error: unknown option `--bogus`
 ...
 
+$ xtask vocab malapi --check --apply
+? 2
+error: use either --check or --apply, not both
+
+$ xtask vocab malapi --delay soon
+? 2
+error: --delay soon: expected a number of seconds
+
+$ xtask vocab malapi --delay -1
+? 2
+error: --delay -1: expected a number of seconds
+
+$ xtask vocab malapi --html-dir
+? 2
+error: --html-dir needs a value
+
+$ xtask vocab malapi --bogus
+? 2
+error: unknown option `--bogus`
+...
+
 ```

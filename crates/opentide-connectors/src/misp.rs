@@ -3,8 +3,8 @@
 //!
 //! Every request carries the block's key in `Authorization`, asks for and
 //! sends `application/json`, and has 30 seconds; TLS follows the block's
-//! `verify_ssl`. A body is compact JSON in the order it was built (PyMISP's
-//! `orjson.dumps`); a request without data sends no body. Answers are
+//! `verify_ssl`. A body is compact JSON in the order it was built; a request
+//! without data sends no body. Answers are
 //! classified as `_decode` does: never recorded, never echoed, a fixed
 //! reason for every failure ([`MispCallError`]).
 
@@ -544,7 +544,7 @@ pub fn decode(status: u16, body: &[u8]) -> Result<Json, MispCallError> {
     if let Json::Object(object) = &payload
         && let Some(errors) = object.get("errors")
     {
-        if too_large(&python_dumps(errors)) {
+        if too_large(&json_text(errors)) {
             return Err(MispCallError::new(
                 Kind::AttributeTooLarge,
                 "attribute_too_large",
@@ -573,8 +573,8 @@ pub fn decode(status: u16, body: &[u8]) -> Result<Json, MispCallError> {
     Ok(payload)
 }
 
-/// `json.dumps` of a value, enough to look for words in it.
-fn python_dumps(value: &Json) -> String {
+/// A value's JSON text, to look for words in it.
+fn json_text(value: &Json) -> String {
     value.to_compact()
 }
 
