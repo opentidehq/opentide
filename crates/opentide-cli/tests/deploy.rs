@@ -142,7 +142,7 @@ fn a_dry_run_prints_the_plan_the_failing_rule_the_tally_and_the_note() {
     // run fails.
     assert_eq!(
         ran.stderr,
-        "error[compile_failed]: Sysdig cannot compile this rule: 'URGENT'\n  \
+        "error[compile_failed]: Sysdig cannot compile this rule: \"URGENT\"\n  \
          ╰─▶ objects/rules/bad.yaml\n\
          \n\
          warning: a real deploy would need $SYSDIG_TOKEN, which is unset\n"
@@ -457,7 +457,7 @@ fn a_typo_in_the_strategy_is_the_commands_usage_error_and_writes_no_summary() {
     assert!(!ws.join("opentide-reports").exists());
     assert_eq!(
         plain.stderr,
-        "error: --strategy 'PREVEW' is not a deployable strategy. Use PREVIEW or RELEASE\n  \
+        "error: --strategy \"PREVEW\" is not a deployable strategy. Use PREVIEW or RELEASE\n  \
          help: did you mean 'PREVIEW'?\n"
     );
     let _ = std::fs::remove_dir_all(&ws);
@@ -630,7 +630,7 @@ fn a_rule_without_a_status_logs_the_oracles_event_as_json_under_json() {
     assert!(
         plain
             .stderr
-            .starts_with("error: Platform status missing · detail: Rule 'No Status' "),
+            .starts_with("error: Platform status missing · detail: Rule \"No Status\" "),
         "{}",
         plain.stderr
     );

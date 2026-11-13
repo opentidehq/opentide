@@ -62,8 +62,8 @@ pub fn cron_to_timeframe(
     let unit = chars.next_back();
     let count = count(chars.as_str()).ok_or_else(|| {
         invalid(&format!(
-            "invalid literal for int() with base 10: {}",
-            crate::strategy::python_repr(chars.as_str())
+            "invalid literal for int() with base 10: {:?}",
+            chars.as_str()
         ))
     })?;
     let (minute, hour) = match mode {
@@ -78,10 +78,7 @@ pub fn cron_to_timeframe(
             };
             let parts: Vec<&str> = custom.split('h').collect();
             let [hour, minute] = parts.as_slice() else {
-                return Err(invalid(&format!(
-                    "custom_time {} is not HHhmm",
-                    crate::strategy::python_repr(custom)
-                )));
+                return Err(invalid(&format!("custom_time {custom:?} is not HHhmm")));
             };
             ((*minute).to_owned(), (*hour).to_owned())
         }
@@ -106,8 +103,8 @@ pub fn splunk_timerange(time: &str, skew: f64, offset: i64) -> Result<String, Co
     let unit = chars.next_back();
     let count = count(chars.as_str()).ok_or_else(|| {
         invalid(&format!(
-            "invalid literal for int() with base 10: {}",
-            crate::strategy::python_repr(chars.as_str())
+            "invalid literal for int() with base 10: {:?}",
+            chars.as_str()
         ))
     })?;
     let minutes = match unit {
@@ -154,8 +151,8 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
             .parse::<f64>()
             .map_err(|_| {
                 invalid(&format!(
-                    "could not convert string to float: {}",
-                    crate::strategy::python_repr(&deploy::text(value).replace('%', "e-2"))
+                    "could not convert string to float: {:?}",
+                    deploy::text(value).replace('%', "e-2")
                 ))
             })?,
         None => 0.0,
@@ -165,8 +162,8 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
         Some(Json::Int(offset)) => *offset,
         Some(value) => count(&deploy::text(value)).ok_or_else(|| {
             invalid(&format!(
-                "invalid literal for int() with base 10: {}",
-                crate::strategy::python_repr(&deploy::text(value))
+                "invalid literal for int() with base 10: {:?}",
+                deploy::text(value)
             ))
         })?,
     };
