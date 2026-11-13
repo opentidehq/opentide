@@ -283,15 +283,13 @@ pub fn run(args: &[String]) -> Result<u8> {
         "replay" => {
             let python = python.unwrap_or_else(|| default_python(&repo));
             let engine = engine.context("replay needs --engine rust")?;
-            let engines: &[&str] = match engine.as_str() {
-                "rust" => &["rust"],
-                other => bail!(
-                    "--engine {other}: the Rust server is opentide's only one (rust); \
-                     the recordings are the Python server's"
-                ),
-            };
+            ensure!(
+                engine == "rust",
+                "--engine {engine}: the Rust server is opentide's only one (rust); \
+                 the recordings are the Python server's"
+            );
             ensure!(!files.is_empty(), "replay needs recordings\n{USAGE}");
-            let passed = replay(&repo, &python, &sessions, engines, &files, show_approved)?;
+            let passed = replay(&repo, &python, &sessions, &files, show_approved)?;
             Ok(u8::from(!passed))
         }
         "help" | "--help" | "-h" => {
@@ -447,7 +445,6 @@ fn replay(
     repo: &Path,
     python: &Path,
     sessions: &Sessions,
-    engines: &[&str],
     files: &[PathBuf],
     show_approved: bool,
 ) -> Result<bool> {
@@ -477,28 +474,15 @@ fn replay(
             .iter()
             .map(|exchange| (exchange.step.clone(), exchange.request.clone()))
             .collect();
-        let mut python_live = None;
-        for engine in engines {
-            let live = run_session(repo, python, engine, fixture, recording.launch, &sent)?;
-            // The Rust server against the Python server's live answers when
-            // both run, else against the recording; Python always against
-            // the recording.
-            let oracle = match (*engine, &python_live) {
-                ("python", _) | (_, None) => &recording.exchanges,
-                (_, Some(answers)) => answers,
-            };
-            tally.judge(engine, &recording.session, oracle, &live);
-            if *engine == "python" {
-                python_live = Some(live);
-            }
-        }
+        let live = run_session(repo, python, "rust", fixture, recording.launch, &sent)?;
+        tally.judge(&recording.session, &recording.exchanges, &live);
     }
     // A complete run of the Rust server: an approval that applied nowhere is stale.
     let complete = sessions
         .session
         .iter()
         .all(|session| replayed.contains(&session.name));
-    let (passed, lines) = tally.finish(complete, engines);
+    let (passed, lines) = tally.finish(complete);
     for line in lines {
         println!("{line}");
     }
@@ -529,11 +513,10 @@ impl<'a> Tally<'a> {
         }
     }
 
-    /// Compares `engine`'s `live` answers in `session` with `oracle`'s. The
-    /// Python server is the oracle: only another engine's difference may be
-    /// approved by the ledger.
-    pub fn judge(&mut self, engine: &str, session: &str, oracle: &[Exchange], live: &[Exchange]) {
-        let approve = engine != "python";
+    /// Compares the Rust server's `live` answers in `session` with the
+    /// recording's (`oracle`, the Python server's); a difference only
+    /// through the ledger.
+    pub fn judge(&mut self, session: &str, oracle: &[Exchange], live: &[Exchange]) {
         for (expected, got) in oracle.iter().zip(live) {
             self.compared += 1;
             let case = format!("{session}/{}", expected.step);
@@ -541,12 +524,12 @@ impl<'a> Tally<'a> {
                 &case,
                 expected.response.as_ref(),
                 got.response.as_ref(),
-                approve.then_some(self.ledger),
+                Some(self.ledger),
                 &mut self.usage,
             );
             if !report.equal {
                 self.failures += 1;
-                self.lines.push(format!("DIFFERENT {engine} {case}"));
+                self.lines.push(format!("DIFFERENT {case}"));
                 for difference in &report.differences {
                     self.lines.push(format!(
                         "  {} at {}:\n    expected {}\n    got      {}",
@@ -557,7 +540,7 @@ impl<'a> Tally<'a> {
                     ));
                 }
             } else if self.show_approved && !report.approved.is_empty() {
-                self.lines.push(format!("APPROVED {engine} {case}"));
+                self.lines.push(format!("APPROVED {case}"));
                 for approval in &report.approved {
                     self.lines.push(format!(
                         "  entry {} ({}): {}",
@@ -569,7 +552,7 @@ impl<'a> Tally<'a> {
         if live.len() != oracle.len() {
             self.failures += 1;
             self.lines.push(format!(
-                "DIFFERENT {engine} {session}: {} answers, expected {}",
+                "DIFFERENT {session}: {} answers, expected {}",
                 live.len(),
                 oracle.len()
             ));
@@ -577,11 +560,11 @@ impl<'a> Tally<'a> {
     }
 
     /// Whether the replay passed, and what it reports. When `complete` (every
-    /// session replayed) and the Rust server ran, a replay ledger entry
-    /// ([`owns`]) that approved nothing is stale, and fails the replay.
-    pub fn finish(mut self, complete: bool, engines: &[&str]) -> (bool, Vec<String>) {
+    /// session replayed), a replay ledger entry ([`owns`]) that approved
+    /// nothing is stale, and fails the replay.
+    pub fn finish(mut self, complete: bool) -> (bool, Vec<String>) {
         let mut stale = 0usize;
-        if complete && engines.contains(&"rust") {
+        if complete {
             for (index, entry) in self.ledger.entries.iter().enumerate() {
                 if owns(entry) && !self.usage.is_used(index) {
                     stale += 1;
@@ -595,10 +578,8 @@ impl<'a> Tally<'a> {
             }
         }
         self.lines.push(format!(
-            "{} answers compared, {} different, {stale} stale approvals ({})",
-            self.compared,
-            self.failures,
-            engines.join(" + ")
+            "{} answers compared, {} different, {stale} stale approvals",
+            self.compared, self.failures
         ));
         (self.failures == 0 && stale == 0, self.lines)
     }
@@ -1202,54 +1183,55 @@ changelog = "c"
     fn the_replay_passes_on_equal_answers_and_fails_on_a_difference() {
         let ledger = Ledger::default();
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
-        let (passed, lines) = tally.finish(true, &["rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 1));
+        let (passed, lines) = tally.finish(true);
         assert!(passed, "{lines:?}");
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 2));
-        let (passed, lines) = tally.finish(true, &["rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true);
         assert!(!passed);
-        assert_eq!(lines[0], "DIFFERENT rust s/x");
+        assert_eq!(lines[0], "DIFFERENT s/x");
         assert!(lines.last().unwrap().contains("1 different"), "{lines:?}");
         // A server that answered fewer messages than were recorded fails too.
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &[]);
-        assert!(!tally.finish(true, &["rust"]).0);
+        tally.judge("s", &answered("x", 1), &[]);
+        let (passed, lines) = tally.finish(true);
+        assert!(!passed);
+        assert_eq!(lines[0], "DIFFERENT s: 0 answers, expected 1");
     }
 
     #[test]
-    fn a_rust_approval_never_excuses_the_python_server() {
+    fn a_difference_the_ledger_approves_passes() {
         let ledger = Ledger::parse(APPROVAL).unwrap();
         let mut tally = Tally::new(&ledger, true);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 2));
-        let (passed, lines) = tally.finish(true, &["rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true);
         assert!(passed, "{lines:?}");
-        assert_eq!(lines[0], "APPROVED rust s/x");
+        assert_eq!(lines[0], "APPROVED s/x");
+        assert!(lines[1].starts_with("  entry 1 ("), "{lines:?}");
+        // Approvals are listed only when asked for.
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("python", "s", &answered("x", 1), &answered("x", 2));
-        let (passed, lines) = tally.finish(true, &["python"]);
-        assert!(!passed);
-        assert_eq!(lines[0], "DIFFERENT python s/x");
+        tally.judge("s", &answered("x", 1), &answered("x", 2));
+        let (passed, lines) = tally.finish(true);
+        assert!(passed, "{lines:?}");
+        assert_eq!(lines.len(), 1, "{lines:?}");
     }
 
     #[test]
-    fn an_approval_unused_by_a_complete_rust_replay_is_stale() {
+    fn an_approval_unused_by_a_complete_replay_is_stale() {
         let ledger = Ledger::parse(APPROVAL).unwrap();
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
-        let (passed, lines) = tally.finish(true, &["python", "rust"]);
+        tally.judge("s", &answered("x", 1), &answered("x", 1));
+        let (passed, lines) = tally.finish(true);
         assert!(!passed);
         assert!(
             lines[0].starts_with("STALE ledger entry 1 (s/x "),
             "{lines:?}"
         );
-        // Only a complete replay of the Rust server can tell.
+        // Only a complete replay can tell.
         let mut tally = Tally::new(&ledger, false);
-        tally.judge("rust", "s", &answered("x", 1), &answered("x", 1));
-        assert!(tally.finish(false, &["rust"]).0);
-        let mut tally = Tally::new(&ledger, false);
-        tally.judge("python", "s", &answered("x", 1), &answered("x", 1));
-        assert!(tally.finish(true, &["python"]).0);
+        tally.judge("s", &answered("x", 1), &answered("x", 1));
+        assert!(tally.finish(false).0);
     }
 
     #[test]

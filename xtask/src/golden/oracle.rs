@@ -170,7 +170,6 @@ impl Oracle {
             name: "python".into(),
             bin_dir,
             install_dir: dir,
-            env: std::collections::BTreeMap::new(),
             host_paths,
             known_uuids,
         })
