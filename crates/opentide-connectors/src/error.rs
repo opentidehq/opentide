@@ -7,6 +7,7 @@
 //! reaches a message: the request's URL is dropped from every reqwest error
 //! before its text is read ([`describe`]).
 
+#[cfg(not(target_os = "wasi"))]
 use std::error::Error as _;
 
 /// The `failure.code` of a command that failed for a reason not more
@@ -14,6 +15,10 @@ use std::error::Error as _;
 pub const COMMAND_FAILED: &str = "command_failed";
 /// The `failure.code` of a run stopped by Ctrl-C or a client's cancellation.
 pub const INTERRUPTED: &str = "interrupted";
+/// The `failure.code` of a tenant the WASI build of opentide cannot reach:
+/// it has no network of its own (`opentide serve`'s client can make the
+/// requests instead, `opentide/fetch`).
+pub const NETWORK_UNAVAILABLE: &str = "network_unavailable";
 
 /// A failure to reach, or to be answered by, one tenant.
 #[derive(Debug, thiserror::Error)]
@@ -155,6 +160,18 @@ pub enum ConnectorError {
     /// The run was cancelled (Ctrl-C, `$/cancelRequest`).
     #[error("interrupted")]
     Cancelled,
+    /// This build has no network of its own (the WASI build, whose host gives
+    /// it no sockets), and no transport was installed to reach the tenant.
+    #[error(
+        "this command needs the network, which the WASI build of opentide does not have; run \
+         the opentide CLI"
+    )]
+    NetworkUnavailable {
+        /// The platform's identifier.
+        platform: String,
+        /// The tenant's name.
+        tenant: String,
+    },
 }
 
 impl ConnectorError {
@@ -205,6 +222,7 @@ impl ConnectorError {
     pub fn failure_code(&self) -> &'static str {
         match self {
             Self::Cancelled => INTERRUPTED,
+            Self::NetworkUnavailable { .. } => NETWORK_UNAVAILABLE,
             _ => COMMAND_FAILED,
         }
     }
@@ -227,6 +245,7 @@ pub fn origin(url: &url::Url) -> String {
     }
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// The text of a reqwest error and of the errors under it, without the
 /// request's URL (which may carry a credential in its query or user info).
 pub fn describe(error: reqwest::Error) -> String {
@@ -245,6 +264,7 @@ pub fn describe(error: reqwest::Error) -> String {
     parts.join(": ")
 }
 
+#[cfg(not(target_os = "wasi"))]
 /// A reqwest error from a request to *url* on the tenant *label*, as a
 /// [`ConnectorError`].
 pub fn from_reqwest(

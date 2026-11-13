@@ -537,6 +537,9 @@ impl From<ConnectorError> for Error {
                 platform, tenant, ..
             } => ("tenant_gateway", platform, tenant, None),
             ConnectorError::Cancelled => ("interrupted", String::new(), String::new(), None),
+            ConnectorError::NetworkUnavailable { platform, tenant } => {
+                ("network_unavailable", platform, tenant, None)
+            }
         };
         Self::Connector {
             code,

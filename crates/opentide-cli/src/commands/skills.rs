@@ -285,9 +285,11 @@ fn get(url: &str, accept: Option<&str>, network: Network<'_>) -> Option<Vec<u8>>
                 opentide_connectors::runtime::block_on(async {
                     let cancel = CancellationToken::new();
                     let work = async {
-                        let mut request = client.request(reqwest::Method::GET, url);
+                        let mut request =
+                            client.request(opentide_connectors::transport::Method::GET, url);
                         if let Some(accept) = accept {
-                            request = request.header(reqwest::header::ACCEPT, accept);
+                            request = request
+                                .header(opentide_connectors::transport::header::ACCEPT, accept);
                         }
                         let answer = client.send(request.build().ok()?, &cancel).await.ok()?;
                         if !answer.status().is_success() {

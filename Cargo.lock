@@ -230,7 +230,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
 dependencies = [
  "fastrand",
- "tokio",
 ]
 
 [[package]]
@@ -3226,6 +3225,7 @@ version = "0.12.0"
 dependencies = [
  "ansi-to-tui",
  "anyhow",
+ "base64 0.22.1",
  "clap",
  "clap_complete",
  "comfy-table",
@@ -3254,7 +3254,6 @@ dependencies = [
  "ratatui",
  "rayon",
  "regex",
- "reqwest",
  "rmcp",
  "rustix",
  "serde",
@@ -3344,6 +3343,7 @@ name = "opentide-connectors"
 version = "0.12.0"
 dependencies = [
  "backon",
+ "http",
  "jiff",
  "opentide-cassette",
  "opentide-compile",

@@ -33,16 +33,18 @@ impl Answer {
     /// Sends *request* on *http* and reads its answer whole.
     pub async fn fetch(
         http: &HttpClient,
-        request: reqwest::Request,
+        request: crate::transport::Request,
         cancel: &CancellationToken,
     ) -> Result<Self, ConnectorError> {
         let started = Instant::now();
         let response = http.send(request, cancel).await?;
-        let elapsed = started.elapsed();
+        // To the answer's headers, retries included: the transport reads
+        // the body before `send` returns, so its reading is taken off.
+        let elapsed = started.elapsed().saturating_sub(response.reading());
         let status = response.status().as_u16();
         let content_type = response
             .headers()
-            .get(reqwest::header::CONTENT_TYPE)
+            .get(http::header::CONTENT_TYPE)
             .and_then(|value| value.to_str().ok())
             .map(str::to_owned);
         let body = http.bytes(response, cancel).await?;
@@ -89,12 +91,12 @@ impl Answer {
 /// request that cannot be built is the tenant's setup error.
 pub async fn exchange(
     cx: TenantContext<'_>,
-    request: reqwest::RequestBuilder,
+    request: crate::transport::RequestBuilder,
 ) -> Result<Answer, ConnectorError> {
     let request = request.build().map_err(|error| ConnectorError::Setup {
         platform: cx.tenant.label.platform.clone(),
         tenant: cx.tenant.label.tenant.clone(),
-        message: crate::error::describe(error),
+        message: error.describe(),
     })?;
     Answer::fetch(cx.http, request, cx.cancel).await
 }

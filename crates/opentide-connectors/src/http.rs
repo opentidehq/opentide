@@ -19,6 +19,9 @@ use crate::error::{self, ConnectorError};
 use crate::proxy::ProxySettings;
 use crate::retry::RetryPolicy;
 use crate::tls::TlsSettings;
+use crate::transport::{
+    self, Method, Request, RequestBuilder, Response, Transport, TransportFailure, TransportSpec,
+};
 use crate::{Environment, TenantLabel};
 
 /// `transport.DEFAULT_TIMEOUT`: seconds a tenant has to accept a connection
@@ -52,7 +55,7 @@ impl Default for HttpSettings {
 /// A tenant's client.
 #[derive(Clone, Debug)]
 pub struct HttpClient {
-    client: reqwest::Client,
+    transport: Arc<dyn Transport>,
     label: TenantLabel,
     settings: HttpSettings,
     permits: Arc<Semaphore>,
@@ -61,40 +64,35 @@ pub struct HttpClient {
 
 impl HttpClient {
     /// The client of the tenant *label*, from its *settings*, *env*'s CA
-    /// bundles and proxies, and the run's `--proxy` (*explicit_proxy*).
+    /// bundles and proxies, and the run's `--proxy` (*explicit_proxy*), on
+    /// the build's transport or the one the run installed
+    /// ([`crate::transport::install`]).
     pub fn new(
         label: &TenantLabel,
         settings: &HttpSettings,
         env: &Environment,
         explicit_proxy: Option<&str>,
     ) -> Result<Self, ConnectorError> {
-        let setup = |message: String| ConnectorError::Setup {
-            platform: label.platform.clone(),
-            tenant: label.tenant.clone(),
-            message,
-        };
-        let tls = crate::tls::client_config(&settings.tls, env).map_err(setup)?;
-        let mut builder = reqwest::Client::builder()
-            .tls_backend_preconfigured(tls)
-            .http1_only()
-            .connect_timeout(settings.timeout)
-            // reqwest's read timeout runs from the start of the request, the
-            // connection included, so at `timeout` it would race the connect
-            // timeout and report a tenant that cannot be reached as a slow
-            // one. `requests` gives the answer `timeout` once connected (at
-            // most twice `timeout` from the start); the body's reads are held
-            // to `timeout` each by `bytes`.
-            .read_timeout(settings.timeout.saturating_mul(2))
-            .no_proxy();
         let proxies = ProxySettings::from_env(env, explicit_proxy);
-        for proxy in proxies.proxies().map_err(setup)? {
-            builder = builder.proxy(proxy);
-        }
-        let client = builder
-            .build()
-            .map_err(|error| setup(error::describe(error)))?;
+        let transport = transport::make(&TransportSpec {
+            label,
+            settings,
+            proxies: &proxies,
+            env,
+        })
+        .map_err(|error| match error {
+            transport::MakeError::Setup(message) => ConnectorError::Setup {
+                platform: label.platform.clone(),
+                tenant: label.tenant.clone(),
+                message,
+            },
+            transport::MakeError::NetworkUnavailable => ConnectorError::NetworkUnavailable {
+                platform: label.platform.clone(),
+                tenant: label.tenant.clone(),
+            },
+        })?;
         Ok(Self {
-            client,
+            transport,
             label: label.clone(),
             settings: settings.clone(),
             permits: Arc::new(Semaphore::new(settings.max_in_flight.max(1))),
@@ -119,8 +117,38 @@ impl HttpClient {
     }
 
     /// A request to *url*, to finish and pass to [`HttpClient::send`].
-    pub fn request(&self, method: reqwest::Method, url: &str) -> reqwest::RequestBuilder {
-        self.client.request(method, url)
+    pub fn request(&self, method: Method, url: &str) -> RequestBuilder {
+        RequestBuilder::new(method, url)
+    }
+
+    /// The failure *failure* of a request to *url*, naming this tenant.
+    fn error(&self, failure: TransportFailure, url: &url::Url) -> ConnectorError {
+        let platform = self.label.platform.clone();
+        let tenant = self.label.tenant.clone();
+        let address = error::origin(url);
+        match failure {
+            TransportFailure::Connect { reason } | TransportFailure::Unreachable { reason } => {
+                ConnectorError::Unreachable {
+                    platform,
+                    tenant,
+                    address,
+                    reason,
+                }
+            }
+            TransportFailure::Timeout => ConnectorError::Timeout {
+                platform,
+                tenant,
+                address,
+                seconds: self.settings.timeout.as_secs(),
+            },
+            TransportFailure::Answer { reason } => ConnectorError::Answer {
+                platform,
+                tenant,
+                address,
+                reason,
+            },
+            TransportFailure::Cancelled => ConnectorError::Cancelled,
+        }
     }
 
     /// Sends *request*, retrying as the tenant's policy says, and returns
@@ -128,9 +156,9 @@ impl HttpClient {
     /// with [`ConnectorError::Cancelled`] when *cancel* fires.
     pub async fn send(
         &self,
-        request: reqwest::Request,
+        request: Request,
         cancel: &CancellationToken,
-    ) -> Result<reqwest::Response, ConnectorError> {
+    ) -> Result<Response, ConnectorError> {
         // `biased`: a connection cancelled before (or while) a step is
         // ready is interrupted, never answered by whichever branch tokio
         // happens to poll first.
@@ -145,21 +173,12 @@ impl HttpClient {
         // list only, and a connection that could not be made for any.
         let method_retried = retry.retries(request.method().as_str());
         let mut delays = retry.delays();
-        let mut pending = Some(request);
         loop {
-            let Some(current) = pending.take() else {
-                return Err(ConnectorError::Cancelled);
-            };
-            // A body that cannot be cloned (a stream) is sent once.
-            let next = if retry.total > 0 {
-                current.try_clone()
-            } else {
-                None
-            };
+            let next = (retry.total > 0).then(|| request.clone());
             let outcome = tokio::select! {
                 biased;
                 () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
-                outcome = self.client.execute(current) => outcome,
+                outcome = self.transport.execute(request.clone(), cancel) => outcome,
             };
             let wait = match &outcome {
                 Ok(response)
@@ -167,7 +186,7 @@ impl HttpClient {
                 {
                     let after = response
                         .headers()
-                        .get(reqwest::header::RETRY_AFTER)
+                        .get(http::header::RETRY_AFTER)
                         .and_then(|value| value.to_str().ok());
                     let after = retry.retry_after(response.status().as_u16(), after);
                     next.is_some()
@@ -175,10 +194,10 @@ impl HttpClient {
                         .flatten()
                 }
                 Ok(_) => None,
-                Err(failure) if failure.is_connect() => {
+                Err(TransportFailure::Connect { .. }) => {
                     next.is_some().then(|| delays.next()).flatten()
                 }
-                Err(failure) if failure.is_timeout() && method_retried => {
+                Err(TransportFailure::Timeout) if method_retried => {
                     next.is_some().then(|| delays.next()).flatten()
                 }
                 Err(_) => None,
@@ -190,60 +209,33 @@ impl HttpClient {
                         () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
                         () = tokio::time::sleep(delay) => {}
                     }
-                    pending = next;
                 }
                 (None, Ok(response)) => return Ok(response),
-                (None, Err(failure)) => {
-                    return Err(error::from_reqwest(
-                        failure,
-                        &self.label,
-                        &url,
-                        self.settings.timeout.as_secs(),
-                    ));
-                }
+                (None, Err(failure)) => return Err(self.error(failure, &url)),
             }
         }
     }
 
-    /// Reads an answer's body, mapping a failure as [`HttpClient::send`] does;
-    /// each read must bring data within the tenant's timeout (`requests`'
-    /// read timeout).
+    /// An answer's body, read whole by the transport, or why it could not
+    /// be read: each read must have brought data within the tenant's
+    /// timeout (`requests`' read timeout).
+    #[expect(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "async as it was when it read the body: every caller awaits it, and a \
+                  transport may read lazily again"
+    )]
     pub async fn bytes(
         &self,
-        mut response: reqwest::Response,
+        response: Response,
         cancel: &CancellationToken,
     ) -> Result<Vec<u8>, ConnectorError> {
-        let url = response.url().clone();
-        let timeout = self.settings.timeout;
-        let read = async {
-            let mut body = Vec::new();
-            loop {
-                match tokio::time::timeout(timeout, response.chunk()).await {
-                    Ok(Ok(Some(chunk))) => body.extend_from_slice(&chunk),
-                    Ok(Ok(None)) => return Ok(body),
-                    Ok(Err(failure)) => {
-                        return Err(error::from_reqwest(
-                            failure,
-                            &self.label,
-                            &url,
-                            timeout.as_secs(),
-                        ));
-                    }
-                    Err(_) => {
-                        return Err(ConnectorError::Timeout {
-                            platform: self.label.platform.clone(),
-                            tenant: self.label.tenant.clone(),
-                            address: error::origin(&url),
-                            seconds: timeout.as_secs(),
-                        });
-                    }
-                }
-            }
-        };
-        tokio::select! {
-            biased;
-            () = cancel.cancelled() => Err(ConnectorError::Cancelled),
-            body = read => body,
+        if cancel.is_cancelled() {
+            return Err(ConnectorError::Cancelled);
         }
+        let url = response.url().clone();
+        response
+            .into_body()
+            .map_err(|failure| self.error(failure, &url))
     }
 }

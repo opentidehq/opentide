@@ -23,10 +23,9 @@ opentide-workspace.workspace = true
 # Elastic's advisory codes (UC-4.2b) and Python's float `repr` in messages.
 opentide-core.workspace = true
 opentide-schema.workspace = true
-reqwest.workspace = true
-rustls.workspace = true
-rustls-native-certs.workspace = true
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync", "macros"] }
+# The request and answer types under the transport (src/transport.rs): reqwest's own.
+http = "1"
+tokio = { workspace = true, features = ["rt", "time", "sync", "macros"] }
 tokio-util = { workspace = true, features = ["rt"] }
 backon.workspace = true
 serde.workspace = true
@@ -44,6 +43,17 @@ percent-encoding = "2"
 shlex = "2.0"
 # Sentinel (UC-4.3): the request ids MSAL and azure-core stamp their requests with.
 uuid = { workspace = true, features = ["v4"] }
+
+# The native transport (src/transport.rs, `ReqwestTransport`): reqwest on rustls
+# and the system's certificates, on tokio's multi-thread runtime. Not on WASI,
+# whose host gives the process no sockets: there a tenant is reached only
+# through the transport `opentide serve` installs (its client's
+# `opentide/fetch`), and tokio's net, its threads and ring's C are left out.
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+reqwest.workspace = true
+rustls.workspace = true
+rustls-native-certs.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]
 # The Sysdig test compiles the tide corpus's rule as deploy does.
