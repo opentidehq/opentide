@@ -161,6 +161,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --no-install-project
 
+      # The sdist first: hatch-vcs writes src/opentide/_version.py, which ty
+      # resolves, and the engine is not compiled for an sdist.
+      - name: Build the sdist
+        run: uv build --sdist
+
       - name: Ruff check
         run: uv run --no-sync ruff check src/opentide tests scripts --output-format github
 
@@ -176,11 +181,11 @@ jobs:
       # cache put the dependencies: the release profile's link-time
       # optimisation is the release's to prove (publish-dry-run.yml, the
       # engine release dry run), and it took minutes here (#841).
-      - name: Build sdist and wheel
+      - name: Build the wheel from the sdist
         env:
           OPENTIDE_ENGINE_PROFILE: develop
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
-        run: uv build
+        run: uv build --wheel dist/*.tar.gz
 
       - name: Twine check
         run: uvx twine check dist/*
