@@ -81,13 +81,10 @@ fn member<'a>(object: &'a Json, key: &str) -> Option<&'a Json> {
     }
 }
 
-/// `value` as Python's `str()` prints it, for `invalidate`'s paths.
-fn python_str(value: &Json) -> String {
+/// A path `invalidate` names: a string as is, anything else as its JSON.
+fn path_text(value: &Json) -> String {
     match value {
         Json::Str(text) => text.clone(),
-        Json::Null => "None".into(),
-        Json::Bool(true) => "True".into(),
-        Json::Bool(false) => "False".into(),
         other => compact(other),
     }
 }
@@ -436,7 +433,7 @@ impl Server {
         };
         if method == "invalidate" {
             if let Some(Json::Array(paths)) = member(&params, "paths") {
-                let paths: Vec<String> = paths.iter().map(python_str).collect();
+                let paths: Vec<String> = paths.iter().map(path_text).collect();
                 self.inner.runner.invalidate(&paths);
                 tracing::debug!(paths = paths.len(), "serve_invalidated");
             }

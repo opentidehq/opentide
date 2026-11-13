@@ -48,20 +48,24 @@ pub const USAGE: &str = "\
 usage: cargo xtask golden <command> [options]
 
 commands:
-  record [--check-determinism] [--filter GLOB] [--jobs N]
+  record [--check-determinism] [--filter GLOB] [--jobs N] [--oracle FILE --out DIR]
              run every case through the oracle and write tests/golden/cases/
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
   check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
+        [--recordings DIR]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
-  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N]
+  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--recordings DIR]
              check, printing every difference in full
-  lock       rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip compile)
+  lock [--oracle FILE]
+             rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
+             compile); with --oracle, the requirements file FILE names, beside it
   coverage   rewrite COVERAGE.md from cases.toml and the recordings
 
---filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>) matches
+--filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>), or a
+               leading part of it, matches: `explain/*` is every explain case
 --engine       python (the oracle, the default); rust: this repository's CLI against
                the recordings, every case, through the comparator and
                tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core is the
@@ -72,6 +76,17 @@ commands:
                `node` on PATH, which runs the same command line in-process
                (UC-5.3). `--runner node` alone implies --engine rust
 --report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
+--oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
+               of the next oracle: tests/golden/ORACLE.next); `record` with it
+               needs --out, so that the committed recordings stay the ORACLE's
+--out DIR      record into DIR/cases and DIR/blobs instead of tests/golden, and copy
+               the oracle file (as DIR/ORACLE) and its requirements there; a case
+               that fails is reported and the others are still written; no
+               COVERAGE.md. DIR must be outside tests/golden
+--recordings DIR
+               check against the recordings of `record --out DIR`, with the
+               oracle of DIR/ORACLE; no COVERAGE.md check, and with --engine rust
+               no stale-ledger check (the ledger is the committed oracle's)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
 ";
@@ -116,6 +131,12 @@ struct Command {
     determinism: bool,
     jobs: Option<usize>,
     report: Option<PathBuf>,
+    /// `--oracle FILE`: another oracle file than `tests/golden/ORACLE`.
+    oracle: Option<PathBuf>,
+    /// `--out DIR` (`record`): the recordings' root instead of `tests/golden`.
+    out: Option<PathBuf>,
+    /// `--recordings DIR` (`check`, `diff`): the recordings of `record --out DIR`.
+    recordings: Option<PathBuf>,
 }
 
 fn parse(args: &[String]) -> Result<Command> {
@@ -139,6 +160,9 @@ fn parse(args: &[String]) -> Result<Command> {
         determinism: false,
         jobs: None,
         report: None,
+        oracle: None,
+        out: None,
+        recordings: None,
     };
     let mut engine_given = false;
     let mut rest = rest.iter();
@@ -169,6 +193,13 @@ fn parse(args: &[String]) -> Result<Command> {
                 command.jobs = Some(jobs.max(1));
             }
             "--check-determinism" if command.verb == Verb::Record => command.determinism = true,
+            "--oracle" if matches!(command.verb, Verb::Record | Verb::Lock) => {
+                command.oracle = Some(PathBuf::from(value()?));
+            }
+            "--out" if command.verb == Verb::Record => command.out = Some(PathBuf::from(value()?)),
+            "--recordings" if matches!(command.verb, Verb::Check | Verb::Diff) => {
+                command.recordings = Some(PathBuf::from(value()?));
+            }
             other => bail!("unknown option `{other}` for this command\n\n{USAGE}"),
         }
     }
@@ -193,6 +224,8 @@ pub(crate) struct Layout {
     pub(crate) repo: PathBuf,
     pub(crate) golden: PathBuf,
     pub(crate) target: PathBuf,
+    /// Where `cases/` and `blobs/` are: `golden`, or the `--out`/`--recordings` directory.
+    recordings: PathBuf,
     /// The size budget of the recordings (`coverage::BUDGET_BYTES`; the tests set their own).
     budget_bytes: u64,
 }
@@ -226,6 +259,7 @@ impl Layout {
         );
         Ok(Layout {
             golden: repo.join("tests/golden"),
+            recordings: repo.join("tests/golden"),
             repo,
             target,
             budget_bytes: coverage::BUDGET_BYTES,
@@ -233,12 +267,35 @@ impl Layout {
     }
 
     fn cases(&self) -> PathBuf {
-        self.golden.join("cases")
+        self.recordings.join("cases")
     }
 
     fn blobs(&self) -> PathBuf {
-        self.golden.join("blobs")
+        self.recordings.join("blobs")
     }
+
+    /// Whether the recordings are the committed ones, under `tests/golden`.
+    fn committed(&self) -> bool {
+        self.recordings == self.golden
+    }
+}
+
+/// `path` made absolute against the working directory, with `.` and `..` resolved
+/// lexically (the path need not exist yet).
+fn absolute(path: &Path) -> Result<PathBuf> {
+    let joined =
+        std::path::absolute(path).with_context(|| format!("resolve {}", path.display()))?;
+    let mut out = PathBuf::new();
+    for part in joined.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    Ok(out)
 }
 
 impl Command {
@@ -247,13 +304,18 @@ impl Command {
             print!("{USAGE}");
             return Ok(true);
         }
-        let layout = Layout::find()?;
-        let oracle = Oracle::parse(&read(&layout.golden.join("ORACLE"))?)?;
+        let mut layout = Layout::find()?;
+        let (oracle_file, oracle, oracle_dir) = self.oracle_file(&mut layout)?;
         if self.verb == Verb::Lock {
-            oracle.lock(&layout.golden)?;
+            let source = oracle_file
+                .strip_prefix(&layout.repo)
+                .unwrap_or(&oracle_file)
+                .to_string_lossy()
+                .replace('\\', "/");
+            oracle.lock(&oracle_dir, &source)?;
             println!(
                 "golden lock: wrote {}",
-                layout.golden.join(&oracle.requirements).display()
+                oracle_dir.join(&oracle.requirements).display()
             );
             return Ok(true);
         }
@@ -262,7 +324,7 @@ impl Command {
             return write_coverage(&layout, &oracle, &all);
         }
         let engine = match self.engine.as_str() {
-            "python" => oracle.provision(&layout.golden, &oracle::cache_dir(&layout.target))?,
+            "python" => oracle.provision(&oracle_dir, &oracle::cache_dir(&layout.target))?,
             "rust" if self.verb == Verb::Record => {
                 bail!("golden record records the oracle: --engine rust is for check and diff")
             }
@@ -272,7 +334,40 @@ impl Command {
             },
             other => bail!("unknown engine `{other}`: python or rust"),
         };
-        self.run_with(&layout, &oracle, engine)
+        let passed = self.run_with(&layout, &oracle, engine)?;
+        if self.verb == Verb::Record && !layout.committed() {
+            copy_oracle(&oracle_file, &oracle, &oracle_dir, &layout.recordings)?;
+        }
+        Ok(passed)
+    }
+
+    /// The oracle file this command uses, the oracle and its directory, with
+    /// `layout` pointed at the `--out` or `--recordings` directory.
+    fn oracle_file(&self, layout: &mut Layout) -> Result<(PathBuf, Oracle, PathBuf)> {
+        let committed = layout.golden.join("ORACLE");
+        let file = match (&self.oracle, &self.recordings) {
+            (Some(file), _) => absolute(file)?,
+            (None, Some(dir)) => absolute(&dir.join("ORACLE"))?,
+            (None, None) => committed.clone(),
+        };
+        if let Some(dir) = self.out.as_ref().or(self.recordings.as_ref()) {
+            let dir = absolute(dir)?;
+            anyhow::ensure!(
+                !dir.starts_with(&layout.golden),
+                "{} is inside {}: the committed recordings are written by `golden record` alone",
+                dir.display(),
+                layout.golden.display()
+            );
+            layout.recordings = dir;
+        } else if self.verb == Verb::Record && file != committed {
+            bail!(
+                "--oracle {} records with --out DIR only: tests/golden/cases are the recordings \
+                 of tests/golden/ORACLE",
+                file.display()
+            );
+        }
+        let (oracle, dir) = Oracle::read_file(&file)?;
+        Ok((file, oracle, dir))
     }
 
     /// `record`, `check` or `diff` with `engine`, once the repository is found
@@ -315,8 +410,10 @@ impl Command {
                     &layout.blobs(),
                     &run_all(&selected, &ctx, jobs, "compare"),
                     // A filtered run leaves ledger entries unused: only a whole
-                    // run (CI's `Golden check (Rust)`) finds stale ones.
-                    self.filter.is_none(),
+                    // run (CI's `Golden check (Rust)`) finds stale ones. The
+                    // ledger is the committed oracle's: against a preview's
+                    // recordings its entries are not judged stale.
+                    self.filter.is_none() && layout.committed(),
                     self.report.as_deref(),
                     self.verb == Verb::Diff,
                     (&oracle.version, candidate_version.as_deref().unwrap_or("")),
@@ -355,7 +452,8 @@ impl Command {
                 }
             }
         }
-        if failed > 0 {
+        // The committed recordings are all or nothing; a preview keeps what ran.
+        if failed > 0 && (layout.committed() || self.determinism) {
             eprintln!("golden record: {failed} case(s) failed; nothing was written");
             return Ok(false);
         }
@@ -391,18 +489,29 @@ impl Command {
                     .with_context(|| format!("remove blob {unused}"))?;
             }
         }
-        let complete = write_coverage(layout, oracle, all)?;
+        // A preview's coverage is not reported: it records a part of the cases.
+        let complete = if layout.committed() {
+            write_coverage(layout, oracle, all)?
+        } else {
+            true
+        };
         println!(
-            "golden record: {} case(s) in {:.1}s{}",
-            selected.len(),
+            "golden record: {} case(s) in {:.1}s into {}{}{}",
+            selected.len() - failed,
             started.elapsed().as_secs_f64(),
+            layout.recordings.display(),
             if self.determinism {
                 ", each run twice: deterministic"
             } else {
                 ""
+            },
+            if failed > 0 {
+                format!("; {failed} case(s) failed and were not written")
+            } else {
+                String::new()
             }
         );
-        Ok(complete)
+        Ok(complete && failed == 0)
     }
 
     fn check(
@@ -469,15 +578,17 @@ impl Command {
                 eprintln!("blobs/{unused}: no recording uses it (run `cargo xtask golden record`)");
             }
         }
-        let (markdown, complete) = coverage_report(layout, oracle, all)?;
-        if read(&layout.golden.join("COVERAGE.md")).ok().as_deref() != Some(markdown.as_str()) {
-            failed += 1;
-            eprintln!(
-                "COVERAGE.md is out of date (run `cargo xtask golden record` or `golden coverage`)"
-            );
-        }
-        if !complete {
-            failed += 1;
+        if layout.committed() {
+            let (markdown, complete) = coverage_report(layout, oracle, all)?;
+            if read(&layout.golden.join("COVERAGE.md")).ok().as_deref() != Some(markdown.as_str()) {
+                failed += 1;
+                eprintln!(
+                    "COVERAGE.md is out of date (run `cargo xtask golden record` or `golden coverage`)"
+                );
+            }
+            if !complete {
+                failed += 1;
+            }
         }
         println!(
             "golden {}: {} case(s) against {} in {:.1}s; {}",
@@ -536,7 +647,8 @@ fn prepare_fixtures(
     Ok((out, guards))
 }
 
-/// The cases whose id matches `filter` (a glob), or all of them.
+/// The cases whose id, or a leading part of it, matches `filter` (a glob),
+/// or all of them: `explain/*` is every `explain` case, as is `explain`.
 fn select(all: &[Case], filter: Option<&str>) -> Result<Vec<Case>> {
     let Some(filter) = filter else {
         return Ok(all.to_vec());
@@ -544,15 +656,17 @@ fn select(all: &[Case], filter: Option<&str>) -> Result<Vec<Case>> {
     let pattern = glob::Pattern::new(filter).with_context(|| format!("--filter `{filter}`"))?;
     let selected: Vec<Case> = all
         .iter()
-        // `*` stays within one part of the id: `*/json/*/*` is every json case.
+        // `*` stays within one part of the id: `*/json/*/*` is every json
+        // case, and so is `*/json`, which matches its first two parts.
         .filter(|c| {
-            pattern.matches_with(
-                &c.id,
-                glob::MatchOptions {
-                    require_literal_separator: true,
-                    ..glob::MatchOptions::new()
-                },
-            )
+            let options = glob::MatchOptions {
+                require_literal_separator: true,
+                ..glob::MatchOptions::new()
+            };
+            c.id.match_indices('/')
+                .map(|(end, _)| &c.id[..end])
+                .chain([c.id.as_str()])
+                .any(|prefix| pattern.matches_with(prefix, options))
         })
         .cloned()
         .collect();
@@ -678,6 +792,21 @@ fn write_coverage(layout: &Layout, oracle: &Oracle, all: &[Case]) -> Result<bool
     let path = layout.golden.join("COVERAGE.md");
     std::fs::write(&path, markdown).with_context(|| format!("write {}", path.display()))?;
     Ok(complete)
+}
+
+/// Copies the oracle file and its requirements into the recordings directory
+/// `dir` (as `ORACLE` and its own requirements name), so that `--recordings
+/// DIR` knows the oracle that recorded them.
+fn copy_oracle(file: &Path, oracle: &Oracle, oracle_dir: &Path, dir: &Path) -> Result<()> {
+    std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    std::fs::copy(file, dir.join("ORACLE"))
+        .with_context(|| format!("copy {} into {}", file.display(), dir.display()))?;
+    let requirements = oracle_dir.join(&oracle.requirements);
+    if requirements.is_file() {
+        std::fs::copy(&requirements, dir.join(&oracle.requirements))
+            .with_context(|| format!("copy {} into {}", requirements.display(), dir.display()))?;
+    }
+    Ok(())
 }
 
 fn remove_empty_dirs(dir: &Path) -> Result<bool> {
@@ -816,6 +945,7 @@ fixtures = ["none", "empty"]
         std::fs::set_permissions(bin.join("opentide"), std::fs::Permissions::from_mode(0o755))
             .unwrap();
         let layout = Layout {
+            recordings: golden.clone(),
             golden,
             target: repo.join("target"),
             repo,
@@ -853,6 +983,9 @@ fixtures = ["none", "empty"]
             determinism,
             jobs: Some(2),
             report: None,
+            oracle: None,
+            out: None,
+            recordings: None,
         }
     }
 
@@ -1034,6 +1167,163 @@ fixtures = ["none", "empty"]
     }
 
     #[test]
+    fn parses_the_preview_flags() {
+        let c = parse(&args(&[
+            "record",
+            "--oracle",
+            "tests/golden/ORACLE.next",
+            "--out",
+            "target/golden-next",
+        ]))
+        .unwrap();
+        assert_eq!(
+            c.oracle.as_deref(),
+            Some(Path::new("tests/golden/ORACLE.next"))
+        );
+        assert_eq!(c.out.as_deref(), Some(Path::new("target/golden-next")));
+        let c = parse(&args(&["lock", "--oracle", "x/ORACLE.next"])).unwrap();
+        assert_eq!(c.oracle.as_deref(), Some(Path::new("x/ORACLE.next")));
+        for verb in ["check", "diff"] {
+            let c = parse(&args(&[verb, "--engine", "rust", "--recordings", "d"])).unwrap();
+            assert_eq!(c.recordings.as_deref(), Some(Path::new("d")));
+        }
+        // Each flag belongs to its commands only.
+        assert!(parse(&args(&["check", "--oracle", "x"])).is_err());
+        assert!(parse(&args(&["check", "--out", "x"])).is_err());
+        assert!(parse(&args(&["lock", "--out", "x"])).is_err());
+        assert!(parse(&args(&["record", "--recordings", "x"])).is_err());
+        assert!(parse(&args(&["coverage", "--oracle", "x"])).is_err());
+        assert!(parse(&args(&["record", "--out"])).is_err());
+    }
+
+    #[cfg(unix)]
+    const NEXT_ORACLE: &str = r#"tag = "v0.0.1"
+commit = "1111111111111111111111111111111111111111"
+package = "opentide"
+version = "0.0.1"
+wheel = "opentide-0.0.1-x.whl"
+wheel_sha256 = "1111111111111111111111111111111111111111111111111111111111111111"
+python = "3.13.14"
+platform = "linux-x86_64"
+exclude_newer = "2026-11-13T00:00:00Z"
+requirements = "oracle-requirements.next.txt"
+"#;
+
+    #[cfg(unix)]
+    #[test]
+    fn picks_the_oracle_file_and_the_recordings_directory() {
+        let (dir, mut layout, _oracle, _engine) = fake_repository();
+        std::fs::write(layout.golden.join("ORACLE.next"), NEXT_ORACLE).unwrap();
+        let next = layout.golden.join("ORACLE.next");
+        let out = dir.path().join("preview");
+
+        // `record --oracle FILE` without --out would overwrite the committed recordings.
+        let mut record = command(Verb::Record, false);
+        record.oracle = Some(next.clone());
+        let error = record.oracle_file(&mut layout).unwrap_err().to_string();
+        assert!(error.contains("--out"), "{error}");
+        assert!(layout.committed());
+
+        // --out inside tests/golden is refused, `..` and all.
+        record.out = Some(layout.golden.join("cases/../next"));
+        let error = record.oracle_file(&mut layout).unwrap_err().to_string();
+        assert!(error.contains("inside"), "{error}");
+
+        record.out = Some(out.join("./sub/.."));
+        let (file, oracle, oracle_dir) = record.oracle_file(&mut layout).unwrap();
+        assert_eq!((file, oracle.version.as_str()), (next.clone(), "0.0.1"));
+        assert_eq!(oracle_dir, layout.golden);
+        assert_eq!(layout.cases(), out.join("cases"));
+        assert_eq!(layout.blobs(), out.join("blobs"));
+        assert!(!layout.committed());
+
+        // `check --recordings DIR` reads DIR/ORACLE, which `record --out` copies.
+        let mut check = command(Verb::Check, false);
+        check.recordings = Some(out.clone());
+        assert!(check.oracle_file(&mut layout).is_err());
+        std::fs::write(layout.golden.join("oracle-requirements.next.txt"), "pins\n").unwrap();
+        copy_oracle(&next, &oracle, &layout.golden, &out).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(out.join("ORACLE")).unwrap(),
+            NEXT_ORACLE
+        );
+        assert_eq!(
+            std::fs::read_to_string(out.join("oracle-requirements.next.txt")).unwrap(),
+            "pins\n"
+        );
+        let (file, oracle, oracle_dir) = check.oracle_file(&mut layout).unwrap();
+        assert_eq!(
+            (file, oracle.version.as_str()),
+            (out.join("ORACLE"), "0.0.1")
+        );
+        assert_eq!(oracle_dir, out);
+
+        // No flag: tests/golden/ORACLE and the committed recordings.
+        let (_plain_dir, mut plain, _, _) = fake_repository();
+        std::fs::write(plain.golden.join("ORACLE"), NEXT_ORACLE).unwrap();
+        let (file, _, _) = command(Verb::Check, false).oracle_file(&mut plain).unwrap();
+        assert_eq!(file, plain.golden.join("ORACLE"));
+        assert!(plain.committed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn records_a_preview_outside_tests_golden_and_checks_against_it() {
+        let (dir, mut layout, oracle, engine) = fake_repository();
+        let golden_before = std::fs::read_dir(&layout.golden).unwrap().count();
+        layout.recordings = dir.path().join("preview");
+        let mut record = command(Verb::Record, false);
+        record.out = Some(layout.recordings.clone());
+        record.filter = Some("validate/*/*/*".into());
+        assert!(record.run_with(&layout, &oracle, engine.clone()).unwrap());
+        // The preview holds the cases; tests/golden has only its cases.toml.
+        assert!(
+            layout
+                .cases()
+                .join("validate/plain/empty/default/case.toml")
+                .is_file()
+        );
+        assert!(!layout.cases().join("commands").exists());
+        assert_eq!(
+            std::fs::read_dir(&layout.golden).unwrap().count(),
+            golden_before
+        );
+        assert!(!layout.golden.join("COVERAGE.md").exists());
+
+        // Checked against the preview, with no coverage report to compare.
+        let mut check = command(Verb::Check, false);
+        check.recordings = Some(layout.recordings.clone());
+        check.filter = Some("validate/*/*/*".into());
+        assert!(check.run_with(&layout, &oracle, engine.clone()).unwrap());
+        std::fs::write(
+            layout.cases().join("validate/plain/none/default/stdout"),
+            "changed\n",
+        )
+        .unwrap();
+        assert!(!check.run_with(&layout, &oracle, engine.clone()).unwrap());
+        // A whole check finds the cases the preview did not record.
+        check.filter = None;
+        assert!(!check.run_with(&layout, &oracle, engine.clone()).unwrap());
+
+        // A failing case is reported; the preview keeps the others.
+        std::fs::write(
+            layout.golden.join("cases.toml"),
+            FAKE_CASES.replace("timeout_secs = 30", "timeout_secs = 1"),
+        )
+        .unwrap();
+        std::fs::write(
+            engine.bin_dir.join("opentide"),
+            // The `empty` fixture's cases time out; the `none` ones run.
+            "#!/bin/sh\n[ -d .opentide ] && sleep 30\necho ran\n",
+        )
+        .unwrap();
+        std::fs::remove_dir_all(&layout.recordings).unwrap();
+        assert!(!record.run_with(&layout, &oracle, engine).unwrap());
+        assert!(layout.cases().join("validate/plain/none/default").is_dir());
+        assert!(!layout.cases().join("validate/plain/empty/default").exists());
+    }
+
+    #[test]
     fn filters_by_glob() {
         let spec = Spec::parse(
             "[defaults]\nmodes = [\"plain\", \"json\"]\nfixtures = [\"none\"]\ntimeout_secs = 5\n\
@@ -1043,8 +1333,13 @@ fixtures = ["none", "empty"]
         .unwrap();
         let all = spec.expand().unwrap();
         assert_eq!(select(&all, Some("*/json/*/*")).unwrap().len(), 1);
-        // `*` does not cross a `/`.
-        assert!(select(&all, Some("*/json/*")).is_err());
+        // A glob over the leading parts of the id selects the cases below them.
+        assert_eq!(select(&all, Some("*/json/*")).unwrap().len(), 1);
+        assert_eq!(select(&all, Some("validate/*")).unwrap().len(), 2);
+        assert_eq!(select(&all, Some("validate")).unwrap().len(), 2);
+        // `*` does not cross a `/`, nor match a part of one.
+        assert!(select(&all, Some("validate*json")).is_err());
+        assert!(select(&all, Some("valid")).is_err());
         assert_eq!(select(&all, Some("validate/*/none/a")).unwrap().len(), 2);
         assert_eq!(select(&all, None).unwrap().len(), 2);
         assert!(select(&all, Some("lint/*")).is_err());

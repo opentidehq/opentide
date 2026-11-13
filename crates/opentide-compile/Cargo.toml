@@ -79,6 +79,8 @@ percent-encoding = "2"
 unicode-properties.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# generate docs: each platform setting's description, read from the block models' JSON Schema.
+schemars.workspace = true
 thiserror.workspace = true
 # Log events (a rule without a status), written by the host's layer.
 tracing = "0.1"

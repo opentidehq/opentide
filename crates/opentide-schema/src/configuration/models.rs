@@ -1170,18 +1170,10 @@ pub struct PlatformConfiguration {
     pub tenants: Vec<GenericTenant>,
 }
 
-/// The platform identifiers with a model of their own, in the oracle's order.
-pub const PLATFORMS: [&str; 9] = [
-    "sentinel",
-    "splunk",
-    "carbon_black_cloud",
-    "sentinel_one",
-    "defender_for_endpoint",
-    "crowdstrike",
-    "harfanglab",
-    "elastic",
-    "sysdig",
-];
+/// The platform identifiers with a model of their own, in the oracle's order
+/// ([`crate::platforms::Order::Configuration`]).
+pub const PLATFORMS: [&str; crate::platforms::COUNT] =
+    crate::platforms::ordered(crate::platforms::Order::Configuration);
 
 // --- visibility.toml -------------------------------------------------------------------
 

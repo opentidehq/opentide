@@ -10,7 +10,7 @@ use crate::duration;
 use crate::json::{Json, Object};
 use crate::kql;
 use crate::rule::{CompileError, Rule, codes};
-use crate::strategy::{StatusStrategy, python_repr};
+use crate::strategy::StatusStrategy;
 
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "Sentinel";
@@ -419,7 +419,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     properties.insert("displayName".into(), rule.name.clone().into());
     properties.insert("description".into(), rule.description().into());
     let resolved = crate::attack::techniques(cx.index, &rule.uuid)
-        .map_err(|missing| CompileError::failed(DISPLAY, &python_repr(&missing.0)))?;
+        .map_err(|missing| CompileError::failed(DISPLAY, &format!("{:?}", missing.0)))?;
     if !resolved.is_empty() {
         let mut tactics: Vec<String> = Vec::new();
         for technique in &resolved {
