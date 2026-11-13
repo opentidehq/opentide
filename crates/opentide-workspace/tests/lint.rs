@@ -770,7 +770,7 @@ mod lint {
         // `opentide lint` reports it (language-server #250).
         fs.write(
             "/ws/objects/rules/b.yaml",
-            format!("name: B\nmetadata:\n  uuid: 33333333-3333-4333-8333-333333333333\n  schema: rule::1.1\n  author: me\n  organisation: us\nconfigurations: {{}}\n"),
+            "name: B\nmetadata:\n  uuid: 33333333-3333-4333-8333-333333333333\n  schema: rule::1.1\n  author: me\n  organisation: us\nconfigurations: {}\n",
         );
         let recommended = lint_file(
             &fs,
