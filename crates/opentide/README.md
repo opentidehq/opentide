@@ -34,12 +34,16 @@ cargo run -p opentide --example deploy_plan -- path/to/workspace PREVIEW
 | Feature | Default | What it adds |
 |---------|:-------:|--------------|
 | `schema` | yes | The Tide models (`opentide::models`) |
+| `analysis` | no | Check one query on its own and highlight a text, without a workspace (`opentide::analysis`) |
 | `workspace` | yes | `Workspace`: open, validate, lint, info, catalogue, coverage |
 | `compile` | yes | `Workspace::deploy_plan` |
 | `queries` | no | The offline query engines behind validate's and lint's queries checks |
 | `cli` | no | `opentide::cli::{main, run_json}` and the `opentide` binary (`cargo install opentide --features cli`) |
 | `lsp` | no | The language server (`opentide::lsp`) |
 | `connectors` | no | Tenant operations (`opentide::connectors`): a query run, a live query check and a rule deploy on a workspace's tenants; async, on tokio |
+| `plugins` | no | The platform plugin host a binding embeds to add platforms (`opentide::plugins`); implies `connectors` |
+| `python` | no | The Tide models as Python classes (`opentide::python`), for the Python package's binding; brings PyO3 |
+| `stubs` | no | PyO3's introspection data behind `python`, for `cargo xtask stubs` |
 
 This is the only opentide crate with a stability promise: semantic versioning, checked with `cargo semver-checks`. The `opentide-*` crates it builds on are internal. The documentation is on [docs.rs](https://docs.rs/opentide) and on [opentide.org](https://opentide.org/docs/sdk/rust).
 

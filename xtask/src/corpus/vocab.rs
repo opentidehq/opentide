@@ -9,6 +9,22 @@
 pub const PLATFORMS: &[&str] =
     &opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Connector);
 
+/// The platforms the generator writes blocks and configurations for: the
+/// connector order minus the platforms the recorded oracle (0.23.0) lacks
+/// (`opentide_schema::platforms::SINCE_ORACLE`). A platform's registry row
+/// added on the catch-up train would otherwise reshuffle the whole seeded
+/// corpus (generation is seeded on this list's length and order), staling the
+/// recorded lint cases, payload plans and the digest; leaving the new platform
+/// out keeps the generated corpus the 0.23.0 one. The per-platform generator
+/// arms stay in code, unused until O2 empties `SINCE_ORACLE`.
+pub fn generated_platforms() -> Vec<&'static str> {
+    PLATFORMS
+        .iter()
+        .copied()
+        .filter(|id| !opentide_schema::platforms::after_oracle(id))
+        .collect()
+}
+
 /// `tlp::1.0`.
 pub const TLP: &[&str] = &["clear", "green", "amber", "amber+strict", "red"];
 /// `criticality::1.0`.

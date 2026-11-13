@@ -1,0 +1,9 @@
+{
+  "object_uuid": "8d7c6b5a-0000-4000-8000-000000000203",
+  "platforms": {
+    "defender_for_endpoint": {
+      "lab": "203"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

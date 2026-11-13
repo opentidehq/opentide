@@ -53,10 +53,10 @@ assert_is_empty = "allow"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-opentide-core.workspace = true
-opentide-analysis.workspace = true
-opentide-highlight.workspace = true
-opentide-lsp.workspace = true
+# The facade, and only the facade (ADR 0005, UC-5.1 #836), without its
+# default features: `analysis` (highlight, the legend) and `lsp` (the language
+# server one message at a time).
+opentide = { path = "../opentide", default-features = false, features = ["analysis", "lsp"] }
 serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen.workspace = true

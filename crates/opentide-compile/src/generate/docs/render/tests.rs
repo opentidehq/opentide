@@ -6,11 +6,6 @@ use super::super::settings::{CodeSetting, Setting, SettingTable};
 use super::*;
 use StatusStrategy::{Deletion, Disablement, Preview, Release};
 
-#[test]
-fn templates_parse() {
-    let _ = Templates::new();
-}
-
 fn definition(name: &str, strategy: StatusStrategy) -> StatusDefinition {
     StatusDefinition {
         name: name.to_owned(),
@@ -350,4 +345,46 @@ fn small_helpers() {
         [&"a".to_owned(), &"b".to_owned()]
     );
     assert_eq!(killchain_phases(None), Vec::<String>::new());
+}
+
+#[test]
+fn percentages_round_half_to_even_as_python_does() {
+    assert_eq!(percent(1, 2), "50");
+    assert_eq!(percent(1, 8), "12");
+    assert_eq!(percent(3, 8), "38");
+    assert_eq!(percent(5, 8), "62");
+    assert_eq!(percent(1, 3), "33");
+    assert_eq!(percent(2, 3), "67");
+    assert_eq!(percent(0, 0), "0");
+}
+
+#[test]
+fn statuses_take_their_strategys_colour_deeper_later() {
+    let definitions = [
+        definition("DRAFT", StatusStrategy::Inert),
+        definition("TESTING", Preview),
+        definition("STAGING", Preview),
+        definition("PRODUCTION", Release),
+        definition("REMOVED", Deletion),
+    ];
+    let colours = status_colours(&definitions);
+    let colour = |name: &str| {
+        colours
+            .iter()
+            .find(|(known, _)| known == name)
+            .map(|(_, colour)| *colour)
+    };
+    assert_eq!(colour("DRAFT"), Some("#667085"));
+    assert_eq!(colour("TESTING"), Some("#fdb022"));
+    assert_eq!(colour("STAGING"), Some("#f79009"));
+    assert_eq!(colour("PRODUCTION"), Some("#039855"));
+    assert_eq!(colour("REMOVED"), Some("#b42318"));
+    assert_eq!(colour("ELSE"), None);
+    // More statuses than shades: the last ones share the deepest.
+    let many: Vec<StatusDefinition> = (0..6)
+        .map(|index| definition(&format!("S{index}"), StatusStrategy::Universal))
+        .collect();
+    let colours = status_colours(&many);
+    assert_eq!(colours[0].1, "#84caff");
+    assert_eq!(colours[5].1, "#2e90fa");
 }

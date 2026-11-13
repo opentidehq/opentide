@@ -11,6 +11,10 @@
 //! renderers of every result ([`render`], UC-3.4, #826): code frames, outcome
 //! lines, SARIF and Code Quality, CI sinks and progress. Every command runs
 //! on it: it is opentide's one command line (UC-6.2, #841).
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
+//! `cli` feature).
 
 pub mod app;
 pub mod catalog;

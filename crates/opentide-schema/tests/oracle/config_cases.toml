@@ -16,7 +16,8 @@
 #   for a workspace holding `files`.
 #
 # A case whose Rust result differs names the `difference` that explains it
-# (its reason and the bold lead of its CHANGELOG.md entry). A difference's
+# (its reason and the bold lead of its CHANGELOG.md entry), or a list of
+# them whose fields it may change together. A difference's
 # `fields` are the members it may change, at any depth of the result; every
 # other member (code, severity, field path, file, line, column, context) is
 # still compared with the oracle's. The test fails when such a case no longer
@@ -46,6 +47,12 @@ id = "toml-datetime-text"
 reason = "A TOML date-time is kept as toml_datetime writes it, losslessly: fractional seconds as written (`.5`, nanoseconds), a `-00:00` offset as `+00:00`. The oracle rounded to microseconds, padded the fraction to six digits and wrote UTC as `Z`; a message quotes the value as a string (`'1979-05-27T07:32:00Z'`) where the oracle wrote `datetime.datetime(...)`."
 fields = ["dt_fraction", "dt_offset", "time_nanos", "error", "message"]
 changelog = "**Configuration files are read as TOML 1.0**"
+
+[[difference]]
+id = "lint-recommended-check"
+reason = "opentide 0.28.1 adds lint's `recommended` check: the bundled `lint.toml` holds a `[recommended]` table, which the resolved configuration and the parsed checks carry, where the 0.23.0 oracle had none, and the list of known checks an unknown one is refused with names it. O2 records it from 0.28.1."
+fields = ["recommended", "error"]
+changelog = "**`opentide lint` reports a rule without `configurations` or `response` as a note.**"
 
 # --- routing ---------------------------------------------------------------------------
 
@@ -480,22 +487,26 @@ text = "[[misp]]\nname = \"it's\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_
 
 [[case]]
 id = "workspace-bundled"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = {}
 
 [[case]]
 id = "workspace-overrides"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "deployment.toml" = "default_responders = \"soc\"\n[[responders]]\nname = \"soc\"\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\nurl = \"$URL\"\nport = 8089\napp = \"search\"\ntoken = \"$TOKEN\"\n", "visibility.toml" = "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"d\"\nsystem = \"sentinel\"\n", "notes.txt" = "not read", "extra.toml" = "a = 1\n", "custom/one.toml" = "b = [1, 2.5, true]\n" }
 parent = { "deployment.toml" = "default_responders = \"cert\"\n", "platforms/elastic.toml" = "[platform]\nenabled = true\n" }
 
 [[case]]
 id = "workspace-findings"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "deployment.toml" = "colour = \"blue\"\n[promotion]\npromotion_target = \"NOPE\"\n", "documentation.toml" = "flavor = 5\n", "paths.toml" = "objects = [\"x\"]\n", "platforms/sentinel.toml" = "[platform]\ncolour = 1\n", "platforms/foo.toml" = "x = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
 
 [[case]]
 id = "workspace-cross-checks"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "deployment.toml" = "[promotion]\npromotion_target = \"NOPE\"\n[[responders]]\nname = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
 
@@ -527,16 +538,19 @@ files = { "documentation.toml" = "[cve]\nproxy = \"http://p\"\n" }
 
 [[case]]
 id = "workspace-hidden-and-private"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { ".hidden/a.toml" = "a = 1\n", "__cache__/b.toml" = "b = 1\n", ".dot.toml" = "c = 1\n", "folder/.h.toml" = "d = 1\n", "folder/x.y.toml" = "e = 1\n", "sharing.toml" = "[[misp]]\nname = \"a\"\n" }
 
 [[case]]
 id = "workspace-systems-file"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "systems.toml" = "[splunk.platform]\nenabled = true\n" }
 
 [[case]]
 id = "workspace-empty-visibility"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "platforms.toml" = "[splunk]\nplatform = 1\n" }
 
@@ -544,11 +558,13 @@ files = { "platforms.toml" = "[splunk]\nplatform = 1\n" }
 
 [[case]]
 id = "lint-bundled"
+difference = "lint-recommended-check"
 kind = "lint"
 text = ""
 
 [[case]]
 id = "lint-unknown-check"
+difference = "lint-recommended-check"
 kind = "lint"
 text = "[zeta]\nx = 1\n[alpha]\n"
 
@@ -594,6 +610,7 @@ text = "[metadata]\nrequired = \"author\"\n"
 
 [[case]]
 id = "lint-required-dedupe"
+difference = "lint-recommended-check"
 kind = "lint"
 text = "[metadata]\nrequired = [\"tlp\", \"author\", \"tlp\"]\nseverity = \"info\"\n"
 
@@ -626,6 +643,7 @@ difference = "lint-pattern-regex"
 
 [[case]]
 id = "lint-kinds"
+difference = "lint-recommended-check"
 kind = "lint"
 text = "[filenames]\nstyle = \"name\"\npattern = '^\\[(SEN|XDR)\\]\\[[^\\]]+\\].+$'\n[filenames.rules]\npattern = '^R-.+'\n[filenames.threats]\nstyle = \"none\"\n"
 
@@ -708,6 +726,7 @@ parent = { "systems/splunk.toml" = "x = 1\n" }
 # and replaces the folder.
 [[case]]
 id = "workspace-file-and-folder"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "platforms.toml" = "[splunk]\nx = 1\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n" }
 
@@ -727,6 +746,7 @@ difference = "toml-parse-message"
 
 [[case]]
 id = "workspace-integer-range"
+difference = "lint-recommended-check"
 kind = "workspace"
 files = { "custom.toml" = "a = 9223372036854775807\nb = -9223372036854775808\n" }
 
@@ -740,7 +760,7 @@ difference = "toml-integer-range"
 id = "workspace-datetimes"
 kind = "workspace"
 files = { "custom.toml" = "plain = 1979-05-27T07:32:00Z\nlocal = 1979-05-27T07:32:00\nmicros = 07:32:00.123456\ndt_fraction = 1979-05-27 07:32:00.5Z\ndt_offset = 1979-05-27T07:32:00-00:00\ntime_nanos = 07:32:00.123456789\n" }
-difference = "toml-datetime-text"
+difference = ["toml-datetime-text", "lint-recommended-check"]
 
 [[case]]
 id = "sharing-datetime-entry"
@@ -777,6 +797,7 @@ text = "[placeholders]\nenabled = [1e20, 1.5e-7, 1e16, 1e-5, 0.0001, 1e15, 99999
 
 [[case]]
 id = "lint-pattern-verbose-comment"
+difference = "lint-recommended-check"
 kind = "lint"
 text = "[filenames]\npattern = '(?x)a # c'\n"
 

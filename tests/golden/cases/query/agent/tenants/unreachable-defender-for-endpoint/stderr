@@ -1,0 +1,2 @@
+error: 1 of 1 queries failed on 1 defender_for_endpoint tenant: lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: HTTPSConnectionPool(host='login.microsoftonline.com', port=443): Max retries exceeded with url: /00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=9): Failed to establish a new connection: [Errno 111] Connection refused")))
+tip: add --json for machine-readable output

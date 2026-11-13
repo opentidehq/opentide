@@ -281,13 +281,14 @@ fn the_mcp_wizard_writes_the_hosts_chosen() {
 
 /// The `setup skills` wizard (UC-4.4d, #834): the agent environments, the
 /// target, the confirmation, then the starter skills and `AGENTS.md`, the
-/// catalogue read from its cassette.
+/// catalogue read from its cassette. The catalogue lists
+/// `detection-engineering`, so its copy is downloaded (opentide 0.28.1).
 #[test]
 fn the_skills_wizard_installs_for_the_environments_chosen() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     std::fs::create_dir(&repo).unwrap();
-    let (proxy, env) = cassette("skills/manifest", &dir.path().join("ca.pem"));
+    let (proxy, env) = cassette("skills/catalogue-first", &dir.path().join("ca.pem"));
     let mut session = spawn_with(&repo, &["setup", "skills"], &env);
     // Generic: the third environment.
     answer(
@@ -298,11 +299,15 @@ fn the_skills_wizard_installs_for_the_environments_chosen() {
     answer(&mut session, "Agent environments:", &[]);
     answer(&mut session, "generic", &[]);
     answer(&mut session, "Install these agent skills?", &[ENTER]);
-    let (printed, code) = finish(session, "Wrote 3 files");
+    let (printed, code) = finish(session, "Wrote 4 files");
     assert_eq!(code, 0, "{printed}");
     assert!(repo.join("AGENTS.md").is_file());
     assert!(
         repo.join(".agents/skills/opentide-detection-rule/SKILL.md")
+            .is_file()
+    );
+    assert!(
+        repo.join(".agents/skills/detection-engineering/references/kql.md")
             .is_file()
     );
     assert!(!repo.join("CLAUDE.md").exists());

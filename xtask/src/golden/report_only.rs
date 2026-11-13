@@ -8,9 +8,11 @@
 //! the 0.28.x oracle.
 //!
 //! So the train commits [`MARKER`]: while it is there, the golden-diff
-//! gates print every difference as a full report and pass. Nothing else is
-//! relaxed — the unit, fixture and cassette tests, and the ledger's own
-//! check (`cargo xtask compare --check-ledger`), still gate.
+//! gates print every difference as a full report and pass, and so do
+//! `cargo xtask codegen --check`'s comparisons with the oracle's recordings
+//! (its committed artifacts' drift from the generator still fails). Nothing
+//! else is relaxed — the unit, fixture and cassette tests, and the ledger's
+//! own check (`cargo xtask compare --check-ledger`), still gate.
 //!
 //! The marker belongs to the train alone. [`refuse_on_integration`] is the
 //! guard CI runs on every pull request: a pull request into

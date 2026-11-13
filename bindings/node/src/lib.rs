@@ -109,7 +109,9 @@ pub struct ValidateOptions {
 #[derive(Debug, Clone, Default)]
 pub struct LintOptions {
     /// `--check`; empty runs the checks `lint.toml` enables.
-    #[napi(ts_type = "Array<'filenames' | 'metadata' | 'placeholders' | 'queries'>")]
+    #[napi(
+        ts_type = "Array<'filenames' | 'metadata' | 'recommended' | 'placeholders' | 'queries'>"
+    )]
     pub checks: Option<Vec<String>>,
     /// `--strict`: any finding fails the run.
     pub strict: Option<bool>,
