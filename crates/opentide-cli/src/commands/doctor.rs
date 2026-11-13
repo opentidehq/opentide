@@ -352,7 +352,7 @@ impl Doctor<'_> {
 
     fn git(&self) -> Vec<Check> {
         let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
-        let Ok(git) = which::which_in("git", Some(path), &self.cwd) else {
+        let Some(git) = on_path("git", &path, &self.cwd) else {
             return vec![
                 Check::new(
                     "git",
@@ -1156,9 +1156,7 @@ impl Doctor<'_> {
         let path = self.cx.env.get("PATH").unwrap_or_default().to_owned();
         let mut unresolved: Vec<String> = commands
             .into_iter()
-            .filter(|command| {
-                !command.is_empty() && which::which_in(command, Some(&path), &self.cwd).is_err()
-            })
+            .filter(|command| !command.is_empty() && on_path(command, &path, &self.cwd).is_none())
             .collect();
         unresolved.sort();
         if !unresolved.is_empty() {
@@ -1388,6 +1386,30 @@ fn lines(check: &Check) -> Vec<(Text, usize)> {
         out.push((hint, 4));
     }
     out
+}
+
+/// The program `name` resolves to on `path` (a `PATH` value), relative to
+/// `cwd`, as a shell finds it.
+#[cfg(not(target_os = "wasi"))]
+fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+    which::which_in(name, Some(path), cwd).ok()
+}
+
+/// WASI: `std::env::split_paths`, which `which` reads `PATH` with, is not
+/// implemented there (it panics), so the search is done here: `:`-separated
+/// folders, the first that holds a file of that name (WASI has no execute
+/// bit to check).
+#[cfg(target_os = "wasi")]
+fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+    let candidate = std::path::Path::new(name);
+    if candidate.components().count() > 1 {
+        let found = cwd.join(candidate);
+        return found.is_file().then_some(found);
+    }
+    path.split(':')
+        .filter(|folder| !folder.is_empty())
+        .map(|folder| cwd.join(folder).join(name))
+        .find(|found| found.is_file())
 }
 
 #[cfg(test)]

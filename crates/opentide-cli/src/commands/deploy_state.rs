@@ -564,9 +564,13 @@ pub fn write_durable(path: &Path, text: &str) -> std::io::Result<()> {
         file.flush()?;
         file.sync_all()?;
         drop(file);
+        // WASI has no permissions to keep (its `set_permissions` is unsupported).
+        #[cfg(not(target_os = "wasi"))]
         if let Some(permissions) = permissions {
             std::fs::set_permissions(&temporary, permissions)?;
         }
+        #[cfg(target_os = "wasi")]
+        let _ = permissions;
         std::fs::rename(&temporary, path)
     })();
     if let Err(error) = written {

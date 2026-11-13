@@ -86,7 +86,11 @@ console script of `.venv`, which runs the Rust core in process) and compares eac
 oracle's recording through `opentide-compare`: stdout, stderr, the exit code, the files and the
 JSON document (by its data: key order, indentation, escapes and the final newline are layout, not
 compared), with the goldens' normalisation. Everything else is compared byte for byte. `--runner node` launches the npm package's bin
-instead. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
+instead; `--runner wasi` launches the WASI build of the command line
+(`build-wasm.sh cli`) under wasmtime, or Node's WASI with `OPENTIDE_WASI_RUNTIME=node`, and leaves
+out the cases that need the network: those with a cassette, and those
+`tests/golden/WASI_EXCLUDED.toml` lists, each with its reason and network evidence (a network
+fixture or command, or a refused request in the oracle's recording), which xtask's tests check. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
 report, in three parts: `--partition K/N` runs the cases whose id hashes (FNV-1a) to part K, so
 parts 1/N to N/N run every case once, and `--unused FILE` writes the ledger entries the part did
 not apply instead of failing on them; an entry every part lists is stale, and the gather fails.

@@ -278,8 +278,13 @@ impl WriteFs for OsFs {
             .tempfile_in(folder)?;
         temporary.write_all(after)?;
         temporary.as_file().sync_all()?;
-        let permissions = std::fs::metadata(&target)?.permissions();
-        std::fs::set_permissions(temporary.path(), permissions)?;
+        // The original's permissions; WASI has none to keep (its
+        // `set_permissions` is unsupported).
+        #[cfg(not(target_os = "wasi"))]
+        {
+            let permissions = std::fs::metadata(&target)?.permissions();
+            std::fs::set_permissions(temporary.path(), permissions)?;
+        }
         // Dropped on an error, the temporary file is deleted.
         temporary
             .persist(&target)

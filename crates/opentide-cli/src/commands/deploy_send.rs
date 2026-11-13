@@ -308,10 +308,8 @@ fn failed(message: &str) -> Vec<(String, Json)> {
 /// thread's log subscriber (a host may already run a runtime here).
 pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
-    let ran = std::thread::scope(|scope| {
-        scope
-            .spawn(|| tracing::dispatcher::with_default(&dispatch, || run_deploy(args, cx)))
-            .join()
+    let ran = crate::threads::run_apart(|| {
+        tracing::dispatcher::with_default(&dispatch, || run_deploy(args, cx))
     });
     Sent {
         result: ran.unwrap_or_else(|_| failed("the deploy stopped unexpectedly")),

@@ -55,7 +55,14 @@ Do not `cargo build -p opentide-wasm --target wasm32-wasip1`. That target must n
 
 ## WASI
 
-`wasm32-wasip1` (the renamed `wasm32-wasi`) is for vscode.dev running the CLI-style binary. Build `opentide-lsp`, not `opentide-wasm` (`scripts/engine/build-wasm.sh wasi`). Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
+**The command line on WASI** (`scripts/engine/build-wasm.sh cli`, ADR 0007's amendment): `opentide-cli`'s binary without its `terminal` feature, built for `wasm32-wasip1` with the `wasi` profile (opt-level z), as `target/wasm32-wasip1/wasi/opentide.wasm`, the one module the VS Code extension runs under `@vscode/wasm-wasi`. The script fails when its gzip size passes 15 MiB; `OPENTIDE_WASM_OPT=1` also runs `wasm-opt -Oz` (binaryen, about 2% smaller, minutes of CPU). What WASI preview 1 lacks, and how the command line copes:
+- **No threads**: `opentide_cli::threads::run_apart` runs inline; `serve` reads stdin on its own loop (`Server::read_inline`, `Server::pump`, the seam `opentide/fetch` waits through).
+- **No sockets**: the connectors' default transport fails every request with "this command needs the network; run the opentide CLI" (`Setup`), until `serve`'s host fetch is installed.
+- **No working directory**: the host passes it as `PWD` (`--repo` works too). **No terminal size**: the host passes `OPENTIDE_TERMINAL_WIDTH`.
+- **No processes, permissions or mmap**: `git --version`, `set_permissions` and gix's object store (memmap2) do not work; the writers skip permissions there.
+- **Panics abort** (no unwinding): a `thread::scope` spawn, or a std call WASI leaves unimplemented (`std::env::split_paths`), traps the module. Run `cargo xtask golden check --runner wasi` after a change to the command line.
+
+`wasm32-wasip1` (the renamed `wasm32-wasi`) is also for vscode.dev running the language server's CLI-style binary. Build `opentide-lsp`, not `opentide-wasm` (`scripts/engine/build-wasm.sh wasi`). Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
 
 ## TypeScript client
 

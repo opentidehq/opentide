@@ -3,6 +3,9 @@
 //! `tests/test_cli/test_tui.py` asserts of the Python UI, key by key, and
 //! the layout at a width: names cut with an ellipsis, counts kept whole,
 //! nothing wider than its column.
+
+// The terminal UI is the `terminal` feature (off in the WASI build).
+#![cfg(feature = "terminal")]
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"

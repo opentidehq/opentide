@@ -103,12 +103,8 @@ fn tenant(
 
 /// Runs `work` on a runtime of its own, off this thread.
 fn block_on<T: Send>(work: impl std::future::Future<Output = T> + Send) -> Result<T, String> {
-    std::thread::scope(|scope| {
-        scope
-            .spawn(|| opentide_connectors::runtime::block_on(work))
-            .join()
-            .map_err(|_| "the import stopped unexpectedly".to_owned())?
-    })
+    crate::threads::run_apart(|| opentide_connectors::runtime::block_on(work))
+        .map_err(|_| "the import stopped unexpectedly".to_owned())?
 }
 
 /// `Imported/<file>` under the working directory, written as `write_text`

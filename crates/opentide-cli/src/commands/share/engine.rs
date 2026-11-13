@@ -744,7 +744,7 @@ fn edit_body(created: &Json, remote: &RemoteEvent, tide_uuid: &str) -> Result<Js
 /// Runs `work` over `items`, `workers` at a time, keeping their order
 /// (`_map`).
 fn map<T: Sync, R: Send>(workers: usize, items: &[T], work: &(dyn Fn(&T) -> R + Sync)) -> Vec<R> {
-    if workers <= 1 || items.len() <= 1 {
+    if workers <= 1 || items.len() <= 1 || !crate::threads::AVAILABLE {
         return items.iter().map(work).collect();
     }
     let next = Mutex::new(0usize);

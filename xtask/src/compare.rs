@@ -17,7 +17,7 @@ use anyhow::{Context, Result, bail};
 use opentide_compare::ledger::Ledger;
 use opentide_compare::{FileState, Run};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The ledger's place in the repository.
 pub const LEDGER: &str = "tests/golden/APPROVED_DIFFS.toml";
@@ -371,6 +371,97 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
 #[cfg(not(unix))]
 pub fn node_candidate(_repo: &Path, _target: &Path) -> Result<crate::golden::run::Engine> {
     bail!("--runner node runs on Unix only")
+}
+
+/// The WASI build of the command line (`scripts/engine/build-wasm.sh cli`,
+/// ADR 0007's amendment), as `--runner wasi` launches it: under wasmtime, or
+/// the runtime `$OPENTIDE_WASI_RUNTIME` names (`node`, Node's own WASI,
+/// through `scripts/engine/wasi-run.mjs`). The host's root is mapped at the
+/// guest's root, so every path a case passes or prints is where it is; the
+/// environment is passed in whole and the working directory as `PWD`, which
+/// the module adopts. `$OPENTIDE_WASI_MODULE` names another module.
+#[cfg(unix)]
+pub fn wasi_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
+    let module = std::env::var_os("OPENTIDE_WASI_MODULE").map_or_else(
+        || {
+            target
+                .join("wasm32-wasip1")
+                .join("wasi")
+                .join("opentide.wasm")
+        },
+        PathBuf::from,
+    );
+    if !module.is_file() {
+        bail!(
+            "{} is not built: run `scripts/engine/build-wasm.sh cli` first",
+            module.display()
+        );
+    }
+    let runtime = std::env::var("OPENTIDE_WASI_RUNTIME").unwrap_or_else(|_| "wasmtime".into());
+    let on_path = |name: &str| {
+        std::env::var_os("PATH")
+            .iter()
+            .flat_map(std::env::split_paths)
+            .map(|dir| dir.join(name))
+            .find(|path| path.is_file())
+            .with_context(|| format!("no `{name}` on PATH"))
+    };
+    let quoted = |path: &Path| -> Result<String> {
+        let text = path.to_string_lossy();
+        if text.contains('\'') {
+            bail!("{text}: a path with a quote cannot go in the launcher");
+        }
+        Ok(format!("'{text}'"))
+    };
+    let command = match runtime.as_str() {
+        "wasmtime" => format!(
+            "{} run -S inherit-env --dir /::/ -- {}",
+            quoted(&on_path("wasmtime")?)?,
+            quoted(&module)?
+        ),
+        "node" => format!(
+            "{} --no-turbo-fast-api-calls --no-warnings {} {}",
+            quoted(&on_path("node")?)?,
+            quoted(&repo.join("scripts").join("engine").join("wasi-run.mjs"))?,
+            quoted(&module)?
+        ),
+        other => bail!("unknown OPENTIDE_WASI_RUNTIME `{other}`: wasmtime or node"),
+    };
+    let bin_dir = target.join("golden-wasi");
+    std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
+    crate::script::write_executable(
+        &bin_dir.join("opentide"),
+        &format!(
+            "#!/bin/sh\nexport PWD=\"$(pwd)\"\n\
+             # WASI cannot ask a terminal its size: the width of the one this runs\n\
+             # at goes in, as a host passes its pseudoterminal's (opentide-cli,\n\
+             # app::TERMINAL_WIDTH_VARIABLE).\n\
+             for fd in 2 1; do\n\
+             \x20 if [ -t \"$fd\" ]; then\n\
+             \x20   OPENTIDE_TERMINAL_WIDTH=$(stty size <&\"$fd\" 2>/dev/null | cut -d' ' -f2)\n\
+             \x20   export OPENTIDE_TERMINAL_WIDTH\n\
+             \x20   break\n\
+             \x20 fi\n\
+             done\n\
+             exec {command} \"$@\"\n"
+        ),
+    )?;
+    Ok(crate::golden::run::Engine {
+        name: "wasi".into(),
+        bin_dir,
+        install_dir: module
+            .parent()
+            .map_or_else(|| target.to_path_buf(), Path::to_path_buf),
+        host_paths: Vec::new(),
+        known_uuids: std::sync::Arc::new(package_uuids(repo)?),
+    })
+}
+
+/// The WASI runner launches through a shell script: Unix only, as the
+/// goldens are recorded.
+#[cfg(not(unix))]
+pub fn wasi_candidate(_repo: &Path, _target: &Path) -> Result<crate::golden::run::Engine> {
+    bail!("--runner wasi runs on Unix only")
 }
 
 /// The version in `opentide --version`'s output, `opentide <version>`.

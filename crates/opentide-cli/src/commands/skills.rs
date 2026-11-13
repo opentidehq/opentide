@@ -279,43 +279,40 @@ fn get(url: &str, accept: Option<&str>, network: Network<'_>) -> Option<Vec<u8>>
     let label = TenantLabel::new("skills", DEFAULT_SOURCE);
     let client = HttpClient::new(&label, &settings, &environment, network.proxy).ok()?;
     let interrupted = network.interrupted;
-    std::thread::scope(|scope| {
-        scope
-            .spawn(|| {
-                opentide_connectors::runtime::block_on(async {
-                    let cancel = CancellationToken::new();
-                    let work = async {
-                        let mut request =
-                            client.request(opentide_connectors::transport::Method::GET, url);
-                        if let Some(accept) = accept {
-                            request = request
-                                .header(opentide_connectors::transport::header::ACCEPT, accept);
-                        }
-                        let answer = client.send(request.build().ok()?, &cancel).await.ok()?;
-                        if !answer.status().is_success() {
-                            return None;
-                        }
-                        client.bytes(answer, &cancel).await.ok()
-                    };
-                    // Ctrl-C stops the fetch.
-                    let watch = async {
-                        while !interrupted() {
-                            tokio::time::sleep(Duration::from_millis(50)).await;
-                        }
-                        cancel.cancel();
-                    };
-                    tokio::select! {
-                        body = work => body,
-                        () = watch => None,
-                    }
-                })
-                .ok()
-                .flatten()
-            })
-            .join()
-            .ok()
-            .flatten()
+    crate::threads::run_apart(|| {
+        opentide_connectors::runtime::block_on(async {
+            let cancel = CancellationToken::new();
+            let work = async {
+                let mut request = client.request(opentide_connectors::transport::Method::GET, url);
+                if let Some(accept) = accept {
+                    request = request.header(
+                        opentide_connectors::transport::HeaderName::from_static("accept"),
+                        accept,
+                    );
+                }
+                let answer = client.send(request.build().ok()?, &cancel).await.ok()?;
+                if !answer.status().is_success() {
+                    return None;
+                }
+                client.bytes(answer, &cancel).await.ok()
+            };
+            // Ctrl-C stops the fetch.
+            let watch = async {
+                while !interrupted() {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                cancel.cancel();
+            };
+            tokio::select! {
+                body = work => body,
+                () = watch => None,
+            }
+        })
+        .ok()
+        .flatten()
     })
+    .ok()
+    .flatten()
 }
 
 /// The bytes of `path` in the skills repository at `git_ref`, or `None`

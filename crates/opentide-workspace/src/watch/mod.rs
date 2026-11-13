@@ -266,6 +266,35 @@ pub struct Watcher<'fs, V: Validate> {
     runs: usize,
 }
 
+/// WebAssembly has no change events (no [`events`]): the loop looks every
+/// [`POLL_INTERVAL`], which also catches what an event would have woken it
+/// for.
+#[cfg(target_family = "wasm")]
+impl<V: Validate> Watcher<'_, V> {
+    /// Validates, shows the pass, then looks for changes every
+    /// [`POLL_INTERVAL`] and shows each pass that follows, until `stop`
+    /// says so.
+    ///
+    /// # Errors
+    ///
+    /// None today; the signature matches the native loop's, which can fail
+    /// to watch the folders.
+    pub fn run(
+        &mut self,
+        mut show: impl FnMut(&WatchRun),
+        stop: impl Fn() -> bool,
+    ) -> std::io::Result<()> {
+        show(&self.start());
+        while !stop() {
+            std::thread::sleep(POLL_INTERVAL);
+            if let Some(run) = self.poll() {
+                show(&run);
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<'fs, V: Validate> Watcher<'fs, V> {
     /// A watcher of the object folders `roots`, read through `fs`.
     /// `scoped_runs` is false when the command is narrowed (`--file`,

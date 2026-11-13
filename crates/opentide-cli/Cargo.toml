@@ -60,7 +60,6 @@ clap = { workspace = true, features = ["env", "string"] }
 clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
 comfy-table = { version = "7.2", default-features = false }
-ctrlc = "3.4"
 # The query lines of a code frame, coloured as the editor colours them.
 opentide-analysis.workspace = true
 # The commands ported onto the framework (UC-2.4): the workspace, its
@@ -83,8 +82,8 @@ anyhow.workspace = true
 # `opentide tui`'s terminal UI: ratatui, drawn through crossterm; and the
 # output of a command run from it, printed by the renderers as SGR runs at a
 # terminal, read back into ratatui's text for the Results tab.
-ratatui = { version = "0.30", default-features = false, features = ["crossterm", "underline-color"] }
-ansi-to-tui = { version = "8.0", default-features = false }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm", "underline-color"], optional = true }
+ansi-to-tui = { version = "8.0", default-features = false, optional = true }
 indexmap = "2"
 # `validate`'s queries check analyses the objects on every core (#817).
 rayon.workspace = true
@@ -117,7 +116,7 @@ tracing = "0.1"
 unicode-width = "0.2"
 # The `setup` wizard (UC-3.6c, #951): its questions at a terminal, on
 # crossterm (Linux, macOS and Windows consoles).
-inquire = { version = "0.9", default-features = false, features = ["crossterm"] }
+inquire = { version = "0.9", default-features = false, features = ["crossterm"], optional = true }
 # `new`'s fresh object identifiers.
 uuid = { workspace = true, features = ["v4"] }
 # `generate extract elastic --include-prebuilt` (UC-4.4b, #834): the UUID a
@@ -136,14 +135,31 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 # stdio, on a current-thread tokio runtime (stdin, and the duplicate of stdout
 # the frames go to).
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
-tokio = { version = "1.48", default-features = false, features = ["rt", "io-std", "io-util", "fs", "sync", "time", "macros"] }
+# Only the features tokio builds on wasm32 here; `fs` and `io-std`, which
+# `mcp start`'s native transport needs, are added off WASI below.
+tokio = { version = "1.48", default-features = false, features = ["rt", "io-util", "sync", "time", "macros"] }
 # `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
 # the connectors' HTTP client, through the proxy and CA bundle the
-# environment names.
+# environment names. Under WASI the connectors answer every request with
+# their network-unavailable failure (wasm32-wasip1 has no sockets).
 opentide-connectors.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 # `opentide serve`'s `opentide/fetch` (src/serve/fetch.rs): request and answer bodies.
 base64.workspace = true
+
+[features]
+default = ["terminal"]
+# The terminal UI (`tui`) and the `setup` wizard's questions, on crossterm.
+# Off, as in the WASI build, they refuse as they do without a terminal.
+terminal = ["dep:ratatui", "dep:ansi-to-tui", "dep:inquire"]
+
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+# Ctrl-C (`app::install_interrupt_handler`). WASI delivers no signals.
+ctrlc = "3.4"
+# `mcp start`'s transport on stdin and a duplicate of stdout. WASI has
+# neither tokio's `fs` nor its `io-std` (tokio refuses them on wasm32); the
+# WASI build reads and writes the standard streams through blocking adapters.
+tokio = { version = "1.48", default-features = false, features = ["io-std", "fs"] }
 
 [target.'cfg(unix)'.dependencies]
 # `mcp start` points descriptor 1 at stderr while it serves, so nothing but a

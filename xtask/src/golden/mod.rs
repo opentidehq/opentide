@@ -26,6 +26,7 @@ mod pty;
 pub mod recording;
 pub mod run;
 pub mod snapshot;
+pub mod wasi;
 
 use anyhow::{Context, Result, bail};
 use case::{Case, Spec};
@@ -80,7 +81,13 @@ commands:
                the PyPI console script of .venv; node, the npm package's `opentide`
                bin (bindings/node/cli.js, after `npm run build` there) under the
                `node` on PATH, which runs the same command line in-process
-               (UC-5.3). `--runner node` alone implies --engine rust
+               (UC-5.3); wasi, the WASI build of the command line
+               (target/wasm32-wasip1/wasi/opentide.wasm, `build-wasm.sh cli`) under
+               wasmtime, or $OPENTIDE_WASI_RUNTIME (`node`: Node's WASI), the case's
+               paths mapped where they are, its environment and working directory
+               passed in (ADR 0007's amendment); cases that need the network are
+               left out (tests/golden/WASI_EXCLUDED.toml). `--runner node` or
+               `--runner wasi` alone implies --engine rust
 --report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
 --oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
                of the next oracle: tests/golden/ORACLE.next); `record` with it
@@ -126,6 +133,8 @@ enum Runner {
     Python,
     /// The npm package's `opentide` bin (`bindings/node`), under Node.
     Node,
+    /// The WASI build of the command line, under wasmtime.
+    Wasi,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -230,7 +239,8 @@ fn parse(args: &[String]) -> Result<Command> {
                 command.runner = match value()?.as_str() {
                     "python" => Runner::Python,
                     "node" => Runner::Node,
-                    other => bail!("unknown runner `{other}`: python or node"),
+                    "wasi" => Runner::Wasi,
+                    other => bail!("unknown runner `{other}`: python, node or wasi"),
                 };
             }
             "--report" if command.verb != Verb::Record => {
@@ -262,12 +272,12 @@ fn parse(args: &[String]) -> Result<Command> {
     {
         bail!("only the oracle records: `record` takes no --engine or --runner");
     }
-    if command.runner == Runner::Node {
+    if matches!(command.runner, Runner::Node | Runner::Wasi) {
         if !engine_given {
             command.engine = "rust".into();
         }
         if command.engine != "rust" {
-            bail!("--runner node launches the candidate of --engine rust");
+            bail!("--runner node and --runner wasi launch the candidate of --engine rust");
         }
     }
     if command.unused.is_some() && (command.partition.is_none() || command.engine != "rust") {
@@ -388,6 +398,7 @@ impl Command {
             "rust" => match self.runner {
                 Runner::Python => crate::compare::candidate(&layout.repo, &layout.target)?,
                 Runner::Node => crate::compare::node_candidate(&layout.repo, &layout.target)?,
+                Runner::Wasi => crate::compare::wasi_candidate(&layout.repo, &layout.target)?,
             },
             other => bail!("unknown engine `{other}`: python or rust"),
         };
@@ -436,10 +447,11 @@ impl Command {
     /// leaves entries unused: only a whole run finds stale ones, or every part
     /// of one together (CI's `Golden compare` gathers the parts' `--unused`).
     /// The ledger is the committed oracle's: against a preview's recordings
-    /// its entries are not judged stale.
+    /// its entries are not judged stale. A WASI run leaves the network cases
+    /// out, as a filter would, so it judges none either: the native runs do.
     fn stale_check(&self, layout: &Layout) -> crate::compare::StaleCheck<'_> {
         use crate::compare::StaleCheck;
-        if self.filter.is_some() || !layout.committed() {
+        if self.filter.is_some() || self.runner == Runner::Wasi || !layout.committed() {
             StaleCheck::Skip
         } else if self.partition.is_some() {
             StaleCheck::Write(self.unused.as_deref())
@@ -453,7 +465,30 @@ impl Command {
     fn run_with(&self, layout: &Layout, oracle: &Oracle, engine: run::Engine) -> Result<bool> {
         let spec = Spec::parse(&read(&layout.golden.join("cases.toml"))?)?;
         let all = spec.expand()?;
-        let selected = select(&all, self.filter.as_deref(), self.partition)?;
+        let mut selected = select(&all, self.filter.as_deref(), self.partition)?;
+        if self.runner == Runner::Wasi {
+            // The WASI build has no network: the cases that need one are left
+            // out, each named with its reason (ADR 0007's amendment).
+            let exclusions =
+                wasi::Exclusions::parse(&read(&layout.golden.join("WASI_EXCLUDED.toml"))?)?;
+            let problems = exclusions.problems(&all, &layout.cases());
+            if !problems.is_empty() {
+                bail!(
+                    "tests/golden/WASI_EXCLUDED.toml:\n  {}",
+                    problems.join("\n  ")
+                );
+            }
+            selected.retain(|case| match exclusions.reason(case) {
+                Some(reason) => {
+                    println!("skip {} (WASI: {reason})", case.id);
+                    false
+                }
+                None => true,
+            });
+            if selected.is_empty() {
+                bail!("--runner wasi: every selected case needs the network");
+            }
+        }
         // Generated fixtures are generated once per run, then copied per case.
         let (fixtures, _generated) = prepare_fixtures(&spec.fixtures, &selected, &layout.repo)?;
         // The version the candidate reports, before the engine moves in.
@@ -968,6 +1003,10 @@ mod tests {
         let c = parse(&args(&["diff", "--engine", "rust", "--runner", "node"])).unwrap();
         assert_eq!((c.engine.as_str(), c.runner), ("rust", Runner::Node));
         assert!(parse(&args(&["check", "--engine", "python", "--runner", "node"])).is_err());
+        // So does the WASI runner.
+        let c = parse(&args(&["check", "--runner", "wasi"])).unwrap();
+        assert_eq!((c.engine.as_str(), c.runner), ("rust", Runner::Wasi));
+        assert!(parse(&args(&["check", "--engine", "python", "--runner", "wasi"])).is_err());
         assert!(parse(&args(&["check", "--runner", "deno"])).is_err());
         assert!(parse(&args(&["record", "--runner", "node"])).is_err());
         assert!(parse(&args(&["nope"])).is_err());

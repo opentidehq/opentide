@@ -78,6 +78,7 @@ CI_CORE = {
     "cli-e2e",
     "gitlab-ci-lint",
     "golden-compare-part",
+    "wasi",
 }
 # Jobs that gather the parts of a core gate under the required check's name
 # (#841): `if` is exactly GATHER, so a failed part fails it instead of

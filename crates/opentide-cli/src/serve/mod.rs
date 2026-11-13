@@ -72,22 +72,10 @@ impl Launch {
 }
 
 /// The lines read from `source` until the end of input, each handed to `server`.
-pub fn read_lines(mut source: impl Read, server: &Server) {
-    let mut pending: Vec<u8> = Vec::new();
-    let mut chunk = vec![0_u8; 65536];
-    loop {
-        let read = match source.read(&mut chunk) {
-            Ok(0) | Err(_) => break,
-            Ok(read) => read,
-        };
-        pending.extend_from_slice(&chunk[..read]);
-        while let Some(end) = pending.iter().position(|byte| *byte == b'\n') {
-            let line: Vec<u8> = pending.drain(..=end).collect();
-            server.receive(&line[..line.len() - 1]);
-        }
-    }
-    if !pending.is_empty() {
-        server.receive(&pending);
+pub fn read_lines(source: impl Read, server: &Server) {
+    let mut lines = server::Lines::new(source);
+    while let Some(line) = lines.next_line() {
+        server.receive(&line);
     }
     server.close_input();
 }
@@ -134,10 +122,16 @@ pub fn serve(
         output.flush()
     });
     let server = Server::new(write, runner, version);
-    let reader = server.clone();
-    std::thread::Builder::new()
-        .name("opentide-serve-stdin".into())
-        .spawn(move || read_lines(requests, &reader))?;
+    // WASI has no threads: the serving loop reads each request itself.
+    #[cfg(target_os = "wasi")]
+    server.read_inline(Box::new(requests));
+    #[cfg(not(target_os = "wasi"))]
+    {
+        let reader = server.clone();
+        std::thread::Builder::new()
+            .name("opentide-serve-stdin".into())
+            .spawn(move || read_lines(requests, &reader))?;
+    }
     let signals = signals::Termination::install(&server)?;
     let ended = server.serve(&|| interrupt.requested());
     let signalled = signals.finish();
@@ -151,6 +145,7 @@ pub fn serve(
 mod stdio {
     //! stdin for JSON-RPC alone.
 
+    #[cfg(not(target_os = "wasi"))]
     use std::fs::File;
 
     /// A duplicate of stdin for the requests; on Unix descriptor 0 then
@@ -163,6 +158,14 @@ mod stdio {
         let null = File::open("/dev/null")?;
         rustix::stdio::dup2_stdin(null.as_fd())?;
         Ok(requests)
+    }
+
+    /// stdin itself for the requests (WASI: no descriptor can be duplicated,
+    /// so a run that reads stdin would read the client's requests; no run
+    /// under `serve` reads it).
+    #[cfg(target_os = "wasi")]
+    pub fn reserve_stdin() -> std::io::Result<std::io::Stdin> {
+        Ok(std::io::stdin())
     }
 
     /// A duplicate of stdin for the requests (Windows: the standard handle stays).
