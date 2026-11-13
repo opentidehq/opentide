@@ -463,6 +463,31 @@ mod tests {
         assert!(codes.contains(&"invalid_ref") && codes.contains(&"missing_author"));
     }
 
+    /// An agent asking about a warning-only YARA code learns that validate
+    /// passes and lint reports it (#1015), as `opentide explain` says.
+    #[test]
+    fn explain_calls_a_warning_only_yara_code_a_warning() {
+        let env = Env::from_pairs::<&str, &str>([]);
+        let result = call(
+            "explain",
+            &serde_json::from_value(json!({"code": "yara_slow_pattern"})).unwrap(),
+            &context(&env),
+        );
+        assert_eq!(result["isError"], false);
+        let page = text_of(&result);
+        assert_eq!(page["found"], true);
+        let markdown = page["markdown"].as_str().unwrap();
+        assert!(markdown.contains("always as a warning"), "{markdown}");
+        assert!(!markdown.contains("as an error"), "{markdown}");
+        let error = text_of(&ok_result(&explain("yara_unknown_module")));
+        assert!(
+            error["markdown"]
+                .as_str()
+                .unwrap()
+                .contains("as an error, a query the platform would reject")
+        );
+    }
+
     #[test]
     fn explain_of_an_unknown_code_suggests_the_closest() {
         let page = text_of(&ok_result(&explain("vocab_unknwn")));

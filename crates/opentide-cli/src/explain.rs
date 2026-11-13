@@ -243,68 +243,92 @@ pub fn all() -> Vec<Page> {
     codes().into_iter().filter_map(page).collect()
 }
 
+/// Where a query code is reported. A code the engine only ever warns about
+/// (opentide-yara's `WARNING_CODES`, #1015) never fails `opentide validate`.
+fn query_reported_by(code: &str, article: &str, language: &str) -> String {
+    if opentide_yara::always_warning(code) {
+        format!(
+            "Reported by the analysis engine in {article} {language} query, at the place in \
+             the query, always as a warning: the platform takes the rule, so `opentide \
+             validate` does not fail on it, and `opentide lint` (its `queries` check) and an \
+             editor running `opentide lsp start` show it."
+        )
+    } else {
+        format!(
+            "Reported by the analysis engine in {article} {language} query, at the place in \
+             the query: as an error, a query the platform would reject, by `opentide \
+             validate` (its `queries` check) and `opentide validate query`; as a warning or \
+             a note, style, by `opentide lint` (its `queries` check). An editor running \
+             `opentide lsp start` shows both."
+        )
+    }
+}
+
+/// The example command of a query code's page: `lint` shows a warning-only
+/// code, `validate query` any other.
+fn query_example(code: &str) -> &'static str {
+    if opentide_yara::always_warning(code) {
+        "opentide lint --check queries"
+    } else {
+        "opentide validate query"
+    }
+}
+
 /// A page for an analysis-engine code, from the engine's sentence.
 fn engine_page(code: &str) -> Option<Page> {
     let sentence = opentide_core::codes::describe(code)?;
-    let (where_, example, fix) = if let Some((language, url)) =
-        crate::render::codeframe::engine_reference(code)
-    {
-        let article = if language.starts_with(['A', 'E', 'I', 'O', 'U']) {
-            "an"
-        } else {
-            "a"
-        };
-        (
-            format!(
-                "Reported by the analysis engine in {article} {language} query, at the place in \
-                 the query: as an error, a query the platform would reject, by `opentide \
-                 validate` (its `queries` check) and `opentide validate query`; as a warning or \
-                 a note, style, by `opentide lint` (its `queries` check). An editor running \
-                 `opentide lsp start` shows both."
-            ),
-            "opentide validate query",
-            format!(
-                "Change the query where the frame points, then run `opentide validate query` \
+    let (where_, example, fix) =
+        if let Some((language, url)) = crate::render::codeframe::engine_reference(code) {
+            let article = if language.starts_with(['A', 'E', 'I', 'O', 'U']) {
+                "an"
+            } else {
+                "a"
+            };
+            (
+                query_reported_by(code, article, language),
+                query_example(code),
+                format!(
+                    "Change the query where the frame points, then run `opentide validate query` \
                  (`--file` for one rule or query file) or `opentide lint --check queries` \
                  again. The [{language} reference]({url}) describes the syntax and the \
                  commands the engine checks against."
-            ),
-        )
-    } else if ELASTIC_ADVISORY_CODES.contains(&code) {
-        (
-            "Reported by the analysis engine on an Elastic rule block (elastic-1.0): \
+                ),
+            )
+        } else if ELASTIC_ADVISORY_CODES.contains(&code) {
+            (
+                "Reported by the analysis engine on an Elastic rule block (elastic-1.0): \
              `opentide lint` (its `queries` check) and an editor running `opentide lsp start` \
              show it, and `opentide validate query --platform elastic --live` checks the same \
              settings."
-                .to_owned(),
-            "opentide lint --check queries",
-            "Change the block's setting the frame points at, then run \
+                    .to_owned(),
+                "opentide lint --check queries",
+                "Change the block's setting the frame points at, then run \
              `opentide lint --check queries` again."
-                .to_owned(),
-        )
-    } else if SYSDIG_ADVISORY_CODES.contains(&code) {
-        (
-            "Reported by the analysis engine on a Sysdig rule block (sysdig-1.0): \
+                    .to_owned(),
+            )
+        } else if SYSDIG_ADVISORY_CODES.contains(&code) {
+            (
+                "Reported by the analysis engine on a Sysdig rule block (sysdig-1.0): \
              `opentide lint` (its `queries` check) and an editor running `opentide lsp start` \
              show it. It is an advisory: Falco loads the rule, and `opentide validate` does \
              not fail on it."
-                .to_owned(),
-            "opentide lint --check queries",
-            "Change the block's macros or lists where the frame points, then run \
+                    .to_owned(),
+                "opentide lint --check queries",
+                "Change the block's macros or lists where the frame points, then run \
              `opentide lint --check queries` again."
-                .to_owned(),
-        )
-    } else {
-        (
-            "Reported by the analysis engine for an object file: an editor running \
+                    .to_owned(),
+            )
+        } else {
+            (
+                "Reported by the analysis engine for an object file: an editor running \
              `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the \
              authority for objects and name the same problem with their own code."
-                .to_owned(),
-            "opentide validate",
-            "Change the file where the frame points, then run `opentide validate` again."
-                .to_owned(),
-        )
-    };
+                    .to_owned(),
+                "opentide validate",
+                "Change the file where the frame points, then run `opentide validate` again."
+                    .to_owned(),
+            )
+        };
     let where_ = ENGINE_REPORTED_BY
         .iter()
         .find(|(name, _)| *name == code)
@@ -679,6 +703,54 @@ mod tests {
         // Output an example shows is marked, a command is not.
         assert!(reference.contains("```text illustrative\n"));
         assert!(reference.contains("```text\nopentide validate query\n```"));
+    }
+
+    /// The generic query page says a code fails `opentide validate`; the
+    /// engine only ever warns on these (opentide-yara's `WARNING_CODES`), so
+    /// their pages say so (#1015). `harfanglab_yara_context`, the sixth, has
+    /// no query reference: its page is the block's.
+    #[test]
+    fn a_warning_only_yara_code_is_not_described_as_an_error() {
+        for code in [
+            "yara_entrypoint_deprecated",
+            "yara_meta_missing",
+            "yara_module_unconfirmed",
+            "yara_slow_pattern",
+            "yara_suspicious_expression",
+        ] {
+            assert!(opentide_yara::always_warning(code), "{code}");
+            let page = page(code).unwrap_or_else(|| panic!("{code}: no page"));
+            assert!(page.markdown.contains("in a YARA rule query"), "{code}");
+            assert!(page.markdown.contains("always as a warning"), "{code}");
+            assert!(
+                page.markdown
+                    .contains("`opentide validate` does not fail on it"),
+                "{code}"
+            );
+            assert!(!page.markdown.contains("as an error"), "{code}");
+            assert!(
+                page.markdown
+                    .contains("```text\nopentide lint --check queries\n```"),
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_yara_error_keeps_the_generic_query_page() {
+        for code in ["yara_unknown_module", "yara_x_incompatible"] {
+            let page = page(code).unwrap();
+            assert!(
+                page.markdown
+                    .contains("as an error, a query the platform would reject"),
+                "{code}"
+            );
+            assert!(
+                page.markdown
+                    .contains("```text\nopentide validate query\n```"),
+                "{code}"
+            );
+        }
     }
 
     /// Each override names an engine code, and its page says it.

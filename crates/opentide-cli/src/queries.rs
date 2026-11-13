@@ -64,7 +64,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 11] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -105,6 +105,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 10] = [
         "cql_",
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
+    ),
+    (
+        "yara_",
+        "YARA rule",
+        "https://yara.readthedocs.io/en/v4.5.2/writingrules.html",
     ),
     (
         "yaral_",
