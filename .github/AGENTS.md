@@ -268,7 +268,13 @@ removed from the rule too, or every pull request that does not run it waits for 
   `-highlight`, `-ecs`, `-lsp`), any crate's `Cargo.toml`, `packages/*/package.json`,
   `grammars/`, `Cargo.lock`, the query catalogs or the oracles, weekly (with the Carbon Black
   Cloud tenant) and on demand. Its own triggers and network-heavy references keep it out of
-  ci.yml.
+  ci.yml. On a pull request each reference runs only when its own language's inputs change (its
+  `changes` job, `Oracle paths`: the language's crate, grammar, catalog, testdata and oracle
+  script; what every language builds on runs them all; the `full-ci` label, a push and a filter
+  that fails run everything), so a KQL change pulls no Splunk, Falco or Elasticsearch image and no
+  Lucene jar. The pinned Elastic references (Lucene's jars from Maven Central, the EQL and kuery
+  grammars) are cached under `oracle.py`'s pins and saved from pushes; `oracle.py` checks each
+  file's SHA-256, a restored one too (`tests/test_ci/test_ci_scope.py`).
 - [`golden.yml`](workflows/golden.yml) runs `cargo xtask golden check --engine python` and
   `golden record --check-determinism` against the committed recordings of the frozen Python CLI
   (`tests/golden/README.md`) on every push to `development` and `integration/unified-core`,

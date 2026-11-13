@@ -772,3 +772,83 @@ def test_a_push_run_names_the_merged_pull_request() -> None:
     run_name = str(_load(CI)["run-name"])
     assert "github.event.head_commit.message" in run_name
     assert "github.event_name == 'push'" in run_name
+
+
+# ---- The oracles: each reference on its own language's inputs -----------------
+
+ORACLE_JOBS = {"kql": "kql", "spl": "spl", "falco": "falco", "elastic": "elastic"}
+ORACLE_JOBS["elasticsearch"] = "elastic"
+
+
+def _oracle_scope(repo: Path, tmp_path: Path, event: str = "pull_request") -> dict[str, str]:
+    step = next(
+        s
+        for s in _load(WORKFLOWS / "oracle.yml")["jobs"]["changes"]["steps"]
+        if s.get("id") == "paths"
+    )
+    output = tmp_path / "oracle_output"
+    output.write_text("", encoding="utf-8")
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "EVENT_NAME": event,
+        "FULL_CI": "false",
+        **{key: str(value) for key, value in step["env"].items() if key.endswith("_PATHS")},
+        "GITHUB_OUTPUT": str(output),
+    }
+    subprocess.run(["bash", "-c", step["run"]], cwd=repo, env=env, check=True, capture_output=True)
+    lines = output.read_text(encoding="utf-8").splitlines()
+    return dict(line.partition("=")[::2] for line in lines)
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        ({"crates/opentide-kql/src/lib.rs": "x\n"}, {"kql"}),
+        ({"data/catalogs/spl/commands.toml": "x\n"}, {"spl"}),
+        ({"scripts/engine/oracles/falco/run.py": "x\n"}, {"falco"}),
+        ({"crates/opentide-lucene/src/lib.rs": "x\n"}, {"elastic"}),
+        ({"grammars/tree-sitter-opentide-esql/grammar.js": "x\n"}, {"elastic"}),
+        # What every language builds on: every reference.
+        ({"crates/opentide-analysis/src/lib.rs": "x\n"}, {"kql", "spl", "falco", "elastic"}),
+        ({"scripts/engine/oracles/oracle.py": "x\n"}, {"kql", "spl", "falco", "elastic"}),
+        ({"Cargo.lock": "version = 4\n"}, {"kql", "spl", "falco", "elastic"}),
+        # Near misses.
+        ({"crates/opentide-cql/src/lib.rs": "x\n"}, set()),
+        ({"docs/engine/kql.md": "x\n"}, set()),
+    ],
+)
+def test_each_oracle_runs_on_its_languages_inputs(
+    tmp_path: Path, change: dict[str, str | None], expected: set[str]
+) -> None:
+    repo = _pull_request(_golden(), tmp_path, {"Cargo.lock": "version = 3\n"}, change)
+    found = _oracle_scope(repo, tmp_path)
+    assert {key for key, value in found.items() if value == "true"} == expected
+    assert set(found) == set(ORACLE_JOBS.values())
+    # Not a pull request: every reference.
+    assert set(_oracle_scope(repo, tmp_path, event="push").values()) == {"true"}
+
+
+def test_each_oracle_job_reads_its_scope() -> None:
+    jobs = _load(WORKFLOWS / "oracle.yml")["jobs"]
+    for job_id, output in ORACLE_JOBS.items():
+        assert _needs(jobs[job_id]) == ["changes"], job_id
+        assert jobs[job_id]["if"] == _paths_condition(output), job_id
+
+
+def test_the_pinned_elastic_references_are_cached_and_checked() -> None:
+    """Lucene's jars and the Elastic grammars come from Maven Central and
+    GitHub: cached under oracle.py's pins (Maven answered HTTP 429 on #1041),
+    saved from pushes only, each file's SHA-256 checked by oracle.py."""
+    steps = _load(WORKFLOWS / "oracle.yml")["jobs"]["elastic"]["steps"]
+    restore = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/restore@"))
+    save = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/save@"))
+    key = "oracle-references-${{ hashFiles('scripts/engine/oracles/oracle.py') }}"
+    assert restore["with"]["key"] == save["with"]["key"] == key
+    assert restore["with"]["path"] == save["with"]["path"]
+    assert "*.jar" in restore["with"]["path"]
+    assert str(save["if"]).startswith("github.event_name == 'push'")
+    names = [str(s.get("name", "")) for s in steps]
+    assert names.index("Restore the pinned references") < names.index("Elastic oracles")
+    oracle = (ROOT / "scripts" / "engine" / "oracles" / "oracle.py").read_text(encoding="utf-8")
+    # The pins and the check the cache relies on.
+    assert '"lucene-core.jar": (' in oracle and "sha256(path.read_bytes())" in oracle
