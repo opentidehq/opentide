@@ -776,13 +776,13 @@ Every brief uses the same base:
 
 Decided by the orchestrator (technical): 1 yes, one implementation per platform; 2 yes, a
 `train/catchup-0.28` branch with report-only goldens until O2; 4 merge commits only (PRs merge with
-merge_method=merge, never squash or rebase); 5 the bench oracle stays at 0.23.0. Open with the
-maintainer: 3 (0.28.0 or 0.28.1).
+merge_method=merge, never squash or rebase); 5 the bench oracle stays at 0.23.0. Decided by the
+maintainer (2026-11-13): 3, see below.
 
 
 1. **One implementation of each platform's checks** (in `opentide-schema`, reaching the editor through `opentide-workspace` validate), with language-server's Tide block walkers taken only for injection, completion and hover. The Sysdig precedent keeps two walkers plus an agreement test (`opentide-tide/src/sysdig.rs`, `the_editor_and_the_model_agree_on_the_sysdig_cases`). This plan recommends against repeating that four times.
 2. **Train branch with report-only goldens until O2**, versus ledgering every port against 0.23.0 on integration. The docs redesign alone changes every `generate` case, and the new platforms change `generate schemas` blobs and every help screen that lists platforms. Ledgering against an oracle about to be replaced is wasted work.
-3. **Oracle 0.28.0 or 0.28.1** (§1.5): 0.28.1 only if #1015 ships first.
+3. **Oracle 0.28.0 or 0.28.1** (§1.5). Decided: the oracle will be opentide 0.28.1 and the engine language-server 0.16.1 (maintainer, 2026-11-13); O1/O2 fill in the tag, wheel and SHA-256 once they're published.
 4. **How train merges keep two parents** (M0, E1, the train into integration): a merge commit, never squash.
 5. **Bench oracle** stays at 0.23.0 for now (§1.6).
 
