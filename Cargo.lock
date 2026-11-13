@@ -3642,6 +3642,7 @@ dependencies = [
  "opentide-lucene",
  "opentide-schema",
  "opentide-spl",
+ "opentide-yara",
  "regex",
  "ryu",
  "serde",

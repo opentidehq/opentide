@@ -23,6 +23,7 @@ mod vocabs;
 mod yaml;
 mod yaml_path;
 mod yaml_scalar;
+mod yara;
 
 use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, span_to_range};
@@ -81,6 +82,14 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
+        // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
+        // one rule assembled from several fields ([`yara`]).
+        [
+            "configurations",
+            "harfanglab" | "bitdefender",
+            "yara",
+            "signature",
+        ] => Some(LanguageId::Yara),
         _ => None,
     }
 }
@@ -123,6 +132,54 @@ pub struct InjectedQuery {
     /// Maps inner byte offset → host byte offset.
     pub host_map: Vec<usize>,
     pub host_span: ByteSpan,
+    /// For text assembled from several fields (HarfangLab's decomposed YARA
+    /// rule): which field each region of `inner` comes from, and which
+    /// regions deploy generates. Empty for a query read from one scalar.
+    pub parts: Vec<InjectionPart>,
+}
+
+/// A region of an assembled [`InjectedQuery`]'s text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InjectionPart {
+    /// Byte range in `inner`.
+    pub start: usize,
+    pub end: usize,
+    /// The YAML field the region comes from.
+    pub field_path: Vec<String>,
+    /// Text deploy writes (headers, generated meta): no field holds it, so
+    /// it gets no token, no cursor, and no finding of its own.
+    pub synthetic: bool,
+}
+
+impl InjectedQuery {
+    /// The part holding inner byte `offset`, if the injection has parts.
+    #[must_use]
+    pub fn part_at(&self, offset: usize) -> Option<&InjectionPart> {
+        self.parts
+            .iter()
+            .find(|p| offset >= p.start && offset < p.end)
+            .or_else(|| self.parts.iter().rfind(|p| p.end == offset && !p.synthetic))
+    }
+
+    /// Whether inner byte `offset` is text deploy generates.
+    #[must_use]
+    pub fn is_synthetic(&self, offset: usize) -> bool {
+        self.part_at(offset).is_some_and(|p| p.synthetic)
+    }
+
+    /// The source spans the injection's own text covers: its parts that come
+    /// from the document, or its whole span.
+    #[must_use]
+    pub fn host_spans(&self) -> Vec<ByteSpan> {
+        if self.parts.is_empty() {
+            return vec![self.host_span];
+        }
+        self.parts
+            .iter()
+            .filter(|p| !p.synthetic && p.end > p.start)
+            .map(|p| ByteSpan::new(self.host_map[p.start], self.host_map[p.end - 1] + 1))
+            .collect()
+    }
 }
 
 /// Locate the injected query (if any) covering a host byte offset.
@@ -132,8 +189,17 @@ pub struct InjectedQuery {
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
     let (source, offset) = opentide_core::strip_bom_at(source, offset);
     for inj in extract_injections(source) {
-        if let Some(inner) = inj.host_map.iter().position(|&h| h == offset) {
+        if let Some(inner) = inj
+            .host_map
+            .iter()
+            .enumerate()
+            .position(|(i, &h)| h == offset && !inj.is_synthetic(i))
+        {
             return Some((inj, inner));
+        }
+        // An assembled injection covers only its parts' text.
+        if !inj.parts.is_empty() {
+            continue;
         }
         // Right after the query's last character: where the cursor is while
         // the query is typed. It belongs to the query, at its end.
@@ -435,7 +501,10 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     // Injected query analysis
     let injections = extract_injections(input.source);
-    let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
+    let skip: Vec<ByteSpan> = injections
+        .iter()
+        .flat_map(InjectedQuery::host_spans)
+        .collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
     let mut queries = analyze_injections(
         input.source,
@@ -460,7 +529,8 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
 /// What a rule's platform blocks say that no query of theirs carries: the
 /// Elastic block's advisories, the Sysdig block's tuning and list
-/// advisories, and, when the block has no query to carry them (none, or a
+/// advisories, the HarfangLab `yara` block's constraints on what deploy
+/// assembles ([`yara::constraint_diagnostics`]), and, when the block has no query to carry them (none, or a
 /// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
@@ -499,6 +569,12 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
         if !carried {
             out.extend(falco::exception_diagnostics(source, block));
         }
+    }
+    if configurations.is_some_and(|c| c.get("harfanglab").is_some()) {
+        out.extend(yara::constraint_diagnostics(
+            source,
+            &yaml_scalar::mapping_keys(source),
+        ));
     }
     out
 }
@@ -706,10 +782,23 @@ fn analyze_injections(
                 let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
-            // No Tide field injects YARA, the Exabeam Query Language or
-            // YARA-L yet: the HarfangLab, Bitdefender, Exabeam and Google
-            // SecOps block ports bring their injection and its analysis.
-            LanguageId::Yara | LanguageId::Exabeam | LanguageId::Yaral => (Vec::new(), Vec::new()),
+            LanguageId::Yara => {
+                let ctx = opentide_yara::Profile::for_platform(&inj.platform)
+                    .map(opentide_yara::Context::for_profile)
+                    .unwrap_or_default();
+                let r = opentide_yara::analyze_with(&inj.inner, &ctx);
+                let inner_lines = opentide_core::LineIndex::new(&inj.inner);
+                let diagnostics = r
+                    .diagnostics
+                    .into_iter()
+                    .filter_map(|d| yara::on_assembled(&inj, &inner_lines, d))
+                    .collect();
+                (diagnostics, r.tokens)
+            }
+            // No Tide field injects the Exabeam Query Language or YARA-L
+            // yet: the Exabeam and Google SecOps block ports bring their
+            // injection and its analysis.
+            LanguageId::Exabeam | LanguageId::Yaral => (Vec::new(), Vec::new()),
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
@@ -734,7 +823,14 @@ fn analyze_injections(
 
 fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
     let start = inner_offset(&inj.inner, d.range.start);
-    let end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+    let mut end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+    // A finding stays inside the part it starts in.
+    if let Some(part) = inj.part_at(start) {
+        end = end.min(part.end).max(start + 1);
+        if d.field_path.is_none() {
+            d.field_path = Some(part.field_path.clone());
+        }
+    }
     let span = remap_span(inj, ByteSpan::new(start, end));
     d.range = span_to_range(source, span);
     if d.field_path.is_none() {
@@ -773,6 +869,9 @@ fn remap_token(
     inj: &InjectedQuery,
     token: &HighlightToken,
 ) -> Option<HighlightToken> {
+    if inj.is_synthetic(token.span.start) {
+        return None;
+    }
     let mapped = remap_span(inj, token.span);
     Some(HighlightToken {
         span: mapped,
