@@ -255,3 +255,31 @@ fn a_block_without_condition_is_not_assembled() {
         "rule 'T': configurations.google_secops has no condition"
     );
 }
+
+/// 0.28.0's `validation/errors.py` reports a google-secops-1.0 constraint by
+/// its own code (`google_secops.checks.CONSTRAINT_CODES`), not
+/// `schema_validation`; the stray `query` key is not one of them.
+#[test]
+fn constraints_are_reported_by_their_own_code() {
+    use opentide_schema::error::Surface;
+
+    let document = node::load(
+        "status: S\nquery: x\nrun_frequency: HOURLY\nevents: |\n  $e\ncondition: |\n  $e\n",
+    )
+    .unwrap();
+    let mut cx = Context::new();
+    let _ = GoogleSecopsConfig::from_node(document.root().unwrap(), &mut cx);
+    let mut codes: Vec<(String, &str)> = cx
+        .into_errors()
+        .iter()
+        .map(|error| (error.field_path().join("."), error.code(Surface::Object)))
+        .collect();
+    codes.sort();
+    assert_eq!(
+        codes,
+        [
+            ("query".to_owned(), "schema_validation"),
+            ("run_frequency".to_owned(), "google_secops_run_frequency"),
+        ]
+    );
+}

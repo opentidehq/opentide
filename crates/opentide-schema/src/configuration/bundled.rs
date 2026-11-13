@@ -5,7 +5,7 @@
 /// Every bundled `.toml` file, by its path relative to the folder, in the
 /// order the oracle reads them (sorted by name, the `platforms/` folder in
 /// its place).
-pub const FILES: [(&str, &str); 16] = [
+pub const FILES: [(&str, &str); 17] = [
     (
         "deployment.toml",
         include_str!(concat!(
@@ -60,6 +60,13 @@ pub const FILES: [(&str, &str); 16] = [
         include_str!(concat!(
             env!("OPENTIDE_ASSETS"),
             "/src/opentide/data/configurations/platforms/elastic.toml"
+        )),
+    ),
+    (
+        "platforms/google_secops.toml",
+        include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/src/opentide/data/configurations/platforms/google_secops.toml"
         )),
     ),
     (

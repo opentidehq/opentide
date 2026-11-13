@@ -30,8 +30,49 @@ fn every_platform_template_is_the_committed_one() {
     assert_eq!(platform_template("plugin").unwrap(), None);
 }
 
+/// The platforms the 0.23.0 recordings predate: the `platforms-after-0.23`
+/// difference of `tests/oracle/config_cases.toml`, the one list the oracle
+/// tests share until the oracle moves to 0.28.0 (O2).
+fn platforms_after_the_oracle() -> Vec<String> {
+    let cases: toml::Value = toml::from_str(&read(
+        &repo().join("crates/opentide-schema/tests/oracle/config_cases.toml"),
+    ))
+    .unwrap_or_else(|error| panic!("config_cases.toml: {error}"));
+    cases["difference"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|difference| difference["id"].as_str() == Some("platforms-after-0.23"))
+        .flat_map(|difference| difference["fields"].as_array().cloned().unwrap_or_default())
+        .filter_map(|field| field.as_str().map(str::to_owned))
+        .collect()
+}
+
+/// `template` without the commented block of each of `platforms` under
+/// `configurations:` (`  #<platform>:` up to the next block at that indent).
+fn without_blocks(template: &str, platforms: &[String]) -> String {
+    let mut out = String::new();
+    let mut skipping = false;
+    for line in template.split_inclusive('\n') {
+        let block = line
+            .strip_prefix("  #")
+            .and_then(|rest| rest.trim_end().strip_suffix(':'))
+            .filter(|key| !key.is_empty() && !key.contains(' '));
+        if let Some(key) = block {
+            skipping = platforms.iter().any(|platform| platform == key);
+        } else if !line.starts_with("    ") && !line.trim().is_empty() {
+            skipping = false;
+        }
+        if !skipping {
+            out.push_str(line);
+        }
+    }
+    out
+}
+
 #[test]
 fn every_object_template_is_the_oracles_on_the_tide_corpus() {
+    let later = platforms_after_the_oracle();
     // tide-corpus requires lint's default metadata keys.
     let dir = repo()
         .join("tests/golden/cases/generate/agent/tide-corpus/default/files/ws/.opentide/templates");
@@ -41,7 +82,7 @@ fn every_object_template_is_the_oracles_on_the_tide_corpus() {
         let rendered = object_template(identifier, &Options::default())
             .unwrap()
             .unwrap();
-        assert_eq!(rendered, expected, "{identifier}");
+        assert_eq!(without_blocks(&rendered, &later), expected, "{identifier}");
     }
     assert_eq!(
         object_template("visibility::1.0", &Options::default()).unwrap(),

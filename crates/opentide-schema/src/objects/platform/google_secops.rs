@@ -295,7 +295,7 @@ fn raw_block(node: &Node, cx: &mut Context) -> bool {
             let kind = if finding.code == "extra_forbidden" {
                 ErrorKind::UnknownKey
             } else {
-                ErrorKind::InvalidValue(finding.code)
+                ErrorKind::Constraint(finding.code)
             };
             cx.error(kind, finding.message.clone(), node);
         });

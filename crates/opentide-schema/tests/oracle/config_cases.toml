@@ -16,12 +16,19 @@
 #   for a workspace holding `files`.
 #
 # A case whose Rust result differs names the `difference` that explains it
-# (its reason and the bold lead of its CHANGELOG.md entry). A difference's
+# (its reason and the bold lead of its CHANGELOG.md entry), or a list of them
+# when more than one applies. A difference's
 # `fields` are the members it may change, at any depth of the result; every
 # other member (code, severity, field path, file, line, column, context) is
 # still compared with the oracle's. The test fails when such a case no longer
 # differs, when it differs outside its difference's `fields`, or when a
 # difference no case names.
+
+[[difference]]
+id = "platforms-after-0.23"
+reason = "The bundled configuration has a file for each platform opentide gained after the 0.23.0 oracle (catch-up plan, 0.24.0 to 0.28.0), so a resolved workspace holds its `platforms` and `systems` entry, which the oracle's lacks. Each port adds its platform's key to `fields`; the difference goes when the oracle moves to 0.28.0 (O2)."
+fields = ["google_secops"]
+changelog = "**Google Security Operations**"
 
 [[difference]]
 id = "toml-parse-message"
@@ -482,22 +489,26 @@ text = "[[misp]]\nname = \"it's\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_
 id = "workspace-bundled"
 kind = "workspace"
 files = {}
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-overrides"
 kind = "workspace"
 files = { "deployment.toml" = "default_responders = \"soc\"\n[[responders]]\nname = \"soc\"\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n[[tenants]]\nname = \"prod\"\n[tenants.setup]\nurl = \"$URL\"\nport = 8089\napp = \"search\"\ntoken = \"$TOKEN\"\n", "visibility.toml" = "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"d\"\nsystem = \"sentinel\"\n", "notes.txt" = "not read", "extra.toml" = "a = 1\n", "custom/one.toml" = "b = [1, 2.5, true]\n" }
 parent = { "deployment.toml" = "default_responders = \"cert\"\n", "platforms/elastic.toml" = "[platform]\nenabled = true\n" }
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-findings"
 kind = "workspace"
 files = { "deployment.toml" = "colour = \"blue\"\n[promotion]\npromotion_target = \"NOPE\"\n", "documentation.toml" = "flavor = 5\n", "paths.toml" = "objects = [\"x\"]\n", "platforms/sentinel.toml" = "[platform]\ncolour = 1\n", "platforms/foo.toml" = "x = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-cross-checks"
 kind = "workspace"
 files = { "deployment.toml" = "[promotion]\npromotion_target = \"NOPE\"\n[[responders]]\nname = 1\n", "visibility.toml" = "[[logsources]]\nname = \"n\"\ndescription = \"d\"\nsystem = \"sentinel\"\nassets = [\"ghost\"]\n" }
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-retired"
@@ -529,16 +540,19 @@ files = { "documentation.toml" = "[cve]\nproxy = \"http://p\"\n" }
 id = "workspace-hidden-and-private"
 kind = "workspace"
 files = { ".hidden/a.toml" = "a = 1\n", "__cache__/b.toml" = "b = 1\n", ".dot.toml" = "c = 1\n", "folder/.h.toml" = "d = 1\n", "folder/x.y.toml" = "e = 1\n", "sharing.toml" = "[[misp]]\nname = \"a\"\n" }
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-systems-file"
 kind = "workspace"
 files = { "systems.toml" = "[splunk.platform]\nenabled = true\n" }
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-empty-visibility"
 kind = "workspace"
 files = { "platforms.toml" = "[splunk]\nplatform = 1\n" }
+difference = "platforms-after-0.23"
 
 # --- lint.toml -------------------------------------------------------------------------
 
@@ -710,6 +724,7 @@ parent = { "systems/splunk.toml" = "x = 1\n" }
 id = "workspace-file-and-folder"
 kind = "workspace"
 files = { "platforms.toml" = "[splunk]\nx = 1\n", "platforms/splunk.toml" = "[platform]\nenabled = true\n" }
+difference = "platforms-after-0.23"
 
 # The error's column counts code points, after a two-byte and a four-byte
 # character.
@@ -729,6 +744,7 @@ difference = "toml-parse-message"
 id = "workspace-integer-range"
 kind = "workspace"
 files = { "custom.toml" = "a = 9223372036854775807\nb = -9223372036854775808\n" }
+difference = "platforms-after-0.23"
 
 [[case]]
 id = "workspace-integer-past-range"
@@ -740,7 +756,7 @@ difference = "toml-integer-range"
 id = "workspace-datetimes"
 kind = "workspace"
 files = { "custom.toml" = "plain = 1979-05-27T07:32:00Z\nlocal = 1979-05-27T07:32:00\nmicros = 07:32:00.123456\ndt_fraction = 1979-05-27 07:32:00.5Z\ndt_offset = 1979-05-27T07:32:00-00:00\ntime_nanos = 07:32:00.123456789\n" }
-difference = "toml-datetime-text"
+difference = ["toml-datetime-text", "platforms-after-0.23"]
 
 [[case]]
 id = "sharing-datetime-entry"
