@@ -35,6 +35,7 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Search catalogue | `search` |
 | Threat → objective → rule graph | `get_chaining` |
 | ATT&CK coverage gaps | `coverage` |
+| Where the catalogue is blind: threats, objectives, rules and attack paths | `graph` |
 | Validate a rule, with positions and fixes | `validate_rule`, `validation_report` |
 | What a diagnostic code means | `explain` |
 | Check queries against the tenant | `validate_query` with `live: true` |
@@ -42,7 +43,7 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Deploy (dry-run default) | `deploy_rule` |
 | Deployment state | `deployment_status` |
 | Read schemas, templates, vocab | `opentide://*` resources |
-| Interactive coverage, validation and lineage views | [MCP Apps](./views.md) on `coverage`, `validation_report`, `get_chaining` |
+| Interactive detection graph, coverage, validation and lineage views | [MCP Apps](./views.md) on `graph`, `coverage`, `validation_report`, `get_chaining` |
 
 ## Server instructions
 
@@ -50,7 +51,7 @@ The server sends `instructions` to MCP hosts with its `initialize` response. The
 
 > opentide: Spec-driven development for agentic detection engineering. opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents.
 
-Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` and `run_query` with `live: true` contact the tenant, so the agent asks first, and how to read [`next_actions`](./tools.md#next-actions). The text is `INSTRUCTIONS` in `src/opentide/mcp_server/server.py`.
+Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`, `graph`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` and `run_query` with `live: true` contact the tenant, so the agent asks first, and how to read [`next_actions`](./tools.md#next-actions). The text is `INSTRUCTIONS` in `src/opentide/mcp_server/server.py`.
 
 <Callout type="warn">
 `validate_query` refuses unless you pass `live: true`. That call checks the

@@ -150,6 +150,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
 .node .meta { display: block; font-size: var(--ot-size-xs); color: var(--ot-text-2); white-space: nowrap; }
 .empty { color: var(--ot-text-3); font-size: var(--ot-size-xs); padding: 6px 0; }
 @media (max-width: 560px) { .lineage { grid-template-columns: 1fr; } }
+/*__OPENTIDE_VIEW_STYLE__*/
 </style>
 </head>
 <body>
@@ -166,6 +167,8 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
   let nextId = 1;
   const pending = new Map();
   let hostCapabilities = {};
+  // The host's context so far (theme, display modes, size): ui/initialize, then each change.
+  let hostContext = {};
   let toolArgs = {};
 
   function post(message) { window.parent.postMessage(message, "*"); }
@@ -214,6 +217,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
 
   function applyHostContext(context) {
     if (!context) return;
+    hostContext = Object.assign({}, hostContext, context);
     const html = document.documentElement;
     if (context.theme === "light" || context.theme === "dark") html.dataset.theme = context.theme;
     const variables = context.styles && context.styles.variables;
@@ -718,7 +722,10 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
   }
 
   // ------------------------------------------------------------------ main
-  const renderers = { validation: renderValidation, coverage: renderCoverage, lineage: renderLineage };
+  // A view with its own script (ui.py injects it here) adds its renderer to extraRenderers.
+  const extraRenderers = {};
+  /*__OPENTIDE_VIEW_SCRIPT__*/
+  const renderers = Object.assign({ validation: renderValidation, coverage: renderCoverage, lineage: renderLineage }, extraRenderers);
   let lastData = null;
   function show(data) {
     lastData = data;
@@ -726,7 +733,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
     if (!renderer) return render(state("Unknown view " + VIEW + "."));
     renderer(data);
     // Titles arrive after the first paint; render again once they do.
-    if (VIEW !== "validation" && !catalogue.size) loadCatalogue().then(() => { if (lastData === data && catalogue.size) renderer(data); });
+    if ((VIEW === "coverage" || VIEW === "lineage") && !catalogue.size) loadCatalogue().then(() => { if (lastData === data && catalogue.size) renderer(data); });
   }
 
   connect();

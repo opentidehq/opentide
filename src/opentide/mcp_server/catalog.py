@@ -278,3 +278,264 @@ def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any
         "own_matrix": own,
         "tactic_filter": tactic or None,
     }
+
+
+# --------------------------------------------------------------------------- graph
+
+#: Chaining relations that order two threats in time, as (earlier, later) when the
+#: relation is read from the threat that declares it: chaining_relations vocabulary.
+SEQUENCE_RELATIONS = {"preceeds": "from", "succeeds": "to"}
+
+#: How many uuids the summary lists per gap before it only counts them.
+SUMMARY_LIST_LIMIT = 25
+
+
+def _chaining_links(body: dict[str, Any]) -> list[dict[str, str]]:
+    """A threat's ``threat.chaining`` entries as ``{to, relation}``."""
+    section = body.get("threat")
+    entries = section.get("chaining") if isinstance(section, dict) else None
+    links: list[dict[str, str]] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        vector, relation = entry.get("vector"), entry.get("relation")
+        if isinstance(vector, str) and vector.strip() and isinstance(relation, str):
+            links.append({"to": vector.strip(), "relation": relation.strip()})
+    return links
+
+
+def _section(body: dict[str, Any], key: str) -> dict[str, Any]:
+    """``body[key]`` when it is a mapping, else ``{}``: an optional block may load as ``None``."""
+    value = body.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _threat_actors(section: dict[str, Any]) -> list[str]:
+    """``threat.actors`` as written (``att&ck::G0006``); object_actors folds case for matching."""
+    entries = section.get("actors")
+    names: list[str] = []
+    for entry in entries if isinstance(entries, list) else []:
+        name = entry.get("name") if isinstance(entry, dict) else entry
+        if isinstance(name, str) and name.strip() and name.strip() not in names:
+            names.append(name.strip())
+    return names
+
+
+def _actor_labels(actors: set[str]) -> dict[str, str]:
+    """Display names for actor ids, from the ``actors`` vocabulary (``G0006`` -> its name)."""
+    vocabulary = Opentide.Vocabularies.Index.get("actors")
+    entries = getattr(vocabulary, "entries", None)
+    if not isinstance(entries, dict):
+        return {}
+    labels: dict[str, str] = {}
+    for actor in actors:
+        key = actor.split("::", 1)[-1]
+        entry = entries.get(key) or entries.get(key.upper())
+        name = getattr(entry, "name", None) if entry is not None else None
+        if name is None and isinstance(entry, dict):
+            name = entry.get("name")
+        if isinstance(name, str) and name:
+            labels[actor] = name
+    return labels
+
+
+def _rule_objective(body: dict[str, Any], signals: dict[str, Any]) -> tuple[str | None, str | None]:
+    """The objective a rule's ``detection_model`` names, directly or through a signal."""
+    target = body.get("detection_model")
+    if not isinstance(target, str) or not target.strip():
+        return None, None
+    target = target.strip()
+    signal = signals.get(target)
+    if isinstance(signal, dict) and isinstance(signal.get("owner"), str):
+        return signal["owner"], target
+    return target, None
+
+
+def _platform_statuses(body: dict[str, Any]) -> dict[str, str | None]:
+    configurations = body.get("configurations")
+    if not isinstance(configurations, dict):
+        return {}
+    return {
+        str(name): (block.get("status") if isinstance(block.get("status"), str) else None)
+        for name, block in configurations.items()
+        if isinstance(block, dict)
+    }
+
+
+def _configured_statuses() -> list[dict[str, str]]:
+    """``[[statuses]]`` of deployment.toml in lifecycle order, as ``{name, strategy}``.
+
+    Read without validating the file, as ``validate`` reads the names: a typo in
+    deployment.toml is the configuration check's finding, not a failure here.
+    """
+    try:
+        entries = Opentide.Configurations.Deployment.Index.get("statuses")
+    except (KeyError, AttributeError):
+        return []
+    statuses: list[dict[str, str]] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str) and entry["name"]:
+            strategy = entry.get("strategy")
+            statuses.append({"name": entry["name"], "strategy": str(strategy or "")})
+    return statuses
+
+
+def _release_statuses(statuses: list[dict[str, str]]) -> set[str]:
+    """The statuses deploy releases from the default branch: what "in production" means."""
+    release = {status["name"] for status in statuses if status["strategy"] == "RELEASE"}
+    return release or {"PRODUCTION"}
+
+
+def catalogue_graph(*, detail: str = "summary") -> dict[str, Any]:
+    """The catalogue as a graph: threats, objectives, rules and how they connect.
+
+    ``detail="full"`` returns every node with the fields the graph view draws;
+    ``"summary"`` (the default) returns counts and the gaps, small enough for a
+    model's context however large the catalogue.
+    """
+    from opentide.core.technique_coverage import own_techniques, rule_technique_index
+
+    ensure_initialised()
+    signals_raw = getattr(Opentide.Models, "signals", None) or {}
+    signals = {str(key): as_body(value) for key, value in signals_raw.items()}
+    techniques = rule_technique_index()
+
+    threats: list[dict[str, Any]] = []
+    for uuid, entry in Opentide.Models.threats.items():
+        body = as_body(entry)
+        section = _section(body, "threat")
+        threats.append(
+            {
+                "uuid": str(uuid),
+                "title": body.get("name") or str(uuid),
+                "criticality": body.get("criticality"),
+                "severity": section.get("severity"),
+                "viability": section.get("viability"),
+                "actors": _threat_actors(section),
+                "techniques": sorted(set(own_techniques(body))),
+                "chaining": _chaining_links(body),
+            }
+        )
+
+    objectives: list[dict[str, Any]] = []
+    for uuid, entry in Opentide.Models.objectives.items():
+        body = as_body(entry)
+        section = _section(body, "objective")
+        signals_list = section.get("signals")
+        objectives.append(
+            {
+                "uuid": str(uuid),
+                "title": body.get("name") or str(uuid),
+                "priority": section.get("priority"),
+                "threats": _string_ids(section.get("threats")),
+                "signals": len(signals_list) if isinstance(signals_list, list) else 0,
+            }
+        )
+
+    rules: list[dict[str, Any]] = []
+    for uuid, entry in Opentide.Models.rules.items():
+        body = as_body(entry)
+        objective, signal = _rule_objective(body, signals)
+        resolved = techniques.get(str(uuid))
+        rules.append(
+            {
+                "uuid": str(uuid),
+                "title": body.get("name") or str(uuid),
+                "severity": body.get("severity"),
+                "objective": objective,
+                "signal": signal,
+                "techniques": sorted(set(resolved.all)) if resolved else [],
+                "platforms": _platform_statuses(body),
+            }
+        )
+
+    statuses = _configured_statuses()
+    if detail == "full":
+        actors = {actor for threat in threats for actor in threat["actors"]}
+        return {
+            "threats": threats,
+            "objectives": objectives,
+            "rules": rules,
+            "actor_names": _actor_labels(actors),
+            "statuses": statuses,
+        }
+    return _graph_summary(threats, objectives, rules, _release_statuses(statuses))
+
+
+def _graph_summary(
+    threats: list[dict[str, Any]],
+    objectives: list[dict[str, Any]],
+    rules: list[dict[str, Any]],
+    release: set[str],
+) -> dict[str, Any]:
+    rules_by_objective: dict[str, list[dict[str, Any]]] = {}
+    for rule in rules:
+        if rule["objective"]:
+            rules_by_objective.setdefault(rule["objective"], []).append(rule)
+    objectives_by_threat: dict[str, list[str]] = {}
+    for objective in objectives:
+        for threat in objective["threats"]:
+            objectives_by_threat.setdefault(threat, []).append(objective["uuid"])
+
+    threat_rules = {
+        threat["uuid"]: [
+            rule
+            for objective in objectives_by_threat.get(threat["uuid"], [])
+            for rule in rules_by_objective.get(objective, [])
+        ]
+        for threat in threats
+    }
+
+    by_status: dict[str, int] = {}
+    by_platform: dict[str, dict[str, int]] = {}
+    for rule in rules:
+        for platform, status in rule["platforms"].items():
+            key = status or "unset"
+            by_status[key] = by_status.get(key, 0) + 1
+            counts = by_platform.setdefault(platform, {})
+            counts[key] = counts.get(key, 0) + 1
+
+    def listed(items: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "count": len(items),
+            "items": [
+                {"uuid": item["uuid"], "title": item["title"]}
+                for item in items[:SUMMARY_LIST_LIMIT]
+            ],
+        }
+
+    no_objective = [t for t in threats if not objectives_by_threat.get(t["uuid"])]
+    no_rule = [
+        t for t in threats if objectives_by_threat.get(t["uuid"]) and not threat_rules[t["uuid"]]
+    ]
+    no_production = [
+        t
+        for t in threats
+        if threat_rules[t["uuid"]]
+        and not any(
+            status in release
+            for rule in threat_rules[t["uuid"]]
+            for status in rule["platforms"].values()
+        )
+    ]
+    idle_objectives = [o for o in objectives if not rules_by_objective.get(o["uuid"])]
+    chained = {t["uuid"] for t in threats if t["chaining"]} | {
+        link["to"] for t in threats for link in t["chaining"]
+    }
+    return {
+        "counts": {
+            "threats": len(threats),
+            "objectives": len(objectives),
+            "rules": len(rules),
+            "chained_threats": len(chained),
+            "actors": len({a for t in threats for a in t["actors"]}),
+        },
+        "rule_blocks_by_status": dict(sorted(by_status.items())),
+        "rule_blocks_by_platform": {
+            k: dict(sorted(v.items())) for k, v in sorted(by_platform.items())
+        },
+        "threats_without_objectives": listed(no_objective),
+        "threats_without_rules": listed(no_rule),
+        "threats_without_production_rules": listed(no_production),
+        "objectives_without_rules": listed(idle_objectives),
+    }

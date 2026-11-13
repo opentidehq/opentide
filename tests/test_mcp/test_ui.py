@@ -16,6 +16,7 @@ BOUND_TOOLS = {
     "coverage": "ui://opentide/coverage.html",
     "validation_report": "ui://opentide/validation-report.html",
     "get_chaining": "ui://opentide/lineage.html",
+    "graph": "ui://opentide/graph.html",
 }
 
 
@@ -59,11 +60,21 @@ def test_each_page_names_its_view_and_loads_nothing_remote(view: ui.View) -> Non
     assert "innerHTML" not in page and "insertAdjacentHTML" not in page
 
 
-def test_only_the_coverage_page_carries_the_attack_matrix() -> None:
+def test_only_the_coverage_and_graph_pages_carry_the_attack_matrix() -> None:
     assert _attack_json(ui.view_html("validation")) is None
     assert _attack_json(ui.view_html("lineage")) is None
-    matrix = _attack_json(ui.view_html("coverage"))
-    assert isinstance(matrix, dict) and matrix["version"]
+    for view in ("coverage", "graph"):
+        matrix = _attack_json(ui.view_html(view))
+        assert isinstance(matrix, dict) and matrix["version"], view
+
+
+def test_the_graph_page_carries_its_own_style_and_script() -> None:
+    page = ui.view_html("graph")
+    assert "extraRenderers.graph = renderGraphView" in page
+    assert ".g-canvas" in page
+    # Other views get the shell alone.
+    assert "renderGraphView" not in ui.view_html("coverage")
+    assert "/*__OPENTIDE_VIEW_" not in page and "/*__OPENTIDE_VIEW_" not in ui.view_html("lineage")
 
 
 def test_attack_matrix_follows_the_bundled_vocabulary() -> None:
