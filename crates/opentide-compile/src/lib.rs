@@ -46,6 +46,7 @@ pub mod sentinel_one;
 pub mod splunk;
 pub mod strategy;
 pub mod sysdig;
+pub mod validate;
 
 pub use json::Json;
 pub use rule::{CompileError, Rule};

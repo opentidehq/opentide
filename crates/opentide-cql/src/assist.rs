@@ -34,10 +34,10 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
                 .child_by_field_name("field")
                 .map(|f| unquote(text(f, source)))
                 .unwrap_or("");
-            if field == "#event_simpleName" || field == "event_simpleName" {
-                if let Some(e) = catalog.event(unquote(text(node, source))) {
-                    return Some(event_hover(e));
-                }
+            if (field == "#event_simpleName" || field == "event_simpleName")
+                && let Some(e) = catalog.event(unquote(text(node, source)))
+            {
+                return Some(event_hover(e));
             }
         }
     }
@@ -396,24 +396,24 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
         }
         if let Some((call, args)) = open_call(before) {
             let current = top_level_arguments(args).pop().unwrap_or_default();
-            if let (Some(f), Some(arg)) = (catalog.function(&call), argument_name(&current)) {
-                if let Some(p) = f.parameter(arg) {
-                    if !p.values.is_empty() {
-                        return p
-                            .values
-                            .iter()
-                            .map(|v| CompletionItem::new(v.clone(), "enum"))
-                            .collect();
-                    }
-                    if p.query || p.ty.contains("function") {
-                        return function_items(catalog).collect();
-                    }
-                    if p.ty == "boolean" {
-                        return ["true", "false"]
-                            .into_iter()
-                            .map(|v| CompletionItem::new(v, "constant"))
-                            .collect();
-                    }
+            if let (Some(f), Some(arg)) = (catalog.function(&call), argument_name(&current))
+                && let Some(p) = f.parameter(arg)
+            {
+                if !p.values.is_empty() {
+                    return p
+                        .values
+                        .iter()
+                        .map(|v| CompletionItem::new(v.clone(), "enum"))
+                        .collect();
+                }
+                if p.query || p.ty.contains("function") {
+                    return function_items(catalog).collect();
+                }
+                if p.ty == "boolean" {
+                    return ["true", "false"]
+                        .into_iter()
+                        .map(|v| CompletionItem::new(v, "constant"))
+                        .collect();
                 }
             }
         }
@@ -428,36 +428,33 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     }
 
     // Right after `(` or `,` of a known call: the parameters not given yet.
-    if head.ends_with('(') || head.ends_with(',') {
-        if let Some((call, args)) = open_call(before) {
-            if let Some(f) = catalog.function(&call) {
-                let arguments = top_level_arguments(args);
-                let mut given: Vec<&str> =
-                    arguments.iter().filter_map(|a| argument_name(a)).collect();
-                // A finished argument without a name binds the omittable parameter.
-                let finished = &arguments[..arguments.len().saturating_sub(1)];
-                if finished
-                    .iter()
-                    .any(|a| argument_name(a).is_none() && !a.trim().is_empty())
-                {
-                    if let Some(p) = f.unnamed_parameter() {
-                        given.push(p.name.as_str());
-                    }
-                }
-                let mut items: Vec<CompletionItem> = f
-                    .parameters
-                    .iter()
-                    .filter(|p| !p.deprecated && !given.iter().any(|g| p.answers_to(g)))
-                    .map(|p| {
-                        let mut item = CompletionItem::new(p.name.clone(), "property");
-                        item.detail = Some(parameter_detail(p));
-                        item
-                    })
-                    .collect();
-                items.extend(field_items(catalog));
-                return items;
-            }
+    if (head.ends_with('(') || head.ends_with(','))
+        && let Some((call, args)) = open_call(before)
+        && let Some(f) = catalog.function(&call)
+    {
+        let arguments = top_level_arguments(args);
+        let mut given: Vec<&str> = arguments.iter().filter_map(|a| argument_name(a)).collect();
+        // A finished argument without a name binds the omittable parameter.
+        let finished = &arguments[..arguments.len().saturating_sub(1)];
+        if finished
+            .iter()
+            .any(|a| argument_name(a).is_none() && !a.trim().is_empty())
+            && let Some(p) = f.unnamed_parameter()
+        {
+            given.push(p.name.as_str());
         }
+        let mut items: Vec<CompletionItem> = f
+            .parameters
+            .iter()
+            .filter(|p| !p.deprecated && !given.iter().any(|g| p.answers_to(g)))
+            .map(|p| {
+                let mut item = CompletionItem::new(p.name.clone(), "property");
+                item.detail = Some(parameter_detail(p));
+                item
+            })
+            .collect();
+        items.extend(field_items(catalog));
+        return items;
     }
 
     // A step or a filter: functions, tags and fields.

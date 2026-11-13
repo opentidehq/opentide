@@ -1,0 +1,2 @@
+// prod:index invalid
+$e.additional.fields["Owner" = "alice"

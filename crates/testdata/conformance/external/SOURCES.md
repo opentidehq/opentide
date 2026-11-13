@@ -160,3 +160,77 @@ Selection: only parts of the repository under the root Unlicense. The sub-packag
 
 `<slug>.broken.cql` is the same query with one injected fault. The fault kinds are an unbalanced `(` or `{`, a dangling `and`, a `| https://` step, a misspelt function, a misspelt parameter, a second unnamed argument, a duplicated parameter, a removed required parameter, `order=down`, an unknown regex flag, free text after an aggregate, `x := f(..., as=y)`, and `<=>` outside `correlate()`. `FAULTS.toml` records each twin's fault and the code it must report. `crates/opentide-analysis/tests/external_cql.rs` requires every public query to produce no finding (`opentide_cql::analyze` and `analyze_query`), and every twin to report its code. It also requires at least 30 pairs, every fault kind, and a manifest that matches the files.
 
+
+## YARA — ReversingLabs/reversinglabs-yara-rules (MIT) and Neo23x0/signature-base (Detection Rule License 1.1)
+
+`yara/<source>/<file>` is one public YARA rules file, unmodified, written by `scripts/sync_yara_corpus.py`. `<file>.broken.<ext>` is a modified copy with one injected fault, which libyara 4.5.4 refuses: the last rule's closing `}` removed, `$opentide_undefined or` or `opentide_undefined or` put in front of the first condition, or `condition:` misspelt `conditon:`. `crates/opentide-yara/tests/external_corpus.rs` requires every public file to produce no finding under the libyara and the YARA-X dialects, and every twin to report an error.
+
+Selection: files libyara 4.5.4 and YARA-X 1.23.0 both compile without a warning (no external variable), under 12 KB, spread over the repositories' categories. From signature-base, only files whose every `license` meta is the DRL 1.1 and that name no other licence or copyright: rules there under CC BY-NC 4.0, the Open Government Licence, BSD, Volexity's or CAPE's licence, and collections of third-party rules without a licence meta, are left out. Nothing GPL or Elastic License is vendored.
+
+### reversinglabs/ — at `e0a0be54aa1e11ccfd6854e4f19e9476f328fd84`
+
+Licence text: [`LICENSE.MIT-ReversingLabs.txt`](LICENSE.MIT-ReversingLabs.txt).
+
+- `ByteCode.MSIL.Backdoor.AgentRacoon.yara` from `yara/backdoor/ByteCode.MSIL.Backdoor.AgentRacoon.yara`
+- `ByteCode.MSIL.Backdoor.AsyncRAT.yara` from `yara/backdoor/ByteCode.MSIL.Backdoor.AsyncRAT.yara`
+- `ByteCode.MSIL.Backdoor.LimeRAT.yara` from `yara/backdoor/ByteCode.MSIL.Backdoor.LimeRAT.yara`
+- `ByteCode.MSIL.Backdoor.OrcusRAT.yara` from `yara/backdoor/ByteCode.MSIL.Backdoor.OrcusRAT.yara`
+- `ByteCode.MSIL.Backdoor.ResolverRAT.yara` from `yara/backdoor/ByteCode.MSIL.Backdoor.ResolverRAT.yara`
+- `Win32.Downloader.dlMarlboro.yara` from `yara/downloader/Win32.Downloader.dlMarlboro.yara`
+- `Win32.Exploit.CVE20200601.yara` from `yara/exploit/Win32.Exploit.CVE20200601.yara`
+- `ByteCode.MSIL.Infostealer.GomorrahStealer.yara` from `yara/infostealer/ByteCode.MSIL.Infostealer.GomorrahStealer.yara`
+- `Win32.Infostealer.MultigrainPOS.yara` from `yara/infostealer/Win32.Infostealer.MultigrainPOS.yara`
+- `Win32.Infostealer.ProjectHookPOS.yara` from `yara/infostealer/Win32.Infostealer.ProjectHookPOS.yara`
+- `Win32.PUA.Domaiq.yara` from `yara/pua/Win32.PUA.Domaiq.yara`
+- `ByteCode.MSIL.Ransomware.Apis.yara` from `yara/ransomware/ByteCode.MSIL.Ransomware.Apis.yara`
+- `ByteCode.MSIL.Ransomware.ChupaCabra.yara` from `yara/ransomware/ByteCode.MSIL.Ransomware.ChupaCabra.yara`
+- `ByteCode.MSIL.Ransomware.Cring.yara` from `yara/ransomware/ByteCode.MSIL.Ransomware.Cring.yara`
+- `ByteCode.MSIL.Ransomware.Dusk.yara` from `yara/ransomware/ByteCode.MSIL.Ransomware.Dusk.yara`
+- `ByteCode.MSIL.Ransomware.EAF.yara` from `yara/ransomware/ByteCode.MSIL.Ransomware.EAF.yara`
+- `Linux.Rootkit.Pumakit.yara` from `yara/rootkit/Linux.Rootkit.Pumakit.yara`
+- `Linux.Trojan.AcidRain.yara` from `yara/trojan/Linux.Trojan.AcidRain.yara`
+- `Linux.Trojan.BiBiWiper.yara` from `yara/trojan/Linux.Trojan.BiBiWiper.yara`
+- `Win32.Trojan.BiBiWiper.yara` from `yara/trojan/Win32.Trojan.BiBiWiper.yara`
+- `Win32.Trojan.CaddyWiper.yara` from `yara/trojan/Win32.Trojan.CaddyWiper.yara`
+- `Linux.Virus.Vit.yara` from `yara/virus/Linux.Virus.Vit.yara`
+- `Win32.Virus.Awfull.yara` from `yara/virus/Win32.Virus.Awfull.yara`
+- `Win32.Virus.Cmay.yara` from `yara/virus/Win32.Virus.Cmay.yara`
+- `Win32.Virus.DeadCode.yara` from `yara/virus/Win32.Virus.DeadCode.yara`
+
+### signature-base/ — at `de3c7252c22b3376352b5a68defa46459a12a693`
+
+The rules are shared under the Detection Rule License 1.1: [`LICENSE.DRL-1.1.md`](LICENSE.DRL-1.1.md). Each public file is unmodified, so every rule keeps the attribution meta (`author`, `reference`) the licence requires; its `.broken.` twin is a modified copy with one injected fault, as described above.
+
+- `apt_aa19_024a.yar` from `yara/apt_aa19_024a.yar`
+- `apt_agent_btz.yar` from `yara/apt_agent_btz.yar`
+- `bkdr_xz_util_cve_2024_3094.yar` from `yara/bkdr_xz_util_cve_2024_3094.yar`
+- `crime_academic_data_centers_camp_may20.yar` from `yara/crime_academic_data_centers_camp_may20.yar`
+- `crime_andromeda_jun17.yar` from `yara/crime_andromeda_jun17.yar`
+- `expl_adselfservice_cve_2021_40539.yar` from `yara/expl_adselfservice_cve_2021_40539.yar`
+- `expl_cleo_dec24.yar` from `yara/expl_cleo_dec24.yar`
+- `exploit_cve_2014_4076.yar` from `yara/exploit_cve_2014_4076.yar`
+- `gen_Excel4Macro_Sharpshooter.yar` from `yara/gen_Excel4Macro_Sharpshooter.yar`
+- `general_officemacros.yar` from `yara/general_officemacros.yar`
+- `generic_cryptors.yar` from `yara/generic_cryptors.yar`
+- `hktl_badsuccessor_helper_may25.yar` from `yara/hktl_badsuccessor_helper_may25.yar`
+- `htkl_blue_hammer_tool.yar` from `yara/htkl_blue_hammer_tool.yar`
+- `log_teamviewer_keyboard_layouts.yar` from `yara/log_teamviewer_keyboard_layouts.yar`
+- `lotusblossom_notepad_exploitation.yar` from `yara/lotusblossom_notepad_exploitation.yar`
+- `mal_avemaria_rat.yar` from `yara/mal_avemaria_rat.yar`
+- `pua_cryptocoin_miner.yar` from `yara/pua_cryptocoin_miner.yar`
+- `pup_lightftp.yar` from `yara/pup_lightftp.yar`
+- `react_pocs_indicators_dec25.yar` from `yara/react_pocs_indicators_dec25.yar`
+- `seaspy_backdoor_jan25.yar` from `yara/seaspy_backdoor_jan25.yar`
+- `susp_aur_packages.yar` from `yara/susp_aur_packages.yar`
+- `threat_compromised_daemon_tools_lite_may26.yar` from `yara/threat_compromised_daemon_tools_lite_may26.yar`
+- `vul_backdoor_antitheftweb.yar` from `yara/vul_backdoor_antitheftweb.yar`
+- `vuln_erlang_otp_ssh_cve_2025_32433.yar` from `yara/vuln_erlang_otp_ssh_cve_2025_32433.yar`
+- `webshell_regeorg.yar` from `yara/webshell_regeorg.yar`
+
+## Exabeam Query Language — written for opentide (EUPL-1.2)
+
+`exabeam/<name>.<profile>.exabeam` is a query written for this repository, not copied: Exabeam's own published content (ExabeamLabs/new-scale-content-hub) may not be redistributed, so it is measured locally (`crates/opentide-exabeam/tests/content_hub.rs`, `docs/EXABEAM.md`) and never vendored. The queries are realistic detections and hunts in the forms Exabeam's rules use (activity types, lists, CIDR blocks and ranges, context tables, `RGX`/`WLD` patterns, `SELECT` … `GROUP-BY`, `FOREACH`, `RGX_EXTRACT`), written with the Common Information Model's field names; `<profile>` is `rule` (a correlation-rule sequence) or `search` (a hunt). `<name>.broken.<profile>.exabeam` is the same query with one injected fault, which the specification's reference checker reports too. [`exabeam/FAULTS.toml`](exabeam/FAULTS.toml) records each twin's fault and code. `crates/opentide-analysis/tests/external_exabeam.rs` requires every query to produce no finding under its profile, every twin to report its code, and a manifest that matches the files.
+
+## YARA-L — chronicle/detection-rules (Apache-2.0)
+
+Licence text: [`LICENSE.Apache-2.0.txt`](LICENSE.Apache-2.0.txt). 79 community rules from `chronicle/detection-rules@a49c3752f3f013e9ead85c7430b8f39369efacbf`, unmodified, each with a `.broken.` twin (a modified copy with one injected fault). The list, and how each twin is made, is [`yaral/SOURCES.md`](yaral/SOURCES.md); `crates/opentide-yaral/tests/external_corpus.rs` requires every public rule to parse with no error but its listed exceptions, and every twin to have an error.

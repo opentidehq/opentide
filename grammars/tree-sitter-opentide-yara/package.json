@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-yara",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for YARA signatures (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.yara",
+      "file-types": ["yara"]
+    }
+  ]
+}

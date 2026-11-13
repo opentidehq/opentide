@@ -967,6 +967,7 @@ use crate::objects::platform::sentinel_one::{
     SentinelOneCondition, SentinelOneConfig, SentinelOneCorrelation, SentinelOneDetails,
     SentinelOneResponse, SentinelOneSingleEvent, SentinelOneSubQuery,
 };
+use crate::objects::platform::splunk::SavedSearchValue;
 use crate::objects::platform::splunk::{
     SplunkActions, SplunkConfig, SplunkEmail, SplunkEmailInclude, SplunkNotable,
     SplunkNotableDrilldown, SplunkNotableEvent, SplunkRisk, SplunkRiskObject, SplunkSchedule,
@@ -1013,6 +1014,7 @@ py_value! {
     Suppression => type_hint_union!(hint::STR, hint::BOOL),
     SentinelTechnique => hint::STR,
     TreatAsThreat => type_hint_union!(hint::BOOL, hint::STR),
+    SavedSearchValue => type_hint_union!(hint::STR, hint::INT, hint::FLOAT, hint::BOOL),
     ExabeamValue => type_hint_union!(hint::INT, hint::FLOAT, hint::SCALARS),
     ExabeamDays => type_hint_union!(hint::STRS, hint::INTS),
 }

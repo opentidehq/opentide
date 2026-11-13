@@ -543,22 +543,22 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
             q.query.field_path == path && !placeholder::is_placeholder_query(source, &q.query)
         })
     };
-    if let Some(block) = configurations.and_then(|c| c.get("elastic")) {
-        if let Some(at) = carrier(out, ELASTIC_QUERY) {
-            out[at]
-                .diagnostics
-                .extend(elastic::dataset_declarations(source, block));
-        }
+    if let Some(block) = configurations.and_then(|c| c.get("elastic"))
+        && let Some(at) = carrier(out, ELASTIC_QUERY)
+    {
+        out[at]
+            .diagnostics
+            .extend(elastic::dataset_declarations(source, block));
     }
-    if let Some(block) = configurations.and_then(|c| c.get("sysdig")) {
-        if let Some(at) = carrier(out, SYSDIG_CONDITION) {
-            out[at]
-                .diagnostics
-                .extend(falco::source_diagnostics(source, block));
-            out[at]
-                .diagnostics
-                .extend(exceptions_beyond_the_model(source, block));
-        }
+    if let Some(block) = configurations.and_then(|c| c.get("sysdig"))
+        && let Some(at) = carrier(out, SYSDIG_CONDITION)
+    {
+        out[at]
+            .diagnostics
+            .extend(falco::source_diagnostics(source, block));
+        out[at]
+            .diagnostics
+            .extend(exceptions_beyond_the_model(source, block));
     }
 }
 
@@ -706,6 +706,10 @@ fn analyze_injections(
                 let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
+            // No Tide field injects YARA, the Exabeam Query Language or
+            // YARA-L yet: the HarfangLab, Bitdefender, Exabeam and Google
+            // SecOps block ports bring their injection and its analysis.
+            LanguageId::Yara | LanguageId::Exabeam | LanguageId::Yaral => (Vec::new(), Vec::new()),
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,

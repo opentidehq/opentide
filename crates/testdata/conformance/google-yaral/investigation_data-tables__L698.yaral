@@ -1,0 +1,5 @@
+  events:
+    $e.metadata.event_type = "NETWORK_CONNECTION"
+
+  export:
+    %summary_table.write_row(col_name: $e.metadata.product_name, Vendor_name: $e.metadata.vendor_name)

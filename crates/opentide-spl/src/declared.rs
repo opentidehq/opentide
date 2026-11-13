@@ -189,11 +189,12 @@ fn scan_terms(source: &str, start: usize, end: usize, out: &mut Vec<Read>) {
         }
         let (values, next) = term_values(source, i, end);
         i = next;
-        if let Some((values, operator_negates)) = values {
-            if !negated && !operator_negates {
-                for (value_start, value_end) in values {
-                    read_name(source, value_start, value_end, out);
-                }
+        if let Some((values, operator_negates)) = values
+            && !negated
+            && !operator_negates
+        {
+            for (value_start, value_end) in values {
+                read_name(source, value_start, value_end, out);
             }
         }
         negate_next = false;

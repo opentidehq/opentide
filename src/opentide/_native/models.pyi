@@ -8799,6 +8799,13 @@ class SplunkConfig:
         Notable, risk, and email actions.
         """
     @property
+    def advanced(self, /) -> dict[str, str | int | float | bool | None] | None:
+        """
+        `savedsearches.conf` keys no other field sets, sent as written at deploy: a custom alert
+        action's `action.<name>.param.*`, for instance. A value is a string, number, boolean
+        (`1` or `0`) or `null` (empty). A key the block also sets takes this value.
+        """
+    @property
     def contributors(self, /) -> list[str] | None:
         """
         Platform contributors.

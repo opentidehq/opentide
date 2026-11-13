@@ -105,13 +105,13 @@
           ]
         },
         {
-          "begin": "^(\\s+)(carbon_black_cloud)\\s*:\\s*(?:#.*)?$",
+          "begin": "^(\\s+)(carbon_black_cloud|graylog)\\s*:\\s*(?:#.*)?$",
           "beginCaptures": {
             "2": {
               "name": "variable.other.property.tide"
             }
           },
-          "comment": "configurations.{carbon_black_cloud}: lucene queries (#171)",
+          "comment": "configurations.{carbon_black_cloud,graylog}: lucene queries (#171)",
           "end": "^(?!\\1\\s+\\S|\\s*$)",
           "patterns": [
             {
@@ -243,6 +243,52 @@
           ]
         },
         {
+          "begin": "^(\\s+)(google_secops)\\s*:\\s*(?:#.*)?$",
+          "beginCaptures": {
+            "2": {
+              "name": "variable.other.property.tide"
+            }
+          },
+          "comment": "configurations.{google_secops}: yaral queries (#171)",
+          "end": "^(?!\\1\\s+\\S|\\s*$)",
+          "patterns": [
+            {
+              "begin": "^(\\s+)(setup|events|outcome|condition|export)\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$",
+              "beginCaptures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                }
+              },
+              "contentName": "meta.embedded.block.yaral",
+              "end": "^(?!\\1\\s+\\S|\\s*$)",
+              "patterns": [
+                {
+                  "include": "source.yaral"
+                }
+              ]
+            },
+            {
+              "captures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                },
+                "3": {
+                  "name": "meta.embedded.block.yaral",
+                  "patterns": [
+                    {
+                      "include": "source.yaral"
+                    }
+                  ]
+                }
+              },
+              "match": "^(\\s+)(setup|events|outcome|condition|export)\\s*:\\s+(?![|>])(.+)$"
+            },
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
           "include": "$self"
         }
       ]
@@ -264,7 +310,7 @@
     },
     {
       "comment": "capture:tide.property",
-      "match": "(?m)^\\s*(?:action|actions|actors|alert|alert_severity|allow_block|analysis|anomaly_threshold|append_to_rule|arch|attach_csv|author|availability|bcc|building_block|carbon_black_cloud|cardinality|category|cc|chaining|classification|collect_investigation_package|column|comparator|composition|comps|condition|confidence|configurations|containment|content_type|context|contributors|cool_off|correlation|correlation_search|create_incident|created|criticality|cron|crowdstrike|custom_condition|custom_details|custom_time|cve|data|data_view_id|days|default|defender_for_endpoint|delay|description|details|detection_model|detectors|device|device_groups|devices|disable_fallback|disable_user|drilldown|duration|dynamic_properties|earliest|effort|elastic|email|enabled|end|endpoint|entities|entity|entries|eql|event|event_category_override|every|exabeam|examples|exceptions|exclusions|expiration|expires|false_positives|field|fields|file|files|filters|first|flags|for|force_password_reset|frequency|from|function|group_by|group_by_alert_details|group_by_custom_details|group_by_entities|group_name|grouping|grouping_lookback|groups|guide|harfanglab|highlighted_fields|history_window_start|id|identifier|impact|impacted_entities|imports|include|index|indicator_path|initiate_investigation|inline_results|integration|internal|interval|investigation|investment|isolate_device|items|job_id|key|killchain|language|last|last_day|latest|let|leverage|link|list_id|lists|logsource|logsources|lookback|machine_learning|macros|mailbox|mapping|mappings|mark_as_compromised|match_in_order|matches_required|matching|maturity|max_alerts|message|meta|metadata|methodology|minimum_engine_version|missing_fields_strategy|mitre_attack|modified|modifiers|name|namespace_type|negate|network_quarantine|new_terms|notable|notify|nrt|objective|operator|organisation|organizations|os|outcome|output|overrides|package|parent|platforms|playbook|policies|priority|procedure|product|property|public|purpose|quarantine_file|query|reason|recipients|recommendation|references|reopen_closed_incidents|report|reports|required_fields|requirements|respond|responders|response|restrict_app_execution|results_link|reviewed|risk|risk_objects|run_antivirus_scan|schedule|scheduling|schema|scope|score|search|search_string|searches|security_domain|selection|selections|send_csv|send_pdf|sentinel|sentinel_one|sequences|setup|severity|sighting|sigma|signals|single_event|source|splunk|start|status|strategy|strings|sub_queries|subject|suppression|surface|sysdig|system|tactic|tactics|tags|technique|techniques|technology|template|tenant|tenants|terrain|test_mode|threat|threat_objects|threats|threshold|throttling|tiebreaker_field|time_window|timeline|timerange|timestamp|timestamp_field|title|tlp|to|treat_as_threat|trigger|trigger_condition|trigger_time|type|user|users|uuid|value|values|version|viability|watchlist|within|yara)\\s*:",
+      "match": "(?m)^\\s*(?:action|actions|actors|advanced|alert|alert_severity|allow_block|analysis|anomaly_threshold|append_to_rule|arch|attach_csv|author|availability|bcc|building_block|carbon_black_cloud|cardinality|category|cc|chaining|classification|collect_investigation_package|column|comparator|composition|comps|condition|confidence|configurations|containment|content_type|context|contributors|cool_off|correlation|correlation_search|create_incident|created|criticality|cron|crowdstrike|custom_condition|custom_details|custom_time|cve|data|data_view_id|days|default|defender_for_endpoint|delay|description|details|detection_model|detectors|device|device_groups|devices|disable_fallback|disable_user|drilldown|duration|dynamic_properties|earliest|effort|elastic|email|enabled|end|endpoint|entities|entity|entries|eql|event|event_category_override|every|exabeam|examples|exceptions|exclusions|expiration|expires|false_positives|field|fields|file|files|filters|first|flags|for|force_password_reset|frequency|from|function|group_by|group_by_alert_details|group_by_custom_details|group_by_entities|group_name|grouping|grouping_lookback|groups|guide|harfanglab|highlighted_fields|history_window_start|id|identifier|impact|impacted_entities|imports|include|index|indicator_path|initiate_investigation|inline_results|integration|internal|interval|investigation|investment|isolate_device|items|job_id|key|killchain|language|last|last_day|latest|let|leverage|link|list_id|lists|logsource|logsources|lookback|machine_learning|macros|mailbox|mapping|mappings|mark_as_compromised|match_in_order|matches_required|matching|maturity|max_alerts|message|meta|metadata|methodology|minimum_engine_version|missing_fields_strategy|mitre_attack|modified|modifiers|name|namespace_type|negate|network_quarantine|new_terms|notable|notify|nrt|objective|operator|organisation|organizations|os|outcome|output|overrides|package|parent|platforms|playbook|policies|priority|procedure|product|property|public|purpose|quarantine_file|query|reason|recipients|recommendation|references|reopen_closed_incidents|report|reports|required_fields|requirements|respond|responders|response|restrict_app_execution|results_link|reviewed|risk|risk_objects|run_antivirus_scan|schedule|scheduling|schema|scope|score|search|search_string|searches|security_domain|selection|selections|send_csv|send_pdf|sentinel|sentinel_one|sequences|setup|severity|sighting|sigma|signals|single_event|source|splunk|start|status|strategy|strings|sub_queries|subject|suppression|surface|sysdig|system|tactic|tactics|tags|technique|techniques|technology|template|tenant|tenants|terrain|test_mode|threat|threat_objects|threats|threshold|throttling|tiebreaker_field|time_window|timeline|timerange|timestamp|timestamp_field|title|tlp|to|treat_as_threat|trigger|trigger_condition|trigger_time|type|user|users|uuid|value|values|version|viability|watchlist|within|yara)\\s*:",
       "name": "variable.other.property.tide"
     },
     {

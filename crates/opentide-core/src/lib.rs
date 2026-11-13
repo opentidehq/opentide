@@ -48,6 +48,20 @@ pub enum LanguageId {
     /// (`configurations.crowdstrike`). Not Cassandra's CQL.
     #[serde(rename = "cql", alias = "opentide-cql")]
     Cql,
+    /// YARA signatures as libyara 4.5 compiles them, with YARA-X 1.x as a
+    /// second opinion (yara-1.0; HarfangLab and Bitdefender `yara` blocks).
+    #[serde(rename = "yara", alias = "opentide-yara")]
+    Yara,
+    /// The Exabeam Query Language of the New-Scale SIEM (exabeam-1.0;
+    /// `configurations.exabeam`, `system: exabeam` hunts). Exabeam's guides
+    /// call it "EQL"; opentide never does, because `eql` is Elastic's.
+    #[serde(rename = "exabeam", alias = "opentide-exabeam")]
+    Exabeam,
+    /// YARA-L 2.0, the detection and search language of Google Security
+    /// Operations (yara-l-1.0; `configurations.google_secops`, `.yaral` and
+    /// `.yl2` files). Not YARA: no code is shared.
+    #[serde(rename = "yaral", alias = "opentide-yaral", alias = "yara-l")]
+    Yaral,
 }
 
 impl LanguageId {
@@ -63,6 +77,9 @@ impl LanguageId {
             Self::Config => "opentide-config",
             Self::Falco => "falco",
             Self::Cql => "cql",
+            Self::Yara => "yara",
+            Self::Exabeam => "exabeam",
+            Self::Yaral => "yaral",
         }
     }
 
@@ -78,6 +95,9 @@ impl LanguageId {
             "opentide-config" => Some(Self::Config),
             "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
             "cql" | "opentide-cql" | "CQL" | "logscale" | "crowdstrike" => Some(Self::Cql),
+            "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
+            "exabeam" | "opentide-exabeam" | "Exabeam" => Some(Self::Exabeam),
+            "yaral" | "opentide-yaral" | "yara-l" | "YARA-L" => Some(Self::Yaral),
             _ => None,
         }
     }
@@ -94,12 +114,15 @@ impl LanguageId {
             "lucene" => Some(Self::Lucene),
             "falco" => Some(Self::Falco),
             "cql" => Some(Self::Cql),
+            "yar" | "yara" => Some(Self::Yara),
+            "exabeam" => Some(Self::Exabeam),
+            "yaral" | "yl2" => Some(Self::Yaral),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 8] = [
+    pub const QUERY_LANGUAGES: [Self; 11] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -108,6 +131,9 @@ impl LanguageId {
         Self::Lucene,
         Self::Falco,
         Self::Cql,
+        Self::Yara,
+        Self::Exabeam,
+        Self::Yaral,
     ];
 }
 
@@ -306,6 +332,36 @@ impl<'a> LineIndex<'a> {
         }
     }
 
+    /// Same result as [`position_to_offset`]: the byte offset of an LSP
+    /// position (UTF-16 columns), a column past its line's end clamping to
+    /// that end, a line past the text's end giving its length.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a char is one or two UTF-16 units"
+    )]
+    pub fn offset(&self, position: Position) -> usize {
+        let line = position.line as usize;
+        let Some(&start) = self.starts.get(line) else {
+            return self.source.len();
+        };
+        // The line's end: its `\n`, or the end of the text.
+        let end = self
+            .starts
+            .get(line + 1)
+            .map_or(self.source.len(), |next| next - 1);
+        if self.ascii[line] {
+            return (start + position.character as usize).min(end);
+        }
+        let mut col = 0u32;
+        for (i, ch) in self.source[start..end].char_indices() {
+            if col >= position.character {
+                return start + i;
+            }
+            col += ch.len_utf16() as u32;
+        }
+        end
+    }
+
     /// Same result as [`span_to_range`].
     pub fn range(&self, span: ByteSpan) -> Range {
         Range {
@@ -448,6 +504,20 @@ impl Diagnostic {
         }
     }
 
+    /// A finding that is worth knowing and never wrong: an optional field
+    /// left out, say. Hosts show it without counting it as a problem.
+    pub fn information(code: impl Into<String>, message: impl Into<String>, range: Range) -> Self {
+        Self {
+            severity: Severity::Information,
+            ..Self::warning(code, message, range)
+        }
+    }
+
+    pub fn with_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
+    }
+
     pub fn with_field_path(mut self, path: Vec<String>) -> Self {
         self.field_path = Some(path);
         self
@@ -540,6 +610,14 @@ pub mod codes {
     pub const LUCENE_BARE_TERM: &str = "lucene_bare_term";
     pub const LUCENE_LOOKS_LIKE_KUERY: &str = "lucene_looks_like_kuery";
     pub const LUCENE_ELASTICSEARCH_ONLY: &str = "lucene_elasticsearch_only";
+    // The Graylog dialect of Lucene (graylog-1.0, "Query diagnostics").
+    pub const GRAYLOG_LEADING_WILDCARD: &str = "graylog_leading_wildcard";
+    pub const GRAYLOG_REGEX_UNSUPPORTED: &str = "graylog_regex_unsupported";
+    pub const GRAYLOG_REGEX_OPERATOR: &str = "graylog_regex_operator";
+    pub const GRAYLOG_REGEX_QUOTE: &str = "graylog_regex_quote";
+    pub const GRAYLOG_OPEN_RANGE: &str = "graylog_open_range";
+    pub const GRAYLOG_DOUBLE_BACKSLASH: &str = "graylog_double_backslash";
+    pub const GRAYLOG_ANALYZED_FIELD: &str = "graylog_analyzed_field";
     pub const KUERY_QUESTION_MARK: &str = "kuery_question_mark";
     pub const KUERY_FREE_TEXT: &str = "kuery_free_text";
     pub const KUERY_LOOKS_LIKE_LUCENE: &str = "kuery_looks_like_lucene";
@@ -608,25 +686,33 @@ pub mod codes {
     pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
     pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
     pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
-
-    // Exabeam block constraint codes (exabeam-1.0, Constraints), the workspace
-    // check and the advisories, as opentide names them.
-    pub const EXABEAM_SEQUENCES: &str = "exabeam_sequences";
-    pub const EXABEAM_CORRELATION: &str = "exabeam_correlation";
-    pub const EXABEAM_THRESHOLD_FUNCTION: &str = "exabeam_threshold_function";
-    pub const EXABEAM_THRESHOLD_OPERATOR: &str = "exabeam_threshold_operator";
-    pub const EXABEAM_THRESHOLD_VALUE: &str = "exabeam_threshold_value";
-    pub const EXABEAM_GROUP_BY: &str = "exabeam_group_by";
-    pub const EXABEAM_DURATION: &str = "exabeam_duration";
-    pub const EXABEAM_SEVERITY: &str = "exabeam_severity";
-    pub const EXABEAM_OUTCOME: &str = "exabeam_outcome";
-    pub const EXABEAM_EMAIL: &str = "exabeam_email";
-    pub const EXABEAM_SCHEDULE: &str = "exabeam_schedule";
-    pub const EXABEAM_NAME_LENGTH: &str = "exabeam_name_length";
-    pub const EXABEAM_CONTEXT_TABLE_TRIGGER: &str = "exabeam_context_table_trigger";
-    pub const EXABEAM_NAME_DUPLICATE: &str = "exabeam_name_duplicate";
-    pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
-    pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
+    // Bitdefender GravityZone block codes (bitdefender-1.0, Constraints and
+    // Advisories), as opentide names them.
+    pub const BITDEFENDER_RULE_KIND: &str = "bitdefender_rule_kind";
+    pub const BITDEFENDER_TARGET: &str = "bitdefender_target";
+    pub const BITDEFENDER_CRITERION_SHAPE: &str = "bitdefender_criterion_shape";
+    pub const BITDEFENDER_CRITERION_FIELD: &str = "bitdefender_criterion_field";
+    pub const BITDEFENDER_CRITERION_RELATION: &str = "bitdefender_criterion_relation";
+    pub const BITDEFENDER_CRITERION_VALUE: &str = "bitdefender_criterion_value";
+    pub const BITDEFENDER_CRITERIA_COMBINATION: &str = "bitdefender_criteria_combination";
+    pub const BITDEFENDER_ACTION_SCOPE: &str = "bitdefender_action_scope";
+    pub const BITDEFENDER_TARGETS_SHAPE: &str = "bitdefender_targets_shape";
+    pub const BITDEFENDER_SEVERITY: &str = "bitdefender_severity";
+    pub const BITDEFENDER_REGISTRY_FULL_HIVE: &str = "bitdefender_registry_full_hive";
+    pub const BITDEFENDER_CONTAINS_NO_WILDCARD: &str = "bitdefender_contains_no_wildcard";
+    pub const BITDEFENDER_SEVERITY_COLLAPSED: &str = "bitdefender_severity_collapsed";
+    // Graylog block codes (graylog-1.0, Constraints and Advisories), as
+    // opentide names them.
+    pub const GRAYLOG_QUERY_BLANK: &str = "graylog_query_blank";
+    pub const GRAYLOG_LIST_SHAPE: &str = "graylog_list_shape";
+    pub const GRAYLOG_SCHEDULE: &str = "graylog_schedule";
+    pub const GRAYLOG_EVENT_LIMIT: &str = "graylog_event_limit";
+    pub const GRAYLOG_AGGREGATION: &str = "graylog_aggregation";
+    pub const GRAYLOG_EVENT_FIELD: &str = "graylog_event_field";
+    pub const GRAYLOG_EVENT_KEY: &str = "graylog_event_key";
+    pub const GRAYLOG_PRIORITY: &str = "graylog_priority";
+    pub const GRAYLOG_FIELD_NAME: &str = "graylog_field_name";
+    pub const GRAYLOG_OVERLAPPING_WINDOW: &str = "graylog_overlapping_window";
 
     // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
     pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
@@ -649,6 +735,143 @@ pub mod codes {
     pub const CQL_MATCH_GUARD: &str = "cql_match_guard";
     pub const CQL_REGEX_GROUP_UNDER_OR: &str = "cql_regex_group_under_or";
     pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
+
+    // YARA (yara-1.0, #165). Errors are what libyara 4.5 refuses; the
+    // warnings are yara_x_incompatible through yara_meta_missing.
+    pub const YARA_PARSE_ERROR: &str = "yara_parse_error";
+    pub const YARA_INCLUDE: &str = "yara_include";
+    pub const YARA_SIGNATURE_ALIAS: &str = "yara_signature_alias";
+    pub const YARA_EMPTY_SIGNATURE: &str = "yara_empty_signature";
+    pub const YARA_DUPLICATE_RULE: &str = "yara_duplicate_rule";
+    pub const YARA_DUPLICATE_STRING: &str = "yara_duplicate_string";
+    pub const YARA_DUPLICATE_TAG: &str = "yara_duplicate_tag";
+    pub const YARA_UNDEFINED_STRING: &str = "yara_undefined_string";
+    pub const YARA_UNREFERENCED_STRING: &str = "yara_unreferenced_string";
+    pub const YARA_UNDEFINED_IDENTIFIER: &str = "yara_undefined_identifier";
+    pub const YARA_RULE_IDENTIFIER_CONFLICT: &str = "yara_rule_identifier_conflict";
+    pub const YARA_UNKNOWN_MODULE: &str = "yara_unknown_module";
+    pub const YARA_MODULE_NOT_IMPORTED: &str = "yara_module_not_imported";
+    pub const YARA_UNKNOWN_MODULE_MEMBER: &str = "yara_unknown_module_member";
+    pub const YARA_TYPE: &str = "yara_type";
+    pub const YARA_REGEXP: &str = "yara_regexp";
+    pub const YARA_HEX_STRING: &str = "yara_hex_string";
+    pub const YARA_STRING_MODIFIER: &str = "yara_string_modifier";
+    pub const YARA_NUMBER_OUT_OF_RANGE: &str = "yara_number_out_of_range";
+    pub const YARA_X_INCOMPATIBLE: &str = "yara_x_incompatible";
+    pub const YARA_SLOW_PATTERN: &str = "yara_slow_pattern";
+    pub const YARA_ENTRYPOINT_DEPRECATED: &str = "yara_entrypoint_deprecated";
+    pub const YARA_SUSPICIOUS_EXPRESSION: &str = "yara_suspicious_expression";
+    pub const YARA_MODULE_UNCONFIRMED: &str = "yara_module_unconfirmed";
+    pub const YARA_META_MISSING: &str = "yara_meta_missing";
+    // The YARA profiles of harfanglab-1.0 (1.2) and bitdefender-1.0.
+    pub const HARFANGLAB_RULE_KIND: &str = "harfanglab_rule_kind";
+    pub const HARFANGLAB_YARA_FORM: &str = "harfanglab_yara_form";
+    pub const HARFANGLAB_YARA_SECTION_HEADER: &str = "harfanglab_yara_section_header";
+    pub const HARFANGLAB_YARA_IMPORT: &str = "harfanglab_yara_import";
+    pub const HARFANGLAB_YARA_RULE_NAME: &str = "harfanglab_yara_rule_name";
+    pub const HARFANGLAB_YARA_CONTEXT: &str = "harfanglab_yara_context";
+    pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
+    pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
+    // YARA-L 2.0 (yara-l-1.0). Errors are what Google's compiler refuses;
+    // the warnings are yaral_string_escape and yaral_deprecated_field
+    // through yaral_reference_list_deprecated.
+    pub const YARAL_PARSE_ERROR: &str = "yaral_parse_error";
+    pub const YARAL_SECTION_HEADER: &str = "yaral_section_header";
+    pub const YARAL_SECTION_EMPTY: &str = "yaral_section_empty";
+    pub const YARAL_SECTION_ALIAS: &str = "yaral_section_alias";
+    pub const YARAL_SECTION_MISSING: &str = "yaral_section_missing";
+    pub const YARAL_SECTION_ORDER: &str = "yaral_section_order";
+    pub const YARAL_SECTION_UNAVAILABLE: &str = "yaral_section_unavailable";
+    pub const YARAL_META_DUPLICATE: &str = "yaral_meta_duplicate";
+    pub const YARAL_RESERVED_IDENTIFIER: &str = "yaral_reserved_identifier";
+    pub const YARAL_UNDEFINED_VARIABLE: &str = "yaral_undefined_variable";
+    pub const YARAL_MULTI_EVENT_MATCH: &str = "yaral_multi_event_match";
+    pub const YARAL_MATCH_SHAPE: &str = "yaral_match_shape";
+    pub const YARAL_MATCH_VARIABLE: &str = "yaral_match_variable";
+    pub const YARAL_MATCH_WINDOW: &str = "yaral_match_window";
+    pub const YARAL_CONDITION_SHAPE: &str = "yaral_condition_shape";
+    pub const YARAL_NOCASE_ON_ENUM: &str = "yaral_nocase_on_enum";
+    pub const YARAL_OUTCOME_LIMIT: &str = "yaral_outcome_limit";
+    pub const YARAL_OUTCOME_AGGREGATION: &str = "yaral_outcome_aggregation";
+    pub const YARAL_UNKNOWN_FUNCTION: &str = "yaral_unknown_function";
+    pub const YARAL_FUNCTION_UNAVAILABLE: &str = "yaral_function_unavailable";
+    pub const YARAL_UNKNOWN_UDM_FIELD: &str = "yaral_unknown_udm_field";
+    pub const YARAL_ENUM_VALUE: &str = "yaral_enum_value";
+    pub const YARAL_TYPE: &str = "yaral_type";
+    pub const YARAL_REGEX: &str = "yaral_regex";
+    pub const YARAL_STRING_ESCAPE: &str = "yaral_string_escape";
+    pub const YARAL_REFERENCE_LIST_LIMIT: &str = "yaral_reference_list_limit";
+    pub const YARAL_OPTION: &str = "yaral_option";
+    pub const YARAL_EXPORT_VALUE: &str = "yaral_export_value";
+    pub const YARAL_WINDOW_BOUND: &str = "yaral_window_bound";
+    pub const YARAL_DEPRECATED_FIELD: &str = "yaral_deprecated_field";
+    pub const YARAL_UNFILTERED_EVENT: &str = "yaral_unfiltered_event";
+    pub const YARAL_LEADING_WILDCARD_REGEX: &str = "yaral_leading_wildcard_regex";
+    pub const YARAL_REFERENCE_LIST_DEPRECATED: &str = "yaral_reference_list_deprecated";
+    // The constraints and advisories of google-secops-1.0.
+    pub const GOOGLE_SECOPS_RULE_NAME: &str = "google_secops_rule_name";
+    pub const GOOGLE_SECOPS_SEVERITY: &str = "google_secops_severity";
+    pub const GOOGLE_SECOPS_RUN_FREQUENCY: &str = "google_secops_run_frequency";
+    pub const GOOGLE_SECOPS_SCHEDULE: &str = "google_secops_schedule";
+    pub const GOOGLE_SECOPS_META_KEY: &str = "google_secops_meta_key";
+    pub const GOOGLE_SECOPS_RISK_SCORE_MISSING: &str = "google_secops_risk_score_missing";
+    pub const GOOGLE_SECOPS_RULE_ID_LITERAL: &str = "google_secops_rule_id_literal";
+    pub const GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE: &str =
+        "google_secops_live_frequency_unavailable";
+
+    // The Exabeam Query Language (specifications exabeam-1.0, language).
+    pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
+    pub const EXABEAM_IMPLICIT_OPERATOR: &str = "exabeam_implicit_operator";
+    pub const EXABEAM_NOT_EQUAL: &str = "exabeam_not_equal";
+    pub const EXABEAM_BARE_WILDCARD: &str = "exabeam_bare_wildcard";
+    pub const EXABEAM_LEADING_SLASH: &str = "exabeam_leading_slash";
+    pub const EXABEAM_FREE_TEXT_SPECIAL: &str = "exabeam_free_text_special";
+    pub const EXABEAM_UNKNOWN_FUNCTION: &str = "exabeam_unknown_function";
+    pub const EXABEAM_FUNCTION_ARITY: &str = "exabeam_function_arity";
+    pub const EXABEAM_REGEX: &str = "exabeam_regex";
+    pub const EXABEAM_RANGE: &str = "exabeam_range";
+    pub const EXABEAM_IPV6_RANGE: &str = "exabeam_ipv6_range";
+    pub const EXABEAM_TIME_EXACT: &str = "exabeam_time_exact";
+    pub const EXABEAM_CONTEXT_TABLE_OR: &str = "exabeam_context_table_or";
+    pub const EXABEAM_CONTEXT_TABLE_LIMIT: &str = "exabeam_context_table_limit";
+    pub const EXABEAM_ADVANCED_IN_RULE: &str = "exabeam_advanced_in_rule";
+    pub const EXABEAM_KEYWORD_CASE: &str = "exabeam_keyword_case";
+    pub const EXABEAM_CLAUSE_ORDER: &str = "exabeam_clause_order";
+    pub const EXABEAM_PIPE_LIMIT: &str = "exabeam_pipe_limit";
+    pub const EXABEAM_RGX_EXTRACT_LIMIT: &str = "exabeam_rgx_extract_limit";
+    pub const EXABEAM_RESERVED_ALIAS: &str = "exabeam_reserved_alias";
+    pub const EXABEAM_GROUP_BY_SELECT_STAR: &str = "exabeam_group_by_select_star";
+    pub const EXABEAM_GROUP_BY_COLUMN: &str = "exabeam_group_by_column";
+    pub const EXABEAM_FOREACH_CLAUSE: &str = "exabeam_foreach_clause";
+    pub const EXABEAM_FOREACH_REFERENCE: &str = "exabeam_foreach_reference";
+    pub const EXABEAM_FOREACH_POSITION: &str = "exabeam_foreach_position";
+    pub const EXABEAM_MIXED_BOOLEAN: &str = "exabeam_mixed_boolean";
+    pub const EXABEAM_IMPLICIT_AND: &str = "exabeam_implicit_and";
+    pub const EXABEAM_SINGLE_GROUP: &str = "exabeam_single_group";
+    pub const EXABEAM_PIPE_MISUSE: &str = "exabeam_pipe_misuse";
+    pub const EXABEAM_WILDCARD_IN_PHRASE: &str = "exabeam_wildcard_in_phrase";
+    pub const EXABEAM_UNQUOTED_VALUE: &str = "exabeam_unquoted_value";
+    pub const EXABEAM_LEGACY_REGEX: &str = "exabeam_legacy_regex";
+    pub const EXABEAM_UNKNOWN_FIELD: &str = "exabeam_unknown_field";
+    pub const EXABEAM_STRING_FIELD_NUMBER: &str = "exabeam_string_field_number";
+    pub const EXABEAM_UNKNOWN_VALUE: &str = "exabeam_unknown_value";
+    // Exabeam block constraint codes and advisories (platform exabeam-1.0).
+    pub const EXABEAM_SEQUENCES: &str = "exabeam_sequences";
+    pub const EXABEAM_CORRELATION: &str = "exabeam_correlation";
+    pub const EXABEAM_THRESHOLD_FUNCTION: &str = "exabeam_threshold_function";
+    pub const EXABEAM_THRESHOLD_OPERATOR: &str = "exabeam_threshold_operator";
+    pub const EXABEAM_THRESHOLD_VALUE: &str = "exabeam_threshold_value";
+    pub const EXABEAM_GROUP_BY: &str = "exabeam_group_by";
+    pub const EXABEAM_DURATION: &str = "exabeam_duration";
+    pub const EXABEAM_SEVERITY: &str = "exabeam_severity";
+    pub const EXABEAM_OUTCOME: &str = "exabeam_outcome";
+    pub const EXABEAM_EMAIL: &str = "exabeam_email";
+    pub const EXABEAM_SCHEDULE: &str = "exabeam_schedule";
+    pub const EXABEAM_NAME_LENGTH: &str = "exabeam_name_length";
+    pub const EXABEAM_CONTEXT_TABLE_TRIGGER: &str = "exabeam_context_table_trigger";
+    pub const EXABEAM_NAME_DUPLICATE: &str = "exabeam_name_duplicate";
+    pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
+    pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -719,6 +942,13 @@ pub mod codes {
         LUCENE_BARE_TERM,
         LUCENE_LOOKS_LIKE_KUERY,
         LUCENE_ELASTICSEARCH_ONLY,
+        GRAYLOG_LEADING_WILDCARD,
+        GRAYLOG_REGEX_UNSUPPORTED,
+        GRAYLOG_REGEX_OPERATOR,
+        GRAYLOG_REGEX_QUOTE,
+        GRAYLOG_OPEN_RANGE,
+        GRAYLOG_DOUBLE_BACKSLASH,
+        GRAYLOG_ANALYZED_FIELD,
         KUERY_QUESTION_MARK,
         KUERY_FREE_TEXT,
         KUERY_LOOKS_LIKE_LUCENE,
@@ -779,22 +1009,29 @@ pub mod codes {
         SYSDIG_DEFINITION_ORDER,
         SYSDIG_LIST_IN_VALUE,
         SYSDIG_LIST_SELF_REFERENCE,
-        EXABEAM_SEQUENCES,
-        EXABEAM_CORRELATION,
-        EXABEAM_THRESHOLD_FUNCTION,
-        EXABEAM_THRESHOLD_OPERATOR,
-        EXABEAM_THRESHOLD_VALUE,
-        EXABEAM_GROUP_BY,
-        EXABEAM_DURATION,
-        EXABEAM_SEVERITY,
-        EXABEAM_OUTCOME,
-        EXABEAM_EMAIL,
-        EXABEAM_SCHEDULE,
-        EXABEAM_NAME_LENGTH,
-        EXABEAM_CONTEXT_TABLE_TRIGGER,
-        EXABEAM_NAME_DUPLICATE,
-        EXABEAM_OUTCOME_SILENT,
-        EXABEAM_CORRELATION_WINDOW,
+        BITDEFENDER_RULE_KIND,
+        BITDEFENDER_TARGET,
+        BITDEFENDER_CRITERION_SHAPE,
+        BITDEFENDER_CRITERION_FIELD,
+        BITDEFENDER_CRITERION_RELATION,
+        BITDEFENDER_CRITERION_VALUE,
+        BITDEFENDER_CRITERIA_COMBINATION,
+        BITDEFENDER_ACTION_SCOPE,
+        BITDEFENDER_TARGETS_SHAPE,
+        BITDEFENDER_SEVERITY,
+        BITDEFENDER_REGISTRY_FULL_HIVE,
+        BITDEFENDER_CONTAINS_NO_WILDCARD,
+        BITDEFENDER_SEVERITY_COLLAPSED,
+        GRAYLOG_QUERY_BLANK,
+        GRAYLOG_LIST_SHAPE,
+        GRAYLOG_SCHEDULE,
+        GRAYLOG_EVENT_LIMIT,
+        GRAYLOG_AGGREGATION,
+        GRAYLOG_EVENT_FIELD,
+        GRAYLOG_EVENT_KEY,
+        GRAYLOG_PRIORITY,
+        GRAYLOG_FIELD_NAME,
+        GRAYLOG_OVERLAPPING_WINDOW,
         CQL_PARSE_ERROR,
         CQL_UNKNOWN_FUNCTION,
         CQL_REMOVED_FUNCTION,
@@ -815,6 +1052,131 @@ pub mod codes {
         CQL_MATCH_GUARD,
         CQL_REGEX_GROUP_UNDER_OR,
         CQL_CORRELATE_AGGREGATE,
+        YARA_PARSE_ERROR,
+        YARA_INCLUDE,
+        YARA_SIGNATURE_ALIAS,
+        YARA_EMPTY_SIGNATURE,
+        YARA_DUPLICATE_RULE,
+        YARA_DUPLICATE_STRING,
+        YARA_DUPLICATE_TAG,
+        YARA_UNDEFINED_STRING,
+        YARA_UNREFERENCED_STRING,
+        YARA_UNDEFINED_IDENTIFIER,
+        YARA_RULE_IDENTIFIER_CONFLICT,
+        YARA_UNKNOWN_MODULE,
+        YARA_MODULE_NOT_IMPORTED,
+        YARA_UNKNOWN_MODULE_MEMBER,
+        YARA_TYPE,
+        YARA_REGEXP,
+        YARA_HEX_STRING,
+        YARA_STRING_MODIFIER,
+        YARA_NUMBER_OUT_OF_RANGE,
+        YARA_X_INCOMPATIBLE,
+        YARA_SLOW_PATTERN,
+        YARA_ENTRYPOINT_DEPRECATED,
+        YARA_SUSPICIOUS_EXPRESSION,
+        YARA_MODULE_UNCONFIRMED,
+        YARA_META_MISSING,
+        HARFANGLAB_RULE_KIND,
+        HARFANGLAB_YARA_FORM,
+        HARFANGLAB_YARA_SECTION_HEADER,
+        HARFANGLAB_YARA_IMPORT,
+        HARFANGLAB_YARA_RULE_NAME,
+        HARFANGLAB_YARA_CONTEXT,
+        BITDEFENDER_YARA_ASCII,
+        BITDEFENDER_YARA_SIZE,
+        EXABEAM_PARSE_ERROR,
+        EXABEAM_IMPLICIT_OPERATOR,
+        EXABEAM_NOT_EQUAL,
+        EXABEAM_BARE_WILDCARD,
+        EXABEAM_LEADING_SLASH,
+        EXABEAM_FREE_TEXT_SPECIAL,
+        EXABEAM_UNKNOWN_FUNCTION,
+        EXABEAM_FUNCTION_ARITY,
+        EXABEAM_REGEX,
+        EXABEAM_RANGE,
+        EXABEAM_IPV6_RANGE,
+        EXABEAM_TIME_EXACT,
+        EXABEAM_CONTEXT_TABLE_OR,
+        EXABEAM_CONTEXT_TABLE_LIMIT,
+        EXABEAM_ADVANCED_IN_RULE,
+        EXABEAM_KEYWORD_CASE,
+        EXABEAM_CLAUSE_ORDER,
+        EXABEAM_PIPE_LIMIT,
+        EXABEAM_RGX_EXTRACT_LIMIT,
+        EXABEAM_RESERVED_ALIAS,
+        EXABEAM_GROUP_BY_SELECT_STAR,
+        EXABEAM_GROUP_BY_COLUMN,
+        EXABEAM_FOREACH_CLAUSE,
+        EXABEAM_FOREACH_REFERENCE,
+        EXABEAM_FOREACH_POSITION,
+        EXABEAM_MIXED_BOOLEAN,
+        EXABEAM_IMPLICIT_AND,
+        EXABEAM_SINGLE_GROUP,
+        EXABEAM_PIPE_MISUSE,
+        EXABEAM_WILDCARD_IN_PHRASE,
+        EXABEAM_UNQUOTED_VALUE,
+        EXABEAM_LEGACY_REGEX,
+        EXABEAM_UNKNOWN_FIELD,
+        EXABEAM_STRING_FIELD_NUMBER,
+        EXABEAM_UNKNOWN_VALUE,
+        EXABEAM_SEQUENCES,
+        EXABEAM_CORRELATION,
+        EXABEAM_THRESHOLD_FUNCTION,
+        EXABEAM_THRESHOLD_OPERATOR,
+        EXABEAM_THRESHOLD_VALUE,
+        EXABEAM_GROUP_BY,
+        EXABEAM_DURATION,
+        EXABEAM_SEVERITY,
+        EXABEAM_OUTCOME,
+        EXABEAM_EMAIL,
+        EXABEAM_SCHEDULE,
+        EXABEAM_NAME_LENGTH,
+        EXABEAM_CONTEXT_TABLE_TRIGGER,
+        EXABEAM_NAME_DUPLICATE,
+        EXABEAM_OUTCOME_SILENT,
+        EXABEAM_CORRELATION_WINDOW,
+        YARAL_PARSE_ERROR,
+        YARAL_SECTION_HEADER,
+        YARAL_SECTION_EMPTY,
+        YARAL_SECTION_ALIAS,
+        YARAL_SECTION_MISSING,
+        YARAL_SECTION_ORDER,
+        YARAL_SECTION_UNAVAILABLE,
+        YARAL_META_DUPLICATE,
+        YARAL_RESERVED_IDENTIFIER,
+        YARAL_UNDEFINED_VARIABLE,
+        YARAL_MULTI_EVENT_MATCH,
+        YARAL_MATCH_SHAPE,
+        YARAL_MATCH_VARIABLE,
+        YARAL_MATCH_WINDOW,
+        YARAL_CONDITION_SHAPE,
+        YARAL_NOCASE_ON_ENUM,
+        YARAL_OUTCOME_LIMIT,
+        YARAL_OUTCOME_AGGREGATION,
+        YARAL_UNKNOWN_FUNCTION,
+        YARAL_FUNCTION_UNAVAILABLE,
+        YARAL_UNKNOWN_UDM_FIELD,
+        YARAL_ENUM_VALUE,
+        YARAL_TYPE,
+        YARAL_REGEX,
+        YARAL_STRING_ESCAPE,
+        YARAL_REFERENCE_LIST_LIMIT,
+        YARAL_OPTION,
+        YARAL_EXPORT_VALUE,
+        YARAL_WINDOW_BOUND,
+        YARAL_DEPRECATED_FIELD,
+        YARAL_UNFILTERED_EVENT,
+        YARAL_LEADING_WILDCARD_REGEX,
+        YARAL_REFERENCE_LIST_DEPRECATED,
+        GOOGLE_SECOPS_RULE_NAME,
+        GOOGLE_SECOPS_SEVERITY,
+        GOOGLE_SECOPS_RUN_FREQUENCY,
+        GOOGLE_SECOPS_SCHEDULE,
+        GOOGLE_SECOPS_META_KEY,
+        GOOGLE_SECOPS_RISK_SCORE_MISSING,
+        GOOGLE_SECOPS_RULE_ID_LITERAL,
+        GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -953,6 +1315,27 @@ pub mod codes {
             }
             LUCENE_ELASTICSEARCH_ONLY => {
                 "The syntax works in Elasticsearch but not in Carbon Black Cloud."
+            }
+            GRAYLOG_LEADING_WILDCARD => {
+                "A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form."
+            }
+            GRAYLOG_REGEX_UNSUPPORTED => {
+                "A Graylog regex uses an inline flag, a `(?…)` group, `\\b`, `\\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query."
+            }
+            GRAYLOG_REGEX_OPERATOR => {
+                "A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character."
+            }
+            GRAYLOG_REGEX_QUOTE => {
+                "A Graylog regex holds an unescaped `\"`, which Lucene reads as a quoted literal, not the character: escape it as `\\\"`."
+            }
+            GRAYLOG_OPEN_RANGE => {
+                "A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`."
+            }
+            GRAYLOG_DOUBLE_BACKSLASH => {
+                "A Graylog query holds four backslashes in a row: `\\\\` is already one literal backslash, so `\\\\\\\\` matches two."
+            }
+            GRAYLOG_ANALYZED_FIELD => {
+                "A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value."
             }
             KUERY_QUESTION_MARK => {
                 "? is a literal in Kibana KQL (kuery), not a single-character wildcard."
@@ -1105,41 +1488,68 @@ pub mod codes {
             SYSDIG_LIST_SELF_REFERENCE => {
                 "A block list names itself: Falco keeps the name as a literal item, which on Sysdig resolves against a tenant list of that name, not this one."
             }
-            EXABEAM_SEQUENCES => "An Exabeam block has no sequences, or a sequence has no query.",
-            EXABEAM_CORRELATION => {
-                "An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one."
+            BITDEFENDER_RULE_KIND => {
+                "A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule)."
             }
-            EXABEAM_THRESHOLD_FUNCTION => {
-                "A threshold's `function` is not an Exabeam function, or its `field` is missing or blank."
+            BITDEFENDER_TARGET => {
+                "`detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused."
             }
-            EXABEAM_THRESHOLD_OPERATOR => "A threshold's `operator` is not one its function takes.",
-            EXABEAM_THRESHOLD_VALUE => {
-                "A threshold's `value` does not have the shape its operator takes."
+            BITDEFENDER_CRITERION_SHAPE => {
+                "A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value."
             }
-            EXABEAM_GROUP_BY => "A `group_by` is not a list of one to three distinct field names.",
-            EXABEAM_DURATION => {
-                "A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes."
+            BITDEFENDER_CRITERION_FIELD => {
+                "The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list)."
             }
-            EXABEAM_SEVERITY => {
-                "The block `severity` is not `none`, `low`, `medium`, `high` or `critical`."
+            BITDEFENDER_CRITERION_RELATION => {
+                "The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`."
             }
-            EXABEAM_OUTCOME => "The block `outcome` is not `alert`, `case` or `none`.",
-            EXABEAM_EMAIL => {
-                "The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject."
+            BITDEFENDER_CRITERION_VALUE => {
+                "The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535."
             }
-            EXABEAM_SCHEDULE => "A `schedule` recurrence is not one Exabeam takes.",
-            EXABEAM_NAME_LENGTH => "The Exabeam rule name is longer than 128 characters.",
-            EXABEAM_CONTEXT_TABLE_TRIGGER => {
-                "A sequence whose query looks a value up in a context table has a threshold."
+            BITDEFENDER_CRITERIA_COMBINATION => {
+                "The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion."
             }
-            EXABEAM_NAME_DUPLICATE => {
-                "Two enabled Exabeam blocks resolve to the same Exabeam rule name."
+            BITDEFENDER_ACTION_SCOPE => {
+                "An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target."
             }
-            EXABEAM_OUTCOME_SILENT => {
-                "An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers."
+            BITDEFENDER_TARGETS_SHAPE => {
+                "`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias."
             }
-            EXABEAM_CORRELATION_WINDOW => {
-                "`correlation.within` is not more than the time the ordered sequences need."
+            BITDEFENDER_SEVERITY => "`severity` is not `Low`, `Medium`, or `High`.",
+            BITDEFENDER_REGISTRY_FULL_HIVE => {
+                "A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`."
+            }
+            BITDEFENDER_CONTAINS_NO_WILDCARD => {
+                "A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`."
+            }
+            BITDEFENDER_SEVERITY_COLLAPSED => {
+                "`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`."
+            }
+            GRAYLOG_QUERY_BLANK => "A Graylog block's `query` is missing or blank.",
+            GRAYLOG_LIST_SHAPE => {
+                "A Graylog list field is not one string or a list of distinct non-blank strings."
+            }
+            GRAYLOG_SCHEDULE => {
+                "A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`."
+            }
+            GRAYLOG_EVENT_LIMIT => {
+                "A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation."
+            }
+            GRAYLOG_AGGREGATION => {
+                "A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments."
+            }
+            GRAYLOG_EVENT_FIELD => {
+                "A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`."
+            }
+            GRAYLOG_EVENT_KEY => "A Graylog `event_key` item is not an `event_fields` name.",
+            GRAYLOG_PRIORITY => {
+                "A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            GRAYLOG_FIELD_NAME => {
+                "A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`)."
+            }
+            GRAYLOG_OVERLAPPING_WINDOW => {
+                "A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."
@@ -1197,6 +1607,329 @@ pub mod codes {
             }
             CQL_REGEX_GROUP_UNDER_OR => {
                 "A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields."
+            }
+            EXABEAM_PARSE_ERROR => {
+                "The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number."
+            }
+            EXABEAM_IMPLICIT_OPERATOR => {
+                "An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT."
+            }
+            EXABEAM_NOT_EQUAL => "Exabeam filters have no != operator; write NOT field:value.",
+            EXABEAM_BARE_WILDCARD => "A * alone is not an Exabeam query term.",
+            EXABEAM_LEADING_SLASH => "An Exabeam query cannot start with /.",
+            EXABEAM_FREE_TEXT_SPECIAL => {
+                "Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes."
+            }
+            EXABEAM_UNKNOWN_FUNCTION => {
+                "The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT."
+            }
+            EXABEAM_FUNCTION_ARITY => {
+                "An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern."
+            }
+            EXABEAM_REGEX => {
+                "The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier."
+            }
+            EXABEAM_RANGE => {
+                "The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network."
+            }
+            EXABEAM_IPV6_RANGE => {
+                "An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only."
+            }
+            EXABEAM_TIME_EXACT => {
+                "An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only."
+            }
+            EXABEAM_CONTEXT_TABLE_OR => {
+                "An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only."
+            }
+            EXABEAM_CONTEXT_TABLE_LIMIT => {
+                "An Exabeam query has more than two context table lookups."
+            }
+            EXABEAM_ADVANCED_IN_RULE => {
+                "A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only."
+            }
+            EXABEAM_KEYWORD_CASE => {
+                "An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case."
+            }
+            EXABEAM_CLAUSE_ORDER => {
+                "Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT."
+            }
+            EXABEAM_PIPE_LIMIT => "An Exabeam query has more than five pipes.",
+            EXABEAM_RGX_EXTRACT_LIMIT => "An Exabeam query has more than three RGX_EXTRACT calls.",
+            EXABEAM_RESERVED_ALIAS => {
+                "An Exabeam AS name is one of the Search guide's reserved words."
+            }
+            EXABEAM_GROUP_BY_SELECT_STAR => "An Exabeam GROUP-BY is combined with SELECT *.",
+            EXABEAM_GROUP_BY_COLUMN => {
+                "An Exabeam selected column is neither in GROUP-BY nor aggregated."
+            }
+            EXABEAM_FOREACH_CLAUSE => "An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.",
+            EXABEAM_FOREACH_REFERENCE => {
+                "An Exabeam @field reference is outside a FOREACH sub-query."
+            }
+            EXABEAM_FOREACH_POSITION => {
+                "An Exabeam FOREACH is the first statement; it runs on the result of a preceding query."
+            }
+            EXABEAM_MIXED_BOOLEAN => {
+                "Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence."
+            }
+            EXABEAM_IMPLICIT_AND => {
+                "Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND."
+            }
+            EXABEAM_SINGLE_GROUP => {
+                "Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them."
+            }
+            EXABEAM_PIPE_MISUSE => {
+                "An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE."
+            }
+            EXABEAM_WILDCARD_IN_PHRASE => {
+                "A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase."
+            }
+            EXABEAM_UNQUOTED_VALUE => {
+                "An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes."
+            }
+            EXABEAM_LEGACY_REGEX => {
+                "An Exabeam value between slashes may be read as a regular expression; write RGX(\"...\") for a pattern, or drop the slashes for a path."
+            }
+            EXABEAM_UNKNOWN_FIELD => {
+                "The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it."
+            }
+            EXABEAM_STRING_FIELD_NUMBER => {
+                "An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes."
+            }
+            EXABEAM_UNKNOWN_VALUE => {
+                "An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it."
+            }
+            EXABEAM_SEQUENCES => {
+                "An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query."
+            }
+            EXABEAM_CORRELATION => {
+                "An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by."
+            }
+            EXABEAM_THRESHOLD_FUNCTION => {
+                "An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing."
+            }
+            EXABEAM_THRESHOLD_OPERATOR => {
+                "An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value."
+            }
+            EXABEAM_THRESHOLD_VALUE => {
+                "An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer."
+            }
+            EXABEAM_GROUP_BY => {
+                "An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty)."
+            }
+            EXABEAM_DURATION => {
+                "An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes."
+            }
+            EXABEAM_SEVERITY => "An Exabeam severity is not none, low, medium, high or critical.",
+            EXABEAM_OUTCOME => "An Exabeam outcome is not alert, case or none.",
+            EXABEAM_EMAIL => {
+                "An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank."
+            }
+            EXABEAM_SCHEDULE => {
+                "An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take."
+            }
+            EXABEAM_NAME_LENGTH => "The Exabeam rule name is longer than 128 characters.",
+            EXABEAM_CONTEXT_TABLE_TRIGGER => {
+                "An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match."
+            }
+            EXABEAM_NAME_DUPLICATE => {
+                "Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case."
+            }
+            EXABEAM_OUTCOME_SILENT => {
+                "An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event."
+            }
+            EXABEAM_CORRELATION_WINDOW => {
+                "An Exabeam correlation window is shorter than the longest sequence threshold window."
+            }
+            YARA_PARSE_ERROR => "The YARA signature does not parse as libyara 4.5 reads it.",
+            YARA_INCLUDE => {
+                "A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it."
+            }
+            YARA_SIGNATURE_ALIAS => {
+                "A YARA signature is a YAML alias instead of text written out in its own block."
+            }
+            YARA_EMPTY_SIGNATURE => {
+                "The YARA signature has no rule, or only private or global rules."
+            }
+            YARA_DUPLICATE_RULE => "Two YARA rules in one signature have the same name.",
+            YARA_DUPLICATE_STRING => "Two strings of one YARA rule have the same identifier.",
+            YARA_DUPLICATE_TAG => "A YARA rule repeats a tag.",
+            YARA_UNDEFINED_STRING => {
+                "A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define."
+            }
+            YARA_UNREFERENCED_STRING => {
+                "A YARA string is never used in the condition, which libyara refuses unless the condition uses them."
+            }
+            YARA_UNDEFINED_IDENTIFIER => {
+                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds."
+            }
+            YARA_RULE_IDENTIFIER_CONFLICT => {
+                "A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible."
+            }
+            YARA_UNKNOWN_MODULE => "A YARA import names a module libyara does not ship.",
+            YARA_MODULE_NOT_IMPORTED => {
+                "A YARA module field or function is used without importing its module."
+            }
+            YARA_UNKNOWN_MODULE_MEMBER => {
+                "The YARA module has no such field or function, or the function takes other arguments."
+            }
+            YARA_TYPE => "A YARA operator or function is applied to a value of the wrong type.",
+            YARA_REGEXP => "A YARA regular expression is invalid.",
+            YARA_HEX_STRING => {
+                "A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives."
+            }
+            YARA_STRING_MODIFIER => {
+                "libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
+            }
+            YARA_NUMBER_OUT_OF_RANGE => {
+                "A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts."
+            }
+            YARA_X_INCOMPATIBLE => "libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.",
+            YARA_SLOW_PATTERN => {
+                "libyara warns that this YARA string or loop may slow scanning down."
+            }
+            YARA_ENTRYPOINT_DEPRECATED => {
+                "entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point."
+            }
+            YARA_SUSPICIOUS_EXPRESSION => {
+                "A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean."
+            }
+            YARA_MODULE_UNCONFIRMED => {
+                "The YARA module is known but not confirmed on the platform's agents."
+            }
+            YARA_META_MISSING => {
+                "A non-private YARA rule lacks a meta key the platform profile recommends."
+            }
+            HARFANGLAB_RULE_KIND => {
+                "A HarfangLab block sets both sigma and yara; a block is one kind."
+            }
+            HARFANGLAB_YARA_FORM => {
+                "A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports)."
+            }
+            HARFANGLAB_YARA_SECTION_HEADER => {
+                "A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself."
+            }
+            HARFANGLAB_YARA_IMPORT => {
+                "A decomposed HarfangLab YARA imports entry is not a module the YARA language knows."
+            }
+            HARFANGLAB_YARA_RULE_NAME => {
+                "The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore."
+            }
+            HARFANGLAB_YARA_CONTEXT => {
+                "A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho."
+            }
+            BITDEFENDER_YARA_ASCII => {
+                "A Bitdefender YARA signature holds a character that is not ASCII."
+            }
+            BITDEFENDER_YARA_SIZE => {
+                "A Bitdefender YARA signature is longer than 30,000 characters."
+            }
+            YARAL_PARSE_ERROR => "The YARA-L text does not parse, or a text holds a second rule.",
+            YARAL_SECTION_HEADER => {
+                "A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only."
+            }
+            YARAL_SECTION_EMPTY => {
+                "A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`)."
+            }
+            YARAL_SECTION_ALIAS => {
+                "A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys."
+            }
+            YARAL_SECTION_MISSING => {
+                "A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule."
+            }
+            YARAL_SECTION_ORDER => {
+                "A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export)."
+            }
+            YARAL_SECTION_UNAVAILABLE => {
+                "The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections."
+            }
+            YARAL_META_DUPLICATE => {
+                "A meta key appears twice, or a meta value is not a double-quoted string."
+            }
+            YARAL_RESERVED_IDENTIFIER => {
+                "A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`."
+            }
+            YARAL_UNDEFINED_VARIABLE => {
+                "A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`."
+            }
+            YARAL_MULTI_EVENT_MATCH => {
+                "A rule with two or more event variables has no `match` section."
+            }
+            YARAL_MATCH_SHAPE => {
+                "The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`."
+            }
+            YARAL_MATCH_VARIABLE => "A `match` name is not a placeholder bound in `events`.",
+            YARAL_MATCH_WINDOW => {
+                "The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d."
+            }
+            YARAL_CONDITION_SHAPE => {
+                "The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event."
+            }
+            YARAL_NOCASE_ON_ENUM => {
+                "`nocase` is applied to a comparison with an enumerated UDM field."
+            }
+            YARAL_OUTCOME_LIMIT => "A rule or search assigns more than 20 outcome variables.",
+            YARAL_OUTCOME_AGGREGATION => {
+                "With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable."
+            }
+            YARAL_UNKNOWN_FUNCTION => {
+                "The function is not in Google's YARA-L function list, or it takes a different number of arguments."
+            }
+            YARAL_FUNCTION_UNAVAILABLE => {
+                "The function exists, but not in this profile (rules or search)."
+            }
+            YARAL_UNKNOWN_UDM_FIELD => "The field path is not in the Unified Data Model.",
+            YARAL_ENUM_VALUE => "The value is not one of the enumerated UDM field's values.",
+            YARAL_TYPE => {
+                "An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number."
+            }
+            YARAL_REGEX => "The regular expression is not valid RE2.",
+            YARAL_STRING_ESCAPE => {
+                "A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles."
+            }
+            YARAL_REFERENCE_LIST_LIMIT => {
+                "More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2)."
+            }
+            YARAL_OPTION => "An unknown option, or an option value of the wrong kind.",
+            YARAL_EXPORT_VALUE => {
+                "An `export` `write_row` value is not an outcome variable: Google exports outcome variables only."
+            }
+            YARAL_WINDOW_BOUND => {
+                "`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window."
+            }
+            YARAL_DEPRECATED_FIELD => "The UDM field is deprecated.",
+            YARAL_UNFILTERED_EVENT => {
+                "An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event."
+            }
+            YARAL_LEADING_WILDCARD_REGEX => {
+                "The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time."
+            }
+            YARAL_REFERENCE_LIST_DEPRECATED => {
+                "Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`)."
+            }
+            GOOGLE_SECOPS_RULE_NAME => {
+                "The Google SecOps rule `name` is not a YARA-L identifier, or is a keyword."
+            }
+            GOOGLE_SECOPS_SEVERITY => {
+                "`severity` or `priority` is not `Info`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            GOOGLE_SECOPS_RUN_FREQUENCY => {
+                "`run_frequency` is not `LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`; Google's legacy `HOURLY` is refused."
+            }
+            GOOGLE_SECOPS_SCHEDULE => {
+                "`schedule` is set without a customizable `run_frequency`, or its `late_arriving_data_adjustment` is not a positive duration."
+            }
+            GOOGLE_SECOPS_META_KEY => {
+                "A block `meta` key is not an identifier, is a keyword or a key deploy derives, or its value is not a string."
+            }
+            GOOGLE_SECOPS_RISK_SCORE_MISSING => {
+                "`outcome` assigns no `$risk_score`, so every detection gets the instance's default score."
+            }
+            GOOGLE_SECOPS_RULE_ID_LITERAL => {
+                "The rule compares `detection.detection.rule_id` with a literal `ru_` id, which differs per tenant: match `detection.detection.rule_name` instead."
+            }
+            GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE => {
+                "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy."
             }
             _ => return None,
         })
@@ -1256,6 +1989,51 @@ mod tests {
         }
     }
 
+    /// `LineIndex` gives exactly what the scanning functions give, at every
+    /// offset and every position: multi-byte UTF-8 (2, 3 and 4 bytes, the
+    /// last two UTF-16 units), CRLF, tabs, empty lines, a text with and
+    /// without a final newline, and positions past a line's or the text's end.
+    #[test]
+    fn line_index_agrees_with_the_scans_everywhere() {
+        for text in [
+            "",
+            "\n",
+            "ascii only\nsecond line\n",
+            "ab\n\u{1F600}c\r\n\nd \u{e9}",
+            "\tkey:\t\u{65e5}\u{672c}\u{8a9e}\r\n\t- \u{e9}t\u{e9} \u{1F600}\u{1F600} x\r\n\r\nend",
+            "no final newline \u{e9}",
+            "\u{1F600}",
+        ] {
+            let index = LineIndex::new(text);
+            for offset in 0..=text.len() + 2 {
+                assert_eq!(
+                    index.position(offset),
+                    offset_to_position(text, offset),
+                    "{text:?} @ {offset}"
+                );
+            }
+            let lines = u32::try_from(text.split('\n').count()).unwrap();
+            for line in 0..=lines + 1 {
+                for character in 0..=40 {
+                    let p = Position::new(line, character);
+                    assert_eq!(
+                        index.offset(p),
+                        position_to_offset(text, p),
+                        "{text:?} @ {line}:{character}"
+                    );
+                }
+            }
+            for start in 0..=text.len() {
+                let span = ByteSpan::new(start, (start + 3).min(text.len()));
+                assert_eq!(
+                    index.range(span),
+                    span_to_range(text, span),
+                    "{text:?} {span:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn no_otide_in_crate_name() {
         assert!(
@@ -1307,8 +2085,22 @@ mod tests {
         assert_eq!(LanguageId::from_extension("falco"), Some(LanguageId::Falco));
         assert_eq!(LanguageId::parse("falco"), Some(LanguageId::Falco));
         assert_eq!(LanguageId::parse("cql"), Some(LanguageId::Cql));
+        assert_eq!(LanguageId::parse("yara"), Some(LanguageId::Yara));
+        assert_eq!(
+            LanguageId::parse(LanguageId::Yara.as_str()),
+            Some(LanguageId::Yara)
+        );
+        assert_eq!(LanguageId::from_extension("yar"), Some(LanguageId::Yara));
+        assert_eq!(LanguageId::from_extension("yara"), Some(LanguageId::Yara));
         assert_eq!(LanguageId::parse("logscale"), Some(LanguageId::Cql));
         assert_eq!(LanguageId::from_extension("cql"), Some(LanguageId::Cql));
+        // Exabeam's guides call it EQL; opentide's id is `exabeam`.
+        assert_eq!(LanguageId::parse("exabeam"), Some(LanguageId::Exabeam));
+        assert_eq!(
+            LanguageId::from_extension("exabeam"),
+            Some(LanguageId::Exabeam)
+        );
+        assert_eq!(LanguageId::parse("EQL"), Some(LanguageId::Eql));
     }
 
     #[test]

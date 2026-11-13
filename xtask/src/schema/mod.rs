@@ -198,10 +198,62 @@ fn since_oracle_model_prefixes() -> Vec<String> {
         .collect()
 }
 
+/// A property the models have and the oracle's do not: a field development
+/// added after the oracle's release (0.23.0), ported on purpose.
+#[derive(Debug, Clone, Copy)]
+pub struct ApprovedProperty {
+    /// The models that hold it, by Pydantic class name.
+    pub models: &'static [&'static str],
+    /// Its path in each of them, from the root of the normalised schema.
+    pub paths: &'static [&'static str],
+    /// Why the models have it.
+    pub reason: &'static str,
+    /// The bold lead of the `CHANGELOG.md` entry that announces it.
+    pub changelog: &'static str,
+}
+
+/// The approved properties. Each applies only where the oracle has no
+/// property at that path: any other difference there is still reported, and
+/// an entry that approves nothing in a run is stale and fails it.
+pub const APPROVED_PROPERTIES: &[ApprovedProperty] = &[ApprovedProperty {
+    models: &[
+        "SplunkConfig",
+        "RuleConfigurations",
+        "DetectionRule",
+        "DetectionRule_v1_1",
+    ],
+    paths: &[
+        "/properties/advanced",
+        "/properties/splunk/properties/advanced",
+        "/properties/configurations/properties/splunk/properties/advanced",
+    ],
+    reason: "0.24.0 (#878): a Splunk block's `advanced` table is a field of the \
+             platform::splunk::1.0 layout again; the oracle (0.23.0) refused it as a \
+             splunk::2.x key",
+    changelog: "**A Splunk block's `advanced` table validates and deploys again**",
+}];
+
+/// Whether `difference` (a line of [`normalise::differences`]) is a
+/// property of `model` that [`APPROVED_PROPERTIES`] approves: the entry's
+/// index, if so.
+fn approved_property(model: &str, difference: &str) -> Option<usize> {
+    APPROVED_PROPERTIES.iter().position(|entry| {
+        entry.models.contains(&model)
+            && entry.paths.iter().any(|path| {
+                difference
+                    .strip_prefix(path)
+                    .is_some_and(|rest| rest.starts_with(": pydantic (absent), rust "))
+            })
+    })
+}
+
 /// Compares the oracle's schemas (`probe.py schemas`) with the models'. The
-/// differences by model; an empty list passes.
+/// differences by model, but for the approved properties; an empty list
+/// passes. An approved property that applies nowhere is a difference of
+/// `(approvals)`.
 pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
     let mut out = Vec::new();
+    let mut used = vec![false; APPROVED_PROPERTIES.len()];
     let registered: Vec<&str> = oracle["registered"]
         .as_array()
         .context("the probe wrote no registered identifiers")?
@@ -233,8 +285,28 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
         let a = normalise(pydantic, Side::Pydantic, &[]);
         let b = normalise(&rust, Side::Schemars, &[]);
-        out.push((name.to_owned(), differences(&a, &b)));
+        let mut found = differences(&a, &b);
+        found.retain(|difference| match approved_property(name, difference) {
+            Some(index) => {
+                used[index] = true;
+                false
+            }
+            None => true,
+        });
+        out.push((name.to_owned(), found));
     }
+    let stale: Vec<String> = APPROVED_PROPERTIES
+        .iter()
+        .zip(&used)
+        .filter(|(_, used)| !**used)
+        .map(|(entry, _)| {
+            format!(
+                "stale: no model differs from the oracle by {:?} ({})",
+                entry.paths, entry.changelog
+            )
+        })
+        .collect();
+    out.push(("(approvals)".to_owned(), stale));
     Ok(out)
 }
 
@@ -464,6 +536,99 @@ mod tests {
         let options = parse(&args(&["--against", "python", "--only", "schemas"])).unwrap();
         assert_eq!(options.only, Some(Only::Schemas));
         assert!(parse(&args(&["--against", "python", "--only", "x"])).is_err());
+    }
+
+    #[test]
+    fn an_approved_property_is_one_the_oracle_lacks_at_its_path() {
+        let added = "/properties/advanced: pydantic (absent), rust {\"type\":\"object\"}";
+        assert_eq!(approved_property("SplunkConfig", added), Some(0));
+        // Another model, another path, or a property both have.
+        assert_eq!(approved_property("SentinelConfig", added), None);
+        assert_eq!(
+            approved_property(
+                "SplunkConfig",
+                "/properties/advancedx: pydantic (absent), rust {}"
+            ),
+            None
+        );
+        assert_eq!(
+            approved_property(
+                "SplunkConfig",
+                "/properties/advanced/type: pydantic \"object\", rust \"array\""
+            ),
+            None
+        );
+        assert_eq!(
+            approved_property(
+                "SplunkConfig",
+                "/properties/advanced: pydantic {}, rust (absent)"
+            ),
+            None
+        );
+    }
+
+    /// The models against an oracle whose schemas are the models' own,
+    /// but for the approved properties: those are not reported (the
+    /// models' schemas read as Pydantic's differ in other ways, which this
+    /// test does not look at), and an approval that applies nowhere is
+    /// reported stale.
+    #[test]
+    fn approved_properties_pass_and_go_stale() {
+        let mut schemas = serde_json::Map::new();
+        for (name, schema) in rust_schemas() {
+            let mut schema = schema;
+            for entry in APPROVED_PROPERTIES {
+                if entry.models.contains(&name) {
+                    remove_property(&mut schema, "advanced");
+                }
+            }
+            schemas.insert(name.to_owned(), schema);
+        }
+        let oracle = json!({
+            "registered": objects::checks::REGISTERED,
+            "schemas": Value::Object(schemas.clone()),
+        });
+        let compared = compare_schemas(&oracle).unwrap();
+        assert!(
+            compared
+                .iter()
+                .flat_map(|(_, found)| found)
+                .all(|difference| !difference.contains("advanced")),
+            "{compared:#?}"
+        );
+        assert_eq!(
+            compared.last(),
+            Some(&("(approvals)".to_owned(), Vec::new()))
+        );
+        // The oracle with the property too: the approval is stale.
+        let mut full = serde_json::Map::new();
+        for (name, schema) in rust_schemas() {
+            full.insert(name.to_owned(), schema);
+        }
+        let oracle = json!({"registered": objects::checks::REGISTERED, "schemas": full});
+        let compared = compare_schemas(&oracle).unwrap();
+        let (_, stale) = compared.last().unwrap();
+        assert_eq!(stale.len(), 1, "{stale:?}");
+        assert!(stale[0].starts_with("stale: "), "{stale:?}");
+    }
+
+    /// Removes every property named `name` from `schema`, its definitions
+    /// included.
+    fn remove_property(schema: &mut Value, name: &str) {
+        match schema {
+            Value::Object(map) => {
+                if let Some(Value::Object(properties)) = map.get_mut("properties") {
+                    properties.remove(name);
+                }
+                for value in map.values_mut() {
+                    remove_property(value, name);
+                }
+            }
+            Value::Array(items) => items
+                .iter_mut()
+                .for_each(|item| remove_property(item, name)),
+            _ => {}
+        }
     }
 
     #[test]

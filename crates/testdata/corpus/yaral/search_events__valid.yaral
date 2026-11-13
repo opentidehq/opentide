@@ -1,0 +1,3 @@
+// prod:search_events valid
+metadata.event_type = "NETWORK_DNS"
+network.dns.questions.name = "example.com"

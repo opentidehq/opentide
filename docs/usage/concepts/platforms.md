@@ -129,7 +129,23 @@ See [`validate`](../../cli/validate.md#query-validation).
 
 ## The `query` field
 
-Where a platform spec marks `query` required, the value is a non-blank string. A Splunk block takes the [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/) layout only: the `splunk::2.x` keys (`search`, `cron_schedule`, flat `throttling`, `notable`, `scheduling.frequency`, `advanced`, ...) are unknown keys, as every other unknown key is.
+Where a platform spec marks `query` required, the value is a non-blank string. A Splunk block takes the [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/) layout only: the `splunk::2.x` keys (`search`, `cron_schedule`, flat `throttling`, `notable`, `scheduling.frequency`, ...) are unknown keys, as every other unknown key is.
+
+### Splunk's `advanced` table
+
+A Splunk block's `advanced` table sets `savedsearches.conf` keys that no other field of the block sets, such as the parameters of a custom alert action:
+
+```yaml
+configurations:
+  splunk:
+    query: index=main sourcetype=canarytokens
+    advanced:
+      action.misp_alert_create_event.param.title: "Canary token triggered"
+      action.misp_alert_create_event.param.distribution: 0
+      action.misp_alert_create_event.param.tags:
+```
+
+`opentide deploy` sends each key as written: a `null` value as the empty value, a boolean as `1` or `0`, any other value as text. A list or table is refused, as `savedsearches.conf` cannot hold one, and so is a blank key. A key the block also sets (`alert_threshold`, `cron_schedule`) takes the `advanced` value; the `[[modifiers]]` of `platforms/splunk.toml` still apply after it. An action whose parameters are set here is triggered when it is in the tenant's `[tenants.setup] actions_enabled`. The table is left out of the generated templates and of editor completion.
 
 ### Upgrading to 0.4.0
 

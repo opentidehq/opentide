@@ -21,6 +21,11 @@
       "name": "configuration",
       "kind": "configuration_faults",
       "about": "each configuration fault kind of tests/corpora/faults.toml applied alone to the base workspace: one corpus each, configuration/<kind>"
+    },
+    {
+      "name": "compile",
+      "kind": "compile_faults",
+      "about": "each compile fault kind of tests/corpora/faults.toml (compile-*) applied alone to the base workspace: one corpus each, compile/<kind>; validate reports what the platform compilers refuse (UC-2.2, #817)"
     }
   ],
   "stand_ins": [

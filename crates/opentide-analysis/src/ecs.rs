@@ -87,33 +87,32 @@ pub(crate) fn complete(
     // EQL event categories are `event.category` values: add their docs.
     if let Some(category) = opentide_ecs::field("event.category") {
         for item in items.iter_mut().filter(|i| i.kind == "type") {
-            if let Some(v) = category.allowed.iter().find(|v| v.name == item.label) {
-                if item.documentation.is_none() {
-                    item.documentation =
-                        Some(format!("**{}** event category\n\n{}", v.name, v.short));
-                }
+            if let Some(v) = category.allowed.iter().find(|v| v.name == item.label)
+                && item.documentation.is_none()
+            {
+                item.documentation = Some(format!("**{}** event category\n\n{}", v.name, v.short));
             }
         }
     }
 
-    if let Some((name, quoted)) = value_context(language, before) {
-        if let Some(field) = opentide_ecs::field(&name).filter(|f| !f.allowed.is_empty()) {
-            let quote = matches!(language, LanguageId::Eql | LanguageId::Esql) && !quoted;
-            items.retain(|i| i.kind != "property");
-            for v in &field.allowed {
-                let label = if quote {
-                    format!("\"{}\"", v.name)
-                } else {
-                    v.name.clone()
-                };
-                items.push(
-                    CompletionItem::new(label, "enum")
-                        .with_detail(format!("{} value · ECS", field.name))
-                        .with_docs(v.short.clone()),
-                );
-            }
-            return;
+    if let Some((name, quoted)) = value_context(language, before)
+        && let Some(field) = opentide_ecs::field(&name).filter(|f| !f.allowed.is_empty())
+    {
+        let quote = matches!(language, LanguageId::Eql | LanguageId::Esql) && !quoted;
+        items.retain(|i| i.kind != "property");
+        for v in &field.allowed {
+            let label = if quote {
+                format!("\"{}\"", v.name)
+            } else {
+                v.name.clone()
+            };
+            items.push(
+                CompletionItem::new(label, "enum")
+                    .with_detail(format!("{} value · ECS", field.name))
+                    .with_docs(v.short.clone()),
+            );
         }
+        return;
     }
 
     // Field positions are where the engine already offers the query's fields.
