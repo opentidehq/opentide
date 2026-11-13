@@ -2652,6 +2652,7 @@ dependencies = [
  "gix-revwalk",
  "gix-worktree",
  "indexmap",
+ "jiff",
  "minijinja",
  "opentide-core",
  "opentide-schema",
