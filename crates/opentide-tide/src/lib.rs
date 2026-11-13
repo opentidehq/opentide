@@ -437,12 +437,14 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
-    for query in analyze_injections(
+    let mut queries = analyze_injections(
         input.source,
         object.configurations.as_ref(),
         input.elastic_tenants,
         injections,
-    ) {
+    );
+    attach_to_queries(input.source, object.configurations.as_ref(), &mut queries);
+    for query in queries {
         diagnostics.extend(query.diagnostics);
         tokens.extend(query.tokens);
     }
@@ -456,15 +458,16 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     }
 }
 
-/// What a rule's platform blocks say, apart from the queries they carry:
-/// the Elastic block's advisories and declared datasets, and the Sysdig
-/// block's Falco and constraint checks.
+/// What a rule's platform blocks say that no query of theirs carries: the
+/// Elastic block's advisories, the Sysdig block's tuning and list
+/// advisories, and, when the block has no query to carry them (none, or a
+/// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
-/// reports the constraints as the object's schema check, and the language
-/// server reports `validate`'s and `lint`'s findings, so [`analyze`] leaves
-/// them out: the editor publishing them too showed one fault twice (UC-2.6,
-/// #821). Spans and ranges are in the text after a leading byte-order mark
+/// reports the block's constraints as the object's schema check, and the
+/// language server reports `validate`'s findings and the queries' analysis,
+/// so [`analyze`] leaves them out: the editor walking the blocks too showed
+/// one fault twice (UC-2.6, #821). Spans and ranges are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]).
 pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
     let source = opentide_core::strip_bom(source);
@@ -478,14 +481,24 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
     let object_type = object_schema_id(&object);
     let object_type = object_type.split("::").next().unwrap_or("");
     let configurations = object.configurations.as_ref();
-    if object_type == "rule" && configurations.is_some_and(|c| c.get("elastic").is_some()) {
-        out.extend(elastic::block_advisories(source, &root, workspace));
+    if let Some(block) = configurations.and_then(|c| c.get("elastic")) {
+        if !carried(source, ELASTIC_QUERY) {
+            out.extend(elastic::dataset_declarations(source, block));
+        }
+        if object_type == "rule" {
+            out.extend(elastic::block_advisories(source, &root, workspace));
+        }
     }
     if let Some(block) = configurations.and_then(|c| c.get("sysdig")) {
-        out.extend(falco::source_diagnostics(source, block));
+        let carried = carried(source, SYSDIG_CONDITION);
+        if !carried {
+            out.extend(falco::source_diagnostics(source, block));
+        }
         out.extend(falco::tuning_diagnostics(source, block));
         out.extend(sysdig::list_self_references(source, block));
-        out.extend(falco::exception_diagnostics(source, block));
+        if !carried {
+            out.extend(falco::exception_diagnostics(source, block));
+        }
     }
     out
 }
@@ -514,40 +527,81 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
         elastic_tenants,
         extract_injections(source),
     );
-    // The datasets the Elastic block reads (`index`, `threat.index`,
-    // `data_view_id`) are its query's, so `opentide validate` reports them
-    // on the query, except on a placeholder query, which validate skips.
-    // (The editor leaves the blocks to `validate` and `lint`:
-    // [`block_diagnostics`], UC-2.6 #821.)
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
-        if let Some(query) = out.iter_mut().find(|q| {
-            q.query.field_path == ["configurations", "elastic", "query"]
-                && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
+    attach_to_queries(source, configurations.as_ref(), &mut out);
+    out
+}
+
+/// The block findings a query carries: the datasets the Elastic block
+/// reads (`index`, `threat.index`, `data_view_id`) are its query's, and the
+/// Sysdig block's event source and exceptions its condition's (Falco
+/// appends the exceptions to the condition when it loads the rule). A
+/// placeholder query carries none: `opentide validate` skips it, and
+/// [`block_diagnostics`] reports them on the block instead.
+fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut [QueryAnalysis]) {
+    let carrier = |out: &mut [QueryAnalysis], path: [&str; 3]| -> Option<usize> {
+        out.iter().position(|q| {
+            q.query.field_path == path && !placeholder::is_placeholder_query(source, &q.query)
+        })
+    };
+    if let Some(block) = configurations.and_then(|c| c.get("elastic")) {
+        if let Some(at) = carrier(out, ELASTIC_QUERY) {
+            out[at]
                 .diagnostics
                 .extend(elastic::dataset_declarations(source, block));
         }
     }
-    // An unknown event source is the condition's: its fields go unchecked.
-    // The exceptions are too: Falco appends them to the condition when it
-    // loads the rule, so a value the field's type cannot hold is a fault of
-    // the query `opentide validate` reports.
-    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig")) {
-        if let Some(query) = out.iter_mut().find(|q| {
-            q.query.field_path == ["configurations", "sysdig", "condition"]
-                && !placeholder::is_placeholder_query(source, &q.query)
-        }) {
-            query
+    if let Some(block) = configurations.and_then(|c| c.get("sysdig")) {
+        if let Some(at) = carrier(out, SYSDIG_CONDITION) {
+            out[at]
                 .diagnostics
                 .extend(falco::source_diagnostics(source, block));
-            query
+            out[at]
                 .diagnostics
-                .extend(falco::exception_diagnostics(source, block));
+                .extend(exceptions_beyond_the_model(source, block));
         }
     }
-    out
 }
+
+/// Falco's findings on the Sysdig block's exceptions, but on an exception
+/// whose shape the model refuses: `validate` reports that one as the block's
+/// `sysdig_exception_shape`, and Falco's own finding would show the fault
+/// twice (UC-2.6, #821).
+fn exceptions_beyond_the_model(source: &str, block: &Node) -> Vec<Diagnostic> {
+    use opentide_schema::objects::platform::sysdig::{block_codes, exception_shape_ok};
+    let refused: Vec<String> = if block_codes(block).contains("sysdig_exception_shape") {
+        block
+            .get("exceptions")
+            .and_then(|e| e.as_sequence())
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| !exception_shape_ok(entry))
+            .map(|(index, _)| index.to_string())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    falco::exception_diagnostics(source, block)
+        .into_iter()
+        .filter(|d| {
+            d.field_path
+                .as_deref()
+                .and_then(|path| path.get(3))
+                .is_none_or(|index| !refused.contains(index))
+        })
+        .collect()
+}
+
+/// Whether a query of `source` (not a placeholder) is at `path`, and so
+/// carries the block findings [`attach_to_queries`] gives it.
+fn carried(source: &str, path: [&str; 3]) -> bool {
+    extract_injections(source)
+        .iter()
+        .any(|q| q.field_path == path && !placeholder::is_placeholder_query(source, q))
+}
+
+const ELASTIC_QUERY: [&str; 3] = ["configurations", "elastic", "query"];
+const SYSDIG_CONDITION: [&str; 3] = ["configurations", "sysdig", "condition"];
 
 fn analyze_injections(
     source: &str,

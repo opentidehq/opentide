@@ -2237,3 +2237,49 @@ configurations:
         "{codes:?}"
     );
 }
+
+/// `analyze --blocks` adds a Tide object's platform-block findings, which
+/// `opentide lint` reports and the server does not (UC-2.6, #821): the
+/// Falco oracle reads the engine's whole judgement of a rule this way.
+#[test]
+fn analyze_blocks_adds_the_platform_block_findings() {
+    let scratch = Scratch::new("analyze-blocks");
+    let rules = scratch.0.join("objects/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    let file = rules.join("self-list.yaml");
+    std::fs::write(
+        &file,
+        "name: Self list\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000084\n  \
+         schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n    \
+         condition: proc.name in (l1)\n    lists:\n    - name: l1\n      items: [l1, bash]\n",
+    )
+    .unwrap();
+    let codes = |extra: &[&str]| -> Vec<String> {
+        let out = Command::new(bin())
+            .arg("analyze")
+            .arg(&file)
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let found: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap();
+        found
+            .iter()
+            .map(|d| d["code"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let plain = codes(&[]);
+    assert!(
+        !plain.iter().any(|c| c == "sysdig_list_self_reference"),
+        "{plain:?}"
+    );
+    let blocks = codes(&["--blocks"]);
+    assert!(
+        blocks.iter().any(|c| c == "sysdig_list_self_reference"),
+        "{blocks:?}"
+    );
+}

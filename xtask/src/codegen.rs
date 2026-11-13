@@ -337,16 +337,12 @@ fn committed(root: &Path, check: bool) -> Result<Vec<String>> {
         names.push(entry?.file_name().to_string_lossy().into_owned());
     }
     problems.extend(stale_editor_schemas(&names, &artifacts));
-    // A template the editor does not compile in is stale.
     let dir = root.join(EDITOR_TEMPLATES);
+    let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
-        let name = entry?.file_name().to_string_lossy().into_owned();
-        if !EDITOR_TEMPLATE_NAMES.contains(&name.as_str()) {
-            problems.push(format!(
-                "{EDITOR_TEMPLATES}/{name}: no snippet reads it; remove it"
-            ));
-        }
+        names.push(entry?.file_name().to_string_lossy().into_owned());
     }
+    problems.extend(stale_editor_templates(&names));
     Ok(problems)
 }
 
@@ -567,6 +563,18 @@ fn stale_templates(names: &[String], artifacts: &[(String, String)]) -> Vec<Stri
         .map(|name| format!("{PLATFORM_TEMPLATES}/{name}"))
         .filter(|path| !artifacts.iter().any(|(known, _)| known == path))
         .map(|path| format!("{path}: no platform model generates it"))
+        .collect();
+    stale.sort();
+    stale
+}
+
+/// Of the file names in the editor's templates folder, each the language
+/// server does not compile in (#814).
+fn stale_editor_templates(names: &[String]) -> Vec<String> {
+    let mut stale: Vec<String> = names
+        .iter()
+        .filter(|name| !EDITOR_TEMPLATE_NAMES.contains(&name.as_str()))
+        .map(|name| format!("{EDITOR_TEMPLATES}/{name}: no snippet reads it; remove it"))
         .collect();
     stale.sort();
     stale
@@ -1229,6 +1237,7 @@ mod tests {
         let artifacts = committed_artifacts().unwrap();
         let mut names: Vec<String> = artifacts
             .iter()
+            .filter(|(path, _)| path.starts_with(PLATFORM_TEMPLATES))
             .map(|(path, _)| path.rsplit('/').next().unwrap().to_owned())
             .collect();
         assert!(stale_templates(&names, &artifacts).is_empty());
@@ -1238,6 +1247,27 @@ mod tests {
             stale_templates(&names, &artifacts),
             [format!(
                 "{PLATFORM_TEMPLATES}/retired.template.yaml: no platform model generates it"
+            )]
+        );
+    }
+
+    /// #814: the editor's snippets are the three generated templates; any
+    /// other file in their folder is stale.
+    #[test]
+    fn the_editor_templates_are_generated_and_an_extra_one_is_stale() {
+        let artifacts = committed_artifacts().unwrap();
+        let mut names: Vec<String> = artifacts
+            .iter()
+            .filter_map(|(path, _)| path.strip_prefix(&format!("{EDITOR_TEMPLATES}/")))
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(names, EDITOR_TEMPLATE_NAMES);
+        assert!(stale_editor_templates(&names).is_empty());
+        names.push("rule.1.1.template.yaml".to_owned());
+        assert_eq!(
+            stale_editor_templates(&names),
+            [format!(
+                "{EDITOR_TEMPLATES}/rule.1.1.template.yaml: no snippet reads it; remove it"
             )]
         );
     }
@@ -1532,6 +1562,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         for dir in [
             PLATFORM_TEMPLATES,
+            EDITOR_TEMPLATES,
             EDITOR_SCHEMAS,
             COMMITTED_CATALOGS,
             "highlights/queries/tide",

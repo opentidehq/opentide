@@ -1129,7 +1129,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The index pattern is not one the workspace declares in visibility.toml.
 
-Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) shows it; `opentide validate` does not fail on it, and since UC-2.6 an editor running `opentide lsp start` does not show it either: the editor publishes what `opentide validate` reports on the object, and the block's advisories are lint's. It is opt-in: only a workspace whose `visibility.toml` has at least one `elastic` log source gets it, for an index pattern no log source names, whether or not the engine knows it otherwise. An Elastic log source's `name` is its index pattern or data stream; data views are not declared. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
+Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, with the query's findings; `opentide validate` does not fail on it. It is opt-in: only a workspace whose `visibility.toml` has at least one `elastic` log source gets it, for an index pattern no log source names, whether or not the engine knows it otherwise. An Elastic log source's `name` is its index pattern or data stream; data views are not declared. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
 
 ### Example
 
@@ -1677,7 +1677,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold.
 
-Reported by the analysis engine on the Sysdig block's `exceptions`, which Falco appends to the condition when it loads the rule: as an error, an exception Falco would reject, by `opentide validate` (its `queries` check), which an editor running `opentide lsp start` shows; as a warning, by `opentide lint` (its `queries` check), which the editor does not show (UC-2.6: the editor publishes validate's findings, and the block's advisories are lint's).
+Reported by the analysis engine on the Sysdig block's `exceptions`, with the condition's findings, since Falco appends them to the condition when it loads the rule: as an error, an exception Falco would reject, by `opentide validate` (its `queries` check); as a warning, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both. An exception whose shape the model refuses (fields, comps and values that do not align) is `sysdig_exception_shape` instead, which `validate` names in its `schema_validation` finding: Falco's checks leave that exception to it.
 
 ### Example
 
@@ -1981,7 +1981,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The event source is not one Falco or its published plugins define, so its fields are not checked.
 
-Reported by the analysis engine on the Sysdig block's `source`, as a warning: `opentide lint` (its `queries` check) shows it. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
+Reported by the analysis engine on the Sysdig block's `source`, as a warning, with the condition's findings (its fields go unchecked): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it.
 
 ### Example
 

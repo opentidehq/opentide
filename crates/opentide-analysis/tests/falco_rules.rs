@@ -155,10 +155,10 @@ fn every_converted_rule_is_clean() {
 }
 
 /// UC-2.6 (#821): an exception value the field's type cannot hold is a
-/// fault of the condition Falco appends it to, so `opentide validate`'s
-/// queries check has it ([`analyze_queries`], as an error). The editor
-/// publishes `validate`'s findings and checks the block no longer, so
-/// [`analyze`] does not report it a second time.
+/// fault of the condition Falco appends it to, so the condition's analysis
+/// carries it: `opentide validate`'s queries check ([`analyze_queries`], as
+/// an error) and the editor ([`analyze`]) report it, once each, and the
+/// block's own findings ([`analyze_blocks`], `lint`'s) do not repeat it.
 #[test]
 fn an_exception_value_the_field_cannot_hold_is_the_conditions_fault() {
     let text = rule("terminal-shell-in-container.yaml").replacen(
@@ -192,8 +192,87 @@ fn an_exception_value_the_field_cannot_hold_is_the_conditions_fault() {
         },
     )
     .diagnostics;
+    let exceptions = |found: &[opentide_analysis::Diagnostic]| {
+        found
+            .iter()
+            .filter(|d| d.code == codes::FALCO_EXCEPTION)
+            .count()
+    };
+    assert_eq!(exceptions(&editor), 1, "{editor:?}");
+    assert_eq!(exceptions(&analyze_blocks(&host, &text)), 0);
+}
+
+/// An exception whose shape the model refuses is `validate`'s
+/// `sysdig_exception_shape` alone: the condition's analysis does not report
+/// Falco's finding on it too (UC-2.6, #821). The fault corpus's two
+/// exception kinds, the misaligned comps and a block list in a value.
+#[test]
+fn an_exception_the_model_refuses_is_not_reported_twice() {
+    let rule = |block: &str| {
+        format!(
+            "name: Shape\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000085\n  \
+             schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n{block}"
+        )
+    };
+    let errors = |text: &str| -> Vec<String> {
+        analyze_queries(&MemoryWorkspace::default(), text)
+            .into_iter()
+            .flat_map(|q| q.diagnostics)
+            .filter(|d| d.severity == opentide_analysis::Severity::Error)
+            .map(|d| d.code)
+            .collect()
+    };
+    let misaligned = rule(
+        "    condition: spawned_process and proc.name = bash\n    exceptions:\n    \
+         - name: e\n      fields: [proc.pname, proc.name]\n      comps: ['=']\n      \
+         values: [[a, b]]\n",
+    );
+    assert_eq!(errors(&misaligned), Vec::<String>::new());
+    let list_in_value = rule(
+        "    condition: spawned_process and proc.pname in (corpus_parents)\n    lists:\n    \
+         - name: corpus_parents\n      items: [sshd]\n    exceptions:\n    - name: e\n      \
+         fields: [proc.name]\n      comps: ['=']\n      values: [[x corpus_parents]]\n",
+    );
+    assert_eq!(errors(&list_in_value), Vec::<String>::new());
+    // An exception the model accepts keeps Falco's checks.
+    let value_type = rule(
+        "    condition: spawned_process and proc.name = bash\n    exceptions:\n    \
+         - name: e\n      fields: [proc.pid]\n      comps: ['=']\n      values: [[abc]]\n",
+    );
+    assert_eq!(errors(&value_type), [codes::FALCO_EXCEPTION]);
+}
+
+/// A tuning that appends exceptions alone has no condition to carry them:
+/// the block's own findings report them, and the editor does not.
+#[test]
+fn exceptions_without_a_condition_are_the_blocks() {
+    let text = "name: Tuning\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000083\n  \
+                schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n    \
+                append_to_rule: Terminal shell in container\n    exceptions:\n    - name: e\n      \
+                fields: [proc.pname]\n      values: [[x]]\n    - name: e\n      \
+                fields: [proc.pname]\n      values: [[y]]\n";
+    let host = MemoryWorkspace::default();
+    let codes_of = |found: Vec<opentide_analysis::Diagnostic>| -> Vec<String> {
+        found.into_iter().map(|d| d.code).collect()
+    };
+    let blocks = codes_of(analyze_blocks(&host, text));
     assert!(
-        !editor.iter().any(|d| d.code == codes::FALCO_EXCEPTION),
+        blocks.iter().any(|c| c == codes::FALCO_EXCEPTION),
+        "{blocks:?}"
+    );
+    let editor = codes_of(
+        analyze(
+            &host,
+            AnalyzeRequest {
+                uri: "objects/rules/tuning.yaml".into(),
+                language: LanguageId::TideYaml,
+                text: text.into(),
+            },
+        )
+        .diagnostics,
+    );
+    assert!(
+        !editor.iter().any(|c| c == codes::FALCO_EXCEPTION),
         "{editor:?}"
     );
 }
@@ -283,13 +362,16 @@ fn faults_are_reported_where_they_are_written() {
             codes::FALCO_UNKNOWN_EVENT,
             "conect",
         ),
-        // An exception whose comps do not align with its fields (Falco's loader).
+        // Two exceptions with one name (Falco's LOAD_EXCEPTION_NAME_NOT_UNIQUE).
+        // A misaligned exception is the model's `sysdig_exception_shape`, not
+        // Falco's here: `an_exception_the_model_refuses_is_not_reported_twice`.
         (
             "terminal-shell-in-container.yaml",
-            "comps: ['=', startswith]",
-            "comps: ['=']",
+            "      - [kubectl, registry.example.com/ops/]\n",
+            "      - [kubectl, registry.example.com/ops/]\n    - name: known_shell_parents\n      \
+             fields: [proc.pname]\n      values: [[sudo]]\n",
             codes::FALCO_EXCEPTION,
-            "comps",
+            "name",
         ),
         // An exception value the field's type cannot hold, compiled as Falco
         // writes it into the condition.
