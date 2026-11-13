@@ -91,7 +91,7 @@ includes every `actors::1.2` key).
 The bundled pins must match `specifications/schemas/pins/` table by table,
 including revisions opentide does not ship yet (`objective::1.1`). Such a table
 is unused until opentide registers that schema. When an opentide PR changes
-bundled vocabularies, pins, the lockfile or the sync script, CI compares them
+bundled vocabularies, pins, the lockfile or the sync (`xtask/src/vocab/sync.rs`), CI compares them
 with specifications `main` and fails on drift. A pin change made only in
 specifications arrives through the next ingest's opentide PR. See
 [`scripts/build/README.md`](../../scripts/build/README.md).
