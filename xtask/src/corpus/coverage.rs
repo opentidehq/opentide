@@ -243,11 +243,7 @@ pub fn report(codes: &Codes, catalogue: &Catalogue) -> Report {
                 entry.code
             ));
         }
-        if !report
-            .groups
-            .get(&entry.code)
-            .is_some_and(|groups| !groups.is_empty())
-        {
+        if report.groups.get(&entry.code).is_none_or(Vec::is_empty) {
             report.problems.push(format!(
                 "`{}` is pending ({}) but is not in scope",
                 entry.code, entry.owner
