@@ -225,11 +225,12 @@ jobs:
 
       # The workflows themselves, with shellcheck (on the runner) over their
       # scripts; .github/actionlint.yaml names what this version does not know.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: actionlint@1.7.7
+      # Built by the runner's Go from the pinned module, which Go's checksum
+      # database verifies (install-action has no build of this version).
       - name: actionlint
-        run: actionlint -color
+        run: |
+          GOBIN="${RUNNER_TEMP}/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "${RUNNER_TEMP}/bin/actionlint" -color
 
       # The wheel is built from the sdist in a directory of its own, so this
       # also proves the sdist carries everything the engine's build reads.

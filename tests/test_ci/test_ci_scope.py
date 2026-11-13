@@ -761,9 +761,12 @@ def test_codeql_starts_every_language_and_gates_its_steps() -> None:
 
 def test_lint_runs_actionlint_over_the_workflows() -> None:
     steps = _ci_jobs()["lint"]["steps"]
-    tools = [str((s.get("with") or {}).get("tool", "")) for s in steps]
-    assert any(re.fullmatch(r"actionlint@\d+\.\d+\.\d+", tool) for tool in tools)
-    assert any(str(s.get("run", "")).startswith("actionlint") for s in steps)
+    (step,) = [s for s in steps if s.get("name") == "actionlint"]
+    run = str(step["run"])
+    # A pinned module version, verified by Go's checksum database.
+    module = r"github\.com/rhysd/actionlint/cmd/actionlint@v\d+\.\d+\.\d+\n"
+    assert re.search(r"go install " + module, run)
+    assert '"${RUNNER_TEMP}/bin/actionlint"' in run
     assert (ROOT / ".github" / "actionlint.yaml").is_file()
 
 
