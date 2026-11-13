@@ -103,7 +103,24 @@ fn a_different_answer_fails_the_replay() {
     let dir = tempfile::tempdir().unwrap();
     let python = stand_in(dir.path(), "python", "", "");
     let file = recording(dir.path(), "a", Launch::Workspace, "<PACKAGE>/other");
-    assert_eq!(run(&args(&python, &[&file])).unwrap(), 1);
+    // `--gate`: the difference fails whether or not the repository is
+    // report-only (tests/golden/REPORT_ONLY, the catch-up train).
+    let mut gated = args(&python, &[&file]);
+    gated.insert(1, "--gate".to_owned());
+    assert_eq!(run(&gated).unwrap(), 1);
+}
+
+#[test]
+fn a_report_only_repository_reports_a_difference_and_passes() {
+    let dir = tempfile::tempdir().unwrap();
+    let python = stand_in(dir.path(), "python", "", "");
+    let file = recording(dir.path(), "a", Launch::Workspace, "<PACKAGE>/other");
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let expected = u8::from(!xtask::golden::report_only::enabled(&repo));
+    assert_eq!(run(&args(&python, &[&file])).unwrap(), expected);
 }
 
 #[test]

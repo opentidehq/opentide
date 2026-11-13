@@ -141,6 +141,7 @@ Engine tests (ubuntu-latest)
 Engine tests (macos-latest)
 Engine tests (windows-latest)
 Supply chain (cargo deny)
+Report-only goldens guard
 Corpus (generator, faults, coverage) against opentide 0.23.0
 Test (3.10)
 Test (3.14)
