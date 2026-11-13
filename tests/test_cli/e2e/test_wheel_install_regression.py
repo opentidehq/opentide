@@ -266,9 +266,9 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
     that died with `ModuleNotFoundError: mcp` could ship. Issue #460: that path
     is `opentide mcp start`, and the wheel does not install `opentide-mcp`.
 
-    This replaces an assertion that a bare install *reports a missing extra*.
-    `mcp` became a base dependency in 0.14.0, so that test could only ever skip,
-    and the stronger claim -- a bare install actually serves -- went unguarded.
+    The server is the Rust one compiled into ``opentide._native`` (UC-6.0c,
+    UC-6.2): the wheel no longer depends on the Python ``mcp`` package, and a
+    bare install still serves.
     """
     uv = shutil.which("uv")
     if uv is None:
@@ -276,17 +276,10 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
 
     wheel = _build_wheel(uv, tmp_path / "dist")
     env_dir = tmp_path / "bare-venv"
-    python = _install(uv, env_dir, str(wheel))
+    _install(uv, env_dir, str(wheel))
 
     removed = _venv_bin(env_dir, "opentide-mcp")
     assert not removed.exists(), "the wheel must not install an opentide-mcp alias"
-
-    imported = _run([str(python), "-c", "import mcp.server.mcpserver"], timeout=60)
-    assert imported.returncode == 0, (
-        "a bare wheel install must ship mcp as a base dependency:\n"
-        + imported.stdout
-        + imported.stderr
-    )
 
     opentide = _venv_bin(env_dir, "opentide")
     result = _run(
@@ -353,14 +346,19 @@ def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
     assert response["result"]["serverInfo"]["name"] == "opentide"
 
 
-#: Every vendor SDK a platform imports. A bare ``pip install opentide`` must
-#: carry all of them: there are no extras, and a generated CI pipeline installs
-#: exactly ``opentide==<version>`` (the 0.14.2 Sentinel live-validation failure).
-_PLATFORM_SDK_IMPORTS = (
-    "azure.identity",
-    "azure.monitor.query",
-    "splunklib.client",
-    "cbc_sdk.rest_api",
+#: The vendor SDKs and Python packages the Python implementation imported. The
+#: Rust core talks to every platform and serves MCP itself (UC-6.2), so a bare
+#: ``pip install opentide`` brings none of them.
+_REMOVED_DEPENDENCIES = (
+    "azure-identity",
+    "azure-monitor-query",
+    "splunk-sdk",
+    "carbon-black-cloud-sdk",
+    "mcp",
+    "pymisp",
+    "typer",
+    "rich",
+    "textual",
 )
 
 
@@ -368,11 +366,12 @@ _PLATFORM_SDK_IMPORTS = (
 _NOT_INSTALLED = ("pandas", "numpy", "openpyxl")
 
 
-def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
-    """A bare install, resolved with uv's default pre-release policy, has every SDK.
+def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path) -> None:
+    """A bare install, resolved with uv's default pre-release policy, is the slim package.
 
-    uv refuses a transitive pre-release, so a pre-release-only dependency (as
-    ``azure-mgmt-securityinsight`` is) would fail this install outright.
+    uv refuses a transitive pre-release, so a pre-release-only dependency would
+    fail this install outright. The wheel declares no extras, and none of the
+    Python implementation's dependencies are installed (UC-6.2).
     """
     uv = shutil.which("uv")
     if uv is None:
@@ -381,31 +380,19 @@ def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
     wheel = _build_wheel(uv, tmp_path / "dist")
     python = _install(uv, tmp_path / "sdk-venv", str(wheel))
 
-    import_every_sdk = "\n".join(
-        [
-            "import importlib, sys",
-            "for name in sys.argv[1:]:",
-            "    importlib.import_module(name)",
-            "import opentide.platforms.sentinel.client as client",
-            "assert client.ALERT_RULES_API_VERSION",
-        ]
-    )
-    probe = _run([str(python), "-c", import_every_sdk, *_PLATFORM_SDK_IMPORTS], timeout=120)
-    assert probe.returncode == 0, probe.stdout + probe.stderr
     print_extras = (
         "from importlib.metadata import metadata; "
         "print(metadata('opentide').get_all('Provides-Extra') or [])"
     )
     metadata = _run([str(python), "-c", print_extras], timeout=60)
     assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
-    # No command needs them since #747: they were 100 MB of the VS Code bundle.
     print_installed = (
         "import importlib.metadata as m; "
         "print(sorted(d.metadata['Name'].lower() for d in m.distributions()))"
     )
     installed = _run([str(python), "-c", print_installed], timeout=60)
-    for heavy in _NOT_INSTALLED:
-        assert f"'{heavy}'" not in installed.stdout, installed.stdout + installed.stderr
+    for gone in (*_REMOVED_DEPENDENCIES, *_NOT_INSTALLED):
+        assert f"'{gone}'" not in installed.stdout, installed.stdout + installed.stderr
 
 
 def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:
