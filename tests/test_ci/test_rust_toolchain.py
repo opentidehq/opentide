@@ -321,3 +321,130 @@ def test_a_failed_rustup_setup_fails_the_step(path: Path) -> None:
 )
 def test_a_masked_rustup_setup_is_seen(step: dict[str, Any], masked: int) -> None:
     assert len(_masked_setups(step)) == masked
+
+
+def _cibuildwheel_linux() -> dict[str, Any]:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return pyproject["tool"]["cibuildwheel"]["linux"]
+
+
+def test_the_linux_wheels_build_with_the_pinned_release_minimal() -> None:
+    """The manylinux containers install rust-toolchain.toml's release, minimal,
+    in before-all, and RUSTUP_TOOLCHAIN names it for the build. Without it,
+    rustup read the file in /project and auto-installed the release with its
+    components (rustfmt, clippy) mid-build, behind hatch_build.py's quiet
+    `rustc -vV`; an install that failed there left a partial toolchain, and
+    cargo failed on `clippy-preview ... detected conflict: 'bin/cargo-clippy'`
+    (linux-arm64, #1031, #1048)."""
+    channel = tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))[
+        "toolchain"
+    ]["channel"]
+    linux = _cibuildwheel_linux()
+    assert linux["environment"]["RUSTUP_TOOLCHAIN"] == channel
+    before_all = linux["before-all"]
+    assert isinstance(before_all, str)
+    installer = before_all.split("|", 1)[1]
+    words = installer.split()
+    assert words[words.index("--profile") + 1] == "minimal"
+    # The release the build runs, installed before it, never `stable`.
+    assert words[words.index("--default-toolchain") + 1] == '"$RUSTUP_TOOLCHAIN"'
+    assert not re.search(r"(?:-c|--component)\b|clippy|rustfmt", installer), installer
+
+
+INSTALL_RUST = "scripts/build/install-rust.sh"
+BUILD_PACKAGES = ROOT / ".github" / "workflows" / "build-packages.yml"
+
+
+def _build_packages_jobs() -> dict[str, Any]:
+    return yaml.safe_load(BUILD_PACKAGES.read_text(encoding="utf-8"))["jobs"]
+
+
+def _index(steps: list[dict[str, Any]], name: str) -> int:
+    (found,) = [n for n, step in enumerate(steps) if step.get("name") == name]
+    return found
+
+
+@pytest.mark.parametrize(
+    ("job_id", "build", "platforms"),
+    [
+        # Linux wheels build in containers: before-all, above.
+        ("wheels", "Build wheels", {"macOS", "Windows"}),
+        ("npm-native", "Build the addon", {"Linux", "macOS", "Windows"}),
+    ],
+)
+def test_every_package_build_installs_the_pinned_release_first(
+    job_id: str, build: str, platforms: set[str]
+) -> None:
+    """Each wheel and npm-native build on a runner runs install-rust.sh before
+    it builds: the release minimal, named in RUSTUP_TOOLCHAIN. Without it,
+    rustup installed rust-toolchain.toml's release mid-build and a macos-arm64
+    wheel failed with "'cargo' is not installed for the toolchain" (#1050)."""
+    job = _build_packages_jobs()[job_id]
+    steps = job["steps"]
+    setup = steps[_index(steps, "Set up Rust")]
+    assert _index(steps, "Set up Rust") < _index(steps, build), job_id
+    assert str(setup["run"]).split()[0] == INSTALL_RUST, setup["run"]
+    assert setup.get("shell") == "bash", "Windows runs it with Git Bash"
+    condition = str(setup.get("if", ""))
+    runners = {"ubuntu": "Linux", "macos": "macOS", "windows": "Windows"}
+    systems = {
+        next(system for prefix, system in runners.items() if str(cell["os"]).startswith(prefix))
+        for cell in job["strategy"]["matrix"]["include"]
+    }
+    covered = {s for s in systems if not (condition and s == "Linux")}
+    assert covered == platforms, (job_id, condition)
+    # No other install of Rust in the job: no unnamed install that takes the
+    # file's components, no second release.
+    for step in steps:
+        assert "rustup toolchain install" not in str(step.get("run", "")), (job_id, step)
+
+
+def test_the_npm_native_build_adds_its_target_through_the_script() -> None:
+    steps = _build_packages_jobs()["npm-native"]["steps"]
+    assert steps[_index(steps, "Set up Rust")]["run"].strip() == f'{INSTALL_RUST} "${{TARGET}}"'
+    assert _build_packages_jobs()["npm-native"]["env"]["TARGET"] == "${{ matrix.target }}"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="runs the script with stub binaries in bash")
+def test_the_install_script_installs_the_release_minimal_and_names_it(tmp_path: Path) -> None:
+    """install-rust.sh with stub rustup, rustc and cargo: what it asks rustup
+    for, and what it leaves in GITHUB_ENV."""
+    import os
+    import subprocess
+
+    channel = tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))[
+        "toolchain"
+    ]["channel"]
+    calls = tmp_path / "calls"
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    for name in ("rustup", "rustc", "cargo"):
+        stub = stubs / name
+        stub.write_text(
+            f'#!/bin/sh\necho "{name} $* [RUSTUP_TOOLCHAIN=$RUSTUP_TOOLCHAIN]" >> "{calls}"\n',
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
+    github_env = tmp_path / "github_env"
+    github_env.write_text("", encoding="utf-8")
+    env = {
+        **os.environ,
+        "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}",
+        "GITHUB_ENV": str(github_env),
+    }
+    env.pop("RUSTUP_TOOLCHAIN", None)
+    subprocess.run(
+        ["bash", str(ROOT / INSTALL_RUST), "aarch64-apple-darwin"],
+        env=env,
+        check=True,
+        capture_output=True,
+        cwd=tmp_path,
+    )
+    named = f"[RUSTUP_TOOLCHAIN={channel}]"
+    assert calls.read_text(encoding="utf-8").splitlines() == [
+        f"rustup toolchain install {channel} --profile minimal --no-self-update {named}",
+        f"rustup target add --toolchain {channel} aarch64-apple-darwin {named}",
+        f"rustc --version {named}",
+        f"cargo --version {named}",
+    ]
+    assert github_env.read_text(encoding="utf-8") == f"RUSTUP_TOOLCHAIN={channel}\n"

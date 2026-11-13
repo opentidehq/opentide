@@ -14,13 +14,10 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
+use opentide_schema::platforms::IdShape;
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = opentide_workspace::state::SCHEMA_ID;
-/// Platforms whose deployer addresses the remote rule by a vendor id.
-pub const STATE_PLATFORMS: [&str; 4] = opentide_workspace::state::STATE_PLATFORMS;
-/// Platforms whose external id is a canonical decimal integer.
-const INTEGER_ID_PLATFORMS: [&str; 3] = ["defender_for_endpoint", "sentinel_one", "sysdig"];
 /// The root keys a shard's model reads; any other is kept as written.
 const ROOT_KEYS: [&str; 3] = ["object_uuid", "platforms", "schema"];
 /// The ignore line `opentide setup` writes, which a workspace that ignores
@@ -124,12 +121,6 @@ impl ExternalId {
     }
 }
 
-fn canonical_decimal(text: &str) -> bool {
-    text == "0"
-        || (text.starts_with(|c: char| ('1'..='9').contains(&c))
-            && text.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
 /// *value* as the shard stores it, or `external_id_shape`
 /// (`normalise_external_id`).
 pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<String, StateError> {
@@ -143,18 +134,22 @@ pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<Strin
             "external_id_shape",
             format!("{platform} external id is empty"),
         )),
-        ExternalId::Text(text)
-            if INTEGER_ID_PLATFORMS.contains(&platform) && !canonical_decimal(text) =>
-        {
-            Err(StateError::new(
-                "external_id_shape",
-                format!(
-                    "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
+        ExternalId::Text(text) => {
+            match opentide_schema::platforms::external_id_problem(platform, text) {
+                Some(IdShape::CanonicalDecimal) => Err(StateError::new(
+                    "external_id_shape",
+                    format!(
+                        "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
                      no leading zeroes)"
-                ),
-            ))
+                    ),
+                )),
+                Some(IdShape::Pattern(pattern)) => Err(StateError::new(
+                    "external_id_shape",
+                    format!("{platform} external id {text:?} does not match {pattern:?}"),
+                )),
+                None => Ok(text.clone()),
+            }
         }
-        ExternalId::Text(text) => Ok(text.clone()),
     }
 }
 
@@ -321,7 +316,7 @@ impl Shard {
                     format!(
                         "{} names platform {platform:?}; only {} store external ids",
                         path.display(),
-                        STATE_PLATFORMS.join(", ")
+                        opentide_workspace::state::state_platforms().join(", ")
                     ),
                 ));
             }

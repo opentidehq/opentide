@@ -228,18 +228,10 @@ pub fn env(stage: &mut Stage, target: &Path) -> Result<StepResult, String> {
 
 // ---------------------------------------------------------------- platforms
 
-/// A platform's value on the command line, and its configuration file.
-pub const PLATFORM_FILES: [(&str, &str); 9] = [
-    ("sentinel", "sentinel.toml"),
-    ("splunk", "splunk.toml"),
-    ("crowdstrike", "crowdstrike.toml"),
-    ("defender_for_endpoint", "defender_for_endpoint.toml"),
-    ("sentinel_one", "sentinel_one.toml"),
-    ("carbon_black_cloud", "carbon_black_cloud.toml"),
-    ("harfanglab", "harfanglab.toml"),
-    ("elastic", "elastic.toml"),
-    ("sysdig", "sysdig.toml"),
-];
+/// A platform's configuration file, `<id>.toml`, when it is built in.
+pub fn platform_file(platform: &str) -> Option<String> {
+    opentide_schema::platforms::is_builtin(platform).then(|| format!("{platform}.toml"))
+}
 
 /// `content` with `enabled = true` in its `[platform]` table
 /// (`_enable_platform_toml`), its line endings kept.
@@ -280,7 +272,7 @@ pub fn platforms(
     stage.mkdir(&dest);
     let (mut written, mut updated, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
     for platform in chosen {
-        let Some((_, file)) = PLATFORM_FILES.iter().find(|(name, _)| name == platform) else {
+        let Some(file) = platform_file(platform) else {
             continue;
         };
         let Some(template) =
@@ -289,7 +281,7 @@ pub fn platforms(
             tracing::warn!(platform = %platform, "platform_template_missing");
             continue;
         };
-        let out = dest.join(file);
+        let out = dest.join(&file);
         let relative = format!("{OPENTIDE_DIR}/configurations/platforms/{file}");
         if let Some(current) = read_text(stage, &out)? {
             let enabled = enable_platform_toml(&current);

@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::IdShape;
 use opentide_schema::vocab::quote;
 use serde_json::Value as Json;
 
@@ -13,17 +14,6 @@ use crate::fs::{EntryKind, FileSystem};
 
 /// The shard's schema identifier.
 pub const SCHEMA_ID: &str = "deployment.state::1.0";
-
-/// Platforms whose deployer addresses the remote rule by a vendor id.
-pub const STATE_PLATFORMS: [&str; 4] = [
-    "crowdstrike",
-    "defender_for_endpoint",
-    "sentinel_one",
-    "sysdig",
-];
-
-/// Platforms whose external id is a canonical decimal integer.
-const INTEGER_ID_PLATFORMS: [&str; 3] = ["defender_for_endpoint", "sentinel_one", "sysdig"];
 
 /// Platform-block keys that used to carry the vendor id on the rule.
 const LEGACY_MAP_KEYS: [&str; 2] = ["rule_id", "rule_id_bundle"];
@@ -335,7 +325,7 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
                     "{} names platform {}; only {} store external ids",
                     path.display(),
                     quote(platform),
-                    STATE_PLATFORMS.join(", ")
+                    crate::state::state_platforms().join(", ")
                 ),
                 path,
             ));
@@ -389,16 +379,18 @@ fn external_id_problem(platform: &str, value: &str) -> Option<String> {
     if value.trim().is_empty() {
         return Some(format!("{platform} external id is empty"));
     }
-    let canonical_decimal = value == "0"
-        || (value.starts_with(|c: char| ('1'..='9').contains(&c))
-            && value.chars().all(|c| c.is_ascii_digit()));
-    (INTEGER_ID_PLATFORMS.contains(&platform) && !canonical_decimal).then(|| {
-        format!(
+    match opentide_schema::platforms::external_id_problem(platform, value)? {
+        IdShape::CanonicalDecimal => Some(format!(
             "{platform} external id {} is not a canonical decimal integer (no sign, no leading \
              zeroes)",
             quote(value)
-        )
-    })
+        )),
+        IdShape::Pattern(pattern) => Some(format!(
+            "{platform} external id {} does not match {}",
+            quote(value),
+            quote(pattern)
+        )),
+    }
 }
 
 #[cfg(test)]
