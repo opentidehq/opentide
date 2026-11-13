@@ -168,6 +168,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Sysdig Secure | Falco (the block's `condition`, exceptions, macros and lists) | ✅ |
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
 | CrowdStrike | CQL (the block's `query`, a correlation rule; a hunt with `system: crowdstrike`) | ✅ |
+| Exabeam New-Scale SIEM | the Exabeam Query Language (each sequence's filter, profile `rule`; `system: exabeam` hunts and `.exabeam` files, profile `search`) | ✅ |
 | Google Security Operations | YARA-L 2.0 (the block's sections as the assembled rule; `system: google_secops` hunts as searches; `.yaral` and `.yl2` files) | ✅ |
 | HarfangLab | — | ❌ never validated |
 

@@ -469,6 +469,51 @@ fn google_secops_sections_and_yaral_files_are_checked_offline() {
 }
 
 #[test]
+fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
+    let (_scratch, ws) = corpus();
+    let rules = ws.join("objects/rules");
+    std::fs::write(
+        rules.join("exabeam.yaml"),
+        "name: Exabeam rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005eb\n  schema: \
+         rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+         clear\ndescription: d\nconfigurations:\n  exabeam:\n    status: STAGING\n    \
+         sequences:\n      - query: SELECT user WHERE activity_type:\"app-login\" GROUP-BY \
+         user\n",
+    )
+    .unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--platform", "exabeam"],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    assert_eq!(document["mode"], "offline", "{}", ran.stdout);
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    // A sequence filter is a correlation-rule query: Search's SELECT and
+    // GROUP-BY are refused there.
+    assert_eq!(codes, ["exabeam_advanced_in_rule"], "{}", ran.stdout);
+    // A `.exabeam` file is a search, where they are not.
+    std::fs::write(
+        ws.join("logins.exabeam"),
+        "SELECT user, COUNT(*) AS logins WHERE activity_type:\"app-login\" GROUP-BY user\n",
+    )
+    .unwrap();
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "logins.exabeam"],
+        &[],
+    );
+    assert_eq!(file.code, 0, "{}", file.stdout);
+    assert_eq!(file.json()["queries"][0]["language"], "exabeam");
+}
+
+#[test]
 fn platforms_the_engine_cannot_parse_are_refused() {
     let (_scratch, ws) = corpus();
     let tenant_only = opentide(

@@ -3657,6 +3657,7 @@ dependencies = [
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
+ "opentide-exabeam",
  "opentide-falco",
  "opentide-highlight",
  "opentide-kql",

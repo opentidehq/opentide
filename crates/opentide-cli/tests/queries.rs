@@ -555,7 +555,7 @@ fn lint_reports_the_google_secops_block_advisories() {
 fn lint_reports_the_exabeam_block_advisories() {
     let text = rule(
         "  exabeam:\n    status: PREVIEW\n    outcome: none\n    sequences:\n      - query: \
-         activity_type = \"a\"\n      - query: activity_type = \"b\"\n        threshold:\n          \
+         activity_type:\"app-login\"\n      - query: activity_type:\"app-login\"\n        threshold:\n          \
          within: 10m\n    correlation:\n      within: 12m\n",
     );
     let found = lint_check(&text);

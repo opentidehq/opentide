@@ -402,7 +402,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `google_secops`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one` and `exabeam`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `google_secops`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 
