@@ -707,10 +707,17 @@ fn run_on_tenant(
         }
     };
     let registry = crate::plugins::registry();
-    let Some(runner) = registry
-        .get(platform)
-        .and_then(opentide_connectors::Platform::query_runner)
-    else {
+    // Google SecOps reads Application Default Credentials from the command's
+    // environment, not the process's.
+    let secops = opentide_connectors::google_secops::GoogleSecops::new(environment.clone());
+    let found = if platform == "google_secops" {
+        Some(&secops as &dyn opentide_connectors::connector::QueryRunner)
+    } else {
+        registry
+            .get(platform)
+            .and_then(opentide_connectors::Platform::query_runner)
+    };
+    let Some(runner) = found else {
         outcome.error = Some(format!("{platform} has no query runner"));
         return finish(outcome);
     };
@@ -2201,7 +2208,7 @@ mod tests {
         let refused = no_runner("sysdig");
         assert_eq!(
             compact_of(&Json::Object(refused.outcome.data.clone())),
-            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","harfanglab","sentinel","sentinel_one","splunk"]}"#
+            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","google_secops","harfanglab","sentinel","sentinel_one","splunk"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();
