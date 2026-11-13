@@ -487,11 +487,12 @@ fn is_uuid_v4(node: &Node) -> bool {
     })
 }
 
-/// A scalar as the messages that quote a value show it: a string quoted,
-/// anything else as YAML writes it (`null`, `true`, `1.5`).
+/// A scalar as the messages that quote a value show it: a string quoted as
+/// every message quotes one, anything else as YAML writes it (`null`,
+/// `true`, `1.5`).
 fn scalar_shown(node: &Node) -> String {
     match &node.value {
-        Value::Str(text) | Value::Datetime(text) => format!("{text:?}"),
+        Value::Str(text) | Value::Datetime(text) => quote(text),
         other => other.to_string(),
     }
 }

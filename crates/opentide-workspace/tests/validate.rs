@@ -174,7 +174,7 @@ mod validate {
         assert!(
             invalid
                 .iter()
-                .all(|d| d.message == "UUID \"bad-1\" is not a valid UUIDv4")
+                .all(|d| d.message == "UUID 'bad-1' is not a valid UUIDv4")
         );
         assert!(invalid.iter().all(|d| {
             d.help
