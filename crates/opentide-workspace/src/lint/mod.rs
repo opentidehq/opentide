@@ -30,6 +30,7 @@ use std::path::{Path, PathBuf};
 use indexmap::IndexMap;
 use opentide_schema::configuration::lint::{FilenameConfig, LintConfig};
 use opentide_schema::node::{self, Node, Value};
+use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
@@ -474,12 +475,20 @@ fn lint_with(
     if selected.contains(&LintCheck::Queries)
         && let Some(check) = options.query_check
     {
-        for &index in &shown {
-            let record = &records[index];
-            let (None, Some(text)) = (&record.parse_error, &record.text) else {
-                continue;
-            };
-            match check.check(&record.path, &record.relative, record.uuid.as_deref(), text) {
+        // The files are checked on every core and their findings taken in
+        // order: the first file the engine refuses still decides the report.
+        let checked: Vec<Result<Vec<LintFinding>, String>> = shown
+            .par_iter()
+            .filter_map(|&index| {
+                let record = &records[index];
+                let (None, Some(text)) = (&record.parse_error, &record.text) else {
+                    return None;
+                };
+                Some(check.check(&record.path, &record.relative, record.uuid.as_deref(), text))
+            })
+            .collect();
+        for one in checked {
+            match one {
                 Ok(found) => engine.extend(found),
                 Err(message) => {
                     let mut report = LintReport::refused(&target, selected, message, 2);

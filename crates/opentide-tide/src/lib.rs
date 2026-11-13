@@ -757,10 +757,31 @@ fn join_field_path(parent: &str, key: &str) -> String {
     }
 }
 
+/// The patterns [`highlight_scalar`] tells a scalar's kind by, compiled once:
+/// it runs on every scalar of every file, and compiling them each time was
+/// most of `opentide lint`'s time (#806).
+struct ScalarPatterns {
+    uuid: Regex,
+    schema: Regex,
+    technique: Regex,
+    number: Regex,
+}
+
 #[expect(
     clippy::unwrap_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+    reason = "regex literals: an invalid pattern fails every test that reaches it"
 )]
+fn scalar_patterns() -> &'static ScalarPatterns {
+    static PATTERNS: std::sync::OnceLock<ScalarPatterns> = std::sync::OnceLock::new();
+    PATTERNS.get_or_init(|| ScalarPatterns {
+        uuid: Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+            .unwrap(),
+        schema: Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$").unwrap(),
+        technique: Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$").unwrap(),
+        number: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
+    })
+}
+
 fn highlight_scalar(
     spans: &mut Vec<(ByteSpan, &'static str)>,
     skip: &[ByteSpan],
@@ -786,37 +807,24 @@ fn highlight_scalar(
             || field.default_value.as_deref() == Some(value)
             || field.const_value.as_deref() == Some(value)
     });
-    let capture =
-        if Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .unwrap()
-            .is_match(value)
-        {
-            "tide.uuid"
-        } else if Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$")
-            .unwrap()
-            .is_match(value)
-        {
-            "tide.schema"
-        } else if value == "true" || value == "false" {
-            "boolean"
-        } else if (value.starts_with('"') && value.ends_with('"'))
-            || (value.starts_with('\'') && value.ends_with('\''))
-        {
-            "string"
-        } else if in_enum
-            || Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$")
-                .unwrap()
-                .is_match(value)
-        {
-            "constant"
-        } else if Regex::new(r"^-?[0-9]+(\.[0-9]+)?$")
-            .unwrap()
-            .is_match(value)
-        {
-            "number"
-        } else {
-            "string"
-        };
+    let patterns = scalar_patterns();
+    let capture = if patterns.uuid.is_match(value) {
+        "tide.uuid"
+    } else if patterns.schema.is_match(value) {
+        "tide.schema"
+    } else if value == "true" || value == "false" {
+        "boolean"
+    } else if (value.starts_with('"') && value.ends_with('"'))
+        || (value.starts_with('\'') && value.ends_with('\''))
+    {
+        "string"
+    } else if in_enum || patterns.technique.is_match(value) {
+        "constant"
+    } else if patterns.number.is_match(value) {
+        "number"
+    } else {
+        "string"
+    };
     push_span(spans, skip, start, end, capture);
 }
 

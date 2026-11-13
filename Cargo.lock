@@ -3189,6 +3189,7 @@ dependencies = [
  "portable-pty",
  "pulldown-cmark",
  "ratatui",
+ "rayon",
  "regex",
  "reqwest",
  "rmcp",
