@@ -26,6 +26,7 @@ from opentide.mcp_server.tools import (
     tool_deployment_status,
     tool_explain,
     tool_get_chaining,
+    tool_graph,
     tool_run_query,
     tool_search,
     tool_validate_query,
@@ -52,7 +53,7 @@ objective UUID; an objective lists threat UUIDs.
 
 Workflow:
 1. Search. search (keyword, UUID, technique) and coverage find what exists; \
-get_chaining shows threat -> objective -> rule.
+get_chaining shows threat -> objective -> rule; graph shows where the catalogue is blind.
 2. Draft. Start from opentide://templates/{{object_type}}, check fields against \
 opentide://schemas/{{object_type}} and opentide://vocabularies/{{name}}, and write the \
 file with your own tools: this server does not write files.
@@ -159,6 +160,24 @@ def coverage(technique: str = "", tactic: str = "") -> dict:
     """
     require_workspace()
     return tool_coverage(technique=technique, tactic=tactic)
+
+
+@mcp.tool(title="Detection graph", annotations=LOCAL_READ, meta=ui_meta("graph"))
+def graph(detail: str = "summary") -> dict:
+    """The whole catalogue as a graph: where threats, objectives and rules connect, and the gaps.
+
+    detail summary (default): {counts, rule_blocks_by_status,
+    rule_blocks_by_platform, threats_without_objectives, threats_without_rules,
+    threats_without_production_rules, objectives_without_rules}; each gap is
+    {count, items: [{uuid, title}]}, at most 25 items. Start here for "where are
+    we blind?". detail full: every threat {uuid, title, criticality, actors,
+    techniques, chaining: [{to, relation}]}, objective {uuid, title, priority,
+    threats} and rule {uuid, title, objective, techniques, platforms: {name:
+    status}}, with actor_names; large on a big catalogue, so the graph view
+    asks for it and you rarely need to.
+    """
+    require_workspace()
+    return tool_graph(detail)
 
 
 @mcp.tool(title="Validate a rule", annotations=LOCAL_READ)

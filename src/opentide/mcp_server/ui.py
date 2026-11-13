@@ -28,23 +28,33 @@ from opentide.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-View = Literal["coverage", "validation", "lineage"]
+View = Literal["coverage", "validation", "lineage", "graph"]
 
 #: The ``ui://`` resource of each view.
 VIEW_URIS: dict[View, str] = {
     "coverage": "ui://opentide/coverage.html",
     "validation": "ui://opentide/validation-report.html",
     "lineage": "ui://opentide/lineage.html",
+    "graph": "ui://opentide/graph.html",
 }
 
 VIEW_TITLES: dict[View, str] = {
     "coverage": "ATT&CK coverage",
     "validation": "Validation report",
     "lineage": "Threat, objective and rule lineage",
+    "graph": "Detection graph",
 }
+
+#: Views with their own stylesheet and script in views/, injected into the shared page.
+_VIEW_ASSETS: dict[View, tuple[str, str]] = {"graph": ("graph.css", "graph.js")}
+
+#: Views that show technique names and tactics, and so carry the ATT&CK matrix.
+_ATTACK_VIEWS: frozenset[View] = frozenset({"coverage", "graph"})
 
 _VIEW_MARKER = "__OPENTIDE_VIEW__"
 _ATTACK_MARKER = "__OPENTIDE_ATTACK__"
+_STYLE_MARKER = "/*__OPENTIDE_VIEW_STYLE__*/"
+_SCRIPT_MARKER = "/*__OPENTIDE_VIEW_SCRIPT__*/"
 
 
 def ui_meta(view: View) -> dict[str, Any]:
@@ -127,9 +137,18 @@ def _script_json(value: Any) -> str:
 @cache
 def view_html(view: View) -> str:
     """The page for *view*, built once per process."""
-    template = files("opentide.mcp_server.views").joinpath("view.html").read_text(encoding="utf-8")
-    attack = attack_matrix() if view == "coverage" else None
-    return template.replace(_VIEW_MARKER, view).replace(_ATTACK_MARKER, _script_json(attack))
+    views = files("opentide.mcp_server.views")
+    page = views.joinpath("view.html").read_text(encoding="utf-8")
+    style, script = "", ""
+    if view in _VIEW_ASSETS:
+        css_name, js_name = _VIEW_ASSETS[view]
+        style = views.joinpath(css_name).read_text(encoding="utf-8")
+        script = views.joinpath(js_name).read_text(encoding="utf-8")
+    attack = attack_matrix() if view in _ATTACK_VIEWS else None
+    # The assets are this package's own files; the markers are replaced once, in order,
+    # so nothing they contain is read as a marker.
+    page = page.replace(_STYLE_MARKER, style, 1).replace(_SCRIPT_MARKER, script, 1)
+    return page.replace(_VIEW_MARKER, view, 1).replace(_ATTACK_MARKER, _script_json(attack), 1)
 
 
 def build_apps() -> Apps:

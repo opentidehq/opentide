@@ -35,6 +35,7 @@ PROTOCOL_VERSION = "2024-11-05"
 READ_TIMEOUT = 60.0
 
 EXPECTED_TOOLS = {
+    "graph",
     "search",
     "get_chaining",
     "coverage",

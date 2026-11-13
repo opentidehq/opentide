@@ -17,7 +17,7 @@ Every tool has a `title` and `annotations` in `tools/list`. Hosts use the hints 
 
 | Tool | `readOnlyHint` | `destructiveHint` | `openWorldHint` | Why |
 |------|:---:|:---:|:---:|-----|
-| `search`, `get_chaining`, `coverage`, `validate_rule`, `validation_report`, `explain`, `deployment_status` | `true` | `false` | `false` | Read the workspace and bundled data only |
+| `search`, `get_chaining`, `coverage`, `graph`, `validate_rule`, `validation_report`, `explain`, `deployment_status` | `true` | `false` | `false` | Read the workspace and bundled data only |
 | `validate_query` | `true` | `false` | `true` | `live: true` contacts the tenant |
 | `run_query` | `false` | `false` | `true` | Contacts the tenant; Elastic `kuery` writes its rule preview's alerts to the preview index |
 | `deploy_rule` | `false` | `true` | `true` | `dry_run: false` creates or replaces the rule on the tenant |
@@ -175,6 +175,48 @@ Without `technique`:
   "tactic_filter": null
 }
 ```
+
+## graph
+
+The whole catalogue as a graph: threats, objectives and rules, how they connect, and where it is blind. Use it to answer "where are we blind?" or "what covers this attack path?".
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `detail` | string | `"summary"` | `summary`: counts and gaps, small whatever the catalogue's size. `full`: every node |
+
+A threat is covered when a rule reaches it through an objective that lists it. A rule belongs to the objective its `detection_model` names, or, when that is a signal, to the signal's objective. A threat is *in production* when one of those rules has a platform block whose status deploy releases: a `[[statuses]]` entry of `deployment.toml` with `strategy = "RELEASE"` (`PRODUCTION` in the default lifecycle).
+
+```json
+// call
+{}
+
+// returns
+{
+  "counts": { "threats": 13, "objectives": 8, "rules": 14, "chained_threats": 13, "actors": 2 },
+  "rule_blocks_by_status": { "PRODUCTION": 14, "STAGING": 6, "TESTING": 2 },
+  "rule_blocks_by_platform": { "sentinel": { "PRODUCTION": 4, "STAGING": 2, "TESTING": 1 } },
+  "threats_without_objectives": { "count": 2, "items": [{ "uuid": "…", "title": "Mailboxes collected through Microsoft Graph" }] },
+  "threats_without_rules": { "count": 1, "items": [{ "uuid": "…", "title": "Kerberoasting of service accounts" }] },
+  "threats_without_production_rules": { "count": 2, "items": [{ "uuid": "…", "title": "Cobalt Strike beacon over HTTPS" }] },
+  "objectives_without_rules": { "count": 1, "items": [{ "uuid": "…", "title": "Detect Kerberoasting" }] }
+}
+```
+
+Each gap lists at most 25 items; `count` is the full number. With `detail: "full"`:
+
+```json
+{
+  "threats": [{ "uuid": "…", "title": "LSASS memory dumped for credentials", "criticality": "Critical", "severity": "Substantial incident", "viability": "Likely",
+                "actors": ["att&ck::G0102"], "techniques": ["T1003.001"], "chaining": [{ "to": "…", "relation": "preceeds" }] }],
+  "objectives": [{ "uuid": "…", "title": "Detect credential dumping from LSASS", "priority": "High", "threats": ["…"], "signals": 1 }],
+  "rules": [{ "uuid": "…", "title": "LSASS read by a non-system process", "severity": "High", "objective": "…", "signal": null,
+              "techniques": ["T1003.001"], "platforms": { "defender_for_endpoint": "PRODUCTION", "elastic": "PRODUCTION" } }],
+  "actor_names": { "att&ck::G0102": "[Enterprise] Wizard Spider" },
+  "statuses": [{ "name": "DESIGN", "strategy": "INERT" }, { "name": "STAGING", "strategy": "PREVIEW" }, { "name": "PRODUCTION", "strategy": "RELEASE" }]
+}
+```
+
+`techniques` on a rule are its own and those it inherits from its objective, as `coverage` counts them. `actors` and chaining `relation`s are as the threat writes them (`sequence::preceeds` or `preceeds`). `statuses` are the workspace's `[[statuses]]`, in lifecycle order. An unknown `detail` returns `{"error", "supported"}`. In a host with MCP Apps, `graph` opens the [detection graph](./views.md#detection-graph).
 
 ## validate_rule
 

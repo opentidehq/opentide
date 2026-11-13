@@ -8,6 +8,7 @@ from typing import Any
 
 from opentide.core.registry import Opentide
 from opentide.mcp_server.catalog import (
+    catalogue_graph,
     coverage_analysis,
     ensure_initialised,
     get_chaining_graph,
@@ -35,6 +36,19 @@ def tool_get_chaining(uuid: str) -> dict[str, Any]:
 
 def tool_coverage(technique: str = "", tactic: str = "") -> dict[str, Any]:
     return coverage_analysis(technique=technique, tactic=tactic)
+
+
+#: The graph tool's levels of detail.
+GRAPH_DETAILS = ("summary", "full")
+
+
+def tool_graph(detail: str = "summary") -> dict[str, Any]:
+    if detail not in GRAPH_DETAILS:
+        return {
+            "error": f"Unknown detail {detail!r}",
+            "supported": list(GRAPH_DETAILS),
+        }
+    return catalogue_graph(detail=detail)
 
 
 def next_action(
