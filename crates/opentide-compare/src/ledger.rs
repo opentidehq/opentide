@@ -9,9 +9,9 @@
 //! rule = "json:/environment"                # json:<JSON pointer> | json-extend:<JSON pointer> | json-drop:<JSON pointer> | json-sha256:<JSON pointer> | text | lines | sha256 | mode | presence | help | help-text
 //! oracle = '[...]'                          # what the oracle has there
 //! candidate = '[...]'                       # what the candidate has instead
-//! reason = "OPENTIDE_ENGINE is read by the launcher (#805)"
+//! reason = "the catalogue lists a variable the oracle did not have"
 //! issue = "https://github.com/opentidehq/opentide/issues/805"
-//! changelog = "**`OPENTIDE_ENGINE`**"       # text found in CHANGELOG.md
+//! changelog = "**`opentide commands`**"    # text found in CHANGELOG.md
 //! ```
 //!
 //! Every field is required. A `json:` rule's values are JSON texts, or

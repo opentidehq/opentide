@@ -46,8 +46,8 @@
 //! ANSI escape codes are kept: they are part of what human mode prints.
 //!
 //! Written for `cargo xtask golden` (UC-0.5, #803) and moved here (UC-0.7,
-//! #805) so that `OPENTIDE_ENGINE=compare` in the CLI normalises as the
-//! goldens do; `xtask::golden::normalise` re-exports it.
+//! #805) so that the command line's golden replays normalise as the goldens
+//! do; `xtask::golden::normalise` re-exports it.
 
 use crate::{FileState, Run};
 use regex::{Captures, Regex};

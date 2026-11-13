@@ -3423,7 +3423,6 @@ dependencies = [
  "opentide",
  "opentide-analysis",
  "opentide-cli",
- "opentide-compare",
  "opentide-compile",
  "opentide-connectors",
  "opentide-lsp",
@@ -3434,7 +3433,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]

@@ -88,9 +88,9 @@ pub enum Error {
     /// The promotion cannot rewrite it without changing what else it says
     /// (`PromotionRefused`): the file is left as it is, with a warning.
     Refused(String),
-    /// A case this port does not reproduce as the oracle reports it (a value
-    /// YAML 1.1 and 1.2 read differently, text the oracle's parser refuses):
-    /// the host leaves the run to the Python implementation.
+    /// A case the promotion does not rewrite (a value YAML 1.1 and 1.2 read
+    /// differently, promoted text that does not read back): the host fails
+    /// the run and names `--skip-promotion`.
     Unported(String),
 }
 

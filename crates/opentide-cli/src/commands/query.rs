@@ -195,16 +195,20 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// The refusal of a run this engine does not cover: Python's
-/// (`engine_not_ported`), named as `opentide.cli.engines` names it.
-pub fn not_ported(what: &str) -> Report {
-    let message = format!(
-        "opentide {what} has no Rust implementation yet: unset OPENTIDE_ENGINE, or set it to \
-         python or compare."
-    );
-    let mut failure = Failure::new(code::ENGINE_NOT_PORTED, message);
-    failure.argument = Some("OPENTIDE_ENGINE".into());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+/// A rule's query on a platform plugin (`--rule`, `--file`): a usage error.
+/// The rule's block under `configurations.<plugin>` is the plugin's to read,
+/// and no plugin method hands opentide its query; the query is given as
+/// `QUERY` or `--query-file` instead.
+pub fn plugin_rule(platform: &str, source: &str) -> Report {
+    usage(
+        platform,
+        &format!(
+            "{source} reads a rule's query from a built-in platform's block; {platform} is a \
+             platform plugin: give its query as QUERY or --query-file"
+        ),
+        source,
+        &[],
+    )
 }
 
 /// A platform with no query runner (Sysdig): a usage error on `--platform`,
@@ -880,10 +884,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         );
     }
     // A platform plugin (UC-4.5) runs through the same runner trait; a rule's
-    // query on one (the rule's block is the plugin's to read) is not ported.
+    // query on one cannot be read (the rule's block is the plugin's).
     let plugin = crate::plugins::is_plugin(platform);
-    if plugin && sources[0] != "QUERY" {
-        return not_ported(&format!("query {} on {platform}", sources[0]));
+    if plugin && (sources[0] == "--rule" || sources[0] == "--file") {
+        return plugin_rule(platform, sources[0]);
     }
     let rule = if sources[0] == "QUERY" {
         None
@@ -2237,10 +2241,16 @@ mod tests {
         assert_eq!(failure.argument.as_deref(), Some("--platform"));
         assert_eq!(failure.message, "sysdig has no query runner");
         assert_eq!(failure.suggestion, None);
-        let refused = not_ported("query --rule on acme");
+        let refused = plugin_rule("acme", "--rule");
+        assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();
-        assert_eq!(failure.code, code::ENGINE_NOT_PORTED);
-        assert_eq!(failure.argument.as_deref(), Some("OPENTIDE_ENGINE"));
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(failure.argument.as_deref(), Some("--rule"));
+        assert!(
+            failure.message.contains("acme is a platform plugin"),
+            "{}",
+            failure.message
+        );
     }
 
     #[test]

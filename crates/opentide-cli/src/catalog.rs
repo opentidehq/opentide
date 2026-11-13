@@ -91,14 +91,6 @@ pub fn environment() -> Vec<(String, String)> {
             .iter()
             .map(|name| ((*name).to_owned(), AGENT_MEANING.to_owned())),
     );
-    // Last, as in the Python catalogue: the oracle's list (v0.23.0) is a
-    // prefix of this one (UC-0.7, #805).
-    rows.push((
-        "OPENTIDE_ENGINE".into(),
-        "Implementation that runs a command: python (default), rust, or compare (both, failing \
-         with exit 70 when they differ)"
-            .into(),
-    ));
     rows
 }
 

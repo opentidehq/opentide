@@ -3,9 +3,8 @@
 //! [`HostRunner`] runs a request as `opentide --json <argv>` would in a new
 //! process: every run is Rust's, in this process
 //! ([`crate::embed::run_captured`]), with the run's environment and working
-//! directory, whatever `OPENTIDE_ENGINE` the server or the request names
-//! (UC-6.0d, #841: the Python side that chose an engine per request and ran
-//! Python's choices is gone). A read-only run keeps its workspace warm in the
+//! directory (UC-6.0d, #841: the Rust core is opentide's one implementation).
+//! A read-only run keeps its workspace warm in the
 //! session ([`opentide_workspace::session`]) for the next one.
 
 use std::path::{Component, Path, PathBuf};
@@ -189,13 +188,12 @@ impl HostRunner {
         run_environment(&self.base_env, request)
     }
 
-    /// How `request` goes: on Rust, with the request's environment over the
-    /// server's, `OPENTIDE_ENGINE=rust` and progress events on stderr.
+    /// How `request` goes: with the request's environment over the server's,
+    /// and progress events on stderr.
     fn own_plan(&self, request: &RunRequest) -> Plan {
         let words = crate::hoist::command_words(&self.root, &request.argv);
         let mut env = self.run_environment(request);
-        env.retain(|(name, _)| name != "OPENTIDE_ENGINE" && name != "OPENTIDE_PROGRESS");
-        env.push(("OPENTIDE_ENGINE".into(), "rust".into()));
+        env.retain(|(name, _)| name != "OPENTIDE_PROGRESS");
         env.push(("OPENTIDE_PROGRESS".into(), "json".into()));
         let cwd = request
             .cwd
@@ -549,19 +547,19 @@ mod tests {
         ));
     }
 
-    /// No request runs on Python, whatever engine the server or the request
-    /// names (UC-6.0d, #841).
+    /// A request runs in the server's directory, its variables over the
+    /// server's, with progress events on stderr whatever the request asks.
     #[test]
-    fn every_run_is_planned_on_rust() {
+    fn every_run_is_planned_with_progress_events() {
         let runner = HostRunner::new(
-            vec![("OPENTIDE_ENGINE".into(), "python".into())],
+            vec![("NO_COLOR".into(), "1".into())],
             PathBuf::from("/w"),
             "0.0.0",
         );
         let request = RunRequest {
             argv: words("--repo r validate --file x"),
             env: Some(vec![
-                ("OPENTIDE_ENGINE".into(), "compare".into()),
+                ("NO_COLOR".into(), "0".into()),
                 ("OPENTIDE_PROGRESS".into(), "off".into()),
             ]),
             ..RunRequest::default()
@@ -578,7 +576,7 @@ mod tests {
                 .map(|(_, value)| value.as_str())
                 .collect()
         };
-        assert_eq!(named("OPENTIDE_ENGINE"), ["rust"]);
+        assert_eq!(named("NO_COLOR"), ["0"]);
         assert_eq!(named("OPENTIDE_PROGRESS"), ["json"]);
         let refused = runner.plan(&RunRequest {
             argv: words("tui"),
