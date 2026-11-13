@@ -25,7 +25,6 @@
 
 pub mod answer;
 pub mod bitdefender;
-pub mod body;
 pub mod carbon_black;
 pub mod connector;
 pub mod credentials;

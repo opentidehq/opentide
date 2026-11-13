@@ -390,7 +390,7 @@ impl<'a> Client<'a> {
         let service = tenant
             .secret("key_type")
             .is_ok_and(|kind| kind.expose() == "service");
-        let bytes = crate::body::python_json(body).map_err(|error| {
+        let bytes = serde_json::to_vec(body).map_err(|error| {
             CallError::Tenant(ConnectorError::Setup {
                 platform: PLATFORM.to_owned(),
                 tenant: self.tenant().to_owned(),

@@ -16,7 +16,6 @@ use indexmap::IndexMap;
 use opentide_schema::node::{Document, Node, Value};
 use opentide_workspace::Index;
 
-use super::json_text::line;
 use super::relations::py_str;
 use crate::json::Json;
 
@@ -195,7 +194,8 @@ pub fn overlay(index: &Index, shards: &IndexMap<String, Shard>) -> Index {
             continue;
         }
         // The object as a document of its own, read back from its JSON.
-        let Ok(document) = opentide_schema::node::load(&line(&Json::from_node(object))) else {
+        let Ok(document) = opentide_schema::node::load(&Json::from_node(object).to_compact())
+        else {
             continue;
         };
         bucket.insert(
@@ -482,7 +482,7 @@ mod tests {
                     .map(|(_, value)| (*value).to_owned())
             }
         };
-        let line = |json: &Json| super::line(json);
+        let line = |json: &Json| crate::generate::json_text::line(json);
         let local = vars(&[]);
         assert_eq!(
             line(&change(

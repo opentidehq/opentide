@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>MalAPI.io</title></head>
+<body>
+<nav><a href="/">MalAPI.io</a> <a href="/about">About</a></nav>
+<!-- A trimmed copy of the front page's table: three APIs of the site's
+     hundreds. The API lists sit in <tbody> elements inside the cells, which
+     lxml kept where they are and html5ever moves (foster parenting). -->
+<table id="main-table">
+  <tr>
+    <th> Enumeration <img src="/static/info.svg" title=" Functions associated with system enumeration. "></th>
+    <th>Anti-Debugging <img src="/static/info.svg" title="Functions associated with anti-reverse engineering and debugging."></th>
+    <th>Helper <img src="/static/info.svg" title="Functions that are not necessarily malicious, but can aid malware."></th>
+  </tr>
+  <tr>
+    <td><tbody>
+      <a class="map-item" href="/winapi/GetDriveTypeA"> GetDriveTypeA </a><br>
+    </tbody></td>
+    <td><tbody>
+      <a class="map-item" href="/winapi/GetDriveTypeA">GetDriveTypeA</a><br>
+      <a class="map-item" href="https://malapi.io/winapi/IsDebuggerPresent">IsDebuggerPresent</a><br>
+    </tbody></td>
+    <td><tbody>
+      <a class="map-item" href="winapi/VirtualAlloc/">VirtualAlloc</a><br>
+    </tbody></td>
+  </tr>
+</table>
+<footer><a href="https://github.com/mrd0x">Credits</a></footer>
+</body>
+</html>

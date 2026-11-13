@@ -216,3 +216,10 @@ fn secret_names_and_comment_descriptions() {
     assert_eq!(described["filenames.other"], "lone");
     assert!(!described.values().any(|text| text.contains("example")));
 }
+
+#[test]
+fn floats_show_as_rust_prints_them() {
+    for (float, shown) in [(1.5, "1.5"), (2.0, "2"), (f64::INFINITY, "inf")] {
+        assert_eq!(scalar_text(&Value::Float(float)), shown);
+    }
+}
