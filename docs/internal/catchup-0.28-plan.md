@@ -468,12 +468,12 @@ Every brief uses the same base:
 - Use a worktree with its own Cargo target pool (root `AGENTS.md`, "Parallel agents").
 - Read `.agents/skills/{rust,rust-engine,golden,review-checklist}/SKILL.md`.
 - Python behaviour comes from `git show 3acbea603:<path>`, and for U-0.28.1 from development's
-  tip that M0 merged (`a15c78c73`). Port the data, not the formatting: use
+  tip that M0 merged (`164450afc`, 0.28.1). Port the data, not the formatting: use
   crates (clap, minijinja, serde_json, jiff, reqwest, regex) and never reproduce a Python library's
   layout byte for byte. Where only layout differs from 0.28.0, the difference is approved in the
   ledger at O2.
 - Take your rows of `docs/internal/catchup-0.28.md`: the data, fixtures, explain pages and docs pages
-  development added for your feature, from `3acbea603` (U-0.28.1: `a15c78c73`).
+  development added for your feature, from `3acbea603` (U-0.28.1: `164450afc`).
 - Definition of done: `scripts/ci-local.sh --full` passes, plus `cargo xtask check-layers`,
   `cargo xtask codegen --check` and `cargo xtask stubs --check` where models changed. Every fix has a
   regression test. `CHANGELOG.md` `[Unreleased]` names only deliberate differences from 0.28.0.

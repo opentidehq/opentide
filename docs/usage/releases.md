@@ -7,6 +7,47 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.28.1 — 13 November 2026
+
+Optional fields such as `author` are notes, not warnings: `lint --strict` no longer fails on them, and `--verbose` shows them.
+
+**Install**
+
+```bash
+pip install opentide==0.28.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If your CI runs `opentide lint --strict` to require `author` or `organisation`, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. Notes no longer fail `--strict`.
+
+**Added**
+
+- **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide notes by default, count them, and suggest the same command with `--verbose`. `--json` and reports always include them ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check, configured with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+
+**Changed**
+
+- **The analysis engine is [language-server 0.16.1](https://github.com/opentidehq/language-server/releases/tag/v0.16.1).** The editor and `opentide tui` report missing optional fields as information, and warn on Exabeam `activity_type`, `subject` and `outcome` values the CIM lacks.
+- **`lint --strict` fails only on errors and warnings.** Raise a check's `severity` in `lint.toml` to gate on it ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`setup skills` installs the catalogue's `detection-engineering`**, and falls back to the packaged copy when it cannot download it ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+
+**Fixed**
+
+- **`opentide lint` reports Graylog and YARA-L query warnings**, which it dropped before ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **The packaged authoring skills have frontmatter**, so agents find them ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **`opentide explain` calls a warning-only YARA code a warning** ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0281--2026-11-13) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.28.1/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.28.1)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.28.0 — 12 November 2026
 
 Google Security Operations support: deploy YARA-L rules to Google SecOps, with their sections checked as you type.

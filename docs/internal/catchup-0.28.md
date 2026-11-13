@@ -1,32 +1,32 @@
 ---
 title: Catch-up 0.28 manifest
-description: Every path development changed between 0.23.0 and 0.28.0, and after it up to `a15c78c73`, that the M0 merge kept at integration's version, with the work unit that brings it.
+description: Every path development changed between 0.23.0 and 0.28.0, and after it up to `164450afc`, that the M0 merge kept at integration's version, with the work unit that brings it.
 ---
 
 # Catch-up 0.28 manifest
 
 The M0 merge (`chore/merge-development-0.28`) made `v0.28.0` (`3acbea603`), and development
-after it up to `a15c78c73` (#1029 and #1015, for 0.28.1), ancestors of
+after it up to `164450afc` (#1029, #1015 and #1049: 0.28.1, not yet tagged), ancestors of
 `integration/unified-core` without changing what integration does. It deleted the old Python
 implementation and its tests, and took only history and process files from development (the
 allowlist in [the plan, §3.1](./catchup-0.28-plan.md#31-recommendation-one-early-merge-commit-m0-features-ported-after)).
-Its docs also name 0.28.0 as the latest release: the docs version tests require it once
-`[0.28.0]` is the newest dated `CHANGELOG.md` version. Every other path development changed is
+Its docs also name 0.28.1 as the latest release: the docs version tests require it once
+`[0.28.1]` is the newest dated `CHANGELOG.md` version. Every other path development changed is
 still at integration's version. This page lists them,
 with the unit of [the plan](./catchup-0.28-plan.md) that brings each one.
 
 U-0.28.1 is the port unit for #1029 (optional fields are notes, `--strict` and `--verbose`) and
-#1015's packaged skills. A port PR takes its paths with `git checkout a15c78c73 -- <path>` (or edits them into shape) and
+#1015's packaged skills. A port PR takes its paths with `git checkout 164450afc -- <path>` (or edits them into shape) and
 deletes its rows here. O2 deletes this page when only the last two tables are left.
 
 ## Check
 
-The paths that still differ from development at `a15c78c73` (a later merge of development moves
+The paths that still differ from development at `164450afc` (a later merge of development moves
 both commits of the command to its tip):
 
 ```bash
-git diff --name-only f41fe5e5c a15c78c73 -- . ':!*.py' ':!analysis' ':!tests/test_*' \
-  | while read -r p; do git diff --quiet a15c78c73 HEAD -- "$p" || echo "$p"; done
+git diff --name-only f41fe5e5c 164450afc -- . ':!*.py' ':!analysis' ':!tests/test_*' \
+  | while read -r p; do git diff --quiet 164450afc HEAD -- "$p" || echo "$p"; done
 ```
 
 The train is mergeable when it prints only the paths under [Superseded](#superseded) and
@@ -35,19 +35,19 @@ The train is mergeable when it prints only the paths under [Superseded](#superse
 
 ## Deferred
 
-276 paths.
+277 paths.
 
 | Path | Unit | Note |
 |---|---|---|
 | `.agents/skills/uv/SKILL.md` | E1 | Rust 1.95 |
 | `AGENTS.md` | X1 | the platform matrix goes to `crates/opentide-connectors/AGENTS.md` |
-| `README.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `README.md` | X1 | M0 moved its version claims to 0.28.1 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/cli/deploy.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/diagnostics.md` | F3 | generated, after the P-units and H1 add their codes; since 0.28.0 also U-0.28.1 (`recommended_field_missing`), P-EX (`exabeam_unknown_value`), the YARA lane (YARA warnings) and P-GS (YARA-L) |
 | `docs/cli/explain.md` | F3 | code list, widened by the new codes |
 | `docs/cli/generate.md` | D1, D2, D3 | pages, diagrams, CVE details |
 | `docs/cli/global-options.md` | U-0.28.1 | `--verbose` (#1029) |
-| `docs/cli/index.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/cli/index.md` | X1 | M0 moved its version claims to 0.28.1 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/cli/info.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/lint.md` | U-0.28.1 | the `recommended` check, notes (#1029) |
 | `docs/cli/lsp.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
@@ -55,22 +55,23 @@ The train is mergeable when it prints only the paths under [Superseded](#superse
 | `docs/cli/query.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/cli/setup.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; U-0.28.1 the packaged skills (#1015) |  |
 | `docs/cli/validate.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; F1 the `advanced` table; U-0.28.1 notes and `--verbose` (#1029) |  |
-| `docs/index.md` | X1 | platform count; M0 moved its version claims to 0.28.0 |
+| `docs/index.md` | X1 | platform count; M0 moved its version claims to 0.28.1 |
 | `docs/internal/cli-experience.md` | F3 | MDX escaping (`< 120 ms`) |
 | `docs/mcp/configuration.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
-| `docs/mcp/index.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
-| `docs/mcp/installation.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/mcp/index.md` | X1 | M0 moved its version claims to 0.28.1 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/mcp/installation.md` | X1 | M0 moved its version claims to 0.28.1 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/mcp/tools.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
-| `docs/sdk/installation.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/sdk/installation.md` | X1 | M0 moved its version claims to 0.28.1 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
 | `docs/sdk/models.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/sdk/platforms.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/usage/concepts/deployment-state.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest |  |
 | `docs/usage/concepts/platforms.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest; F1 the `advanced` table |  |
-| `docs/usage/index.md` | X1 | M0 moved its version claims to 0.28.0 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
-| `docs/usage/installation.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest | M0 moved its version claims to 0.28.0 |
+| `docs/usage/configuration.md` | U-0.28.1 | `recommended_field_missing` in the editor, the `[recommended]` severity (#1029, #1049) |
+| `docs/usage/index.md` | X1 | M0 moved its version claims to 0.28.1 (the docs version tests follow the newest dated CHANGELOG version); the rest of the page |
+| `docs/usage/installation.md` | P-BD, P-GL, P-EX, P-GS, H1 (each its platform's lines); X1 the rest | M0 moved its version claims to 0.28.1 |
 | `docs/usage/repository-setup.md` | U-0.28.1 | packaged skills (#1015) |
-| `docs/usage/troubleshooting.md` | X1; U-0.28.1 the skills paragraphs (#1015) | the Typer section (no Typer on integration); M0 moved its pins to 0.28.0 |
-| `docs/usage/workflows/agentic-setup.md` | U-0.28.1 | packaged skills (#1015); M0 moved its pin to 0.28.0 |
+| `docs/usage/troubleshooting.md` | X1; U-0.28.1 the skills paragraphs (#1015) | the Typer section (no Typer on integration); M0 moved its pins to 0.28.1 |
+| `docs/usage/workflows/agentic-setup.md` | U-0.28.1 | packaged skills (#1015); M0 moved its pin to 0.28.1 |
 | `scripts/build/check_docs_mdx.py` | F3 | the MDX check; a `.py` path: the check command does not list it |
 | `scripts/validate-docs.sh` | F3 | the MDX check's hook; integration's docs fail the check today (9 errors) |
 | `src/opentide/data/bitdefender/NOTICE` | P-BD | with `criteria.toml` |
@@ -340,10 +341,10 @@ Taken from development and merged with integration's own changes, so they keep d
 | `.agents/skills/release-management/SKILL.md` | development's headline wording and Step 5 (the skills review) merged into integration's release-train text |
 | `.agents/skills/review-checklist/SKILL.md` | development's item 7 (a companion opentidehq/skills pull request) merged into integration's checklist |
 | `.github/workflows/docs.yml` | integration's triggers already run on every pull request, so development's path filter has nothing to add |
-| `CHANGELOG.md` | development's 0.24.0–0.28.0 sections merged below integration's `[Unreleased]` |
+| `CHANGELOG.md` | development's 0.24.0–0.28.1 sections merged below integration's `[Unreleased]` |
 | `docs/internal/meta.json` | integration's pages plus `unified-core` and the two catch-up pages |
 
-The other allowlist paths are byte-identical to development's: `.github/release-notes/v0.23.0.md` to `v0.28.0.md`,
+The other allowlist paths are byte-identical to development's: `.github/release-notes/v0.23.0.md` to `v0.28.1.md`,
 `docs/usage/releases.md`, `docs/internal/unified-core.md` and `.agents/skills/release-notes/SKILL.md`.
 The MDX check (`scripts/build/check_docs_mdx.py`, its `scripts/validate-docs.sh` hook and its test) was
 on the allowlist only if integration's docs pass it; they do not yet, so F3 takes it.
@@ -352,5 +353,5 @@ on the allowlist only if integration's docs pass it; they do not yet, so F3 take
 
 The Python implementation's modules and tests that development changed or added, deleted as
 integration deleted them (98 modify/delete conflicts, 54 added modules, 38 added test modules).
-Each unit reads its behaviour from `git show a15c78c73:<path>`. The second merge (development at
-`a15c78c73`) resolved its 28 modify/delete conflicts the same way.
+Each unit reads its behaviour from `git show 164450afc:<path>`. The second merge (development at
+`164450afc`) resolved its 28 modify/delete conflicts the same way, and the third (`164450afc`, #1049) its 3.

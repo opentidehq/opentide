@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG = ROOT / "CHANGELOG.md"
 
 #: The newest release merged from development, and the development commit merged last.
-MERGED_RELEASE = "0.28.0"
-MERGED_COMMIT = "a15c78c738265f536ce13f17458e0244383fba1d"
+MERGED_RELEASE = "0.28.1"
+MERGED_COMMIT = "164450afcc1b81a9c3e39a0bc5f3ee0fb0d3b54b"
 
 _SECTION = re.compile(r"\n(?=## \[)")
 

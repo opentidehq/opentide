@@ -10,7 +10,7 @@ description: Install opentide and start the stdio server with opentide mcp start
 The server ships in the base package:
 
 ```bash
-pip install 'opentide==0.28.0'
+pip install 'opentide==0.28.1'
 ```
 
 Command: **`opentide mcp start`**. The server is the command line's own, in Rust (rmcp, the official Rust MCP SDK): it needs no Python package of its own.
