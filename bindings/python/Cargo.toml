@@ -4,7 +4,7 @@ name = "opentide-native"
 # whose version comes from its git tag; this crate is never published.
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 license = "EUPL-1.2"
 publish = false
 description = "The analysis engine, the command line, the SDK core and the Tide models, compiled into the opentide Python package"

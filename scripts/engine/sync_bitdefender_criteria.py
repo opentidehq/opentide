@@ -27,7 +27,8 @@ Inputs (read as data, never executed):
   catalogue header. CI has no network: keep a cache to run ``--check``.
 
 Usage:
-    python -I scripts/engine/sync_bitdefender_criteria.py --cache ../bitdefender-cache [--offline] [--check]
+    python -I scripts/engine/sync_bitdefender_criteria.py --cache ../bitdefender-cache \
+        [--offline] [--check]
 
 ``--check`` regenerates in memory, makes no network request, and exits 1 when
 the committed file differs. Standard library only.
@@ -81,7 +82,12 @@ IGNORED_NOTES = [
     (re.compile(r"^HKEY_[A-Z_]+: HK[A-Z]+$"), "hives"),
     # Registry.Data: base64 for binary types. The value's encoding is not
     # checked: the rule's data type may be any of several.
-    (re.compile(r"^For the binary, resource_list, full_resource_descriptor, and resource_requirements_list registry types"), "base64"),
+    (
+        re.compile(
+            r"^For the binary, resource_list, full_resource_descriptor, and resource_requirements_list registry types"  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+        ),
+        "base64",
+    ),
 ]
 
 
@@ -216,7 +222,7 @@ def grid(rows: list[list[Cell]]) -> list[list[Cell]]:
 def intro_hashes(html: str) -> list[str]:
     """The fields the page lists as taking no wildcards with `contains`."""
     head = html[: html.find("<table")]
-    match = re.search(r"An exception applies to criteria where.*?</ul>", head, re.S)
+    match = re.search(r"An exception applies to criteria where.*?</ul>", head, re.DOTALL)
     if not match:
         raise SystemExit("the page no longer lists the fields without wildcards")
     names = re.findall(r"<li[^>]*>(?:\s|<[^>]+>)*([A-Za-z.0-9]+)", match.group(0))
@@ -287,7 +293,9 @@ def availability(texts: list[str]) -> tuple[str, str | None]:
     simple = {"EDR": "edr", "XDR": "xdr", "Both": "both"}
     if joined in simple:
         return simple[joined], None
-    m = re.fullmatch(r"(EDR|XDR|Both) for exclusion rules / (EDR|XDR|Both) for detection rules", joined)
+    m = re.fullmatch(
+        r"(EDR|XDR|Both) for exclusion rules / (EDR|XDR|Both) for detection rules", joined
+    )
     if m:
         return simple[m.group(2)], simple[m.group(1)]
     raise SystemExit(f"sensor support {joined!r} is not EDR, XDR, Both or a per-rule-type pair")
@@ -300,11 +308,13 @@ def relations(text: str) -> list[str]:
     return found
 
 
-def kind_of(cell: Cell, name: str, hashes: list[str]) -> tuple[str, list[Value], int | None, int | None]:
+def kind_of(
+    cell: Cell, name: str, hashes: list[str]
+) -> tuple[str, list[Value], int | None, int | None]:
     """The value kind, enumerated values, and range of a field."""
     texts = cell.main()
     first = texts[0] if texts else ""
-    if first.startswith("Possible") or first.startswith("Possible values"):
+    if first.startswith(("Possible", "Possible values")):
         values: list[Value] = []
         sensor = ""
         for block in cell.blocks:
@@ -355,7 +365,9 @@ def ignored(text: str) -> bool:
     return any(pattern.search(text) for pattern, _ in IGNORED_NOTES)
 
 
-def read_field_notes(row: Field, blocks: list[Block], cat: Catalogue, pending_values: list[tuple[str, str, str]]) -> None:
+def read_field_notes(
+    row: Field, blocks: list[Block], cat: Catalogue, pending_values: list[tuple[str, str, str]]
+) -> None:
     """Turn the notes under a field name into pairing data."""
     collecting = False
     for block in blocks:
@@ -367,7 +379,9 @@ def read_field_notes(row: Field, blocks: list[Block], cat: Catalogue, pending_va
         if text == "Incompatible with the following fields in the same rule:":
             collecting = True
             continue
-        m = re.fullmatch(r"Requires either ([\w.]+) or ([\w.]+) to be defined in the same rule\.", text)
+        m = re.fullmatch(
+            r"Requires either ([\w.]+) or ([\w.]+) to be defined in the same rule\.", text
+        )
         if m:
             row.requires_any.extend(m.groups())
             continue
@@ -375,7 +389,9 @@ def read_field_notes(row: Field, blocks: list[Block], cat: Catalogue, pending_va
         if m:
             row.requires_any.append(m.group(1))
             continue
-        m = re.fullmatch(r"This criterion can only be used together with ([\w.]+) in the same rule\.", text)
+        m = re.fullmatch(
+            r"This criterion can only be used together with ([\w.]+) in the same rule\.", text
+        )
         if m:
             row.requires_any.append(m.group(1))
             continue
@@ -384,38 +400,68 @@ def read_field_notes(row: Field, blocks: list[Block], cat: Catalogue, pending_va
             row.requires_any.append(m.group(1))
             continue
         m = re.fullmatch(
-            r"This criterion can only be applied together with ([\w.]+) and is required when \1 is used without detection\.",
+            r"This criterion can only be applied together with ([\w.]+) and is required when \1 is used without detection\.",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
             text,
         )
         if m:
             row.requires_any.append(m.group(1))
             row.resource = resource_of(row.name)
             continue
-        m = re.fullmatch(r"For detection rules, requires ([\w.]+) or detection to be defined in the same rule\.", text)
+        m = re.fullmatch(
+            r"For detection rules, requires ([\w.]+) or detection to be defined in the same rule\.",
+            text,
+        )
         if m:
             row.detection_requires_any.extend([m.group(1), "detection"])
             row.resource = resource_of(row.name)
             continue
-        m = re.fullmatch(r"This criterion is incompatible with the (\w+) value of the ([\w.]+) field\.", text)
+        m = re.fullmatch(
+            r"This criterion is incompatible with the (\w+) value of the ([\w.]+) field\.", text
+        )
         if m:
             pending_values.append((m.group(2), m.group(1), row.name))
             continue
         m = re.fullmatch(
-            r"If this criterion and ([\w.]+) are used, the ([\w.]+) criterion can have only the value ([a-z_/]+)\.", text
+            r"If this criterion and ([\w.]+) are used, the ([\w.]+) criterion can have only the value ([a-z_/]+)\.",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+            text,
         )
         if m:
             # The other values of the protocol field cannot sit beside this one.
             pending_values.append((m.group(2), "!" + m.group(3), row.name))
             continue
-        m = re.fullmatch(r"For any XDR detection rule that uses the (\w+) target, you must include either this criterion or a detection condition, but not both or neither\.", text)
+        m = re.fullmatch(
+            r"For any XDR detection rule that uses the (\w+) target, you must include either this criterion or a detection condition, but not both or neither\.",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+            text,
+        )
         if m:
-            cat.rules.append(Rule("alert_or_operation", target=m.group(1), field=row.name, scope="xdr", require=True))
+            cat.rules.append(
+                Rule(
+                    "alert_or_operation",
+                    target=m.group(1),
+                    field=row.name,
+                    scope="xdr",
+                    require=True,
+                )
+            )
             continue
-        m = re.fullmatch(r"Any detection rule with the ([a-z ]+?) target(?: entity)? must use either this criterion or the detection field, but not both\.", text)
+        m = re.fullmatch(
+            r"Any detection rule with the ([a-z ]+?) target(?: entity)? must use either this criterion or the detection field, but not both\.",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+            text,
+        )
         if m:
             if m.group(1) != row.target:
-                raise SystemExit(f"{row.name}: a note about target {m.group(1)!r} under {row.target!r}")
-            cat.rules.append(Rule("alert_or_operation", target=row.target, field=row.name, scope="all", require=True))
+                raise SystemExit(
+                    f"{row.name}: a note about target {m.group(1)!r} under {row.target!r}"
+                )
+            cat.rules.append(
+                Rule(
+                    "alert_or_operation",
+                    target=row.target,
+                    field=row.name,
+                    scope="all",
+                    require=True,
+                )
+            )
             continue
         if ignored(text):
             continue
@@ -437,14 +483,19 @@ def read_value_notes(row: Field, cell: Cell, cat: Catalogue) -> None:
             current = next((v for v in row.values if v.name == block.text), current)
             continue
         text = block.text
-        m = re.fullmatch(r"The (\w+) value is incompatible with ([\w.]+) or ([\w.]+) in the same rule\.", text)
+        m = re.fullmatch(
+            r"The (\w+) value is incompatible with ([\w.]+) or ([\w.]+) in the same rule\.", text
+        )
         if m:
             value = next((v for v in row.values if v.name == m.group(1)), None)
             if value is None:
                 raise SystemExit(f"{row.name}: a note on unknown value {m.group(1)!r}")
             value.incompatible.extend(m.group(2, 3))
             continue
-        m = re.fullmatch(r"This value is not supported when the (.+) fields? (?:is|are) included in the same rule\.", text)
+        m = re.fullmatch(
+            r"This value is not supported when the (.+) fields? (?:is|are) included in the same rule\.",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+            text,
+        )
         if m:
             if current is None:
                 raise SystemExit(f"{row.name}: a value note before any value")
@@ -467,10 +518,21 @@ def read_alert(line: list[Cell], cat: Catalogue) -> None:
     if name != ["detection"] or line[3].main() != ["All target entities"]:
         raise SystemExit("the first row is no longer the alert (detection) criterion")
     sensors, _ = availability(line[5].main())
-    cat.alert = Field("detection", "*", " ".join(line[2].main()), sensors, yes(line[0].main()[0]),
-                      yes(line[1].main()[0]), relations(line[6].main()[0]), "string")
+    cat.alert = Field(
+        "detection",
+        "*",
+        " ".join(line[2].main()),
+        sensors,
+        yes(line[0].main()[0]),
+        yes(line[1].main()[0]),
+        relations(line[6].main()[0]),
+        "string",
+    )
     for block in line[4].notes():
-        if re.fullmatch(r"For any XDR detection rule, you must use either this criterion or an operation criterion, but not both\.", block.text):
+        if re.fullmatch(
+            r"For any XDR detection rule, you must use either this criterion or an operation criterion, but not both\.",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+            block.text,
+        ):
             cat.rules.append(Rule("alert_or_operation", scope="xdr", require=False))
             continue
         raise SystemExit(f"alert: note {block.text!r} is not understood")
@@ -483,7 +545,8 @@ def read_page(html: str) -> Catalogue:
     tables = [
         t
         for t in tables
-        if len(t[0]) == len(HEADER) and all(" ".join(c.main()).startswith(h) for c, h in zip(t[0], HEADER))
+        if len(t[0]) == len(HEADER)
+        and all(" ".join(c.main()).startswith(h) for c, h in zip(t[0], HEADER, strict=False))
     ]
     if len(tables) != 1:
         raise SystemExit(f"expected one criteria table with columns {HEADER}, found {len(tables)}")
@@ -492,10 +555,16 @@ def read_page(html: str) -> Catalogue:
     head = re.sub(r"<[^>]+>", "", html[: html.find("<table")])
     head = re.sub(r"\s+", " ", head)
     cat = Catalogue()
-    if "EDR-only fields or values cannot be combined with XDR-only fields or values within the same rule" not in head:
+    if (
+        "EDR-only fields or values cannot be combined with XDR-only fields or values within the same rule"  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+        not in head
+    ):
         raise SystemExit("the page no longer says EDR-only and XDR-only criteria do not mix")
     cat.rules.append(Rule("no_sensor_mix"))
-    m = re.search(r"Only one XDR resource can be defined as a criterion in a detection rule with the (\w+) or (\w+ \w+) target", head)
+    m = re.search(
+        r"Only one XDR resource can be defined as a criterion in a detection rule with the (\w+) or (\w+ \w+) target",  # noqa: E501 -- a sentence of Bitdefender's page, matched whole
+        head,
+    )
     if not m:
         raise SystemExit("the page no longer limits connection rules to one XDR resource")
     cat.rules.append(Rule("one_resource", targets=[m.group(1), m.group(2)]))
@@ -512,8 +581,20 @@ def read_page(html: str) -> Catalogue:
         sensors, exclusion_sensors = availability(line[5].main())
         rel = relations(line[6].main()[0])
         kind, values, low, high = kind_of(line[7], name, hashes)
-        row = Field(name, target, " ".join(line[2].main()), sensors, yes(line[0].main()[0]), yes(line[1].main()[0]),
-                    rel, kind, exclusion_sensors, values, low, high)
+        row = Field(
+            name,
+            target,
+            " ".join(line[2].main()),
+            sensors,
+            yes(line[0].main()[0]),
+            yes(line[1].main()[0]),
+            rel,
+            kind,
+            exclusion_sensors,
+            values,
+            low,
+            high,
+        )
         for value in row.values:
             value.availability = value.availability or sensors
         read_field_notes(row, line[4].notes(), cat, pending)
@@ -545,7 +626,11 @@ def read_page(html: str) -> Catalogue:
 def check(cat: Catalogue, by_name: dict[str, Field]) -> None:
     """Every name a rule mentions is a field of the catalogue."""
     for row in cat.fields:
-        mentioned = row.requires_any + row.incompatible + [n for n in row.detection_requires_any if n != "detection"]
+        mentioned = (
+            row.requires_any
+            + row.incompatible
+            + [n for n in row.detection_requires_any if n != "detection"]
+        )
         mentioned += [n for v in row.values for n in v.incompatible]
         for name in mentioned:
             if name not in by_name:
@@ -574,9 +659,10 @@ def write(cat: Catalogue, fetched: str) -> str:
         "# Bitdefender GravityZone criteria catalogue (#226), generated by",
         "# scripts/engine/sync_bitdefender_criteria.py. Do not edit.",
         f"# Source: {PAGE}",
-        f"# (\"Detection and exclusion criteria for Basic rules\", fetched {fetched}).",
+        f'# ("Detection and exclusion criteria for Basic rules", fetched {fetched}).',
         "# Facts only: names, Control Center labels, sensors, relations, value kinds,",
-        "# values, ranges and pairing rules, rewritten as data. See data/catalogs/bitdefender/NOTICE.",
+        "# values, ranges and pairing rules, rewritten as data. "
+        "See data/catalogs/bitdefender/NOTICE.",
         "#",
         "# availability: the sensor that evaluates a field or value in a detection rule",
         "#   (edr, xdr or both); exclusion_availability when exclusion rules differ.",
@@ -663,8 +749,13 @@ def write(cat: Catalogue, fetched: str) -> str:
         if row.values:
             out.append("values = [")
             for value in row.values:
-                extra = f", incompatible = {qlist(value.incompatible)}" if value.incompatible else ""
-                out.append(f"    {{ name = {q(value.name)}, availability = {q(value.availability)}{extra} }},")
+                extra = (
+                    f", incompatible = {qlist(value.incompatible)}" if value.incompatible else ""
+                )
+                out.append(
+                    f"    {{ name = {q(value.name)}, "
+                    f"availability = {q(value.availability)}{extra} }},"
+                )
             out.append("]")
         out.append("")
     return "\n".join(out).rstrip("\n") + "\n"
@@ -694,12 +785,18 @@ def fill_cache(cache: Path, offline: bool, refresh: bool) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     parser.add_argument("--cache", type=Path, required=True, help="directory holding criteria.html")
-    parser.add_argument("--offline", action="store_true", help="never fetch; fail on a missing page")
+    parser.add_argument(
+        "--offline", action="store_true", help="never fetch; fail on a missing page"
+    )
     parser.add_argument("--refresh", action="store_true", help="fetch the page again")
-    parser.add_argument("--check", action="store_true", help="exit 1 when the file would change (offline)")
+    parser.add_argument(
+        "--check", action="store_true", help="exit 1 when the file would change (offline)"
+    )
     args = parser.parse_args()
 
-    fill_cache(args.cache, offline=args.offline or args.check, refresh=args.refresh and not args.check)
+    fill_cache(
+        args.cache, offline=args.offline or args.check, refresh=args.refresh and not args.check
+    )
     html = (args.cache / CACHE_NAME).read_text(encoding="utf-8")
     stamp = args.cache / "FETCHED"
     fetched = stamp.read_text(encoding="utf-8").strip() if stamp.is_file() else "unknown"

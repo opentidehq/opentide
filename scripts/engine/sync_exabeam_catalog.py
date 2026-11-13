@@ -70,7 +70,8 @@ PLATFORM_FIELDS = (
     (
         "approxLogTime",
         "datetime",
-        "The time Exabeam received the log, in epoch milliseconds. A time field: Search matches it with a range only.",
+        "The time Exabeam received the log, in epoch milliseconds. "
+        "A time field: Search matches it with a range only.",
     ),
     (
         "rawLogIds",
@@ -135,7 +136,7 @@ def read_fields(source: Path) -> list[tuple[str, str, str]]:
             raise SystemExit(f"{name}: unknown CIM type {kind!r}; add it to TYPES after reading it")
         rows.append((name, kind, " ".join(description.split())))
     names = [r[0] for r in rows]
-    if len(set(n.lower() for n in names)) != len(names):
+    if len({n.lower() for n in names}) != len(names):
         raise SystemExit("Fields_Descriptions.md lists a field twice")
     return rows
 
@@ -149,7 +150,12 @@ def render_fields(rows: list[tuple[str, str, str]]) -> str:
         "# Field-name prefixes that are never an unknown field.",
     ]
     for prefix, description in PREFIXES:
-        out += ["[[prefixes]]", f"prefix = {toml_string(prefix)}", f"description = {toml_string(description)}", ""]
+        out += [
+            "[[prefixes]]",
+            f"prefix = {toml_string(prefix)}",
+            f"description = {toml_string(description)}",
+            "",
+        ]
     out.append("# Common Information Model fields, then the platform fields the CIM table omits.")
     known = {r[0].lower() for r in rows}
     for name, kind, description in rows:
@@ -211,7 +217,8 @@ def render_values(source: Path) -> str:
         out += [
             "[[subjects]]",
             f"name = {toml_string(name)}",
-            f"description = {toml_string(' '.join(str(subjects[name].get('description', '')).split()))}",
+            "description = "
+            + toml_string(" ".join(str(subjects[name].get("description", "")).split())),
             "",
         ]
     for name in sorted(activity):
@@ -232,7 +239,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--source", type=Path, required=True, help="ExabeamLabs/CIMLibrary checkout")
     ap.add_argument("--check", action="store_true", help="compare with the committed files")
-    ap.add_argument("--allow-other-commit", action="store_true", help="read a checkout that is not the pinned commit")
+    ap.add_argument(
+        "--allow-other-commit",
+        action="store_true",
+        help="read a checkout that is not the pinned commit",
+    )
     args = ap.parse_args(argv)
     commit = head_commit(args.source)
     if commit != PINNED_COMMIT and not args.allow_other_commit:

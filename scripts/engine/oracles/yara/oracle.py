@@ -25,7 +25,8 @@ A disagreement fails unless a ``[[yara]]`` entry of
 agrees fails too. ``conformance.rs`` reads the same entries for the cases.
 
 Usage:
-    python3 scripts/engine/oracles/yara/oracle.py [--binary target/debug/opentide-lsp] [--report report.json]
+    python3 scripts/engine/oracles/yara/oracle.py \
+        [--binary target/debug/opentide-lsp] [--report report.json]
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ import json
 import pathlib
 import subprocess
 import sys
+
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[4]
@@ -65,8 +67,15 @@ def ledger() -> dict[str, dict]:
     """Path → its `[[yara]]` entry."""
     out = {}
     for entry in tomllib.loads(EXCEPTIONS.read_text()).get("yara", []):
-        if not entry.get("id") or not entry.get("reason") or entry.get("check") not in ("libyara", "yara_x", "both"):
-            sys.exit(f"[[yara]] {entry.get('id')}: needs an id, a reason, and check = libyara, yara_x or both")
+        if (
+            not entry.get("id")
+            or not entry.get("reason")
+            or entry.get("check") not in ("libyara", "yara_x", "both")
+        ):
+            sys.exit(
+                f"[[yara]] {entry.get('id')}: needs an id, a reason, "
+                "and check = libyara, yara_x or both"
+            )
         for path in entry.get("paths", []):
             out[path] = entry
     return out
@@ -75,7 +84,10 @@ def ledger() -> dict[str, dict]:
 def engine(binary: pathlib.Path, path: pathlib.Path) -> tuple[bool, set[str]]:
     """Whether the engine reports an error, and the codes it reports."""
     done = subprocess.run(
-        [str(binary), "analyze", "--language", "yara", str(path)], capture_output=True, text=True
+        [str(binary), "analyze", "--language", "yara", str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     found = json.loads(done.stdout or "[]")
     # `yara_empty_signature` is yara-1.0's rule for a signature; libyara
@@ -112,7 +124,8 @@ def main() -> int:
         if (live["libyara"], live["yara_x"]) != (case["libyara"], case["yara_x"]):
             failures.append(
                 f"{case['origin']}: recorded {case['libyara']}/{case['yara_x']}, the engines say "
-                f"{live['libyara']}/{live['yara_x']} (re-run scripts/engine/sync_yara_conformance.py)"
+                f"{live['libyara']}/{live['yara_x']} "
+                "(re-run scripts/engine/sync_yara_conformance.py)"
             )
 
     # 2. The files.
@@ -125,10 +138,16 @@ def main() -> int:
         error, codes = engine(args.binary, path)
         kind = disagreement(theirs, error, codes)
         entry = known.get(rel)
-        report[rel] = {**theirs, "engine_error": error, "engine_codes": sorted(codes), "disagreement": kind}
+        report[rel] = {
+            **theirs,
+            "engine_error": error,
+            "engine_codes": sorted(codes),
+            "disagreement": kind,
+        }
         if kind and not (entry and entry["check"] in (kind, "both")):
             failures.append(
-                f"{rel}: {kind} disagreement: libyara {theirs['libyara']}, YARA-X {theirs['yara_x']}, "
+                f"{rel}: {kind} disagreement: libyara {theirs['libyara']}, "
+                f"YARA-X {theirs['yara_x']}, "
                 f"engine {'error' if error else 'no error'} {sorted(codes)}"
                 f" [{theirs.get('libyara_message') or theirs.get('yara_x_message') or ''}]"
             )
@@ -137,7 +156,9 @@ def main() -> int:
 
     if args.report:
         args.report.write_text(json.dumps(report, indent=1) + "\n")
-    print(f"yara: {len(recorded)} recorded verdicts, {len(files)} files, {len(failures)} failure(s)")
+    print(
+        f"yara: {len(recorded)} recorded verdicts, {len(files)} files, {len(failures)} failure(s)"
+    )
     for f in failures:
         print(f"  {f}")
     return 1 if failures else 0

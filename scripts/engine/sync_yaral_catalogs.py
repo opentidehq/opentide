@@ -89,29 +89,146 @@ FREE = {"google.protobuf.Struct", "google.protobuf.Value", "google.protobuf.Any"
 # outcome and statistics pages. Rules: outcome-syntax "Aggregations"; search
 # adds avg, stddev, earliest, latest (statistics-aggregations-in-udm-search).
 OUTCOME = "https://cloud.google.com/chronicle/docs/yara-l/outcome-syntax"
-STATISTICS = "https://cloud.google.com/chronicle/docs/investigation/statistics-aggregations-in-udm-search"
+STATISTICS = (
+    "https://cloud.google.com/chronicle/docs/investigation/statistics-aggregations-in-udm-search"
+)
 AGGREGATIONS = [
-    ("count", "count(value)", 1, 1, "INT", ["rules", "search", "dashboards"], OUTCOME, "Number of values in the match window or group."),
-    ("count_distinct", "count_distinct(value)", 1, 1, "INT", ["rules", "search", "dashboards"], OUTCOME, "Number of distinct values in the match window or group."),
-    ("sum", "sum(numeric_value)", 1, 1, "NUMBER", ["rules", "search", "dashboards"], OUTCOME, "Sum of the numeric values in the match window or group."),
-    ("max", "max(value)", 1, 1, "NUMBER", ["rules", "search", "dashboards"], OUTCOME, "Largest value in the match window or group."),
-    ("min", "min(value)", 1, 1, "NUMBER", ["rules", "search", "dashboards"], OUTCOME, "Smallest value in the match window or group."),
-    ("array", "array(value)", 1, 1, "ARRAY", ["rules", "search", "dashboards"], OUTCOME, "The values, as a list: 25 in a rule, 1,000 in a search."),
-    ("array_distinct", "array_distinct(value)", 1, 1, "ARRAY", ["rules", "search", "dashboards"], OUTCOME, "The distinct values, as a list: 25 in a rule, 1,000 in a search."),
-    ("avg", "avg(numeric_value)", 1, 1, "FLOAT", ["search", "dashboards"], STATISTICS, "Average of the numeric values; in a rule, window.avg."),
-    ("stddev", "stddev(numeric_value)", 1, 1, "FLOAT", ["search", "dashboards"], STATISTICS, "Standard deviation of the numeric values; in a rule, window.stddev."),
-    ("earliest", "earliest(timestamp)", 1, 1, "TIMESTAMP", ["search", "dashboards"], STATISTICS, "Earliest timestamp of the group, in microseconds."),
-    ("latest", "latest(timestamp)", 1, 1, "TIMESTAMP", ["search", "dashboards"], STATISTICS, "Latest timestamp of the group, in microseconds."),
+    (
+        "count",
+        "count(value)",
+        1,
+        1,
+        "INT",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "Number of values in the match window or group.",
+    ),
+    (
+        "count_distinct",
+        "count_distinct(value)",
+        1,
+        1,
+        "INT",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "Number of distinct values in the match window or group.",
+    ),
+    (
+        "sum",
+        "sum(numeric_value)",
+        1,
+        1,
+        "NUMBER",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "Sum of the numeric values in the match window or group.",
+    ),
+    (
+        "max",
+        "max(value)",
+        1,
+        1,
+        "NUMBER",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "Largest value in the match window or group.",
+    ),
+    (
+        "min",
+        "min(value)",
+        1,
+        1,
+        "NUMBER",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "Smallest value in the match window or group.",
+    ),
+    (
+        "array",
+        "array(value)",
+        1,
+        1,
+        "ARRAY",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "The values, as a list: 25 in a rule, 1,000 in a search.",
+    ),
+    (
+        "array_distinct",
+        "array_distinct(value)",
+        1,
+        1,
+        "ARRAY",
+        ["rules", "search", "dashboards"],
+        OUTCOME,
+        "The distinct values, as a list: 25 in a rule, 1,000 in a search.",
+    ),
+    (
+        "avg",
+        "avg(numeric_value)",
+        1,
+        1,
+        "FLOAT",
+        ["search", "dashboards"],
+        STATISTICS,
+        "Average of the numeric values; in a rule, window.avg.",
+    ),
+    (
+        "stddev",
+        "stddev(numeric_value)",
+        1,
+        1,
+        "FLOAT",
+        ["search", "dashboards"],
+        STATISTICS,
+        "Standard deviation of the numeric values; in a rule, window.stddev.",
+    ),
+    (
+        "earliest",
+        "earliest(timestamp)",
+        1,
+        1,
+        "TIMESTAMP",
+        ["search", "dashboards"],
+        STATISTICS,
+        "Earliest timestamp of the group, in microseconds.",
+    ),
+    (
+        "latest",
+        "latest(timestamp)",
+        1,
+        1,
+        "TIMESTAMP",
+        ["search", "dashboards"],
+        STATISTICS,
+        "Latest timestamp of the group, in microseconds.",
+    ),
 ]
 # Functions the syntax pages use that the functions page has no entry for,
 # each with its evidence.
 EXTRA_FUNCTIONS = [
     # condition-syntax: "a list outcome is tested with arrays.contains".
-    ("arrays.contains", "arrays.contains(array, value)", 2, 2, "BOOL", ["rules", "search", "dashboards"],
-     "https://cloud.google.com/chronicle/docs/yara-l/condition-syntax", "Whether the list holds the value."),
+    (
+        "arrays.contains",
+        "arrays.contains(array, value)",
+        2,
+        2,
+        "BOOL",
+        ["rules", "search", "dashboards"],
+        "https://cloud.google.com/chronicle/docs/yara-l/condition-syntax",
+        "Whether the list holds the value.",
+    ),
     # outcome-syntax and troubleshoot-rule-errors cast UINT64 fields with it.
-    ("cast.as_uint", "cast.as_uint(value)", 1, 1, "UINT", ["rules", "search"],
-     "https://cloud.google.com/chronicle/docs/yara-l/outcome-syntax", "Casts a value to an unsigned integer."),
+    (
+        "cast.as_uint",
+        "cast.as_uint(value)",
+        1,
+        1,
+        "UINT",
+        ["rules", "search"],
+        "https://cloud.google.com/chronicle/docs/yara-l/outcome-syntax",
+        "Casts a value to an unsigned integer.",
+    ),
 ]
 # Corrections where a signature line disagrees with its own description.
 ARITY_FIXES = {
@@ -138,7 +255,7 @@ NAME_FIXES = {"registry*key*": "registry_key"}
 
 def fetch(url: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310 - fixed https URL
+    with urllib.request.urlopen(request, timeout=60) as response:
         return response.read().decode("utf-8")
 
 
@@ -301,9 +418,10 @@ def parse_collection(text: str) -> tuple[dict[str, list[dict]], dict[str, list[s
             kind, url, doc = (plain.group(1), "", plain.group(2)) if plain else ("string", "", rest)
         enum = kind == "enum"
         if kind == "string":
-            type_name = {"#timestamp": "google.protobuf.Timestamp", "#duration": "google.protobuf.Duration"}.get(
-                url[url.rfind("#") :] if "#" in url else "", "string"
-            )
+            type_name = {
+                "#timestamp": "google.protobuf.Timestamp",
+                "#duration": "google.protobuf.Duration",
+            }.get(url[url.rfind("#") :] if "#" in url else "", "string")
         elif kind == "object" and url.endswith("#struct"):
             type_name = "google.protobuf.Struct"
         elif kind in ("object", "enum"):
@@ -320,7 +438,9 @@ def parse_collection(text: str) -> tuple[dict[str, list[dict]], dict[str, list[s
                 }
                 type_name = anchor or shared.get(page, page.rsplit("/", 1)[-1])
         else:
-            type_name = {"boolean": "bool", "integer": "int32", "number": "double"}.get(kind, "string")
+            type_name = {"boolean": "bool", "integer": "int32", "number": "double"}.get(
+                kind, "string"
+            )
         messages[current].append(
             {
                 "name": snake(name),
@@ -338,10 +458,14 @@ def parse_collection(text: str) -> tuple[dict[str, list[dict]], dict[str, list[s
 
 
 def parse_functions(page: str, metrics: str) -> list[dict]:
-    headings = list(re.finditer(r'<h3[^>]*id="([^"]+)"[^>]*>(.*?)</h3>', page, re.S))
+    headings = list(re.finditer(r'<h3[^>]*id="([^"]+)"[^>]*>(.*?)</h3>', page, re.DOTALL))
     out: list[dict] = []
     for k, heading in enumerate(headings):
-        end = headings[k + 1].start() if k + 1 < len(headings) else page.find("devsite-content-footer", heading.end())
+        end = (
+            headings[k + 1].start()
+            if k + 1 < len(headings)
+            else page.find("devsite-content-footer", heading.end())
+        )
         section = page[heading.end() : end if end > 0 else len(page)]
         title = html.unescape(re.sub(r"<[^>]+>", "", heading.group(2))).strip()
         chips = []
@@ -352,21 +476,36 @@ def parse_functions(page: str, metrics: str) -> list[dict]:
             continue
         blocks = [
             html.unescape(re.sub(r"<[^>]+>", "", b)).strip()
-            for b in re.findall(r"<pre[^>]*><code[^>]*>(.*?)</code></pre>", section, re.S)
+            for b in re.findall(r"<pre[^>]*><code[^>]*>(.*?)</code></pre>", section, re.DOTALL)
         ]
         signature = next(
-            (line.strip() for b in blocks for line in b.splitlines() if re.match(r"^[a-z_0-9.]+\s*\(", line.strip())),
+            (
+                line.strip()
+                for b in blocks
+                for line in b.splitlines()
+                if re.match(r"^[a-z_0-9.]+\s*\(", line.strip())
+            ),
             "",
         )
         name = re.match(r"^([a-z_0-9.]+)\s*\(", signature).group(1)
+
         # Google numbers repeated heading ids: description, description_1, ...
-        para = lambda h4: re.search(rf'<h4 id="{h4}(?:_[0-9]+)?"[^>]*>.*?</h4>\s*<p>(.*?)</p>', section, re.S)
+        def para(h4: str, section: str = section) -> re.Match[str] | None:
+            return re.search(
+                rf'<h4 id="{h4}(?:_[0-9]+)?"[^>]*>.*?</h4>\s*<p>(.*?)</p>', section, re.DOTALL
+            )
+
         description = para("description")
         params = para("param_data_types")
         result = para("return_type")
-        clean = lambda m: html.unescape(re.sub(r"<[^>]+>", "", m.group(1))).strip() if m else ""
+
+        def clean(m: re.Match[str] | None) -> str:
+            return html.unescape(re.sub(r"<[^>]+>", "", m.group(1))).strip() if m else ""
+
         param_types = [p.strip() for p in re.split(r"[,\n]", clean(params)) if p.strip()]
-        args = signature[signature.index("(") + 1 : signature.rindex(")")] if ")" in signature else ""
+        args = (
+            signature[signature.index("(") + 1 : signature.rindex(")")] if ")" in signature else ""
+        )
         min_args, max_args = arity(args)
         if name in ARITY_FIXES:
             min_args, max_args = ARITY_FIXES[name]
@@ -391,17 +530,21 @@ def parse_functions(page: str, metrics: str) -> list[dict]:
         out.append(
             {
                 "name": f"metrics.{fn}",
-                "signature": f"metrics.{fn}(period: <duration>, window: <window>, metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)",
+                "signature": f"metrics.{fn}(period: <duration>, window: <window>, "
+                "metric: <metric>, agg: <aggregation>, <udm field>: <value>, ...)",
                 "min_args": 1,
                 "max_args": None,
                 "params": [],
                 "result": "NUMBER",
                 "availability": ["rules"],
-                "summary": "A Risk Analytics metric over the period and window, aggregated as `agg` (named arguments).",
+                "summary": "A Risk Analytics metric over the period and window, "
+                "aggregated as `agg` (named arguments).",
                 "url": CITED["metrics.md"],
             }
         )
-    for name, signature, lo, hi, result, availability, url, summary in AGGREGATIONS + EXTRA_FUNCTIONS:
+    for name, signature, lo, hi, result, availability, url, summary in (
+        AGGREGATIONS + EXTRA_FUNCTIONS
+    ):
         out.append(
             {
                 "name": name,
@@ -522,12 +665,13 @@ def render_functions(functions: list[dict], fetched: str) -> str:
         f"# Fetched: {fetched}",
         "",
         "[meta]",
-        f"sources = [{q(CITED['functions.html'])}, {q(CITED['metrics.md'])}, {q(OUTCOME)}, {q(STATISTICS)}]",
+        f"sources = [{q(CITED['functions.html'])}, {q(CITED['metrics.md'])}, "
+        f"{q(OUTCOME)}, {q(STATISTICS)}]",
         f"fetched = {q(fetched)}",
         "",
     ]
     for fn in functions:
-        namespace, _, short = fn["name"].rpartition(".")
+        namespace, _, _short = fn["name"].rpartition(".")
         lines.append("[[functions]]")
         lines.append(f"name = {q(fn['name'])}")
         if namespace:
@@ -556,14 +700,26 @@ def main() -> int:
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    pages, fetched = load_pages(args.cache, args.offline or args.check, args.refresh and not args.check)
+    pages, fetched = load_pages(
+        args.cache, args.offline or args.check, args.refresh and not args.check
+    )
 
     messages, enums, summaries = parse_udm(pages["udm.md"])
     detection, detection_enums = parse_collection(pages["collection.md"])
     for name, fields in WELL_KNOWN.items():
         messages.setdefault(
             name,
-            [{"name": n, "type": t, "enum": False, "repeated": False, "deprecated": False, "doc": ""} for n, t in fields],
+            [
+                {
+                    "name": n,
+                    "type": t,
+                    "enum": False,
+                    "repeated": False,
+                    "deprecated": False,
+                    "doc": "",
+                }
+                for n, t in fields
+            ],
         )
     messages.update(detection)
     enums.update(detection_enums)
@@ -581,11 +737,17 @@ def main() -> int:
             f["type"]
             for fields in messages.values()
             for f in fields
-            if f["type"] not in messages and f["type"] not in enums and f["type"] not in SCALARS and f["type"] not in FREE
+            if f["type"] not in messages
+            and f["type"] not in enums
+            and f["type"] not in SCALARS
+            and f["type"] not in FREE
         }
     )
     if unknown:
-        print(f"note: types without a table (paths under them are not checked): {', '.join(unknown)}", file=sys.stderr)
+        print(
+            f"note: types without a table (paths under them are not checked): {', '.join(unknown)}",
+            file=sys.stderr,
+        )
     for root in ("Event", "Entity", "Collection", "Noun", "Metadata", "SecurityResult"):
         if root not in messages:
             sys.exit(f"the pages lost the {root} message")
@@ -603,9 +765,16 @@ def main() -> int:
         OUT_FUNCTIONS: render_functions(functions, fetched),
     }
     if args.check:
-        stale = [p for p, text in outputs.items() if not p.exists() or p.read_text(encoding="utf-8") != text]
+        stale = [
+            p
+            for p, text in outputs.items()
+            if not p.exists() or p.read_text(encoding="utf-8") != text
+        ]
         for p in stale:
-            print(f"{p.relative_to(ROOT)} is stale; run scripts/engine/sync_yaral_catalogs.py", file=sys.stderr)
+            print(
+                f"{p.relative_to(ROOT)} is stale; run scripts/engine/sync_yaral_catalogs.py",
+                file=sys.stderr,
+            )
         return 1 if stale else 0
     for path, text in outputs.items():
         path.parent.mkdir(parents=True, exist_ok=True)

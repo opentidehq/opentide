@@ -32,7 +32,8 @@ Inputs (read as data; the checker is imported from the checkout given):
 - ``--specifications DIR``: an opentidehq/specifications checkout.
 
 Usage:
-    python -I scripts/engine/sync_exabeam_conformance.py --specifications ../specifications [--check]
+    python -I scripts/engine/sync_exabeam_conformance.py \
+        --specifications ../specifications [--check]
 
 ``--check`` compares with the committed file and exits 1 when it differs.
 """
@@ -52,7 +53,7 @@ EXTERNAL = ROOT / "testdata" / "conformance" / "external" / "exabeam"
 OUT = CONFORMANCE / "reference.json"
 
 
-def load_module(specifications: Path, name: str):  # noqa: ANN201 -- a module
+def load_module(specifications: Path, name: str):
     path = specifications / "scripts" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -70,7 +71,7 @@ def block_cases() -> list[Path]:
     return paths
 
 
-def record_block(fixtures, path: Path) -> dict[str, object]:  # noqa: ANN001
+def record_block(fixtures, path: Path) -> dict[str, object]:
     doc = fixtures.load_yaml(path)
     errors = []
     configurations = doc.get("configurations") if isinstance(doc, dict) else None
@@ -105,9 +106,13 @@ def queries() -> list[tuple[str, str, str]]:
     out: list[tuple[str, str, str]] = []
     for sub in ("valid", "invalid", "highlight"):
         for path in sorted((CONFORMANCE / sub).glob("*.exabeam")):
-            out.append((f"{sub}/{path.name}", path.name.split(".")[-2], path.read_text(encoding="utf-8")))
+            out.append(
+                (f"{sub}/{path.name}", path.name.split(".")[-2], path.read_text(encoding="utf-8"))
+            )
     for path in sorted(EXTERNAL.glob("*.exabeam")):
-        out.append((f"external/{path.name}", path.name.split(".")[-2], path.read_text(encoding="utf-8")))
+        out.append(
+            (f"external/{path.name}", path.name.split(".")[-2], path.read_text(encoding="utf-8"))
+        )
     lines = (CONFORMANCE / "probes.tsv").read_text(encoding="utf-8").splitlines()
     for number, line in enumerate(lines, start=1):
         if line.startswith("#"):
@@ -124,7 +129,7 @@ def byte_offsets(text: str) -> list[int]:
     return offsets
 
 
-def record(checker, name: str, profile: str, text: str) -> dict[str, object]:  # noqa: ANN001
+def record(checker, name: str, profile: str, text: str) -> dict[str, object]:
     result = checker.analyze(text, profile)
     b = byte_offsets(text)
 
@@ -149,7 +154,8 @@ def main(argv: list[str] | None = None) -> int:
     fixtures = load_module(args.specifications, "object_fixtures")
     doc = {
         "generated_by": "scripts/engine/sync_exabeam_conformance.py",
-        "reference": f"opentidehq/specifications@{commit(args.specifications)} scripts/exabeam_language.py, scripts/object_fixtures.py",
+        "reference": f"opentidehq/specifications@{commit(args.specifications)} "
+        "scripts/exabeam_language.py, scripts/object_fixtures.py",
         "queries": [record(checker, *q) for q in queries()],
         "blocks": [record_block(fixtures, p) for p in block_cases()],
     }
@@ -161,7 +167,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
     OUT.write_text(text, encoding="utf-8")
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(doc['queries'])} queries, {len(doc['blocks'])} blocks")
+    print(
+        f"wrote {OUT.relative_to(ROOT)}: {len(doc['queries'])} queries, {len(doc['blocks'])} blocks"
+    )
     return 0
 
 

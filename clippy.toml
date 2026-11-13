@@ -1,7 +1,7 @@
 # clippy's configuration for the Cargo workspace. The lint levels are in the
 # root Cargo.toml, [workspace.lints]; this file only tunes lints.
 #
-# No `msrv` here: clippy reads `rust-version` (1.85, [workspace.package]) from
+# No `msrv` here: clippy reads `rust-version` (1.95, [workspace.package]) from
 # each crate's manifest, and a second copy here could only drift from it.
 
 # unwrap_used, expect_used and dbg_macro are denied outside tests. In a #[test]

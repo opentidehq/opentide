@@ -18,7 +18,8 @@ external_corpus.rs`` holds the engine to the files: every public file comes
 out clean, every twin gets an error.
 
 Usage:
-    python -I scripts/engine/sync_yara_corpus.py --reversinglabs ../reversinglabs-yara-rules --signature-base ../signature-base [--check]
+    python -I scripts/engine/sync_yara_corpus.py --reversinglabs ../reversinglabs-yara-rules \
+        --signature-base ../signature-base [--check]
 """
 
 from __future__ import annotations
@@ -122,7 +123,7 @@ def refused(source: str) -> bool:
 
 def head(path: Path) -> str:
     return subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True, text=True
+        ["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
     ).stdout.strip()
 
 
@@ -158,7 +159,9 @@ def main() -> int:
             files[path.with_name(f"{stem}.broken.{ext}")] = twin
     if args.check:
         on_disk = {p for p in OUT.rglob("*") if p.is_file() and p.parent != OUT}
-        stale = [p for p, t in files.items() if not p.exists() or p.read_text(encoding="utf-8") != t]
+        stale = [
+            p for p, t in files.items() if not p.exists() or p.read_text(encoding="utf-8") != t
+        ]
         stale += sorted(on_disk - set(files))
         for p in stale:
             print(f"{p.relative_to(ROOT)} is stale", file=sys.stderr)

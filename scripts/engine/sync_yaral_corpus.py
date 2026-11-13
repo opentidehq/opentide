@@ -142,11 +142,16 @@ def broken(text: str, index: int) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    parser.add_argument("--rules", type=Path, required=True, help="a chronicle/detection-rules checkout")
+    parser.add_argument(
+        "--rules", type=Path, required=True, help="a chronicle/detection-rules checkout"
+    )
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     head = subprocess.run(
-        ["git", "-C", str(args.rules), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+        ["git", "-C", str(args.rules), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
     ).stdout.strip()
     if head and head != COMMIT:
         print(f"warning: {args.rules} is at {head}, the corpus at {COMMIT}", file=sys.stderr)
@@ -162,10 +167,15 @@ def main() -> int:
             sys.exit(f"{rel}: no fault could be injected")
         expected[OUT / f"{stem}.broken.yaral"] = twin
     if args.check:
-        stale = [p for p, t in expected.items() if not p.exists() or p.read_text(encoding="utf-8") != t]
+        stale = [
+            p for p, t in expected.items() if not p.exists() or p.read_text(encoding="utf-8") != t
+        ]
         extra = [p for p in OUT.glob("*.yaral") if p not in expected]
         for p in stale + extra:
-            print(f"{p.relative_to(ROOT)} differs; run scripts/engine/sync_yaral_corpus.py", file=sys.stderr)
+            print(
+                f"{p.relative_to(ROOT)} differs; run scripts/engine/sync_yaral_corpus.py",
+                file=sys.stderr,
+            )
         return 1 if stale or extra else 0
     OUT.mkdir(parents=True, exist_ok=True)
     for p in OUT.glob("*.yaral"):

@@ -72,7 +72,15 @@ def rust_literal(text: str, i: int) -> tuple[str, int] | None:
                     while j < len(text) and text[j] in " \t\r\n":
                         j += 1
                     continue
-                simple = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}
+                simple = {
+                    "n": "\n",
+                    "t": "\t",
+                    "r": "\r",
+                    "0": "\0",
+                    "\\": "\\",
+                    '"': '"',
+                    "'": "'",
+                }
                 if n in simple:
                     out.append(simple[n])
                     j += 2
@@ -102,15 +110,19 @@ def yara_x_cases(root: Path) -> list[dict]:
         body, _ = lit
         source = RUST_MACROS[m.group(1)].format(body)
         line = tests.count("\n", 0, m.start()) + 1
-        cases.append({"origin": f"yara-x:lib/src/tests/mod.rs:{line}", "kind": m.group(1), "source": source})
+        cases.append(
+            {"origin": f"yara-x:lib/src/tests/mod.rs:{line}", "kind": m.group(1), "source": source}
+        )
     for kind in ["errors", "warnings"]:
         folder = root / "lib/src/compiler/tests/testdata" / kind
         for path in sorted(folder.glob("*.in"), key=lambda p: (len(p.stem), p.stem)):
-            cases.append({
-                "origin": f"yara-x:{path.relative_to(root)}",
-                "kind": f"compiler_{kind}",
-                "source": path.read_text(encoding="utf-8", errors="replace"),
-            })
+            cases.append(
+                {
+                    "origin": f"yara-x:{path.relative_to(root)}",
+                    "kind": f"compiler_{kind}",
+                    "source": path.read_text(encoding="utf-8", errors="replace"),
+                }
+            )
     return cases
 
 
@@ -131,7 +143,15 @@ def c_literals(text: str, i: int) -> tuple[str, int] | None:
             c = text[j]
             if c == "\\":
                 n = text[j + 1]
-                simple = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "'": "'", "0": "\0"}
+                simple = {
+                    "n": "\n",
+                    "t": "\t",
+                    "r": "\r",
+                    "\\": "\\",
+                    '"': '"',
+                    "'": "'",
+                    "0": "\0",
+                }
                 if n in simple:
                     out.append(simple[n])
                     j += 2
@@ -152,7 +172,9 @@ def c_literals(text: str, i: int) -> tuple[str, int] | None:
 def libyara_cases(root: Path) -> list[dict]:
     cases = []
     text = (root / "tests/test-rules.c").read_text()
-    call = re.compile(r"\b(assert_true_rule\w*|assert_false_rule\w*|assert_error|assert_warning\w*)\s*\(")
+    call = re.compile(
+        r"\b(assert_true_rule\w*|assert_false_rule\w*|assert_error|assert_warning\w*)\s*\("
+    )
     for m in call.finditer(text):
         lit = c_literals(text, m.end())
         if lit is None:
@@ -161,7 +183,9 @@ def libyara_cases(root: Path) -> list[dict]:
         if not text[end:].lstrip().startswith((",", ")")):
             continue
         line = text.count("\n", 0, m.start()) + 1
-        cases.append({"origin": f"libyara:tests/test-rules.c:{line}", "kind": m.group(1), "source": source})
+        cases.append(
+            {"origin": f"libyara:tests/test-rules.c:{line}", "kind": m.group(1), "source": source}
+        )
     return cases
 
 
@@ -210,6 +234,7 @@ def verdicts(source: str) -> dict:
             capture_output=True,
             timeout=20,
             preexec_fn=limit,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return {"libyara": "timeout", "yara_x": "timeout"}
@@ -222,7 +247,10 @@ def verdicts(source: str) -> dict:
 def tags(path: Path) -> list[str]:
     """The tags on the checkout's commit (YARA-X tags `v1.23.0` and `go/v1.23.0` alike)."""
     return subprocess.run(
-        ["git", "-C", str(path), "tag", "--points-at", "HEAD"], capture_output=True, text=True
+        ["git", "-C", str(path), "tag", "--points-at", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
     ).stdout.split()
 
 
@@ -254,9 +282,14 @@ def main() -> int:
         seen.add(case["source"])
         case.update(verdicts(case["source"]))
         rows.append(case)
-    text = json.dumps(
-        {"yara_x": YARA_X_TAG, "libyara": LIBYARA_TAG, "cases": rows}, indent=1, ensure_ascii=False
-    ) + "\n"
+    text = (
+        json.dumps(
+            {"yara_x": YARA_X_TAG, "libyara": LIBYARA_TAG, "cases": rows},
+            indent=1,
+            ensure_ascii=False,
+        )
+        + "\n"
+    )
     if args.check:
         if OUT.read_text() != text:
             print(f"{OUT.relative_to(ROOT)} is stale", file=sys.stderr)
@@ -266,8 +299,10 @@ def main() -> int:
     OUT.write_text(text)
     from collections import Counter
 
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(rows)} cases;",
-          dict(Counter((r["libyara"], r["yara_x"]) for r in rows)))
+    print(
+        f"wrote {OUT.relative_to(ROOT)}: {len(rows)} cases;",
+        dict(Counter((r["libyara"], r["yara_x"]) for r in rows)),
+    )
     return 0
 
 

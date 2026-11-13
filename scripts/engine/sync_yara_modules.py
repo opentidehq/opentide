@@ -18,7 +18,8 @@ libyara, ``yara_x_incompatible`` for what only libyara has.
 
 Usage:
     cargo run --release --manifest-path scripts/yara-modules/Cargo.toml > /tmp/yara-x-modules.json
-    python scripts/engine/sync_yara_modules.py --libyara ../yara --yara-x-json /tmp/yara-x-modules.json [--check]
+    python scripts/engine/sync_yara_modules.py --libyara ../yara \
+        --yara-x-json /tmp/yara-x-modules.json [--check]
 """
 
 from __future__ import annotations
@@ -38,8 +39,19 @@ YARA_X_VERSION = "1.23.0"
 
 # yara-1.0 "Modules": the modules the engine knows.
 MODULES = [
-    "pe", "elf", "math", "hash", "time", "dotnet", "macho", "magic",
-    "cuckoo", "console", "string", "lnk", "dex",
+    "pe",
+    "elf",
+    "math",
+    "hash",
+    "time",
+    "dotnet",
+    "macho",
+    "magic",
+    "cuckoo",
+    "console",
+    "string",
+    "lnk",
+    "dex",
 ]
 
 # libyara's one-letter types (libyara/include/yara/modules.h).
@@ -69,7 +81,7 @@ def libyara_members(source: str) -> dict[str, dict]:
     stack: list[str] = []
 
     def path(name: str) -> str:
-        return ".".join(stack + [name]) if stack else name
+        return ".".join([*stack, name]) if stack else name
 
     for m in DECL.finditer(body):
         macro, raw = m.group(1), m.group(2)
@@ -79,8 +91,11 @@ def libyara_members(source: str) -> dict[str, dict]:
             continue
         name = strings[0]
         if macro.startswith("begin_struct"):
-            kind = {"begin_struct": "struct", "begin_struct_array": "array",
-                    "begin_struct_dictionary": "dict"}[macro]
+            kind = {
+                "begin_struct": "struct",
+                "begin_struct_array": "array",
+                "begin_struct_dictionary": "dict",
+            }[macro]
             p = path(name)
             out[p] = {"kind": kind, "element": "struct" if kind != "struct" else None}
             stack.append(name + {"struct": "", "array": "[]", "dict": "{}"}[kind])
@@ -119,7 +134,9 @@ def yara_x_members(fields: list, prefix: str = "", out: dict | None = None) -> d
             out[p] = {"kind": "struct", "doc": doc, "enum": f.get("enum", False)}
             yara_x_members(t["struct"], p, out)
         elif "array" in t or "map" in t:
-            kind, inner, mark = ("array", t["array"], "[]") if "array" in t else ("dict", t["map"][1], "{}")
+            kind, inner, mark = (
+                ("array", t["array"], "[]") if "array" in t else ("dict", t["map"][1], "{}")
+            )
             element = inner if isinstance(inner, str) else "struct"
             out[p] = {"kind": kind, "element": element, "doc": doc}
             if isinstance(inner, dict) and "struct" in inner:
@@ -127,11 +144,13 @@ def yara_x_members(fields: list, prefix: str = "", out: dict | None = None) -> d
         elif "function" in t:
             overloads = []
             for sig in t["function"]:
-                overloads.append({
-                    "args": "".join(yara_x_type_letter(a[1]) for a in sig["args"]),
-                    "ret": sig["ret"] if isinstance(sig["ret"], str) else "struct",
-                    "doc": sig.get("doc"),
-                })
+                overloads.append(
+                    {
+                        "args": "".join(yara_x_type_letter(a[1]) for a in sig["args"]),
+                        "ret": sig["ret"] if isinstance(sig["ret"], str) else "struct",
+                        "doc": sig.get("doc"),
+                    }
+                )
             out[p] = {"kind": "function", "overloads": overloads, "doc": doc}
     return out
 
@@ -227,7 +246,9 @@ def main() -> int:
     args = ap.parse_args()
     tag = subprocess.run(
         ["git", "-C", str(args.libyara), "describe", "--tags", "--exact-match"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        check=False,
     ).stdout.strip()
     if tag != LIBYARA_TAG:
         print(f"libyara checkout is {tag or 'not a tag'}, want {LIBYARA_TAG}", file=sys.stderr)
