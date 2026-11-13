@@ -668,3 +668,117 @@ pub fn decomposed_advisory(contexts: &Node, os: Option<&str>) -> Option<(&'stati
         ),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
+
+    use super::*;
+
+    fn block(yaml: &str) -> BTreeSet<&'static str> {
+        let document = crate::node::load(yaml).unwrap();
+        block_codes(document.root().unwrap())
+    }
+
+    #[test]
+    fn signature_codes_follow_the_scan() {
+        let codes = |text: &str| signature_codes(Some(text));
+        assert!(codes("rule a { condition: true }").is_empty());
+        assert_eq!(codes("  \n"), BTreeSet::from([codes::EMPTY_SIGNATURE]));
+        assert_eq!(
+            signature_codes(None),
+            BTreeSet::from([codes::EMPTY_SIGNATURE])
+        );
+        // Only private or global rules: nothing to deploy.
+        assert_eq!(
+            codes("private rule p { condition: true }"),
+            BTreeSet::from([codes::EMPTY_SIGNATURE])
+        );
+        assert_eq!(
+            codes("include \"x.yar\"\nrule a { condition: true }"),
+            BTreeSet::from([codes::INCLUDE])
+        );
+        // In a comment, a string or a regexp, it is no include and no rule.
+        assert!(
+            codes("// include \"x\"\nrule a { strings: $s = \"rule b {\" $r = /rule c/ condition: $s }")
+                .is_empty()
+        );
+        assert_eq!(
+            codes("rule a { condition: true }\nrule a { condition: false }"),
+            BTreeSet::from([codes::DUPLICATE_RULE])
+        );
+        // Not a keyword in a longer word: `$rule`, `my_rule`.
+        assert!(codes("rule a { strings: $rule = \"x\" condition: $rule }").is_empty());
+    }
+
+    #[test]
+    fn block_codes_are_the_oracles() {
+        assert_eq!(
+            block("sigma: {condition: s}\nyara: {signature: 'rule a { condition: true }'}"),
+            BTreeSet::from([codes::RULE_KIND])
+        );
+        // A null `sigma` is no kind.
+        assert!(block("sigma: null\nyara: {signature: 'rule a { condition: true }'}").is_empty());
+        // `imports: null` beside `signature` is still both forms.
+        assert_eq!(
+            block("yara: {signature: 'rule a { condition: true }', imports: null}"),
+            BTreeSet::from([codes::YARA_FORM])
+        );
+        assert_eq!(
+            block("yara: {strings: \"$a = 1\\ncondition:\", condition: $a}"),
+            BTreeSet::from([codes::SECTION_HEADER])
+        );
+        assert_eq!(
+            block("yara: {strings: x, condition: x, imports: [pe, foo]}"),
+            BTreeSet::from([codes::IMPORT])
+        );
+        assert!(block("yara: {strings: x, condition: x, imports: [pe, elf]}").is_empty());
+    }
+
+    #[test]
+    fn rule_names_and_texts_follow_deploy() {
+        assert_eq!(derived_rule_name("Cmd String-Exec"), "cmd_string_exec");
+        assert_eq!(derived_rule_name("2024 Loader"), "rule_2024_loader");
+        assert_eq!(derived_rule_name("a/b"), "a_b");
+        assert!(
+            rule_name_problem("Condition")
+                .unwrap()
+                .contains("'condition'")
+        );
+        assert!(rule_name_problem("Détection").unwrap().contains("'é'"));
+        assert!(rule_name_problem(&"a".repeat(128)).is_none());
+        assert!(rule_name_problem(&"a".repeat(129)).unwrap().contains("129"));
+        assert_eq!(deployed_signature("a\r\nb\rc"), "a\nb\nc\n");
+        assert_eq!(deployed_signature("a\n\n"), "a\n\n");
+        assert!(context_accepted("file.pe,memory"));
+        assert!(!context_accepted("file, memory"));
+        let contexts = ["file".to_owned(), "memory".to_owned()];
+        assert_eq!(decomposed_context(&contexts, "Linux"), "file.elf,memory");
+        assert_eq!(decomposed_context(&contexts, "Plan9"), "file,memory");
+    }
+
+    #[test]
+    fn advisories_name_each_non_private_rule() {
+        let found = advisories(
+            "private rule p { condition: true }\nrule a { meta: context = \"disk\" condition: p }\n\
+             rule b { condition: p }\nrule c {\n  meta:\n    context = 1\n  condition: p\n}",
+        );
+        let codes: Vec<(&str, &str)> = found
+            .iter()
+            .map(|advisory| (advisory.code, advisory.rule.as_str()))
+            .collect();
+        assert_eq!(
+            codes,
+            [
+                ("harfanglab_yara_context", "a"),
+                ("yara_meta_missing", "b"),
+                ("harfanglab_yara_context", "c")
+            ]
+        );
+        assert!(
+            found[2].message.contains("context to 1, not a string"),
+            "{}",
+            found[2].message
+        );
+    }
+}

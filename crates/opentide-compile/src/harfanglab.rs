@@ -465,6 +465,27 @@ mod tests {
     }
 
     /// The YARA content of a rule whose `meta.arch` is written `arch`.
+    /// harfanglab-1.0 1.2: a `signature` is the YaraFile `content`, verbatim
+    /// but for `\n` line endings and one trailing newline; the payload's
+    /// other keys are the decomposed form's.
+    #[test]
+    fn a_signature_is_sent_as_written() {
+        let text = "name: Loader\nmetadata:\n  uuid: 00000000-0000-4000-8005-000000000699\n\
+                    description: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    \
+                    yara:\n      signature: \"import \\\"pe\\\"\\r\\nrule a {\\r\\n  condition: \\
+                    pe.is_dll()\\r\\n}\"\n";
+        let document = opentide_schema::node::load(text).unwrap();
+        let rule = Rule::new(document.root().unwrap(), None);
+        let block = rule.block(PLATFORM).unwrap();
+        let body = yara(&rule, block, block.get("yara").unwrap(), &Json::Null);
+        assert_eq!(
+            body.get("content").and_then(Json::as_str),
+            Some("import \"pe\"\nrule a {\n  condition: pe.is_dll()\n}\n")
+        );
+        assert_eq!(body.get("name").and_then(Json::as_str), Some("Loader"));
+        assert_eq!(body.get("overwrite"), Some(&Json::Bool(true)));
+    }
+
     fn yara_content(arch: &str) -> String {
         let text = format!(
             "name: Loader\nmetadata:\n  uuid: 00000000-0000-4000-8005-000000000699\n\
