@@ -15,6 +15,7 @@ pub fn empty() -> Node {
         value: Value::Map(Vec::new()),
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     }
 }
 

@@ -948,3 +948,51 @@ fn an_optional_literal_keeps_null_out_of_its_enum() {
     let threat = &schema["$defs"]["ElasticThreatMatch"]["properties"]["language"];
     assert_eq!(threat["anyOf"], language["anyOf"], "{threat}");
 }
+
+#[test]
+fn sysdig_items_are_the_text_the_file_writes() {
+    for (written, text) in sysdig::ITEM_TEXT_CASES {
+        let document = crate::node::load(&format!("[{written}]")).unwrap();
+        let root = document.root().unwrap();
+        let Value::Seq(items) = &root.value else {
+            panic!("{written}")
+        };
+        assert_eq!(sysdig::item_text(&items[0]), *text, "{written}");
+    }
+}
+
+#[test]
+fn sysdig_a_null_exception_value_is_refused() {
+    for values in [
+        json!(["sh", null]),
+        json!([["sh", null]]),
+        json!([["sh", ["a", null]]]),
+    ] {
+        let fields = if values[0].is_array() {
+            json!(["proc.name", "proc.pname"])
+        } else {
+            json!("proc.name")
+        };
+        let found = errors(
+            "sysdig",
+            &merged(
+                &rule(),
+                &json!({"exceptions": [{"name": "e", "fields": fields, "values": values}]}),
+            ),
+        );
+        assert!(
+            found.contains(&format!(": {}", sysdig::NULL_VALUE)),
+            "{values}: {found}"
+        );
+    }
+    assert_eq!(
+        errors(
+            "sysdig",
+            &merged(
+                &rule(),
+                &json!({"exceptions": [{"name": "e", "fields": "proc.name", "values": ["sh", null]}]})
+            )
+        ),
+        format!("exceptions.0.values.1: {}", sysdig::NULL_VALUE)
+    );
+}

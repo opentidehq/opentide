@@ -92,8 +92,17 @@ impl YamlNode for Node {
     fn scalar_text(&self) -> Option<String> {
         match &self.value {
             Value::Str(text) | Value::Datetime(text) => Some(text.clone()),
-            Value::Bool(flag) => Some(flag.to_string()),
-            Value::Int(_) | Value::Float(_) => number_text(&self.value),
+            // A boolean or a number as written (`True`, `1.50`), as Falco reads it.
+            Value::Bool(flag) => Some(
+                self.text
+                    .as_deref()
+                    .map_or_else(|| flag.to_string(), str::to_owned),
+            ),
+            Value::Int(_) | Value::Float(_) => self
+                .text
+                .as_deref()
+                .map(str::to_owned)
+                .or_else(|| number_text(&self.value)),
             Value::Null | Value::Seq(_) | Value::Map(_) => None,
         }
     }
@@ -174,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn numbers_print_as_yaml_writes_them() {
+    fn scalars_print_as_written() {
         let doc = root(
             "[1, -7, 0x1F, 1.5, 1e3, 1.0, .inf, -.inf, .nan, 0.00005, 1e16, 1e-7, true, x, ~, [], {}]",
         );
@@ -185,7 +194,7 @@ mod tests {
             .map(|item| item.scalar_text())
             .collect();
         let want = [
-            "1", "-7", "31", "1.5", "1000.0", "1.0", ".inf", "-.inf", ".nan", "0.00005", "1e16",
+            "1", "-7", "0x1F", "1.5", "1e3", "1.0", ".inf", "-.inf", ".nan", "0.00005", "1e16",
             "1e-7", "true", "x",
         ];
         let mut expected: Vec<Option<String>> =

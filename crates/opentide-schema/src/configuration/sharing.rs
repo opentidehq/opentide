@@ -111,6 +111,7 @@ impl Merged {
                             value: Value::Str(key.clone()),
                             start: value.start,
                             end: value.start,
+                            text: None,
                         }),
                         value: Arc::clone(value),
                     })
@@ -118,6 +119,7 @@ impl Merged {
             ),
             start: crate::node::Mark::default(),
             end: crate::node::Mark::default(),
+            text: None,
         }
     }
 }

@@ -45,7 +45,7 @@ fn scalar(v: &Node) -> bool {
 
 fn text_of(v: &Node) -> String {
     if v.is_null() {
-        return "None".into();
+        return v.text.as_deref().unwrap_or("null").to_owned();
     }
     v.scalar_text().unwrap_or_default()
 }

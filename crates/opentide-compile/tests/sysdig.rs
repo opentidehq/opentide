@@ -126,16 +126,89 @@ fn a_tuple_exception_without_comps_compares_with_equals() {
 }
 
 #[test]
-fn float_items_are_written_as_python_writes_them() {
+fn items_reach_falco_as_the_file_writes_them() {
     let out = details(
         "    status: STAGING\n    condition: proc.name in (l)\n    lists:\n    - name: l\n      \
-         items: [1.0e+16, 1.0e-5, 0.5]\n",
+         items: [1.0e+16, 1.0e-5, 0.5, 0x1F]\n",
     );
     let Json::Str(text) = out else { panic!() };
     assert!(
-        text.contains("\"condition\":\"proc.name in ( 1e+16, 1e-05, 0.5 )\""),
+        text.contains("\"condition\":\"proc.name in ( 1.0e+16, 1.0e-5, 0.5, 0x1F )\""),
         "{text}"
     );
+}
+
+/// The model's check and the deploy body read each item of
+/// `ITEM_TEXT_CASES` as the same text: a list item in the condition and an
+/// exception value in the body.
+#[test]
+fn the_check_and_the_body_agree_on_each_items_text() {
+    use opentide_schema::objects::platform::sysdig::ITEM_TEXT_CASES;
+    for (written, text) in ITEM_TEXT_CASES {
+        let out = details(&format!(
+            "    status: STAGING\n    condition: proc.name in (l)\n    lists:\n    - name: l\n      \
+             items: [{written}]\n    exceptions:\n    - name: e\n      fields: proc.name\n      \
+             values: [{written}]\n"
+        ));
+        let Json::Str(details) = out else { panic!() };
+        let parsed: serde_json::Value = serde_json::from_str(&details).unwrap();
+        let condition = parsed["condition"]["condition"].as_str().unwrap();
+        // The expansion quotes an item with a space in it, as Falco's does.
+        let item = if text.contains(' ') {
+            format!("{text:?}")
+        } else {
+            (*text).to_owned()
+        };
+        assert_eq!(condition, format!("proc.name in ( {item} )"), "{written}");
+        assert_eq!(
+            parsed["exceptions"][0]["values"],
+            serde_json::json!([text]),
+            "{written}"
+        );
+        let document = opentide_schema::node::load(&format!("[{written}]")).unwrap();
+        let root = document.root().unwrap();
+        let opentide_schema::node::Value::Seq(items) = &root.value else {
+            panic!("{written}")
+        };
+        assert_eq!(
+            opentide_schema::objects::platform::sysdig::item_text(&items[0]),
+            *text,
+            "{written}"
+        );
+    }
+}
+
+#[test]
+fn a_null_value_is_refused_before_falco_gets_it() {
+    for (place, block) in [
+        (
+            "exception \"e\"",
+            "    exceptions:\n    - name: e\n      fields: proc.name\n      values: [sh, null]\n",
+        ),
+        (
+            "exception \"e\"",
+            "    exceptions:\n    - name: e\n      fields: [proc.name, proc.pname]\n      \
+             values: [[sh, ~]]\n",
+        ),
+        (
+            "list \"l\"",
+            "    lists:\n    - name: l\n      items: [a, null]\n",
+        ),
+    ] {
+        let (code, reason) = body(&format!(
+            "    status: STAGING\n    condition: proc.name = x\n{block}"
+        ))
+        .unwrap_err();
+        assert_eq!(code, "compile_invalid_rule", "{block}");
+        assert_eq!(
+            reason,
+            format!(
+                "{place}: a value is null, and Falco reads each value as text: write the text it \
+                 should match (quote it, \"null\", to match that word)"
+            ),
+            "{block}"
+        );
+    }
 }
 
 #[test]

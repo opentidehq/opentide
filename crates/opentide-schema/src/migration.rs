@@ -221,6 +221,7 @@ pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
             value: Value::Map(entries),
             start: metadata.start,
             end: metadata.end,
+            text: None,
         })
     };
     let entries = match entries
@@ -240,6 +241,7 @@ pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
                     value: Value::Map(vec![schema]),
                     start: Mark::default(),
                     end: Mark::default(),
+                    text: None,
                 }),
             });
             entries
@@ -249,6 +251,7 @@ pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
         value: Value::Map(entries),
         start: root.start,
         end: root.end,
+        text: None,
     }
 }
 
@@ -270,6 +273,7 @@ fn text(value: &str) -> Arc<Node> {
         value: Value::Str(value.to_owned()),
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     })
 }
 

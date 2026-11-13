@@ -106,6 +106,7 @@ pub struct SysdigException {
     /// operator) is one value list, or the name of a list. Single-field form: a flat list of values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "crate::objects::platform::optional_any_list")]
+    #[from_node(with = "exception_values")]
     pub values: Option<Vec<crate::objects::any::Any>>,
 }
 
@@ -308,29 +309,96 @@ fn scalar(node: &Node) -> bool {
     !matches!(node.value, Value::Seq(_) | Value::Map(_))
 }
 
-/// `item_text`: a list or exception item as YAML gives it to Falco.
-fn item_text(node: &Node) -> String {
+/// A list or exception item as Falco reads it: a string as it is, any other
+/// scalar as written in the file (`1.50`, `True`), which is the text Falco's
+/// YAML loader gives a list item or an exception value. A collection, which
+/// names no list, by its YAML 1.2 form.
+pub fn item_text(node: &Node) -> String {
     match &node.value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(flag) => flag.to_string(),
-        Value::Int(integer) => integer.to_string(),
-        Value::Float(float) => python_float(*float),
         Value::Str(text) | Value::Datetime(text) => text.clone(),
-        Value::Seq(_) | Value::Map(_) => crate::configuration::repr::node(node),
+        other => node
+            .text
+            .as_deref()
+            .map_or_else(|| other.to_string(), str::to_owned),
     }
 }
 
-/// A float as Python's `str()` writes it, for the values YAML gives
-/// (`1.5`, `2.0`, `inf`, `nan`).
-fn python_float(float: f64) -> String {
-    if float.is_nan() {
-        "nan".to_owned()
-    } else if float.is_infinite() {
-        if float > 0.0 { "inf" } else { "-inf" }.to_owned()
-    } else if float.fract() == 0.0 && float.abs() < 1e16 {
-        format!("{float:.1}")
-    } else {
-        format!("{float}")
+/// Items as a file writes them and the text Falco receives for each: the
+/// cases the model's check ([`item_text`]) and the deploy body
+/// (`opentide-compile`'s Sysdig compiler) are both tested on.
+pub const ITEM_TEXT_CASES: &[(&str, &str)] = &[
+    ("1.50", "1.50"),
+    ("1.0e+16", "1.0e+16"),
+    ("1e3", "1e3"),
+    ("0x1F", "0x1F"),
+    ("007", "007"),
+    ("-0", "-0"),
+    (".inf", ".inf"),
+    ("True", "True"),
+    ("false", "false"),
+    ("\"5\"", "5"),
+    ("'a b'", "a b"),
+    ("bash", "bash"),
+];
+
+/// An exception's `values`: a null value anywhere in them is refused, since
+/// Falco reads every value as text and has none for null.
+pub fn exception_values(
+    node: &Node,
+    cx: &mut Context,
+) -> Option<Option<Vec<crate::objects::any::Any>>> {
+    let mut nulls = Vec::new();
+    null_values(node, &mut nulls);
+    if nulls.is_empty() {
+        return <Option<Vec<crate::objects::any::Any>> as crate::from_node::FromNode>::from_node(
+            node, cx,
+        );
+    }
+    for (path, null) in nulls {
+        report_at(cx, &path, null);
+    }
+    None
+}
+
+/// Reports a null value at `path` (indices under `values`).
+fn report_at(cx: &mut Context, path: &[usize], null: &Node) {
+    match path.split_first() {
+        Some((index, rest)) => cx.at_index(*index, |cx| report_at(cx, rest, null)),
+        None => cx.error(ErrorKind::InvalidValue("value_error"), NULL_VALUE, null),
+    }
+}
+
+/// The finding of a null exception value.
+pub const NULL_VALUE: &str = "Value error, an exception value cannot be null: Falco reads each \
+                              value as text, so write the text it should match (quote it, \
+                              \"null\", to match that word)";
+
+/// The null nodes among `values`' rows and their value lists, each with
+/// its indices.
+fn null_values<'a>(node: &'a Node, out: &mut Vec<(Vec<usize>, &'a Node)>) {
+    let Value::Seq(rows) = &node.value else {
+        return;
+    };
+    for (r, row) in rows.iter().enumerate() {
+        match &row.value {
+            Value::Null => out.push((vec![r], row)),
+            Value::Seq(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    match &item.value {
+                        Value::Null => out.push((vec![r, i], item)),
+                        Value::Seq(members) => {
+                            for (m, member) in members.iter().enumerate() {
+                                if matches!(member.value, Value::Null) {
+                                    out.push((vec![r, i, m], member));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 
