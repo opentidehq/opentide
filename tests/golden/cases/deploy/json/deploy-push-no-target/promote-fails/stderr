@@ -1,0 +1,1 @@
+{"target":1,"detail":"Valid statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED","event":"invalid_promotion_target","logger":"opentide.mutation.promotion","level":"error","timestamp":"0000-00-00 00:00:00"}
