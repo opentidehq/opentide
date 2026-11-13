@@ -23,10 +23,14 @@ from opentide.ci.writeback import rules_folder
 
 HERE = Path(__file__).resolve().parent
 ALL = [
+    "bitdefender",
     "carbon_black_cloud",
     "crowdstrike",
     "defender_for_endpoint",
     "elastic",
+    "exabeam",
+    "google_secops",
+    "graylog",
     "harfanglab",
     "sentinel",
     "sentinel_one",
