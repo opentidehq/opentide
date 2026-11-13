@@ -2148,13 +2148,13 @@ impl Sender<'_, '_> {
         Some(StateError {
             code: "deployment_state_unpersisted",
             message: format!(
-                "rule {uuid} has no {platform} id for tenant {}, and this {place} run ({names}) \
+                "rule {uuid} has no {platform} id for tenant {:?}, and this {place} run ({names}) \
                  in CI cannot keep the id a create would return: only the generated production \
                  job (--strategy RELEASE on the default branch) commits \
                  .opentide/states/deployment/. The create was refused before any vendor call. \
                  Deploy the rule from the production job, or pass --persist-state-externally if \
                  this pipeline commits .opentide/states/deployment/ itself.",
-                opentide_connectors::python::python_string_repr(tenant.trim())
+                tenant.trim()
             ),
         })
     }
@@ -2195,10 +2195,10 @@ impl Sender<'_, '_> {
             return Err(StateError {
                 code: "external_id_missing",
                 message: format!(
-                    "rule {uuid} has no {platform} id for tenant {} in {}, so nothing is known \
+                    "rule {uuid} has no {platform} id for tenant {:?} in {}, so nothing is known \
                      to exist on that tenant and there is nothing to {}. If a remote copy \
                      exists, it must be removed by hand.",
-                    opentide_connectors::python::python_string_repr(tenant.trim()),
+                    tenant.trim(),
                     shard.path.display(),
                     strategy.name().to_lowercase()
                 ),
@@ -2613,10 +2613,7 @@ impl Sender<'_, '_> {
                         SentinelOneError::BadId(text) => {
                             return Raised::new(
                                 "ValueError",
-                                format!(
-                                    "invalid literal for int() with base 10: {}",
-                                    opentide_connectors::python::python_string_repr(text)
-                                ),
+                                format!("invalid literal for int() with base 10: {text:?}"),
                             );
                         }
                         SentinelOneError::Unreadable { detail } => {
