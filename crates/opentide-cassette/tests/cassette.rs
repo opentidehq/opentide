@@ -1,6 +1,7 @@
 //! Redaction, the cassette format and wiremock replay.
 
 use opentide_cassette::cassette::{Request, Response};
+use opentide_cassette::replay::same_body;
 use opentide_cassette::{Body, Cassette, Interaction, Redaction, Replay};
 
 #[test]
@@ -106,7 +107,7 @@ fn a_cassette_is_recorded_never_edited() {
 }
 
 #[test]
-fn replay_serves_in_order_checks_bytes_and_repeats_whole_passes() {
+fn replay_serves_in_order_checks_bodies_and_repeats_whole_passes() {
     let cassette = Cassette::new(
         "s",
         vec![],
@@ -178,7 +179,36 @@ fn replay_serves_in_order_checks_bytes_and_repeats_whole_passes() {
             .starts_with("method POST was recorded, GET sent")
     );
 
-    // One byte off in a body.
+    // The same JSON in another layout: keys reordered, no spaces, non-ASCII
+    // as UTF-8 rather than escaped. It is the same data, so it matches.
+    let replay = runtime.block_on(Replay::start(
+        Cassette::new(
+            "s",
+            vec![],
+            vec![interaction(
+                "POST",
+                "https://t.invalid/rules",
+                "{\"a\": 1, \"b\": [\"caf\\u00e9\", {\"c\": null}]}",
+                201,
+                "{}",
+            )],
+        ),
+        Redaction::default(),
+        origin.clone(),
+    ));
+    assert_eq!(
+        send(
+            &replay,
+            "POST",
+            "/rules",
+            "{\"b\":[\"café\",{\"c\":null}],\"a\":1}"
+        )
+        .0,
+        201
+    );
+    assert_eq!(runtime.block_on(replay.verify()), Vec::new());
+
+    // A value changed in a body.
     let replay = runtime.block_on(Replay::start(
         cassette.clone(),
         Redaction::default(),
@@ -227,4 +257,43 @@ fn known_secrets_of_three_characters_or_more_are_redacted() {
     let redaction = Redaction::new(["abc".to_owned(), "xy".to_owned(), String::new()]);
     assert_eq!(redaction.text("abc xy abcd"), "REDACTED xy REDACTEDd");
     assert_eq!(redaction.text("ab"), "ab");
+}
+
+#[test]
+fn json_bodies_match_as_data_and_other_bodies_as_bytes() {
+    let matches = |want: &str, got: &str| same_body(want.as_bytes(), got.as_bytes());
+    // Reordered, re-spaced, escaped differently: the same data.
+    assert!(matches(r#"{"a": 1, "b": "x"}"#, r#"{"b":"x","a":1}"#));
+    assert!(matches(
+        "{\n    \"a\": [1, 2],\n    \"z\": \"\\u00e9\\ud83d\\ude00\"\n}",
+        r#"{"z":"é😀","a":[1,2]}"#
+    ));
+    assert!(matches(r#"[{"k": true}]"#, r#"[{"k":true}]"#));
+    // A JSON document held in a string (a rule sent as text) is data too.
+    assert!(matches(
+        r#"{"rule": "{\"q\": \"x\", \"n\": 2}"}"#,
+        r#"{"rule":"{\"n\":2,\"q\":\"x\"}"}"#
+    ));
+    // A changed value, a key added or missing, a reordered array: different.
+    assert!(!matches(r#"{"a": 1}"#, r#"{"a": 2}"#));
+    assert!(!matches(r#"{"a": 1}"#, r#"{"a": "1"}"#));
+    assert!(!matches(r#"{"a": 1}"#, r#"{"a": 1.0}"#));
+    assert!(!matches(r#"{"a": 1}"#, r#"{"a": 1, "b": null}"#));
+    assert!(!matches(r#"{"a": 1, "b": null}"#, r#"{"a": 1}"#));
+    assert!(!matches("[1, 2]", "[2, 1]"));
+    assert!(!matches(
+        r#"{"rule": "{\"q\": \"x\"}"}"#,
+        r#"{"rule": "{\"q\": \"y\"}"}"#
+    ));
+    // A string that is not a JSON document is compared as text.
+    assert!(!matches(r#"{"q": "a  b"}"#, r#"{"q": "a b"}"#));
+    // Not JSON: byte for byte. A form body, an empty body, binary.
+    assert!(matches("a=1&b=2", "a=1&b=2"));
+    assert!(!matches("a=1&b=2", "b=2&a=1"));
+    assert!(!matches("a=1", "a=1 "));
+    assert!(matches("", ""));
+    assert!(!matches("", "{}"));
+    assert!(!matches("{\"a\": 1}", "{\"a\": 1"));
+    assert!(same_body(&[0xff, 0x00], &[0xff, 0x00]));
+    assert!(!same_body(&[0xff, 0x00], &[0xff, 0x01]));
 }

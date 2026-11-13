@@ -131,7 +131,11 @@ impl HttpClient {
         request: reqwest::Request,
         cancel: &CancellationToken,
     ) -> Result<reqwest::Response, ConnectorError> {
+        // `biased`: a connection cancelled before (or while) a step is
+        // ready is interrupted, never answered by whichever branch tokio
+        // happens to poll first.
         let _permit = tokio::select! {
+            biased;
             () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
             permit = self.permits.acquire() => permit.map_err(|_| ConnectorError::Cancelled)?,
         };
@@ -153,6 +157,7 @@ impl HttpClient {
                 None
             };
             let outcome = tokio::select! {
+                biased;
                 () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 outcome = self.client.execute(current) => outcome,
             };
@@ -181,6 +186,7 @@ impl HttpClient {
             match (wait, outcome) {
                 (Some(delay), _) => {
                     tokio::select! {
+                        biased;
                         () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
                         () = tokio::time::sleep(delay) => {}
                     }
@@ -235,6 +241,7 @@ impl HttpClient {
             }
         };
         tokio::select! {
+            biased;
             () = cancel.cancelled() => Err(ConnectorError::Cancelled),
             body = read => body,
         }

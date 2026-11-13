@@ -103,11 +103,11 @@ commands:
   payloads diff --against python [--corpus NAME|all]
                  the deploy compile's request bodies against the oracle's, on
                  every corpus (UC-3.1, #823); `cargo xtask payloads help`
-  vocab <sync|sentinel-attack|diff|ingest> [options]
+  vocab <sync|sentinel-attack|diff|ingest|malapi> [options]
                  the vocabularies: sync and check them against specifications,
                  generate Sentinel's ATT&CK list, compare with the oracle
-                 (UC-1.6, #812), ingest ATT&CK and MISP into specifications;
-                 `cargo xtask vocab help` lists the options
+                 (UC-1.6, #812), ingest ATT&CK, MISP and MalAPI into
+                 specifications; `cargo xtask vocab help` lists the options
   schema diff --against python [options]
                  the object models against the oracle: their JSON Schemas,
                  and their verdict on every object file of every corpus
