@@ -3801,6 +3801,884 @@ ops = [
 isolated = true
 note = "every target's Graylog block has the same title, so each names the others; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Graylog; and each Graylog kind adds the platform's configuration file"
 
+[[kind]]
+id = "exabeam-advanced-in-rule"
+codes = ["exabeam_advanced_in_rule"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'SELECT user, COUNT(*) AS logins WHERE activity_type:"app-login" GROUP-BY user'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-bare-wildcard"
+codes = ["exabeam_bare_wildcard"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: '*'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-context-table-limit"
+codes = ["exabeam_context_table_limit"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'user IN "Executives" AND src_host IN "Jump Hosts" AND dest_host IN "Domain Controllers"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-context-table-or"
+codes = ["exabeam_context_table_or"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'user IN "Executive Users" OR src_ip IN "Admin Users"."IP Address"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-foreach-reference"
+codes = ["exabeam_foreach_reference"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'src_host: @dest_host'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-free-text-special"
+codes = ["exabeam_free_text_special"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'web-north AND 10.228.200.3'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-function-arity"
+codes = ["exabeam_function_arity"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'process_name: RGXi("^powershell", "^pwsh")'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-implicit-and"
+codes = ["exabeam_implicit_and"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'vendor:"Microsoft" event_code:"4625"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-implicit-operator"
+codes = ["exabeam_implicit_operator"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'subject:"app" NOT vendor:"Exabeam"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-ipv6-range"
+codes = ["exabeam_ipv6_range"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'src_ip:[fd00::/8]'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-leading-slash"
+codes = ["exabeam_leading_slash"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: '/admin AND vendor:"Microsoft"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-legacy-regex"
+codes = ["exabeam_legacy_regex"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'user:"/[^0-9A-Za-z_]/"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-mixed-boolean"
+codes = ["exabeam_mixed_boolean"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'vendor:"Microsoft" AND event_code:"4625" OR event_code:"4771"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-not-equal"
+codes = ["exabeam_not_equal"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"process-create" AND user != "SYSTEM"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-parse-error"
+codes = ["exabeam_parse_error"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'process_name:"cmd.exe'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-range"
+codes = ["exabeam_range"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'dest_port:[443 TO 80]'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-regex"
+codes = ["exabeam_regex"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'process_command_line: RGX("(?=x)powershell")'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-single-group"
+codes = ["exabeam_single_group"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: '(vendor:"Microsoft") AND event_code:"4625"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-time-exact"
+codes = ["exabeam_time_exact"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'time:"2026-11-11T00:00:00Z"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-unknown-function"
+codes = ["exabeam_unknown_function"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'process_command_line: contains("-enc")'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-unquoted-value"
+codes = ["exabeam_unquoted_value"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'vendor:Microsoft'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-wildcard-in-phrase"
+codes = ["exabeam_wildcard_in_phrase"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'process_command_line:"powershell * -enc"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-unknown-field"
+codes = ["exabeam_unknown_field"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"process-create" AND opentide_no_such_field:"x"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-string-field-number"
+codes = ["exabeam_string_field_number"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"app-login" AND event_code:4625'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-unknown-value"
+codes = ["exabeam_unknown_value"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"network-connection" AND process_name:"powershell.exe"'
+''' },
+]
+isolated = true
+note = "the sequence's query, read with the rule profile; a warning: lint's queries check reports it, validate does not; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-clause-order"
+codes = ["exabeam_clause_order"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "SELECT user GROUP-BY user WHERE activity_type:\"app-login\"" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-foreach-clause"
+codes = ["exabeam_foreach_clause"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "subject:\"endpoint\" | FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host ORDER-BY src_host ]" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-foreach-position"
+codes = ["exabeam_foreach_position"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host ]" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-group-by-column"
+codes = ["exabeam_group_by_column"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "SELECT user, src_ip, COUNT(*) AS logins WHERE activity_type:\"app-login\" GROUP-BY user" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-group-by-select-star"
+codes = ["exabeam_group_by_select_star"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "SELECT * WHERE activity_type:\"app-login\" GROUP-BY user" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-keyword-case"
+codes = ["exabeam_keyword_case"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "Select user WHERE activity_type:\"app-login\"" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-pipe-limit"
+codes = ["exabeam_pipe_limit"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "SELECT user AS t1 WHERE vendor:\"a\" | SELECT t1 AS t2 WHERE t1:\"x\" | SELECT t2 AS t3 WHERE t2:\"x\" | SELECT t3 AS t4 WHERE t3:\"x\" | SELECT t4 AS t5 WHERE t4:\"x\" | SELECT t5 AS t6 WHERE t5:\"x\" | SELECT t6 WHERE t6:\"x\"" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-pipe-misuse"
+codes = ["exabeam_pipe_misuse"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "activity_type:\"app-login\" | SELECT user, COUNT(*) AS logins GROUP-BY user" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; a warning: lint's queries check reports it, validate does not; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-reserved-alias"
+codes = ["exabeam_reserved_alias"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "SELECT user, COUNT(*) AS window WHERE activity_type:\"app-login\" GROUP-BY user" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-rgx-extract-limit"
+codes = ["exabeam_rgx_extract_limit"]
+severity = "error"
+target = { family = "rule", tags = ["hunt"] }
+ops = [
+    { op = "append", path = "response.procedure.searches", value = { purpose = "Exabeam hunt", system = "exabeam", query = "SELECT RGX_EXTRACT(\"a(b)\") AS x1, RGX_EXTRACT(\"c(d)\") AS x2, RGX_EXTRACT(\"e(f)\") AS x3, RGX_EXTRACT(\"g(h)\") AS x4 WHERE vendor:\"Microsoft\"" } },
+]
+isolated = true
+note = "a response hunt's query (`system: exabeam`), read with the search profile; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "exabeam-context-table-trigger"
+codes = ["exabeam_context_table_trigger"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"app-login" AND user IN "Privileged Accounts"'
+        threshold: {function: count, operator: more_than, value: 5, within: 1h}
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-correlation"
+codes = ["exabeam_correlation"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    correlation: {within: 10m}
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-correlation-window"
+codes = ["exabeam_correlation_window"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    correlation: {within: 15m}
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'
+        threshold: {function: count, operator: more_than, value: 10, within: 1h}
+      - query: 'activity_type:"app-login" AND outcome:"success"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-duration"
+codes = ["exabeam_duration"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    delay: 5m
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-email"
+codes = ["exabeam_email"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    email: {recipients: []}
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-group-by"
+codes = ["exabeam_group_by"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+        group_by: [user, src_ip, host, dest_ip]
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-name-duplicate"
+class = "cross-file"
+codes = ["exabeam_name_duplicate"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    name: exabeam shared name
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+counts = { exabeam_name_duplicate = 5 }
+isolated = true
+note = "every target's Exabeam block has the same name, so each names the others; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-name-length"
+codes = ["exabeam_name_length"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    name: exabeam rule name over the limit exabeam rule name over the limit exabeam rule name over the limit exabeam rule name over the limit exabeam rule name over the limit {n}
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-outcome"
+codes = ["exabeam_outcome"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    outcome: webhook
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-outcome-silent"
+codes = ["exabeam_outcome_silent"]
+severity = "warning"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    outcome: none
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "an advisory: validate and lint both report it; isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-schedule"
+codes = ["exabeam_schedule"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    schedule: [{every: week, days: [mon], from: "08:00Z", to: "18:00Z"}]
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-sequences"
+codes = ["exabeam_sequences"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - name: Failed logins
+        query: ""
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-severity"
+codes = ["exabeam_severity"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    severity: High
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-threshold-function"
+codes = ["exabeam_threshold_function"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+        threshold: {function: sum, operator: more_than, value: 1000000, within: 1h}
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-threshold-operator"
+codes = ["exabeam_threshold_operator"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+        threshold: {function: count, operator: in, value: [5, 10], within: 10m}
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
+[[kind]]
+id = "exabeam-threshold-value"
+codes = ["exabeam_threshold_value"]
+severity = "error"
+target = { family = "rule" }
+ops = [
+    { op = "add_file", path = ".opentide/configurations/platforms/exabeam.toml", text = "[platform]\nenabled = true\nname = \"Exabeam New-Scale SIEM\"\n" },
+    { op = "append_text", text = '''
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"process-create" AND process_name:"mshta.exe"'
+        threshold: {function: count, operator: more_than, value: 2.5, within: 10m}
+''' },
+]
+isolated = true
+note = "isolated: the fault workspace tests/golden records is 0.23.0's, which has no Exabeam; and each Exabeam kind adds the platform's configuration file"
+
 # Codes in scope whose fault kind a unit of the 0.28 catch-up train still
 # owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them
 # and no kind above produces them yet. Each names its owner. The list only
@@ -3808,210 +4686,6 @@ note = "every target's Graylog block has the same title, so each names the other
 # a kind now produces, and on any code in scope that is neither covered nor
 # pending; it must be empty before the train merges into integration (xtask's
 # `nothing_is_pending_without_the_report_only_marker`).
-
-[[pending]]
-code = "exabeam_advanced_in_rule"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_bare_wildcard"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_clause_order"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_context_table_limit"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_context_table_or"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_context_table_trigger"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_correlation"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_correlation_window"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_duration"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_email"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_foreach_clause"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_foreach_position"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_foreach_reference"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_free_text_special"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_function_arity"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_group_by"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_group_by_column"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_group_by_select_star"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_implicit_and"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_implicit_operator"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_ipv6_range"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_keyword_case"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_leading_slash"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_legacy_regex"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_mixed_boolean"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_name_duplicate"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_name_length"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_not_equal"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_outcome"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_outcome_silent"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_parse_error"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_pipe_limit"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_pipe_misuse"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_range"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_regex"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_reserved_alias"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_rgx_extract_limit"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_schedule"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_sequences"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_severity"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_single_group"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_string_field_number"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_threshold_function"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_threshold_operator"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_threshold_value"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_time_exact"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_unknown_field"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_unknown_function"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_unknown_value"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_unquoted_value"
-owner = "P-EX"
-
-[[pending]]
-code = "exabeam_wildcard_in_phrase"
-owner = "P-EX"
 
 [[pending]]
 code = "harfanglab_rule_kind"
