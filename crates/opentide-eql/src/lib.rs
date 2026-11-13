@@ -639,14 +639,14 @@ fn check_sequence(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
     let by_pos = children.iter().position(|c| {
         c.kind() == "join_keys" && node.child_by_field_name("by").map(|b| b.id()) == Some(c.id())
     });
-    if let (Some(p), Some(b)) = (params_pos, by_pos) {
-        if p < b {
-            out.push(Diagnostic::error(
-                codes::EQL_PARSE_ERROR,
-                "specify sequence `by` before `with maxspan`, not after",
-                range(source, node_span(children[b])),
-            ));
-        }
+    if let (Some(p), Some(b)) = (params_pos, by_pos)
+        && p < b
+    {
+        out.push(Diagnostic::error(
+            codes::EQL_PARSE_ERROR,
+            "specify sequence `by` before `with maxspan`, not after",
+            range(source, node_span(children[b])),
+        ));
     }
     let maxspan = params_pos.and_then(|p| children[p].child_by_field_name("maxspan"));
     if let Some(unit) = maxspan {
@@ -730,9 +730,10 @@ fn is_missing_term(term: Node) -> bool {
 /// ends sequences, the other copies become ordinary steps. `until ![...]`
 /// parses, but Elasticsearch documents no meaning for it.
 fn check_until(until: Node, runs: u64, source: &str, out: &mut Vec<Diagnostic>) {
-    if let Some(option) = term_option(until) {
-        if runs > 1 {
-            out.push(Diagnostic::warning(
+    if let Some(option) = term_option(until)
+        && runs > 1
+    {
+        out.push(Diagnostic::warning(
                 codes::EQL_UNTIL_TERM,
                 format!(
                     "`runs` on the `until` term adds {} copies of it as ordinary sequence steps before the real `until`; remove `with runs`",
@@ -740,7 +741,6 @@ fn check_until(until: Node, runs: u64, source: &str, out: &mut Vec<Diagnostic>) 
                 ),
                 range(source, node_span(option)),
             ));
-        }
     }
     if is_missing_term(until) {
         let open = until
@@ -1118,17 +1118,17 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
             return Some(function_hover(row));
         }
     }
-    if parent.is_some_and(|p| p.kind() == "pipe") {
-        if let Some(row) = catalog.pipe(text(node, source)) {
-            let mut md = format!(
-                "**{}** (pipe)\n\n```eql\n{}\n```\n\n{}",
-                row.name, row.signature, row.docs
-            );
-            if let Some(c) = &row.citation {
-                md.push_str(&format!("\n\n[Elastic docs]({c})"));
-            }
-            return Some(md);
+    if parent.is_some_and(|p| p.kind() == "pipe")
+        && let Some(row) = catalog.pipe(text(node, source))
+    {
+        let mut md = format!(
+            "**{}** (pipe)\n\n```eql\n{}\n```\n\n{}",
+            row.name, row.signature, row.docs
+        );
+        if let Some(c) = &row.citation {
+            md.push_str(&format!("\n\n[Elastic docs]({c})"));
         }
+        return Some(md);
     }
     let word = match node.kind() {
         "missing_event_open" => "![",

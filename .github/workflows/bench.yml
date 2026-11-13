@@ -1,18 +1,22 @@
 # The plan section 11 benchmarks with their budgets (UC-0.8, #806): `cargo xtask bench`
 # (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
-# tests/bench/budgets.toml and to the last development result.
+# tests/bench/budgets.toml and to the last result of the comparison base.
 #
-# When: nightly on the default branch (development), on demand, and on a pull request
-# that carries the `perf` label (adding the label starts a run; every push then reruns
-# it). A run measures each command as fresh processes on one runner class,
-# ubuntu-24.04 (4 vCPU, the class the baseline in budgets.toml was recorded on):
-# numbers from another class are not comparable.
+# When: on every push to integration/unified-core and development, nightly on the
+# default branch (development), on demand, and on a pull request that carries the `perf` label (adding
+# the label starts a run; every push then reruns it). A run measures each command as
+# fresh processes on one runner class, ubuntu-24.04 (4 vCPU, the class the baseline in
+# budgets.toml was recorded on): numbers from another class are not comparable.
 #
-# The last development result: the bench-<engine> artifact of the newest run of this
-# workflow on development (a nightly or a manual run) whose job for that engine
-# succeeded on the same CPU model. A job that failed its check is never the reference,
-# so a regression stays red until it is fixed or the budgets are re-recorded on
-# purpose. Each run keeps its own results as the bench-<engine> artifact for 90 days.
+# The comparison base (BASE_BRANCH): integration/unified-core, where the Rust command
+# line is; development has none until the Unified Core merges there (epic #790), so its
+# runs would compare the Rust engine with nothing. Set BASE_BRANCH back to development
+# when it does. The last result is the bench-<engine> artifact of the newest run of
+# this workflow on BASE_BRANCH (a push, a nightly or a manual run) whose job for that
+# engine succeeded on the same CPU model. A job that failed its check is never the
+# reference, so a regression stays red until it is fixed or the budgets are
+# re-recorded on purpose. Each run keeps its own results as the bench-<engine>
+# artifact for 90 days.
 #
 # Safety: `pull_request`, never `pull_request_target`: a PR's code runs with a
 # read-only token and no secrets, and the label only decides whether the job runs.
@@ -24,11 +28,17 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+  push:
+    branches: [development, integration/unified-core]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
+
+env:
+  # The branch whose last result each run is held to (above).
+  BASE_BRANCH: integration/unified-core
 
 jobs:
   bench:
@@ -39,21 +49,23 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'perf') &&
         (github.event.action != 'labeled' || github.event.label.name == 'perf'))
     # On the job, not the workflow, so that a skipped run (another label) cancels
-    # nothing. A new push to a PR replaces its run; nightly and manual runs on
-    # development wait for each other instead.
+    # nothing, and per engine, so that a run's two jobs never wait for each other.
+    # A new push to a PR replaces its run; every other run (a push to
+    # integration/unified-core, the nightly, Run workflow) has a group of its own,
+    # its run id, so each push keeps a complete result (tests/test_ci/test_concurrency.py).
     concurrency:
-      group: bench-${{ github.ref }}-${{ matrix.engine }}
+      group: bench-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-${{ matrix.engine }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read
-      actions: read # gh run list and gh run download: the last development result
+      actions: read # gh run list and gh run download: the base branch's last result
     strategy:
       fail-fast: false
       matrix:
-        # python: the oracle, opentide 0.23.0 from PyPI. rust: what has a Rust
-        # implementation (today the language server); the rest reports "no Rust yet".
+        # python: the oracle, opentide 0.23.0 from PyPI. rust: the Rust command line
+        # (the opentide binary), the language server and the workspace load.
         engine: [python, rust]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,35 +102,51 @@ jobs:
           ENGINE: ${{ matrix.engine }}
         run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
 
-      # The oracle's `deploy --dry-run` on the heavy workspace (which declares tenants for
-      # five platforms) under strace: it must open no network connection nor send a
-      # datagram to a network address (every network syscall traced: connect,
-      # sendto, sendmsg, sendmmsg).
-      - name: Prove that the dry run reaches no tenant
-        if: matrix.engine == 'python'
+      # `deploy --dry-run` and `generate docs` on the heavy workspace (which declares
+      # tenants for five platforms) under strace, with the engine's own opentide (the
+      # oracle, or the release binary the benchmark built): neither may open a network
+      # connection nor send a datagram to a network address (every network syscall
+      # traced: connect, sendto, sendmsg, sendmmsg). `generate docs` looks CVEs up
+      # online by default ([cve] retrieve_details): the heavy workspace names none, and
+      # the measured runs get proxies that lead nowhere besides.
+      - name: Prove that the dry run and generate docs reach no network
+        env:
+          ENGINE: ${{ matrix.engine }}
         run: |
           command -v strace >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q strace; }
           heavy="$RUNNER_TEMP/heavy"
           cargo xtask corpus generate --seed 20261107 --out "$heavy"
-          opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
-          mkdir -p "$RUNNER_TEMP/home"
-          (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
-            strace -f -qq -e trace=%network -o "$RUNNER_TEMP/connect.txt" \
-            "$opentide" --json deploy --dry-run --all --strategy PREVIEW > "$RUNNER_TEMP/dry-run.json")
-          jq -e '.dry_run == true and .ok == true' "$RUNNER_TEMP/dry-run.json" > /dev/null
-          # Every network syscall is traced; a socket() alone (Python probes IPv6 support
-          # at import) reaches nothing, so only calls that name a destination count.
-          if grep -E '^[0-9]+ +(connect|sendto|sendmsg|sendmmsg)\(.*AF_INET6?' "$RUNNER_TEMP/connect.txt"; then
-            echo "::error::deploy --dry-run opened a network connection"
-            exit 1
+          if [ "$ENGINE" = python ]; then
+            opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
+          else
+            opentide="$GITHUB_WORKSPACE/target/release/opentide"
           fi
+          mkdir -p "$RUNNER_TEMP/home"
+          traced() {
+            (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
+              strace -f -qq -e trace=%network -o "$RUNNER_TEMP/network-$1.txt" \
+              "$opentide" --json "${@:2}" > "$RUNNER_TEMP/$1.json")
+            # Every network syscall is traced; a socket() alone (Python probes IPv6
+            # support at import) reaches nothing, so only calls that name a
+            # destination count.
+            if grep -E '^[0-9]+ +(connect|sendto|sendmsg|sendmmsg)\(.*AF_INET6?' "$RUNNER_TEMP/network-$1.txt"; then
+              echo "::error::opentide ${*:2} opened a network connection"
+              exit 1
+            fi
+          }
+          traced dry-run deploy --dry-run --all --strategy PREVIEW
+          jq -e '.dry_run == true and .ok == true' "$RUNNER_TEMP/dry-run.json" > /dev/null
           echo "deploy --dry-run planned $(jq '[.plan[] | length] | add' "$RUNNER_TEMP/dry-run.json") rule deployments and opened no network connection."
+          traced docs generate docs
+          jq -e '.ok == true' "$RUNNER_TEMP/docs.json" > /dev/null
+          echo "generate docs opened no network connection."
 
-      # The newest development run (nightly or manual) whose job for this engine
-      # succeeded and ran on this run's CPU: GitHub's runners of one class come on
-      # several CPU generations, and a 10% rule across two of them measures the
-      # hardware. Its bench-<engine> artifact is the reference.
-      - name: Find the last development result
+      # The newest run on BASE_BRANCH (a push, nightly or manual) whose job for this
+      # engine succeeded and ran on this run's CPU: GitHub's runners of one class come
+      # on several CPU generations, and a 10% rule across two of them measures the
+      # hardware. Its bench-<engine> artifact is the reference. A run never takes
+      # itself (a push to BASE_BRANCH is listed while it runs, and has not succeeded).
+      - name: Find the base branch's last result
         env:
           GH_TOKEN: ${{ github.token }}
           ENGINE: ${{ matrix.engine }}
@@ -126,9 +154,10 @@ jobs:
           job="Benchmarks ($ENGINE)"
           cpu=$(jq -r '.host.cpu_model // ""' bench.json)
           runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow bench.yml \
-            --branch development --limit 50 --json databaseId,event \
-            --jq '.[] | select(.event == "schedule" or .event == "workflow_dispatch") | .databaseId')
+            --branch "$BASE_BRANCH" --limit 50 --json databaseId,event \
+            --jq '.[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .databaseId')
           for run_id in $runs; do
+            [ "$run_id" = "$GITHUB_RUN_ID" ] && continue
             conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs" \
               --jq ".jobs[] | select(.name == \"$job\") | .conclusion")
             [ "$conclusion" = success ] || continue
@@ -139,12 +168,12 @@ jobs:
             fi
             if [ "$(jq -r '.host.cpu_model // ""' candidate/bench.json)" = "$cpu" ]; then
               mv candidate previous
-              echo "Last development result on $cpu: run $run_id"
+              echo "Last $BASE_BRANCH result on $cpu: run $run_id"
               exit 0
             fi
           done
           rm -rf candidate
-          echo "No successful development run on $cpu among the last 50: checking against the budgets alone."
+          echo "No successful $BASE_BRANCH run on $cpu among the last 50: checking against the budgets alone."
 
       - name: Check against the budgets
         run: |

@@ -189,12 +189,12 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
             i += 1;
             continue;
         }
-        if brackets == 0 {
-            if let Some(next) = skip_hidden(source, i, end) {
-                i = next;
-                field_before = false;
-                continue;
-            }
+        if brackets == 0
+            && let Some(next) = skip_hidden(source, i, end)
+        {
+            i = next;
+            field_before = false;
+            continue;
         }
         match c {
             b'[' => {
@@ -465,11 +465,12 @@ fn skip_ws_and_comments(source: &str, mut i: usize, end: usize) -> usize {
         while i < end && bytes[i].is_ascii_whitespace() {
             i += 1;
         }
-        if i < end && bytes[i..end].starts_with(b"```") {
-            if let Some(next) = skip_hidden(source, i, end) {
-                i = next;
-                continue;
-            }
+        if i < end
+            && bytes[i..end].starts_with(b"```")
+            && let Some(next) = skip_hidden(source, i, end)
+        {
+            i = next;
+            continue;
         }
         return i;
     }

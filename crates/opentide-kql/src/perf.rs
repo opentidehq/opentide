@@ -97,32 +97,29 @@ fn narrows(kind: &str) -> bool {
 
 fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
     let ops = operators(expr);
-    if source_is_table(expr, columns) {
-        if let Some(first) = ops.first() {
-            if !is_filter(first.kind()) {
-                if let Some(late) = ops
-                    .iter()
-                    .find(|op| is_filter(op.kind()))
-                    .filter(|late| !reads_made_column(**late, expr, columns))
-                {
-                    let keyword = if late.kind() == "filter_operator" {
-                        "filter"
-                    } else {
-                        "where"
-                    };
-                    push(
-                        out,
-                        source,
-                        codes::KQL_WHERE_NOT_FIRST,
-                        format!(
-                            "`{keyword}` is not the first operator after the table reference; filter before later operators ({CITE})"
-                        ),
-                        late.start_byte(),
-                        late.end_byte(),
-                    );
-                }
-            }
-        }
+    if source_is_table(expr, columns)
+        && let Some(first) = ops.first()
+        && !is_filter(first.kind())
+        && let Some(late) = ops
+            .iter()
+            .find(|op| is_filter(op.kind()))
+            .filter(|late| !reads_made_column(**late, expr, columns))
+    {
+        let keyword = if late.kind() == "filter_operator" {
+            "filter"
+        } else {
+            "where"
+        };
+        push(
+            out,
+            source,
+            codes::KQL_WHERE_NOT_FIRST,
+            format!(
+                "`{keyword}` is not the first operator after the table reference; filter before later operators ({CITE})"
+            ),
+            late.start_byte(),
+            late.end_byte(),
+        );
     }
 
     // Warn only when a `join` runs on wide columns and a later `project`

@@ -930,11 +930,11 @@ mod tests {
     fn utc_dates() {
         assert_eq!(utc_date(UNIX_EPOCH), "1970-01-01");
         assert_eq!(
-            utc_date(UNIX_EPOCH + Duration::from_secs(1_794_009_600)),
+            utc_date(UNIX_EPOCH + Duration::from_hours(498_336)),
             "2026-11-07"
         );
         assert_eq!(
-            utc_date(UNIX_EPOCH + Duration::from_secs(951_782_400)),
+            utc_date(UNIX_EPOCH + Duration::from_hours(264_384)),
             "2000-02-29"
         );
     }

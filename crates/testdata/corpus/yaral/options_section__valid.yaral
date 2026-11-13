@@ -1,0 +1,12 @@
+// prod:options_section valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+  options:
+    allow_zero_values = true
+    suppression_window = 1h
+}

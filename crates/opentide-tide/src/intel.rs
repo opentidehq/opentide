@@ -113,13 +113,13 @@ pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> O
         .map(str::trim)
         .filter(|v| !v.is_empty() && !is_block_scalar_marker(v))
     {
-        if let Some(uuid) = extract_uuid(value) {
-            if let Some(o) = workspace.iter().find(|o| o.uuid == uuid) {
-                return Some(format!(
-                    "**{}** (`{}::1.0`)\n\n`{}`\n\n{}",
-                    o.name, o.object_type, o.uuid, o.path
-                ));
-            }
+        if let Some(uuid) = extract_uuid(value)
+            && let Some(o) = workspace.iter().find(|o| o.uuid == uuid)
+        {
+            return Some(format!(
+                "**{}** (`{}::1.0`)\n\n`{}`\n\n{}",
+                o.name, o.object_type, o.uuid, o.path
+            ));
         }
         if let Some(field) = field_for(source, &cursor) {
             if let Some(md) = enum_hover(field, value) {
@@ -289,28 +289,25 @@ pub fn resolve_completion(mut item: CompletionItem) -> CompletionItem {
     if item.documentation.is_some() {
         return item;
     }
-    if let Some(field) = field_from_detail(item.detail.as_deref()) {
-        if let Some(index) = field
+    if let Some(field) = field_from_detail(item.detail.as_deref())
+        && let Some(index) = field
             .enum_values
             .iter()
             .position(|value| value == &item.label)
-        {
-            if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
-                let label = item.label.clone();
-                return item.with_docs(format!("**{label}**\n\n{doc}"));
-            }
-        }
+        && let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty())
+    {
+        let label = item.label.clone();
+        return item.with_docs(format!("**{label}**\n\n{doc}"));
     }
     for field in load_tide_fields() {
         if let Some(index) = field
             .enum_values
             .iter()
             .position(|value| value == &item.label)
+            && let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty())
         {
-            if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
-                let label = item.label.clone();
-                return item.with_docs(format!("**{label}**\n\n{doc}"));
-            }
+            let label = item.label.clone();
+            return item.with_docs(format!("**{label}**\n\n{doc}"));
         }
     }
     if let Some(field) = resolve_field_by_name(&item.label) {

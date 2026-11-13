@@ -93,10 +93,12 @@ fn scan_with(
     while let Some((folder, entries, depth)) = stack.pop() {
         for entry in entries {
             let path = folder.join(&entry.file_name);
-            if entry.kind == EntryKind::Dir && !entry.symlink && depth < MAX_DEPTH {
-                if let Ok(children) = fs.read_dir(&path) {
-                    stack.push((path.clone(), children, depth + 1));
-                }
+            if entry.kind == EntryKind::Dir
+                && !entry.symlink
+                && depth < MAX_DEPTH
+                && let Ok(children) = fs.read_dir(&path)
+            {
+                stack.push((path.clone(), children, depth + 1));
             }
             if entry.kind != EntryKind::File || !is_object(&entry.name) {
                 continue;

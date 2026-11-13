@@ -1,0 +1,13 @@
+// prod:export_section valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  outcome:
+    $user = $e.target.user.userid
+  condition:
+    $e
+  export:
+    %logins.write_row(user: $user)
+}

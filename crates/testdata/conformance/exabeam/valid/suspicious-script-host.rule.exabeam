@@ -1,0 +1,3 @@
+activity_type:"process-create"
+AND (process_name:("wscript.exe", "cscript.exe", "mshta.exe") OR process_path:WLDi("*\\appdata\\local\\temp\\*"))
+AND NOT user:"`SYSTEM`"

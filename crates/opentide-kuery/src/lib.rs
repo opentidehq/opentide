@@ -201,10 +201,10 @@ fn parse_error_message(err: Node, source: &str) -> String {
             _ => missing_after(before),
         };
     }
-    if let Some(at) = unclosed_quote(source) {
-        if at <= err.end_byte() {
-            return "KQL syntax error: a quoted string is never closed".into();
-        }
+    if let Some(at) = unclosed_quote(source)
+        && at <= err.end_byte()
+    {
+        return "KQL syntax error: a quoted string is never closed".into();
     }
     let t = text(err, source);
     // `a:1 b:2`: KQL has no implicit `and`, so `1 b` is one value and the
@@ -607,14 +607,13 @@ fn fuzzy_or_boost(word: &str) -> bool {
     if word.contains(['\\', '.', '/']) {
         return false;
     }
-    if let Some((head, _)) = word.split_once('~') {
-        if head.len() <= 6
-            && head
-                .chars()
-                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
-        {
-            return false;
-        }
+    if let Some((head, _)) = word.split_once('~')
+        && head.len() <= 6
+        && head
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+    {
+        return false;
     }
     let tail = |sep: char| {
         word.rsplit_once(sep).is_some_and(|(head, n)| {

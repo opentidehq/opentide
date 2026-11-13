@@ -1,6 +1,6 @@
 ---
 name: rust-engine
-description: Change the opentide Rust workspace (edition 2024, rust-version 1.85). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock CI builds with --locked. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
+description: Change the opentide Rust workspace (edition 2024, rust-version 1.95). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock CI builds with --locked. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -8,7 +8,7 @@ metadata:
 
 # Rust engine
 
-The workspace is edition **2024**, `rust-version` **1.85**, toolchain pinned to one exact release with `rustfmt` and `clippy` (`rust-toolchain.toml`, which says how to move it; CI installs the same file's toolchain). CI exports `RUSTFLAGS=-Dwarnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`. A warning is a failed build.
+The workspace is edition **2024**, `rust-version` **1.95** (the floor `yara-x-parser` and `yara-x-fmt` set), toolchain pinned to one exact release with `rustfmt` and `clippy` (`rust-toolchain.toml`, which says how to move it; CI installs the same file's toolchain). CI exports `RUSTFLAGS=-Dwarnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`. A warning is a failed build.
 
 This skill is how engine code is written. How the workspace is built, linted and tested (the pinned toolchain, nextest profiles, insta, trycmd, `cargo xtask`, worktrees and target pools) is the `rust` skill (`.agents/skills/rust/SKILL.md`); proving a port against the Python oracle is `golden`.
 
@@ -29,6 +29,9 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-lucene` | no | `Diagnostic` | Lucene `query_string` checks |
 | `opentide-falco` | no | `Diagnostic` | Falco conditions: fields per event source, default macros and lists, events (`OnceLock`), output templates |
 | `opentide-cql` | no | `Diagnostic` | CrowdStrike Query Language: function signatures, Falcon events, LogScale/Falcon/CPS fields (`OnceLock`), Next-Gen SIEM correlation checks |
+| `opentide-exabeam` | no | `Diagnostic` | Exabeam Query Language: the verdict parser (a port of the spec's reference checker), RE2 checks over `regex-syntax`, CIM fields (`OnceLock`) |
+| `opentide-yara` | no | `Diagnostic` | YARA signatures (yara-1.0): `yara-x-parser` is the verdict parser, `yara-x-fmt` formats `.yar` files |
+| `opentide-yaral` | no | `Diagnostic` | YARA-L 2.0 (yara-l-1.0, Google SecOps): the tree-sitter grammar is the verdict parser; UDM and function catalogs (`OnceLock`); `regex-syntax` checks RE2 patterns |
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-schema` | no | `thiserror` (`SchemaError`) | The Tide model as code: serde, garde, schemars, PyO3 (UC-1.1, ADR 0001) |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
@@ -52,18 +55,20 @@ Pinned stack (do not bump in passing):
 | `serde` 1 / `serde_json` 1 | lockfile | derive on engine types; JSON at the host boundary |
 | `toml` 0.8 | 0.8.23 | catalog files and `highlights/spec.toml` |
 | `saphyr` / `saphyr-parser` 0.3 | lockfile | YAML, through `opentide_core::node` only (#850). No `serde_yaml` or `serde_yml` |
-| `thiserror` 2 | 2.0.20 | library errors |
+| `thiserror` 2 | lockfile (2.0.21 or later: `yara-x-fmt` needs it) | library errors |
 | `anyhow` 1 | 1.0.104 | `opentide-lsp` binary only |
 | `clap` 4 | derive | `opentide-lsp` CLI only |
 | `regex` 1 | lockfile | compile once |
+| `regex-syntax` 0.8 | lockfile (`regex`'s own parser) | `opentide-exabeam` only: RE2 syntax checks of Exabeam patterns, parsed, never compiled |
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
+| `yara-x-parser`, `yara-x-fmt` | `=1.23.0` | `opentide-yara` only. Never the `yara-x` compiler crate (wasmtime, no WASI): it is an oracle (`scripts/engine/oracles`) |
 
 `Cargo.lock` is exactly what cargo resolves for the workspace: CI passes `--locked` (`ci.yml`, every Rust job), so a lock that needs rewriting fails it. Commit a re-resolved lock only with a change that means to change dependencies, and check with `cargo tree` that nothing else moved. If a command rewrites `Cargo.lock` for any other change, restore the committed file (`git checkout -- Cargo.lock`). `scripts/engine/cloud-agent-install.sh` restores it after warming the build. `fuzz/` keeps its own lock.
 
 ## Types agents get wrong
 
-`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
+`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `exabeam`, `yaral`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. `exabeam` is the Exabeam Query Language, which Exabeam calls EQL; `eql` stays Elastic's. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
 
 Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
 

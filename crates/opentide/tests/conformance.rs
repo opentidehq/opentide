@@ -304,7 +304,7 @@ const TENANT_CALLS: [&str; 3] = ["query", "validate_query", "deploy"];
 
 /// How far back `query` searches without a `start`: the Python and Node
 /// SDKs' default, 24 hours before `end`.
-const QUERY_SINCE: Duration = Duration::from_secs(24 * 60 * 60);
+const QUERY_SINCE: Duration = Duration::from_hours(24);
 
 /// `tenant`'s connection, each `{<stand-in>}` of its setup the URL that
 /// stand-in listens on.

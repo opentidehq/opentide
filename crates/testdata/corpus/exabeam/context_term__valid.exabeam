@@ -1,0 +1,2 @@
+# prod:context_term valid
+user IN "Privileged Accounts" AND NOT src_host IN "Jump Hosts"."Hostname"

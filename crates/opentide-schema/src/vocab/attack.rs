@@ -203,10 +203,10 @@ pub fn matrix(vocabulary: Option<&Vocabulary>, entries: &IndexMap<&str, &Entry>)
         }
         for stage in &entries[key.as_str()].stages {
             let name = tactic(stage).map_or(stage.as_str(), |(name, _)| name);
-            if let Some(column) = tactics.iter_mut().find(|t| t.name == name) {
-                if !column.techniques.contains(key) {
-                    column.techniques.push(key.clone());
-                }
+            if let Some(column) = tactics.iter_mut().find(|t| t.name == name)
+                && !column.techniques.contains(key)
+            {
+                column.techniques.push(key.clone());
             }
         }
     }
