@@ -40,7 +40,7 @@ name: Golden
 on:
   push:
     # integration/unified-core collects the unified-core work (epic #790) before development.
-    branches: [development, integration/unified-core]
+    branches: [development, integration/unified-core, "train/catchup-*"]
   pull_request:
     # All base branches and all paths: the `changes` job below holds the path
     # filter, so that integration/unified-core can require the checks.

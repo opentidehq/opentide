@@ -14,7 +14,7 @@ name: Schema
 
 on:
   push:
-    branches: [main, development, integration/unified-core]
+    branches: [main, development, integration/unified-core, "train/catchup-*"]
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
     paths:

@@ -37,7 +37,7 @@ A pull request runs the **core gates**; everything else is the **full set**
 | A pull request with the `full-ci` label | Everything: the core gates and the full set (the label is read at each push, so add it, then push; or Run workflow on the branch) |
 | A pull request that changes the engine release's inputs (`engine-release*.yml`, `scripts/engine/release*`; not `Cargo.toml` or `Cargo.lock`, which most pull requests touch) | Also the engine release dry run, its vscode-extension check and the crates' package and licence scan |
 | A pull request that changes `grammars/`, `highlights/` or `check-grammars.sh` | Also the grammar regeneration and TextMate checks |
-| Push to `development`, `integration/unified-core` (and `main`), nightly, Run workflow | Everything |
+| Push to `development`, `integration/unified-core`, a catch-up train (`train/catchup-*`) (and `main`), nightly, Run workflow | Everything |
 
 A full-set job's `if` is exactly
 `github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')`;
@@ -99,28 +99,34 @@ rustup installs nothing in the middle of a build; the Linux wheels' containers d
 `RUSTFLAGS=-Dwarnings` (the nightly fuzz build aside); the test jobs also set
 `CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (CI never writes a snapshot).
 
-**Rust caches, one strategy** (`tests/test_ci/test_rust_caches.py`): every rust-cache step in
-ci.yml names its cache (`shared-key`, plus `key` per OS or target), and each name has one job that
-saves it; readers use `save-if: false` and repeat its runner and `CARGO*`/`RUST*` environment,
-which rust-cache hashes into the key. The names are split by what is built, because a check
-build, a debug test tree, a release binary and the binding `uv sync` builds share no artifacts and
-one key would hold only one of them: `engine-dev` (`engine-test-part` per OS, its first shard; `clients` and
-`elastic-sweep` read Linux's), `python-engine` (the abi3 binding, saved by `test`'s 3.14 cell, read
-by the other Python jobs), `engine-check`, `engine-wasm`, `engine-package`, `engine-bench`, `fuzz`,
-`python-engine-windows`, and `engine-release` per target for the dry run. A release restores none.
-
-**Compiler caches (sccache, #841):** rust-cache drops the workspace's own crates before saving, so
-every job recompiled them from a fresh checkout (two to three minutes a job). The jobs that compile
-the most on every pull request also wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from
-taiki-e/install-action), whose directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path with `..`) actions/cache keeps
-under `sccache-<name>-<hash of the Rust sources>`: by content, so only what a change touches
-compiles again. Each name has one job that saves it (`actions/cache/save`, only when the key
-missed), as rust-cache's: `python-engine` (`test`'s 3.14 cell; the other Python jobs restore it), `engine-check` (`engine`),
-`engine-dev-<os>` (`engine-test-part`), `golden-compare` and `corpus`. Every Python job names the same
+**Compiler caches, one strategy** (`tests/test_ci/test_rust_caches.py`, #841, #1047): the Rust
+jobs of ci.yml wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from taiki-e/install-action), whose
+directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path
+with `..`) actions/cache keeps under `sccache-<family>-<hash of Cargo.lock and rust-toolchain.toml>`,
+restored with the family as `restore-keys`. The key does not hash the sources: sccache is
+content-addressed, so a copy made some merges ago still serves every crate that did not change,
+and a push to a base branch saves nothing until the lockfile or the toolchain changes. Each family
+has one job that saves it (`actions/cache/save`, from a push, only when the key missed):
+`lint`, `engine-check` (`engine`), `engine-dev-<os>` (`engine-test-part`'s first shard per OS;
+`clients` and `elastic-sweep` restore Linux's), `corpus` (`corpus-part`'s generator; the other
+parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
+Python jobs restore it), `golden-compare`, and `full-set-<OS>` (`conformance` on each OS; the full
+set's other Rust jobs restore their OS's: `facade`, `node`, `npm-install`, `engine-wasm`,
+`engine-package`, `bench`, `cli-windows-smoke`). No job with a compiler cache restores a
+rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
+two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per
+repository keeps once a few pushes land, so the caches pull requests read were evicted within
+minutes (#1047). The rust-caches left: `fuzz` (`fuzz-smoke`: the nightly's `fuzz/target` and
+cargo-fuzz in `~/.cargo/bin`) and the release dry run's per target (`engine-release-build.yml`;
+a release restores none), plus the other workflows' own. Every Python job names the same
 interpreter for PyO3 (`PYO3_PYTHON: /usr/bin/python3`): the binding is abi3, and a different
 interpreter reruns PyO3's build script and rebuilds every crate above it.
-**Caches are saved from pushes only** (`save-if: ${{ github.event_name == 'push' ... }}` on
-every rust-cache, `github.event_name == 'push' && ...` on every sccache save, in every workflow a
+**A pull request reads its base branch's caches** and the default branch's (`development`) only,
+so every workflow that saves one on a push also runs on a push to a catch-up release train
+(`train/catchup-*`), which pull requests target (`tests/test_ci/test_ci_scope.py`); the other
+`train/` branches are pull requests' heads.
+**Caches are saved from pushes only** (`github.event_name == 'push' && ...` on every sccache save, `save-if:
+${{ github.event_name == 'push' ... }}` on every rust-cache, in every workflow a
 pull request runs): a pull request restores the caches of its base branch (and of `development`)
 and saves none. A pull request's own cache served that pull request alone, and its gigabytes
 evicted the base branches' caches within the half hour (#841). uv's cache (setup-uv) is keyed on

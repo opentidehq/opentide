@@ -531,3 +531,21 @@ def test_the_full_set_e2e_tests_run_in_the_full_set_only() -> None:
     assert marked, "no test is marked full_set: drop the marker and cli-e2e-full"
     for path in marked:
         assert "mark.cli_e2e" in path.read_text(encoding="utf-8"), path
+
+
+# A pull request restores only its base branch's caches and the default
+# branch's (development, which has no Rust jobs to save any). A pull request
+# into a release train (train/catchup-0.28) found none, since nothing pushed
+# to the train saved them. Every workflow whose push run saves a Rust cache
+# runs on a push to a catch-up train too. Only the catch-up trains: the other
+# train/ branches are pull requests' heads, whose pushes run as pull requests.
+TRAINS = "train/catchup-*"
+SAVES_ON_PUSH = ["ci.yml", "golden.yml", "schema.yml", "oracle.yml", "coverage.yml"]
+
+
+@pytest.mark.parametrize("name", SAVES_ON_PUSH)
+def test_a_push_to_a_release_train_saves_the_caches_its_pull_requests_read(name: str) -> None:
+    branches = _triggers(_load(WORKFLOWS / name))["push"]["branches"]
+    assert TRAINS in branches, name
+    assert {"development", INTEGRATION} <= set(branches), name
+    assert not [b for b in branches if b.startswith("train/") and b != TRAINS], branches

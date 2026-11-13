@@ -17,7 +17,7 @@ name: Oracle
 on:
   push:
     # integration/unified-core: the Unified Core PRs merge there before development.
-    branches: [main, development, integration/unified-core]
+    branches: [main, development, integration/unified-core, "train/catchup-*"]
     tags: ["engine-v*"]
   # On a pull request only when it changes what the references check: the
   # query languages' crates and what they build on, every crate manifest
