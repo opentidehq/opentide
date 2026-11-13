@@ -97,6 +97,9 @@ def written_files(result: Mapping[str, Any]) -> list[str]:
 
 
 def _purpose(path: str) -> str:
+    if Path(path).name == "claude_desktop_config.json":
+        # Outside the repository, so absolute: no prefix matches it.
+        return "MCP server for Claude Desktop"
     for prefix, purpose in _PURPOSES:
         if path.startswith(prefix) or path == prefix.rstrip("/"):
             return purpose

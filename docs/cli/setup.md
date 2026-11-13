@@ -59,7 +59,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--python-version` | CI Python version (default `3.12`) |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
 | `--vscode-setup` | Deprecated `setup vscode`: recommend the opentide extension, write snippets (generate-first) |
-| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
+| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code`, `claude-desktop` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
 | `--skills` | Agent skills for `claude-code`, `cursor`, `github-copilot` or `generic` (repeatable): the [setup skills](#setup-skills) step, with its default skills |
 | `--plugin` | Register the opentidehq/skills Agent Plugin for Claude Code, as `setup skills --plugin` |
 | `--hooks` | Validate-on-commit hooks: the [setup hooks](#setup-hooks) step |
@@ -258,11 +258,34 @@ opentide setup mcp --cursor --vscode --yes
 | `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| `--claude-desktop` | Claude Desktop's `claude_desktop_config.json`, outside the repository (see below) | the workspace's absolute path |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
 The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code itself. When `.vscode/extensions.json` recommends it, `setup mcp --vscode` still writes `.vscode/mcp.json`, for teammates without the extension, and says so: JSON output has `"extension_mcp": true` and a `detail` sentence, printed as a note.
 
 VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the detection workspace from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
+
+#### Claude Desktop
+
+Claude Desktop's chat does not start a plugin's local MCP servers, and it reads one configuration file per user rather than one per project. `--claude-desktop` adds an `opentide` server to that file:
+
+```bash
+opentide setup mcp --claude-desktop --yes --path ~/detections
+```
+
+| OS | File |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` (`~/AppData/Roaming` when `APPDATA` is unset) |
+| Linux and others | `$XDG_CONFIG_HOME/Claude/claude_desktop_config.json` (`~/.config` when `XDG_CONFIG_HOME` is unset) |
+
+- **Absolute command.** Claude Desktop started from the Dock or the Start menu does not have your shell's `PATH`, so the entry's `command` is the absolute path of the `opentide` that ran setup: the one installed beside its Python, else the one on `PATH`, else that Python with `-m opentide`.
+- **Workspace.** Claude Desktop has no project directory, so the entry sets `OPENTIDE_REPO_ROOT` to the absolute path of the detection workspace (`--path`, default `.`).
+- **Merged.** Every other server and setting in the file stays; an existing `opentide` entry is replaced, so the file serves one workspace at a time. A file that is not a JSON object is left unchanged, with a warning. The folders are created when Claude Desktop has never written the file, and a file that is a link is written through, not replaced.
+- **Output.** `files` and `claude_desktop_config` name the absolute path written, and `advice` says to restart Claude Desktop, or to choose **Developer → Reload MCP Configuration**.
+- **`--plan`** lists the file by its absolute path (`create`, `merge`, or `skip` when it cannot be merged) and writes nothing to it.
+
+`opentide doctor` counts Claude Desktop among the hosts of `mcp_config` when the file's opentide server names this workspace in `OPENTIDE_REPO_ROOT`.
 
 ### setup skills
 

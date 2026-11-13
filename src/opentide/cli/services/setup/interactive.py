@@ -199,6 +199,7 @@ MCP_LABELS = {
     "vscode": "VS Code",
     "cursor": "Cursor",
     "claude-code": "Claude Code",
+    "claude-desktop": "Claude Desktop (your user config)",
     "generic": "Generic (opentide.mcp.json)",
 }
 

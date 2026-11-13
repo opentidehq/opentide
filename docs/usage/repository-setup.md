@@ -106,6 +106,7 @@ opentide setup skills --yes --generic --name SOC --org "Example Corp"
 | `--vscode` | `.vscode/mcp.json` |
 | `--cursor` | `.cursor/mcp.json` |
 | `--claude-code` | `.mcp.json` |
+| `--claude-desktop` | Claude Desktop's `claude_desktop_config.json`, outside the repository ([details](../cli/setup.md#claude-desktop)) |
 | `--generic` | `opentide.mcp.json` |
 
 | Skills target | Output |

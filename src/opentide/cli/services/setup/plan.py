@@ -23,7 +23,9 @@ What the copy holds:
 
 A step that would write outside the repository (a ``core.hooksPath`` shared
 with other repositories) writes nothing there in a plan either: it warns, as
-it does when it runs.
+it does when it runs. One whose job is a file outside it (``setup mcp
+--claude-desktop``) works the file out without writing it and reports it in
+``_outside``; the plan lists it by its absolute path.
 """
 
 from __future__ import annotations
@@ -492,6 +494,12 @@ class Sandbox:
             # A file the step removed (a skill folder replaced whole).
             planned.files.append(PlannedFile(self.shown(relative), "delete"))
             shown.add(self.shown(relative))
+        for item in _reported_outside(result):
+            # A file outside the repository (Claude Desktop's config), shown as it is:
+            # the step works it out without writing it, as the copy does not hold it.
+            if item.path not in shown:
+                planned.files.append(item)
+                shown.add(item.path)
         for item in _reported_skips(result):
             path = self.to_real(item)
             relative = self._relative_to_target(path)
@@ -526,6 +534,26 @@ class Sandbox:
 def _warnings(result: Mapping[str, Any]) -> list[str]:
     warnings = result.get("warnings")
     return [str(item) for item in warnings] if isinstance(warnings, list) else []
+
+
+def _reported_outside(result: Mapping[str, Any]) -> list[PlannedFile]:
+    """The files outside the repository a step reported it would write (``_outside``)."""
+    reported = result.get("_outside")
+    if not isinstance(reported, list):
+        return []
+    actions: dict[str, PlanAction] = {
+        "create": "create",
+        "merge": "merge",
+        "skip": "skip",
+        "delete": "delete",
+    }
+    found: list[PlannedFile] = []
+    for item in reported:
+        if isinstance(item, Mapping):
+            action = actions.get(str(item.get("action")))
+            if action is not None and item.get("path"):
+                found.append(PlannedFile(str(item["path"]), action))
+    return found
 
 
 def _reported_skips(result: Mapping[str, Any]) -> list[str]:

@@ -84,6 +84,8 @@ class SetupOptions:
     default_branch: str | None = None
     vscode_setup: bool = False
     yes: bool = False
+    #: ``--plan``: the steps write nothing outside the repository's copy.
+    plan: bool = False
     run_repo: bool = True
     run_ci: bool = False
     run_platforms: bool = False
@@ -214,7 +216,9 @@ def run_setup(
 
     if options.run_mcp and options.mcp_hosts:
         mcp_result = run_mcp_setup(
-            McpSetupOptions(path=options.path, hosts=options.mcp_hosts, yes=options.yes)
+            McpSetupOptions(
+                path=options.path, hosts=options.mcp_hosts, yes=options.yes, plan=options.plan
+            )
         )
         record("mcp", mcp_result)
 

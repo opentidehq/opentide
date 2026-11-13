@@ -13,11 +13,21 @@ _EXTENSION_MCP = (
     "(opentidehq.opentide), which provides the opentide MCP server to VS Code"
 )
 
+_CLAUDE_DESKTOP_CONFIG = (
+    "With --claude-desktop: the absolute path of the Claude Desktop config written, "
+    "which is outside the repository"
+)
+
 
 class PlannedFile(ResultModel):
     """``setup --plan``: one file a step would write, remove, or leave as it is."""
 
-    path: str = Field(description="Relative to the repository set up")
+    path: str = Field(
+        description=(
+            "Relative to the repository set up; absolute for a file outside it "
+            "(Claude Desktop's config)"
+        )
+    )
     action: Literal["create", "merge", "skip", "delete"]
 
 
@@ -61,6 +71,7 @@ class SetupStep(CiFields):
     installed: bool | None = None
     mcp_available: bool | None = None
     extension_mcp: bool | None = None
+    claude_desktop_config: str | None = Field(None, description=_CLAUDE_DESKTOP_CONFIG)
     detail: str | None = None
     skills: list[str] | None = None
     also_applied: list[str] | None = None
@@ -112,6 +123,7 @@ class SetupMcpResult(CommandDocument, SetupFiles, SetupPlanFields):
     mcp_available: bool | None = Field(None, description="Whether the MCP server can start")
     extension_mcp: bool | None = Field(None, description=_EXTENSION_MCP)
     detail: str | None = Field(None, description="What extension_mcp means, in a sentence")
+    claude_desktop_config: str | None = Field(None, description=_CLAUDE_DESKTOP_CONFIG)
 
 
 class SetupVscodeResult(CommandDocument, SetupFiles, SetupPlanFields):
