@@ -18,8 +18,8 @@ The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https:
 | [0003](./0003-cli-is-opentide-cli.md) | D-3 | The CLI is `opentide-cli`, called in-process from Python and npm | Proposed |
 | [0004](./0004-merge-language-server.md) | D-4 | language-server merges into this repository with its history | Proposed |
 | [0005](./0005-opentide-facade-crate.md) | D-5 | The `opentide` facade crate is the Rust SDK and the only stable API | Proposed |
-| [0006](./0006-npm-packages.md) | D-6 | npm: `@opentide/opentide` is both the SDK and the CLI | Proposed |
-| [0007](./0007-vscode-extension-stays-separate.md) | D-7 | The VS Code extension stays a separate repository | Proposed |
+| [0006](./0006-npm-packages.md) | D-6 | npm: `@opentide/opentide` is both the SDK and the CLI, for Node.js (amended 2026-11-13: not for the VS Code extension) | Proposed |
+| [0007](./0007-vscode-extension-stays-separate.md) | D-7 | The VS Code extension stays a separate repository (amended 2026-11-13: WASI-native, the CLI as `wasm32-wasip1`) | Proposed |
 | [0008](./0008-connectors-in-rust.md) | D-8 | Connectors are Rust, with a Python plugin hook | Proposed |
 | [0009](./0009-revision-registry.md) | UC-1.7 | The revision registry: dispatch on `metadata.schema`, unknown revisions checked against the newest of their family, forward migrations ([#813](https://github.com/opentidehq/opentide/issues/813)) | Proposed |
 | [0010](./0010-one-diagnostic-model.md) | UC-2.2 | One diagnostic model for `validate`, the SDK, MCP and the language server, and the decisions on the CLI/editor parity gaps ([#817](https://github.com/opentidehq/opentide/issues/817)) | Proposed |
