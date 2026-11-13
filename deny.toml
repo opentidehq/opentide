@@ -124,6 +124,11 @@ skip = [
   # wiremock (the recorded-HTTP harness, opentide-cassette: test tooling,
   # never shipped) is on base64 0.22; hyper-util (reqwest) is on 0.23.
   { crate = "base64@0.22.1", reason = "only opentide-cassette (test tooling, never shipped) uses it, through wiremock 0.6; reqwest's hyper-util uses base64 0.23" },
+  # rcgen (opentide-cassette's test certificates: test tooling, never shipped)
+  # is on pem 4; jsonwebtoken 9 (the Google SecOps service-account JWT, on ring,
+  # UC-4; opentide-connectors) ships pem 3. Drop this when jsonwebtoken's ring
+  # backend moves to pem 4.
+  { crate = "pem@4.0.0", reason = "only opentide-cassette (test tooling, never shipped) uses it, through rcgen 0.14; jsonwebtoken 9 (the shipped Google SecOps JWT, on ring) uses pem 3" },
   # Two proc macros convert identifiers' case at compile time: crossterm's
   # derive_more-impl (opentide-cli's setup wizard) with convert_case 0.10, and
   # napi-derive (the Node binding, UC-5.3) with 0.12.
