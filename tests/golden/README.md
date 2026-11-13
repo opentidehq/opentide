@@ -198,7 +198,7 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
 
-When `golden check --engine compare` compares a run with its recording (not when a case is
+When `golden check --engine rust` compares a run with its recording (not when a case is
 recorded), one more rule applies to each side:
 
 | Rule | Becomes | Why |

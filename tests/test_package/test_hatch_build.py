@@ -13,7 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from opentide.core.files import tomllib
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 

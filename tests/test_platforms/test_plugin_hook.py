@@ -3,7 +3,7 @@
 The sample plugin, ``tests/fixtures/plugin_platform`` (the platform ``acme``),
 is installed into a site folder of its own, as an installer would: its package
 and a ``.dist-info`` with its ``opentide.platforms`` entry point. Each run is the
-Rust command line in the Python package (``python -m opentide.cli.rust``), in a
+command line in the Python package (``python -m opentide``), in a
 child process whose ``PYTHONPATH`` holds that folder, against a stand-in Acme
 tenant on 127.0.0.1 that answers from ``cassette.json`` and records what it was
 sent. Nothing reaches a real host.
@@ -157,7 +157,7 @@ def _env(site: Path | None, repo: Path, url: str = "http://127.0.0.1:9") -> dict
 
 
 def _run(
-    args: list[str], env: dict[str, str], cwd: Path, *, module: str = "opentide.cli.rust"
+    args: list[str], env: dict[str, str], cwd: Path, *, module: str = "opentide"
 ) -> tuple[int, dict[str, Any]]:
     done = subprocess.run(
         [sys.executable, "-m", module, "--json", *args],
@@ -426,51 +426,24 @@ def test_the_sample_plugin_runs_a_query(plugin_site: Path, workspace: Path) -> N
     assert document["row_count"] == 2
 
 
-@pytest.mark.parametrize("engine", ["rust", "", None])
-def test_the_console_script_routes_a_plugin_run_to_the_rust_core(
-    plugin_site: Path, workspace: Path, engine: str | None
-) -> None:
-    # OPENTIDE_ENGINE=rust, blank or unset (the default engine): only the
-    # Rust core reaches a plugin, so a plugin run goes there (UC-4.5b).
-    env = _env(plugin_site, workspace)
-    if engine is not None:
-        env["OPENTIDE_ENGINE"] = engine
-    with StandIn(CASSETTE["deploy"]) as tenant:
-        env["ACME_URL"] = tenant.url
-        code, document = _run(
-            ["deploy", "--platform", "acme", "--strategy", "PREVIEW", "--uuid", VALID_RULE],
-            env,
-            workspace,
-            module="opentide",
-        )
-    assert code == 0, document
-    assert tenant.received == tenant.requests()
-
-
-def test_the_python_engine_keeps_the_python_command_line(
-    plugin_site: Path, workspace: Path
-) -> None:
-    # OPENTIDE_ENGINE=python is the Python command line, which knows the
-    # built-in platforms only: it refuses the plugin's name, and sends nothing.
-    env = _env(plugin_site, workspace)
-    env["OPENTIDE_ENGINE"] = "python"
+def test_a_rules_query_on_a_plugin_is_a_usage_error(plugin_site: Path, workspace: Path) -> None:
+    # The rule's block under configurations.acme is the plugin's to read: the
+    # query is given as QUERY or --query-file, and nothing is sent.
     with StandIn([]) as tenant:
-        env["ACME_URL"] = tenant.url
         code, document = _run(
-            ["deploy", "--platform", "acme", "--strategy", "PREVIEW", "--uuid", VALID_RULE],
-            env,
+            ["query", "--platform", "acme", "--rule", VALID_RULE],
+            _env(plugin_site, workspace, tenant.url),
             workspace,
-            module="opentide",
         )
     assert code == 2, document
+    assert document["failure"]["code"] == "usage_invalid_value"
+    assert document["failure"]["argument"] == "--rule"
     assert tenant.received == []
 
 
-def test_the_default_engine_queries_a_plugin_through_python_m_opentide(
-    plugin_site: Path, workspace: Path
-) -> None:
-    # `python -m opentide` (the console script's launcher) under the default
-    # engine: a query on the plugin's platform runs on Rust.
+def test_python_m_opentide_queries_a_plugin(plugin_site: Path, workspace: Path) -> None:
+    # `python -m opentide` (the console script's launcher): a query on the
+    # plugin's platform.
     with StandIn(CASSETTE["query"]) as tenant:
         code, document = _run(
             [
@@ -629,31 +602,3 @@ def test_entry_points_that_cannot_be_plugins_are_reported(
     found = {entry["id"]: entry for entry in plugins._discover()}
     assert "lower case letters" in found["Bad-Name"]["error"]
     assert found["missing"]["error"].startswith("ModuleNotFoundError")
-
-
-def test_the_routing_covers_plugin_runs_only_when_the_plugin_is_installed(
-    plugin_site: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from opentide.cli.engines import RUST_COMMANDS, plugin_platforms
-
-    # Every deploy runs on Rust since UC-4.4c (#834): a plugin run is what
-    # `compare` refuses, as it reaches the plugin's tenant.
-    deploy = RUST_COMMANDS[("deploy",)]
-    query = RUST_COMMANDS[("query",)]
-    assert not deploy.plugin_run(["--platform", "acme", "--dry-run"])
-    assert not query.covers(["--platform", "acme", "q"])
-    monkeypatch.syspath_prepend(str(plugin_site))
-    assert plugin_platforms() == frozenset({"acme"})
-    assert deploy.plugin_run(["--platform", "acme", "--dry-run"])
-    assert deploy.plugin_run(["--platform=acme", "--uuid", "x"])
-    assert not deploy.plugin_run(["--platform", "sentinel", "--all"])
-    assert not deploy.plugin_run(["--platform", "acme", "--platform", "other"])
-    assert query.covers(["--platform", "acme", "q"])
-    assert query.covers(["--platform=acme", "q"])
-    assert not query.covers(["--platform", "acme", "--platform", "other"])
-    # A rule's query goes to Rust too, which refuses it on a plugin's platform
-    # with engine_not_ported (the rule's block is the plugin's to read).
-    assert query.covers(["--platform", "acme", "--rule", "r"])
-    live = RUST_COMMANDS[("validate", "query")]
-    assert live.covers(["--live", "--platform", "acme"])
-    assert not RUST_COMMANDS[("lint",)].plugin_run(["--platform", "acme"])

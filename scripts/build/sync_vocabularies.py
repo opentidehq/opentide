@@ -9,10 +9,21 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from opentide.core.io import load_toml
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
+
+
+def load_toml(path: Path) -> dict[str, Any]:
+    """The TOML document at *path*."""
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
 
 SPECIFICATIONS_ENV = "OPENTIDE_SPECIFICATIONS_ROOT"
 BASELINE_SHA = "baseline-bundled-state"

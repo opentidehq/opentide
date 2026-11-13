@@ -33,9 +33,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
-from opentide.models.system_config import ConfigurationModels as C
-
 from opentide.loading.rule_loader import load_rule_from_dict
+from opentide.models.system_config import ConfigurationModels as C
 from opentide.platforms.elastic import validator as elastic_validator
 from opentide.platforms.elastic.compile import compile_rule
 from opentide.platforms.elastic.deployer import ElasticDeploy
