@@ -18,7 +18,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - **lint.toml `[recommended]`.** `enabled` and `severity` decide `recommended_field_missing`, as `[metadata]` decides `missing_author` and `missing_organisation` ([#249](https://github.com/opentidehq/language-server/issues/249)).
 - **API: `opentide_core::Diagnostic::information` and `Diagnostic::with_severity`**, next to `error`, `warning` and `with_field_path`.
-- **Exabeam `activity_type`, `subject` and `outcome` values are checked against the CIM.** A value Exabeam's Common Information Model does not list is the warning `exabeam_unknown_value`, with a near miss or the subject's activity types: `activity_type:"network-connection"` suggests `network-session`, `network-traffic` and the rest. Wildcards, `WLD`/`RGX` and `null` are never reported.
+- **Exabeam `activity_type`, `subject` and `outcome` values are checked against the CIM.** A value Exabeam's Common Information Model does not list is the warning `exabeam_unknown_value`, with a near miss or the subject's activity types: `activity_type:"network-connection"` suggests `network-session`, `network-traffic` and the rest. Wildcards, functions such as `WLD` and `RGX`, values between slashes, `null`, empty values, unquoted numbers and IP addresses, `@field`s and earlier `AS` names are never reported. When an `activity_type` is a subject (`activity_type:"dns"`), or a `subject` an activity type, the message says so.
 
 ## [0.16.0] - 2026-11-12
 

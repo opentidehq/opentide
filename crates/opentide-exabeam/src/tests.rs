@@ -124,14 +124,34 @@ fn unknown_values_are_warnings_with_a_near_miss() {
     assert!(
         found[0]
             .1
-            .contains("its `dns` activity types are `dns-request`, `dns-response`, `dns-traffic`"),
+            .contains("the `dns` activity types are `dns-request`, `dns-response`, `dns-traffic`"),
         "{found:?}"
     );
+    // The subject is named as the catalogue spells it, whatever the query's case.
+    let found = unknown_values(r#"activity_type:"DNS-query""#, Profile::Rule);
+    assert!(found[0].1.contains("the `dns` activity types"), "{found:?}");
     let found = unknown_values(r#"activity_type:"user-frobnicate""#, Profile::Rule);
     assert!(found[0].1.contains(" and 30 more"), "{found:?}");
     let found = unknown_values(r#"outcome:"failure""#, Profile::Rule);
     assert!(
         found[0].1.contains("the outcomes are `fail`, `success`"),
+        "{found:?}"
+    );
+    // A subject written as an activity type, and the reverse.
+    let found = unknown_values(r#"activity_type:"DNS""#, Profile::Rule);
+    assert!(
+        found[0]
+            .1
+            .contains("`dns` is a subject: write `subject:\"dns\"`, or one of its activity types"),
+        "{found:?}"
+    );
+    assert!(found[0].1.contains("`dns-request`"), "{found:?}");
+    let found = unknown_values(r#"subject:"process-create""#, Profile::Rule);
+    assert!(
+        found[0].1.contains(
+            "`process-create` is an activity type of the subject `process`: write \
+             `activity_type:\"process-create\"`, or `subject:\"process\"`"
+        ),
         "{found:?}"
     );
     let found = unknown_values(r#"subject:"web""#, Profile::Rule);

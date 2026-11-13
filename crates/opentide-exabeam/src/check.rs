@@ -2573,10 +2573,26 @@ fn unknown_value_message(catalog: &Catalog, field: ValueField, value: &str) -> S
     if let Some(near) = catalog.suggest_value(field, value) {
         return format!("{head}; did you mean `{near}`? A tenant's parsers may still emit it");
     }
-    let known = match field {
-        ValueField::ActivityType => catalog.activity_types_of(value),
-        ValueField::Outcome => catalog.values(ValueField::Outcome),
-        ValueField::Subject => Vec::new(),
+    // The likeliest mix-up: a subject written as an activity type, or the reverse.
+    if field == ValueField::Subject
+        && let Some(activity) = catalog.activity_type(value)
+    {
+        return format!(
+            "{head}; `{}` is an activity type of the subject `{}`: write \
+             `activity_type:\"{}\"`, or `subject:\"{}\"`",
+            activity.name, activity.subject, activity.name, activity.subject
+        );
+    }
+    let as_subject = (field == ValueField::ActivityType && !value.contains('-'))
+        .then(|| catalog.subject(value))
+        .flatten();
+    let known = match (field, as_subject) {
+        (ValueField::ActivityType, Some(subject)) => {
+            catalog.activity_types_of_subject(&subject.name)
+        }
+        (ValueField::ActivityType, None) => catalog.activity_types_of(value),
+        (ValueField::Outcome, _) => catalog.values(ValueField::Outcome),
+        (ValueField::Subject, _) => Vec::new(),
     };
     if known.is_empty() {
         return format!("{head}; a tenant's parsers may still emit it");
@@ -2593,8 +2609,22 @@ fn unknown_value_message(catalog: &Catalog, field: ValueField, value: &str) -> S
             known.len() - LISTED_ACTIVITY_TYPES
         ));
     }
-    let which = match (field, value.split_once('-')) {
-        (ValueField::ActivityType, Some((subject, _))) => format!("its `{subject}` activity types"),
+    if let Some(subject) = as_subject {
+        return format!(
+            "{head}; `{}` is a subject: write `subject:\"{}\"`, or one of its activity types, \
+             {listed}",
+            subject.name, subject.name
+        );
+    }
+    let which = match field {
+        // Every activity type's prefix is its subject: name it as the catalogue spells it.
+        ValueField::ActivityType => {
+            let subject = known
+                .first()
+                .and_then(|name| catalog.activity_type(name))
+                .map_or("", |a| a.subject.as_str());
+            format!("the `{subject}` activity types")
+        }
         _ => "the outcomes".to_string(),
     };
     format!("{head}; {which} are {listed}. A tenant's parsers may still emit it")

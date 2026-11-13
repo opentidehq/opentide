@@ -253,9 +253,14 @@ impl Catalog {
         let Some((head, _)) = value.split_once('-') else {
             return Vec::new();
         };
+        self.activity_types_of_subject(head)
+    }
+
+    /// The activity types of the subject named `subject` (any case).
+    pub fn activity_types_of_subject(&self, subject: &str) -> Vec<&str> {
         self.activity_types
             .iter()
-            .filter(|a| a.subject.eq_ignore_ascii_case(head))
+            .filter(|a| a.subject.eq_ignore_ascii_case(subject))
             .map(|a| a.name.as_str())
             .collect()
     }
