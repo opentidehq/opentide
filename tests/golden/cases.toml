@@ -639,6 +639,12 @@ fixtures = ["tide-corpus", "vscode", "fault"]
 
 [[case]]
 command = "validate"
+variant = "verbose"
+args = ["validate", "--verbose"]
+fixtures = ["tide-corpus", "fault"]
+
+[[case]]
+command = "validate"
 variant = "check-schema"
 args = ["validate", "--check", "schema"]
 fixtures = ["tide-corpus", "vscode", "fault"]
@@ -1310,6 +1316,34 @@ args = ["lint"]
 modes = ["plain"]
 fixtures = ["fault"]
 env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
+
+# opentide 0.28.1 (#1028, #1029): optional fields are notes. lint hides
+# them without --verbose (and suggests it), --strict does not fail on them,
+# the recommended check reports a rule without configurations or response,
+# and --quiet refuses --verbose. Definitions only until O2 records them.
+[[case]]
+command = "lint"
+variant = "verbose"
+args = ["lint", "--verbose"]
+fixtures = ["tide-corpus", "fault"]
+
+[[case]]
+command = "lint"
+variant = "check-recommended"
+args = ["lint", "--check", "recommended"]
+fixtures = ["tide-corpus", "fault"]
+
+[[case]]
+command = "lint"
+variant = "strict-check-metadata"
+args = ["lint", "--strict", "--check", "metadata"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "quiet-verbose"
+args = ["--quiet", "lint", "--verbose"]
+fixtures = ["tide-corpus"]
 
 [[case]]
 command = "lint"
@@ -2185,6 +2219,31 @@ variant = "broken"
 args = ["setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
 fixtures = ["none"]
 cassette = "skills/broken"
+
+# opentide 0.28.1 (#1015): the catalogue lists detection-engineering, so the
+# starter skills install its copy; when a file of it cannot be downloaded,
+# the package's copy is written, or an installed copy (skills-merge) kept,
+# with a warning. Definitions only until O2 records them from 0.28.1.
+[[case]]
+command = "setup skills"
+variant = "catalogue-first"
+args = ["setup", "skills", "--generic", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup skills"
+variant = "catalogue-first-fallback"
+args = ["setup", "skills", "--generic", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first-missing"
+
+[[case]]
+command = "setup skills"
+variant = "catalogue-first-kept"
+args = ["setup", "skills", "--cursor", "--yes"]
+fixtures = ["skills-merge"]
+cassette = "skills/catalogue-first-missing"
 
 [[case]]
 command = "setup skills"

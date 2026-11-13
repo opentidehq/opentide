@@ -48,6 +48,22 @@ cwd = "tmp"
 exit = 1
 
 [[scenario]]
+name = "skills/catalogue-first"
+description = "`setup skills` with the starter skills from the stand-in opentidehq/skills repository (opentide 0.28.1, #1015): the catalogue lists detection-engineering, so its tree and files are downloaded; opentide-detection-rule installs from the package."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/catalogue-first-missing"
+description = "`setup skills` with the starter skills when a file of the catalogue's detection-engineering answers 404 (opentide 0.28.1, #1015): the package's copy is written, with a warning, or an installed copy is kept."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py", "detection-engineering-missing"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
 name = "crowdstrike/deploy"
 description = "CrowdStrike's deploy client: the OAuth2 token, then create, update, disable and delete a correlation rule, and a create, an update and a delete the tenant refuses."
 client = ["{python}", "tests/cassettes/crowdstrike/client.py", "deploy"]

@@ -499,7 +499,8 @@ fn by_file(
     let mut by_file: HashMap<PathBuf, Vec<Diagnostic>> = HashMap::new();
     let fs = workspace.fs();
     // KG-03 and KG-05 (#893): the editor shows lint's `filename_mismatch`
-    // and `metadata_recommended` (#926).
+    // and `metadata_recommended` (#926), and `recommended_field_missing`
+    // as a note (opentide 0.28.1, language-server #250).
     let lint = workspace.editor_lint(files).into_iter().map(|finding| {
         let mut diagnostic = finding.diagnostic;
         if diagnostic.code == lint::codes::FILENAME {

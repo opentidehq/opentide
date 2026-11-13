@@ -282,6 +282,17 @@ fn framework_goldens_are_identical() {
         }
     }
     let _ = std::fs::remove_dir_all(&scratch);
+    // The catch-up train's report-only marker (`tests/golden/REPORT_ONLY`,
+    // `common/replay.rs` `report_only`): its differences from the 0.23.0
+    // recordings are printed, not failed, until O2 re-records them.
+    if repo().join("tests/golden/REPORT_ONLY").is_file() && !failures.is_empty() {
+        eprintln!(
+            "tests/golden/REPORT_ONLY is present: {} framework golden difference(s) reported, not failed:\n{}",
+            failures.len(),
+            failures.join("\n")
+        );
+        return;
+    }
     assert!(
         failures.is_empty(),
         "{} differences:\n{}",

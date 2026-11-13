@@ -190,6 +190,33 @@ pub fn fields_catalog(version: &str, sources: &Sources) -> Json {
     ]))
 }
 
+/// The dotted paths of the fields of the revision `identifier` that the
+/// catalog marks `recommended`: the templates ask for them and validation
+/// does not require them (a rule's `configurations` and `response`). What
+/// `opentide lint`'s `recommended` check reports, so lint and the editor
+/// name the same fields (`lsp_catalog.recommended_fields`). Sorted; empty for
+/// an identifier that names no revision.
+///
+/// The fields are read from the model schema with the family's root keys
+/// added (`RootExtras`), which is where the editor schema's `required`
+/// differs from the model's; the vocabularies play no part.
+pub fn recommended_fields(identifier: &str) -> Vec<String> {
+    use schemars::transform::Transform as _;
+    let Some(mut schema) = revision_model_schema(identifier) else {
+        return Vec::new();
+    };
+    let facts = Facts::of(schema.as_value());
+    let family = identifier.split("::").next().unwrap_or_default();
+    super::schema::RootExtras { family }.transform(&mut schema);
+    let mut found: Vec<String> = flatten(schema.as_value(), identifier, &facts)
+        .into_iter()
+        .filter(|row| matches!(row.node.get("recommended"), Some(Json::Bool(true))))
+        .map(|row| row.path)
+        .collect();
+    found.sort();
+    found
+}
+
 /// The editor schema as `generate schemas` writes it, hover texts included.
 fn annotated(schema: &Value) -> Value {
     let mut json = Json::from(schema);

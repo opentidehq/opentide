@@ -98,19 +98,6 @@ pub const RETIRED: &[Retired] = &[
         example: "opentide lint --check metadata",
         level: "warning",
     },
-    Retired {
-        code: "recommended_field_missing",
-        retired_in: "opentide 0.24.0",
-        successor: "`opentide lint` reports a missing recommended metadata field as \
-            `metadata_recommended`",
-        meaning: "A field the templates ask for was missing; `opentide validate` accepted the \
-            object without it.",
-        reported_by: "Until opentide 0.24.0, the language server reported it as a warning. The \
-            editor now reports what `opentide validate` reports, and recommendations are \
-            `opentide lint`'s `metadata_recommended` (KG-05).",
-        example: "opentide lint --check metadata",
-        level: "warning",
-    },
 ];
 
 /// The engine's advisories on an Elastic rule block (`ELASTIC_ADVISORY_CODES`).
@@ -367,6 +354,28 @@ mod tests {
         assert_eq!(page(""), None);
     }
 
+    /// `recommended_field_missing` is lint's again (opentide 0.28.1, #1028):
+    /// a live page, not a retired one, that says it is a note.
+    #[test]
+    fn recommended_field_missing_is_lints_recommended_check() {
+        let live = page("recommended_field_missing").unwrap();
+        assert!(!live.retired);
+        assert!(
+            live.markdown.contains("Severity: note."),
+            "{}",
+            live.markdown
+        );
+        assert!(live.markdown.contains("`[recommended]`"));
+        assert!(
+            !RETIRED
+                .iter()
+                .any(|retired| retired.code == "recommended_field_missing")
+        );
+        assert!(codes().contains(&"recommended_field_missing"));
+        let metadata = page("metadata_recommended").unwrap();
+        assert!(metadata.markdown.contains("prints only with `--verbose`"));
+    }
+
     /// A code the language server stopped reporting keeps its page and its
     /// SARIF rule, tagged retired: a suppression list or baseline may name
     /// it (the Upgrade notes send users to `opentide explain filename_slug`).
@@ -377,7 +386,6 @@ mod tests {
             ("filename_slug", "`filename_mismatch`"),
             ("missing_author", "`metadata_recommended`"),
             ("missing_organisation", "`metadata_recommended`"),
-            ("recommended_field_missing", "`metadata_recommended`"),
         ] {
             let page = page(code).unwrap_or_else(|| panic!("{code}: no page"));
             assert!(page.retired, "{code}");
