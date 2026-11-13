@@ -125,6 +125,7 @@ fn parity(only: Option<&BTreeSet<String>>, keep: Option<PathBuf>) -> Result<u8> 
     let started = Instant::now();
     let (mut passed, mut failed, mut skipped) = (0usize, 0usize, 0usize);
     let mut findings = 0usize;
+    let mut selected = Vec::new();
     for kind in &catalogue.kinds {
         if only.is_some_and(|only| !only.contains(&kind.id)) {
             continue;
@@ -136,6 +137,11 @@ fn parity(only: Option<&BTreeSet<String>>, keep: Option<PathBuf>) -> Result<u8> 
             }
             continue;
         }
+        selected.push(kind);
+    }
+    // Each kind is its own workspace and its own in-process server: they run
+    // on every core, and are reported in the catalogue's order (#841).
+    let outcomes = crate::parallel::in_order(&selected, |kind| -> Result<(usize, Vec<String>)> {
         let mut workspace = base.clone();
         let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
         let target_paths = faults::apply(&mut workspace, kind, &targets)?;
@@ -143,7 +149,10 @@ fn parity(only: Option<&BTreeSet<String>>, keep: Option<PathBuf>) -> Result<u8> 
         write_workspace(&workspace, &dir)?;
         let dir = dunce::canonicalize(&dir)
             .with_context(|| format!("cannot resolve {}", dir.display()))?;
-        let (count, problems) = compare_kind(&dir, &target_paths)?;
+        compare_kind(&dir, &target_paths)
+    });
+    for (kind, outcome) in selected.iter().zip(outcomes) {
+        let (count, problems) = outcome?;
         findings += count;
         if problems.is_empty() {
             passed += 1;

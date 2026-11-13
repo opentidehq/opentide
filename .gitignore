@@ -149,3 +149,6 @@ highlights/test/node_modules
 # cargo-mutants output (.cargo/mutants.toml)
 /mutants.out/
 /mutants.out.old/
+
+# sccache's directory in CI (SCCACHE_DIR, .github/workflows/ci.yml)
+.sccache/

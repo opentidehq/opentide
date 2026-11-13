@@ -63,14 +63,20 @@ CI_CORE = {
     "changes",
     "lint",
     "engine",
-    "engine-test",
+    "engine-test-part",
     "deny",
     "test",
     "cli-e2e",
     "gitlab-ci-lint",
     "golden-compare",
-    "corpus",
+    "corpus-part",
 }
+# Jobs that gather the parts of a core gate under the required check's name
+# (#841): `if` is exactly GATHER, so a failed part fails it instead of
+# skipping it (a skipped required check passes), and it fails unless the job
+# it needs succeeded.
+GATHER = "${{ !cancelled() }}"
+CI_GATHER = {"corpus": "corpus-part", "engine-test": "engine-test-part"}
 # ci.yml's jobs in the full set only.
 CI_FULL = {
     "test-full",
@@ -149,7 +155,7 @@ def _ci_jobs() -> dict[str, Any]:
 
 
 def test_every_ci_job_has_one_scope() -> None:
-    scopes = [CI_CORE, CI_FULL, set(CI_PATHS), set(CI_DEPENDENT)]
+    scopes = [CI_CORE, CI_FULL, set(CI_PATHS), set(CI_DEPENDENT), set(CI_GATHER)]
     every = [job for scope in scopes for job in scope]
     assert len(every) == len(set(every)), "a job is in two scopes"
     assert set(_ci_jobs()) == set(every)
@@ -161,6 +167,30 @@ def test_the_core_gates_run_on_every_pull_request(job_id: str) -> None:
     assert "if" not in job, f"{job_id} is a core gate: it runs on every pull request"
     assert "continue-on-error" not in job, job_id
     assert set(_needs(job)) <= CI_CORE, (job_id, _needs(job))
+
+
+@pytest.mark.parametrize(("job_id", "parts"), sorted(CI_GATHER.items()))
+def test_a_gathering_job_fails_unless_every_part_passed(job_id: str, parts: str) -> None:
+    job = _ci_jobs()[job_id]
+    assert job.get("if") == GATHER, job_id
+    assert _needs(job) == [parts], job_id
+    assert parts in CI_CORE, f"{parts} runs on every pull request"
+    (step,) = job["steps"]
+    assert step["env"]["RESULT"] == f"${{{{ needs.{parts}.result }}}}"
+    assert 'test "${RESULT}" = success' in step["run"]
+
+
+@pytest.mark.parametrize("result", ["failure", "cancelled", "skipped", "success"])
+def test_the_gathering_check_passes_only_on_success(result: str) -> None:
+    """The step's own shell, run on each result a part can have."""
+    (step,) = _ci_jobs()["corpus"]["steps"]
+    done = subprocess.run(
+        ["bash", "-ec", step["run"]],
+        env={**os.environ, "RESULT": result},
+        capture_output=True,
+        check=False,
+    )
+    assert (done.returncode == 0) is (result == "success"), result
 
 
 @pytest.mark.parametrize("job_id", sorted(CI_FULL | set(CI_PATHS)))

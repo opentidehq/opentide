@@ -422,7 +422,7 @@ def test_the_scan_check_fails_once_an_excluded_crate_is_published(
 
 
 def _corpus_step(workflow: dict[str, Any], needle: str) -> dict[str, Any]:
-    steps = workflow["jobs"]["corpus"]["steps"]
+    steps = workflow["jobs"]["corpus-part"]["steps"]
     found = [step for step in steps if needle in str(step.get("run", ""))]
     assert len(found) == 1, f"expected exactly one corpus step running {needle!r}"
     return found[0]
@@ -430,7 +430,7 @@ def _corpus_step(workflow: dict[str, Any], needle: str) -> dict[str, Any]:
 
 def _vocab_resolution_pattern(workflow: dict[str, Any]) -> str:
     """The ERE the corpus job's ``vocab_resolution`` step greps changed paths with."""
-    steps = workflow["jobs"]["corpus"]["steps"]
+    steps = workflow["jobs"]["corpus-part"]["steps"]
     runs = [str(step.get("run", "")) for step in steps if step.get("id") == "vocab_resolution"]
     assert len(runs) == 1, "expected exactly one vocab_resolution step in the corpus job"
     match = re.search(r'grep -qE "([^"]+)"', runs[0])
@@ -465,11 +465,65 @@ def test_vocab_diff_gate_watches_resolution_data_and_approvals(
 
 def test_vocab_diff_runs_against_the_installed_oracle(workflow: dict[str, Any]) -> None:
     """``cargo xtask vocab diff --against python`` enforces APPROVED.toml (UC-1.6)."""
-    steps = workflow["jobs"]["corpus"]["steps"]
+    steps = workflow["jobs"]["corpus-part"]["steps"]
     diff = _corpus_step(workflow, "cargo xtask vocab diff --against python")
-    assert diff.get("if") == "steps.vocab_resolution.outputs.changed == 'true'"
+    assert diff.get("if") == (
+        "matrix.part == 'vocabulary' && steps.vocab_resolution.outputs.changed == 'true'"
+    )
     assert '--python "$RUNNER_TEMP/oracle/bin/python"' in str(diff["run"])
     oracle = _corpus_step(workflow, "oracle-requirements.txt")
     assert steps.index(oracle) < steps.index(diff), "the oracle is installed before the diff"
     # The filter diffs against the base commit, so the checkout keeps history.
     assert steps[0]["with"].get("fetch-depth") == 0
+
+
+def _runs(job: dict[str, Any]) -> str:
+    return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
+
+
+@pytest.mark.parametrize("job", ["engine", "engine-test-part"])
+def test_the_engine_jobs_compile_no_python_binding(workflow: dict[str, Any], job: str) -> None:
+    """`uv sync` compiled the binding for minutes before the engine's own work
+    (#841): the engine jobs run Python from setup-python, with nothing synced."""
+    assert "uv sync" not in _runs(workflow["jobs"][job]), job
+    assert "uv run" not in _runs(workflow["jobs"][job]), job
+
+
+def test_the_difflib_comparison_reads_setup_pythons_interpreter(workflow: dict[str, Any]) -> None:
+    """crates/opentide-workspace/tests/external_difflib.rs needs a Python: with
+    no .venv, OPENTIDE_PYTHON names it, or the test fails."""
+    steps = workflow["jobs"]["engine-test-part"]["steps"]
+    (nextest,) = [s for s in steps if "cargo nextest run" in str(s.get("run", ""))]
+    assert (nextest.get("env") or {}).get("OPENTIDE_PYTHON") == "python"
+    assert any(str(s.get("uses", "")).startswith("actions/setup-python@") for s in steps)
+
+
+def test_lint_compiles_the_engine_once(workflow: dict[str, Any]) -> None:
+    """ruff and ty read the sources: the dependencies are installed without the
+    project, and nothing syncs it back before `uv build`, which compiles the
+    engine from the sdist into the cached target directory (#841)."""
+    steps = workflow["jobs"]["lint"]["steps"]
+    runs = [str(s.get("run", "")) for s in steps]
+    assert "uv sync --group dev --no-install-project" in runs
+    for run in runs:
+        if run.startswith("uv run"):
+            assert run.startswith("uv run --no-sync"), run
+    sdist = runs.index("uv build --sdist")
+    # ty resolves opentide._version, which building the sdist writes.
+    assert sdist < next(n for n, run in enumerate(runs) if "ty check" in run)
+    (build,) = [s for s in steps if "uv build --wheel" in str(s.get("run", ""))]
+    run = str(build["run"])
+    # From the sdist alone, unpacked where the last run unpacked it.
+    assert 'tar -xzf dist/*.tar.gz -C "${RUNNER_TEMP}/sdist" --strip-components=1' in run
+    assert 'uv build --wheel --out-dir dist "${RUNNER_TEMP}/sdist"' in run
+    env = build.get("env") or {}
+    assert env.get("OPENTIDE_ENGINE_PROFILE") == "develop"
+    assert env.get("CARGO_TARGET_DIR") == "${{ github.workspace }}/target"
+
+
+def test_codeql_installs_the_dependencies_not_the_engine() -> None:
+    codeql = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    )
+    runs = _runs(codeql["jobs"]["analyze"])
+    assert "uv sync --group dev --no-install-project" in runs

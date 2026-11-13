@@ -77,6 +77,8 @@ jobs:
       # Its own cache: no other job builds these features or this target.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          # Saved from pushes only: a pull request's cache serves no other (#841).
+          save-if: ${{ github.event_name == 'push' }}
           workspaces: . -> target
           shared-key: schema
 
