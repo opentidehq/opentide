@@ -67,6 +67,10 @@ fn block_of(rule: &Node) -> Option<&Node> {
     matches!(block.value, Value::Map(_)).then_some(block.as_ref())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "regex literals, exercised by every advisory test"
+)]
 fn patterns() -> &'static (Regex, Regex, Regex) {
     static PATTERNS: OnceLock<(Regex, Regex, Regex)> = OnceLock::new();
     PATTERNS.get_or_init(|| {
