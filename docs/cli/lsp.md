@@ -58,7 +58,7 @@ The server picks each document's language once, when the editor opens it:
 | `cql` | `opentide-cql`, `logscale`, `crowdstrike` | `.cql`: the CrowdStrike Query Language (Falcon LogScale and Next-Gen SIEM) |
 | `opentide-config` | — | `.opentide/configurations/**/*.toml` |
 
-There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` as Lucene, `configurations.sysdig.condition` as Falco, `configurations.crowdstrike.query` as CQL (a Next-Gen SIEM correlation rule), and an Elastic query by the block's `type` and `language`. A hunt's search takes the language of its `system`.
+There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` as Lucene, `configurations.sysdig.condition` as Falco, `configurations.crowdstrike.query` as CQL (a Next-Gen SIEM correlation rule), a Google SecOps block's `setup`, `events`, `outcome`, `condition` and `export` as YARA-L (together, as the one rule deploy assembles), and an Elastic query by the block's `type` and `language`. A hunt's search takes the language of its `system`.
 
 ### Diagnostics
 
@@ -168,6 +168,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Sysdig Secure | Falco (the block's `condition`, exceptions, macros and lists) | ✅ |
 | SentinelOne | S1QL | ❌ tenant only: `opentide validate query --platform sentinel_one --live` |
 | CrowdStrike | CQL (the block's `query`, a correlation rule; a hunt with `system: crowdstrike`) | ✅ |
+| Google Security Operations | YARA-L 2.0 (the block's sections as the assembled rule; `system: google_secops` hunts as searches; `.yaral` and `.yl2` files) | ✅ |
 | HarfangLab | — | ❌ never validated |
 
 ## opentide lsp start and opentide-lsp
