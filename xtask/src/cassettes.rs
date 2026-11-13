@@ -27,7 +27,9 @@ Usage: cargo xtask cassettes <command>
 
 Commands:
   check            check every cassette under tests/cassettes
-  record <name>…   record the scenarios named (all with --all) from the oracle
+  record <name>… [--oracle FILE]
+                   record the scenarios named (all with --all) from the oracle
+                   of tests/golden/ORACLE, or of FILE (tests/golden/ORACLE.next)
   list             list the scenarios
 
 Exit status: 0 success, 1 a check failed, 2 usage error or the run could not start
@@ -135,8 +137,27 @@ pub fn run(args: &[String]) -> Result<u8> {
             Ok(0)
         }
         "record" => {
-            let all = rest.iter().any(|arg| arg == "--all");
-            let names: Vec<&String> = rest.iter().filter(|arg| !arg.starts_with("--")).collect();
+            let mut all = false;
+            let mut oracle_file = layout.golden.join("ORACLE");
+            let mut names: Vec<&String> = Vec::new();
+            let mut args = rest.iter();
+            while let Some(arg) = args.next() {
+                match arg.as_str() {
+                    "--all" => all = true,
+                    "--oracle" => {
+                        let Some(file) = args.next() else {
+                            eprint!("cassettes record: --oracle needs a file\n\n{USAGE}");
+                            return Ok(2);
+                        };
+                        oracle_file = PathBuf::from(file);
+                    }
+                    other if other.starts_with("--") => {
+                        eprint!("cassettes record: unknown option `{other}`\n\n{USAGE}");
+                        return Ok(2);
+                    }
+                    _ => names.push(arg),
+                }
+            }
             let chosen: Vec<&Scenario> = scenarios
                 .scenario
                 .iter()
@@ -146,10 +167,8 @@ pub fn run(args: &[String]) -> Result<u8> {
                 eprint!("cassettes record: name scenarios of scenarios.toml, or --all\n\n{USAGE}");
                 return Ok(2);
             }
-            let oracle = Oracle::parse(
-                &std::fs::read_to_string(layout.golden.join("ORACLE")).context("read ORACLE")?,
-            )?;
-            let engine = oracle.provision(&layout.golden, &oracle::cache_dir(&layout.target))?;
+            let (oracle, oracle_dir) = Oracle::read_file(&oracle_file)?;
+            let engine = oracle.provision(&oracle_dir, &oracle::cache_dir(&layout.target))?;
             for scenario in chosen {
                 let cassette = record(scenario, &layout.repo, &engine.bin_dir)?;
                 let path = dir.join(format!("{}.json", scenario.name));
