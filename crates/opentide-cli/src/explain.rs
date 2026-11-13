@@ -125,6 +125,82 @@ pub const ELASTIC_ADVISORY_CODES: [&str; 5] = [
 /// The engine's advisories on a Sysdig rule block (`SYSDIG_ADVISORY_CODES`).
 pub const SYSDIG_ADVISORY_CODES: [&str; 1] = ["sysdig_list_self_reference"];
 
+/// Where an engine code is reported, for the codes whose reporter is not the
+/// one its kind implies: block advisories on a query, the Sysdig block's model
+/// constraints that `validate` names in its `schema_validation`, and since
+/// UC-2.6 the editor's share of each (`docs/cli/diagnostics.md` held them by
+/// hand until the reference was generated again).
+const ENGINE_REPORTED_BY: &[(&str, &str)] = &[
+    (
+        "falco_exception",
+        "Reported by the analysis engine on the Sysdig block's `exceptions`, with the condition's findings, since Falco appends them to the condition when it loads the rule: as an error, an exception Falco would reject, by `opentide validate` (its `queries` check); as a warning, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both. An exception whose shape the model refuses (fields, comps and values that do not align) is `sysdig_exception_shape` instead, which `validate` names in its `schema_validation` finding: Falco's checks leave that exception to it.",
+    ),
+    (
+        "falco_unknown_rule",
+        "Reported by the analysis engine on the Sysdig block's `append_to_rule`, as a warning: `opentide lint` (its `queries` check) shows it. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "falco_unknown_source",
+        "Reported by the analysis engine on the Sysdig block's `source`, as a warning, with the condition's findings (its fields go unchecked): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it.",
+    ),
+    (
+        "lookback_long",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "lookback_zero",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "risk_band",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "sysdig_definition_duplicate",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_definition_name",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_definition_order",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_exception_shape",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_list_in_value",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_priority",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_rule_shape",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_source",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "sysdig_tuning_keys",
+        "Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.",
+    ),
+    (
+        "technique_not_enterprise",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+    (
+        "threshold_lookback",
+        "Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.",
+    ),
+];
+
 /// The first paragraph that is not a heading, its whitespace collapsed.
 fn summary_of(markdown: &str) -> String {
     markdown
@@ -242,6 +318,10 @@ fn engine_page(code: &str) -> Option<Page> {
                 .to_owned(),
         )
     };
+    let where_ = ENGINE_REPORTED_BY
+        .iter()
+        .find(|(name, _)| *name == code)
+        .map_or(where_, |(_, reported_by)| (*reported_by).to_owned());
     let markdown = format!(
         "# {code}\n\n{sentence}\n\n{where_}\n\n## Example\n\n```text\n{example}\n```\n\n\
          ## How to fix\n\n{fix}\n"
@@ -591,6 +671,24 @@ mod tests {
         // Output an example shows is marked, a command is not.
         assert!(reference.contains("```text illustrative\n"));
         assert!(reference.contains("```text\nopentide validate query\n```"));
+    }
+
+    /// Each override names an engine code, and its page says it.
+    #[test]
+    fn engine_reporters_name_engine_codes() {
+        for (code, reported_by) in ENGINE_REPORTED_BY {
+            assert!(opentide_core::codes::describe(code).is_some(), "{code}");
+            assert!(
+                !pages::PAGES.iter().any(|(name, _)| name == code),
+                "{code}: a file page wins over the override"
+            );
+            assert!(page(code).unwrap().markdown.contains(reported_by), "{code}");
+        }
+        assert!(
+            ENGINE_REPORTED_BY
+                .windows(2)
+                .all(|pair| pair[0].0 < pair[1].0)
+        );
     }
 
     #[test]
