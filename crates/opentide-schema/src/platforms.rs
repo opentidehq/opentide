@@ -346,7 +346,7 @@ pub const PLATFORMS: &[Platform] = &[
         query_runner: true,
         runner_languages: &["yaral"],
         // The offline YARA-L check arrives with the engine import (E1).
-        offline_languages: &[],
+        offline_languages: &["yaral"],
         query_file_suffixes: &["yaral"],
         cli_rank: 10,
         connector_rank: 10,

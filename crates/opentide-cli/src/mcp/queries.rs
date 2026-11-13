@@ -26,6 +26,8 @@ fn default_language(platform: &str) -> &'static str {
         "sysdig" => "falco",
         "crowdstrike" => "cql",
         "exabeam" => "exabeam",
+        // A whole YARA-L rule (a `.yaral` file's text), checked as a rule.
+        "google_secops" => "yaral",
         _ => "kql",
     }
 }

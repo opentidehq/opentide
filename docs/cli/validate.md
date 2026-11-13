@@ -402,6 +402,9 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
+
+Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
 SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. HarfangLab is never validated by `validate query`, and Sysdig and CrowdStrike only offline: `--platform sysdig --live` and `--platform crowdstrike --live` report `supported: false`, because Sysdig Secure has no rule preview and opentide calls no CrowdStrike query check (see [Supported platforms](#supported-platforms)). The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
@@ -593,7 +596,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
 | `harfanglab` | ❌ `supported: false` | ❌ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ❌ |
-| `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ❌ |
+| `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
 
 ### Exabeam live validation
 
