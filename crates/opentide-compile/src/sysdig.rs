@@ -20,8 +20,9 @@ use opentide_schema::objects::platform::falco_text::{
 use crate::elastic::rule_techniques;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
-use crate::strategy::{StatusStrategy, python_repr};
+use crate::strategy::StatusStrategy;
 use crate::{Context, attack};
+use opentide_schema::configuration::repr::quote as python_repr;
 
 /// The platform's display name, in a failure's message.
 pub const DISPLAY: &str = "Sysdig";
@@ -171,9 +172,8 @@ fn expansion_error(message: String) -> CompileError {
 
 fn list_in_value(name: &str, place: &str) -> CompileError {
     expansion_error(format!(
-        "{place}: the block list {} appears in a value where Falco's expansion would not \
-         produce a value list",
-        python_repr(name)
+        "{place}: the block list {name:?} appears in a value where Falco's expansion would \
+         not produce a value list"
     ))
 }
 
@@ -209,12 +209,11 @@ impl Expander {
             }
             if !later.is_empty() {
                 return Err(expansion_error(format!(
-                    "macro {} uses the block macro {}, which is itself or defined after it: \
-                     Falco refuses it as an undefined macro",
-                    python_repr(name),
+                    "macro {name:?} uses the block macro {}, which is itself or defined after \
+                     it: Falco refuses it as an undefined macro",
                     later
                         .iter()
-                        .map(|name| python_repr(name))
+                        .map(|name| format!("{name:?}"))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )));
@@ -305,7 +304,7 @@ impl Expander {
         let mut out = Object::new();
         out.insert("name".into(), name.clone().into());
         out.insert("fields".into(), fields.cloned().unwrap_or(Json::Null));
-        let place = format!("exception {}", python_repr(&name));
+        let place = format!("exception {name:?}");
         let as_list = |value: &Json| match value {
             Json::Array(items) => items.clone(),
             other => vec![other.clone()],
@@ -607,7 +606,7 @@ pub fn api_body(compiled: &FalcoRule) -> Result<Json, CompileError> {
         // The oracle's `API_PRIORITY[...]` raises a KeyError.
         return Err(CompileError::failed(
             DISPLAY,
-            &python_repr(&compiled.priority),
+            &format!("{:?}", compiled.priority),
         ));
     };
     details.insert("source".into(), compiled.source.clone().into());
