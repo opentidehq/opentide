@@ -67,7 +67,7 @@ impl Client {
                 .send(line.to_owned());
             Ok(())
         });
-        let server = Server::new(write, runner, "0.23.0");
+        let server = Server::new(write, runner, "0.28.1");
         Client {
             server,
             lines,
@@ -273,7 +273,7 @@ fn shutdown_then_exit_ends_the_loop() {
 
 #[test]
 fn protocol_commands_are_refused_as_usage_errors() {
-    let runner = HostRunner::new(Vec::new(), PathBuf::from("."), "0.23.0");
+    let runner = HostRunner::new(Vec::new(), PathBuf::from("."), "0.28.1");
     let mut client = Client::new(Arc::new(runner)).start();
     for argv in [
         "[\"serve\"]",
@@ -499,7 +499,7 @@ fn host(ws: &Path) -> Client {
             ws.join(".state").display().to_string(),
         ),
     ];
-    Client::new(Arc::new(HostRunner::new(base, ws.to_path_buf(), "0.23.0"))).start()
+    Client::new(Arc::new(HostRunner::new(base, ws.to_path_buf(), "0.28.1"))).start()
 }
 
 #[test]
@@ -518,7 +518,7 @@ fn initialize_names_the_protocol_version_and_command_tree() {
         result,
         Json::object([
             ("protocol", Json::Int(1)),
-            ("version", Json::str("0.23.0")),
+            ("version", Json::str("0.28.1")),
             ("commands_digest", Json::str(digest)),
         ])
     );
@@ -588,7 +588,7 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
     let _session = session();
     opentide_cli::embed::clear_workspaces();
     let (_root, ws) = workspace("tide-corpus");
-    let runner = HostRunner::new(Vec::new(), ws.clone(), "0.23.0");
+    let runner = HostRunner::new(Vec::new(), ws.clone(), "0.28.1");
     let request = RunRequest {
         argv: vec!["info".into()],
         ..RunRequest::default()
@@ -626,8 +626,8 @@ fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
             Ok(())
         });
         let base = vec![("HOME".to_owned(), ws.display().to_string())];
-        let runner = HostRunner::new(base, ws.clone(), "0.23.0");
-        let server = Server::new(write, Arc::new(runner), "0.23.0");
+        let runner = HostRunner::new(base, ws.clone(), "0.28.1");
+        let server = Server::new(write, Arc::new(runner), "0.28.1");
         // The reading thread takes every line before the first run starts.
         opentide_cli::serve::read_lines(input.as_bytes(), &server);
         assert!(server.serve(&|| false));
