@@ -1290,11 +1290,19 @@ jobs:
 
       - name: npm packages build and pack
         run: |
-          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci); done
           node scripts/engine/check-npm-packs.mjs
 
-      - name: Native language server
-        run: cargo build --locked -p opentide-lsp
+      - name: Native language server and command line
+        run: cargo build --locked -p opentide-lsp -p opentide-cli
+
+      # The extension host's half of `opentide/fetch` (W2): its HTTP stack on
+      # the loopback, the protocol, and `opentide serve` running tenant
+      # commands whose requests the host answers from the golden cassettes.
+      - name: wasi-host (opentide/fetch against opentide serve)
+        env:
+          OPENTIDE_BIN: target/debug/opentide-cli
+        run: node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
 
       # node:wasi's path_open is a V8 fast API call whose allocation can start
       # a GC inside the call, which segfaults node 22 once the WASI instances

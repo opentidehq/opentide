@@ -126,8 +126,11 @@ rust_jobs() {
     echo "==> WebAssembly engine (browser and WASI), clippy on wasm32, npm packs"
     RUSTFLAGS="-Dwarnings" bash scripts/engine/build-wasm.sh
     RUSTFLAGS="-Dwarnings" bash scripts/engine/build-wasm.sh clippy
-    for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci --silent); done
+    for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci --silent); done
     node scripts/engine/check-npm-packs.mjs
+    echo "==> wasi-host (opentide/fetch against opentide serve)"
+    cargo build --locked -p opentide-cli
+    OPENTIDE_BIN=target/debug/opentide-cli node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
   fi
 
   if [[ -n "${TREE_SITTER_CLI:-}" || -x /tmp/ts-cli/node_modules/.bin/tree-sitter ]] \

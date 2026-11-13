@@ -26,6 +26,7 @@ JSON-RPC 2.0, one JSON message per line, on stdin and stdout, as MCP's stdio tra
 | `$/cancelRequest` | notification | `{id}` | the cancelled `run` answers with exit code `130` |
 | `shutdown` | request | — | `null` |
 | `exit` | notification | — | the running `run` is cancelled, each queued one answers `130` without running, and the process exits `0` |
+| `opentide/fetch` | request, server to client, after `initialize` asked for it | one tenant request (below) | the tenant's answer, or an error naming why there is none |
 
 `version` is the opentide version. `commands_digest` is the sha256 of the document `opentide --json commands` prints, without `duration_ms`, with sorted keys and no spaces: a client that keeps a copy of the command tree reads it again only when the digest changes.
 
@@ -88,6 +89,38 @@ SIGTERM and SIGHUP stop the server as the end of input does: the running command
 ### Progress
 
 The [progress events](./json-output.md#progress-events) a run emits arrive as `progress` notifications carrying the run's request `id`, whether or not `OPENTIDE_PROGRESS` is set, and never on stderr.
+
+## Tenant requests the client makes: opentide/fetch
+
+A client may make the requests a run sends to tenants, in place of opentide's own HTTP client. The WASI build of opentide reaches tenants only this way: VS Code's WASI host gives the process no sockets. The extension host makes each request with Node's HTTP stack ([`@opentide/wasi-host`](https://github.com/opentidehq/opentide/tree/development/packages/wasi-host)), and VS Code's proxy settings and certificate store apply to it. A native server does the same when asked.
+
+The client asks for it at `initialize`, with `{"capabilities": {"fetch": true}}`. The answer then includes `"capabilities": {"fetch": true}`, and every tenant request of every run from then on is a request from the server to the client:
+
+```json illustrative
+{"jsonrpc":"2.0","id":"h1","method":"opentide/fetch","params":{"run":"2","platform":"defender_for_endpoint","tenant":"lab","method":"POST","url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","headers":[["content-type","application/x-www-form-urlencoded"]],"body":"Y2xpZW50X2lkPS4uLg==","connect_timeout_ms":30000,"read_timeout_ms":30000,"tls":{"verify":true,"ca_bundles":[]},"proxy":null}}
+{"jsonrpc":"2.0","id":"h1","result":{"status":200,"headers":[["content-type","application/json"]],"url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","body":"eyJhY2Nlc3NfdG9rZW4iOi4uLn0=","elapsed_ms":182}}
+```
+
+- **The request.**
+  - **Ids:** the server's ids are strings (`"h1"`, `"h2"`, …), so they never collide with the client's.
+  - **`run`:** the id of the `run` the request belongs to.
+  - **`headers` and `body`:** the headers come in the order the platform wrote them, and a name may repeat. `body` is base64, or `null` for no body.
+  - **Limits:** `connect_timeout_ms` bounds opening the connection (TLS and a proxy tunnel included). `read_timeout_ms` bounds each wait for the answer once connected.
+  - **`tls` and `proxy`:** these are the tenant's settings. `tls.verify` is its `ssl`, and `tls.ca_bundles` holds the PEM text of its CA bundle and of the bundles `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` name. `proxy` is the proxy URL the request goes through (`--proxy`, `OPENTIDE_PROXY`, the proxy variables and `no_proxy`), or `null` to go direct.
+- **The answer.**
+  - **Result:** `status`, the `headers` received, the `url` that answered after redirects, the `body` in base64, and optionally `elapsed_ms`, the time to the answer's headers.
+  - **Failure:** a client that has no answer replies with a JSON-RPC error whose `data.kind` says why. Each kind becomes the failure opentide's own HTTP client reports in that case, with its message, advice and exit code:
+
+| `data.kind` | When | The tenant's failure |
+|-------------|------|----------------------|
+| `connect` | the connection could not be made: refused, DNS, TLS, the proxy, or `connect_timeout_ms` | the tenant cannot be reached; sent again as the platform's retry policy says |
+| `timeout` | connected, then no answer within `read_timeout_ms` | the tenant did not answer in time |
+| `aborted` | the server withdrew the request | the run is interrupted (`interrupted`) |
+| `unreachable` | anything else that stopped the request being sent (a URL, header or setting the client refuses) | the tenant cannot be reached |
+| `answer` | the answer could not be read | the tenant's answer could not be read |
+
+- **Withdrawal.** A run cancelled while a request is pending withdraws it with `$/cancelRequest` `{"id": "h1"}`, and stops at once. A late answer to a withdrawn request is ignored. If no answer comes within the two limits plus 5 seconds, the request times out on the server's side.
+- **Without the capability.** A client that does not ask gets the `initialize` answer it always had, and opentide makes the requests itself. The WASI build has no HTTP client of its own, so there a tenant command outside such a server fails with `this command needs the network; run the opentide CLI`.
 
 ## Related
 
