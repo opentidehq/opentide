@@ -10,6 +10,11 @@ Standard library only; deterministic answers.
 - ``sample-skill`` ships ``SKILL.md`` and ``references/notes.md``.
 - ``broken-skill`` lists ``references/missing.md``, which answers 404: the
   download that fails.
+- ``detection-engineering``, which the package also ships, with a reference
+  file: ``setup skills`` installs the catalogue's copy of it (opentide 0.28.1,
+  #1015). Started with ``detection-engineering-missing``, the tenant lists its
+  ``references/kql.md`` without serving it: the download that fails, so the
+  installed copy is kept or the package's is written.
 """
 
 from __future__ import annotations
@@ -37,6 +42,11 @@ MANIFEST = {
             "name": "Broken skill",
             "description": "A skill one of whose files cannot be downloaded.",
         },
+        {
+            "slug": "detection-engineering",
+            "name": "Detection engineering",
+            "description": "The catalogue's detection-engineering, longer than the package's.",
+        },
     ],
 }
 
@@ -49,10 +59,19 @@ FILES: dict[str, bytes] = {
     ),
     "skills/sample-skill/references/notes.md": b"# Notes\n\nCaf\xc3\xa9 \xe2\x80\x94 UTF-8 kept.\n",
     "skills/broken-skill/SKILL.md": b"---\nname: broken-skill\n---\n\n# Broken skill\n",
+    "skills/detection-engineering/SKILL.md": (
+        b"---\nname: detection-engineering\ndescription: The catalogue's skill.\n---\n\n"
+        b"# Detection engineering\n\nRead [the KQL notes](references/kql.md).\n"
+    ),
+    "skills/detection-engineering/references/kql.md": b"# KQL\n",
 }
 
 #: Listed in the tree, never served.
-MISSING = ("skills/broken-skill/references/missing.md",)
+MISSING = ["skills/broken-skill/references/missing.md"]
+
+if sys.argv[1:] == ["detection-engineering-missing"]:
+    MISSING.append("skills/detection-engineering/references/kql.md")
+    del FILES["skills/detection-engineering/references/kql.md"]
 
 
 def _tree() -> dict[str, Any]:

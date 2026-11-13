@@ -200,7 +200,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
-| [`recommended_field_missing`](#recommended_field_missing) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
+| [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; `opentide validate` accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
@@ -2919,7 +2919,7 @@ Run `opentide setup mcp` with your editor's flag.
 
 An object has no `metadata.author` or `metadata.organisation`.
 
-Severity: note. Reported by `opentide lint` (metadata check).
+Severity: note. Reported by `opentide lint` (metadata check). The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[metadata]` sets.
 
 ### Example
 
@@ -2931,7 +2931,7 @@ metadata:
 
 ### How to fix
 
-Add the missing keys under `metadata`. They are recommended, not required: lint fails only with `--strict`.
+Add the missing keys under `metadata`. They are optional, so the note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them, set `severity = "warning"` or `"error"` under `[metadata]` in `.opentide/configurations/lint.toml`; to stop asking for them, set `required = []`.
 
 ## missing_author
 
@@ -3398,21 +3398,24 @@ Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOU
 
 ## recommended_field_missing
 
-Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
+A field the templates ask for is missing; `opentide validate` accepts the object without it.
 
-Severity: warning, while it was reported. A field the templates ask for was missing; `opentide validate` accepted the object without it.
-
-Until opentide 0.24.0, the language server reported it as a warning. The editor now reports what `opentide validate` reports, and recommendations are `opentide lint`'s `metadata_recommended` (KG-05).
+Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[recommended]` sets.
 
 ### Example
 
-```text
-opentide lint --check metadata
+```yaml
+name: Suspicious sign-in
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000002
+  schema: rule::1.0
+# no configurations: nothing to deploy yet
+# no response: no alert guidance for the analyst
 ```
 
 ### How to fix
 
-Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
+Add the field when the rule is ready for it: `configurations` with a block per platform to deploy to, `response` with the alert guidance. The note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them in `opentide lint`, set `severity = "warning"` or `"error"` under `[recommended]` in `.opentide/configurations/lint.toml`; to stop reporting them, set `enabled = false`.
 
 ## reference_not_found
 
