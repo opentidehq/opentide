@@ -235,3 +235,48 @@ def test_cargos_messages_are_read_as_utf8_whatever_the_locale(
     monkeypatch.setattr(hook.shutil, "which", lambda name: name if name == "cargo" else None)
     monkeypatch.setattr(hook.subprocess, "run", run)
     assert hook.build_engine("release") == library
+
+
+def test_pyo3_reads_the_base_interpreter_of_the_build_environment(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Each build environment is new: its own path as PYO3_PYTHON would rerun
+    PyO3's build script and recompile every engine crate above pyo3 (#841)."""
+    base = tmp_path / "python3"
+    base.write_bytes(b"")
+    monkeypatch.delenv("PYO3_PYTHON", raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "build-env-1" / "bin" / "python"))
+    monkeypatch.setattr(sys, "_base_executable", str(base), raising=False)
+    assert hook.pyo3_python() == str(base)
+    seen: list[dict[str, str]] = []
+    library = tmp_path / "develop" / "lib_native.so"
+    library.parent.mkdir()
+    library.write_bytes(b"\x7fELF")
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        env = kwargs.get("env")
+        assert isinstance(env, dict)
+        seen.append(env)
+        stdout = _artifact("_native", ["cdylib"], [str(library)])
+        return subprocess.CompletedProcess(command, 0, stdout=stdout)
+
+    monkeypatch.setattr(hook.shutil, "which", lambda name: name if name == "cargo" else None)
+    monkeypatch.setattr(hook.subprocess, "run", run)
+    hook.build_engine("develop")
+    assert seen[-1]["PYO3_PYTHON"] == str(base)
+
+
+def test_an_explicit_pyo3_python_wins(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PYO3_PYTHON", "/opt/python/bin/python3.12")
+    monkeypatch.setattr(sys, "_base_executable", str(tmp_path / "python3"), raising=False)
+    assert hook.pyo3_python() == "/opt/python/bin/python3.12"
+
+
+def test_without_a_base_interpreter_the_running_one_is_read(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("PYO3_PYTHON", raising=False)
+    monkeypatch.setattr(sys, "_base_executable", str(tmp_path / "missing"), raising=False)
+    assert hook.pyo3_python() == sys.executable

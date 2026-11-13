@@ -315,17 +315,12 @@ pub fn golden(
             return Ok(false);
         }
     };
-    let mut usage = Usage::default();
-    let mut reports = Vec::new();
-    let mut failed = 0usize;
-    for result in results {
+    // Each case is read and compared on its own, on every core (#841); the
+    // messages, the reports and the ledger's usage follow the cases' order.
+    let compared = crate::parallel::in_order(results, |result| {
         let actual = match result {
             Ok(actual) => actual,
-            Err(error) => {
-                failed += 1;
-                eprintln!("error: {error:#}");
-                continue;
-            }
+            Err(error) => return Ok(Err(format!("error: {error:#}"))),
         };
         let dir = cases.join(&actual.case.id);
         let recorded = crate::golden::recording::Recording::read(&dir, blobs)
@@ -335,6 +330,7 @@ pub fn golden(
         opentide_version_in_run(&mut oracle_run, oracle_version);
         let mut candidate_run = run_of(actual);
         opentide_version_in_run(&mut candidate_run, candidate_version);
+        let mut usage = Usage::default();
         let report = opentide_compare::compare(
             opentide_compare::Case {
                 command: &actual.case.command,
@@ -345,8 +341,27 @@ pub fn golden(
             &ledger,
             &mut usage,
         );
+        Ok::<_, anyhow::Error>(Ok((report, usage)))
+    });
+    let mut usage = Usage::default();
+    let mut reports = Vec::new();
+    let mut failed = 0usize;
+    for outcome in compared {
+        let (report, case_usage) = match outcome? {
+            Ok(compared) => compared,
+            Err(message) => {
+                failed += 1;
+                eprintln!("{message}");
+                continue;
+            }
+        };
+        for index in 0..ledger.entries.len() {
+            if case_usage.is_used(index) {
+                usage.mark(index);
+            }
+        }
         if !report.equal {
-            eprintln!("{}: differs from the oracle's recording", actual.case.id);
+            eprintln!("{}: differs from the oracle's recording", report.case);
             let shown = if full { usize::MAX } else { 10 };
             for difference in report.differences.iter().take(shown) {
                 let at = difference
