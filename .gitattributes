@@ -44,3 +44,19 @@ data/catalogs/tide/generated/*.json -text
 # The agent skills and entrypoint templates `setup skills` writes (compiled into
 # the Rust CLI with include_bytes!): the same bytes on every checkout.
 src/opentide/data/setup/skills/** -text
+
+# The conformance fixtures of the 0.16.0 engine languages: their tests compare
+# byte offsets (highlight goldens, recorded verdicts), so a Windows checkout
+# holds the committed LF bytes too.
+crates/testdata/conformance/exabeam/** -text
+crates/testdata/conformance/yara/** -text
+crates/testdata/conformance/yara-x/** -text
+crates/testdata/conformance/google-yaral/** -text
+crates/testdata/conformance/specifications-google-secops/** -text
+crates/testdata/conformance/external/exabeam/** -text
+crates/testdata/conformance/external/yara/** -text
+crates/testdata/conformance/external/yaral/** -text
+crates/testdata/corpus/yara/** -text
+crates/testdata/corpus/yaral/** -text
+crates/testdata/corpus/exabeam/** -text
+crates/testdata/oracles/graylog/** -text

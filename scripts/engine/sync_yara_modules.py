@@ -8,7 +8,7 @@ Reads two sources:
   declarations are what libyara 4.5 compiles against, so they decide
   ``libyara = true`` and the libyara argument signatures (``"si"``: a string,
   then an integer);
-- YARA-X's module reflection, as JSON from ``scripts/yara-modules`` (a
+- YARA-X's module reflection, as JSON from ``scripts/engine/yara-modules`` (a
   separate Cargo project: the ``yara-x`` crate never enters the workspace).
   It decides ``yara_x = true``, and gives the types and documentation.
 
@@ -17,7 +17,7 @@ only is kept with the other flag false: ``yara_unknown_module_member`` under
 libyara, ``yara_x_incompatible`` for what only libyara has.
 
 Usage:
-    cargo run --release --manifest-path scripts/yara-modules/Cargo.toml > /tmp/yara-x-modules.json
+    cargo run --release --manifest-path scripts/engine/yara-modules/Cargo.toml > /tmp/yara-x-modules.json
     python scripts/engine/sync_yara_modules.py --libyara ../yara \
         --yara-x-json /tmp/yara-x-modules.json [--check]
 """

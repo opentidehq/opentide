@@ -4,7 +4,7 @@
 //! call it "EQL"; opentide never does, because `eql` is Elastic's.
 //!
 //! The contract is specifications `specs/languages/exabeam-1.0.md`. Exabeam
-//! publishes no grammar and no parser, so the verdicts come from [`check`], a
+//! publishes no grammar and no parser, so the verdicts come from [`check`](mod@check), a
 //! port of the specification's reference checker
 //! (`scripts/exabeam_language.py`), and the field catalogue from Exabeam's
 //! Common Information Model ([`catalog`]). The tree-sitter grammar

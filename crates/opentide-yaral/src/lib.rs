@@ -8,7 +8,7 @@
 //!
 //! 1. the tree-sitter grammar (`grammars/tree-sitter-opentide-yaral`), whose
 //!    errors are `yaral_parse_error`;
-//! 2. [`check::Checker`]: sections and their order for the profile, scope
+//! 2. `check::Checker`: sections and their order for the profile, scope
 //!    (event variables, placeholders, outcomes), `match` windows, outcome
 //!    aggregation, condition shape, options, the UDM and function catalogues,
 //!    literals and limits.

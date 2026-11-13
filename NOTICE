@@ -89,7 +89,8 @@ crates/testdata/conformance/yara-x/) Module members and function signatures come
 from the module declarations of libyara 4.5.4 (VirusTotal/yara, Copyright
 The YARA Authors) and the module reflection of YARA-X 1.23.0
 (VirusTotal/yara-x, Copyright The YARA-X Authors), both BSD-3-Clause
-(data/catalogs/yara/LICENSE-BSD-3-Clause-*.txt); YARA-X's member documentation is
+(data/catalogs/yara/LICENSE-BSD-3-Clause-libyara.txt,
+data/catalogs/yara/LICENSE-BSD-3-Clause-YARA-X.txt, data/catalogs/yara/NOTICE); YARA-X's member documentation is
 copied as published. crates/testdata/conformance/yara-x/parser/ holds yara-x-parser's
 own parser inputs, unchanged (BSD-3-Clause). crates/opentide-yara follows
 libyara's grammar.y, lexer.l, hex_grammar.y, re_lexer.l, parser.c and

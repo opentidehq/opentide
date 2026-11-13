@@ -22,6 +22,14 @@ license-files = [
     "data/catalogs/cql/LICENSE-MIT.txt",
     "data/catalogs/cql/LICENSE-Unlicense.txt",
     "data/catalogs/cql/NOTICE",
+    "data/catalogs/bitdefender/NOTICE",
+    "data/catalogs/exabeam/LICENSE-Apache-2.0.txt",
+    "data/catalogs/exabeam/NOTICE",
+    "data/catalogs/tz/NOTICE",
+    "data/catalogs/yara/LICENSE-BSD-3-Clause-libyara.txt",
+    "data/catalogs/yara/LICENSE-BSD-3-Clause-YARA-X.txt",
+    "data/catalogs/yara/NOTICE",
+    "data/catalogs/yaral/NOTICE",
 ]
 authors = [
     { name = "opentide", email = "digit-ec-opentide@ec.europa.eu" },

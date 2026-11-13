@@ -10,11 +10,11 @@
 //!
 //! 1. the platform profile's text checks (`bitdefender_yara_ascii`,
 //!    `bitdefender_yara_size`);
-//! 2. [`syntax::prepare`]: the libyara forms yara-x-parser refuses are
+//! 2. `syntax::prepare`: the libyara forms yara-x-parser refuses are
 //!    blanked, keeping every offset (`yara_x_incompatible`);
 //! 3. `yara-x-parser`: its errors, classified (`yara_parse_error`,
 //!    `yara_hex_string`, `yara_number_out_of_range`, ...);
-//! 4. [`check::Checker`]: the symbol table, types and every other code of
+//! 4. `check::Checker`: the symbol table, types and every other code of
 //!    the spec, on each rule that parsed.
 //!
 //! `docs/engine/YARA.md` maps each code to the libyara source and the test.
