@@ -365,7 +365,7 @@ def test_the_scan_check_fails_once_an_excluded_crate_is_published(
 
 
 def _corpus_step(workflow: dict[str, Any], needle: str) -> dict[str, Any]:
-    steps = workflow["jobs"]["corpus"]["steps"]
+    steps = workflow["jobs"]["corpus-part"]["steps"]
     found = [step for step in steps if needle in str(step.get("run", ""))]
     assert len(found) == 1, f"expected exactly one corpus step running {needle!r}"
     return found[0]
@@ -373,7 +373,7 @@ def _corpus_step(workflow: dict[str, Any], needle: str) -> dict[str, Any]:
 
 def _vocab_resolution_pattern(workflow: dict[str, Any]) -> str:
     """The ERE the corpus job's ``vocab_resolution`` step greps changed paths with."""
-    steps = workflow["jobs"]["corpus"]["steps"]
+    steps = workflow["jobs"]["corpus-part"]["steps"]
     runs = [str(step.get("run", "")) for step in steps if step.get("id") == "vocab_resolution"]
     assert len(runs) == 1, "expected exactly one vocab_resolution step in the corpus job"
     match = re.search(r'grep -qE "([^"]+)"', runs[0])
@@ -408,9 +408,11 @@ def test_vocab_diff_gate_watches_resolution_data_and_approvals(
 
 def test_vocab_diff_runs_against_the_installed_oracle(workflow: dict[str, Any]) -> None:
     """``cargo xtask vocab diff --against python`` enforces APPROVED.toml (UC-1.6)."""
-    steps = workflow["jobs"]["corpus"]["steps"]
+    steps = workflow["jobs"]["corpus-part"]["steps"]
     diff = _corpus_step(workflow, "cargo xtask vocab diff --against python")
-    assert diff.get("if") == "steps.vocab_resolution.outputs.changed == 'true'"
+    assert diff.get("if") == (
+        "matrix.part == 'vocabulary' && steps.vocab_resolution.outputs.changed == 'true'"
+    )
     assert '--python "$RUNNER_TEMP/oracle/bin/python"' in str(diff["run"])
     oracle = _corpus_step(workflow, "oracle-requirements.txt")
     assert steps.index(oracle) < steps.index(diff), "the oracle is installed before the diff"

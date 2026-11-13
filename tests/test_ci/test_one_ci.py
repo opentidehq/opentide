@@ -434,7 +434,21 @@ def _every_pull_request(jobs: dict[str, Any], job_id: str) -> bool:
     job = jobs[job_id]
     needs = job.get("needs") or []
     needs = [needs] if isinstance(needs, str) else needs
+    if job.get("if") == _scope().GATHER:
+        # It runs whatever its parts did (test_ci_scope.py, CI_GATHER).
+        return all(_every_pull_request(jobs, need) for need in needs)
     return "if" not in job and all(_every_pull_request(jobs, need) for need in needs)
+
+
+def _gathered(jobs: dict[str, Any]) -> set[str]:
+    """The jobs a gathering job stands for: its check is the required one."""
+    gather = _scope().GATHER
+    found: set[str] = set()
+    for job in jobs.values():
+        if job.get("if") == gather:
+            needs = job.get("needs") or []
+            found |= {needs} if isinstance(needs, str) else set(needs)
+    return found
 
 
 def _required_names(path: Path) -> list[str]:
@@ -442,8 +456,11 @@ def _required_names(path: Path) -> list[str]:
     workflow = _load(path)
     jobs = workflow["jobs"]
     names: list[str] = []
+    gathered = _gathered(jobs)
     for job_id, job in jobs.items():
         if not _every_pull_request(jobs, job_id) or job.get("continue-on-error") is True:
+            continue
+        if job_id in gathered:
             continue
         names += _expand(str(job.get("name", job_id)), job)
     return names

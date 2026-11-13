@@ -283,7 +283,7 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
     """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
     jobs = _ci()["jobs"]
     wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
-    assert {"engine-test", "test", "cli-e2e", "golden-compare", "corpus"} <= set(wrapped)
+    assert {"engine-test", "test", "cli-e2e", "golden-compare", "corpus-part"} <= set(wrapped)
     for job_id in wrapped:
         steps = jobs[job_id]["steps"]
         installs = [
