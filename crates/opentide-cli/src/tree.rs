@@ -165,6 +165,8 @@ pub enum Platform {
     Sysdig,
     #[value(name = "bitdefender")]
     Bitdefender,
+    #[value(name = "google_secops")]
+    GoogleSecops,
 }
 
 /// The values of `RowFormat`, as the command line spells them.

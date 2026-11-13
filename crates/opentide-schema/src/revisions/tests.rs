@@ -155,7 +155,7 @@ fn the_newest_revision_of_each_family() {
         .map(|revision| revision.identifier)
         .collect();
     assert_eq!(rule, ["rule::1.0", "rule::1.1"]);
-    assert_eq!(families().len(), 16 - 1);
+    assert_eq!(families().len(), 17 - 1);
 }
 
 #[test]
