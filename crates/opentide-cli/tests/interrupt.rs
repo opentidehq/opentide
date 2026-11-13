@@ -29,7 +29,7 @@ fn stalling_tenant(arrived: mpsc::Sender<String>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = format!("http://{}", listener.local_addr().unwrap());
     std::thread::spawn(move || {
-        let mut held = Vec::new();
+        let mut open = Vec::new();
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
             let mut head = Vec::new();
@@ -43,7 +43,7 @@ fn stalling_tenant(arrived: mpsc::Sender<String>) -> String {
                 .unwrap_or_default()
                 .to_owned();
             let _ = arrived.send(first);
-            held.push(stream);
+            open.push(stream);
         }
     });
     address
@@ -123,10 +123,24 @@ fn ctrl_c_during_a_tenant_query_stops_the_run_with_interrupted_and_130() {
     let stopped_in = sent.elapsed();
     let mut stdout = String::new();
     let mut stderr = String::new();
-    child.stdout.take().unwrap().read_to_string(&mut stdout).unwrap();
-    child.stderr.take().unwrap().read_to_string(&mut stderr).unwrap();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut stdout)
+        .unwrap();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
 
-    assert_eq!(status.code(), Some(130), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        status.code(),
+        Some(130),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(
         stderr.lines().any(|line| line == "error: interrupted"),
         "stderr: {stderr}"
@@ -136,7 +150,10 @@ fn ctrl_c_during_a_tenant_query_stops_the_run_with_interrupted_and_130() {
         1,
         "reported once: {stderr}"
     );
-    assert!(stdout.is_empty(), "an interrupted run prints no document: {stdout}");
+    assert!(
+        stdout.is_empty(),
+        "an interrupted run prints no document: {stdout}"
+    );
     // The run stopped itself: the handler's grace would have ended the
     // process at INTERRUPT_GRACE with the same code and line.
     assert!(
