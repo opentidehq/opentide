@@ -173,12 +173,20 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     }
 }
 
-/// The catalogue as the oracle printed it: the changes made after the
-/// oracle undone by [`since_oracle::to_oracle`].
+/// The catalogue (`--json commands`) as the oracle printed it: the changes
+/// made after the oracle undone by [`since_oracle::to_oracle`]. Any other
+/// output is returned as it is.
 fn as_oracle(stdout: &str) -> String {
     let Ok(mut document) = Json::parse(stdout) else {
         return stdout.to_owned();
     };
+    // Only the catalogue (`--json commands`) holds what changed since.
+    let Json::Object(members) = &document else {
+        return stdout.to_owned();
+    };
+    if !members.iter().any(|(key, _)| key == "environment") {
+        return stdout.to_owned();
+    }
     since_oracle::to_oracle(&mut document);
     document_text(&document, stdout.starts_with("{\n"))
 }

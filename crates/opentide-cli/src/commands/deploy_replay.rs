@@ -167,6 +167,10 @@ impl Drop for Scratch {
 }
 
 /// Applies *state_commit*'s deployment-state delta to the working tree at *root*.
+#[expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "a shard is named <uuid>.json in lower case; git lists the paths as committed"
+)]
 pub fn replay(root: &Path, env: &Env, state_commit: &str) -> Result<Replayed, ReplayError> {
     let parent = format!("{state_commit}^");
     let changed = git(
@@ -370,9 +374,8 @@ mod tests {
                  '2', the default branch had '3'"
             )]
         );
-        // Now a run that removed the binding.
-        write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
-        git_in(root, &["commit", "-qam", "tip"]);
+        // Now a run that removed the binding, from a tip that holds this run's id.
+        git_in(root, &["checkout", "--", "."]);
         let path = root.join(DEPLOYMENT_STATES).join(format!("{UUID}.json"));
         std::fs::remove_file(&path).unwrap();
         git_in(root, &["commit", "-qam", "removed"]);

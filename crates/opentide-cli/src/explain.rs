@@ -25,8 +25,7 @@ pub struct Page {
     pub retired: bool,
 }
 
-/// A code nothing reports any more, which stays explainable
-/// (`cli/services/retired_codes.py`).
+/// A code nothing reports any more, which stays explainable.
 #[derive(Clone, Copy, Debug)]
 pub struct Retired {
     /// The code.
@@ -45,7 +44,7 @@ pub struct Retired {
     pub level: &'static str,
 }
 
-/// The retired codes, as `cli/services/retired_codes.py` lists them.
+/// The retired codes, as the Python CLI listed them (`retired_codes.py`) until UC-6.2.
 pub const RETIRED: &[Retired] = &[
     Retired {
         code: "crowdstrike_unsupported",
@@ -397,35 +396,6 @@ mod tests {
                 "{code}: not a retired SARIF rule"
             );
         }
-    }
-
-    /// The retired codes are the Python CLI's (`retired_codes.py`), each
-    /// with the release that retired it.
-    #[test]
-    fn the_retired_codes_are_the_python_clis() {
-        let source = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../src/opentide/cli/services/retired_codes.py"),
-        )
-        .unwrap();
-        let mut python: Vec<(&str, &str)> = source
-            .split("RetiredCode(")
-            .skip(1)
-            .map(|entry| {
-                let field = |name: &str| {
-                    let start = entry.find(&format!("{name}=\"")).unwrap() + name.len() + 2;
-                    &entry[start..start + entry[start..].find('"').unwrap()]
-                };
-                (field("code"), field("retired_in"))
-            })
-            .collect();
-        python.sort_unstable();
-        let mut rust: Vec<(&str, &str)> = RETIRED
-            .iter()
-            .map(|retired| (retired.code, retired.retired_in))
-            .collect();
-        rust.sort_unstable();
-        assert_eq!(rust, python);
     }
 
     /// `build.rs` compiles in every page of the package's folder.
