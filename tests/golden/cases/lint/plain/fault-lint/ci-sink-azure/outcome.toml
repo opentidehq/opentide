@@ -12,5 +12,5 @@ path = "tmp/agent/opentide-lint.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 30007
-blob = "5eceb2424bd01251850db791feeef9e6231cd698194e025bef750694055b6870"
+size = 30009
+blob = "8cc90ddbcb3d23e13909d33218946a767f65861e78bada420922de58e70f374a"

@@ -1,11 +1,12 @@
 //! What today's CLI changed in `opentide --json commands` after the oracle
-//! (opentide 0.23.0) was recorded. The Rust tree follows today's CLI; these
+//! (opentide 0.28.1) was recorded. The Rust tree follows today's CLI; these
 //! tests compare it with the oracle's recording, so each change is listed
 //! here and undone (or applied) at the one place it lands, and a change that
 //! is no longer found fails the test.
 //!
-//! - #874 (UC-0.2): `validate query` checks CrowdStrike's CQL offline. The
-//!   `--platform` help names `crowdstrike`, `--file` reads `.cql`, and
+//! - #874 (UC-0.2): `validate query` checks CrowdStrike's CQL offline, which
+//!   0.28.1 does not. The `--platform` help names `crowdstrike` among the
+//!   platforms the engine parses, `--file` reads `.cql`, and
 //!   `QueryChecked.language` gains `cql`.
 
 use opentide_cli::json::Json;
@@ -13,12 +14,12 @@ use opentide_cli::json::Json;
 /// Option help texts: (the oracle's, today's).
 const HELP: &[(&str, &str)] = &[
     (
-        "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
-        "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
     ),
     (
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)",
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql) offline (repeatable)",
     ),
 ];
 
@@ -64,51 +65,9 @@ fn query_languages(document: &mut Json) -> &mut Vec<Json> {
     items
 }
 
-/// `text` without the platform `id` in its comma-separated lists.
-fn without_platform(text: &str, id: &str) -> String {
-    text.replace(&format!(", {id},"), ",")
-        .replace(&format!(", {id}."), ".")
-        .replace(&format!(", {id}\""), "\"")
-        .replace(&format!("{id}, "), "")
-        .replace(&format!(", {id}"), "")
-}
-
-/// Removes the platforms the oracle (0.23.0) lacks
-/// (`opentide_schema::platforms::SINCE_ORACLE`, ported onto the catch-up
-/// train): each one's `--platform` choice, its name in the help texts' lists
-/// and its `setup platforms` flag. Returns how many places changed.
-fn drop_since_oracle(value: &mut Json) -> usize {
-    let ids = opentide_schema::platforms::SINCE_ORACLE;
-    match value {
-        Json::Str(text) => {
-            let mut changed = text.clone();
-            for id in ids {
-                changed = without_platform(&changed, id);
-            }
-            usize::from(std::mem::replace(text, changed) != *text)
-        }
-        Json::Array(items) => {
-            let before = items.len();
-            items.retain(|item| {
-                !matches!(item, Json::Str(text) if ids.contains(&text.as_str()))
-                    && !matches!(item, Json::Object(members)
-                        if members.iter().any(|(key, value)| key == "name"
-                            && matches!(value, Json::Str(name) if ids.contains(&name.as_str()))))
-            });
-            (before - items.len()) + items.iter_mut().map(drop_since_oracle).sum::<usize>()
-        }
-        Json::Object(members) => members
-            .iter_mut()
-            .map(|(_, member)| drop_since_oracle(member))
-            .sum(),
-        _ => 0,
-    }
-}
-
 /// Today's catalogue (or schemas) as the oracle printed it. Panics if a
 /// listed change is not in `document`.
 pub fn to_oracle(document: &mut Json) {
-    drop_since_oracle(document);
     for (oracle, today) in HELP {
         assert!(
             replace_strings(document, today, oracle) > 0,

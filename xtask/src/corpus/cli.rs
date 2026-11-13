@@ -163,6 +163,7 @@ pub fn parse_options(args: &[String]) -> Result<(Options, Option<String>, bool)>
     };
     Ok((
         Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed,
             counts,
             layout,

@@ -539,6 +539,8 @@ fn block_advisories(
             diagnostic.yaml_line = locator.yaml_line(&diagnostic.field_path);
             diagnostic.path = Some(relative.to_owned());
             diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
+            // One line, as `_finding` places a finding with a `yaml_line`.
+            diagnostic.end_line = diagnostic.line;
             opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
         })
         .collect()

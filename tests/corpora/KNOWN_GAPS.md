@@ -1,6 +1,6 @@
 # Known gaps
 
-Faults the oracle (opentide 0.23.0, and 0.28.1 alike: every kind passes against both) misses, or
+Faults the oracle (opentide 0.28.1) misses, or
 reports in a way that surprises: what the architecture review found, and what building the fault
 catalogue found. Each entry has a fault kind in [`faults.toml`](faults.toml) (its `gap` key names
 the entry) that pins what the oracle does today, so

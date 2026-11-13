@@ -69,7 +69,7 @@ Codes in scope whose fault kind the unit named owes (`[[pending]]` in `faults.to
 | `deployment_state_platform` | validation | `deployment-state-platform` | 5 |
 | `deployment_state_shape` | validation | `deployment-state-shape` | 5 |
 | `deployment_state_uuid_mismatch` | validation | `deployment-state-uuid-mismatch` | 5 |
-| `deprecated_field` | validation, query | no fault kind: needs a `tide.meta.deprecation` marker in a metaschema; no field of 0.23.0's models carries one (the deprecations catalogue is empty) | - |
+| `deprecated_field` | validation, query | no fault kind: needs a `tide.meta.deprecation` marker in a metaschema; no field of 0.28.1's models carries one (the deprecations catalogue is empty) | - |
 | `duplicate_id` | validation, query | `uuid-duplicate-rule`, `uuid-duplicate-invalid` | 11 |
 | `duplicate_name` | validation | `sharing-duplicate-name` | 1 |
 | `ecs_type_mismatch` | query | `ecs-type-mismatch` | 5 |

@@ -8,7 +8,7 @@
 //! field there a warning ([`unknown_field_paths`], reported by
 //! [`super::advisories`]).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::error::{ErrorKind, PathSegment};
 use crate::from_node::Context;
@@ -38,10 +38,15 @@ pub const ACTION_SCOPE: &str = "bitdefender_action_scope";
 pub const TARGETS_SHAPE: &str = "bitdefender_targets_shape";
 /// `bitdefender_severity`.
 pub const SEVERITY: &str = "bitdefender_severity";
+/// `yara_empty_signature`, on a signature with no text: the YARA engine
+/// reports it on one it can read (a blank scalar is no injection).
+pub const EMPTY_SIGNATURE: &str = opentide_core::codes::YARA_EMPTY_SIGNATURE;
+/// `yara_signature_alias` ([`signature_aliases`]).
+pub const SIGNATURE_ALIAS: &str = opentide_core::codes::YARA_SIGNATURE_ALIAS;
 
 /// What each constraint code says, for the finding's message
 /// (bitdefender-1.0, Constraints; `CODE_MESSAGES`).
-pub const CODE_MESSAGES: [(&str, &str); 10] = [
+pub const CODE_MESSAGES: [(&str, &str); 11] = [
     (
         RULE_KIND,
         "a Bitdefender block sets exactly one of detection and yara",
@@ -71,6 +76,10 @@ pub const CODE_MESSAGES: [(&str, &str); 10] = [
         "targets sets one of endpoint_tags and companies, non-empty",
     ),
     (SEVERITY, "severity is Low, Medium or High"),
+    (
+        EMPTY_SIGNATURE,
+        "the YARA signature has no rule that is neither private nor global",
+    ),
 ];
 
 /// The alert criterion's API field: the block writes it as `alert`.
@@ -505,30 +514,29 @@ fn action_scope_findings(
     target: Option<&str>,
     fields: &[&str],
 ) -> Vec<Finding> {
-    let names: Vec<&str> = keys(actions)
+    keys(actions)
         .into_iter()
         .flatten()
         .filter(|name| ACTION_TYPES.iter().any(|(known, _)| known == name))
-        .collect();
-    let refused: Vec<&str> = if yara {
-        names
-            .into_iter()
-            .filter(|name| NOT_ON_YARA.contains(name))
-            .collect()
-    } else if matches!(target, Some("process" | "file"))
-        || fields.iter().any(|field| field.contains(".CreatedBy."))
-    {
-        Vec::new()
-    } else {
-        names
-            .into_iter()
-            .filter(|name| PROCESS_ACTIONS.contains(name))
-            .collect()
-    };
-    refused
-        .into_iter()
+        .filter(|name| !action_allowed(name, yara, target, fields))
         .map(|name| Finding::new(ACTION_SCOPE, vec![key("actions"), key(name)]))
         .collect()
+}
+
+/// Whether a block may take the automatic action `action`
+/// (`bitdefender_action_scope`): a YARA rule (`yara`) takes every action but
+/// `kill_process`; a Basic rule takes the process actions (`sandbox`,
+/// `kill_process`, `quarantine`) only with a `process` or `file` `target`
+/// or a `*.CreatedBy.*` field among its criteria (`fields`). The editor's
+/// action completion asks the same.
+pub fn action_allowed(action: &str, yara: bool, target: Option<&str>, fields: &[&str]) -> bool {
+    if yara {
+        !NOT_ON_YARA.contains(&action)
+    } else {
+        !PROCESS_ACTIONS.contains(&action)
+            || matches!(target, Some("process" | "file"))
+            || fields.iter().any(|field| field.contains(".CreatedBy."))
+    }
 }
 
 /// `bitdefender_targets_shape`: exactly one list, non-empty, of non-blank
@@ -573,8 +581,9 @@ pub fn targets_shape_ok_json(targets: &serde_json::Value) -> bool {
 ///
 /// The YARA signature's codes (yara-1.0 and the Bitdefender profile:
 /// `bitdefender_yara_ascii`, `_yara_size`, `yara_include`,
-/// `yara_empty_signature`, `yara_duplicate_rule`) are the YARA lane's, which
-/// this check takes when it lands on the train.
+/// `yara_empty_signature`, `yara_duplicate_rule`) are the YARA engine's,
+/// which reads the signature under the Bitdefender profile; a signature with
+/// no text, which it never reads, is `yara_empty_signature` here.
 pub fn block_findings(block: &Node) -> Vec<Finding> {
     if !matches!(block.value, Value::Map(_)) {
         return Vec::new();
@@ -608,6 +617,19 @@ pub fn block_findings(block: &Node) -> Vec<Finding> {
         target = detection_target;
         fields = detection_fields;
     }
+    // A signature the YARA engine reads is its: the Bitdefender profile and
+    // yara-1.0 codes come from the injection (`opentide_tide::injection`).
+    if let Some(signature) = yara.and_then(|yara| set(yara, "signature"))
+        && signature
+            .value
+            .as_str()
+            .is_some_and(|text| python_strip(text).is_empty())
+    {
+        found.push(Finding::new(
+            EMPTY_SIGNATURE,
+            vec![key("yara"), key("signature")],
+        ));
+    }
     if detection.is_some() != yara.is_some() {
         let is_yara = yara.is_some();
         if (is_yara || target.is_some())
@@ -626,4 +648,77 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
         .into_iter()
         .map(|finding| finding.code)
         .collect()
+}
+
+/// Each platform whose `yara.signature` is a YAML alias in `rule`, with the
+/// path its anchor's node first appears at (where the oracle's YAML reader
+/// places the finding's line)
+/// (`yara_signature_alias`, 0.28.0's `validation/yara_signature.py`): a
+/// platform block's `YaraSignature` must be written out in the block. An
+/// alias shares its anchor's node, so the signature is an alias when its
+/// node first appears, in document order, at another path. HarfangLab's
+/// block has its own check, so it is not one of them.
+pub fn signature_aliases(rule: &Node) -> Vec<(String, Vec<String>)> {
+    let Some(configurations) = get(rule, "configurations") else {
+        return Vec::new();
+    };
+    let Value::Map(blocks) = &configurations.value else {
+        return Vec::new();
+    };
+    let platforms: Vec<&str> = blocks
+        .iter()
+        .filter_map(|entry| {
+            let platform = entry.key.value.as_str()?;
+            let yara = get(&entry.value, "yara")?;
+            (platform != "harfanglab" && yara.get("signature").is_some()).then_some(platform)
+        })
+        .collect();
+    if platforms.is_empty() {
+        return Vec::new();
+    }
+    let mut first = HashMap::new();
+    first_paths(rule, &mut Vec::new(), &mut first);
+    platforms
+        .into_iter()
+        .filter_map(|platform| {
+            let path = ["configurations", platform, "yara", "signature"];
+            let node = path.iter().try_fold(rule, |node, name| get(node, name))?;
+            let seen = first.get(&std::ptr::from_ref(node))?;
+            seen.iter()
+                .map(String::as_str)
+                .ne(path)
+                .then(|| (platform.to_owned(), seen.clone()))
+        })
+        .collect()
+}
+
+/// The path at which each node first appears, in document order, each node
+/// walked once (`_first_paths`).
+fn first_paths(node: &Node, path: &mut Vec<String>, first: &mut HashMap<*const Node, Vec<String>>) {
+    let at = std::ptr::from_ref(node);
+    if first.contains_key(&at) {
+        return;
+    }
+    first.insert(at, path.clone());
+    match &node.value {
+        Value::Map(entries) => {
+            for entry in entries {
+                let key = match &entry.key.value {
+                    Value::Str(key) => key.clone(),
+                    _ => crate::configuration::repr::node(&entry.key),
+                };
+                path.push(key);
+                first_paths(&entry.value, path, first);
+                path.pop();
+            }
+        }
+        Value::Seq(items) => {
+            for (index, item) in items.iter().enumerate() {
+                path.push(index.to_string());
+                first_paths(item, path, first);
+                path.pop();
+            }
+        }
+        _ => {}
+    }
 }

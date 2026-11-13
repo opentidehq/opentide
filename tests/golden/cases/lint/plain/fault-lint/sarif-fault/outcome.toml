@@ -12,5 +12,5 @@ path = "ws/opentide-reports/lint.sarif"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1060949
-blob = "531664f53495491fd1ae757d58f1773bc24975eec99c3c83664141ac4b80caef"
+size = 1060951
+blob = "a9cf9fee87b1ec83610d5b2485295cff361aced106fa3419eb6264332b6c9a60"

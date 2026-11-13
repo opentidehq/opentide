@@ -62,30 +62,6 @@ fn options(inputs: &toml::Table) -> Options {
     }
 }
 
-/// `text` without the lines that name a variable of a platform the recorded
-/// oracle lacks (`opentide_schema::platforms::SINCE_ORACLE`): their bundled
-/// files name them (`GRAYLOG_TOKEN`), so the pipeline's header lists them
-/// where the oracle's has none. A line names one by its `ID_` prefix: its
-/// line in the header (`#   NAME`) and in a job's environment
-/// (`NAME: ${{ secrets.NAME }}`).
-fn without_since_oracle(text: &str) -> String {
-    let prefixes: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
-        .iter()
-        .map(|id| format!("{}_", id.to_ascii_uppercase()))
-        .collect();
-    text.split_inclusive('\n')
-        .filter(|line| {
-            !line
-                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-                .any(|word| {
-                    prefixes
-                        .iter()
-                        .any(|prefix| word.starts_with(prefix.as_str()))
-                })
-        })
-        .collect()
-}
-
 /// The first line the two texts differ on.
 fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
     let (a, b): (Vec<&str>, Vec<&str>) = (oracle.lines().collect(), rendered.lines().collect());
@@ -99,46 +75,6 @@ fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
         }
     }
     (oracle != rendered).then(|| "line endings differ".to_owned())
-}
-
-/// The pipeline with every line that mentions a platform the recorded oracle
-/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) removed: its id in
-/// underscore or hyphen form, matched case-insensitively, which also catches
-/// its credential variables (`$EXABEAM_CLIENT_ID`). No other platform id is a
-/// substring of these, and 0.23.0 output holds none of them, so a 0.23.0
-/// render is returned unchanged. A credential variable that does not hold the
-/// id (Bitdefender's `$GRAVITYZONE_API_KEY`) is found in the platform's
-/// bundled `platforms/<id>.toml`.
-fn without_since_oracle_lines(text: &str) -> String {
-    let variables = |id: &str| -> Vec<String> {
-        let file = format!("platforms/{id}.toml");
-        opentide_schema::configuration::bundled::FILES
-            .iter()
-            .filter(|(path, _)| *path == file)
-            .flat_map(|(_, text)| text.split('$').skip(1))
-            .map(|rest| {
-                rest.chars()
-                    .take_while(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
-                    .collect::<String>()
-                    .to_ascii_lowercase()
-            })
-            .filter(|name| !name.is_empty())
-            .collect()
-    };
-    let tokens: Vec<String> = opentide_schema::platforms::SINCE_ORACLE
-        .iter()
-        .flat_map(|id| {
-            let mut tokens = vec![(*id).to_owned(), id.replace('_', "-")];
-            tokens.extend(variables(id));
-            tokens
-        })
-        .collect();
-    text.split_inclusive('\n')
-        .filter(|line| {
-            let lower = line.to_ascii_lowercase();
-            !tokens.iter().any(|token| lower.contains(token.as_str()))
-        })
-        .collect()
 }
 
 fn data(text: &str) -> Option<Json> {
@@ -158,7 +94,7 @@ fn pipelines_are_the_oracles() {
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
         let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
-            Ok(rendered) => without_since_oracle(&rendered),
+            Ok(rendered) => rendered,
             Err(error) => {
                 problems.push(format!("{name}: {error}"));
                 continue;
@@ -179,11 +115,6 @@ fn pipelines_are_the_oracles() {
         if let Some(dir) = std::env::var_os("OPENTIDE_CI_RENDERED") {
             std::fs::write(Path::new(&dir).join(format!("{name}.yml")), &rendered).unwrap();
         }
-        // The recorded pipeline (0.23.0) predates the platforms the train ports
-        // onto it; their bundled credentials and query stages add lines the
-        // oracle lacks. Drop those lines before comparing. On this oracle none
-        // are present, so this is a no-op until a row lands.
-        let rendered = without_since_oracle_lines(&rendered);
         let same_data = data(&rendered).is_some() && data(&oracle) == data(&rendered);
         if !same_data {
             problems.push(format!(

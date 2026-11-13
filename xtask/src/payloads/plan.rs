@@ -74,42 +74,6 @@ pub fn request(argv: &[String], cwd: &Path) -> Request {
     request
 }
 
-/// Removes every trace of a platform the recorded oracle lacks
-/// (`opentide_schema::platforms::SINCE_ORACLE`) from a plan value: object
-/// members keyed by its id, array string-elements equal to its id, and array
-/// object-elements whose `platform` is its id. On 0.23.0 output none are
-/// present, so this changes nothing until a row lands.
-fn drop_since_oracle(value: &mut Value) {
-    use opentide_schema::platforms::after_oracle;
-    match value {
-        Value::Array(items) => {
-            for item in items.iter_mut() {
-                drop_since_oracle(item);
-            }
-            items.retain(|item| match item {
-                Value::Null => false,
-                Value::String(text) => !after_oracle(text),
-                _ => true,
-            });
-        }
-        Value::Object(map) => {
-            if map
-                .get("platform")
-                .and_then(Value::as_str)
-                .is_some_and(after_oracle)
-            {
-                *value = Value::Null;
-                return;
-            }
-            map.retain(|key, _| !after_oracle(key));
-            for member in map.values_mut() {
-                drop_since_oracle(member);
-            }
-        }
-        _ => {}
-    }
-}
-
 /// One case's differences, each `key: oracle != candidate`, and the payload
 /// entries `dumps` approves (marked in `dumps_used`).
 pub fn compare_case(
@@ -135,14 +99,10 @@ pub fn compare_case(
     };
     let is_set = |name: &str| case.env.contains_key(name);
     let outcome = dry_run::run(&workspace, &owned, &request, &changed, &is_set);
-    let mut candidate: Value = serde_json::from_str(&super::placeholder(
+    let candidate: Value = serde_json::from_str(&super::placeholder(
         &serde_json::to_string(&opentide_compile::Json::Object(outcome.payload.clone()))?,
         ws,
     ))?;
-    // The recorded plan (0.23.0) lacks the platforms the train ports onto it;
-    // drop their entries from the candidate before comparing. On this oracle
-    // none are present, so this is a no-op until a row lands.
-    drop_since_oracle(&mut candidate);
     let mut differences = Vec::new();
     for key in KEYS {
         let oracle = document.get(key).filter(|value| !value.is_null());

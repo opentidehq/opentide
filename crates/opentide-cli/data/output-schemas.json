@@ -5251,6 +5251,9 @@
             "kuery",
             "lucene",
             "falco",
+            "yara",
+            "exabeam",
+            "yaral",
             "cql"
           ],
           "title": "Language",
@@ -6270,6 +6273,46 @@
           "default": null,
           "description": "The rule's file, absolute",
           "title": "File"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The tenant the request was resolved against (Bitdefender, Graylog, Exabeam)",
+          "title": "Tenant"
+        },
+        "unresolved": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the request leaves out because no tenant resolves it: its reason and the block's target aliases (Bitdefender), or stream and notification aliases (Graylog)",
+          "title": "Unresolved"
+        },
+        "server_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The server version the request is built for, assumed because a dry run asks no server (Graylog)",
+          "title": "Server Version"
         }
       },
       "required": [

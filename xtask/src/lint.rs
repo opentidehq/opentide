@@ -64,8 +64,9 @@ pub const APPROVED: &[Approved] = &[
         id: "yaml-error-text",
         reason: "a file that is not YAML is reported in the words of the YAML 1.2 parser \
                  (saphyr), at the line and column the oracle names (one column later where \
-                 saphyr names the tab it refuses); the code, the file and the check are the \
-                 same (as in `cargo xtask validate diff`)",
+                 saphyr names the tab it refuses, and at the start of the plain scalar a tab \
+                 interrupts, which the oracle's message names); the code, the file and the \
+                 check are the same (as in `cargo xtask validate diff`)",
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_error_text,
     },
@@ -113,21 +114,6 @@ fn code(finding: &Json) -> &str {
     finding["code"].as_str().unwrap_or("")
 }
 
-/// Whether `code` (a finding's `code` field) belongs to a platform the
-/// recorded oracle lacks (`opentide_schema::platforms::SINCE_ORACLE`): it is
-/// `<id>_...` for one of those ids. No 0.23.0 code has such a prefix, so this
-/// is false until a row lands.
-fn after_oracle_code(code: Option<&Json>) -> bool {
-    let Some(code) = code.and_then(Json::as_str) else {
-        return false;
-    };
-    opentide_schema::platforms::SINCE_ORACLE.iter().any(|id| {
-        code.strip_prefix(id)
-            .and_then(|rest| rest.strip_prefix('_'))
-            .is_some()
-    })
-}
-
 fn without(finding: &Json, drop: &[&str]) -> Json {
     let mut copy = finding.clone();
     if let Some(map) = copy.as_object_mut() {
@@ -154,12 +140,43 @@ fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bo
         (Some(1), Some(1)) => message.contains("tab"),
         _ => false,
     };
-    code(oracle) == "yaml_parse"
+    let same_kind = code(oracle) == "yaml_parse"
         && code(rust) == "yaml_parse"
-        && message.starts_with("Could not parse object YAML: ")
-        && columns
-        && without(oracle, &["message", "column", "end_column"])
-            == without(rust, &["message", "column", "end_column"])
+        && message.starts_with("Could not parse object YAML: ");
+    let place = ["message", "column", "end_column"];
+    let scalar = ["message", "line", "column", "end_line", "end_column"];
+    same_kind
+        && ((columns && without(oracle, &place) == without(rust, &place))
+            || (tab_in_scalar(oracle, rust) && without(oracle, &scalar) == without(rust, &scalar)))
+}
+
+/// A tab inside a multi-line plain scalar: the oracle places the error at
+/// the tab and names the scalar it interrupts (`while scanning a plain
+/// scalar that starts at line L, column C`); saphyr places it at that
+/// scalar, L:C, one column wide.
+fn tab_in_scalar(oracle: &Json, rust: &Json) -> bool {
+    let words = oracle["message"].as_str().unwrap_or("");
+    let Some(start) = words
+        .split("while scanning a plain scalar that starts at line ")
+        .nth(1)
+    else {
+        return false;
+    };
+    let mut numbers = start
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<u64>);
+    let (Some(Ok(line)), Some(Ok(column))) = (numbers.next(), numbers.next()) else {
+        return false;
+    };
+    rust["message"]
+        .as_str()
+        .is_some_and(|m| m.contains("found a tab"))
+        && words.contains("found a tab character")
+        && rust["line"].as_u64() == Some(line)
+        && rust["end_line"].as_u64() == Some(line)
+        && rust["column"].as_u64() == Some(column)
+        && rust["end_column"].as_u64() == Some(column + 1)
 }
 
 fn is_invalid_date(finding: &Json) -> bool {
@@ -415,12 +432,8 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
         .findings
         .iter()
         .filter(|finding| finding.get("check") != Some(&json!("queries")))
-        .filter(|finding| !after_oracle_code(finding.get("code")))
         .map(Item::new)
         .collect();
-    // The recorded oracle (0.23.0) lacks the codes of the platforms the train
-    // ports onto it; drop findings of those codes from both sides. On this
-    // oracle none are present, so this is a no-op until a row lands.
     let rust: Vec<Item> = report
         .findings
         .iter()
@@ -430,7 +443,6 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
                 serde_json::from_str(&crate::payloads::placeholder(&text, ws)).unwrap_or_default();
             map
         })
-        .filter(|map| !after_oracle_code(map.get("code")))
         .map(|map| Item::new(&map))
         .collect();
     list_differences(&case.id, &oracle, &rust, &mut out);
@@ -784,6 +796,34 @@ mod tests {
         let mut other_check = same.clone();
         other_check["check"] = json!("metadata");
         assert!(!yaml_error_text(Some(&oracle), Some(&other_check), &[]));
+    }
+
+    #[test]
+    fn a_tab_in_a_plain_scalar_is_placed_at_the_scalar() {
+        let mut oracle = parse_error(
+            "a.yaml",
+            1,
+            "found a tab character that violates indentation at line 54, column 1 \
+             (while scanning a plain scalar that starts at line 53, column 18)",
+        );
+        oracle["line"] = json!(54);
+        oracle["end_line"] = json!(54);
+        let rust = parse_error(
+            "a.yaml",
+            18,
+            "while scanning a plain scalar, found a tab at line 53, column 18",
+        );
+        assert!(yaml_error_text(Some(&oracle), Some(&rust), &[]));
+        // Anywhere but the scalar the oracle names: no.
+        let elsewhere = parse_error(
+            "a.yaml",
+            17,
+            "while scanning a plain scalar, found a tab at line 53, column 17",
+        );
+        assert!(!yaml_error_text(Some(&oracle), Some(&elsewhere), &[]));
+        let mut other_file = rust.clone();
+        other_file["path"] = json!("b.yaml");
+        assert!(!yaml_error_text(Some(&oracle), Some(&other_file), &[]));
     }
 
     #[test]

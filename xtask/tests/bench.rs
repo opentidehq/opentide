@@ -116,13 +116,14 @@ fn budgets_from(report: &serde_json::Value, path: &Path) {
         .unwrap_or("an unknown CPU");
     #[expect(clippy::cast_precision_loss, reason = "a test RSS")]
     let rss_mib = explain["peak_rss_bytes"].as_u64().unwrap() as f64 / (1024.0 * 1024.0);
+    let platforms = xtask::bench::oracle::ORACLE_PLATFORMS;
     std::fs::write(
         path,
         format!(
             "schema_version = 1\n\n\
              [policy]\nregression = 0.10\nnoise_floor_s = 0.03\nnoise_floor_rss_mib = 2.0\ncross_cpu_regression = 0.5\n\n\
              [baseline]\nengine = \"python\"\noracle = \"{oracle}\"\nscale = 1\nseed = 20261107\n\
-             runs = 3\nwarmup = 0\ndigest = \"{digest}\"\n\
+             runs = 3\nwarmup = 0\ndigest = \"{digest}\"\nplatforms = {platforms:?}\n\
              runner = \"this machine\"\ncpu_model = \"{cpu}\"\nsource = \"tests/bench.rs\"\n\n\
              [commands.explain]\nlabel = \"explain\"\nbaseline_s = {median}\n\
              baseline_rss_mib = {rss_mib}\ntarget_s = 0.03\n"
