@@ -285,12 +285,14 @@ fn settle(
         (Some(waiver), Some(_)) if misses.is_empty() => Settled::Met(Some(format!(
             "meets its budget: remove its {key} ({waiver})"
         ))),
-        (Some(waiver), Some(accepted)) if value <= accepted * (1.0 + regression) => Settled::Waived(
-            misses
-                .iter()
-                .map(|why| format!("{why}; waived until {waiver} (measured {accepted} {unit})"))
-                .collect(),
-        ),
+        (Some(waiver), Some(accepted)) if value <= accepted * (1.0 + regression) => {
+            Settled::Waived(
+                misses
+                    .iter()
+                    .map(|why| format!("{why}; waived until {waiver} (measured {accepted} {unit})"))
+                    .collect(),
+            )
+        }
         (Some(waiver), Some(accepted)) => {
             let mut whys = misses.to_vec();
             whys.push(format!(
