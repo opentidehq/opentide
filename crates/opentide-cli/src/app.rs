@@ -15,7 +15,7 @@ use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
-use crate::render::text::{Color, Colour, Style, Text};
+use crate::render::text::{Colour, Style, Text};
 use crate::usage;
 use clap::FromArgMatches;
 use clap::parser::ValueSource;
@@ -1037,38 +1037,7 @@ impl Run<'_> {
         out: &mut dyn Write,
         err: &mut dyn Write,
     ) -> std::io::Result<i32> {
-        // A person at a terminal sees what runs until the result
-        // replaces it.
-        let status = self.mode == Mode::Human
-            && self.host.stderr_tty
-            && !self.globals.quiet
-            && self.console(true).colour != Colour::None;
-        // Log lines follow under `--debug`, and from the CVE check's
-        // lookups (warnings when they fail): the line stays above them.
-        let logging = self.globals.debug
-            || self.env.debug_requested()
-            || args.check == Some(crate::tree::Check::Cve);
-        // A report on stdout is whole: no status line then either.
-        let status = status && !args.watch && args.report_format == crate::tree::ReportFormat::Text;
-        if status {
-            let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
-            line.push_str(" Validating objects");
-            err.write_all(b"\x1b[?25l")?;
-            err.write_all(line.render(Colour::Full, false).as_bytes())?;
-            if logging {
-                err.write_all(b"\n")?;
-            }
-            err.flush()?;
-        }
         let (parsed, report) = self.validate(args);
-        if status {
-            err.write_all(if logging {
-                b"\x1b[?25h".as_slice()
-            } else {
-                b"\r\x1b[2K\x1b[?25h".as_slice()
-            })?;
-            err.flush()?;
-        }
         if let Some(report) = report {
             return self.emit_report(&report, out, err);
         }
