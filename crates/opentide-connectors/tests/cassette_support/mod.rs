@@ -42,10 +42,13 @@ pub struct Replay {
 /// and their values for this run (redacted as the recording redacted the
 /// Python run's).
 pub fn replay(name: &str, secrets: &[(&str, &str)]) -> Replay {
+    replay_cassette(cassette(name), secrets)
+}
+
+/// [`replay`] with a cassette already read (or altered).
+pub fn replay_cassette(cassette: Cassette, secrets: &[(&str, &str)]) -> Replay {
     let proxy = Proxy::start(
-        Mode::Replay {
-            cassette: cassette(name),
-        },
+        Mode::Replay { cassette },
         Redaction::new(secrets.iter().map(|(_, value)| (*value).to_owned())),
     )
     .expect("the replaying proxy starts");
