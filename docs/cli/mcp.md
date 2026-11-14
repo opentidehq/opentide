@@ -31,7 +31,7 @@ opentide mcp
 
 ```text illustrative
 error: Missing command: choose from start.
-  usage: opentide mcp [OPTIONS] COMMAND [ARGS]...
+  usage: opentide mcp <COMMAND>
   help: run 'opentide mcp --help'
 ```
 

@@ -2,7 +2,11 @@
 //! creations, deletions and renames (issue #816), configuration changes
 //! included.
 
+#[path = "support/export.rs"]
+mod export;
+
 mod index {
+    use crate::export::index_json;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
@@ -175,7 +179,7 @@ mod index {
     )]
     fn full(fs: &Arc<MemoryFs>) -> serde_json::Value {
         let workspace = Workspace::open(Arc::clone(fs) as Arc<dyn FileSystem>, options()).unwrap();
-        workspace.index().to_json(workspace.root())
+        index_json(workspace.index(), workspace.root())
     }
 
     proptest! {
@@ -207,7 +211,7 @@ mod index {
                     }
                 }
                 prop_assert_eq!(
-                    workspace.index().to_json(workspace.root()),
+                    index_json(workspace.index(), workspace.root()),
                     full(&fs),
                     "after {:?}", op
                 );
@@ -233,6 +237,6 @@ mod index {
             .invalidate(&[Change::changed("/ws/objects/rules/a.yaml")])
             .unwrap();
         assert!(workspace.index().get("rule", "u-2").is_some());
-        assert_eq!(workspace.index().to_json(workspace.root()), full(&fs));
+        assert_eq!(index_json(workspace.index(), workspace.root()), full(&fs));
     }
 }
