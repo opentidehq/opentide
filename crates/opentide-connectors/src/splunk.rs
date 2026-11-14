@@ -6,7 +6,7 @@
 //! makes to choose between the v1 and v2 search endpoints.
 //!
 //! Every call carries `Authorization: Splunk <token>` (the token as is when
-//! it already starts with `Splunk `); a body is a form (`urlencode`), with
+//! it already starts with `Splunk `); a body is a form, with
 //! `Content-Type: application/x-www-form-urlencoded`. The tenant is
 //! `https://<url>:<port>`, and every path but `server/info` is under the
 //! app's namespace (`/servicesNS/nobody/<app>/`). An HTML page in place of
@@ -23,10 +23,12 @@ use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
 };
-use crate::encode::{quote, quote_plus, urlencode};
 use crate::error::ConnectorError;
 use crate::text::json_text;
 use crate::{HttpSettings, TenantLabel};
+use opentide_compile::deploy::PATH_SEGMENT;
+use percent_encoding::utf8_percent_encode;
+use url::form_urlencoded::byte_serialize;
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "splunk";
@@ -60,54 +62,42 @@ struct Reply {
 }
 
 impl Reply {
-    /// Whether urllib raised `HTTPError` for it: any status outside 2xx.
+    /// Whether the status is outside 2xx.
     fn failed(&self) -> bool {
         !(200..300).contains(&self.answer.status)
     }
 
-    /// The status's reason phrase (`response.msg`).
-    fn reason(&self) -> &'static str {
-        crate::transport::StatusCode::from_u16(self.answer.status)
-            .ok()
-            .and_then(|status| status.canonical_reason())
-            .unwrap_or("")
-    }
-
-    /// What opentide's urllib handler logs for an error status in a client
-    /// that raises on it (`request_handler` without `allow_http_errors`:
-    /// the deploy's), before the Python Splunk client raises.
+    /// Logs an error status as a warning: deploy reads the answer on (a
+    /// `404` for a saved search that is not there is not a failure).
     fn log_failure(&self) {
         if self.failed() {
-            tracing::error!(
-                detail = format!(
-                    "Received HTTP Error Code {} {}",
-                    self.answer.status,
-                    self.reason()
-                )
-                .as_str(),
-                context = format!("{:?}", String::from_utf8_lossy(&self.answer.body)).as_str(),
-                critical = true,
-                logger = "opentide.platforms.splunk.client",
-                "fatal_error"
-            );
+            tracing::warn!(status = self.answer.status, "{}", self.http_error());
         }
     }
 
-    /// the Python Splunk client's `HTTPError` text: `HTTP <status> <reason>`, then the
-    /// first `<msg>` of an XML error, else the body's bytes.
+    /// `Splunk answered HTTP <status> <reason>`, then the first `<msg>` of an
+    /// XML error, else the body's text when there is one.
     fn http_error(&self) -> String {
+        let status = self.answer.status;
+        let reason = crate::transport::StatusCode::from_u16(status)
+            .ok()
+            .and_then(|status| status.canonical_reason())
+            .map(|reason| format!(" {reason}"))
+            .unwrap_or_default();
         let detail = match xml_message(&self.answer.body) {
-            XmlDetail::Message(text) => format!(" -- {text}"),
+            XmlDetail::Message(text) => text,
             XmlDetail::None => String::new(),
-            XmlDetail::NotXml => {
-                format!(" -- {:?}", String::from_utf8_lossy(&self.answer.body))
-            }
+            XmlDetail::NotXml => String::from_utf8_lossy(&self.answer.body).trim().to_owned(),
         };
-        format!("HTTP {} {}{detail}", self.answer.status, self.reason())
+        if detail.is_empty() {
+            format!("Splunk answered HTTP {status}{reason}")
+        } else {
+            format!("Splunk answered HTTP {status}{reason}: {detail}")
+        }
     }
 }
 
-/// What the Python Splunk client's `XML(body).findtext("./messages/msg")` finds.
+/// The first `./messages/msg` of an XML error body.
 enum XmlDetail {
     Message(String),
     None,
@@ -221,17 +211,12 @@ fn alternate(entry: &str) -> Option<String> {
     })
 }
 
-/// `urllib.parse.unquote`: `%XX` escapes decoded as UTF-8.
-fn unquote(text: &str) -> String {
-    percent_encoding::percent_decode_str(text)
-        .decode_utf8_lossy()
-        .into_owned()
-}
-
 /// An entity's path without its namespace (`_entity_path`): the link's,
-/// unquoted, after `servicesNS/<owner>/<app>/` or `services/`.
+/// percent-decoded, after `servicesNS/<owner>/<app>/` or `services/`.
 fn entity_path(link: &str) -> String {
-    let raw = unquote(link);
+    let raw = percent_encoding::percent_decode_str(link)
+        .decode_utf8_lossy()
+        .into_owned();
     if let Some(at) = raw.find("servicesNS/") {
         let rest = &raw[at + "servicesNS/".len()..];
         let mut parts = rest.splitn(3, '/');
@@ -244,10 +229,17 @@ fn entity_path(link: &str) -> String {
     raw
 }
 
+/// A saved search's name as the last segment of its path. Splunk decodes
+/// the segment as a form value (`+` is a space), as its own clients write
+/// it.
+fn entity_name(name: &str) -> String {
+    byte_serialize(name.as_bytes()).collect()
+}
+
 /// A saved search the tenant holds (the Python Splunk client's `SavedSearch`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedSearch {
-    /// Its path under the namespace, unquoted (`saved/searches/<name>`).
+    /// Its path under the namespace, percent-decoded (`saved/searches/<name>`).
     pub path: String,
     /// Its search as the tenant answered it (`content.search`).
     pub search: Option<String>,
@@ -311,26 +303,23 @@ fn messages(body: &Object, kinds: &[&str]) -> String {
         .join("; ")
 }
 
-/// A form value as `urlencode` writes Python's value: `str(value)`.
-fn form_value(value: &Json) -> String {
-    json_text(value)
-}
-
-/// `_encode`: the pairs, a list as one pair per item.
+/// A form of *pairs*, a list as one field per item and any other value as
+/// its text ([`json_text`]).
 fn form(pairs: &[(String, Json)]) -> String {
-    let mut flat: Vec<(String, String)> = Vec::new();
+    let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (key, value) in pairs {
         match value {
             Json::Array(items) => {
-                flat.extend(items.iter().map(|item| (key.clone(), form_value(item))));
+                for item in items {
+                    form.append_pair(key, &json_text(item));
+                }
             }
-            other => flat.push((key.clone(), form_value(other))),
+            other => {
+                form.append_pair(key, &json_text(other));
+            }
         }
     }
-    urlencode(
-        flat.iter()
-            .map(|(key, value)| (key.as_str(), value.as_str())),
-    )
+    form.finish()
 }
 
 /// The Splunk connector. A tenant's search endpoints (v1 or v2) are read
@@ -369,7 +358,10 @@ impl Splunk {
             Some(_) => cx.tenant.secret("app")?.expose().to_owned(),
             None => "search".to_owned(),
         };
-        Ok(format!("/servicesNS/nobody/{}/", quote_plus(&app)))
+        Ok(format!(
+            "/servicesNS/nobody/{}/",
+            utf8_percent_encode(&app, PATH_SEGMENT)
+        ))
     }
 
     /// One request through the urllib handler: the answer, or the error an
@@ -487,7 +479,7 @@ impl Splunk {
         let path = format!(
             "{}saved/searches/{}",
             Self::namespace(cx)?,
-            quote_plus(name)
+            entity_name(name)
         );
         let reply = Self::send(cx, crate::transport::Method::GET, &path, None).await?;
         reply.log_failure();
@@ -502,10 +494,7 @@ impl Splunk {
             return Err(ConnectorError::refused(
                 PLATFORM,
                 &cx.tenant.label.tenant,
-                format!(
-                    "Found multiple entities named '{}'; please specify a namespace.",
-                    quote_plus(name)
-                ),
+                format!("Found multiple entities named {name:?}; please specify a namespace."),
                 None,
             ));
         }
@@ -523,7 +512,9 @@ impl Splunk {
         search: &str,
     ) -> Result<SavedSearch, ConnectorError> {
         let path = format!("{}saved/searches/", Self::namespace(cx)?);
-        let body = urlencode([("name", name), ("search", search)]);
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([("name", name), ("search", search)])
+            .finish();
         let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         reply.log_failure();
         if reply.failed() {
@@ -566,7 +557,13 @@ impl Splunk {
                 .filter(|(key, _)| key.as_str() != "search")
                 .map(|(key, value)| (key.clone(), value.clone())),
         );
-        let path = format!("{}{}", Self::namespace(cx)?, quote(&saved.path, "/"));
+        let path = saved
+            .path
+            .split('/')
+            .map(|segment| utf8_percent_encode(segment, PATH_SEGMENT).to_string())
+            .collect::<Vec<_>>()
+            .join("/");
+        let path = format!("{}{path}", Self::namespace(cx)?);
         let reply = Self::send(
             cx,
             crate::transport::Method::POST,
@@ -590,7 +587,7 @@ impl Splunk {
         let path = format!(
             "{}saved/searches/{}",
             Self::namespace(cx)?,
-            quote_plus(name)
+            entity_name(name)
         );
         let reply = Self::send(cx, crate::transport::Method::DELETE, &path, None).await?;
         reply.log_failure();
@@ -660,15 +657,17 @@ impl Splunk {
         let earliest = epoch(request.window.start);
         let latest = epoch(request.window.end);
         let count = request.limit.saturating_add(1).to_string();
-        let body = urlencode([
-            ("search", sent.as_str()),
-            ("exec_mode", "oneshot"),
-            ("earliest_time", earliest.as_str()),
-            ("latest_time", latest.as_str()),
-            ("count", count.as_str()),
-            ("output_mode", "json"),
-            ("segmentation", "none"),
-        ]);
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([
+                ("search", sent.as_str()),
+                ("exec_mode", "oneshot"),
+                ("earliest_time", earliest.as_str()),
+                ("latest_time", latest.as_str()),
+                ("count", count.as_str()),
+                ("output_mode", "json"),
+                ("segmentation", "none"),
+            ])
+            .finish();
         let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         if reply.failed() {
             let found = messages(&parse(&reply.answer.body), &["ERROR", "FATAL"]);
@@ -748,12 +747,14 @@ impl Splunk {
         }
         let query = query.trim();
         let v2 = self.search_v2(cx, "parser").await?;
-        let form = urlencode([
-            ("q", query),
-            ("enable_lookups", "True"),
-            ("output_mode", "json"),
-            ("reload_macros", "True"),
-        ]);
+        let form = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([
+                ("q", query),
+                ("enable_lookups", "True"),
+                ("output_mode", "json"),
+                ("reload_macros", "True"),
+            ])
+            .finish();
         let namespace = Self::namespace(cx)?;
         let reply = if v2 {
             let path = format!("{namespace}search/v2/parser");
@@ -765,9 +766,7 @@ impl Splunk {
         let status = reply.answer.status;
         if reply.failed() {
             let body = &reply.answer.body;
-            if reply.reason() == "Temporary Redirect"
-                && String::from_utf8_lossy(body).contains("Network Error")
-            {
+            if status == 307 && String::from_utf8_lossy(body).contains("Network Error") {
                 return Ok(LiveCheck {
                     result: None,
                     errors: Vec::new(),
@@ -828,16 +827,7 @@ fn epoch(at: jiff::Timestamp) -> String {
 
 /// A saved search call the tenant refused (the Python Splunk client's `HTTPError`).
 fn refused_call(cx: TenantContext<'_>, reply: &Reply) -> ConnectorError {
-    ConnectorError::refused(
-        PLATFORM,
-        &cx.tenant.label.tenant,
-        reply.http_error(),
-        Some(format!(
-            "Received HTTP Error Code {} {}",
-            reply.answer.status,
-            reply.reason()
-        )),
-    )
+    ConnectorError::refused(PLATFORM, &cx.tenant.label.tenant, reply.http_error(), None)
 }
 
 /// An HTML page, which the REST API never sends (`_looks_like_html`): a
@@ -1003,6 +993,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_name_is_one_form_encoded_segment() {
+        assert_eq!(entity_name("Splunk SPL Rule"), "Splunk+SPL+Rule");
+        assert_eq!(entity_name("a/b&c"), "a%2Fb%26c");
+    }
+
+    #[test]
+    fn a_list_is_one_field_per_item() {
+        let pairs = vec![
+            ("search".to_owned(), Json::Str("index=* a&b".to_owned())),
+            (
+                "action".to_owned(),
+                Json::Array(vec![Json::Str("x".to_owned()), Json::Bool(true)]),
+            ),
+        ];
+        assert_eq!(form(&pairs), "search=index%3D*+a%26b&action=x&action=true");
+    }
+
+    #[test]
     fn queries_search_unless_they_start_with_a_command() {
         assert_eq!(spl_search(" index=main "), "search index=main");
         assert_eq!(spl_search("| tstats count"), "| tstats count");
@@ -1033,18 +1041,21 @@ mod tests {
                 elapsed: Duration::ZERO,
             },
         };
-        assert_eq!(reply(404, b"").http_error(), "HTTP 404 Not Found -- \"\"");
+        assert_eq!(
+            reply(404, b"").http_error(),
+            "Splunk answered HTTP 404 Not Found"
+        );
         assert_eq!(
             reply(
                 400,
                 b"<response><messages><msg type=\"ERROR\">Argument &quot;x&quot;</msg></messages></response>"
             )
             .http_error(),
-            "HTTP 400 Bad Request -- Argument \"x\""
+            "Splunk answered HTTP 400 Bad Request: Argument \"x\""
         );
         assert_eq!(
-            reply(400, b"{\"a\": 1}").http_error(),
-            "HTTP 400 Bad Request -- \"{\\\"a\\\": 1}\""
+            reply(400, b"{\"a\": 1}\n").http_error(),
+            "Splunk answered HTTP 400 Bad Request: {\"a\": 1}"
         );
         assert_eq!(
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),

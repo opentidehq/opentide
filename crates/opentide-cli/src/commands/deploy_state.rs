@@ -175,16 +175,16 @@ fn id_kind(platform: &str) -> opentide_schema::platforms::ExternalId {
     opentide_schema::platforms::external_id_kind(platform)
 }
 
-/// Python's type name of a JSON value (`type(value).__name__`).
-fn type_name(value: &serde_json::Value) -> &'static str {
+/// What a JSON value is, as a message names it: `null`, `a boolean`,
+/// `a number`, `a string`, `an array`, `an object`.
+fn json_kind(value: &serde_json::Value) -> &'static str {
     match value {
-        serde_json::Value::Null => "NoneType",
-        serde_json::Value::Bool(_) => "bool",
-        serde_json::Value::Number(number) if number.is_f64() => "float",
-        serde_json::Value::Number(_) => "int",
-        serde_json::Value::String(_) => "str",
-        serde_json::Value::Array(_) => "list",
-        serde_json::Value::Object(_) => "dict",
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "a boolean",
+        serde_json::Value::Number(_) => "a number",
+        serde_json::Value::String(_) => "a string",
+        serde_json::Value::Array(_) => "an array",
+        serde_json::Value::Object(_) => "an object",
     }
 }
 
@@ -362,7 +362,7 @@ impl Shard {
                         path,
                         &format!(
                             "platforms.{platform}.{tenant} is {}, not a string",
-                            type_name(value)
+                            json_kind(value)
                         ),
                     ));
                 };
@@ -971,7 +971,7 @@ mod tests {
         assert!(
             refused(&shard_text(r#"{"crowdstrike": {"t": 5}}"#))
                 .message
-                .ends_with("platforms.crowdstrike.t is int, not a string")
+                .ends_with("platforms.crowdstrike.t is a number, not a string")
         );
         assert!(
             refused(&shard_text(r#"{"crowdstrike": {" t": "x"}}"#))

@@ -1449,10 +1449,9 @@ pub struct PlatformConfiguration {
     pub tenants: Vec<GenericTenant>,
 }
 
-/// The platform identifiers with a model of their own, in the oracle's order
-/// ([`crate::platforms::Order::Configuration`]).
-pub const PLATFORMS: [&str; crate::platforms::COUNT] =
-    crate::platforms::ordered(crate::platforms::Order::Configuration);
+/// The platform identifiers with a model of their own, in the table's order
+/// ([`crate::platforms::IDS`]).
+pub const PLATFORMS: [&str; crate::platforms::COUNT] = crate::platforms::IDS;
 
 // --- visibility.toml -------------------------------------------------------------------
 
