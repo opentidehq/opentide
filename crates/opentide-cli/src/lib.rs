@@ -3,8 +3,8 @@
 //!
 //! This crate is the framework every command runs on (UC-3.3, #825): the
 //! command tree in clap ([`tree`]), `opentide --json commands` generated from
-//! it ([`catalog`]), the output modes ([`mode`]), global-flag hoisting
-//! ([`hoist`]), the JSON envelope and exit codes ([`envelope`]), usage errors
+//! it ([`catalog`]), the output modes ([`mode`]), the JSON envelope and
+//! exit codes ([`envelope`]), usage errors
 //! and "did you mean" ([`usage`], [`suggest`]), logging on `tracing`
 //! ([`logging`]), the crash handler and its redaction ([`crash`],
 //! [`redact`]) and Ctrl-C ([`app::install_interrupt_handler`]); and the
@@ -26,7 +26,6 @@ pub mod envelope;
 pub mod explain;
 pub mod git_baseline;
 pub mod help;
-pub mod hoist;
 pub mod json;
 pub mod logging;
 pub mod mcp;

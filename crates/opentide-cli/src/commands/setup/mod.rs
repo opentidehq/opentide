@@ -33,7 +33,8 @@ use crate::json::Json;
 use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::Style;
 
 const COMMAND: &str = "setup ci";
 
@@ -807,8 +808,8 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
             .iter()
             .map(|path| {
                 vec![
-                    Text::styled(path, &Style::new("bold")),
-                    Text::styled(purpose(path), &Style::new("dim")),
+                    Text::styled(path, &Style::new().bold()),
+                    Text::styled(purpose(path), &Style::new().dimmed()),
                 ]
             })
             .collect();
@@ -898,10 +899,10 @@ fn plan(root: &Path, run: &Run) -> Report {
     ];
     report.outcome_kind = Some(OutcomeKind::Plan);
     report.warnings = warnings;
-    let bold = Style::new("bold");
+    let bold = Style::new().bold();
     let mut lines = vec![Text::styled("ci", &bold)];
     if run.files.is_empty() {
-        lines.push(Text::styled("  nothing to write", &Style::new("dim")));
+        lines.push(Text::styled("  nothing to write", &Style::new().dimmed()));
     } else {
         let rows: Vec<Vec<Text>> = run
             .files

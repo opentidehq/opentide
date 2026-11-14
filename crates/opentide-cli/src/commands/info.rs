@@ -9,7 +9,7 @@ use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::catalogue::{self, EDGE_KINDS};
 use opentide_workspace::coverage::{match_technique, rule_technique_index};
 use opentide_workspace::fields::{get, platforms as object_platforms};
-use opentide_workspace::index::truthy;
+use opentide_workspace::index::holds_name;
 use opentide_workspace::info::{self as data, PlatformInfo};
 use opentide_workspace::{Index, Workspace};
 
@@ -22,7 +22,8 @@ use crate::envelope::Failure;
 use crate::json::Json;
 use crate::render::glyphs::SEPARATOR;
 use crate::render::table::{Column, Table, columns};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The sections, in the order the usage error lists them.
 pub const SECTIONS: [&str; 6] = [
@@ -309,8 +310,8 @@ fn outcome_line(rules: usize, threats: usize, objectives: usize, load_errors: us
 /// column.
 fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
     const GAP: usize = 2;
-    let label = Style::new("bold dim");
-    let dim = Style::new("dim");
+    let label = Style::new().bold().dimmed();
+    let dim = Style::new().dimmed();
     let mut rows = vec![vec![Text::styled("version", &label)]];
     let mut ordered: Vec<&PlatformInfo> = platforms.iter().collect();
     ordered.sort_by_key(|platform| !platform.enabled);
@@ -327,7 +328,7 @@ fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
         }
         let mut detail = Text::default();
         if platform.enabled {
-            detail.append("enabled", &Style::new("green"));
+            detail.append("enabled", &AnsiColor::Green.on_default());
         } else {
             detail.append("disabled", &dim);
         }
@@ -342,7 +343,11 @@ fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
             Text::styled(if number == 0 { "platforms" } else { "" }, &label),
             Text::styled(
                 data::label(&platform.name),
-                &Style::new(if platform.enabled { "bold" } else { "dim" }),
+                &if platform.enabled {
+                    Style::new().bold()
+                } else {
+                    Style::new().dimmed()
+                },
             ),
             detail,
         ]);
@@ -380,7 +385,7 @@ fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
                 .and_then(opentide_workspace::Object::root);
             let name = root
                 .and_then(|root| get(root, "name"))
-                .filter(|node| truthy(node))
+                .filter(|node| holds_name(node))
                 .map(|node| node.value.to_string())
                 .unwrap_or_default();
             let mut row = vec![uuid.clone(), name];
@@ -405,8 +410,8 @@ fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
 
 /// The catalogue in a few lines: objects, signals, edges by kind, ATT&CK.
 fn catalogue_lines(catalogue: &catalogue::Catalogue) -> Vec<Text> {
-    let label = Style::new("bold dim");
-    let dim = Style::new("dim");
+    let label = Style::new().bold().dimmed();
+    let dim = Style::new().dimmed();
     let row = |name: &str, value: String, detail: String| {
         vec![
             Text::styled(name, &label),

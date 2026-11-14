@@ -1,0 +1,8 @@
+bin.name = "opentide"
+args = ["valdiate", "--json"]
+env.inherit = false
+status.code = 2
+stdout = """
+{"error":"unrecognized subcommand 'valdiate'","ok":false,"status":"failed","message":"unrecognized subcommand 'valdiate'","schema_version":1,"command":"","duration_ms":[..],"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_command","message":"unrecognized subcommand 'valdiate'","argument":"valdiate","suggestion":"validate","crash_log":null}}
+"""
+stderr = ""

@@ -1,6 +1,6 @@
 //! One run of `opentide`: from the command line to the exit code.
 //!
-//! [`run`] hoists the global flags, resolves the output mode, sets up logging
+//! [`run`] reads the global flags, resolves the output mode, sets up logging
 //! for it, parses the command line with clap, reports usage errors through
 //! the contract, runs the command and catches whatever it did not expect
 //! ([`crate::crash`]). It writes to the streams it is given, so the binary,
@@ -10,14 +10,14 @@ use crate::catalog;
 use crate::crash::{self, Facts, Internal};
 use crate::env::Env;
 use crate::envelope::{Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, USAGE_EXIT_CODE, code};
-use crate::hoist;
 use crate::json::document_text;
 use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
-use crate::render::text::{Color, Colour, Style, Text};
+use crate::render::text::{Colour, Text};
 use crate::usage;
+use anstyle::{AnsiColor, Style};
 use clap::parser::ValueSource;
 use std::cell::RefCell;
 use std::io::Write;
@@ -97,7 +97,7 @@ impl Interrupt {
 /// ends without it.
 pub const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
 
-/// The parsed root options: what every command shares.
+/// The parsed root options and global flags: what every command shares.
 #[expect(
     clippy::struct_excessive_bools,
     reason = "the root's flags, one field each, as the command line has them"
@@ -116,8 +116,6 @@ pub struct Globals {
     pub verbose: bool,
     /// `--version` or `-V`.
     pub version: bool,
-    /// `--help` among the root's own options.
-    pub help: bool,
     /// `--install-completion`.
     pub install_completion: bool,
     /// `--show-completion`.
@@ -130,47 +128,65 @@ pub struct Globals {
     pub data: Option<String>,
 }
 
-/// Reads the root's options, before the command, from hoisted arguments.
-pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
-    let end = hoist::root_options_end(root, args);
-    let mut globals = Globals::default();
-    let mut index = 0;
-    while index < end {
-        let token = &args[index];
-        index += 1;
-        let (name, inline) = match token.split_once('=') {
-            Some((name, value)) => (name, Some(value.to_owned())),
-            None => (token.as_str(), None),
-        };
-        let mut value = || {
-            inline.clone().or_else(|| {
-                let next = args.get(index).cloned();
-                index += 1;
-                next
-            })
-        };
-        // A flag given a value (`--json=1`) is a usage error, not the flag.
-        let flag = inline.is_none();
-        match name {
-            "--json" if flag => globals.json = true,
-            "--no-color" if flag => globals.no_color = true,
-            "--debug" if flag => globals.debug = true,
-            "--quiet" if flag => globals.quiet = true,
-            "--verbose" if flag => globals.verbose = true,
-            "--version" | "-V" if flag => globals.version = true,
-            "--help" if flag => globals.help = true,
-            "--install-completion" if flag => globals.install_completion = true,
-            "--show-completion" if flag => globals.show_completion = true,
-            "--repo" => globals.repo = value(),
-            "--proxy" => globals.proxy = value(),
-            "--data" => globals.data = value(),
-            _ => {}
+/// `args` parsed as far as clap can: the global flags, the root's options and
+/// the command path, even from a command line with a usage error in it (the
+/// error is reported once the run's mode is known).
+pub fn lenient_matches(root: &clap::Command, args: &[String]) -> clap::ArgMatches {
+    // `--help` is a flag here, so the help's run knows its globals too.
+    fn lenient(command: clap::Command) -> clap::Command {
+        let command = command.ignore_errors(true).mut_subcommands(lenient);
+        if command.get_arguments().any(|arg| arg.get_id() == "help") {
+            command.mut_arg("help", |arg| arg.action(clap::ArgAction::SetTrue))
+        } else {
+            command
         }
     }
-    if globals.proxy.is_none() {
-        globals.proxy = env.get("OPENTIDE_PROXY").map(str::to_owned);
+    lenient(root.clone())
+        .try_get_matches_from(
+            std::iter::once(catalog::PROGRAM.to_owned()).chain(args.iter().cloned()),
+        )
+        .unwrap_or_default()
+}
+
+/// The command path `args` name (`["generate", "docs", "rules"]`), as far as
+/// it parses.
+pub fn command_words(root: &clap::Command, args: &[String]) -> Vec<String> {
+    command_path(&lenient_matches(root, args))
+}
+
+/// Reads the root's options and the global flags of `args`, parsed into
+/// `matches` by [`lenient_matches`].
+///
+/// A global flag is any of its words before `--`: no option takes a value
+/// that starts with `-` but by `=`, so that is what clap reads too, and it
+/// still holds where clap stopped short, after a usage error
+/// (`valdiate --json`) or after `generate`'s phases (`generate docs --json`).
+pub fn globals(args: &[String], matches: &clap::ArgMatches, env: &Env) -> Globals {
+    let typed_flag = |name: &str| {
+        args.iter()
+            .take_while(|word| *word != "--")
+            .any(|word| word == name)
+    };
+    let flag = |id: &str| matches.try_get_one::<bool>(id).ok().flatten() == Some(&true);
+    // `--repo` and `--data` as typed: their environment variables are read
+    // where the workspace is found.
+    let typed = |id: &str| {
+        let value = matches.try_get_one::<String>(id).ok().flatten()?;
+        (matches.value_source(id) == Some(ValueSource::CommandLine)).then(|| value.clone())
+    };
+    Globals {
+        json: typed_flag("--json"),
+        no_color: typed_flag("--no-color"),
+        debug: typed_flag("--debug"),
+        quiet: typed_flag("--quiet"),
+        verbose: typed_flag("--verbose"),
+        version: flag("version"),
+        install_completion: flag("install_completion"),
+        show_completion: flag("show_completion"),
+        repo: typed("repo"),
+        data: typed("data"),
+        proxy: typed("proxy").or_else(|| env.get("OPENTIDE_PROXY").map(str::to_owned)),
     }
-    globals
 }
 
 /// A usage error a command found itself, with the notes under it.
@@ -231,7 +247,7 @@ impl Run<'_> {
             Mode::Mcp => {}
             _ => {
                 let console = self.console(self.host.stdout_tty);
-                let bold = Style::BOLD;
+                let bold = Style::new().bold();
                 for line in lines {
                     out.write_all(console.line(&Text::styled(line, &bold)).as_bytes())?;
                 }
@@ -246,6 +262,30 @@ impl Run<'_> {
         out.flush()?;
         err.flush()?;
         Ok(outcome.exit_code)
+    }
+
+    /// A clap parse error: the envelope under `--json`, else clap's own
+    /// rendered error on stderr. Exit 2.
+    fn emit_usage(
+        &self,
+        problem: usage::UsageError,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        if self.mode == Mode::Json {
+            let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
+            return self.emit(&outcome, &[], &[], out, err);
+        }
+        let console = self.console(self.host.stderr_tty);
+        let text = if console.colour == Colour::Full {
+            problem.rendered.ansi().to_string()
+        } else {
+            problem.rendered.to_string()
+        };
+        err.write_all(text.as_bytes())?;
+        err.write_all(console.agent_tip(self.mode).as_bytes())?;
+        err.flush()?;
+        Ok(USAGE_EXIT_CODE)
     }
 
     /// The stream the lines go to: colour in `human` mode, bold and dim only
@@ -322,10 +362,13 @@ impl Run<'_> {
         } else {
             "--show-completion"
         };
-        let start = hoist::root_options_end(&self.root, &self.args);
-        let words: Vec<String> = self.args[start..]
+        // The shell named after the option: `--show-completion bash`.
+        let words: Vec<String> = self
+            .args
             .iter()
-            .take_while(|word| !word.starts_with('-'))
+            .skip_while(|word| !option.eq(*word))
+            .skip(1)
+            .filter(|word| !word.starts_with('-'))
             .cloned()
             .collect();
         let refuse = |failure: Failure| {
@@ -445,7 +488,7 @@ impl Run<'_> {
         let matches = match self.root.clone().try_get_matches_from(argv) {
             Ok(matches) => matches,
             Err(error) => {
-                let path = hoist::command_words(&self.root, &self.args);
+                let path = command_words(&self.root, &self.args);
                 match error.kind() {
                     clap::error::ErrorKind::DisplayHelp => return self.help(&path, 0, out),
                     // `opentide mcp`: a person gets the group's help, exit 2;
@@ -457,9 +500,8 @@ impl Run<'_> {
                     }
                     _ => {}
                 }
-                let problem = usage::describe(&self.root, &self.args, &error);
-                let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
-                return self.emit(&outcome, &problem.notes, &[], out, err);
+                let problem = usage::describe(&self.root, &self.args, error);
+                return self.emit_usage(problem, out, err);
             }
         };
         let mut words = command_path(&matches);
@@ -490,7 +532,12 @@ impl Run<'_> {
                 .position(|word| word.starts_with('-'))
             {
                 let options = generate_phases.split_off(end);
-                let start = hoist::root_options_end(&self.root, &self.args);
+                // The command line up to `generate`, the phases left out.
+                let start = self
+                    .args
+                    .windows(2)
+                    .position(|pair| pair[0] == "generate" && pair[1] == generate_phases[0])
+                    .unwrap_or_default();
                 let mut reparsed = self.args[..=start].to_vec();
                 reparsed.extend(options);
                 let argv =
@@ -499,10 +546,8 @@ impl Run<'_> {
                     if error.kind() == clap::error::ErrorKind::DisplayHelp {
                         return self.help(&words, 0, out);
                     }
-                    let problem = usage::describe(&self.root, &reparsed, &error);
-                    let outcome =
-                        Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
-                    return self.emit(&outcome, &problem.notes, &[], out, err);
+                    let problem = usage::describe(&self.root, &reparsed, error);
+                    return self.emit_usage(problem, out, err);
                 }
             }
         }
@@ -652,7 +697,7 @@ impl Run<'_> {
                         .get_one::<crate::tree::ReportFormat>("report_format")
                         .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
                 if status {
-                    let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
+                    let mut line = Text::styled("⠋", &AnsiColor::Cyan.on_default().bold());
                     line.push_str(" Validating objects");
                     err.write_all(b"\x1b[?25l")?;
                     err.write_all(line.render(Colour::Full, false).as_bytes())?;
@@ -2002,7 +2047,10 @@ impl Run<'_> {
         }
         err.write_all(result_err.as_bytes())?;
         if !run.refused && !self.globals.quiet && text_out {
-            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::DIM);
+            let note = Text::styled(
+                crate::commands::deploy::DRY_RUN_NOTE,
+                &Style::new().dimmed(),
+            );
             out.write_all(stdout.line(&note).as_bytes())?;
         }
         out.flush()?;
@@ -2747,9 +2795,9 @@ fn run_with(
 ) -> i32 {
     let started = Instant::now();
     let root = catalog::root();
-    let hoisted = hoist::drop_group_separators(&root, &hoist::hoist(&root, argv));
-    let globals = globals(&root, &hoisted, env);
-    let leading = hoist::leading_words(&root, &hoisted);
+    let matches = lenient_matches(&root, argv);
+    let globals = globals(argv, &matches, env);
+    let leading = command_path(&matches);
     let mode = mode::resolve(
         Inputs {
             json_flag: globals.json,
@@ -2762,7 +2810,7 @@ fn run_with(
     let debug = globals.debug || env.debug_requested();
     let run = Run {
         indent: mode::json_indent(env, host.stdout_tty),
-        args: hoisted,
+        args: argv.to_vec(),
         root,
         globals,
         mode,
@@ -2822,7 +2870,7 @@ fn report_internal(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> i32 {
-    let words = hoist::command_words(&run.root, &run.args).join(" ");
+    let words = command_words(&run.root, &run.args).join(" ");
     let facts = Facts::current(&run.host.version);
     let now = utc_now();
     crash::report(
@@ -2985,8 +3033,10 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         width: terminal_width(),
         interrupt,
     };
-    let mut out = std::io::stdout().lock();
-    let mut err = std::io::stderr();
+    // The renderers decide whether to style (`App::console`); the console
+    // streams only make a Windows console read what they write.
+    let mut out = anstream::AutoStream::always(std::io::stdout()).lock();
+    let mut err = anstream::AutoStream::always(std::io::stderr());
     run(argv, &env, &host, &mut out, &mut err)
 }
 
@@ -3080,17 +3130,41 @@ mod tests {
     }
 
     #[test]
-    fn framework_globals_read_root_options_only() {
+    fn framework_command_words_and_late_global_flags() {
         let root = catalog::root();
-        let args: Vec<String> =
-            "--repo r --proxy=http://p --debug -V --data d --help validate --quiet"
-                .split_whitespace()
-                .map(str::to_owned)
-                .collect();
-        let globals = globals(&root, &args, &Env::default());
+        let words = |text: &str| {
+            let args: Vec<String> = text.split_whitespace().map(str::to_owned).collect();
+            command_words(&root, &args).join(" ")
+        };
+        assert_eq!(words("generate docs rules --x"), "generate docs rules");
+        assert_eq!(words("explain invalid_ref"), "explain");
+        assert_eq!(words("--json validate --json query"), "validate query");
+        assert_eq!(words("--repo r mcp start --x"), "mcp start");
+        assert_eq!(words("valdiate"), "");
+        // A global flag after a usage error, or after `generate`'s phases,
+        // still counts; after `--` it does not.
+        for line in [
+            "valdiate --json",
+            "validate --bogus --json",
+            "generate docs --json",
+        ] {
+            assert!(globals_of(&root, line, &Env::default()).json, "{line}");
+        }
+        assert!(!globals_of(&root, "explain -- --json", &Env::default()).json);
+    }
+
+    #[test]
+    fn framework_globals_read_root_options_and_global_flags() {
+        let root = catalog::root();
+        let args: Vec<String> = "--repo r --proxy=http://p --debug -V --data d validate --quiet"
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
+        let globals = globals(&args, &lenient_matches(&root, &args), &Env::default());
         assert_eq!(globals.repo.as_deref(), Some("r"));
         assert_eq!(globals.proxy.as_deref(), Some("http://p"));
-        assert!(globals.debug && globals.version && globals.help && !globals.quiet);
+        // `--quiet` is global: after the command too.
+        assert!(globals.debug && globals.version && globals.quiet);
         let env = Env::from_pairs([("OPENTIDE_PROXY", "http://e")]);
         assert_eq!(
             globals_of(&root, "validate", &env).proxy.as_deref(),
@@ -3189,7 +3263,7 @@ mod tests {
     }
 
     #[test]
-    fn framework_usage_error_at_a_narrow_terminal_is_the_outcome_renderer() {
+    fn framework_usage_error_in_the_text_modes_is_clap_rendering() {
         let word = "--an-option-whose-name-is-wider-than-the-terminal";
         let line = format!("validate {word}");
         for (mode, colour) in [("plain", Colour::Mono), ("human", Colour::Full)] {
@@ -3197,25 +3271,17 @@ mod tests {
             assert_eq!(result.code, USAGE_EXIT_CODE, "{mode}");
             // A word is never split: the option stays whole on its row.
             assert!(result.stderr.contains(word), "{mode}: {}", result.stderr);
-            let message = format!("Unknown option {word:?}.");
-            let console = Console {
-                colour,
-                width: Some(30),
-            };
-            let notes = [
-                (
-                    "usage".to_owned(),
-                    "opentide validate [OPTIONS] [COMMAND]".to_owned(),
-                ),
-                (
-                    "help".to_owned(),
-                    "run 'opentide validate --help'".to_owned(),
-                ),
-            ];
+            // clap's error, styled only in `human` mode.
+            assert!(
+                result.stderr.starts_with("error: ") || result.stderr.starts_with('\u{1b}'),
+                "{mode}: {}",
+                result.stderr
+            );
             assert_eq!(
-                result.stderr,
-                console.error(&message, &notes, Mode::Plain, false),
-                "{mode}"
+                result.stderr.contains('\u{1b}'),
+                colour == Colour::Full,
+                "{mode}: {}",
+                result.stderr
             );
         }
         // The agent tip, as the outcome renderer writes it.
@@ -3783,40 +3849,21 @@ mod tests {
     }
 
     #[test]
-    fn framework_a_separator_before_a_command_name_runs_it() {
-        let run = dispatched("--json -- commands", &[], false);
-        assert_eq!(run.code, 0, "{}", run.stdout);
-        assert!(run.stdout.starts_with("{\"program\""));
+    fn framework_a_separator_before_a_command_name_is_a_usage_error() {
+        // `--` ends the options: what follows is no command.
+        for line in [
+            "--json -- commands",
+            "--json validate -- query",
+            "--json generate extract -- sentinel",
+        ] {
+            let run = dispatched(line, &[], false);
+            assert_eq!(run.code, USAGE_EXIT_CODE, "{line}: {}", run.stdout);
+            assert!(run.stdout.contains("\"code\":\"usage_"), "{}", run.stdout);
+        }
         let plain = dispatched("-- commands", &[], false);
-        assert_eq!((plain.code, plain.stderr.as_str()), (0, ""));
-        // `validate query` runs on this CLI (UC-3.5b): the separator is dropped
-        // and the subcommand runs, not a usage error.
-        let nested = dispatched("--json validate -- query", &[], false);
-        assert!(
-            nested.stdout.contains("\"command\":\"validate query\""),
-            "{}",
-            nested.stdout
-        );
-        assert!(
-            !nested.stdout.contains("\"code\":\"usage_"),
-            "{}",
-            nested.stdout
-        );
-        // A subcommand after a separator runs by its path.
-        let separated = dispatched("--json generate extract -- sentinel", &[], false);
-        assert!(
-            separated
-                .stdout
-                .contains("\"command\":\"generate extract sentinel\""),
-            "{}",
-            separated.stdout
-        );
-        assert!(
-            !separated.stdout.contains("\"code\":\"usage_"),
-            "{}",
-            separated.stdout
-        );
-        // `validate -- --json`: an unknown option of validate, not a command.
+        assert_eq!(plain.code, USAGE_EXIT_CODE);
+        // `validate -- --json`: after `--`, `--json` is a word where
+        // validate expects its command.
         let option = dispatched("--json validate -- --json", &[], false);
         assert_eq!(option.code, 2);
         assert!(
@@ -3824,12 +3871,8 @@ mod tests {
             "{}",
             option.stdout
         );
-        assert!(option.stdout.contains("\"code\":\"usage_unknown_option\""));
-        assert!(
-            option
-                .stdout
-                .contains(r#""message":"Unknown option \"--json\".""#)
-        );
+        assert!(option.stdout.contains("\"code\":\"usage_unknown_command\""));
+        assert!(option.stdout.contains(r#""argument":"--json""#));
     }
 
     #[test]
@@ -3882,14 +3925,14 @@ mod tests {
         let new = dispatched("--json new", &[], false);
         assert!(
             new.stdout
-                .contains("\"error\":\"Missing command: choose from threat, objective, rule.\"")
+                .contains("\"error\":\"missing command: choose from threat, objective, rule\"")
         );
         let agent = dispatched("mcp", &[("AI_AGENT", "a")], false);
         assert!(agent.stdout.is_empty());
         assert!(
             agent
                 .stderr
-                .starts_with("error: Missing command: choose from start.\n")
+                .starts_with("error: missing command: choose from start\n")
         );
     }
 
@@ -4112,7 +4155,12 @@ mod tests {
         // A bare argv in machine mode is the usage error, not help.
         let bare = dispatched("--json", &[], false);
         assert_eq!(bare.code, 2);
-        assert!(bare.stdout.contains("\"error\":\"Missing command.\""));
+        assert!(
+            bare.stdout
+                .contains("requires a subcommand but one was not provided"),
+            "{}",
+            bare.stdout
+        );
         // `-h` is no option, as in the Python CLI (#841): `--help` is the
         // one help option.
         let short = dispatched("--json -h", &[], false);
@@ -4122,13 +4170,13 @@ mod tests {
             "{}",
             short.stdout
         );
-        // A flag given a value: the usual usage error, with its notes.
+        // A flag given a value: clap's usage error.
         let valued = dispatched("--json=1 explain x", &[], false);
         assert_eq!(valued.code, 2);
         assert!(
             valued
                 .stderr
-                .starts_with("error: --json does not take a value.\n  usage: "),
+                .starts_with("error: unexpected value '1' for '--json' found"),
             "{}",
             valued.stderr
         );
@@ -4221,16 +4269,14 @@ mod tests {
         assert!(help.stdout.contains("Usage: opentide"), "{}", help.stdout);
     }
 
-    /// `--verbose` is a root flag, hoisted from after the command like
+    /// `--verbose` is a global flag, accepted after the command like
     /// `--quiet`; with `--quiet` it is a usage error (opentide 0.28.1).
     #[test]
     fn verbose_is_a_root_flag_that_quiet_refuses() {
         let root = catalog::root();
         assert!(globals_of(&root, "--verbose lint", &Env::default()).verbose);
         assert!(!globals_of(&root, "lint", &Env::default()).verbose);
-        assert!(crate::hoist::HOISTED_FLAGS.contains(&"--verbose"));
-        let hoisted = crate::hoist::hoist(&root, &["lint".to_owned(), "--verbose".to_owned()]);
-        assert_eq!(hoisted, ["--verbose", "lint"]);
+        assert!(globals_of(&root, "lint --verbose", &Env::default()).verbose);
         for line in [
             "--quiet --verbose --json commands",
             "--json commands --verbose --quiet",
@@ -4260,7 +4306,7 @@ mod tests {
 
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {
         let args: Vec<String> = text.split_whitespace().map(str::to_owned).collect();
-        globals(root, &args, env)
+        globals(&args, &lenient_matches(root, &args), env)
     }
 
     /// `generate <phase>...`: the words after `generate` that are no

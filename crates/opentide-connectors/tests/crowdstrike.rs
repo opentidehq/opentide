@@ -134,6 +134,7 @@ fn crowdstrike_deploys_as_the_python_client_does() {
             rule_id: rule_id.to_owned(),
             operation,
             body,
+            policies: None,
         };
         block_on(async { deployer.deploy(cx, &request).await }).unwrap()
     };
@@ -207,6 +208,7 @@ fn crowdstrike_a_body_one_byte_off_fails_the_replay() {
         rule_id: String::new(),
         operation: Operation::Create,
         body: create("Encoded PowerShelL"),
+        policies: None,
     };
     let platform = Crowdstrike::new();
     let _ = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
@@ -347,6 +349,15 @@ fn crowdstrike_runs_and_stops_query_jobs_as_the_python_runner_does() {
         )
     );
     assert_eq!(replay.proxy.verify(), Vec::new());
+    // One token (expires_in 1799 s) serves every search of the run, where
+    // the recording client signed in before each.
+    let sign_ins = replay
+        .proxy
+        .requests()
+        .iter()
+        .filter(|request| request.url.ends_with("/oauth2/token"))
+        .count();
+    assert_eq!(sign_ins, 1);
 }
 
 #[test]
