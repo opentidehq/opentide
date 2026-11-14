@@ -84,7 +84,7 @@ pub fn strategy(
 ) -> Result<StatusStrategy, CompileError> {
     cx.statuses
         .strategy(status)
-        .map_err(|error| CompileError::failed(display, &error.exception_text()))
+        .map_err(|error| CompileError::failed(display, &error.to_string()))
 }
 
 /// The action for a rule with `status` whose recorded id on the tenant is

@@ -23,7 +23,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     Context, Outcome, block_on, configured, format, json_string, key_error, report,
-    sanitize_filename, strip, tenant, under, write_text,
+    sanitize_filename, tenant, under, write_text,
 };
 
 const SENTINEL: &str = "sentinel";
@@ -210,7 +210,7 @@ pub(crate) fn scalar(value: &CJson) -> String {
 fn block_style(text: &str) -> &'static str {
     let first = text
         .split('\n')
-        .find(|line| !strip(line).is_empty())
+        .find(|line| !line.trim().is_empty())
         .unwrap_or("");
     if first.starts_with(' ') { "|2" } else { "|" }
 }

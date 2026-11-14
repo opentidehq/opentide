@@ -110,8 +110,8 @@ pub fn deploy_http_settings(platform: &str) -> HttpSettings {
     }
 }
 
-/// The built-in platforms with a connector, in the order Python lists them
-/// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
+/// The built-in platforms with a connector, in the platform table's order
+/// ([`plugin::BUILTIN`]): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
 /// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
@@ -122,9 +122,9 @@ pub fn builtin() -> Registry {
         Box::new(defender::Defender::new()),
         Box::new(splunk::Splunk::new()),
         Box::new(sentinel_one::SentinelOne),
-        Box::new(carbon_black::CarbonBlack),
         Box::new(crowdstrike::Crowdstrike::new()),
         Box::new(harfanglab::HarfangLab),
+        Box::new(carbon_black::CarbonBlack),
         Box::new(elastic::Elastic),
         Box::new(sysdig::Sysdig),
         Box::new(bitdefender::Bitdefender),
@@ -275,9 +275,9 @@ mod tests {
                 "defender_for_endpoint",
                 "splunk",
                 "sentinel_one",
-                "carbon_black_cloud",
                 "crowdstrike",
                 "harfanglab",
+                "carbon_black_cloud",
                 "elastic",
                 "sysdig",
                 "bitdefender",

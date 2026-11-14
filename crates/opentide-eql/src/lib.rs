@@ -1108,6 +1108,10 @@ pub fn sequence_maxspans(source: &str) -> Vec<(ByteSpan, u64)> {
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize) -> Option<String> {
     let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset) {
+        return None;
+    }
     let (tree, _) = parse_prepared(source)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let catalog = Catalog::cached();
@@ -1218,8 +1222,11 @@ const EVENT_CATEGORIES: &[&str] = &[
 ];
 
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = source.get(..offset.min(source.len())) else {
+        return Vec::new();
+    };
     let catalog = Catalog::cached();
-    let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
     if trimmed.is_empty() {
         let mut items: Vec<CompletionItem> = ["sequence", "sample"]
@@ -1299,7 +1306,8 @@ fn fields_in(source: &str) -> Vec<String> {
     reason = "a signature has a handful of parameters, far below u32::MAX"
 )]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
-    let before = &source[..offset.min(source.len())];
+    // An offset inside a character (a decoded escape) has nothing to show.
+    let before = source.get(..offset.min(source.len()))?;
     let (name, active) = innermost_call(before)?;
     let row = Catalog::cached().function(name.trim_end_matches('~'))?;
     let parameters: Vec<ParameterInformation> = row
@@ -1884,5 +1892,16 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "process where process.name == \"\u{e9}\" and length(\"\u{e9}\") > 1";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        assert!(completions(src, inside).is_empty());
+        assert_eq!(hover(src, inside), None);
+        assert!(signature_help(src, inside).is_none());
     }
 }

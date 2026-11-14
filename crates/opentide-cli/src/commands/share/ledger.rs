@@ -46,43 +46,6 @@ fn triple(record: &Object) -> Option<Triple> {
     Some((values.next()?, values.next()?, values.next()?))
 }
 
-/// `str.splitlines()`: every line break Python knows, the breaks dropped.
-fn split_lines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((index, c)) = chars.next() {
-        let breaks = matches!(
-            c,
-            '\n' | '\r'
-                | '\u{0b}'
-                | '\u{0c}'
-                | '\u{1c}'
-                | '\u{1d}'
-                | '\u{1e}'
-                | '\u{85}'
-                | '\u{2028}'
-                | '\u{2029}'
-        );
-        if !breaks {
-            continue;
-        }
-        lines.push(&text[start..index]);
-        let mut end = index + c.len_utf8();
-        if c == '\r'
-            && let Some((next, '\n')) = chars.peek().copied()
-        {
-            chars.next();
-            end = next + 1;
-        }
-        start = end;
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
 fn collapse(entries: Vec<Line>) -> Vec<Line> {
     let mut last: Vec<(Triple, usize)> = Vec::new();
     for (index, entry) in entries.iter().enumerate() {
@@ -122,7 +85,7 @@ impl Ledger {
         };
         let text = String::from_utf8_lossy(&bytes);
         let mut entries = Vec::new();
-        for line in split_lines(&text) {
+        for line in text.lines() {
             if line.trim().is_empty() {
                 continue;
             }
@@ -263,8 +226,14 @@ mod tests {
             std::fs::read_to_string(&file).unwrap(),
             "not json\n[1]\n{\"state\":\"synced\",\"object_uuid\":\"b\",\"integration\":\"misp\",\"target\":\"t\"}\n"
         );
+        // A ledger edited on Windows: CRLF line ends read as LF ones.
+        std::fs::write(
+            &file,
+            "{\"state\":\"synced\",\"object_uuid\":\"c\",\"integration\":\"misp\",\"target\":\"t\"}\r\n\r\n[1]\r\n",
+        )
+        .unwrap();
+        assert_eq!(Ledger::load(&file).records().len(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(Ledger::load(&file).records().is_empty());
-        assert_eq!(split_lines("a\rb\u{2028}c"), ["a", "b", "c"]);
     }
 }

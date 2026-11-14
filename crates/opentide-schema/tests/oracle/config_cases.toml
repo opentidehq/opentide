@@ -25,6 +25,12 @@
 # difference no case names.
 
 [[difference]]
+id = "one-union-error"
+reason = "A configuration value that may be one of several types (an integer or a `$VARIABLE` reference, a boolean or a reference, a `custom_details` value) of the wrong kind is one error naming what is accepted (`expected an integer or a string`), where the oracle kept the message of the member it ranked first (`Input should be a valid integer`). The code and the field path do not change."
+fields = ["message"]
+changelog = "**A value of the wrong type is reported once, at its own path**"
+
+[[difference]]
 id = "lint-error-quotes-values"
 reason = "A `lint.toml` that cannot be used is refused with its error, which quotes each value in double quotes with Rust's escapes (`unknown check(s) \"alpha\"`), where the oracle used Python's `repr` (`'alpha'`)."
 fields = ["error"]
@@ -301,6 +307,7 @@ text = "[paths.objects]\nrule = 1\ncolour = \"x\"\n[artifacts.schemas]\nrouter =
 
 [[case]]
 id = "splunk-unions"
+difference = "one-union-error"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/splunk.toml"
 text = "[[tenants]]\nname = \"a\"\nstrategies = \"DELETION\"\n[tenants.setup]\nurl = 1\nport = 1.5\napp = \"a\"\nssl = \"maybe\"\nschedule_offset = \"x\"\n"
@@ -313,6 +320,7 @@ text = "[[tenants]]\nname = \"a\"\nstrategies = [\"release\", 3]\nsetup = 5\n"
 
 [[case]]
 id = "splunk-strategies-empty"
+difference = "one-union-error"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/splunk.toml"
 text = "[[tenants]]\nname = \"a\"\nstrategies = []\n[tenants.setup]\nurl = \"u\"\nport = \"8089\"\napp = \"a\"\ncorrelation_searches = \"x\"\nallow_skew = true\nenterprise_security = \"$ES\"\nssl = \" Yes \"\n"
@@ -331,6 +339,7 @@ text = "[[tenants]]\nname = \"\"\nmanual = 1\n"
 
 [[case]]
 id = "elastic-patterns"
+difference = "one-union-error"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/elastic.toml"
 text = "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nelasticsearch_url = \"e\"\napi_key = \"lit\"\nversion = \"x\"\nsuppression = 1\n"
@@ -349,6 +358,7 @@ text = "[platform]\ncolour = \"blue\"\nname = 5\n[[tenants]]\nname = \"t\"\n[ten
 
 [[case]]
 id = "sentinel-one-ids"
+difference = "one-union-error"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/sentinel_one.toml"
 text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nurl = \"u\"\naccount_id = 1.5\napi_token = \"$T\"\nsite_id = true\n"
@@ -415,6 +425,7 @@ text = "[[modifiers]]\nname = 1\n[modifiers.conditions]\nstatus = \"X\"\ndefault
 
 [[case]]
 id = "generic-platform"
+difference = "one-union-error"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/foo.toml"
 text = "x = 1\n[[tenants]]\nname = \"a\"\ny = 2\n[tenants.setup]\nz = 3\nssl = 2\n"
@@ -457,6 +468,7 @@ text = "[[assets]]\nname = \"known\"\ndescription = \"d\"\ncriticality = \"high\
 
 [[case]]
 id = "visibility-asset-types"
+difference = "one-union-error"
 kind = "text"
 path = "/w/.opentide/configurations/visibility.toml"
 text = "logsources = []\nassets = [{name = 1, custom_details = {a = [1]}}]\n"

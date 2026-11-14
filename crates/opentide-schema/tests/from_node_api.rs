@@ -108,9 +108,7 @@ struct Level {
 #[derive(Debug, FromNode)]
 #[from_node(union)]
 enum TreeOrInt {
-    #[from_node(tag = "tree")]
     Tree(#[expect(dead_code, reason = "read only by the conversion")] Level),
-    #[from_node(tag = "int")]
     Int(#[expect(dead_code, reason = "read only by the conversion")] i64),
 }
 

@@ -32,7 +32,6 @@ use std::time::Duration;
 use opentide_compile::Json;
 use opentide_compile::exabeam::{RULES_PATH, SEARCH_PATH, search_body};
 use opentide_compile::json::Object;
-use opentide_schema::objects::platform::python_strip;
 use regex::Regex;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
@@ -257,7 +256,7 @@ fn error_entry(entry: &Object) -> String {
     let message = entry
         .get("message")
         .filter(|message| message.truthy())
-        .map(|message| python_strip(&scalar_text(message)).to_owned())
+        .map(|message| scalar_text(message).trim().to_owned())
         .unwrap_or_default();
     let mut text = match code {
         Some(code) if !message.is_empty() => format!("{}: {message}", scalar_text(code)),
@@ -603,7 +602,7 @@ impl<'a> Session<'a> {
             .answer
             .not_json_detail()
             .unwrap_or_else(|| reply.answer.text_head(300));
-        let detail = python_strip(&detail);
+        let detail = detail.trim();
         let mut message = format!(
             "tenant {} refused {what}: HTTP {}",
             self.tenant(),
@@ -983,7 +982,7 @@ impl TenantFailure {
 /// The rule UUID a create answered, lower-case and canonical, or `None`
 /// (`returned_rule_id`).
 pub fn returned_rule_id(result: &Object) -> Option<String> {
-    let value = python_strip(result.get("id")?.as_str()?);
+    let value = result.get("id")?.as_str()?.trim();
     let canonical = uuid::Uuid::try_parse(value).ok()?;
     // Only the hyphenated 8-4-4-4-12 form, as the oracle's pattern takes it.
     (value.len() == 36).then(|| canonical.hyphenated().to_string())
@@ -1330,7 +1329,7 @@ fn split_columns(text: &str) -> Vec<String> {
             '(' | '[' => depth += 1,
             ')' | ']' => depth -= 1,
             ',' if depth == 0 => {
-                columns.push(python_strip(&current).to_owned());
+                columns.push(current.trim().to_owned());
                 current.clear();
                 continue;
             }
@@ -1338,7 +1337,7 @@ fn split_columns(text: &str) -> Vec<String> {
         }
         current.push(character);
     }
-    columns.push(python_strip(&current).to_owned());
+    columns.push(current.trim().to_owned());
     columns.retain(|column| !column.is_empty());
     columns
 }

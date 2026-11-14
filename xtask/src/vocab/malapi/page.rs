@@ -17,7 +17,7 @@ use html5ever::tendril::TendrilSink;
 use html5ever::{ParseOpts, parse_document};
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
-use super::super::ingest::value::{Table, Value, strip};
+use super::super::ingest::value::{Table, Value};
 
 /// The site.
 pub const MALAPI_URL: &str = "https://malapi.io";
@@ -134,13 +134,13 @@ pub fn front_page(html: &str) -> Result<FrontPage> {
 
     let mut stages = Vec::new();
     for cell in descendants(&table).iter().filter(|node| is(node, "th")) {
-        let name = strip(&text(cell)).to_owned();
+        let name = text(cell).trim().to_owned();
         let description = find(cell, |node| is(node, "img"))
             .and_then(|icon| attribute(&icon, "title"))
             .with_context(|| format!("the category `{name}` has no icon title on {MALAPI_URL}"))?;
         let mut stage = Table::new();
         stage.insert("name".to_owned(), Value::from(name));
-        stage.insert("description".to_owned(), Value::from(strip(&description)));
+        stage.insert("description".to_owned(), Value::from(description.trim()));
         stages.push(stage);
     }
     ensure!(!stages.is_empty(), "No attack category on {MALAPI_URL}");
@@ -148,7 +148,7 @@ pub fn front_page(html: &str) -> Result<FrontPage> {
     let mut apis = BTreeSet::new();
     for link in descendants(&document).iter().filter(|node| is(node, "a")) {
         if attribute(link, "href").is_some_and(|href| api_link(&href)) {
-            let name = strip(&text(link)).to_owned();
+            let name = text(link).trim().to_owned();
             ensure!(
                 valid_api(&name),
                 "the API link `{name}` on {MALAPI_URL} is not an identifier"
@@ -184,11 +184,11 @@ pub fn api_page(api: &str, html: &str) -> Result<Table> {
         };
         if let Some((_, field)) = FIELDS
             .iter()
-            .find(|(label, _)| *label == strip(&text(&heading)))
+            .find(|(label, _)| *label == text(&heading).trim())
         {
             details.insert(
                 (*field).to_owned(),
-                Value::from(strip(&text(&content)).to_owned()),
+                Value::from(text(&content).trim().to_owned()),
             );
         }
     }
@@ -214,7 +214,7 @@ pub fn api_page(api: &str, html: &str) -> Result<Table> {
     if let Some(Value::String(stages)) = details.get("tide.vocab.stages") {
         let mut names: Vec<Value> = stages
             .lines()
-            .map(strip)
+            .map(str::trim)
             .filter(|line| !line.is_empty())
             .map(Value::from)
             .collect();

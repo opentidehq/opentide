@@ -36,11 +36,9 @@ pub use checks::{Finding, block_codes, block_findings};
 #[from_node(union)]
 pub enum CriterionValue {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
 }
@@ -331,13 +329,13 @@ impl JsonSchema for ProcessAction {
     }
 }
 
-/// `Literal[True]`'s error, at the node.
+/// The error for a value other than `true`, at the node (`literal_error`).
 fn not_true(node: &Node, cx: &mut Context) {
     cx.error_with(
         ErrorKind::InvalidValue("literal_error"),
-        "Input should be True",
+        "Input should be true",
         node,
-        &[("expected", "True".to_owned())],
+        &[("expected", "true".to_owned())],
     );
 }
 
@@ -356,7 +354,7 @@ pub fn literal_true(node: &Node, cx: &mut Context) -> Option<Option<bool>> {
 /// garde: a `Literal[True]` built in memory is `true`.
 pub fn garde_true(value: &Option<bool>, _pins: &Pins) -> garde::Result {
     match value {
-        Some(false) => Err(garde::Error::new("Input should be True")),
+        Some(false) => Err(garde::Error::new("Input should be true")),
         _ => Ok(()),
     }
 }
@@ -387,7 +385,7 @@ pub fn process_action(node: &Node, cx: &mut Context) -> Option<Option<ProcessAct
 /// garde: a process action built in memory is `true` or a scope.
 pub fn garde_process_action(value: &Option<ProcessAction>, _pins: &Pins) -> garde::Result {
     match value {
-        Some(ProcessAction::On(false)) => Err(garde::Error::new("Input should be True")),
+        Some(ProcessAction::On(false)) => Err(garde::Error::new("Input should be true")),
         _ => Ok(()),
     }
 }
@@ -647,9 +645,7 @@ pub fn normalise(text: &str) -> String {
                 .map_or(character, |(_, after)| *after)
         })
         .collect();
-    replaced
-        .trim_start_matches(crate::objects::platform::is_python_space)
-        .to_owned()
+    replaced.trim_start().to_owned()
 }
 
 /// The first `limit` characters of `text` (Python's `text[:limit]`).

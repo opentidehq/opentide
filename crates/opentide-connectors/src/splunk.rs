@@ -62,54 +62,42 @@ struct Reply {
 }
 
 impl Reply {
-    /// Whether urllib raised `HTTPError` for it: any status outside 2xx.
+    /// Whether the status is outside 2xx.
     fn failed(&self) -> bool {
         !(200..300).contains(&self.answer.status)
     }
 
-    /// The status's reason phrase (`response.msg`).
-    fn reason(&self) -> &'static str {
-        crate::transport::StatusCode::from_u16(self.answer.status)
-            .ok()
-            .and_then(|status| status.canonical_reason())
-            .unwrap_or("")
-    }
-
-    /// What opentide's urllib handler logs for an error status in a client
-    /// that raises on it (`request_handler` without `allow_http_errors`:
-    /// the deploy's), before the Python Splunk client raises.
+    /// Logs an error status as a warning: deploy reads the answer on (a
+    /// `404` for a saved search that is not there is not a failure).
     fn log_failure(&self) {
         if self.failed() {
-            tracing::error!(
-                detail = format!(
-                    "Received HTTP Error Code {} {}",
-                    self.answer.status,
-                    self.reason()
-                )
-                .as_str(),
-                context = format!("{:?}", String::from_utf8_lossy(&self.answer.body)).as_str(),
-                critical = true,
-                logger = "opentide.platforms.splunk.client",
-                "fatal_error"
-            );
+            tracing::warn!(status = self.answer.status, "{}", self.http_error());
         }
     }
 
-    /// the Python Splunk client's `HTTPError` text: `HTTP <status> <reason>`, then the
-    /// first `<msg>` of an XML error, else the body's bytes.
+    /// `Splunk answered HTTP <status> <reason>`, then the first `<msg>` of an
+    /// XML error, else the body's text when there is one.
     fn http_error(&self) -> String {
+        let status = self.answer.status;
+        let reason = crate::transport::StatusCode::from_u16(status)
+            .ok()
+            .and_then(|status| status.canonical_reason())
+            .map(|reason| format!(" {reason}"))
+            .unwrap_or_default();
         let detail = match xml_message(&self.answer.body) {
-            XmlDetail::Message(text) => format!(" -- {text}"),
+            XmlDetail::Message(text) => text,
             XmlDetail::None => String::new(),
-            XmlDetail::NotXml => {
-                format!(" -- {:?}", String::from_utf8_lossy(&self.answer.body))
-            }
+            XmlDetail::NotXml => String::from_utf8_lossy(&self.answer.body).trim().to_owned(),
         };
-        format!("HTTP {} {}{detail}", self.answer.status, self.reason())
+        if detail.is_empty() {
+            format!("Splunk answered HTTP {status}{reason}")
+        } else {
+            format!("Splunk answered HTTP {status}{reason}: {detail}")
+        }
     }
 }
 
-/// What the Python Splunk client's `XML(body).findtext("./messages/msg")` finds.
+/// The first `./messages/msg` of an XML error body.
 enum XmlDetail {
     Message(String),
     None,
@@ -778,9 +766,7 @@ impl Splunk {
         let status = reply.answer.status;
         if reply.failed() {
             let body = &reply.answer.body;
-            if reply.reason() == "Temporary Redirect"
-                && String::from_utf8_lossy(body).contains("Network Error")
-            {
+            if status == 307 && String::from_utf8_lossy(body).contains("Network Error") {
                 return Ok(LiveCheck {
                     result: None,
                     errors: Vec::new(),
@@ -841,16 +827,7 @@ fn epoch(at: jiff::Timestamp) -> String {
 
 /// A saved search call the tenant refused (the Python Splunk client's `HTTPError`).
 fn refused_call(cx: TenantContext<'_>, reply: &Reply) -> ConnectorError {
-    ConnectorError::refused(
-        PLATFORM,
-        &cx.tenant.label.tenant,
-        reply.http_error(),
-        Some(format!(
-            "Received HTTP Error Code {} {}",
-            reply.answer.status,
-            reply.reason()
-        )),
-    )
+    ConnectorError::refused(PLATFORM, &cx.tenant.label.tenant, reply.http_error(), None)
 }
 
 /// An HTML page, which the REST API never sends (`_looks_like_html`): a
@@ -1064,18 +1041,21 @@ mod tests {
                 elapsed: Duration::ZERO,
             },
         };
-        assert_eq!(reply(404, b"").http_error(), "HTTP 404 Not Found -- \"\"");
+        assert_eq!(
+            reply(404, b"").http_error(),
+            "Splunk answered HTTP 404 Not Found"
+        );
         assert_eq!(
             reply(
                 400,
                 b"<response><messages><msg type=\"ERROR\">Argument &quot;x&quot;</msg></messages></response>"
             )
             .http_error(),
-            "HTTP 400 Bad Request -- Argument \"x\""
+            "Splunk answered HTTP 400 Bad Request: Argument \"x\""
         );
         assert_eq!(
-            reply(400, b"{\"a\": 1}").http_error(),
-            "HTTP 400 Bad Request -- \"{\\\"a\\\": 1}\""
+            reply(400, b"{\"a\": 1}\n").http_error(),
+            "Splunk answered HTTP 400 Bad Request: {\"a\": 1}"
         );
         assert_eq!(
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),

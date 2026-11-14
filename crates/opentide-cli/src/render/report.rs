@@ -13,7 +13,7 @@
 
 use super::codeframe::{PATH_SAFE, quoted};
 use super::diagnostic::{Diagnostic, Severity};
-use super::summary::{DIAGNOSTICS_DOCS_URL, explain_url, split_lines};
+use super::summary::{DIAGNOSTICS_DOCS_URL, explain_url};
 use crate::envelope::{Failure, code};
 use crate::json::Json;
 use regex::Regex;
@@ -127,7 +127,7 @@ fn drop_emphasis(line: &str) -> String {
 /// marks, code fences, backticks or emphasis, and a link as `text (url)`.
 pub fn plain_text(markdown: &str) -> String {
     let mut lines: Vec<String> = Vec::new();
-    for line in split_lines(markdown) {
+    for line in markdown.lines() {
         if line.trim_start().starts_with("```") {
             continue;
         }
@@ -510,7 +510,7 @@ mod tests {
         );
         assert_eq!(drop_emphasis("****"), "****");
         assert_eq!(drop_emphasis("**a**b**"), "ab**");
-        assert_eq!(split_lines("a\r\nb\u{2028}c\n"), ["a", "b", "c"]);
+        assert_eq!(plain_text("# a\r\nb\n"), "a\nb");
     }
 
     #[test]
