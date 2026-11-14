@@ -1,14 +1,18 @@
 //! Loading a workspace: discovery, the configuration resolved once, each
 //! file read and parsed once, load errors, duplicates, signals, references,
-//! the SDK lifecycle and invalidation.
+//! snapshots and invalidation.
+
+#[path = "support/export.rs"]
+mod export;
 
 mod loading {
+    use crate::export::index_json;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
     use opentide_workspace::index::{MISSING_UUID, ReferenceKind, YAML_PARSE};
     use opentide_workspace::{
-        Change, ConfigError, FileSystem, MemoryFs, Options, Registry, RootOptions, Workspace,
+        Change, ConfigError, FileSystem, MemoryFs, Options, RootOptions, Workspace,
     };
 
     const ROOT: &str = "/ws";
@@ -204,6 +208,36 @@ mod loading {
         assert!(workspace.index().is_empty());
     }
 
+    /// A UUID names an object when it is text or a number: `true` is
+    /// refused like a list, `0` is a name like any other number, and a
+    /// `uuid: false` is left blank, so `metadata.uuid` names the object.
+    #[test]
+    fn a_boolean_uuid_names_nothing_and_a_number_does() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write("/ws/objects/rules/a-true.yaml", "uuid: true\n");
+        fs.write("/ws/objects/rules/b-zero.yaml", "uuid: 0\n");
+        fs.write(
+            "/ws/objects/rules/c-false.yaml",
+            "uuid: false\nmetadata:\n  uuid: m-1\n",
+        );
+        let workspace = open(&fs);
+        let index = workspace.index();
+        let refused: Vec<(&str, &str)> = index
+            .load_errors
+            .iter()
+            .map(|e| (e.path.file_name().unwrap().to_str().unwrap(), e.code))
+            .collect();
+        assert_eq!(refused, [("a-true.yaml", MISSING_UUID)]);
+        assert_eq!(
+            index.load_errors[0].error,
+            "object YAML uuid is a boolean, not text"
+        );
+        assert!(index.get("rule", "0").is_some());
+        assert!(index.get("rule", "m-1").is_some());
+        assert!(index.get("rule", "true").is_none());
+        assert_eq!(index.len(), 2);
+    }
+
     #[test]
     fn a_later_file_replaces_an_earlier_one_with_the_same_uuid() {
         let fs = Arc::new(MemoryFs::new());
@@ -371,8 +405,9 @@ mod loading {
             "[paths.objects]\nrule = 5\n",
         );
         let error = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap_err();
-        assert!(matches!(error, ConfigError::Paths(_)), "{error:?}");
-        assert_eq!(error.code(), None);
+        assert!(matches!(error, ConfigError::Paths { .. }), "{error:?}");
+        // The configuration check's code for a value of the wrong type.
+        assert_eq!(error.code(), Some("schema_validation"));
         fs.write("/ws/.opentide/configurations/paths.toml", "[paths\n");
         let error = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap_err();
         assert_eq!(error.code(), Some("config_parse"));
@@ -396,7 +431,8 @@ mod loading {
         );
         let roots = opentide_workspace::root::resolve(fs.as_ref(), &options().roots);
         let error = opentide_workspace::config::load(fs.as_ref(), &roots).unwrap_err();
-        assert!(matches!(error, ConfigError::Paths(_)), "{error:?}");
+        assert!(matches!(error, ConfigError::Paths { .. }), "{error:?}");
+        assert!(error.code().is_some(), "{error:?}");
         let resolved = opentide_workspace::config::resolve_only(fs.as_ref(), &roots).unwrap();
         let statuses = resolved
             .get("deployment")
@@ -461,38 +497,67 @@ mod loading {
         assert_eq!(workspace.index().rules().count(), 0);
     }
 
+    /// With `OPENTIDE_TIDE_WORKSPACE` set, the configuration is the
+    /// workspace's own: the repository's
+    /// `tests/fixtures/generation/configurations` is not merged over it.
     #[test]
-    fn the_registry_loads_once_and_reloads_on_request() {
-        let fs = sample();
-        let mut registry = Registry::new(Arc::clone(&fs) as Arc<dyn FileSystem>, options());
-        assert!(!registry.is_initialised());
-        assert_eq!(registry.rules().unwrap().len(), 2);
-        assert!(registry.is_initialised());
-        let reads = fs.reads().values().sum::<usize>();
-        registry.initialise().unwrap();
-        assert_eq!(registry.threats().unwrap().len(), 1);
-        assert_eq!(registry.objectives().unwrap().len(), 1);
-        assert_eq!(registry.signals().unwrap().len(), 2);
-        assert_eq!(registry.lookup("t-1").unwrap().unwrap().family, "threat");
-        assert!(registry.lookup("nothing").unwrap().is_none());
-        assert!(
-            registry
-                .configuration()
-                .unwrap()
-                .resolved
-                .get("paths")
-                .is_some()
+    fn a_tide_workspace_reads_no_configuration_from_the_repository() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/repo/tests/fixtures/generation/configurations/paths.toml",
+            "[paths.objects]\nrule = \"fixture-rules/\"\n",
         );
+        fs.write("/repo/ws/fixture-rules/r.yaml", object("r-f"));
+        fs.write("/repo/ws/objects/rules/r.yaml", object("r-o"));
+        let options = Options {
+            roots: RootOptions {
+                repo: Some(PathBuf::from("/repo")),
+                tide_workspace_env: Some(PathBuf::from("/repo/ws")),
+                cwd: PathBuf::from("/repo"),
+                ..RootOptions::default()
+            },
+        };
+        let workspace = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options).unwrap();
+        assert!(workspace.roots().tide_workspace);
+        assert!(workspace.index().get("rule", "r-o").is_some());
+        assert!(workspace.index().get("rule", "r-f").is_none());
+        assert!(
+            !workspace
+                .configuration()
+                .folders
+                .iter()
+                .any(|folder| folder.starts_with("/repo/tests")),
+            "{:?}",
+            workspace.configuration().folders
+        );
+    }
+
+    /// An open workspace is a snapshot: its index, configuration and lookups
+    /// read nothing again, and a file written afterwards shows only once
+    /// the workspace is opened again.
+    #[test]
+    fn an_open_workspace_is_a_snapshot_until_opened_again() {
+        let fs = sample();
+        let workspace = open(&fs);
+        let index = workspace.index();
+        assert_eq!(index.rules().count(), 2);
+        let reads = fs.reads().values().sum::<usize>();
+        assert_eq!(index.threats().count(), 1);
+        assert_eq!(index.objectives().count(), 1);
+        assert_eq!(index.signals.len(), 2);
+        assert_eq!(index.lookup("t-1").unwrap().family, "threat");
+        assert!(index.lookup("nothing").is_none());
+        assert!(workspace.configuration().resolved.get("paths").is_some());
         assert_eq!(
             fs.reads().values().sum::<usize>(),
             reads,
-            "initialise reads nothing again"
+            "the accessors read nothing again"
         );
         fs.write("/ws/objects/rules/r9.yaml", object("r-9"));
-        assert_eq!(registry.rules().unwrap().len(), 2, "the snapshot holds");
-        registry.reload().unwrap();
-        assert_eq!(registry.rules().unwrap().len(), 3);
-        assert_eq!(registry.index().unwrap().len(), 5);
+        assert_eq!(workspace.index().rules().count(), 2, "the snapshot holds");
+        let reopened = open(&fs);
+        assert_eq!(reopened.index().rules().count(), 3);
+        assert_eq!(reopened.index().len(), 5);
     }
 
     #[test]
@@ -576,7 +641,7 @@ mod loading {
     )]
     fn fresh(fs: &Arc<MemoryFs>, options: Options) -> serde_json::Value {
         let workspace = Workspace::open(Arc::clone(fs) as Arc<dyn FileSystem>, options).unwrap();
-        workspace.index().to_json(workspace.root())
+        index_json(workspace.index(), workspace.root())
     }
 
     #[test]
@@ -601,7 +666,7 @@ mod loading {
             );
             assert!(workspace.index().get("rule", "r").is_some());
             assert_eq!(
-                workspace.index().to_json(workspace.root()),
+                index_json(workspace.index(), workspace.root()),
                 fresh(&fs, options())
             );
         }
@@ -620,7 +685,7 @@ mod loading {
             .unwrap();
         assert!(done.configuration && !done.full, "{done:?}");
         assert_eq!(
-            workspace.index().to_json(workspace.root()),
+            index_json(workspace.index(), workspace.root()),
             fresh(&fs, options())
         );
     }
@@ -649,7 +714,7 @@ mod loading {
         );
         assert!(workspace.index().get("rule", "r-4").is_some());
         assert_eq!(
-            workspace.index().to_json(workspace.root()),
+            index_json(workspace.index(), workspace.root()),
             fresh(&fs, options())
         );
     }
@@ -689,7 +754,7 @@ mod loading {
             assert!(done.full, "{marker}: {done:?}");
             assert_eq!(workspace.root(), Path::new("/repo/ws/sub"), "{marker}");
             assert_eq!(
-                workspace.index().to_json(workspace.root()),
+                index_json(workspace.index(), workspace.root()),
                 fresh(&fs, discovered()),
                 "{marker}"
             );
@@ -703,7 +768,7 @@ mod loading {
             assert_eq!(workspace.root(), Path::new("/repo/ws"), "{marker}");
             assert!(workspace.index().get("rule", "r-a").is_some());
             assert_eq!(
-                workspace.index().to_json(workspace.root()),
+                index_json(workspace.index(), workspace.root()),
                 fresh(&fs, discovered()),
                 "{marker}"
             );
@@ -738,7 +803,7 @@ mod loading {
         assert_eq!(workspace.index().rules().count(), 1);
         // A linked folder is not entered, as rglob does not enter it.
         assert_eq!(workspace.index().nested.len(), 1);
-        let json = workspace.index().to_json(workspace.root());
+        let json = index_json(workspace.index(), workspace.root());
         assert_eq!(json["file_paths"]["r"], "objects/rules/r.yaml");
         assert_eq!(json["nested"][0]["folder"], "objects/rules");
         std::fs::remove_dir_all(&dir).unwrap();
@@ -764,7 +829,7 @@ mod loading {
     )]
     fn on_disk(dir: &Path) -> serde_json::Value {
         let workspace = Workspace::open_os(Some(dir.to_path_buf())).unwrap();
-        workspace.index().to_json(workspace.root())
+        index_json(workspace.index(), workspace.root())
     }
 
     #[cfg(unix)]
@@ -814,7 +879,10 @@ mod loading {
                 reported.display()
             );
             assert_eq!(rule_name(&workspace).as_deref(), Some(name.as_str()));
-            assert_eq!(workspace.index().to_json(workspace.root()), on_disk(&dir));
+            assert_eq!(
+                index_json(workspace.index(), workspace.root()),
+                on_disk(&dir)
+            );
         }
 
         // The link pointed elsewhere: only the link names the cached file,
@@ -831,7 +899,10 @@ mod loading {
             [dir.canonicalize().unwrap().join("objects/rules/link.yaml")]
         );
         assert_eq!(rule_name(&workspace).as_deref(), Some("retargeted"));
-        assert_eq!(workspace.index().to_json(workspace.root()), on_disk(&dir));
+        assert_eq!(
+            index_json(workspace.index(), workspace.root()),
+            on_disk(&dir)
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

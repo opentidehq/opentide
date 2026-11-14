@@ -44,11 +44,6 @@ fn strings(node: Option<&Node>) -> Vec<String> {
     }
 }
 
-/// Whether a node is set as Python reads `if value:`.
-fn truthy(node: Option<&Node>) -> bool {
-    node.is_some_and(opentide_workspace::index::truthy)
-}
-
 /// The techniques `uuid` resolves to: a rule's through its detection model, a
 /// signal's through its objective, an objective's own `mitre_attack` or else
 /// its threats', a threat's `mitre_attack`; each list de-duplicated in order.
@@ -73,7 +68,7 @@ fn resolve(index: &Index, uuid: &str, depth: usize) -> Result<Vec<String>, Missi
         "rule" => {
             let Some(parent) = body
                 .get("detection_model")
-                .filter(|node| truthy(Some(node)))
+                .filter(|node| opentide_workspace::index::holds_name(node))
             else {
                 return Ok(Vec::new());
             };
@@ -86,7 +81,9 @@ fn resolve(index: &Index, uuid: &str, depth: usize) -> Result<Vec<String>, Missi
                 .get("objective")
                 .ok_or_else(|| MissingKey("objective".to_owned()))?;
             let attack = objective.get("mitre_attack").map(AsRef::as_ref);
-            if truthy(attack) {
+            if attack.is_some_and(
+                |attack| matches!(&attack.value, Value::Seq(items) if !items.is_empty()),
+            ) {
                 found = strings(attack);
             } else if let Some(Value::Seq(threats)) = objective.get("threats").map(|n| &n.value) {
                 for threat in threats {

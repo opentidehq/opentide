@@ -389,8 +389,11 @@ fn lint_check(text: &str) -> Vec<(String, String, usize)> {
         .unwrap()
         .into_iter()
         .map(|finding| {
-            assert_eq!(finding.json["check"], "queries");
-            assert_eq!(finding.json["uuid"], UUID);
+            assert_eq!(
+                finding.entry.check,
+                opentide_workspace::lint::LintCheck::Queries
+            );
+            assert_eq!(finding.entry.uuid.as_deref(), Some(UUID));
             (
                 finding.diagnostic.code.clone(),
                 finding.diagnostic.severity.as_str().to_owned(),

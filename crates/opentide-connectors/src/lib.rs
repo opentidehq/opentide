@@ -35,6 +35,7 @@ pub mod credentials;
 pub mod crowdstrike;
 pub mod defender;
 pub mod elastic;
+pub mod entra;
 pub mod env;
 pub mod error;
 pub mod exabeam;
@@ -56,6 +57,7 @@ pub mod sysdig;
 pub mod tenant;
 pub mod text;
 pub mod tls;
+pub mod token;
 pub mod transport;
 pub mod vulnerability;
 

@@ -2711,7 +2711,6 @@ dependencies = [
  "shlex",
  "signal-hook",
  "soft-canonicalize",
- "strsim",
  "terminal_size",
  "textwrap",
  "tokio",
@@ -2778,6 +2777,7 @@ version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "http",
+ "hyper-util",
  "jiff",
  "jsonwebtoken",
  "opentide-compile",

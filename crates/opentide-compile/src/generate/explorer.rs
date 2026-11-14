@@ -11,7 +11,6 @@ use std::path::Path;
 use indexmap::IndexMap;
 use opentide_workspace::Index;
 
-use super::json_text::line;
 use super::{Cause, Output, PhaseError};
 use crate::json::{Json, Object};
 
@@ -88,7 +87,7 @@ fn infer_type(body: &Json) -> Option<String> {
 fn text(value: &Json) -> String {
     match value {
         Json::Str(text) => text.clone(),
-        other => line(other),
+        other => other.to_compact(),
     }
 }
 
@@ -439,7 +438,7 @@ pub fn search(bundle: &Json) -> Json {
                 .and_then(|uuid| flat.get(uuid))
                 .cloned()
                 .unwrap_or_else(|| Json::Object(Object::new()));
-            let content: String = line(&body).chars().take(CONTENT_LIMIT).collect();
+            let content: String = body.to_compact().chars().take(CONTENT_LIMIT).collect();
             let status = summary
                 .get("status")
                 .filter(|status| status.truthy())
@@ -590,13 +589,13 @@ mod tests {
         assert_eq!(by("r2").get("name"), Some(&Json::from("r2")));
         assert_eq!(by("r2").get("status"), Some(&Json::from("")));
         let chains = bundle.get("chaining").unwrap();
-        assert_eq!(line(chains), "{\"t1\": {\"leads_to\": [\"t9\"]}}");
+        assert_eq!(chains.to_compact(), "{\"t1\":{\"leads_to\":[\"t9\"]}}");
         let staging = bundle.get("stagingIndex").unwrap();
         assert_eq!(
-            line(staging),
-            "{\"deployments\": {\"r1\": {\"sentinel\": \"STAGING\", \"carbon_black_cloud\": \"PRODUCTION\"}, \"r2\": {\"splunk\": \"UNKNOWN\"}}, \
-             \"platformSummary\": {\"sentinel\": {\"production\": 0, \"staging\": 1, \"other\": 0}, \"carbon_black_cloud\": {\"production\": 1, \"staging\": 0, \"other\": 0}, \"splunk\": {\"production\": 0, \"staging\": 0, \"other\": 1}}, \
-             \"stagingObjects\": [\"r1\"], \"productionObjects\": [\"r1\"]}"
+            staging.to_compact(),
+            "{\"deployments\":{\"r1\":{\"sentinel\":\"STAGING\",\"carbon_black_cloud\":\"PRODUCTION\"},\"r2\":{\"splunk\":\"UNKNOWN\"}},\
+             \"platformSummary\":{\"sentinel\":{\"production\":0,\"staging\":1,\"other\":0},\"carbon_black_cloud\":{\"production\":1,\"staging\":0,\"other\":0},\"splunk\":{\"production\":0,\"staging\":0,\"other\":1}},\
+             \"stagingObjects\":[\"r1\"],\"productionObjects\":[\"r1\"]}"
         );
         let signal = bundle.get("signals").unwrap().get("s1").unwrap();
         assert_eq!(signal.get("owner"), Some(&Json::from("o1")));
@@ -613,7 +612,7 @@ mod tests {
         assert_eq!(rule.get("id"), Some(&Json::from("r1")));
         let content = rule.get("content").unwrap().as_str().unwrap();
         assert!(
-            content.starts_with("{\"name\": \"Rule \u{e9}\", \"metadata\": "),
+            content.starts_with("{\"name\":\"Rule \u{e9}\",\"metadata\":"),
             "{content}"
         );
         let long = "x".repeat(5000);
@@ -651,8 +650,8 @@ mod tests {
         let mut report = Object::new();
         report.insert("present".into(), Json::Bool(false));
         assert_eq!(
-            line(&visibility(Json::Object(report), "t", "red")),
-            "{\"version\": \"1.0\", \"generatedAt\": \"t\", \"tlp\": \"red\", \"present\": false}"
+            visibility(Json::Object(report), "t", "red").to_compact(),
+            "{\"version\":\"1.0\",\"generatedAt\":\"t\",\"tlp\":\"red\",\"present\":false}"
         );
     }
 }
