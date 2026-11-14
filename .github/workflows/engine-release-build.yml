@@ -38,6 +38,10 @@ on:
         description: "Built for a pull request or a push: a Rust cache may be restored"
         type: boolean
         default: false
+    outputs:
+      version:
+        description: "The version the binaries report (`opentide --version`): the tag without its v."
+        value: ${{ jobs.meta.outputs.semver }}
 
 permissions:
   contents: read

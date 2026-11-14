@@ -21,11 +21,9 @@
 name: Publish dry run
 
 on:
-  # Nightly (or as scheduled) and on Run workflow only: never on a pull
-  # request or a push, so it never blocks a merge (.github/AGENTS.md, the
-  # nightly set).
-  schedule:
-    - cron: "7 2 * * *"
+  # Part of the nightly and of a release pull request's checks: ci.yml calls
+  # this workflow (.github/AGENTS.md); Run workflow runs it alone.
+  workflow_call:
   workflow_dispatch:
 
 permissions:

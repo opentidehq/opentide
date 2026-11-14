@@ -13,11 +13,10 @@ name: Schema
 # as ci.yml's full set.
 
 on:
-  # Nightly (or as scheduled) and on Run workflow only: never on a pull
-  # request or a push, so it never blocks a merge (.github/AGENTS.md, the
-  # nightly set).
-  schedule:
-    - cron: "29 1 * * *"
+  # Part of the nightly: ci.yml calls this workflow (its `nightly` scope,
+  # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
+  # or a push, so it never blocks a merge.
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
