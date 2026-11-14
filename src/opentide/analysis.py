@@ -1,7 +1,7 @@
 """The analysis engine: offline query checks and highlighting, in process.
 
 The engine is Rust, compiled into this package as ``opentide._native``
-(``bindings/python/``, built by ``hatch_build.py``): ``pip install opentide`` is
+(``bindings/python/``, built by maturin): ``pip install opentide`` is
 the one install. :func:`engine` loads it, and a damaged install fails there, with
 one message (:class:`EngineUnavailableError`). A missing engine is an error,
 never a skipped check. The workspace's checks are :class:`opentide.Workspace`'s

@@ -905,12 +905,8 @@ fn rows(records: &[Record], preview: bool, names: &BTreeMap<String, String>) -> 
         if preview {
             title.append(
                 &format!(" {} dry run, nothing is sent", glyphs::SEPARATOR),
-                &dim,
+                &bold.combine(&dim),
             );
-            // The title's own style is bold, under the dim part too (a Rich
-            // `Text` with a base style).
-            let length = title.len();
-            title.stylize(&bold, 0, length);
         }
         body.push(BodyBlock::Hanging(vec![(title, 0)]));
         let lines: Vec<Vec<Text>> = members

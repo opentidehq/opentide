@@ -22,8 +22,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use opentide_compile::Json;
+use opentide_compile::deploy::PATH_SEGMENT;
+use percent_encoding::utf8_percent_encode;
 use tokio_util::sync::CancellationToken;
 
+use crate::Secret;
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
@@ -33,7 +36,6 @@ use crate::error::ConnectorError;
 use crate::http::HttpSettings;
 use crate::retry::RetryPolicy;
 use crate::token::{Issued, TokenCache, lifetime};
-use crate::{Secret, encode};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "crowdstrike";
@@ -284,7 +286,9 @@ impl<'a> Session<'a> {
         let url = format!(
             "{}{RULES}?{}",
             self.base,
-            encode::urlencode([("ids", rule_id)])
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs([("ids", rule_id)])
+                .finish()
         );
         let answer = self
             .call(crate::transport::Method::DELETE, &url, None, self.cx.cancel)
@@ -318,7 +322,7 @@ impl<'a> Session<'a> {
         let jobs = format!(
             "{}/humio/api/v1/repositories/{}/queryjobs",
             self.base,
-            encode::segment(repository)
+            utf8_percent_encode(repository, PATH_SEGMENT)
         );
         let sent = cql_with_limit(&request.text, request.limit);
         let start = JobStart {
@@ -351,7 +355,7 @@ impl<'a> Session<'a> {
                 None,
             ));
         }
-        let status_url = format!("{jobs}/{}", encode::segment(&job_id));
+        let status_url = format!("{jobs}/{}", utf8_percent_encode(&job_id, PATH_SEGMENT));
         let status = match self.wait(&status_url, request).await {
             Ok(status) => status,
             Err(error) => {

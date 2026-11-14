@@ -99,11 +99,9 @@ fn emit(event: &Event) {
     }
 }
 
-/// Logs `invalid_promotion_target` with the target as the oracle's
-/// structlog line holds it: a number as one, anything else as Python's `str`
-/// writes it (`None` when no target is set, `True`). A JSON log line holds
-/// a boolean, an array or a table as that text where the oracle's holds the
-/// value.
+/// Logs `invalid_promotion_target` with the target: a number as one, a
+/// string as it is, anything else as its JSON (`null` when no target is
+/// set, `true`).
 fn invalid_target(target: &Setting, detail: &str) {
     let event = "invalid_promotion_target";
     match target {
@@ -144,9 +142,7 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
     if ended.is_none() {
         for (path, bytes) in &planned {
             if let Err(error) = write_atomically(path, bytes) {
-                ended = Some(Stop::Failed(super::deploy_state::os_error_text(
-                    &error, path,
-                )));
+                ended = Some(Stop::Failed(format!("{}: {error}", path.display())));
                 break;
             }
             emit(&Event::Info(
@@ -224,7 +220,7 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(error) => {
-                let failed = Stop::Failed(os_error(&error, path));
+                let failed = Stop::Failed(format!("{}: {error}", path.display()));
                 return (events, Vec::new(), Some(failed));
             }
         };
@@ -293,21 +289,6 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
         }
     }
     (events, planned, None)
-}
-
-/// An I/O error as Python words an `OSError` on `path`
-/// (`[Errno 2] No such file or directory: 'x.yaml'`).
-fn os_error(error: &std::io::Error, path: &Path) -> String {
-    let text = error.to_string();
-    match error.raw_os_error() {
-        Some(code) => {
-            let words = text
-                .strip_suffix(&format!(" (os error {code})"))
-                .unwrap_or(&text);
-            format!("[Errno {code}] {words}: {:?}", path.display().to_string())
-        }
-        None => text,
-    }
 }
 
 /// Replaces `path` with `bytes` through a temporary file beside it

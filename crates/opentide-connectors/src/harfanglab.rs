@@ -26,7 +26,6 @@ use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
     QueryRequest, QueryRunner, Row, TenantContext, TimeWindow, columns_of, flatten,
 };
-use crate::encode;
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
 use crate::retry::RetryPolicy;
@@ -280,7 +279,13 @@ impl<'a> Client<'a> {
             ("limit", limit.as_str()),
             ("offset", "0"),
         ]);
-        let url = format!("{}{path}?{}", self.base()?, encode::urlencode(params));
+        let url = format!(
+            "{}{path}?{}",
+            self.base()?,
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(params)
+                .finish()
+        );
         let answer = self
             .send(
                 self.request(crate::transport::Method::GET, &url)?

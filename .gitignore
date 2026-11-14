@@ -26,7 +26,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 # cargo output of the crate placeholder (publishing/placeholders/): ignored
-# here, where hatchling also reads it, so an sdist built after a dry run
+# here, where maturin also reads it, so an sdist built after a dry run
 # leaves it out.
 publishing/placeholders/crates/*/target/
 
@@ -91,7 +91,7 @@ output/
 generated/
 *.log
 
-# Hatch-VCS generated version file
+# The version file the hatch-vcs build wrote before maturin (an old checkout's): out of git and the packages
 src/opentide/_version.py
 
 # workshop
@@ -100,7 +100,7 @@ workshop/
 .claude/settings.local.json
 .claude/worktrees/
 
-# The module an editable install compiles into the package (hatch_build.py).
+# The module a development install (maturin develop, uv sync) compiles into the package.
 src/opentide/_native.*.so
 src/opentide/_native.pyd
 src/opentide/_native.*.pyd
