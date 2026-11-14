@@ -477,9 +477,16 @@ impl Validation {
     }
 }
 
-/// Python's `resolve_worker_count`: no threads under 32 items, else up to 8.
+/// The threads a phase over `items` runs on: one per available core, no
+/// more than there are items; `0` when it runs on one thread (one core, or
+/// at most one item).
 fn workers(items: usize) -> usize {
-    if items < 32 { 0 } else { items.min(8) }
+    let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    if cores < 2 || items < 2 {
+        0
+    } else {
+        items.min(cores)
+    }
 }
 
 /// One UUID written in an object file (`_IdScanRow`).
@@ -1670,6 +1677,17 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workers_follow_the_cores_and_never_outnumber_the_items() {
+        let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        assert_eq!(workers(0), 0);
+        assert_eq!(workers(1), 0, "one item runs on one thread");
+        for items in [2, 3, 32, 1000] {
+            let expected = if cores < 2 { 0 } else { items.min(cores) };
+            assert_eq!(workers(items), expected, "{items} items on {cores} cores");
+        }
+    }
 
     #[test]
     fn validation_codes_hold_every_checks_codes_sorted() {
