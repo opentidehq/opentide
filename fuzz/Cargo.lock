@@ -27,6 +27,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "annotate-snippets"
+version = "0.12.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0258346f92c78dbc5b336b9a5b27c64447aa10643bc64e651db2edb145361564"
+dependencies = [
+ "anstyle",
+ "memchr",
+ "unicode-width",
+]
+
+[[package]]
 name = "ansi-to-tui"
 version = "8.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2674,7 +2685,10 @@ dependencies = [
 name = "opentide-cli"
 version = "0.12.0"
 dependencies = [
+ "annotate-snippets",
  "ansi-to-tui",
+ "anstream",
+ "anstyle",
  "anyhow",
  "base64 0.22.1",
  "clap",
@@ -2699,6 +2713,7 @@ dependencies = [
  "percent-encoding",
  "pulldown-cmark",
  "ratatui",
+ "ratatui-core",
  "rayon",
  "regex",
  "rmcp",
@@ -3468,6 +3483,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbb175c433c8e28a809d1f5773a2ae96e68c0ce40db865cbab1020bf33ae479c"
 dependencies = [
+ "anstyle",
  "bitflags 2.13.2",
  "compact_str",
  "hashbrown 0.17.1",
