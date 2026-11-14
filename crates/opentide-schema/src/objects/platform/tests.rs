@@ -297,6 +297,41 @@ fn elastic_constraint_codes() {
     }
 }
 
+/// A boolean is no integer (Python's `bool` subclassed `int`): in
+/// `threshold.value`, `risk` or `risk.score` it is the field type's
+/// `int_type` on the value, never read as 0 or 1 by the block's constraints.
+#[test]
+fn elastic_booleans_are_not_integers() {
+    for (overrides, path) in [
+        (
+            json!({"type": "threshold", "query": "x", "threshold": {"value": false}}),
+            "threshold.value",
+        ),
+        (
+            json!({"type": "threshold", "query": "x", "threshold": {"value": true}}),
+            "threshold.value",
+        ),
+        (json!({"type": "query", "query": "x", "risk": true}), "risk"),
+        (
+            json!({"type": "query", "query": "x", "risk": {"score": true}}),
+            "risk",
+        ),
+    ] {
+        let block = merged(&json!({"status": "STAGING"}), &overrides);
+        assert!(
+            elastic::block_codes(&json_node(&block)).is_empty(),
+            "{block}"
+        );
+        let found = errors("elastic", &block);
+        assert!(
+            found
+                .lines()
+                .any(|line| line.starts_with(path) && line.contains("valid integer")),
+            "{block}: {found}"
+        );
+    }
+}
+
 #[test]
 fn elastic_machine_learning_job_id_passthrough() {
     for job_id in [json!("rare_process_by_host"), json!(["job_one", "job_two"])] {
