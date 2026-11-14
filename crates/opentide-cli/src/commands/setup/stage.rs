@@ -270,7 +270,7 @@ impl Stage {
                         std::fs::create_dir_all(parent)
                             .map_err(|error| format!("{}: {error}", parent.display()))?;
                     }
-                    std::fs::write(&path, bytes)
+                    opentide_workspace::fs::write_atomically(&path, &bytes)
                         .map_err(|error| format!("{}: {error}", path.display()))?;
                     if executable {
                         set_executable(&path)

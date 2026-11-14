@@ -108,14 +108,15 @@ fn block_on<T: Send>(work: impl std::future::Future<Output = T> + Send) -> Resul
 }
 
 /// `Imported/<file>` under the working directory, written as `write_text`
-/// writes it (the platform's line ends).
+/// writes it (the platform's line ends), whole or not at all.
 fn write_text(path: &Path, text: &str) -> Result<(), String> {
     let text = if cfg!(windows) {
         text.replace('\n', "\r\n")
     } else {
         text.to_owned()
     };
-    std::fs::write(path, text.as_bytes()).map_err(|error| format!("{}: {error}", path.display()))
+    opentide_workspace::fs::write_atomically(path, text.as_bytes())
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// The run as a report: one checklist step, then `Imported 3 rules from
