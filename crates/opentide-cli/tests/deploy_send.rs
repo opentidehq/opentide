@@ -1064,3 +1064,87 @@ fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
     let text = std::fs::read_to_string(&rule).unwrap();
     assert!(text.contains("    status: PRODUCTION\n"), "{text}");
 }
+
+/// A `RELEASE` push of `r.yaml` with *extra* in the environment: the changed
+/// rule is promoted; returns whether the other rule file in the rules folder
+/// (`s.yaml`) was promoted too (whole-folder promotion).
+fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
+    let block = "  splunk:\n    status: STAGING\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        "lab",
+        "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n",
+        &[
+            (
+                "r.yaml",
+                rule(
+                    "Promoted",
+                    "00000000-0000-4000-8047-000000000902",
+                    "A rule.",
+                    block,
+                ),
+            ),
+            (
+                "s.yaml",
+                rule(
+                    "Untouched",
+                    "00000000-0000-4000-8047-000000000903",
+                    "Another rule.",
+                    block,
+                ),
+            ),
+        ],
+    );
+    pushed(ws.path(), "objects/rules/r.yaml");
+    let env = vec![
+        ("GITHUB_ACTIONS", "true".to_owned()),
+        ("GITHUB_EVENT_NAME", "push".to_owned()),
+        ("GITHUB_SHA", "HEAD".to_owned()),
+        ("GITHUB_WORKSPACE", ws.path().display().to_string()),
+    ];
+    let mut env = env;
+    env.extend(
+        extra
+            .iter()
+            .map(|(name, value)| (*name, (*value).to_owned())),
+    );
+    let argv = [
+        "--json",
+        "deploy",
+        "--platform",
+        "splunk",
+        "--strategy",
+        "RELEASE",
+    ];
+    let (code, out, err) = cli(ws.path(), &argv, &env);
+    assert_eq!(code, 0, "{out}{err}");
+    let read = |name: &str| std::fs::read_to_string(ws.path().join("objects/rules").join(name));
+    let changed = read("r.yaml").unwrap();
+    assert!(changed.contains("    status: PRODUCTION\n"), "{changed}");
+    let other = read("s.yaml").unwrap();
+    other.contains("    status: PRODUCTION\n")
+}
+
+/// VS Code's integrated terminal (`TERM_PROGRAM=vscode`) does not turn on
+/// debug promotion: a push promotes the rule it changed and leaves the other
+/// rule files in the rules folder as they are, as it does from any terminal.
+/// The oracle promoted every rule file from that terminal.
+#[test]
+fn a_push_from_vs_codes_terminal_promotes_only_the_changed_rules() {
+    assert!(!push_promotes_the_whole_folder(&[(
+        "TERM_PROGRAM",
+        "vscode"
+    )]));
+}
+
+/// Whole-folder promotion rewrites every rule file: it follows `--debug` or
+/// `OPENTIDE_DEBUG`, never a bare `DEBUG`, which CI systems and tools set
+/// for their own logging (the Python CLI promoted every rule under
+/// `DEBUG=True`).
+#[test]
+fn only_opentide_debug_promotes_the_whole_folder_not_debug() {
+    assert!(!push_promotes_the_whole_folder(&[]));
+    assert!(!push_promotes_the_whole_folder(&[("DEBUG", "1")]));
+    assert!(!push_promotes_the_whole_folder(&[("DEBUG", "true")]));
+    assert!(push_promotes_the_whole_folder(&[("OPENTIDE_DEBUG", "1")]));
+}

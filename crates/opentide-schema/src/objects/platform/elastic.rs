@@ -2,9 +2,13 @@
 //! `ElasticConfig` and its nested models), with the named check
 //! `elastic_rule_shape` ([`block_codes`]): the constraint codes of the
 //! oracle's `_validate_raw_elastic_block`, judged on the raw block before its
-//! fields, in the oracle's terms (Python's truthiness and `isinstance`).
+//! fields. A key is set when its value is not null (`present`), or, where a
+//! check needs a value, when it is not null, `false`, zero or empty
+//! (`truthy`); a value's type is its YAML node's kind (a mapping, a sequence,
+//! an integer; a boolean is never an integer).
 
 use std::collections::BTreeSet;
+use std::ops::RangeInclusive;
 
 use garde::Validate;
 use indexmap::IndexMap;
@@ -17,7 +21,7 @@ use crate::node::{Node, Value};
 use crate::objects::any::Any;
 use crate::objects::platform::durations::duration_seconds;
 use crate::objects::platform::{
-    get, is_map, literal_enum, platform_block, present, python_int, python_strip, truthy,
+    get, is_map, literal_enum, platform_block, present, python_strip, truthy,
 };
 use crate::pins::Pins;
 
@@ -758,6 +762,17 @@ fn iterated(node: &Node) -> Option<Vec<Option<&Node>>> {
     }
 }
 
+/// Whether an integer field's value is within `range`. Any other value fails
+/// the constraint, except a boolean: a boolean is no integer, and the field's
+/// type refuses it on the value itself (`int_type`).
+fn int_within(node: Option<&Node>, range: &RangeInclusive<i64>) -> bool {
+    match node.map(|node| &node.value) {
+        Some(Value::Int(value)) => range.contains(value),
+        Some(Value::Bool(_)) => true,
+        _ => false,
+    }
+}
+
 /// Every constraint code of the oracle's `_validate_raw_elastic_block` on a
 /// raw block, sorted; empty when the block passes, is not a mapping, or has
 /// no `status` (left to the field: a missing status is "Field required", as
@@ -958,7 +973,7 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
             Some(Value::Seq(items)) => items.len() <= 5,
             Some(_) => false,
         };
-        let value_ok = python_int(get(threshold, "value")).is_some_and(|value| value >= 1);
+        let value_ok = int_within(get(threshold, "value"), &(1..=i64::MAX));
         if !field_ok || !value_ok {
             codes.insert("threshold_fields");
         }
@@ -982,16 +997,12 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
         }
     }
     let risk = field("risk");
-    if let Some(score) = python_int(risk) {
-        if !(0..=100).contains(&score) {
-            codes.insert("risk_score");
-        }
-    } else if is_map(risk) {
-        let score = get(risk, "score");
-        if present(score) && !python_int(score).is_some_and(|score| (0..=100).contains(&score)) {
-            codes.insert("risk_score");
-        }
-    } else if present(risk) {
+    let score = if is_map(risk) {
+        get(risk, "score")
+    } else {
+        risk
+    };
+    if present(score) && !int_within(score, &(0..=100)) {
         codes.insert("risk_score");
     }
     // A non-object `scheduling` is a shape fault, not a duration one: left to

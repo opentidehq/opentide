@@ -3,7 +3,7 @@
 //! (`/api/v2/policies`), the endpoints Sysdig's own Terraform provider uses.
 //!
 //! A port of `platforms/sysdig/client.py` (`SysdigClient`: a bearer token,
-//! 30 s, urllib3's retries; a 401 or 403 refuses the whole tenant) and of
+//! 30 s, the connectors' retries; a 401 or 403 refuses the whole tenant) and of
 //! `deployer.py`'s `deploy_api`, rule by rule and request for request:
 //! create a rule and add it to the policies the block or the tenant names;
 //! update it with the version the tenant holds, renaming it in those
@@ -35,18 +35,15 @@ const RULES: &str = "/api/secure/rules";
 /// Runtime policies.
 const POLICIES: &str = "/api/v2/policies";
 
-/// How a Sysdig tenant is reached: 30 s, and urllib3's
-/// `Retry(total=3, backoff_factor=0.5)` on 429 and 5xx for `GET`, `PUT`,
-/// `DELETE` and `POST`.
+/// How a Sysdig tenant is reached: 30 s, and the connectors' retries. Only
+/// a read or a delete is sent again after a transient answer: a rule create
+/// is a `POST`, and every update is a `PUT` that is never retried once
+/// answered (`Client::send`): a rule's carries the `version` the tenant
+/// held, and a policy is sent back as the tenant listed it.
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
         timeout: std::time::Duration::from_secs(30),
-        retry: RetryPolicy::urllib3(
-            3,
-            0.5,
-            &[429, 500, 502, 503, 504],
-            &["GET", "PUT", "DELETE", "POST"],
-        ),
+        retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }
 }
@@ -153,11 +150,19 @@ impl<'a> Client<'a> {
         if let Some(body) = body {
             builder = builder.body(body);
         }
-        let request = builder.build().map_err(|error| ConnectorError::Setup {
+        let mut request = builder.build().map_err(|error| ConnectorError::Setup {
             platform: PLATFORM.to_owned(),
             tenant: self.tenant().to_owned(),
             message: error.describe(),
         })?;
+        // A rule's `PUT` carries the `version` the tenant held (optimistic
+        // concurrency): after the tenant applied a first copy, a second
+        // names a stale version and fails. A policy's `PUT` sends back the
+        // policy as the tenant listed it, a read-modify-write too. Neither
+        // is sent again after an answer; one never sent still is.
+        if request.method() == crate::transport::Method::PUT {
+            request.set_idempotent(false);
+        }
         let answer = Answer::fetch(self.cx.http, request, self.cx.cancel).await?;
         if matches!(answer.status, 401 | 403) {
             return Err(ConnectorError::Refused {

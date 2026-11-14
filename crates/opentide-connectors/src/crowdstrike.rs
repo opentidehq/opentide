@@ -27,6 +27,7 @@ use crate::connector::{
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
+use crate::retry::RetryPolicy;
 use crate::{Secret, TenantLabel, encode};
 
 /// The platform's identifier.
@@ -47,10 +48,13 @@ const MAX_POLL_DELAY: Duration = Duration::from_secs(5);
 /// How long stopping a search may take once the runner gave up on it.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// How a CrowdStrike tenant is reached when nothing else says: `requests`'
-/// 120 s and no retries (the client mounts no retrying adapter).
+/// How a CrowdStrike tenant is reached when nothing else says: 120 s and
+/// the connectors' retries.
 pub fn http_defaults() -> HttpSettings {
-    HttpSettings::default()
+    HttpSettings {
+        retry: RetryPolicy::standard(),
+        ..HttpSettings::default()
+    }
 }
 
 /// The API of a tenant's cloud (`_get_base_api`), or the setup error.

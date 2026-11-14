@@ -9,8 +9,8 @@
 //! Every call carries the session's headers: `Accept` and `Content-Type`
 //! `application/json`, `elastic-api-version: 2023-10-31` and, with a key,
 //! `Authorization: ApiKey <api_key>`; Kibana's writes add `kbn-xsrf: true`.
-//! The client retries 429 and 5xx answers three times with urllib3's backoff
-//! (`Retry(total=3, backoff_factor=0.5)`), for every method.
+//! The client retries as every connector does ([`RetryPolicy::standard`]):
+//! a rule create, a search or a preview (`POST`) is never sent twice.
 //!
 //! The tenant's `index` (a list) is not a [`crate::Tenant`] setup value:
 //! the calls that fall back on it take it as an argument.
@@ -55,17 +55,12 @@ pub const PRESERVED_FIELDS: [&str; 11] = [
     "throttle",
 ];
 
-/// The HTTP settings of an Elastic tenant: `ElasticClient`'s retries and
-/// *timeout* (`int(max(timeout, 1))` seconds).
+/// The HTTP settings of an Elastic tenant: the connectors' retries and
+/// *timeout* (whole seconds, at least one).
 pub fn http_settings(timeout: std::time::Duration) -> HttpSettings {
     HttpSettings {
         timeout: std::time::Duration::from_secs(timeout.as_secs().max(1)),
-        retry: RetryPolicy::urllib3(
-            3,
-            0.5,
-            &[429, 500, 502, 503, 504],
-            &["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
-        ),
+        retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }
 }
