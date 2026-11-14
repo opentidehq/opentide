@@ -78,10 +78,10 @@ impl Provider {
 }
 
 /// The platforms whose queries a pipeline checks on a live tenant
-/// (`QUERY_VALIDATION_PLATFORMS`), in the connectors' order.
+/// (`QUERY_VALIDATION_PLATFORMS`), in the platform table's order.
 pub fn query_validation_platforms() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Connector, |platform| platform.live_check)
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.live_check)
 }
 
 /// The commands of the catalogue gate, which write findings reports.

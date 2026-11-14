@@ -34,15 +34,15 @@ use crate::render::text::{Style, Text};
 pub const COMMAND: &str = "query";
 
 /// The platforms whose queries run here: those with a connector and a query
-/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`), sorted.
+/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`), in the platform table's order.
 pub fn platforms() -> Vec<&'static str> {
     query_platforms()
 }
 
-/// Every platform with a query runner (`QUERY_PLATFORMS`), sorted.
+/// Every platform with a query runner (`QUERY_PLATFORMS`), in the platform table's order.
 pub fn query_platforms() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Name, |platform| platform.query_runner)
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.query_runner)
 }
 
 /// Rows per tenant when `--limit` names none (`DEFAULT_LIMIT`).
@@ -2042,7 +2042,7 @@ mod tests {
         let refused = no_runner("sysdig");
         assert_eq!(
             compact_of(&Json::Object(refused.outcome.data.clone())),
-            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","exabeam","google_secops","graylog","harfanglab","sentinel","sentinel_one","splunk"]}"#
+            r#"{"platform":"sysdig","choices":["sentinel","defender_for_endpoint","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();
