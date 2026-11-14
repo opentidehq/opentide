@@ -1,9 +1,1 @@
-error[schema_validation]: configurations.splunk.advanced: Extra inputs are not permitted
-   ╭─▶ Objects/Detection Rules/rule-0003-splunk-spl.yaml:28:5
-   │
-27 │     query: index=main | head 1
-28 │     advanced:
-   │     ━━━━━━━━
-   │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
-
+✓ 12 objects valid · 7 queries · <SECONDS>

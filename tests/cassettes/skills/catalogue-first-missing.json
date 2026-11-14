@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "scenario": "skills/catalogue-first-missing",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--json",
+    "setup",
+    "skills",
+    "--generic",
+    "--yes"
+  ],
+  "digest": "sha256:c24e0c0b5ff2af02a1d9bcc0728de50bf78a0e172afb3dd596a72668bffcffad",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/opentidehq/skills/main/manifest.json",
+        "headers": [],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "text/plain; charset=utf-8"
+          ]
+        ],
+        "body": "{\n  \"version\": 1,\n  \"source\": \"opentidehq/skills\",\n  \"ref\": \"main\",\n  \"skills\": [\n    {\n      \"slug\": \"sample-skill\",\n      \"name\": \"Sample skill\",\n      \"description\": \"A skill with a reference file, for the install cassettes.\"\n    },\n    {\n      \"slug\": \"broken-skill\",\n      \"name\": \"Broken skill\",\n      \"description\": \"A skill one of whose files cannot be downloaded.\"\n    },\n    {\n      \"slug\": \"detection-engineering\",\n      \"name\": \"Detection engineering\",\n      \"description\": \"The catalogue's detection-engineering, longer than the package's.\"\n    }\n  ]\n}\n"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/opentidehq/skills/git/trees/main?recursive=1",
+        "headers": [
+          [
+            "accept",
+            "application/vnd.github+json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"sha\": \"0000000000000000000000000000000000000000\", \"tree\": [{\"path\": \"skills/broken-skill\", \"type\": \"tree\"}, {\"path\": \"skills/broken-skill/references\", \"type\": \"tree\"}, {\"path\": \"skills/detection-engineering\", \"type\": \"tree\"}, {\"path\": \"skills/detection-engineering/references\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill/references\", \"type\": \"tree\"}, {\"path\": \"README.md\", \"type\": \"blob\"}, {\"path\": \"manifest.json\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/references/missing.md\", \"type\": \"blob\"}, {\"path\": \"skills/detection-engineering/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/detection-engineering/references/kql.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/references/notes.md\", \"type\": \"blob\"}], \"truncated\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/opentidehq/skills/main/skills/detection-engineering/SKILL.md",
+        "headers": [],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "text/plain; charset=utf-8"
+          ]
+        ],
+        "body": "---\nname: detection-engineering\ndescription: The catalogue's skill.\n---\n\n# Detection engineering\n\nRead [the KQL notes](references/kql.md).\n"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/opentidehq/skills/main/skills/detection-engineering/references/kql.md",
+        "headers": [],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "skills-tenant"
+          ],
+          [
+            "content-type",
+            "text/plain; charset=utf-8"
+          ]
+        ],
+        "body": "404: Not Found"
+      }
+    }
+  ]
+}

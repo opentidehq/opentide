@@ -503,6 +503,245 @@ fn lint_reports_every_elastic_block_advisory() {
     assert_eq!(codes(&mobile), ["technique_not_enterprise"]);
 }
 
+#[test]
+fn lint_reports_yaral_warnings_on_their_section() {
+    // An event with no `metadata.event_type` filter scans every event
+    // (`yaral_unfiltered_event`, a warning): lint reports it on `events`.
+    let text = rule(
+        "  google_secops:\n    events: |\n      $e.principal.hostname = \"web01\"\n    outcome: \
+         |\n      $risk_score = 40\n    condition: |\n      $e\n",
+    );
+    let found = lint_check(&text);
+    assert!(
+        found
+            .iter()
+            .any(|(code, severity, line)| code == "yaral_unfiltered_event"
+                && severity == "warning"
+                && *line == 8),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn lint_reports_the_google_secops_block_advisories() {
+    let text = rule(
+        "  google_secops:\n    run_frequency: LIVE\n    events: |\n      $a.metadata.event_type \
+         = \"X\"\n      $b.metadata.event_type = \"Y\"\n    outcome: |\n      $host = \
+         $a.principal.hostname\n    condition: |\n      $a and $b\n",
+    );
+    let found = lint_check(&text);
+    let advisories: Vec<(String, String, usize)> = found
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("google_secops_"))
+        .collect();
+    assert_eq!(
+        advisories,
+        [
+            (
+                "google_secops_risk_score_missing".to_owned(),
+                "warning".to_owned(),
+                11
+            ),
+            (
+                "google_secops_live_frequency_unavailable".to_owned(),
+                "warning".to_owned(),
+                7
+            ),
+        ]
+    );
+}
+
+const GRAYLOG_CONFIGURATION: &str = "/ws/.opentide/configurations/platforms/graylog.toml";
+
+/// A Graylog configuration with one tenant, `lab`, and its setup's `extra`.
+fn graylog_tenant(extra: &str) -> String {
+    format!(
+        "[platform]\nenabled = true\nname = \"Graylog\"\n\n[[tenants]]\nname = \"lab\"\n\n\
+         [tenants.setup]\nurl = \"https://graylog.example\"\ntoken = \"$GRAYLOG_TOKEN\"\n{extra}"
+    )
+}
+
+fn graylog_block(query: &str) -> String {
+    format!(
+        "  graylog:\n    enabled: true\n    status: STAGING\n    streams: sysmon\n    \
+         schedule: {{every: 10m, window: 10m}}\n    query: '{query}'\n"
+    )
+}
+
+/// Each code the queries check reports on `text`, as a rule of a workspace
+/// that also holds `files`, with the errors first.
+fn checked_codes(text: &str, files: &[(&str, &str)]) -> (Vec<String>, Vec<String>) {
+    let mut all = vec![(FILE, text)];
+    all.extend_from_slice(files);
+    let ws = workspace(&all);
+    let path = PathBuf::from(FILE);
+    let objects = [QueryObject {
+        path: &path,
+        uuid: UUID,
+        family: "rule",
+        source: text,
+    }];
+    let found = EngineQueries.check(&ws, &objects, false);
+    let codes = |items: Vec<Diagnostic>| items.into_iter().map(|d| d.code).collect();
+    (codes(found.errors), codes(found.warnings))
+}
+
+#[test]
+fn a_graylog_query_is_checked_in_the_graylog_dialect() {
+    // Graylog's own refusal, not Elastic's Lucene warning.
+    let (errors, warnings) = checked_codes(&rule(&graylog_block("image_lc:/(?i)mshta/")), &[]);
+    assert_eq!(errors, ["graylog_regex_unsupported"]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
+#[test]
+fn a_leading_wildcard_is_refused_unless_every_reached_tenant_allows_it() {
+    let text = rule(&graylog_block("image_lc:*mshta.exe"));
+    // Offline, with no tenant, it stays an error.
+    assert_eq!(checked_codes(&text, &[]).0, ["graylog_leading_wildcard"]);
+    let refused = graylog_tenant("allow_leading_wildcard = false\n");
+    assert_eq!(
+        checked_codes(&text, &[(GRAYLOG_CONFIGURATION, &refused)]).0,
+        ["graylog_leading_wildcard"]
+    );
+    let allowed = graylog_tenant("allow_leading_wildcard = true\n");
+    assert_eq!(
+        checked_codes(&text, &[(GRAYLOG_CONFIGURATION, &allowed)]),
+        (Vec::new(), Vec::new())
+    );
+    // A block that reaches no tenant keeps it.
+    let elsewhere = text.replace(
+        "    streams: sysmon\n",
+        "    streams: sysmon\n    tenants: [prod]\n",
+    );
+    assert_eq!(
+        checked_codes(&elsewhere, &[(GRAYLOG_CONFIGURATION, &allowed)]).0,
+        ["graylog_leading_wildcard"]
+    );
+}
+
+#[test]
+fn lint_reports_the_graylog_block_advisories() {
+    use opentide_workspace::lint::LintQueryCheck;
+    let block = "  graylog:\n    enabled: true\n    status: STAGING\n    \
+                 schedule: {every: 5m, window: 15m}\n    query: 'EventID:1'\n";
+    let text = rule(block);
+    let _engine = opentide_cli::queries::ENGINE.lock().unwrap();
+    let fs = MemoryFs::new();
+    fs.create_dir("/ws/.opentide/configurations/platforms");
+    fs.write(GRAYLOG_CONFIGURATION, graylog_tenant(""));
+    let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
+    let found: Vec<(String, String, String)> = check
+        .check(
+            std::path::Path::new(FILE),
+            "objects/rules/a.yaml",
+            Some(UUID),
+            &text,
+        )
+        .unwrap()
+        .into_iter()
+        .filter(|finding| finding.diagnostic.code.starts_with("graylog_"))
+        .map(|finding| {
+            (
+                finding.diagnostic.code.clone(),
+                finding.diagnostic.field_path.join("."),
+                finding.diagnostic.message.clone(),
+            )
+        })
+        .collect();
+    // The engine's block check first, in its words, then the block's
+    // advisories, as 0.28.1's lint reports them.
+    let schedule = "configurations.graylog.schedule";
+    assert_eq!(
+        found
+            .iter()
+            .map(|(code, path, _)| (code.as_str(), path.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("graylog_overlapping_window", schedule),
+            ("graylog_overlapping_window", schedule),
+            ("graylog_all_streams", "configurations.graylog"),
+        ]
+    );
+    assert_eq!(
+        found[0].2,
+        "this filter searches 900s every 300s, so runs overlap and each message alerts \
+         once per run that sees it; set `window` to `every`, or aggregate"
+    );
+    assert!(
+        found[1]
+            .2
+            .starts_with("the window (15m) is longer than the interval (5m)")
+    );
+}
+
+#[test]
+fn lint_reports_the_bitdefender_block_advisories_on_one_line() {
+    let text = rule(
+        "  bitdefender:\n    enabled: true\n    schema: platform::bitdefender::1.0\n    \
+         status: PRODUCTION\n    detection:\n      target: registry\n      criteria:\n      - \
+         field: Registry.Key\n        contains: HKEY_LOCAL_MACHINE\\Software\\Run\n",
+    );
+    let document = lint_run(&text, &["--check", "queries"]);
+    let found: Vec<(String, Value, Value)> = document["findings"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{document}"))
+        .iter()
+        .filter(|finding| {
+            finding["code"]
+                .as_str()
+                .is_some_and(|code| code.starts_with("bitdefender_"))
+        })
+        .map(|finding| {
+            (
+                finding["code"].as_str().unwrap().to_owned(),
+                finding["line"].clone(),
+                finding["end_line"].clone(),
+            )
+        })
+        .collect();
+    let codes: Vec<&str> = found.iter().map(|(code, _, _)| code.as_str()).collect();
+    assert_eq!(
+        codes,
+        [
+            "bitdefender_registry_full_hive",
+            "bitdefender_contains_no_wildcard"
+        ],
+        "{document}"
+    );
+    assert!(
+        found
+            .iter()
+            .all(|(_, line, end_line)| line.is_u64() && line == end_line),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn lint_reports_the_exabeam_block_advisories() {
+    let text = rule(
+        "  exabeam:\n    status: PREVIEW\n    outcome: none\n    sequences:\n      - query: \
+         activity_type:\"app-login\"\n      - query: activity_type:\"app-login\"\n        threshold:\n          \
+         within: 10m\n    correlation:\n      within: 12m\n",
+    );
+    let found = lint_check(&text);
+    let advisories: Vec<(String, String, usize)> = found
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("exabeam_"))
+        .collect();
+    assert_eq!(
+        advisories,
+        [
+            ("exabeam_outcome_silent".to_owned(), "warning".to_owned(), 8),
+            (
+                "exabeam_correlation_window".to_owned(),
+                "warning".to_owned(),
+                15
+            ),
+        ]
+    );
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {
@@ -526,7 +765,7 @@ fn lint_run(text: &str, words: &[&str]) -> Value {
     let home = scratch.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     let host = opentide_cli::Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(Sink::default())),

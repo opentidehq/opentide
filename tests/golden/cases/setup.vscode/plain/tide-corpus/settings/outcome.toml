@@ -31,8 +31,8 @@ path = "ws/.opentide/lsp/catalogs/generated/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 999657
-blob = "49e1a8b3afaceee0f2ec2573a5c8e8d537603c9f8543c188fe23bdf203250969"
+size = 1133481
+blob = "ddba7ad72c812a7060eddf9dfa44478b7cccc47c196b1cbecd234d9d172eb8d0"
 
 [[files]]
 path = "ws/.opentide/schemas/objective.1.0.schema.json"
@@ -54,16 +54,16 @@ path = "ws/.opentide/schemas/rule.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4926419
-blob = "47656628ff5a61697d2d1bb3a1b25228383151f971abeb85fbc133f3368304f9"
+size = 5017584
+blob = "e195d5014810e20fa8e2ed9ec0df0377beb4fea2baa91db899691ccbb6609f99"
 
 [[files]]
 path = "ws/.opentide/schemas/rule.1.1.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4928629
-blob = "ec700e2282c16754e56a603d660c9327624df84e6beb63621500366fef6f9e39"
+size = 5019794
+blob = "8c28dc1548d38ac7696c44fbb6436b30f6dda00d649c560d1f6cc1d224b6384a"
 
 [[files]]
 path = "ws/.opentide/schemas/threat.1.0.schema.json"

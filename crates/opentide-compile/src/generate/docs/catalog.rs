@@ -243,6 +243,8 @@ pub struct Catalog<'i> {
     signal_by_uuid: HashMap<String, usize>,
     relations: Relations<'i>,
     statuses: Statuses,
+    /// Each rule's `configurations` as written, by UUID.
+    written: HashMap<String, crate::json::Json>,
 }
 
 impl<'i> Catalog<'i> {
@@ -255,8 +257,18 @@ impl<'i> Catalog<'i> {
     /// rules first, then threats, then objectives.
     pub fn build(index: &'i Index, statuses: Statuses) -> Result<Self, PhaseError> {
         let mut rules = Vec::new();
+        let mut written = HashMap::new();
         for object in index.family("rule") {
             let model = rule_model(&object.document)?;
+            if let Some(configurations) = object
+                .document
+                .root()
+                .and_then(|root| root.get("configurations"))
+            {
+                written
+                    .entry(object.uuid.clone())
+                    .or_insert_with(|| crate::json::Json::from_node(configurations));
+            }
             let name = match &model {
                 RuleModel::V1_0(rule) => rule.name.clone(),
                 RuleModel::V1_1(rule) => rule.name.clone(),
@@ -323,7 +335,14 @@ impl<'i> Catalog<'i> {
             signal_by_uuid,
             relations: Relations::new(index),
             statuses,
+            written,
         })
+    }
+
+    /// A rule's `configurations` as its file writes them: what the author
+    /// set, beside the defaults its model fills in.
+    pub fn written_configurations(&self, uuid: &str) -> Option<&crate::json::Json> {
+        self.written.get(uuid)
     }
 
     /// The records of `scope`.
@@ -739,14 +758,41 @@ impl<'i> Catalog<'i> {
                 if let Some(model) = rule_detection_model(&record.model)
                     && !model.is_empty()
                 {
-                    self.add_objective(&mut graph, model);
-                    if self.signal(model).is_some() {
-                        graph.add_edge(model, uuid, Some("implements"), false);
-                    }
+                    self.add_rule_lineage(&mut graph, uuid, model);
                 }
             }
         }
         graph
+    }
+
+    /// A rule page's own path (`_add_rule_lineage`): the threats, its
+    /// objective, its signal, the rule. Sibling rules of the objective are
+    /// left out: they belong on the objective's page, and on a rule page
+    /// they buried the rule itself.
+    fn add_rule_lineage(&self, graph: &mut Graph, rule: &str, model: &str) {
+        let signal = self.signal(model);
+        let objective = signal.map_or(model, |signal| signal.owner.as_str());
+        let Some(record) = self.record(objective) else {
+            return;
+        };
+        let Model::Objective(body) = &record.model else {
+            return;
+        };
+        graph.add_node(objective, &record.name, "objective");
+        for threat in body.objective.threats.iter().flatten() {
+            let Some(threat_record) = self.record(threat) else {
+                continue;
+            };
+            graph.add_node(threat, &threat_record.name, "threat");
+            graph.add_edge(threat, objective, Some("covers"), false);
+        }
+        if let Some(signal) = signal {
+            graph.add_node(&signal.uuid, &signal.name, "signal");
+            graph.add_edge(objective, &signal.uuid, None, false);
+            graph.add_edge(&signal.uuid, rule, Some("implements"), false);
+        } else {
+            graph.add_edge(objective, rule, Some("implements"), false);
+        }
     }
 
     fn add_objective(&self, graph: &mut Graph, uuid: &str) {

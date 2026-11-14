@@ -5,13 +5,17 @@
                                                                                 
  Catalogue hygiene: filename slugs and recommended metadata, not schema         
  validation.                                                                    
+ A missing optional field is a note: it never fails --strict, and prints with   
+ --verbose.                                                                     
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --fix                                      Apply safe filename renames       │
-│ --strict                                   Exit non-zero when findings exist │
-│                                            (CI gate)                         │
+│ --strict                                   Exit non-zero when errors or      │
+│                                            warnings are left (CI gate).      │
+│                                            Notes never fail it               │
 │ --check          CHECK                     Limit to one check: filenames,    │
-│                                            metadata, placeholders or queries │
+│                                            metadata, recommended,            │
+│                                            placeholders or queries           │
 │                                            (repeatable). Runs it even when   │
 │                                            lint.toml disables it             │
 │ --changed                                  Lint only the object files this   │

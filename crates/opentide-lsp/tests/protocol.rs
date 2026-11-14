@@ -1049,6 +1049,65 @@ fn lint_s_file_name_and_metadata_findings_are_published() {
     );
 }
 
+/// opentide 0.28.1 (#1028, language-server #250): a missing optional field
+/// is information. A rule without `response` gets lint's
+/// `recommended_field_missing` as an Information diagnostic (severity 3,
+/// not a warning), at the top of the file; `[recommended] enabled = false` leaves
+/// it out, and a rule with both fields has none.
+#[test]
+fn a_missing_recommended_field_is_information() {
+    let scratch = workspace("recommended-field", true);
+    let root = &scratch.0;
+    let path = root.join("objects/rules/rule-1.0.yaml");
+    let full = fixture(RULE);
+    let start_at = full.find("\nresponse:").unwrap() + 1;
+    let end_at = full.find("\nconfigurations:").unwrap() + 1;
+    let text = format!("{}{}", &full[..start_at], &full[end_at..]);
+    std::fs::write(&path, &text).unwrap();
+    let uri = file_uri(&path);
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    open(&mut lsp, &uri, "opentide-yaml", &text);
+    let published = published_for(&mut lsp, &uri);
+    let found: Vec<&Value> = published
+        .iter()
+        .filter(|d| d["code"] == "recommended_field_missing")
+        .collect();
+    assert_eq!(found.len(), 1, "{published:#?}");
+    assert_eq!(found[0]["severity"], 3, "{}", found[0]);
+    assert_eq!(found[0]["range"]["start"]["line"], 0, "{}", found[0]);
+    assert!(
+        found[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Recommended field missing: response"),
+        "{}",
+        found[0]
+    );
+    drop(lsp);
+
+    std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
+    std::fs::write(
+        root.join(".opentide/configurations/lint.toml"),
+        "[recommended]\nenabled = false\n",
+    )
+    .unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let codes = codes_for(&mut lsp, &uri, &text);
+    assert!(
+        !codes.contains(&"recommended_field_missing".to_string()),
+        "{codes:?}"
+    );
+    drop(lsp);
+    std::fs::write(&path, &full).unwrap();
+    std::fs::remove_file(root.join(".opentide/configurations/lint.toml")).unwrap();
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let codes = codes_for(&mut lsp, &uri, &full);
+    assert!(
+        !codes.contains(&"recommended_field_missing".to_string()),
+        "{codes:?}"
+    );
+}
+
 /// #219: a file-name rename is offered only where it can land: not
 /// for an unsaved `untitled:` buffer, which has no file to rename, and not
 /// onto a path another open document already has.

@@ -244,7 +244,12 @@ impl<'a> Checker<'a> {
         self.push(code, Severity::Error, message, at);
     }
 
+    /// A code the engine only ever warns about (`crate::WARNING_CODES`).
     fn warn(&mut self, code: &'static str, message: String, at: (usize, usize)) {
+        debug_assert!(
+            crate::always_warning(code),
+            "{code} is not in WARNING_CODES"
+        );
         self.push(code, Severity::Warning, message, at);
     }
 

@@ -1,0 +1,39 @@
+  #enabled: false
+  #name: 
+  schema: platform::google_secops::1.0
+  status: 
+  #flags:
+    #- 
+  #tenants:
+    #- 
+  #contributors:
+    #- 
+  #setup: |
+    #...
+  events: |
+    ...
+  #match:
+    #group_by:
+      #- 
+    #window: 
+    #type: hop
+    #pivot: 
+    #direction: before
+  #outcome: |
+    #...
+  condition: |
+    ...
+  #options:
+    #allow_zero_values: false
+    #suppression_window: 
+  #export: |
+    #...
+  #severity: Info
+  #priority: Info
+  #alerting: false
+  #run_frequency: LIVE
+  #schedule:
+    #ensure_enrichment_completeness: false
+    #late_arriving_data_adjustment: 
+  #meta:
+    #key: 

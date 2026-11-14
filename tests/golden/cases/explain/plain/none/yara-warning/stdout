@@ -1,0 +1,15 @@
+# yara_module_unconfirmed
+
+The YARA module is known but not confirmed on the platform's agents.
+
+Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
+
+## Example
+
+```text
+opentide lint --check queries
+```
+
+## How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.

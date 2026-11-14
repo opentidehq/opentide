@@ -8,10 +8,11 @@
                                                                                                     
 [2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
 [2m│[0m [1;36m-[0m[1;36m-platform[0m             [1;33mPLATFORM  [0m  Check this platform's queries. Offline, default every         [2m│[0m
-[2m│[0m                                    platform the engine parses: carbon_black_cloud,               [2m│[0m
-[2m│[0m                                    defender_for_endpoint, elastic, sentinel, splunk, sysdig.     [2m│[0m
-[2m│[0m                                    [1;36m-[0m[1;36m-live[0m needs one of: carbon_black_cloud,                      [2m│[0m
-[2m│[0m                                    defender_for_endpoint, elastic, sentinel, sentinel_one,       [2m│[0m
+[2m│[0m                                    platform the engine parses: bitdefender, carbon_black_cloud,  [2m│[0m
+[2m│[0m                                    defender_for_endpoint, elastic, exabeam, google_secops,       [2m│[0m
+[2m│[0m                                    graylog, harfanglab, sentinel, splunk, sysdig. [1;36m-[0m[1;36m-live[0m needs   [2m│[0m
+[2m│[0m                                    one of: carbon_black_cloud, defender_for_endpoint, elastic,   [2m│[0m
+[2m│[0m                                    exabeam, google_secops, graylog, sentinel, sentinel_one,      [2m│[0m
 [2m│[0m                                    splunk                                                        [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-strategy[0m             [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m     [0m  Check only rules a run with this strategy deploys             [2m│[0m
 [2m│[0m                                    (repeatable), on the tenants that accept it. Default: PREVIEW [2m│[0m
@@ -24,7 +25,8 @@
 [2m│[0m                                    request, the push, or outside CI the last commit (the files   [2m│[0m
 [2m│[0m                                    deploy reads)                                                 [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-file[0m                 [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m     [0m  Check only this rule file, or this query file (.kql, .spl,    [2m│[0m
-[2m│[0m                                    .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)    [2m│[0m
+[2m│[0m                                    .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral,    [2m│[0m
+[2m│[0m                                    .yl2) offline (repeatable)                                    [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-uuid[0m                 [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m     [0m  Check only the rule with this UUID (repeatable)               [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-strict[0m               [1;33m          [0m  Fail on warnings too                                          [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-queries[0m              [1;33merror[0m[1;2;33m|[0m[1;33mwarn[0m  How a rejected query is reported offline: error (the default) [2m│[0m

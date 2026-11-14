@@ -15,6 +15,24 @@ pub const ORACLE_PYTHON: &str = "3.14.6";
 /// package at one version with its SHA-256 (`uv pip compile --generate-hashes`).
 pub const ORACLE_REQUIREMENTS: &str = "tests/bench/oracle-requirements.txt";
 
+/// The platforms the benchmarks' workspace holds blocks and configurations
+/// for: the ones the oracle the benchmarks pin knows (opentide 0.23.0), in the
+/// connector order. `[baseline] platforms` in `tests/bench/budgets.toml` names
+/// the same list, which the baselines were measured on; the four platforms
+/// 0.24.0-0.28.0 added (Bitdefender, Graylog, Exabeam, Google SecOps) join the
+/// benchmarks when their oracle pin moves past 0.28.
+pub const ORACLE_PLATFORMS: &[&str] = &[
+    "sentinel",
+    "defender_for_endpoint",
+    "splunk",
+    "sentinel_one",
+    "carbon_black_cloud",
+    "crowdstrike",
+    "harfanglab",
+    "elastic",
+    "sysdig",
+];
+
 /// Compiles the interpreter's standard library (`compileall`, every CPU),
 /// failing when a module does not compile.
 const COMPILE_STDLIB: &str = "import compileall, sys, sysconfig; \

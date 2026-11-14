@@ -80,6 +80,7 @@ pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'stat
             "Azure",
             &["azure_tenant_id", "azure_client_id", "azure_client_secret"],
         ),
+        "graylog" => ("Graylog", &["url", "token"]),
         _ => ("", &[]),
     }
 }
@@ -628,6 +629,7 @@ pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
+        "graylog" => opentide_connectors::graylog::http_defaults(),
         // azure-core reads for 300 s; the server holds the query up to its
         // own timeout (`Prefer: wait`).
         "sentinel" => sentinel::http_settings(timeout.max(Duration::from_secs(300))),
@@ -707,10 +709,17 @@ fn run_on_tenant(
         }
     };
     let registry = crate::plugins::registry();
-    let Some(runner) = registry
-        .get(platform)
-        .and_then(opentide_connectors::Platform::query_runner)
-    else {
+    // Google SecOps reads Application Default Credentials from the command's
+    // environment, not the process's.
+    let secops = opentide_connectors::google_secops::GoogleSecops::new(environment.clone());
+    let found = if platform == "google_secops" {
+        Some(&secops as &dyn opentide_connectors::connector::QueryRunner)
+    } else {
+        registry
+            .get(platform)
+            .and_then(opentide_connectors::Platform::query_runner)
+    };
+    let Some(runner) = found else {
         outcome.error = Some(format!("{platform} has no query runner"));
         return finish(outcome);
     };
@@ -798,6 +807,29 @@ fn run_on_tenant(
 
 /// The host a tenant's failures name: its `url`, else the platform's.
 fn setup_host(platform: &str, configured: &Configured) -> String {
+    if platform == "google_secops" {
+        // The instance's endpoint, else its location's (`_tenant_host`).
+        let text = |key: &str| {
+            configured
+                .setup
+                .get(key)
+                .and_then(opentide_compile::Json::as_str)
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        };
+        let endpoint = text("endpoint").or_else(|| {
+            text("location")
+                .map(|location| opentide_compile::google_secops::default_endpoint(&location))
+        });
+        return endpoint
+            .map(|endpoint| {
+                url::Url::parse(&endpoint)
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_owned))
+                    .unwrap_or(endpoint)
+            })
+            .unwrap_or_default();
+    }
     let url = configured
         .setup
         .get("url")
@@ -2197,7 +2229,7 @@ mod tests {
         let refused = no_runner("sysdig");
         assert_eq!(
             compact_of(&Json::Object(refused.outcome.data.clone())),
-            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","harfanglab","sentinel","sentinel_one","splunk"]}"#
+            r#"{"platform":"sysdig","choices":["carbon_black_cloud","crowdstrike","defender_for_endpoint","elastic","exabeam","google_secops","graylog","harfanglab","sentinel","sentinel_one","splunk"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();
@@ -2241,6 +2273,10 @@ mod tests {
         assert_eq!(credential_keys("carbon_black_cloud").0, "CBC");
         assert_eq!(credential_keys("sentinel").1.len(), 3);
         assert_eq!(credential_keys("sysdig"), ("", &[][..]));
+        assert_eq!(
+            credential_keys("graylog"),
+            ("Graylog", &["url", "token"][..])
+        );
         let tenant = |url: Option<&str>| Configured {
             name: "lab".into(),
             setup: url

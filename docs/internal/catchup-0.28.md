@@ -351,3 +351,11 @@ The Python implementation's modules and tests that development changed or added,
 integration deleted them (98 modify/delete conflicts, 54 added modules, 38 added test modules).
 Each unit reads its behaviour from `git show 164450afc:<path>`. The second merge (development at
 `164450afc`) resolved its 28 modify/delete conflicts the same way, and the third (`164450afc`, #1049) its 3.
+
+## Verified
+
+Units that bring no path, only checks that what development added is already in.
+
+| Unit | What was checked | Tests |
+|---|---|---|
+| C1 | 0.24.0's CQL in the editor and `opentide tui` was in since the engine's 0.12.0 import, and stays in after E1 (language-server v0.16.1): diagnostics, hover, completion and highlighting on `configurations.crowdstrike.query` and `system: crowdstrike` hunts, in the bare server and `opentide lsp start`; the TUI counts, walks, names (`cql`) and underlines the CQL finding. `crowdstrike_unsupported` is explained as retired (`explain.rs`). The CQL ledger entry and `since_oracle.rs` still describe a real difference: 0.28.0's `validation/query_platforms.py` says "CrowdStrike is never checked" | `opentide-lsp/tests/e2e_stdio.rs` (`cql_in_a_crowdstrike_block_and_hunt_over_stdio`), `opentide-cli/tests/lsp_start.rs` (`a_crowdstrike_query_is_cql_in_an_editor_session`), `opentide-cli/tests/tui.rs` (`a_crowdstrike_query_is_checked_coloured_and_named_cql`) |

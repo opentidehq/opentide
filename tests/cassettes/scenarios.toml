@@ -26,7 +26,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "skills/manifest"
-description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; every skills golden case replays it."
+description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; the skills golden cases that read only the catalogue replay it."
 client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
 cwd = "tmp"
 
@@ -46,6 +46,22 @@ tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
 routes = ["raw.githubusercontent.com", "api.github.com"]
 cwd = "tmp"
 exit = 1
+
+[[scenario]]
+name = "skills/catalogue-first"
+description = "`setup skills` with the starter skills from the stand-in opentidehq/skills repository (opentide 0.28.1, #1015): the catalogue lists detection-engineering, so its tree and files are downloaded; opentide-detection-rule installs from the package."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/catalogue-first-missing"
+description = "`setup skills` with the starter skills when a file of the catalogue's detection-engineering answers 404 (opentide 0.28.1, #1015): the package's copy is written, with a warning, or an installed copy is kept."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py", "detection-engineering-missing"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
 
 [[scenario]]
 name = "crowdstrike/deploy"
@@ -557,4 +573,31 @@ client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && 
 tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
 routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
 secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/deploy"
+description = "Graylog's deploy client on the 7.2 and 6.3 tenants: the version, the query check, a create, an update, a disable and a delete, then the failure table's refusals (an unconfirmed create, a refused one, an update of a missing definition, an immutable one, a delete of one in use)."
+client = ["{python}", "tests/cassettes/graylog/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/query"
+description = "Graylog's message search on 7.2 (every field) and on 6.3 (only the fields the query names)."
+client = ["{python}", "tests/cassettes/graylog/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/validate"
+description = "Graylog's live query check (`POST /api/search/validate`): an OK verdict, a warning and a refusal."
+client = ["{python}", "tests/cassettes/graylog/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
 cwd = "repo"

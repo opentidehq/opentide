@@ -3,7 +3,8 @@
 //! `services/setup/plugin.py`).
 //!
 //! A run downloads each skill tree from the opentidehq/skills repository
-//! (the four authoring skills come from the package), puts it under
+//! (the packaged authoring skills come from the package, but for the
+//! catalogue's `detection-engineering` when it lists one), puts it under
 //! `.agents/skills/<slug>/`, copies it for each harness that reads skills
 //! from its own folder, writes each harness's entrypoint file when the
 //! repository has none, and with `--plugin` registers the opentidehq/skills
@@ -318,40 +319,122 @@ pub fn unavailable(options: &Options, catalogue: &Catalogue<'_>) -> Result<Vec<S
         .collect())
 }
 
+/// Packaged skills that install the catalogue's copy when the catalogue
+/// lists the slug, keeping the package's as a fallback
+/// (`CATALOGUE_FIRST_SKILLS`): the catalogue's is the one `discover` and
+/// `show` describe. Named, not inferred from the catalogue, so a slug the
+/// catalogue starts listing again (`opentide-detection-rule` once taught
+/// `mdr::` that way, #405) keeps installing the package's copy.
+pub const CATALOGUE_FIRST_SKILLS: [&str; 1] = ["detection-engineering"];
+
+/// Where one skill's files came from.
+#[derive(Debug)]
+enum Fetched {
+    /// Files to write under `.agents/skills/<slug>/`.
+    Write(Files),
+    /// The installed copy, kept because the catalogue's could not be
+    /// downloaded: its files, for the harness copies, and nothing written.
+    Kept(Files),
+}
+
+/// The packaged files of `slug`, when it ships with opentide.
+fn bundled_files(slug: &str) -> Option<Files> {
+    BUNDLED
+        .iter()
+        .find(|(name, _)| *name == slug)
+        .map(|(_, files)| {
+            files
+                .iter()
+                .map(|(name, bytes)| ((*name).to_owned(), bytes.to_vec()))
+                .collect()
+        })
+}
+
+/// Every file under `skills/<slug>/` in the catalogue, by its path in the
+/// skill, or `None` when one is missing (`_fetch_skill_files`).
+fn catalogue_files(slug: &str, git_ref: &str, catalogue: &Catalogue<'_>) -> Option<Files> {
+    let folder = format!("skills/{slug}");
+    let paths = catalogue
+        .files_under(&folder, git_ref)
+        .filter(|paths| !paths.is_empty())?;
+    let prefix = format!("{folder}/");
+    let mut files = Vec::with_capacity(paths.len());
+    for path in paths {
+        let bytes = catalogue.file(&path, git_ref)?;
+        let relative = path.strip_prefix(&prefix)?;
+        files.push((relative.to_owned(), bytes));
+    }
+    files
+        .iter()
+        .any(|(name, _)| name == "SKILL.md")
+        .then_some(files)
+}
+
+/// The files of the skill installed at `dest`, read through `stage`.
+fn installed_files(stage: &Stage, dest: &Path) -> Files {
+    files_below(stage, dest)
+        .into_iter()
+        .filter_map(|relative| {
+            let bytes = stage.read(&dest.join(&relative)).ok().flatten()?;
+            Some((relative, bytes))
+        })
+        .collect()
+}
+
 /// One skill's files, by their path in the skill, sorted
-/// (`_install_bundled_skill`, `_download_skill`).
-fn skill_files(slug: &str, git_ref: &str, catalogue: &Catalogue<'_>) -> Result<Files, Error> {
+/// (`_install_bundled_skill`, `_download_skill`). Every skill is the full
+/// tree under `skills/<slug>/` in the catalogue; the packaged authoring
+/// skills install from the package, except a [`CATALOGUE_FIRST_SKILLS`]
+/// slug the catalogue lists (`catalogued`). When that copy cannot be
+/// downloaded, the copy installed at `dest` is kept and, with none, the
+/// package's is written; either way a line goes to `warnings`.
+fn skill_files(
+    stage: &Stage,
+    slug: &str,
+    dest: &Path,
+    catalogue: &Catalogue<'_>,
+    warnings: &mut Vec<String>,
+) -> Result<Fetched, Error> {
     if !catalogue::slug_is_contained(slug) {
         return Err(Error::Failed(format!(
             "Refusing skill slug {}",
             super::repr(slug)
         )));
     }
-    if let Some((_, files)) = BUNDLED.iter().find(|(name, _)| *name == slug) {
-        return Ok(files
-            .iter()
-            .map(|(name, bytes)| ((*name).to_owned(), bytes.to_vec()))
-            .collect());
+    let manifest = catalogue.manifest().map_err(Error::Failed)?;
+    let git_ref = manifest.git_ref.as_str();
+    let catalogued = manifest.catalogue_slugs.iter().any(|known| known == slug);
+    let bundled = bundled_files(slug);
+    if let Some(files) = &bundled
+        && !(catalogued && CATALOGUE_FIRST_SKILLS.contains(&slug))
+    {
+        return Ok(Fetched::Write(files.clone()));
     }
-    let folder = format!("skills/{slug}");
-    let paths = catalogue
-        .files_under(&folder, git_ref)
-        .filter(|paths| !paths.is_empty())
-        .ok_or_else(|| download_error(slug, git_ref))?;
-    let prefix = format!("{folder}/");
-    let mut files = Vec::with_capacity(paths.len());
-    for path in paths {
-        let (Some(bytes), Some(relative)) =
-            (catalogue.file(&path, git_ref), path.strip_prefix(&prefix))
-        else {
-            return Err(download_error(slug, git_ref));
-        };
-        files.push((relative.to_owned(), bytes));
+    if let Some(files) = catalogue_files(slug, git_ref, catalogue) {
+        return Ok(Fetched::Write(files));
     }
-    if !files.iter().any(|(name, _)| name == "SKILL.md") {
+    let Some(packaged) = bundled else {
         return Err(download_error(slug, git_ref));
+    };
+    let source = catalogue::DEFAULT_SOURCE;
+    let place = format!(".agents/skills/{slug}");
+    if stage.is_file(&dest.join("SKILL.md")) {
+        tracing::warn!(slug, source, "ref" = git_ref, "skill_kept_installed_copy");
+        warnings.push(format!(
+            "Kept the installed {place}: its files could not be downloaded from {source}@{git_ref}. Run the command again to update it."
+        ));
+        return Ok(Fetched::Kept(installed_files(stage, dest)));
     }
-    Ok(files)
+    tracing::warn!(
+        slug,
+        source,
+        "ref" = git_ref,
+        "skill_installed_from_package"
+    );
+    warnings.push(format!(
+        "Installed opentide's short packaged copy of {place}: the catalogue's could not be downloaded from {source}@{git_ref}. Run the command again for the full skill."
+    ));
+    Ok(Fetched::Write(packaged))
 }
 
 /// `relative` under `root`, refused when it would leave it (`_contained_file`).
@@ -723,21 +806,20 @@ pub fn install(
     ];
     let mut entrypoints = Entrypoints::default();
     let mut trees: Vec<(String, Files)> = Vec::new();
-    if !slugs.is_empty() {
-        let git_ref = catalogue.manifest().map_err(Error::Failed)?.git_ref.clone();
-        for slug in &slugs {
-            let files = skill_files(slug, &git_ref, catalogue)?;
-            replace_tree(
-                stage,
-                &root.join(".agents").join("skills").join(slug),
-                &files,
-            )?;
-            written.extend(
-                files
-                    .iter()
-                    .map(|(relative, _)| format!(".agents/skills/{slug}/{relative}")),
-            );
-            trees.push((slug.clone(), files));
+    let mut download_warnings: Vec<String> = Vec::new();
+    for slug in &slugs {
+        let dest = root.join(".agents").join("skills").join(slug);
+        match skill_files(stage, slug, &dest, catalogue, &mut download_warnings)? {
+            Fetched::Write(files) => {
+                replace_tree(stage, &dest, &files)?;
+                written.extend(
+                    files
+                        .iter()
+                        .map(|(relative, _)| format!(".agents/skills/{slug}/{relative}")),
+                );
+                trees.push((slug.clone(), files));
+            }
+            Fetched::Kept(files) => trees.push((slug.clone(), files)),
         }
     }
     let mut also_applied: Vec<String> = Vec::new();
@@ -817,6 +899,7 @@ pub fn install(
         );
     }
     let mut warnings = plugin_warnings;
+    warnings.append(&mut download_warnings);
     warnings.append(&mut entrypoints.warnings);
     if !warnings.is_empty() {
         result.set("warnings", strings(&warnings));
@@ -975,6 +1058,149 @@ mod tests {
         assert_eq!(
             std::fs::read(root.join(".claude/skills/detection-engineering/SKILL.md")).unwrap(),
             BUNDLED[0].1[0].1
+        );
+    }
+
+    /// A catalogue that lists `detection-engineering`, whose files cannot be
+    /// downloaded: the run is offline and the file list is empty.
+    fn catalogue_listing_detection_engineering(network: Network<'_>) -> Catalogue<'_> {
+        let mut listed = manifest();
+        listed.catalogue_slugs = vec!["detection-engineering".to_owned()];
+        let catalogue = loaded(network, Ok(listed));
+        let _ = catalogue.tree.set(Some(Vec::new()));
+        catalogue
+    }
+
+    #[test]
+    fn only_detection_engineering_installs_the_catalogues_copy_first() {
+        assert_eq!(CATALOGUE_FIRST_SKILLS, ["detection-engineering"]);
+        let parsed = catalogue::parse_manifest(
+            serde_json::json!({"skills": [{"slug": "detection-engineering"}, {"slug": "other"}]})
+                .as_object()
+                .unwrap(),
+            false,
+        );
+        assert_eq!(parsed.catalogue_slugs, ["detection-engineering", "other"]);
+        assert!(parsed.entries.len() > parsed.catalogue_slugs.len());
+    }
+
+    #[test]
+    fn a_catalogued_skill_that_cannot_be_downloaded_installs_the_package_copy() {
+        let env = offline_env();
+        let network = Network {
+            env: &env,
+            proxy: None,
+            interrupted: &never,
+        };
+        let catalogue = catalogue_listing_detection_engineering(network);
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let mut stage = Stage::new();
+        let options = Options {
+            targets: vec![Target::Cursor],
+            slugs: vec!["detection-engineering".into()],
+            ..Options::default()
+        };
+        let result = install(&mut stage, &root, &options, &catalogue).unwrap();
+        stage.commit().unwrap();
+        assert_eq!(
+            result.strings("files"),
+            [
+                ".agents/skills/detection-engineering/SKILL.md",
+                ".cursor/skills/detection-engineering/SKILL.md",
+            ]
+        );
+        assert_eq!(
+            std::fs::read(root.join(".agents/skills/detection-engineering/SKILL.md")).unwrap(),
+            BUNDLED[0].1[0].1
+        );
+        let warnings = result.strings("warnings");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].starts_with(
+                "Installed opentide's short packaged copy of .agents/skills/detection-engineering: the catalogue's could not be downloaded from opentidehq/skills@"
+            ),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn a_catalogued_skill_that_cannot_be_downloaded_keeps_the_installed_copy() {
+        let env = offline_env();
+        let network = Network {
+            env: &env,
+            proxy: None,
+            interrupted: &never,
+        };
+        let catalogue = catalogue_listing_detection_engineering(network);
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let installed = root.join(".agents/skills/detection-engineering");
+        std::fs::create_dir_all(installed.join("references")).unwrap();
+        std::fs::write(
+            installed.join("SKILL.md"),
+            "the catalogue's, from last time",
+        )
+        .unwrap();
+        std::fs::write(installed.join("references/kql.md"), "kql").unwrap();
+        let mut stage = Stage::new();
+        let options = Options {
+            targets: vec![Target::Cursor],
+            slugs: vec!["detection-engineering".into()],
+            ..Options::default()
+        };
+        let result = install(&mut stage, &root, &options, &catalogue).unwrap();
+        stage.commit().unwrap();
+        // Nothing under .agents/ is written; the harness copy is the kept one.
+        assert_eq!(
+            result.strings("files"),
+            [".cursor/skills/detection-engineering/SKILL.md"]
+        );
+        assert_eq!(
+            read(&installed.join("SKILL.md")),
+            "the catalogue's, from last time"
+        );
+        let copy = root.join(".cursor/skills/detection-engineering");
+        assert_eq!(
+            read(&copy.join("SKILL.md")),
+            "the catalogue's, from last time"
+        );
+        assert_eq!(read(&copy.join("references/kql.md")), "kql");
+        let warnings = result.strings("warnings");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].starts_with(
+                "Kept the installed .agents/skills/detection-engineering: its files could not be downloaded from opentidehq/skills@"
+            ) && warnings[0].ends_with("Run the command again to update it."),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn a_packaged_skill_the_catalogue_lists_still_installs_from_the_package() {
+        let env = offline_env();
+        let network = Network {
+            env: &env,
+            proxy: None,
+            interrupted: &never,
+        };
+        let mut listed = manifest();
+        listed.catalogue_slugs = vec!["opentide-detection-rule".to_owned()];
+        let catalogue = loaded(network, Ok(listed));
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let mut stage = Stage::new();
+        let options = Options {
+            targets: vec![Target::Generic],
+            slugs: vec!["opentide-detection-rule".into()],
+            ..Options::default()
+        };
+        let result = install(&mut stage, &root, &options, &catalogue).unwrap();
+        stage.commit().unwrap();
+        assert!(result.get("warnings").is_none());
+        assert_eq!(
+            std::fs::read(root.join(".agents/skills/opentide-detection-rule/SKILL.md")).unwrap(),
+            BUNDLED[2].1[0].1
         );
     }
 

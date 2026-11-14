@@ -16,7 +16,7 @@ and the issues of the two items that build the tools.
 
 | Tool | Work item | State |
 |------|-----------|-------|
-| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1160 cases recorded from opentide 0.23.0; `.github/workflows/golden.yml` runs `check` and `record --check-determinism` |
+| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1809 cases recorded from opentide 0.28.1; `.github/workflows/golden.yml` runs `check` and `record --check-determinism` |
 | The comparator, `tests/golden/APPROVED_DIFFS.toml`, `golden check --engine rust` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805); UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841) | Present: every case runs on the Rust core, the only implementation; `OPENTIDE_ENGINE` and compare mode were removed with the Python implementation |
 
 **`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
@@ -58,7 +58,7 @@ usage).
 case) and `--jobs N`; `check` and `diff` take
 `--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
 
-**Preview of the next oracle** (`tests/golden/ORACLE.next`, 0.28.1 during the catch-up): judge a
+**Preview of the next oracle** (a file in `ORACLE`'s format naming the next release, such as `tests/golden/ORACLE.next`; none is committed now): judge a
 port against it without committing recordings, `cargo xtask golden record --oracle
 tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
 check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in

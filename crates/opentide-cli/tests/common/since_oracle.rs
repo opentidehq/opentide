@@ -1,24 +1,30 @@
 //! What today's CLI changed in `opentide --json commands` after the oracle
-//! (opentide 0.23.0) was recorded. The Rust tree follows today's CLI; these
+//! (opentide 0.28.1) was recorded. The Rust tree follows today's CLI; these
 //! tests compare it with the oracle's recording, so each change is listed
 //! here and undone (or applied) at the one place it lands, and a change that
 //! is no longer found fails the test.
 //!
-//! - #874 (UC-0.2): `validate query` checks CrowdStrike's CQL offline. The
-//!   `--platform` help names `crowdstrike`, `--file` reads `.cql`, and
+//! - #874 (UC-0.2): `validate query` checks CrowdStrike's CQL offline, which
+//!   0.28.1 does not. The `--platform` help names `crowdstrike` among the
+//!   platforms the engine parses, `--file` reads `.cql`, and
 //!   `QueryChecked.language` gains `cql`.
+//! - P-EX: `validate query` checks Exabeam's queries offline, as 0.28.1
+//!   does, so the `--platform` help names `exabeam` as the oracle's does.
+//!   `--file` reads `.exabeam`, as 0.28.1 does too, and the help derived
+//!   from the platform table names it, where 0.28.1's hand-written help
+//!   leaves it out.
 
 use opentide_cli::json::Json;
 
 /// Option help texts: (the oracle's, today's).
 const HELP: &[(&str, &str)] = &[
     (
-        "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
-        "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
     ),
     (
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)",
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam) offline (repeatable)",
     ),
 ];
 

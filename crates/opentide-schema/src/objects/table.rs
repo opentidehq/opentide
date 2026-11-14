@@ -88,7 +88,7 @@ pub(crate) fn compare(
     files: bool,
 ) -> (Vec<String>, BTreeMap<String, Json>) {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    assert_eq!(table["oracle"], "0.23.0");
+    assert_eq!(table["oracle"], "0.28.1");
     let notes: Cases = toml::from_str(notes).unwrap();
     let differences: BTreeMap<&str, &Difference> = notes
         .difference

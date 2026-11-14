@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "/v1/projects/acme-secops/locations/eu/instances/3f0ac524-5ae1-4bfd-b86d-53afc953e7e6/rules",
+  "body": {
+    "text": "rule password_spray_then_success {\n  meta:\n    author = \"Detection Engineering\"\n    description = \"Ten or more blocked logins for one user from one address, then an allowed login for that user from that address, within 30 minutes.\"\n    severity = \"High\"\n    priority = \"High\"\n    technique = \"T1078,T1110.003\"\n    opentide_uuid = \"00000000-0000-4000-8003-000000000062\"\n    opentide_version = \"1\"\n\n  events:\n    $fail.metadata.event_type = \"USER_LOGIN\"\n    $fail.security_result.action = \"BLOCK\"\n    $fail.principal.ip = $ip\n    $fail.target.user.userid = $user\n\n    $success.metadata.event_type = \"USER_LOGIN\"\n    $success.security_result.action = \"ALLOW\"\n    $success.principal.ip = $ip\n    $success.target.user.userid = $user\n\n    $fail.metadata.event_timestamp.seconds < $success.metadata.event_timestamp.seconds\n\n  match:\n    $user, $ip over 30m\n\n  outcome:\n    $risk_score = max(80)\n    $risk_entity_to_score = $user\n    $failed_attempts = count_distinct($fail.metadata.id)\n    $target_hosts = array_distinct($success.target.hostname)\n\n  condition:\n    #fail >= 10 and $success\n\n  options:\n    suppression_window = 1h\n}\n"
+  }
+}

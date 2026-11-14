@@ -1,6 +1,136 @@
+[Catalogue](../README.md) / [Detection rules](README.md)
+
 # Elastic KQL Rule
 
+*Detection rule · `rule::1.0` · version 1 · modified 2026-01-02 · TLP:CLEAR*
+
+Simulated Elastic rule for CLI E2E corpus.
+
+| Property | Value |
+| --- | --- |
+| Severity | High |
+| Detection model | [Credential Access Objective](../objectives/credential-access-objective.md) |
+| ATT&CK | [`T1059`](https://attack.mitre.org/techniques/T1059) Command and Scripting Interpreter |
+| Platforms | Elastic Security: `STAGING` (PREVIEW runs) |
+
+**On this page:** [Deployment](#deployment) · [Platform configuration](#platform-configuration) · [Response](#response) · [ATT&CK techniques](#att-ck-techniques) · [Detection coverage](#detection-coverage) · [Metadata](#metadata)
+
+## Deployment
+
+What `opentide deploy` does with this rule: each platform block's status, the runs that act on it, and the tenants they reach.
+
+| Platform | Status | Deployed by | Tenants | Block enabled |
+| --- | --- | --- | --- | --- |
+| Elastic Security | `STAGING` | PREVIEW runs | `staging` | yes |
+
+- `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational testing
+
+```mermaid
+flowchart LR
+    subgraph lane1["Detection rule"]
+        rul1["Elastic KQL Rule"]
+    end
+    subgraph lane2["Platforms"]
+        plt1[("Elastic Security<br>STAGING")]
+    end
+    subgraph lane3["Tenants"]
+        ten1[["staging"]]
+    end
+    rul1 --> plt1
+    plt1 -->|"PREVIEW"| ten1
+    classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
+    classDef platform fill:#f2f4f7,stroke:#475467,color:#101828
+    classDef tenant fill:#f4f3ff,stroke:#5925dc,color:#21125a
+    classDef focus stroke-width:3px
+    class rul1 rule
+    class plt1 platform
+    class ten1 tenant
+    class rul1 focus
+    style lane1 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane2 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane3 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+```
+
+*Shapes:* rectangle = detection rule; cylinder = platform; subroutine box = tenant; bold outline = this page. *Lines:* solid line = deployed, by the runs named on the line.
+
+### Tenant targeting
+
+| Platform | Tenant | Reached by | Remote ID |
+| --- | --- | --- | --- |
+| Elastic Security | `staging` | PREVIEW runs | - |
+
+## Platform configuration
+
+### Elastic Security
+
+Status `STAGING` · deployed by PREVIEW runs · tenants: `staging` · schema `platform::elastic::1.0`
+
+**`query`** (Kibana KQL): The event query, in the language the type selects.
+
+```kql
+process.name: "powershell.exe"
+```
+
+| Setting | Value | Description |
+| --- | --- | --- |
+| `type` | `query` | Rule type: `query`, `eql`, `esql`, `threshold`, `new_terms`, `threat_match` or `machine_learning`. |
+| `language` | `kuery` | `kuery` (KQL) or `lucene`, for the event query of `query`, `threshold`, `new_terms`, and `threat_match`. |
+| `index` | `logs-*` | Index patterns. |
+| `scheduling.interval` | `5m` | Runs every. |
+| `scheduling.lookback` | `1m` | Additional look-back time. `0m` is valid. |
+| `building_block` | `false` *(default)* | Building block rule: alerts are hidden from the default Alerts view. |
+
+## Response
+
+| Property | Value |
+| --- | --- |
+| Alert severity | High |
+
+## ATT&CK techniques
+
+| Technique | Name | Tactics | Summary |
+| --- | --- | --- | --- |
+| [`T1059`](https://attack.mitre.org/techniques/T1059) | Command and Scripting Interpreter | Execution | Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries. |
+
+## Detection coverage
+
+```mermaid
+flowchart LR
+    subgraph lane1["Threat vectors"]
+        thr1{{"Simulated Actor"}}
+    end
+    subgraph lane2["Detection objectives"]
+        obj1(["Credential Access<br>Objective"])
+    end
+    subgraph lane3["Detection rules"]
+        rul1["Elastic KQL Rule"]
+    end
+    thr1 --> obj1
+    obj1 --> rul1
+    classDef threat fill:#fdecea,stroke:#b42318,color:#3d0c09
+    classDef objective fill:#fff4e5,stroke:#b54708,color:#3d1d02
+    classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
+    classDef focus stroke-width:3px
+    class thr1 threat
+    class obj1 objective
+    class rul1 rule
+    class rul1 focus
+    style lane1 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane2 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane3 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+```
+
+*Shapes:* hexagon = threat vector; stadium = detection objective; rectangle = detection rule; bold outline = this page.
+
+### Related objects
+
+| Type | Object | Direction |
+| --- | --- | --- |
+| Threat | [Simulated Actor](../threats/simulated-actor.md) | Upstream |
+| Objective | [Credential Access Objective](../objectives/credential-access-objective.md) | Upstream |
+
 ## Metadata
+
 | Field | Value |
 | --- | --- |
 | UUID | `00000000-0000-4000-8003-000000000009` |
@@ -10,80 +140,4 @@
 | Modified | `2026-01-02` |
 | TLP | clear (`TLP:CLEAR`) |
 
-## Description
-Simulated Elastic rule for CLI E2E corpus.
-
-## Status
-| Field | Value |
-| --- | --- |
-| Status (elastic) | `STAGING` |
-| Severity | `High` |
-
-## ATT&CK Techniques
-| Technique | Name | Description |
-| --- | --- | --- |
-| `T1059` | [Command and Scripting Interpreter](https://attack.mitre.org/techniques/T1059) | Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries. These interfaces and languages provide ways of interacting with computer systems and are a common feature across many different platforms. Most systems come with some built-in command-line interface and scripting capabilities, for example, macOS and Linux distributions include some flavor of [Unix Shell](https://attack.mitre.org/techniques/T1059/004) while Windows installations include the [Windows Command Shell](https://attack.mitre.org/techniques/T1059/003) and [PowerShell](https://attack.mitre.org/techniques/T1059/001).  There are also cross-platform interpreters such as [Python](https://attack.mitre.org/techniques/T1059/006), as well as those commonly associated with client applications such as [JavaScript](https://attack.mitre.org/techniques/T1059/007) and [Visual Basic](https://attack.mitre.org/techniques/T1059/005).  Adversaries may abuse these technologies in various ways as a means of executing arbitrary commands. Commands and scripts can be embedded in [Initial Access](https://attack.mitre.org/tactics/TA0001) payloads delivered to victims as lure documents or as secondary payloads downloaded from an existing C2. Adversaries may also execute commands through interactive terminals/shells, as well as utilize various [Remote Services](https://attack.mitre.org/techniques/T1021) in order to achieve remote Execution.(Citation: Powershell Remote Commands)(Citation: Cisco IOS Software Integrity Assurance - Command History)(Citation: Remote Shell Execution in Python) |
-
-## Detection model
-- **Objective**: [Credential Access Objective](../objectives/credential-access-objective.md) (`00000000-0000-4000-8002-000000000001`)
-
-## Response
-
-- **Alert severity**: High
-
-## Platform configurations
-<details><summary>elastic</summary>
-
-- **Enabled**: `True`
-- **Status**: `STAGING`
-
-```sql
-process.name: "powershell.exe"
-
-```
-
-
-</details>
-
-## Coverage
-```mermaid
-flowchart TB
-subgraph "Objectives"
-00000000_0000_4000_8002_000000000001(["Credential Access<br>Objective"])
-end
-subgraph "Threats"
-00000000_0000_4000_8001_000000000001{{"Simulated Actor"}}
-end
-subgraph "Signals"
-00000000_0000_4000_8099_000000000001(("Suspicious logon signal"))
-end
-subgraph "Rules"
-00000000_0000_4000_8003_000000000005["Carbon Black Lucene Rule"]
-00000000_0000_4000_8003_000000000006["CrowdStrike Deploy Rule"]
-00000000_0000_4000_8003_000000000002["Defender KQL Rule"]
-00000000_0000_4000_8003_000000000007["HarfangLab Deploy Rule"]
-00000000_0000_4000_8003_000000000001["Sentinel KQL Rule"]
-00000000_0000_4000_8003_000000000004["SentinelOne S1QL Rule"]
-00000000_0000_4000_8003_000000000003["Splunk SPL Rule"]
-00000000_0000_4000_8003_000000000008["Staging Promote Rule"]
-00000000_0000_4000_8003_0000005d1a90["Sysdig Falco Rule"]
-end
-00000000_0000_4000_8003_000000000009["Elastic KQL Rule"]
-00000000_0000_4000_8001_000000000001 -->|covers| 00000000_0000_4000_8002_000000000001
-00000000_0000_4000_8002_000000000001 --> 00000000_0000_4000_8099_000000000001
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000005
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000006
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000002
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000009
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000007
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000001
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000004
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000003
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000008
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_0000005d1a90
-```
-## Related objects
-| Type | Name | Direction | Relation |
-| --- | --- | --- | --- |
-| Objective | [Credential Access Objective](../objectives/credential-access-objective.md) (`00000000-0000-4000-8002-000000000001`) | Upstream | objective |
-| Threat | [Simulated Actor](../threats/simulated-actor.md) (`00000000-0000-4000-8001-000000000001`) | Upstream | threat |
+<!-- Generated by opentide (opentide generate docs). Edit the object's YAML instead: this page is rewritten on every run. -->

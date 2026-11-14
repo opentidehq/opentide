@@ -12,12 +12,12 @@ commands:
              and COVERAGE.md. --check-determinism runs every case twice and
              fails, writing nothing, unless both runs agree byte for byte
   check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
-        [--partition K/N [--unused FILE]] [--recordings DIR]
+        [--partition K/N [--unused FILE]] [--recordings DIR] [--report FILE] [--keep DIR]
              run every case through the engine and compare with the
              recordings; also checks COVERAGE.md and that no recording is
              missing or orphaned
   diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--partition K/N]
-       [--unused FILE] [--recordings DIR]
+       [--unused FILE] [--recordings DIR] [--report FILE] [--keep DIR]
              check, printing every difference in full
   lock [--oracle FILE]
              rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
@@ -50,6 +50,10 @@ commands:
                left out (tests/golden/WASI_EXCLUDED.toml). `--runner node` or
                `--runner wasi` alone implies --engine rust
 --report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
+--keep DIR     with --engine rust: write each differing case's candidate run into
+               DIR/cases and DIR/blobs, in the recordings' format (normalised as a
+               recording is, before the comparison's version rule), to read or to
+               re-base ledger entries against
 --oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
                of the next oracle: tests/golden/ORACLE.next); `record` with it
                needs --out, so that the committed recordings stay the ORACLE's

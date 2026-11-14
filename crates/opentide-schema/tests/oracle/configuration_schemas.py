@@ -1,6 +1,6 @@
 """Write configuration_schemas.json: every configuration schema the oracle generates.
 
-Run it with the oracle's interpreter (opentide 0.23.0, tests/golden/ORACLE):
+Run it with the oracle's interpreter (tests/golden/ORACLE):
 
     <oracle python> -I crates/opentide-schema/tests/oracle/configuration_schemas.py
 

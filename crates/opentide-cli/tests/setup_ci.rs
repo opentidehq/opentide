@@ -24,7 +24,7 @@ use opentide_cli::{Host, run};
 /// stderr.
 fn opentide(cwd: &Path, words: &[&str]) -> (i32, String, String) {
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(replay::Buffer::default())) as Sink,

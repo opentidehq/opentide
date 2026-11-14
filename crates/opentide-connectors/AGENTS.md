@@ -16,7 +16,7 @@ host is `bindings/python/src/plugins.rs`, the plugin API `src/opentide/plugins.p
 | `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel`; `configured`: a resolved configuration's tenants of a platform as `(name, setup)` | `platforms/config.py` `_tenant_ssl`, `transport.tenant_tls_verify` |
 | `error.rs` | `ConnectorError` and its `failure.code`; messages name `scheme://host[:port]` only, never a path, query or credential | `transport.py` `TenantUnreachableError`, `reaching_tenant` |
 | `plugin.rs` | Platform plugins (UC-4.5, #835): `PluginHost` (the Python binding is the one host), `with_plugins` (the built-in platforms, then the plugins; a plugin never replaces a built-in), `unavailable` (what a host-less command line says) | `platforms/registry.py`'s entry points |
-| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `ConfigurationCheck` (a plugin's own check of its rule block), `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the nine platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
+| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer`, `StateMigrator`, `ConfigurationCheck` (a plugin's own check of its rule block), `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the thirteen built-in platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
 | `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
 | `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
 | `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers), `exchange`; `describe_answer` for one that is not the API's JSON (a gateway's page), quoting as Python's `repr` | `transport.py` `describe_answer`, `not_json_detail` |
@@ -69,6 +69,15 @@ timeout and retries its Python client mounts). A cassette scenario per platform 
 (`tests/cassettes/<platform>/`, a `tenant.py` stand-in built from what the Python tests mock and a
 `client.py` that drives the oracle's own client or deployer) is replayed by
 `tests/<platform>.rs`, which also asserts the outcomes `client.py` printed when it recorded.
+
+A query runner (`QueryRunner`) saves no search or rule, and stops an asynchronous search it stops
+waiting for where the API can (CrowdStrike). An Elastic rule preview is the one write: its alerts
+land in the preview index. Both `opentide query` with `kuery` and
+`validate query --platform elastic --live`, which previews every rule, make one.
+
+A new platform also needs a platform skill in [opentidehq/skills](https://github.com/opentidehq/skills),
+whose `coverage.json` CI checks against `opentide --json info` daily; a platform the skills do not
+cover fails that check and opens an issue there (the root `AGENTS.md`, definition of done item 5).
 
 ## Tests
 

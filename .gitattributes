@@ -11,6 +11,13 @@ tests/golden/fixtures/** -text
 tests/fixtures/tide_corpus/** -text
 # The MCP sessions' Agent Plugin root (tests/golden/mcp/sessions.toml), laid out the same way.
 tests/fixtures/agent_plugin_root/** -text
+# Google SecOps: each .yaral file is the assembled rule itself, compared byte for
+# byte with what deploy sends (LF); the rules and request fixtures beside it the same.
+tests/fixtures/google_secops/** -text
+# Graylog: the compiler's tests (crates/opentide-compile/tests/graylog.rs) edit
+# the rule fixtures by search and replace on `\n`: the bytes as committed, LF,
+# on a Windows checkout too.
+tests/fixtures/graylog/** -text
 # The minijinja templates compiled in with include_str! (setup ci's pipelines,
 # generate docs' pages) and setup ci's oracle pipelines: files a user commits,
 # compared byte for byte, so a Windows checkout holds the LF bytes too.
@@ -60,6 +67,7 @@ crates/testdata/conformance/yara/** -text
 crates/testdata/conformance/yara-x/** -text
 crates/testdata/conformance/google-yaral/** -text
 crates/testdata/conformance/specifications-google-secops/** -text
+crates/testdata/conformance/specifications-yara/** -text
 crates/testdata/conformance/external/exabeam/** -text
 crates/testdata/conformance/external/yara/** -text
 crates/testdata/conformance/external/yaral/** -text
@@ -67,3 +75,6 @@ crates/testdata/corpus/yara/** -text
 crates/testdata/corpus/yaral/** -text
 crates/testdata/corpus/exabeam/** -text
 crates/testdata/oracles/graylog/** -text
+# HarfangLab's YARA fixtures: their tests edit them by LF patterns and compare
+# findings by line, so a Windows checkout holds the committed LF bytes too.
+tests/fixtures/harfanglab/** -text

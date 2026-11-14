@@ -12,7 +12,8 @@
 │ --platform         PLATFORM  Detection platform: sentinel, splunk,           │
 │                              crowdstrike, defender_for_endpoint,             │
 │                              sentinel_one, carbon_black_cloud, harfanglab,   │
-│                              elastic, sysdig                                 │
+│                              elastic, sysdig, bitdefender, graylog, exabeam, │
+│                              google_secops                                   │
 │ --technique        <str>     ATT&CK technique ID for the coverage section    │
 │                              (T1059)                                         │
 │ --strict                     Exit non-zero when any object failed to load    │

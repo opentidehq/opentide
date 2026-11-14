@@ -113,6 +113,27 @@ impl Context {
     }
 }
 
+/// The codes the engine only ever reports as warnings, whatever the dialect
+/// or profile: libyara compiles the rule, so the platform takes it. The
+/// checker reports them through its one warning path (`Checker::warn`), which
+/// takes no other code, and [`diagnostics`] never returns one as an error;
+/// every other code is an error, or a warning under libyara and an error
+/// under YARA-X (`yara_x_incompatible`).
+pub const WARNING_CODES: [&str; 6] = [
+    codes::HARFANGLAB_YARA_CONTEXT,
+    codes::YARA_ENTRYPOINT_DEPRECATED,
+    codes::YARA_META_MISSING,
+    codes::YARA_MODULE_UNCONFIRMED,
+    codes::YARA_SLOW_PATTERN,
+    codes::YARA_SUSPICIOUS_EXPRESSION,
+];
+
+/// Whether the engine only ever reports `code` as a warning
+/// ([`WARNING_CODES`]): `opentide validate` does not fail on it.
+pub fn always_warning(code: &str) -> bool {
+    WARNING_CODES.contains(&code)
+}
+
 /// A finding in byte offsets, before ranges.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Finding {
@@ -215,6 +236,12 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
     findings.extend(checker.findings);
     findings.sort_by_key(|f| (f.start, f.end));
     findings.dedup();
+    debug_assert!(
+        findings
+            .iter()
+            .all(|f| f.severity == Severity::Warning || !always_warning(f.code)),
+        "a warning-only code reported as an error: {findings:?}"
+    );
     let lines = LineIndex::new(source);
     findings
         .into_iter()

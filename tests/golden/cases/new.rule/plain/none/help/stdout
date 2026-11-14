@@ -8,7 +8,9 @@
 │ --platform         PLATFORM  Add a configuration block for this platform     │
 │                              (repeatable): sentinel, splunk, crowdstrike,    │
 │                              defender_for_endpoint, sentinel_one,            │
-│                              carbon_black_cloud, harfanglab, elastic, sysdig │
+│                              carbon_black_cloud, harfanglab, elastic,        │
+│                              sysdig, bitdefender, graylog, exabeam,          │
+│                              google_secops                                   │
 │ --objective        <str>     UUID of the objective this rule implements      │
 │                              (detection_model)                               │
 │ --path             <str>     File to write, or a folder to write it in       │

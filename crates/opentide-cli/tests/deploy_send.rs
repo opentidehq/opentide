@@ -952,7 +952,7 @@ fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,

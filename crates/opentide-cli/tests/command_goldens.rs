@@ -159,7 +159,7 @@ fn a_watch_shows_a_pass_and_ctrl_c_exits_0() {
     interrupt.request();
     let sink: Sink = Arc::new(Mutex::new(replay::Buffer::default()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,
@@ -312,7 +312,7 @@ fn run_at(ws: &std::path::Path, words: &[&str]) -> (i32, String) {
     use std::sync::{Arc, Mutex};
     let sink: Sink = Arc::new(Mutex::new(replay::Buffer::default()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,

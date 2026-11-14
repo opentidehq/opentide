@@ -322,16 +322,27 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             other => panic!("{id}: unknown kind {other}"),
         };
         let oracle = &table["cases"][id];
-        let difference = case
-            .get("difference")
-            .and_then(toml::Value::as_str)
-            .map(|name| {
-                let fields = differences
-                    .get(name)
-                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
-                used.insert(name.to_owned());
-                (name, fields)
-            });
+        // One difference's name, or a list of them: their fields together.
+        let names: Vec<&str> = match case.get("difference") {
+            Some(toml::Value::String(name)) => vec![name.as_str()],
+            Some(toml::Value::Array(names)) => {
+                names.iter().filter_map(toml::Value::as_str).collect()
+            }
+            _ => Vec::new(),
+        };
+        let mut fields = BTreeSet::new();
+        for name in &names {
+            fields.extend(
+                differences
+                    .get(*name)
+                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"))
+                    .iter()
+                    .cloned(),
+            );
+            used.insert((*name).to_owned());
+        }
+        let joined = names.join(" + ");
+        let difference = (!names.is_empty()).then_some((joined.as_str(), &fields));
         failures.extend(compare(id, oracle, &rust, difference));
     }
     for name in differences.keys() {
@@ -369,14 +380,14 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 #[test]
 fn configuration_bundled_files_are_the_folder_and_the_oracles() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    let compiled: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
+    let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
     let oracle: Vec<&str> = table["bundled"]
         .as_array()
         .unwrap()
         .iter()
         .map(|path| path.as_str().unwrap())
         .collect();
-    assert_eq!(compiled, oracle);
+    assert_eq!(every, oracle);
     let folder =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/opentide/data/configurations");
     let mut on_disk = Vec::new();
@@ -401,7 +412,7 @@ fn configuration_bundled_files_are_the_folder_and_the_oracles() {
         }
     }
     on_disk.sort();
-    assert_eq!(compiled, on_disk);
+    assert_eq!(every, on_disk);
     let keys: Vec<&str> = table["metadata_keys"]
         .as_array()
         .unwrap()

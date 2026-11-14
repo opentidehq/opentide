@@ -1,6 +1,6 @@
 """Write objects_table.json: what the oracle reports for each case of objects_cases.toml.
 
-Run it with the oracle's interpreter (opentide 0.23.0, tests/corpora/README.md):
+Run it with the oracle's interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
 
     <oracle python> crates/opentide-schema/tests/oracle/objects_table.py
 

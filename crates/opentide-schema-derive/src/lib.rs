@@ -19,6 +19,7 @@
 //! |-------|-----------|--------|
 //! | struct | `model = "ThreatBody"` | the model's name in `model_type` messages (default: the Rust name) |
 //! | struct | `before = "path"` | `fn(&Node, &mut Context) -> bool`, run first on the raw value; `false` stops |
+//! | struct | `after = "path"` | `fn(&Self, &Node, &mut Context) -> bool`, a `mode="after"` model validator: run on the built value when the conversion reported no error; `false` drops it |
 //! | struct | `tolerate = "PATH"` | a `&[&str]` of keys a closed model does not report (the `__legacy_keys__` pre-pass) |
 //! | field | `before = "path"` | the same, on the field's value |
 //! | field | `with = "path"` | `fn(&Node, &mut Context) -> Option<T>` converts the field instead of `T: FromNode` |
@@ -234,11 +235,13 @@ fn expand_struct(
     let closed = serde.iter().any(|item| item.key == "deny_unknown_fields");
     let mut class_name = name.to_string();
     let mut before = None;
+    let mut after = None;
     let mut tolerate = quote!(&[]);
     for item in own {
         match item.key.as_str() {
             "model" => class_name = string_of(item)?,
             "before" => before = Some(path_of(item)?),
+            "after" => after = Some(path_of(item)?),
             "tolerate" => {
                 let path = path_of(item)?;
                 tolerate = quote!(#path);
@@ -336,6 +339,18 @@ fn expand_struct(
             }
         }
     });
+    let built = match after {
+        // Pydantic runs a `mode="after"` validator only on a model whose
+        // fields all validated, extra keys included.
+        Some(path) => quote! {
+            let __value = Self { #(#bindings),* };
+            if __cx.error_count() > __errors_before || !#path(&__value, __node, __cx) {
+                return ::core::option::Option::None;
+            }
+            ::core::option::Option::Some(__value)
+        },
+        None => quote!(::core::option::Option::Some(Self { #(#bindings),* })),
+    };
     Ok(quote! {
         #[automatically_derived]
         impl ::opentide_schema::from_node::FromNode for #name {
@@ -344,11 +359,12 @@ fn expand_struct(
                 __cx: &mut ::opentide_schema::from_node::Context,
             ) -> ::core::option::Option<Self> {
                 #before_check
+                let __errors_before = __cx.error_count();
                 let __entries = ::opentide_schema::from_node::model_entries(__node, __cx, #class_name)?;
                 let mut __fields = ::opentide_schema::from_node::Fields::new(__node, __entries);
                 #(#lets)*
                 __fields.finish(__cx, #closed, #tolerate);
-                ::core::option::Option::Some(Self { #(#bindings),* })
+                #built
             }
         }
 

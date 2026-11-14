@@ -904,9 +904,18 @@ mod tests {
         let found = cx.platforms(&choices, "");
         let shown = values(&found);
         assert_eq!(shown.len(), choices.len());
-        assert_eq!(&shown[shown.len() - 2..], ["splunk", "crowdstrike"]);
-        assert_eq!(helps(&found)[0], "enabled");
-        assert_eq!(helps(&found)[shown.len() - 1], "");
+        // The disabled platforms (splunk and crowdstrike here, and the ones
+        // the corpus does not enable) come after every enabled one.
+        let help = helps(&found);
+        let first_disabled = help.iter().position(String::is_empty).unwrap();
+        assert!(
+            help[first_disabled..].iter().all(String::is_empty),
+            "{help:?}"
+        );
+        let disabled = &shown[first_disabled..];
+        assert!(disabled.contains(&"splunk".to_owned()), "{disabled:?}");
+        assert!(disabled.contains(&"crowdstrike".to_owned()), "{disabled:?}");
+        assert_eq!(help[0], "enabled");
         assert_eq!(values(&cx.platforms(&choices, "SPL")), ["splunk"]);
         // Tenants of the platform typed, then `all`.
         let elastic = context("opentide query --platform elastic --tenant ", "zsh", &ws);

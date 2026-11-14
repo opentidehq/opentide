@@ -64,8 +64,9 @@ pub const APPROVED: &[Approved] = &[
         id: "yaml-error-text",
         reason: "a file that is not YAML is reported in the words of the YAML 1.2 parser \
                  (saphyr), at the line and column the oracle names (one column later where \
-                 saphyr names the tab it refuses); the code, the file and the check are the \
-                 same (as in `cargo xtask validate diff`)",
+                 saphyr names the tab it refuses, and at the start of the plain scalar a tab \
+                 interrupts, which the oracle's message names); the code, the file and the \
+                 check are the same (as in `cargo xtask validate diff`)",
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_error_text,
     },
@@ -118,6 +119,35 @@ pub fn quoting_only(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> b
     oracle != rust && unquoted_json(oracle) == unquoted_json(rust)
 }
 
+/// A recorded case where the oracle crashed (its recording is an
+/// `internal` failure) and the Rust run is right.
+pub struct OracleCrash {
+    /// The case id (`lint/json/<fixture>/<variant>`).
+    pub case: &'static str,
+    /// Why the Rust result is right.
+    pub reason: &'static str,
+    /// The bold lead of its CHANGELOG.md entry.
+    pub changelog: &'static str,
+}
+
+/// The cases the oracle crashed on: every difference of such a case is
+/// approved while its recording is the oracle's crash. An entry whose case
+/// did not crash, or explains no difference, is stale.
+pub const ORACLE_CRASHES: &[OracleCrash] = &[OracleCrash {
+    case: "lint/json/fault/recommended-crash",
+    reason: "opentide 0.28.1's recommended check (#1028) builds the editor schemas from the \
+             workspace's configuration and crashes on the fault workspace's invalid \
+             deployment.toml (#1081); Rust's check reads no configuration and reports the \
+             workspace's findings",
+    changelog: "**`lint` no longer crashes on an invalid configuration file**",
+}];
+
+/// Whether a recording is the oracle's crash: an `internal` failure.
+fn crashed(recording: &Recording) -> bool {
+    serde_json::from_slice::<Json>(&recording.stdout)
+        .is_ok_and(|stdout| stdout["failure"]["code"] == "internal")
+}
+
 fn code(finding: &Json) -> &str {
     finding["code"].as_str().unwrap_or("")
 }
@@ -148,12 +178,43 @@ fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bo
         (Some(1), Some(1)) => message.contains("tab"),
         _ => false,
     };
-    code(oracle) == "yaml_parse"
+    let same_kind = code(oracle) == "yaml_parse"
         && code(rust) == "yaml_parse"
-        && message.starts_with("Could not parse object YAML: ")
-        && columns
-        && without(oracle, &["message", "column", "end_column"])
-            == without(rust, &["message", "column", "end_column"])
+        && message.starts_with("Could not parse object YAML: ");
+    let place = ["message", "column", "end_column"];
+    let scalar = ["message", "line", "column", "end_line", "end_column"];
+    same_kind
+        && ((columns && without(oracle, &place) == without(rust, &place))
+            || (tab_in_scalar(oracle, rust) && without(oracle, &scalar) == without(rust, &scalar)))
+}
+
+/// A tab inside a multi-line plain scalar: the oracle places the error at
+/// the tab and names the scalar it interrupts (`while scanning a plain
+/// scalar that starts at line L, column C`); saphyr places it at that
+/// scalar, L:C, one column wide.
+pub(crate) fn tab_in_scalar(oracle: &Json, rust: &Json) -> bool {
+    let words = oracle["message"].as_str().unwrap_or("");
+    let Some(start) = words
+        .split("while scanning a plain scalar that starts at line ")
+        .nth(1)
+    else {
+        return false;
+    };
+    let mut numbers = start
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<u64>);
+    let (Some(Ok(line)), Some(Ok(column))) = (numbers.next(), numbers.next()) else {
+        return false;
+    };
+    rust["message"]
+        .as_str()
+        .is_some_and(|m| m.contains("found a tab"))
+        && words.contains("found a tab character")
+        && rust["line"].as_u64() == Some(line)
+        && rust["end_line"].as_u64() == Some(line)
+        && rust["column"].as_u64() == Some(column)
+        && rust["end_column"].as_u64() == Some(column + 1)
 }
 
 fn is_invalid_date(finding: &Json) -> bool {
@@ -300,13 +361,14 @@ struct Recorded {
 }
 
 /// The status, message, exit code and summary the oracle's findings give
-/// without its queries findings (`run_lint`'s verdict).
+/// without its queries findings (`run_lint`'s verdict). A note never fails
+/// a run, `--strict` or not (opentide 0.28.0, #1029).
 fn verdict(findings: &[Json], strict: bool, files: &Json) -> (String, String, i32, Json) {
     let left: Vec<&Json> = findings
         .iter()
         .filter(|f| f.get("fixed") != Some(&Json::Bool(true)))
         .collect();
-    let status = if !left.is_empty() && strict {
+    let status = if strict && left.iter().any(|f| f["severity"] != "info") {
         "failed"
     } else if !left.is_empty() {
         "issues"
@@ -417,8 +479,9 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
             let text = serde_json::to_string(&finding.json).unwrap_or_default();
             let map: IndexMap<String, Json> =
                 serde_json::from_str(&crate::payloads::placeholder(&text, ws)).unwrap_or_default();
-            Item::new(&map)
+            map
         })
+        .map(|map| Item::new(&map))
         .collect();
     list_differences(&case.id, &oracle, &rust, &mut out);
     let mut scalar = |what: &str, oracle: Json, rust: Json| {
@@ -612,6 +675,17 @@ pub fn run(args: &[String]) -> Result<u8> {
         differences.extend(run_case(recording, &ws)?);
     }
     let mut used = vec![0usize; APPROVED.len()];
+    let crashed_cases: Vec<&str> = cases
+        .iter()
+        .filter(|recording| crashed(recording))
+        .map(|recording| recording.case.id.as_str())
+        .collect();
+    let crash_of = |difference: &Difference| {
+        ORACLE_CRASHES
+            .iter()
+            .position(|crash| crash.case == difference.case && crashed_cases.contains(&crash.case))
+    };
+    let mut crash_used = vec![0usize; ORACLE_CRASHES.len()];
     let mut failures = 0;
     let is_list = |difference: &Difference| difference.what == "findings";
     let rule_of = |difference: &Difference| {
@@ -628,7 +702,20 @@ pub fn run(args: &[String]) -> Result<u8> {
         *explained.entry(difference.case.as_str()).or_insert(true) &= rule_of(difference).is_some();
     }
     for difference in &differences {
-        let rule = if is_list(difference) {
+        if let Some(index) = crash_of(difference) {
+            crash_used[index] += 1;
+            if show_approved {
+                println!(
+                    "approved (oracle crash): {} {}",
+                    difference.case, difference.what
+                );
+                println!("  oracle: {}", show(difference.oracle.as_ref()));
+                println!("  rust:   {}", show(difference.rust.as_ref()));
+            }
+            continue;
+        }
+        // A finding, or the list of checks that ran, is explained by a rule.
+        let rule = if is_list(difference) || difference.what == "checks" {
             rule_of(difference)
         } else {
             None
@@ -662,6 +749,19 @@ pub fn run(args: &[String]) -> Result<u8> {
             println!(
                 "       stale: the rule explains no difference ({})",
                 rule.reason
+            );
+            stale += 1;
+        }
+    }
+    for (crash, count) in ORACLE_CRASHES.iter().zip(&crash_used) {
+        println!(
+            "{count:>5}  oracle crash {}  ({})",
+            crash.case, crash.changelog
+        );
+        if complete && *count == 0 {
+            println!(
+                "       stale: the oracle did not crash on this case, or it differs in nothing ({})",
+                crash.reason
             );
             stale += 1;
         }
@@ -737,6 +837,34 @@ mod tests {
     }
 
     #[test]
+    fn a_tab_in_a_plain_scalar_is_placed_at_the_scalar() {
+        let mut oracle = parse_error(
+            "a.yaml",
+            1,
+            "found a tab character that violates indentation at line 54, column 1 \
+             (while scanning a plain scalar that starts at line 53, column 18)",
+        );
+        oracle["line"] = json!(54);
+        oracle["end_line"] = json!(54);
+        let rust = parse_error(
+            "a.yaml",
+            18,
+            "while scanning a plain scalar, found a tab at line 53, column 18",
+        );
+        assert!(yaml_error_text(Some(&oracle), Some(&rust), &[]));
+        // Anywhere but the scalar the oracle names: no.
+        let elsewhere = parse_error(
+            "a.yaml",
+            17,
+            "while scanning a plain scalar, found a tab at line 53, column 17",
+        );
+        assert!(!yaml_error_text(Some(&oracle), Some(&elsewhere), &[]));
+        let mut other_file = rust.clone();
+        other_file["path"] = json!("b.yaml");
+        assert!(!yaml_error_text(Some(&oracle), Some(&other_file), &[]));
+    }
+
+    #[test]
     fn only_findings_on_a_file_the_oracle_refused_for_its_date_are_approved() {
         let date = parse_error(
             "r.yaml",
@@ -809,6 +937,10 @@ mod tests {
         );
         let (status, _, exit, _) = verdict(&findings, true, &json!(7));
         assert_eq!((status.as_str(), exit), ("failed", 1));
+        // Notes alone never fail --strict.
+        let notes = [finding("info", false), finding("info", false)];
+        let (status, _, exit, _) = verdict(&notes, true, &json!(2));
+        assert_eq!((status.as_str(), exit), ("issues", 0));
         // Everything fixed: completed, but the oracle still says it found issues.
         let (status, message, exit, summary) = verdict(&[finding("error", true)], true, &json!(1));
         assert_eq!(
@@ -900,7 +1032,10 @@ mod tests {
         let (recording, ws) = laid_out("lint/json/tide-corpus/fix", dir.path());
         let differences = run_case(&recording, &ws).unwrap();
         for difference in &differences {
-            assert_eq!(difference.what, "findings", "{difference:?}");
+            assert!(
+                ["findings", "checks"].contains(&difference.what.as_str()),
+                "{difference:?}"
+            );
             assert!(
                 APPROVED.iter().any(|rule| (rule.applies)(
                     difference.oracle.as_ref(),
@@ -938,7 +1073,7 @@ mod tests {
         edit(&mut recording, "\"fixed\":12,\"ok\"", "\"fixed\":0,\"ok\"");
         edit(
             &mut recording,
-            "\"checks\":[\"filenames\",\"metadata\",\"placeholders\",\"queries\"]",
+            "\"checks\":[\"filenames\",\"metadata\",\"recommended\",\"placeholders\",\"queries\"]",
             "\"checks\":[\"filenames\"]",
         );
         edit(
