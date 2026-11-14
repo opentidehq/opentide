@@ -318,7 +318,7 @@ Accepted identifiers:
 - GitHub Security Advisories (`GHSA-rxwq-x6h5-x525`)
 - GCVE, including GNA 0 which maps to CVE (`GCVE-0-2024-3094` is stored as `CVE-2024-3094`)
 
-The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are reported in one `cve_lookup_unavailable` warning per threat rather than as invalid (a warning, which fails `--strict`). Each identifier is asked once per run; `[cve] base_url` and `timeout` in `documentation.toml` choose the instance and how long to wait, and `--proxy` the proxy.
+The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are reported in one `cve_lookup_unavailable` warning per threat rather than as invalid (a warning, which fails `--strict`). Each identifier is asked once per run; `[cve] base_url` and `timeout` in `documentation.toml` choose the instance and how long to wait (a positive number of seconds), and `--proxy` the proxy. A `[cve]` setting of the wrong type fails the run with exit `1`, naming it.
 
 ### Queries
 
