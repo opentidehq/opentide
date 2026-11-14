@@ -46,7 +46,8 @@ fn xtask(args: &[&str], inject_ms: Option<u64>) -> Output {
     command
         .args(args)
         .env_remove("XTASK_BENCH_INJECT_SLEEP_MS")
-        .env_remove("XTASK_BENCH_TEST_BALLAST_MIB");
+        .env_remove("XTASK_BENCH_TEST_BALLAST_MIB")
+        .env_remove("BASE_BRANCH");
     if let Some(ms) = inject_ms {
         command.env("XTASK_BENCH_INJECT_SLEEP_MS", ms.to_string());
     }
@@ -204,7 +205,7 @@ fn an_injected_slowdown_fails_the_budget_check_and_the_same_run_without_it_passe
     assert!(stderr.contains("explain: median"), "{stderr}");
     assert!(stderr.contains("against the oracle baseline"), "{stderr}");
     assert!(
-        stderr.contains("against the last development result"),
+        stderr.contains("against the last base-branch result"),
         "{stderr}"
     );
     let summary = std::fs::read_to_string(summary).unwrap();
@@ -363,4 +364,43 @@ fn a_language_server_whose_peak_rss_cannot_be_told_from_xtasks_is_refused() {
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(stderr.contains("does not exceed xtask's own"), "{stderr}");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A regression names the branch it was measured against: bench.yml's
+/// `BASE_BRANCH`, which is integration/unified-core and not development
+/// until the Unified Core merges there.
+#[test]
+fn a_regression_names_the_base_branch() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cmd/bench.in");
+    let check = |base: Option<&str>| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_xtask"));
+        command
+            .current_dir(&fixtures)
+            .args([
+                "bench",
+                "--check",
+                "budgets.toml",
+                "slow.json",
+                "--previous",
+                "development.json",
+            ])
+            .env_remove("BASE_BRANCH");
+        if let Some(base) = base {
+            command.env("BASE_BRANCH", base);
+        }
+        let output = command.output().expect("run xtask");
+        assert_eq!(output.status.code(), Some(1));
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    };
+    let named = check(Some("integration/unified-core"));
+    assert!(
+        named.contains("against the last integration/unified-core result"),
+        "{named}"
+    );
+    assert!(!named.contains("development result"), "{named}");
+    let unnamed = check(None);
+    assert!(
+        unnamed.contains("against the last base-branch result"),
+        "{unnamed}"
+    );
 }

@@ -482,7 +482,7 @@ mod tests {
                     .map(|(_, value)| (*value).to_owned())
             }
         };
-        let line = |json: &Json| crate::generate::json_text::line(json);
+        let line = Json::to_compact;
         let local = vars(&[]);
         assert_eq!(
             line(&change(
@@ -492,13 +492,13 @@ mod tests {
                 None,
                 "t"
             )),
-            "{\"platform\": \"local\", \"number\": null, \"url\": null, \"title\": null, \"head_ref\": null, \"base_ref\": null, \"head_sha\": null, \"source_path\": \"objects/rules/a.yaml\", \"recorded_at\": \"t\"}"
+            "{\"platform\":\"local\",\"number\":null,\"url\":null,\"title\":null,\"head_ref\":null,\"base_ref\":null,\"head_sha\":null,\"source_path\":\"objects/rules/a.yaml\",\"recorded_at\":\"t\"}"
         );
         let github = vars(&[("GITHUB_HEAD_REF", ""), ("GITHUB_SHA", "abc")]);
         let event = r#"{"pull_request": {"number": 7, "html_url": "u", "title": "T", "head": {"ref": "feat", "sha": "def"}, "base": {"ref": "main"}}}"#;
         assert_eq!(
             line(&change(&github, Ci::GitHub, "p", Some(event), "t")),
-            "{\"platform\": \"github\", \"number\": 7, \"url\": \"u\", \"title\": \"T\", \"head_ref\": \"feat\", \"base_ref\": \"main\", \"head_sha\": \"abc\", \"source_path\": \"p\", \"recorded_at\": \"t\"}"
+            "{\"platform\":\"github\",\"number\":7,\"url\":\"u\",\"title\":\"T\",\"head_ref\":\"feat\",\"base_ref\":\"main\",\"head_sha\":\"abc\",\"source_path\":\"p\",\"recorded_at\":\"t\"}"
         );
         let gitlab = vars(&[
             ("CI_MERGE_REQUEST_IID", "12"),
@@ -530,7 +530,7 @@ mod tests {
         )]);
         assert_eq!(
             line(&change(&given, Ci::GitHub, "p", None, "now")),
-            "{\"platform\": \"manual\", \"recorded_at\": \"then\", \"source_path\": \"p\"}"
+            "{\"platform\":\"manual\",\"recorded_at\":\"then\",\"source_path\":\"p\"}"
         );
     }
 
