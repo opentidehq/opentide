@@ -84,7 +84,7 @@ pub fn deployment_error(deployment: &Node) -> Option<String> {
     if errors.is_empty() {
         return None;
     }
-    let lines: Vec<String> = model_errors(&errors, deployment)
+    let lines: Vec<String> = model_errors(&errors)
         .into_iter()
         .map(|error| {
             let message = match error.kind {

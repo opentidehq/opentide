@@ -36,11 +36,9 @@ pub use checks::{Finding, block_codes, block_findings};
 #[from_node(union)]
 pub enum CriterionValue {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
 }
