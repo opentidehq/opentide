@@ -550,7 +550,7 @@ const STATE_PLATFORMS: [&str; 8] = [
 ];
 
 /// The platforms whose deployer addresses the remote rule by a vendor id kept
-/// in the deployment state, in [`STATE_PLATFORMS`]'s order.
+/// in the deployment state, in the order of `STATE_PLATFORMS` above (0.28.1's).
 pub fn state_platforms() -> Vec<&'static str> {
     STATE_PLATFORMS.to_vec()
 }
