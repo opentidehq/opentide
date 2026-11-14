@@ -7,7 +7,7 @@ fixture = "deploy-tenants"
 argv = ["opentide", "deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 cwd = "."
 timeout_secs = 180
-normalise = ["live-label"]
+normalise = ["live-progress"]
 cassette = "golden/deploy-defender"
 
 [env]

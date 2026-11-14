@@ -7,7 +7,7 @@ fixture = "tide-corpus"
 argv = ["opentide", "deploy", "--strategy", "PREVIEW", "--platform", "elastic", "--all"]
 cwd = "."
 timeout_secs = 180
-normalise = ["live-label"]
+normalise = ["live-progress"]
 
 [env]
 AI_AGENT = "golden"

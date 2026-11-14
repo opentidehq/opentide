@@ -7,7 +7,7 @@ fixture = "deploy-tenants"
 argv = ["opentide", "--json", "deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 cwd = "."
 timeout_secs = 180
-normalise = ["live-label"]
+normalise = ["live-progress"]
 cassette = "golden/deploy-sentinel-one"
 
 [env]
