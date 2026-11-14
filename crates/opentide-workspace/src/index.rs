@@ -25,7 +25,8 @@ pub const MISSING_UUID: &str = "missing_uuid";
 pub const DUPLICATE_ID: &str = "duplicate_id";
 /// The family the registry files signals under.
 pub const SIGNAL_FAMILY: &str = "signal";
-/// The index-only field naming the objective a signal is defined in.
+/// The field naming the objective a signal is defined in, beside the
+/// signal's own fields where the index is written out (MCP's resources).
 pub const SIGNAL_OWNER_FIELD: &str = "owner";
 
 /// One indexed object.
@@ -217,16 +218,14 @@ pub struct Index {
     pub chaining: IndexMap<String, IndexMap<String, Vec<String>>>,
 }
 
-/// Python's truthiness of a YAML value.
-pub fn truthy(node: &Node) -> bool {
+/// Whether `node` holds a name: a UUID, a reference, a relation. A
+/// non-empty string or a number does; null, a boolean, an empty string, a
+/// sequence and a mapping name nothing.
+pub fn holds_name(node: &Node) -> bool {
     match &node.value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Int(integer) => *integer != 0,
-        Value::Float(float) => *float != 0.0,
         Value::Str(text) | Value::Datetime(text) => !text.is_empty(),
-        Value::Seq(items) => !items.is_empty(),
-        Value::Map(entries) => !entries.is_empty(),
+        Value::Int(_) | Value::Float(_) => true,
+        Value::Null | Value::Bool(_) | Value::Seq(_) | Value::Map(_) => false,
     }
 }
 
@@ -249,19 +248,25 @@ fn items(node: Option<&Arc<Node>>) -> &[Arc<Node>] {
     }
 }
 
-/// The identifier of an object body: `uuid` when truthy, else
-/// `metadata.uuid` (`body.get("uuid") or meta_uuid`).
+/// The identifier of an object body: `uuid` when it is written, else
+/// `metadata.uuid`. A value left blank (null, `false`, an empty string,
+/// sequence or mapping) is not written; any other value is, for [`ingest`]
+/// to refuse when it is not a name.
 fn identifier(root: &Node) -> Option<&Node> {
-    let top = root
-        .get("uuid")
-        .map(AsRef::as_ref)
-        .filter(|node| truthy(node));
+    let written = |node: &&Node| match &node.value {
+        Value::Null | Value::Bool(false) => false,
+        Value::Str(text) => !text.is_empty(),
+        Value::Seq(items) => !items.is_empty(),
+        Value::Map(entries) => !entries.is_empty(),
+        _ => true,
+    };
+    let top = root.get("uuid").map(AsRef::as_ref).filter(written);
     top.or_else(|| {
         block(root, "metadata")
             .and_then(|metadata| metadata.get("uuid"))
             .map(AsRef::as_ref)
     })
-    .filter(|node| truthy(node))
+    .filter(written)
 }
 
 /// Where the registry's messages show a path: relative to `base` when inside
@@ -380,8 +385,8 @@ fn ingest(
         });
         return;
     };
-    if matches!(id.value, Value::Seq(_) | Value::Map(_)) {
-        // Python cannot key an index on a list or a mapping (it crashed).
+    if !holds_name(id) {
+        // A boolean, a sequence or a mapping names no object.
         index.load_errors.push(LoadError {
             path: path.to_path_buf(),
             family: family.to_owned(),
@@ -440,7 +445,7 @@ fn objective_signals(root: &Node) -> impl Iterator<Item = &Arc<Node>> {
 fn index_signals(index: &mut Index, objective: &str, root: &Node) {
     let mut here: HashSet<String> = HashSet::new();
     for signal in objective_signals(root) {
-        let Some(id) = signal.get("uuid").filter(|id| truthy(id)) else {
+        let Some(id) = signal.get("uuid").filter(|id| holds_name(id)) else {
             continue;
         };
         let key = text(id);
@@ -475,8 +480,7 @@ fn references(index: &mut Index) {
             match family.as_str() {
                 "rule" => {
                     if let Some(parent) = root.get("detection_model")
-                        && truthy(parent)
-                        && !matches!(parent.value, Value::Seq(_) | Value::Map(_))
+                        && holds_name(parent)
                     {
                         found.push(Reference {
                             from: from(),
@@ -505,7 +509,7 @@ fn references(index: &mut Index) {
                     }
                     let signals = objective.and_then(|o| o.get("signals"));
                     for (position, signal) in items(signals).iter().enumerate() {
-                        if let Some(id) = signal.get("uuid").filter(|id| truthy(id)) {
+                        if let Some(id) = signal.get("uuid").filter(|id| holds_name(id)) {
                             found.push(Reference {
                                 from: from(),
                                 kind: ReferenceKind::Signal,
@@ -529,8 +533,11 @@ fn references(index: &mut Index) {
                         if !matches!(link.value, Value::Map(_)) {
                             continue;
                         }
-                        let relation = link.get("relation").filter(|r| truthy(r)).map(|r| text(r));
-                        let Some(vector) = link.get("vector").filter(|v| truthy(v)) else {
+                        let relation = link
+                            .get("relation")
+                            .filter(|r| holds_name(r))
+                            .map(|r| text(r));
+                        let Some(vector) = link.get("vector").filter(|v| holds_name(v)) else {
                             continue;
                         };
                         let vector = text(vector);

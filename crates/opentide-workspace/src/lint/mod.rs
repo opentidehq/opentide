@@ -466,7 +466,10 @@ struct Record {
     name: Option<String>,
     uuid: Option<String>,
     metadata: Option<std::sync::Arc<Node>>,
-    /// The parsed mapping, for the recommended check.
+    /// The parsed mapping, for the recommended check: taken as soon as the
+    /// record is loaded. A file lint parsed itself (the command line's
+    /// `lint`) is then freed; one read from the workspace's index stays
+    /// alive in the index.
     root: Option<std::sync::Arc<Node>>,
     schema: Option<String>,
     parse_error: Option<String>,
@@ -523,10 +526,25 @@ fn lint_with(
     let in_scope = |path: &Path| reported.is_none_or(|files| files.contains(&path.to_path_buf()));
     let nested: Vec<PathBuf> = nested.into_iter().filter(|p| in_scope(p)).collect();
     let every = reported.is_none() || selected.contains(&LintCheck::Filenames);
+    let recommended = selected.contains(&LintCheck::Recommended);
+    let mut recommended_fields = RecommendedFields::default();
+    let mut missing: Vec<Draft> = Vec::new();
     let mut records: Vec<Record> = object_files
         .iter()
         .filter(|path| every || in_scope(path))
-        .map(|path| load_record(fs, &target, path, parses.get(path)))
+        .map(|path| {
+            let mut record = load_record(fs, &target, path, parses.get(path));
+            // The tree is read here and dropped: kept on every record, every
+            // tree lint parsed itself stayed alive to the end of the run (one
+            // from the workspace's index is the index's to free).
+            if let Some(root) = record.root.take()
+                && recommended
+                && in_scope(&record.path)
+            {
+                missing.extend(recommended_fields.findings(&record, &root));
+            }
+            record
+        })
         .collect();
     let shown: Vec<usize> = (0..records.len())
         .filter(|&index| in_scope(&records[index].path))
@@ -538,9 +556,7 @@ fn lint_with(
             &config.required_metadata,
         ));
     }
-    if selected.contains(&LintCheck::Recommended) {
-        findings.extend(recommended_findings(shown.iter().map(|&i| &records[i])));
-    }
+    findings.extend(missing);
     if selected.contains(&LintCheck::Placeholders) {
         findings.extend(placeholder_findings(shown.iter().map(|&i| &records[i])));
     }
@@ -1311,16 +1327,21 @@ fn mapping_at<'n>(root: &'n Node, path: &str) -> Option<&'n Node> {
 /// ([`opentide_schema::generate::catalog::recommended_fields`]), so lint
 /// reports what the editor reports, with no engine. A field counts as missing
 /// only inside a mapping the object has; an unknown schema is validate's.
-fn recommended_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft> {
-    let mut by_schema: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    let mut findings = Vec::new();
-    for record in records {
-        let (None, Some(root), Some(schema)) = (&record.parse_error, &record.root, &record.schema)
-        else {
-            continue;
+#[derive(Default)]
+struct RecommendedFields {
+    /// Each schema's recommended fields, read from the catalog once a run.
+    by_schema: std::collections::HashMap<String, Vec<String>>,
+}
+
+impl RecommendedFields {
+    /// The notes on `record`, whose parsed mapping is `root`.
+    fn findings(&mut self, record: &Record, root: &Node) -> Vec<Draft> {
+        let mut findings = Vec::new();
+        let (None, Some(schema)) = (&record.parse_error, &record.schema) else {
+            return findings;
         };
-        let fields = by_schema
+        let fields = self
+            .by_schema
             .entry(schema.clone())
             .or_insert_with(|| opentide_schema::generate::catalog::recommended_fields(schema));
         for path in fields.iter() {
@@ -1353,8 +1374,8 @@ fn recommended_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Dr
             }
             findings.push(draft);
         }
+        findings
     }
-    findings
 }
 
 fn placeholder_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft> {
