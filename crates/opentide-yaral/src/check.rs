@@ -167,33 +167,13 @@ fn format_minutes(minutes: u64) -> String {
     }
 }
 
-/// The closest of `candidates` to `name`, within two edits.
+/// The closest of `candidates` to `name`, within two edits, by the shared
+/// rule ([`opentide_core::suggest`]).
 pub(crate) fn closest<'a>(
     name: &str,
     candidates: impl Iterator<Item = &'a str>,
 ) -> Option<&'a str> {
-    candidates
-        .map(|c| (edit_distance(name, c), c))
-        .filter(|(d, _)| *d <= 2)
-        .min_by_key(|(d, c)| (*d, *c))
-        .map(|(_, c)| c)
-}
-
-fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut row: Vec<usize> = (0..=b.len()).collect();
-    for i in 1..=a.len() {
-        let mut prev = row[0];
-        row[0] = i;
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            let next = (row[j] + 1).min(row[j - 1] + 1).min(prev + cost);
-            prev = row[j];
-            row[j] = next;
-        }
-    }
-    row[b.len()]
+    opentide_core::suggest::closest_within(name, candidates, 2)
 }
 
 /// The segments of a `udm_field` (after its variable) or a `bare_field`.
@@ -2095,6 +2075,20 @@ impl Profile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn near_misses_within_two_edits_are_suggested() {
+        let names = ["principal", "target", "src", "network"];
+        // One and two edits, a swapped pair one edit.
+        assert_eq!(closest("princpal", names.into_iter()), Some("principal"));
+        assert_eq!(closest("targte", names.into_iter()), Some("target"));
+        assert_eq!(closest("netwrk", names.into_iter()), Some("network"));
+        // Ties go to the best-matching start, then the first in order.
+        assert_eq!(closest("ab", ["ac", "ad"].into_iter()), Some("ac"));
+        assert_eq!(closest("ab", ["ad", "ac"].into_iter()), Some("ac"));
+        // Too far: nothing.
+        assert_eq!(closest("hostname", names.into_iter()), None);
+    }
 
     #[test]
     fn re2_patterns() {
