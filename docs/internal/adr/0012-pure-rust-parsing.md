@@ -1,6 +1,6 @@
 # ADR 0012: Pure-Rust parsing (logos + rowan + hand-written parsers) replaces tree-sitter
 
-- Status: **Proposed** (phase 1, evaluation; not merged)
+- Status: **Accepted in part**: P0 (gates + toolkit) now; Phase A and gate G1 after 1.0.0-rc.1; hybrid if G1 fails; crypto/TLS C removal out of scope
 - Date: 2026-11-14
 - Supersedes: the language-server#89 decision to keep tree-sitter
 - Pilot: branch `exp/pure-rust-parser-kuery`, commit `c691c409`
@@ -173,8 +173,8 @@ Land `opentide-parse` (from the pilot).
 (2..n) grammar functions with tree snapshots, plus the test-only differential (old analyze kept as
 `tests/legacy`) over every corpus file, prefixes and mutations; (last) analysis on rowan, highlight
 mapping, tree-sitter dependency removed from the crate, the language's grammar dir deleted,
-baseline snapshots updated only for broken input, each changed message in
-`tests/golden/APPROVED_DIFFS.toml` with a reason. Exit: zero differences on valid input; identical
+baseline snapshots updated only for broken input, each change a reviewed snapshot diff (the
+Rust-owned snapshot suite, #1139; byte parity with the Python oracle is not required, #1121). Exit: zero differences on valid input; identical
 verdicts on broken input; messages at least as specific; fuzz smoke and the local oracle run by hand.
 
 Order and estimate (agent-implemented, reviewed; scaled from the pilot: kuery 2.5 agent-hours to a
@@ -207,8 +207,8 @@ the changed crates and reverse dependencies with `INSTA_UPDATE=no`): corpus gate
 `external_corpus`, `elastic_corpus`, `external_cql/falco/exabeam/elastic`, `tide_corpus`,
 `yara/conformance.rs`, `yaral/external_corpus.rs`, lucene `lucene_queryparser_cases.rs`,
 `graylog_verdicts.rs`, falco `libsinsp_parser.rs`); analysis `snapshots.rs` and `goldens.rs`;
-`deep_queries.rs`; LSP `e2e_stdio`, `protocol`, `message_session`; CLI `command_goldens.rs` under
-`APPROVED_DIFFS.toml`; fuzz regressions; `textmate`; `wasi` (when its paths change). By hand per
+`deep_queries.rs`; LSP `e2e_stdio`, `protocol`, `message_session`; the Rust-owned snapshot suite (#1139; `command_goldens.rs`
+and `APPROVED_DIFFS.toml` left CI in #1121); fuzz regressions; `textmate`; `wasi` (when its paths change). By hand per
 language: `oracle.yml` references via `scripts/engine/ci-oracle.sh` (Kusto, Splunk, @elastic/esql,
 EQL, kuery peggy, Lucene, Falco, libyara/YARA-X; none for CQL, Exabeam, YARA-L), fuzz smoke.
 
@@ -228,10 +228,10 @@ with the old code.
 | 3 | `TokenSet` u128 can't hold KQL/SPL kinds | Bug | Fixed before landing (above). |
 | 4 | tree-sitter already exposes lookahead sets; expected messages don't need a rewrite | **Strong** | Accepted as fact; G1 compares both. The rewrite is still justified by recovery control, toolchain and one engine pattern, not by messages alone. |
 | 5 | Maintainability: grammar.js is a readable spec; hand-written parsers drift silently; net hand-written lines grow (#89 criterion fails) | Mitigable | Each parser keeps the vendor grammar as doc comments per function; tree snapshots + oracles detect drift; the #89 line criterion is consciously replaced by "generated code removed". |
-| 6 | 75 % of broken inputs change on some surface; users type in broken states | Mitigable | Baseline snapshots of broken input in P0, changes reviewed per language and recorded in `APPROVED_DIFFS.toml` (already 4,593 entries; cost is real). |
+| 6 | 75 % of broken inputs change on some surface; users type in broken states | Mitigable | Baseline snapshots of broken input in P0, changes are reviewed snapshot diffs (#1139), not ledger entries; the bar is messages at least as specific. |
 | 7 | Gains not shown: binary +62.7 KB, crate build slower, WASM/fuzz/Kibana oracle not run; speed moves no unified-core §11 metric | Partly accepted | Speed is not a reason for this ADR. WASM, fuzz and oracle measured at G1. |
 | 8 | Fuel exhaustion and a new depth limit hide failures | Bug | Fixed before landing (above). |
-| 9 | Opportunity cost: UC-1.2 → UC-6 not started; 39–54 (to ~80) days | **Strong** | For the maintainer to rank; Phase A is ~12–15 days and independently useful (5 crates off tree-sitter). |
+| 9 | Opportunity cost; 39–54 (to ~80) days | Weaker than stated | The review's premise was stale: UC-1 → UC-6 are done; the remaining work is the 1.0 RC. Phase A starts after 1.0.0-rc.1. |
 | 10 | Hybrid: hand-write only falco, exabeam, yara | Fallback | Becomes the outcome if G1 fails. |
 
 Reviewer's conditions for approval: a large-language pilot with a wide `TokenSet`; WASM size, build
