@@ -831,10 +831,8 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
 pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize) {
     let cases = repo().join("tests/golden/cases");
     let ledger = ledger();
-    let mut usage = Usage::default();
-    let mut problems = Vec::new();
-    let mut ran = 0;
     let filter = std::env::var("OPENTIDE_REPLAY_FILTER").unwrap_or_default();
+    let mut selected: Vec<(String, PathBuf)> = Vec::new();
     for command in commands {
         for mode in ["human", "plain", "json", "agent"] {
             let extra: Vec<&str> = ["fault", "heavy-small"]
@@ -857,12 +855,13 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
                     if !id.contains(&filter) || host_errno(&id) {
                         continue;
                     }
-                    problems.extend(replay(&id, &dir, &ledger, &mut usage));
-                    ran += 1;
+                    selected.push((id, dir));
                 }
             }
         }
     }
+    let ran = selected.len();
+    let (mut problems, usage) = replay_all(&selected, &ledger);
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
             let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
@@ -888,6 +887,65 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
         }
     }
     (problems, ran)
+}
+
+/// Replays `cases` (`(id, dir)`) on every core: a case runs the CLI in
+/// process with its own environment, working directory and output buffers
+/// (nothing of the process is shared), so the cases of one group need not
+/// wait for each other. A group whose cases each generate the schemas took
+/// minutes on one thread, the slowest tests of the engine tests' first shard
+/// (#841). The problems come back in the cases' order, and the ledger's
+/// usage is every case's, so a stale entry is found as before.
+fn replay_all(cases: &[(String, PathBuf)], ledger: &Ledger) -> (Vec<String>, Usage) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let next = AtomicUsize::new(0);
+    let threads = std::thread::available_parallelism()
+        .map_or(2, std::num::NonZero::get)
+        .min(cases.len().max(1));
+    let mut done: Vec<(usize, Vec<String>, Usage)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                std::thread::Builder::new()
+                    // The CLI's deepest paths (YAML, the query parsers) need
+                    // more than a spawned thread's default 2 MiB.
+                    .stack_size(16 * 1024 * 1024)
+                    .spawn_scoped(scope, || {
+                        let mut out = Vec::new();
+                        loop {
+                            let at = next.fetch_add(1, Ordering::Relaxed);
+                            let Some((id, dir)) = cases.get(at) else {
+                                break;
+                            };
+                            let mut usage = Usage::default();
+                            let problems = replay(id, dir, ledger, &mut usage);
+                            out.push((at, problems, usage));
+                        }
+                        out
+                    })
+                    .unwrap()
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect()
+    });
+    done.sort_by_key(|(at, _, _)| *at);
+    let mut usage = Usage::default();
+    let mut problems = Vec::new();
+    for (_, found, used) in done {
+        problems.extend(found);
+        for index in 0..ledger.entries.len() {
+            if used.is_used(index) {
+                usage.mark(index);
+            }
+        }
+    }
+    (problems, usage)
 }
 
 /// Replays the `variant` case (`help`) of every command path in every mode
