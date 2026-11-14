@@ -259,9 +259,8 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         return Json::Object(failed(
             payload,
             format!(
-                "{platform} queries are in {}, not {}; pass one of those as language",
+                "{platform} queries are in {}, not {chosen:?}; pass one of those as language",
                 languages.join(", "),
-                crate::render::codeframe::quoted(&chosen)
             ),
         ));
     };

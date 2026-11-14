@@ -87,7 +87,7 @@ opentide explain vocab_unknwn
 
 ```text output-of="opentide explain vocab_unknwn" exit=2
 error: No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.
-  help: did you mean 'vocab_unknown'?
+  help: did you mean "vocab_unknown"?
 ```
 
 ## Exit codes
