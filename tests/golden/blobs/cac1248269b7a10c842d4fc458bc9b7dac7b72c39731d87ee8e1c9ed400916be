@@ -1,0 +1,1378 @@
+[
+  {
+    "type": "issue",
+    "check_name": "metadata_recommended",
+    "description": "Recommended metadata missing: organisation (help: add the missing keys under metadata)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "76656f3b4c6abdaacdbc1b26c1c8bc2351c1724707deb2e9c0198595fcd4f210",
+    "location": {
+      "path": "objects/objectives/hidden-spray-objective-0004.yaml",
+      "lines": {
+        "begin": 3
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "metadata_recommended",
+    "description": "Recommended metadata missing: author (help: add the missing keys under metadata)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "28d4c80ccff72cad42d575f1ab6c108e07f430857654060e9468f8e8822553f7",
+    "location": {
+      "path": "objects/rules/elevated-exfiltration-rule-0031.yaml",
+      "lines": {
+        "begin": 3
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "placeholder",
+    "description": "author holds a placeholder value written by opentide new (help: replace the value, then delete the '# opentide:placeholder' comment)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "12850ae845f974a5bd3dfb003bd9d890a0a77fe985c2a501ecda97b11c846a8c",
+    "location": {
+      "path": "objects/rules/silent-exfiltration-rule-0033.yaml",
+      "lines": {
+        "begin": 10
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_exception",
+    "description": "Multiple definitions of exception 'e' in the same rule (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "9f251bf0c412f9a0dd7edac2a3dd9d00e0989d6c39458d37183a7d9f78e3385c",
+    "location": {
+      "path": "objects/rules/covert-downgrade-rule-0237.yaml",
+      "lines": {
+        "begin": 100
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_wildcard_table",
+    "description": "wildcard table `*` scans every table; name the table instead (https://learn.microsoft.com/en-us/kusto/query/best-practices) (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "cc646f8689907f98d1cee2e334ed9dbaa0c6e5bd4755ee5c0703c14c565253ca",
+    "location": {
+      "path": "objects/rules/covert-exfiltration-rule-0157.yaml",
+      "lines": {
+        "begin": 45
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_group_by_column",
+    "description": "suppression.group_by `user.name` is not an output column of the ES|QL query (c, host.name); deploy rejects it (help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "c5edfd151e2316faad0c1ea13443e1d02ac4282a76f6db5785d1b66f170a53d8",
+    "location": {
+      "path": "objects/rules/covert-relay-rule-0307.yaml",
+      "lines": {
+        "begin": 51
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unscoped_union",
+    "description": "unscoped `union` uses wildcard table `*` and reads every table; name the tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices) (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "52c2f66b75002dd9f03281020ed1a0b1f301ad674d8784a0d3940158885af462",
+    "location": {
+      "path": "objects/rules/covert-tunnel-rule-0170.yaml",
+      "lines": {
+        "begin": 49
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_expression_depth",
+    "description": "expression nesting exceeds 250 levels (parentheses plus chained `not`/`-`/`+`): Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject this query; earlier patches and 9.0 to 9.2 accept it (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "8e065d89641cfb8a75742dab58da5b2ccea703df5dbac71deb7033fea88f7a24",
+    "location": {
+      "path": "objects/rules/covert-tunnel-rule-0392.yaml",
+      "lines": {
+        "begin": 76
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_source",
+    "description": "`my_plugin` is not an event source the engine knows (`syscall`, `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "61d8ebcdd78bfdb5392cdb4127522eee7a1ea9cf1d3becb3f0c36a7ee23892cd",
+    "location": {
+      "path": "objects/rules/elevated-beacon-rule-0256.yaml",
+      "lines": {
+        "begin": 68
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unsafe_na_check",
+    "description": "comparing a `ka.` or `jevt.` field with `<NA>`: such a field may hold the string `<NA>`, so the check does not tell a missing value apart (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "c12a567a2d81e68f40819eb63ed7b51ecc6104a5d9d87c93ea395e3547f81d56",
+    "location": {
+      "path": "objects/rules/elevated-harvest-rule-0259.yaml",
+      "lines": {
+        "begin": 83
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_unavailable",
+    "description": "command `INLINE STATS`: needs Elasticsearch 9.2 or later; 8.19, 9.0 and 9.1 reject it; technical preview from 9.2, GA from 9.3 (help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "e20185065ca8686c578777077dd69318e43065d79f07261cff01b9a12aba20ba",
+    "location": {
+      "path": "objects/rules/elevated-harvest-rule-0372.yaml",
+      "lines": {
+        "begin": 39
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_unknown_command",
+    "description": "'frobnicate' is not a command opentide knows; an app on the search head may provide it (opentide cannot declare app commands yet) (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "1b9526a4c79e81947523df39b8bf9008ea7895560f14eb7f420665627a8a7159",
+    "location": {
+      "path": "objects/rules/elevated-relay-rule-0107.yaml",
+      "lines": {
+        "begin": 58
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_expression_depth",
+    "description": "expressions nest 310 deep; Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject more than 300 (earlier releases allow 400) (help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "b6070caed290df8850d6fbb5e15eee03e235f092d1a8e182b41007887f102925",
+    "location": {
+      "path": "objects/rules/elevated-relay-rule-0242.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_deprecated_function",
+    "description": "'any' is deprecated; use take_any() (help: did you mean 'take_any'?)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "ebbe09691d7f2dcd735eae96227bd1c68e2c0cae08b9e4333e0bc0aed1684895",
+    "location": {
+      "path": "objects/rules/elevated-tunnel-rule-0101.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_bare_term",
+    "description": "`bob` has no field, so Elasticsearch searches it in every field; to search `user.name` for both, write `user.name:(alice bob)` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "fcb6c1d77876b4b5e81df4aaea3a09b1f9707e62abc372c943761390e71a6b6e",
+    "location": {
+      "path": "objects/rules/encoded-beacon-rule-0145.yaml",
+      "lines": {
+        "begin": 73
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_field_as_value",
+    "description": "'proc.pname' may be a valid field misused as a const string value: compare with val(proc.pname) (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "7cfdd47577169a18a9181f8b4bc72161a15502fe19b0e21a226a2b435ea1cddc",
+    "location": {
+      "path": "objects/rules/encoded-downgrade-rule-0181.yaml",
+      "lines": {
+        "begin": 83
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_lowercase_operator",
+    "description": "`and` is a search term in Lucene, not an operator; operators are upper case (`AND`) (help: try: AND)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "d0ed5a2534f648fba2abfeb0c790b2452c84011517f8253dc37bd2ebd27caf66",
+    "location": {
+      "path": "objects/rules/encoded-dropper-rule-0294.yaml",
+      "lines": {
+        "begin": 44
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_no_evttype",
+    "description": "the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "32fc09caf6974cc75c6db190ba06bd2b46f7ac160e8cde1dec36c9b0cb1a0a2a",
+    "location": {
+      "path": "objects/rules/encoded-injection-rule-0204.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_bare_term",
+    "description": "`10` has no field, so Elasticsearch searches it in every field; to search `event.code` for both, write `event.code:(> 10)` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "310394e93dbbf6097d73763d4d273d9110dfbd68b14aaa744aea08a861dd8151",
+    "location": {
+      "path": "objects/rules/encoded-spray-rule-0359.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_range_operator",
+    "description": "`event.code:>` needs its value without a space (`event.code:>10`); as written, Elasticsearch searches `event.code` for the text `>` and the next word in every field (help: try: >10)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "21c8b25c832d9aa2c75bfa72e7580f532249f0c54855a2f18f6b3a697cd0b991",
+    "location": {
+      "path": "objects/rules/encoded-spray-rule-0359.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "technique_not_enterprise",
+    "description": "T1626 (Mobile : Abuse Elevation Control Mechanism) is not Enterprise ATT&CK; Elastic deploy skips it from the rule's threat mapping (help: opentide explain technique_not_enterprise describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "2e82f34bd79c8a51643dcd59570b6814f0d8fdb4dcbea9b50277e102480dbe38",
+    "location": {
+      "path": "objects/rules/encoded-tunnel-rule-0047.yaml",
+      "lines": {
+        "begin": 20
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_escape",
+    "description": "Lucene drops a single backslash: `\\W` searches `W`. Write `\\\\` for a literal backslash (help: try: \\\\W)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "5d616ca815fc6728eb8dcb042345452d16759289c02c4dcd2fd85aa45f5759e6",
+    "location": {
+      "path": "objects/rules/encoded-tunnel-rule-0164.yaml",
+      "lines": {
+        "begin": 42
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_deprecated_field",
+    "description": "`evt.dir` is deprecated: due to the drop of enter events, 'evt.dir = <' always evaluates to true, and 'evt.dir = >' always evaluates to false. The rule expression can be simplified by removing the condition on 'evt.dir' (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "a3d26d00125d6cf3b67468980c608296aaafc8edef9b6fb99476e52382cb5161",
+    "location": {
+      "path": "objects/rules/encoded-tunnel-rule-0178.yaml",
+      "lines": {
+        "begin": 37
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_kuery_syntax",
+    "description": "`process.pid >=` is KQL; Lucene searches `>=` as a term. Write `process.pid:>=value` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "9ed5d2922162487217c8c76c2fb2d0ec3b81b6e654665fb9a701d994f6d629c6",
+    "location": {
+      "path": "objects/rules/hidden-downgrade-rule-0229.yaml",
+      "lines": {
+        "begin": 55
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_unescaped_slash",
+    "description": "`/var/` is read as a regular expression because `/` is unescaped, so the value splits into separate clauses; escape the slashes (`\\/`) or quote the value (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "1b09137c644c7d0b86f040850c668301ff14dbc1e70c00e23baa1c8d0edcd244",
+    "location": {
+      "path": "objects/rules/hidden-exfiltration-rule-0470.yaml",
+      "lines": {
+        "begin": 55
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "threshold_lookback",
+    "description": "threshold rule's lookback exceeds its interval (5m): threshold counts are not de-duplicated across overlapping runs (help: opentide explain threshold_lookback describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "1abed52471fe1602ad03884d62b0cfaf4d083d841ef7a5456b36730be1261700",
+    "location": {
+      "path": "objects/rules/hidden-harvest-rule-0060.yaml",
+      "lines": {
+        "begin": 62
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_regex_simple",
+    "description": "regex check with 'bash' may be optimized with simpler operators such as '=', 'contains', 'startswith', 'endswith' (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "f83c37347dd474beadf6b333c855b1ccdc775eddea54395412f0db7782f56a0a",
+    "location": {
+      "path": "objects/rules/hidden-harvest-rule-0217.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_lucene_syntax",
+    "description": "`[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a and field <= b` (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "d81150cd5a8147c61310a8045e46ca2b29477fd42976e827e4f9c6db348861e7",
+    "location": {
+      "path": "objects/rules/hidden-injection-rule-0268.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_maxspan_missing",
+    "description": "sequence has no `with maxspan=`: its events can be any distance apart within the search window. A maxspan bounds matches and the partial sequences Elasticsearch keeps (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "5b2a2c72c5dfb1e2df281ddf4db539baed44f21710ce8e6d689a59f0bc5888cc",
+    "location": {
+      "path": "objects/rules/hidden-relay-rule-0476.yaml",
+      "lines": {
+        "begin": 60
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "risk_band",
+    "description": "risk score 90 is outside Kibana's low band (0–21) for alert severity low (help: opentide explain risk_band describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "db653f8ff6e3d9934c523be4f9eb21519d2afbfc61e1fbdc564c36186dec3a05",
+    "location": {
+      "path": "objects/rules/hidden-tunnel-rule-0528.yaml",
+      "lines": {
+        "begin": 67
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_mixed_operators",
+    "description": "Lucene has no AND/OR precedence (`a OR b AND c` means `a +b +c`); add parentheses (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "7c6da8e646f982b2290308effd2c040ee43f70663fc57181920f38d837559ac0",
+    "location": {
+      "path": "objects/rules/lateral-downgrade-rule-0340.yaml",
+      "lines": {
+        "begin": 79
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_where_not_first",
+    "description": "`where` is not the first operator after the table reference; filter before later operators (https://learn.microsoft.com/en-us/kusto/query/best-practices) (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "ab8d0c2cccff0819bdfbe5f5dd14ab46f9af4ae785a396399622935490e8144c",
+    "location": {
+      "path": "objects/rules/lateral-dropper-rule-0144.yaml",
+      "lines": {
+        "begin": 52
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_regex",
+    "description": "EQL regex (Lucene syntax) has no inline flags or `(?...)` groups: `(?i)` matches the text `?i`. Use `regex~` for a case-insensitive match (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "c71026b3c6e5a25f58469b2818df9ba57b6d5a050977f1bcbe1dc86cf52d385b",
+    "location": {
+      "path": "objects/rules/lateral-exfiltration-rule-0606.yaml",
+      "lines": {
+        "begin": 49
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_nested_comment",
+    "description": "Elasticsearch nests block comments, so this comment runs past its first `*/`; other EQL tools end it there. Avoid `/*` inside a comment (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "3cab9ad86968d28af5087e9d94f14cf6f41ea0adf3a22ec1cee1475100ae526b",
+    "location": {
+      "path": "objects/rules/lateral-pivot-rule-0587.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_runs_ignored",
+    "description": "Elasticsearch ignores a decimal `runs` value: [2.5] runs the query once; use an integer from 1 to 100 (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "dc09dd9d1f9b4798cca34117fefd74dfd140e4d052d3e5d321fd31a4760751ae",
+    "location": {
+      "path": "objects/rules/lateral-spray-rule-0652.yaml",
+      "lines": {
+        "begin": 67
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_dataset_not_declared",
+    "description": "sourcetype `linux_secure` is not declared: no Splunk log source in visibility.toml names it (help: opentide explain spl_dataset_not_declared describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "4871e68a32ab6b3cfc35aa6752c8798770f2ae6008f239f3e0302532fcb34622",
+    "location": {
+      "path": "objects/rules/persistent-beacon-rule-0121.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_macro",
+    "description": "`my_private_macro` is not a macro of this block or of the Falco default rules; the tenant must define it (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "6729e709441f4c9c33b71fc483cb7df84125d7b4f1ead54d8251453d4aa83303",
+    "location": {
+      "path": "objects/rules/persistent-beacon-rule-0233.yaml",
+      "lines": {
+        "begin": 87
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_range_type",
+    "description": "ECS v9.5.0 maps `process.name` as `keyword`: a range compares it as text, so \"10\" sorts before \"9\" (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "b9b500509a9ceee22aba3c60ebbd1a0b1ce09fedba031681b97e2ee5c2ad25c2",
+    "location": {
+      "path": "objects/rules/persistent-dropper-rule-0379.yaml",
+      "lines": {
+        "begin": 62
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_newer_syntax",
+    "description": "the `anyof` operator modifier needs libsinsp 0.25.0 or later: an older Falco or Sysdig agent refuses the rule (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "2d13c6b2c97aca26c6fa3959ea9240b32dba023260fd7eebabcf663fb79f2fab",
+    "location": {
+      "path": "objects/rules/persistent-loader-rule-0191.yaml",
+      "lines": {
+        "begin": 46
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lookback_zero",
+    "description": "scheduling.lookback is zero: the next run starts as this window ends, so late events are missed; Elastic recommends at least 1m (help: opentide explain lookback_zero describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "42e41bb6e06cf369210d19f2dd35ed75c64461d1f12fa2d1d9b793e28cc1b5f4",
+    "location": {
+      "path": "objects/rules/rapid-beacon-rule-0509.yaml",
+      "lines": {
+        "begin": 67
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_empty_stage",
+    "description": "empty pipeline stage: Splunk ignores a trailing `|`; remove it or add the command (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "5860c3247563da6a53d12781cfb7841c31231df826d7d1d61d315c54f7dc94bb",
+    "location": {
+      "path": "objects/rules/rapid-implant-rule-0083.yaml",
+      "lines": {
+        "begin": 70
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_quoted_wildcard",
+    "description": "`*` inside quotes is a literal asterisk in KQL, not a wildcard; drop the quotes and escape spaces to match a pattern (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "abdd166a7418c815326181a4f2b70aaaf18a1e2be0e080b91db77ccccd6a9485",
+    "location": {
+      "path": "objects/rules/rapid-injection-rule-0333.yaml",
+      "lines": {
+        "begin": 49
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "esql_metadata_id",
+    "description": "non-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic Security cannot de-duplicate its alerts (9.4 and later add it) (help: try: METADATA _id, _version, _index)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "15880b4ca64b3dbdc3274e5e3a1cfa9fa8426935f22c4ddb1aacaf72e3a6182c",
+    "location": {
+      "path": "objects/rules/remote-downgrade-rule-0353.yaml",
+      "lines": {
+        "begin": 75
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unscoped_union",
+    "description": "unscoped `union` uses wildcard table `*` and reads every table; name the tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices) (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "656dd903d3b16df18957a0097993f85dfe51600991ba0879ed54c707d5c3b597",
+    "location": {
+      "path": "objects/rules/remote-dropper-rule-0140.yaml",
+      "lines": {
+        "begin": 75
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_transformer_as_value",
+    "description": "'tolower(x)' may be a valid field transformer misused as a const string value (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "44bf5e54aee21c63fffb72b8e46c0733b046de2b1b8dbfd0d91a960045a7060c",
+    "location": {
+      "path": "objects/rules/remote-injection-rule-0220.yaml",
+      "lines": {
+        "begin": 51
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "ecs_unknown_field",
+    "description": "`process.nmae` is not an ECS v9.5.0 field; did you mean `process.name`? (ECS allows custom fields, so this is a warning) (help: try: process.name)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "e9255d3f5ca875301d253706aa031f90326c541f2c0963e9a08079562b9428a6",
+    "location": {
+      "path": "objects/rules/remote-loader-rule-0398.yaml",
+      "lines": {
+        "begin": 61
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_deprecated_operator",
+    "description": "'containscs' is a legacy spelling; use contains_cs (help: try: contains_cs)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "ee51d8a53a1da1c0ad54341fa4c571321facc744b81c875d65f0e8dd5fc36fa1",
+    "location": {
+      "path": "objects/rules/remote-pivot-rule-0105.yaml",
+      "lines": {
+        "begin": 44
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_maxspan_window",
+    "description": "EQL maxspan exceeds the rule window, interval + lookback (10m + 1m); the sequence cannot fit one run (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "f5f41a5781bb19005733ea45e97f0aace92b33edcb51452a022d44aaa0438972",
+    "location": {
+      "path": "objects/rules/remote-tunnel-rule-0541.yaml",
+      "lines": {
+        "begin": 51
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_list",
+    "description": "`nope_list` is not a list of this block or of the Falco default rules: it is compared as the single value 'nope_list' (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "53b3a009627dfb516f8040d9d314d4c3e55ef51a4b19b5281610e1485c247ec7",
+    "location": {
+      "path": "objects/rules/rogue-beacon-rule-0230.yaml",
+      "lines": {
+        "begin": 46
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "elastic_dataset_not_declared",
+    "description": "index pattern `winlogbeat-*` is not declared: no elastic log source in visibility.toml names it or a pattern that covers it (help: opentide explain elastic_dataset_not_declared describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "f824af061f8d7265fa87f10af875f5f070bd9ffb23b2b98b70d3ab79ae8b7d29",
+    "location": {
+      "path": "objects/rules/rogue-beacon-rule-0574.yaml",
+      "lines": {
+        "begin": 77
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_regexp",
+    "description": "Lucene regular expressions have no `(?…)` groups or flags: `(?:` matches the text `?:` and `(?i)` the text `?i`; drop the `?…` part (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "8ab002b5f491ba4387e8fcbba3c43cbeeb5590eb91cdfe19f7b6d93ea6c73dd0",
+    "location": {
+      "path": "objects/rules/rogue-downgrade-rule-0424.yaml",
+      "lines": {
+        "begin": 58
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_subsearch_truncation",
+    "description": "`join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches) (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "6cdb158b602fc6bf9d364976260a8c75c6b5a6f51bcd03529745e7deceebfa5f",
+    "location": {
+      "path": "objects/rules/rogue-dropper-rule-0095.yaml",
+      "lines": {
+        "begin": 73
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_join_summarize_before_project",
+    "description": "`join` runs before `project` narrows columns; project the needed columns first (https://learn.microsoft.com/en-us/kusto/query/best-practices) (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "5065bc567b611a3cb59dc54d983e6d227fbb90d42975ea335068fcde1b5ef386",
+    "location": {
+      "path": "objects/rules/rogue-dropper-rule-0118.yaml",
+      "lines": {
+        "begin": 45
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_until_term",
+    "description": "a missing event (`![`) as the `until` term parses, but Elasticsearch documents no behaviour for it; use `[` (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "869962f8d35bfe49756981ce29e5641b87c398eed1273b6a9f15d43e04d2b7d5",
+    "location": {
+      "path": "objects/rules/rogue-injection-rule-0671.yaml",
+      "lines": {
+        "begin": 60
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_maxspan_lookback",
+    "description": "EQL maxspan exceeds scheduling.lookback (1m); a sequence that straddles two runs is missed (help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "32857c1d54b863d9275da136c36a3400e34480b58768e8cb2740a9ba7cbfff62",
+    "location": {
+      "path": "objects/rules/rogue-pivot-rule-0457.yaml",
+      "lines": {
+        "begin": 68
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lookback_long",
+    "description": "scheduling.lookback exceeds 1h: in Elastic it is overlap added to interval, not the whole query window as in Sentinel (help: opentide explain lookback_long describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "6f43101f352ce348ead65845c3ea0809cda5f6bbfb20ae33123846e65c5ae61c",
+    "location": {
+      "path": "objects/rules/rogue-pivot-rule-0463.yaml",
+      "lines": {
+        "begin": 60
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_literal_wildcard",
+    "description": "`==` matches `*` literally; use `like` for a wildcard (help: try: like)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "46c7671bee06c6f56f8a9f60848bf3fd21780fc3b28f65dc8b62537e3b432696",
+    "location": {
+      "path": "objects/rules/rogue-spray-rule-0411.yaml",
+      "lines": {
+        "begin": 53
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_wildcard",
+    "description": "leading wildcard `*fail` cannot use the term index; a trailing `fail*` is fine (https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search) (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "abcc2170c7809dc35c12c92ea02ba57ad06f8db595a18a13d32650664f724a24",
+    "location": {
+      "path": "objects/rules/rogue-tunnel-rule-0120.yaml",
+      "lines": {
+        "begin": 64
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_table_not_declared",
+    "description": "'AuditLogs' is not a table the workspace declares for sentinel in visibility.toml (help: opentide explain kql_table_not_declared describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "2ded0e64ac0c7853f1f505922af73365189eb6c9cc711b5622430b0fba33e4b9",
+    "location": {
+      "path": "objects/rules/rogue-tunnel-rule-0166.yaml",
+      "lines": {
+        "begin": 61
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "eql_case_sensitive",
+    "description": "event category `PROCESS` is compared case-sensitively; ECS categories are lower case (help: try: process)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "a3b217fc6528ccb7e475c0337abd9d0d1693b3bbcd3f094239a480314fa54bbe",
+    "location": {
+      "path": "objects/rules/rogue-tunnel-rule-0346.yaml",
+      "lines": {
+        "begin": 49
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_render_not_valid",
+    "description": "`render` is not valid in detection queries (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "b8e96d0d75a55a6390684812c449f660558e059e3f4623e59fa08ced2fa7168a",
+    "location": {
+      "path": "objects/rules/scheduled-beacon-rule-0127.yaml",
+      "lines": {
+        "begin": 65
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_escape",
+    "description": "Kibana turns `\\t` inside quotes into a control character; write `\\\\t` for a backslash (help: try: \\\\t)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "8a4f6d9423f8f156ba90cbe9f45b7eec655d20812b23a260cfdcc398d1db5b81",
+    "location": {
+      "path": "objects/rules/scheduled-dropper-rule-0138.yaml",
+      "lines": {
+        "begin": 56
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_lucene_syntax",
+    "description": "`_exists_:field` is Lucene; in KQL write `field:*` (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "253217fd7f6a5d246889a28d23b0d95d0427c620e1c730d991da3bf90abf0dd2",
+    "location": {
+      "path": "objects/rules/scheduled-dropper-rule-0203.yaml",
+      "lines": {
+        "begin": 48
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_lucene_syntax",
+    "description": "`[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a and field <= b` (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "88030a5992216db93b2f7675a9147121e64c59e42d349a872663deff6f84c786",
+    "location": {
+      "path": "objects/rules/scheduled-dropper-rule-0203.yaml",
+      "lines": {
+        "begin": 48
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_looks_like_lucene",
+    "description": "this query reads like Lucene (`_exists_`, ranges); if it is an Elastic rule, set `language: lucene` (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "cfa2b4c729f8bcb31e8f3db148c8ff89e50d97d278dceda541a9e299a440a635",
+    "location": {
+      "path": "objects/rules/scheduled-dropper-rule-0203.yaml",
+      "lines": {
+        "begin": 48
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_question_mark",
+    "description": "`?` is a literal character in KQL, not a single-character wildcard; use `*` to match any characters (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "6db068104d02c11781ffc793af1f0176ce4db0ae9441a3f3e27c7d9283e9b151",
+    "location": {
+      "path": "objects/rules/scheduled-implant-rule-0314.yaml",
+      "lines": {
+        "begin": 77
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_rule",
+    "description": "`No such rule` is not a rule of the Falco default rules: Falco refuses to append to it, and on Sysdig it must be a rule the tenant has (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "b72da93c23a7d58aef9a2307445a7a73aa9c5b9a5431723877a734097e997311",
+    "location": {
+      "path": "objects/rules/scheduled-relay-rule-0243.yaml",
+      "lines": {
+        "begin": 52
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_elasticsearch_only",
+    "description": "`_exists_:field` is Elasticsearch syntax; Carbon Black searches a field named `_exists_`. Use `field:*` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "11af0868291b5f498e7e4b1c602ae4f830b4f60c1ba67ee2edf874256f922f33",
+    "location": {
+      "path": "objects/rules/scheduled-spray-rule-0037.yaml",
+      "lines": {
+        "begin": 57
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "sysdig_list_self_reference",
+    "description": "list `corpus_shells_35` names itself: Falco keeps `corpus_shells_35` as a literal item, which on Sysdig resolves against a tenant list of that name, not this one (help: opentide explain sysdig_list_self_reference describes it)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "c22734802502a0e99a3f22e442e1edbace584e1c4c472ff56ab9fa5c0ab82665",
+    "location": {
+      "path": "objects/rules/scheduled-tunnel-rule-0269.yaml",
+      "lines": {
+        "begin": 63
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_unknown_source",
+    "description": "`not a source!` is not an event source the engine knows (`syscall`, `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "a567152037cf6eb2b712e13e19630abf8e432443291c0443855c1cbb9daf36a3",
+    "location": {
+      "path": "objects/rules/silent-pivot-rule-0025.yaml",
+      "lines": {
+        "begin": 88
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "falco_output_syntax",
+    "description": "unknown filter: `%proc.name)` is not a field or a transformer (libsinsp) (help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "5d43dbf9f7c97b618a766100df35b8fe3036b65e274d2d2eded19a44ae5d2d20",
+    "location": {
+      "path": "objects/rules/silent-pivot-rule-0025.yaml",
+      "lines": {
+        "begin": 83
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kuery_free_text",
+    "description": "`powershell` has no field, so Kibana searches it in every field (`index.query.default_field`); name the field (`field:powershell`) (help: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "info",
+    "fingerprint": "e4eed4ca4b29be8ec016801c8264215d739b03d7d0d670ad5e46e2a2c7d86199",
+    "location": {
+      "path": "objects/rules/silent-tunnel-rule-0184.yaml",
+      "lines": {
+        "begin": 65
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_lowercase_operator",
+    "description": "`and` is a search term in Lucene, not an operator; operators are upper case (`AND`) (help: try: AND)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "c4e10944439098e55db6badcc783198785a5ae31cbaec679268776d8f2d79e27",
+    "location": {
+      "path": "objects/rules/silent-tunnel-rule-0275.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_kuery_syntax",
+    "description": "`event.code >=` is KQL; Lucene searches `>=` as a term. Write `event.code:>=value` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "f2b7a8ce80f22091eedb44549809168c14c0a1236bd1a9339a8bd90ae22588fc",
+    "location": {
+      "path": "objects/rules/silent-tunnel-rule-0275.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "lucene_looks_like_kuery",
+    "description": "this query reads like Kibana KQL (lower-case `and`/`or`/`not` operators, `field >= value` ranges); if it is an Elastic rule, set `language: kuery` (help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "06c251baff8c8206750b8dfbe5f55f9850dca78fb2df84314a56511e1f6b284c",
+    "location": {
+      "path": "objects/rules/silent-tunnel-rule-0275.yaml",
+      "lines": {
+        "begin": 59
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "spl_leading_not",
+    "description": "leading `NOT` used as the search filter scans events before excluding them (https://docs.splunk.com/Documentation/Splunk/latest/Search/Booleanexpressions) (help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "7e9c59fc9d41cfcf98c99ff71cc876612ce4771a6de5407592877c12e9f84977",
+    "location": {
+      "path": "objects/rules/staged-beacon-rule-0094.yaml",
+      "lines": {
+        "begin": 40
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "kql_unscoped_search",
+    "description": "unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices) (help: the KQL reference: https://learn.microsoft.com/kusto/query/)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "6ec054515d4e0cc00d2a2bae6fff4f6904539e83d0b465277a649aa71dd0b923",
+    "location": {
+      "path": "objects/rules/staged-pivot-rule-0131.yaml",
+      "lines": {
+        "begin": 36
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: expected a mapping at the top of the file, found an empty file",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "cdef39e30945b36b8f63aa0d0002fde952f335a548878b1b9392a913579dc3b6",
+    "location": {
+      "path": "objects/threats/encoded-exfiltration-threat-0030.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "filename_mismatch",
+    "description": "Filename 'hidden-downgrade-threat-0005-v2.yaml' does not match slugify(name)='hidden-downgrade-threat-0005' (help: rename it to objects/threats/hidden-downgrade-threat-0005.yaml)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "86d8df3bb37dde6fb8595d2587f6ff245344ac1d0df4ba9f76758c5a28e4943c",
+    "location": {
+      "path": "objects/threats/hidden-downgrade-threat-0005-v2.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "name_missing",
+    "description": "Object has no name; cannot check filename slug (help: add a name: the file name is derived from it)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "7c36e6f3fb863f20eb0740267bfc44f4d14222b8403f5b7a71b3d2592bd2ad47",
+    "location": {
+      "path": "objects/rules/covert-injection-rule-0032.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month)",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "715cd1d17581c0746d2cbe5d824a2f1e76425909dc5b722b6daa91eb799543df",
+    "location": {
+      "path": "objects/rules/elevated-exfiltration-rule-0014.yaml",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: did not find expected ',' or ']'",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "d180414cf3f1ad80544d9d516d9128a02b93fb03acfece3636af1abd9af871ba",
+    "location": {
+      "path": "objects/rules/encoded-beacon-rule-0034.yaml",
+      "lines": {
+        "begin": 83
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: found a tab character that violates indentation",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "ed6b7c84a93ee8677a5dac63f3e5ef9b11dd80d7e07ceeb446e680777641d76a",
+    "location": {
+      "path": "objects/rules/hidden-loader-rule-0024.yaml",
+      "lines": {
+        "begin": 45
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "filename_mismatch",
+    "description": "Filename 'renamed-1.yaml' does not match slugify(name)='covert-implant-rule-0028' (help: rename it to objects/rules/covert-implant-rule-0028.yaml)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "9e9b93a6d37c97a0272abfc23c375484f29145236b80d256b3bff65aedafd250",
+    "location": {
+      "path": "objects/rules/renamed-1.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "yaml_parse",
+    "description": "Could not parse object YAML: did not find expected ',' or ']'",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "d7e86334b04bcf912d712c47f591374fd4a66e83f3531613bb25096a6523b445",
+    "location": {
+      "path": "objects/rules/staged-exfiltration-rule-0021.yaml",
+      "lines": {
+        "begin": 72
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "nested_object_file",
+    "description": "objects/rules/nested/encoded-spray-rule-0017.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)",
+    "categories": [
+      "Style"
+    ],
+    "severity": "minor",
+    "fingerprint": "8de61d9184271e4367f0e8cbb14ffade8b526d9da22758fcb0dad153a0246fce",
+    "location": {
+      "path": "objects/rules/nested/encoded-spray-rule-0017.yaml",
+      "lines": {
+        "begin": 1
+      }
+    }
+  }
+]

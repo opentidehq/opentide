@@ -31,11 +31,18 @@ use std::sync::{Mutex, PoisonError};
 
 use indexmap::IndexMap;
 use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
+use opentide_schema::objects::platform::graylog::{self, ConfiguredTenant};
 use opentide_workspace::diagnostic::ContextValue;
 use opentide_workspace::validate::annotate::relative_path;
 use opentide_workspace::validate::{QueryCheck, QueryFindings, QueryObject};
 use opentide_workspace::{Diagnostic, FileSystem, Severity, Workspace};
 use rayon::prelude::*;
+
+/// Graylog's `configurations` key, and the platform of its queries.
+const GRAYLOG: &str = "graylog";
+
+/// The engine's code for a leading `*` or `?` in a Graylog query.
+const LEADING_WILDCARD: &str = "graylog_leading_wildcard";
 
 /// `context.source` of the findings of the queries check.
 pub const ENGINE_SOURCE: &str = "engine";
@@ -55,6 +62,10 @@ pub const VISIBILITY_CONFIGURATION: &str = ".opentide/configurations/visibility.
 /// matches this path's ending, so it is passed as written here.
 pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elastic.toml";
 
+/// Where the Graylog tenants are read from: their `allow_leading_wildcard`
+/// and `streams` decide `graylog_leading_wildcard` and `graylog_all_streams`.
+pub const GRAYLOG_CONFIGURATION: &str = ".opentide/configurations/platforms/graylog.toml";
+
 /// The engine's warnings about a dataset `visibility.toml` does not declare:
 /// their help is their `opentide explain` page, not a language reference.
 pub const DECLARED_DATASET_CODES: [&str; 3] = [
@@ -65,7 +76,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -107,7 +118,42 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
     ),
+    (
+        "yara_",
+        "YARA rule",
+        "https://yara.readthedocs.io/en/v4.5.2/writingrules.html",
+    ),
+    (
+        "graylog_",
+        "Graylog search query",
+        "https://go2docs.graylog.org/current/making_sense_of_your_log_data/writing_search_queries.html",
+    ),
+    (
+        "exabeam_",
+        "Exabeam Query Language",
+        "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html",
+    ),
+    (
+        "yaral_",
+        "YARA-L 2.0",
+        "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax",
+    ),
 ];
+
+/// Whether `opentide lint` reports an engine warning of `code`: a query
+/// language's (one with a reference), an Elastic advisory, Sysdig's list
+/// self-reference, or an undeclared dataset. 0.28.1 added Graylog's dialect:
+/// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
+/// editor alone.
+pub fn lint_owned(code: &str) -> bool {
+    opentide_schema::objects::platform::harfanglab::yara::ADVISORY_CODES.contains(&code)
+        || ENGINE_REFERENCES
+            .iter()
+            .any(|(prefix, _, _)| code.starts_with(prefix))
+        || ELASTIC_ADVISORIES.contains(&code)
+        || code == "sysdig_list_self_reference"
+        || DECLARED_DATASET_CODES.contains(&code)
+}
 
 /// Words in an engine message that make its `suggestion` a replacement name.
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
@@ -191,6 +237,9 @@ pub struct Profiles {
     host: MemoryWorkspace,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
+    /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
+    /// the file is missing or is not TOML (the configuration check reports it).
+    pub graylog_tenants: Vec<ConfiguredTenant>,
 }
 
 impl Profiles {
@@ -227,9 +276,16 @@ impl Profiles {
             Ok(Some(text)) => vec![(ELASTIC_CONFIGURATION.to_owned(), text)],
             _ => Vec::new(),
         };
+        let graylog_tenants = match read(GRAYLOG_CONFIGURATION) {
+            Ok(Some(text)) => opentide_schema::configuration::toml::parse(&text)
+                .map(|config| graylog::tenants_of(Some(&config)))
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
         Self {
             host: MemoryWorkspace { files },
             visibility_problem,
+            graylog_tenants,
         }
     }
 
@@ -238,7 +294,7 @@ impl Profiles {
     pub fn check_object(&self, text: &str) -> Vec<CheckedQuery> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
-        opentide_analysis::analyze_queries(&self.host, &text)
+        let mut checked: Vec<CheckedQuery> = opentide_analysis::analyze_queries(&self.host, &text)
             .into_iter()
             .map(|report| {
                 let (line, column, _, _) = lines.convert(&text, report.range);
@@ -256,7 +312,44 @@ impl Profiles {
                         .collect(),
                 }
             })
-            .collect()
+            .collect();
+        self.allow_leading_wildcards(&text, &mut checked);
+        one_secops_rule(checked)
+    }
+
+    /// The Graylog queries of `text` without `graylog_leading_wildcard` when
+    /// every tenant the rule's Graylog block reaches sets
+    /// `allow_leading_wildcard = true` (`_graylog_findings`): those servers take
+    /// a leading `*` or `?`. With no tenant the code stays an error.
+    fn allow_leading_wildcards(&self, text: &str, checked: &mut [CheckedQuery]) {
+        let wildcard = |finding: &Finding| finding.code == LEADING_WILDCARD;
+        if !checked
+            .iter()
+            .any(|query| query.platform == GRAYLOG && query.findings.iter().any(wildcard))
+        {
+            return;
+        }
+        let Ok(document) = opentide_schema::node::load(text) else {
+            return; // an unparsable file keeps every finding
+        };
+        let Some(block) = document
+            .root()
+            .and_then(|root| root.get("configurations"))
+            .and_then(|configurations| configurations.get("graylog"))
+        else {
+            return;
+        };
+        let tenants: Vec<_> = self
+            .graylog_tenants
+            .iter()
+            .map(ConfiguredTenant::view)
+            .collect();
+        if !graylog::leading_wildcard_allowed(block, &tenants) {
+            return;
+        }
+        for query in checked.iter_mut().filter(|query| query.platform == GRAYLOG) {
+            query.findings.retain(|finding| !wildcard(finding));
+        }
     }
 }
 
@@ -391,17 +484,16 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             .map(|(number, _)| number + 1)
             .collect();
         let mut out = Vec::new();
+        let harfanglab = HarfangLabAdvisories::of(&text);
         for item in self.profiles.check_file(file, &text) {
             if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
                 continue;
             }
-            let lint_owned = ENGINE_REFERENCES
-                .iter()
-                .any(|(prefix, _, _)| item.code.starts_with(prefix))
-                || ELASTIC_ADVISORIES.contains(&item.code.as_str())
-                || item.code == "sysdig_list_self_reference"
-                || DECLARED_DATASET_CODES.contains(&item.code.as_str());
-            if !lint_owned {
+            // One finding per code, form and rule: opentide's, placed by key.
+            if harfanglab.reports(&item) {
+                continue;
+            }
+            if !lint_owned(&item.code) {
                 continue;
             }
             let severity = if item.severity == EngineSeverity::Warning {
@@ -414,8 +506,218 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
                 relative, uuid, diagnostic,
             ));
         }
+        out.extend(block_advisories(
+            file,
+            relative,
+            uuid,
+            &text,
+            &self.profiles.graylog_tenants,
+        ));
+        out.extend(harfanglab.findings(file, relative, uuid));
         Ok(out)
     }
+}
+
+use opentide_schema::objects::platform::harfanglab::yara::{
+    ADVISORY_CODES as HARFANGLAB_ADVISORIES, CONTEXT_PATH, SIGNATURE_PATH,
+};
+
+/// The HarfangLab profile's advisories on a rule file (`_harfanglab_yara_findings`):
+/// `yara_meta_missing` and `harfanglab_yara_context` are warnings, which
+/// HarfangLab takes, but may not scan where the author meant. opentide's own,
+/// on a `yara.signature` or the decomposed form's `meta.context`, placed in
+/// the file; the engine's finding with the same key gives way to it.
+struct HarfangLabAdvisories {
+    /// `(code, message, 0-based line, field path, rule)`.
+    found: Vec<(&'static str, String, usize, &'static [&'static str], String)>,
+    /// The signature's rules, each with the 0-based file line of its header;
+    /// `None` in the decomposed form.
+    rules: Option<Vec<(String, usize)>>,
+}
+
+impl HarfangLabAdvisories {
+    fn of(text: &str) -> Self {
+        let none = Self {
+            found: Vec::new(),
+            rules: None,
+        };
+        if !text.contains("harfanglab") {
+            return none;
+        }
+        let Ok(document) = opentide_schema::node::load(text) else {
+            return none;
+        };
+        let Some(root) = document.root() else {
+            return none;
+        };
+        let yara = SIGNATURE_PATH[..3]
+            .iter()
+            .try_fold(root.as_ref(), |node, key| node.get(key).map(AsRef::as_ref));
+        let Some(yara) = yara else {
+            return none;
+        };
+        if let Some(signature) = yara.get("signature") {
+            let Some(value) = signature.value.as_str() else {
+                return none;
+            };
+            let line_of = signature_lines(text, signature, value);
+            let found = opentide_schema::objects::platform::harfanglab::yara::advisories(value)
+                .into_iter()
+                .map(|advisory| {
+                    (
+                        advisory.code,
+                        advisory.message,
+                        line_of(advisory.offset),
+                        &SIGNATURE_PATH[..],
+                        advisory.rule,
+                    )
+                })
+                .collect();
+            let rules = opentide_schema::objects::platform::harfanglab::yara::rule_headers(value)
+                .into_iter()
+                .map(|header| (header.name, line_of(header.start)))
+                .collect();
+            return Self {
+                found,
+                rules: Some(rules),
+            };
+        }
+        let Some(entry) = yara.get("meta").and_then(|meta| meta.entry("context")) else {
+            return none;
+        };
+        let os = yara
+            .get("meta")
+            .and_then(|meta| meta.get("os"))
+            .and_then(|os| os.value.as_str());
+        let found = opentide_schema::objects::platform::harfanglab::yara::decomposed_advisory(
+            &entry.value,
+            os,
+        )
+        .map(|(code, message)| {
+            (
+                code,
+                message,
+                entry.key.start.line.saturating_sub(1),
+                &CONTEXT_PATH[..],
+                String::new(),
+            )
+        })
+        .into_iter()
+        .collect();
+        Self { found, rules: None }
+    }
+
+    /// Whether opentide's own check reports the engine `item`'s advisory:
+    /// the same code, form (signature or decomposed) and YARA rule.
+    fn reports(&self, item: &Finding) -> bool {
+        if !HARFANGLAB_ADVISORIES.contains(&item.code.as_str()) {
+            return false;
+        }
+        // In the signature form the rule is the one whose header is the last
+        // at or before the finding's line; before every header, the first.
+        let rule = self.rules.as_ref().map_or_else(String::new, |rules| {
+            let line = item.line.saturating_sub(1);
+            let mut rule = String::new();
+            for (name, header) in rules {
+                if *header > line && !rule.is_empty() {
+                    break;
+                }
+                rule.clone_from(name);
+            }
+            rule
+        });
+        self.found
+            .iter()
+            .any(|(code, _, _, _, own)| *code == item.code && *own == rule)
+    }
+
+    fn findings(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+    ) -> Vec<opentide_workspace::lint::LintFinding> {
+        self.found
+            .iter()
+            .map(|(code, message, line, path, _)| {
+                let mut diagnostic = Diagnostic::new(*code, Severity::Warning, message.clone())
+                    .file(file)
+                    .at(path.iter().map(|key| (*key).to_owned()).collect::<Vec<_>>());
+                diagnostic.yaml_line = Some(*line);
+                diagnostic.path = Some(relative.to_owned());
+                diagnostic.line = Some(line + 1);
+                opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
+            })
+            .collect()
+    }
+}
+
+/// The 0-based file line of each byte offset into a signature's `value`
+/// (`SignatureSite.line_of`): a literal block maps the value's lines one to
+/// one onto the lines after its indicator; any other style places every
+/// offset on the scalar's first line.
+fn signature_lines<'v>(
+    text: &str,
+    node: &opentide_schema::node::Node,
+    value: &'v str,
+) -> impl Fn(usize) -> usize + 'v {
+    // A block scalar's node starts at its content; its indicator (`|`, `|-`,
+    // after any anchor or tag) ends the line before.
+    let before: String = text.chars().take(node.start.index).collect();
+    let header = before
+        .trim_end_matches([' ', '\t'])
+        .strip_suffix('\n')
+        .and_then(|head| head.rsplit('\n').next())
+        .unwrap_or_default();
+    let literal = header
+        .split('#')
+        .next()
+        .and_then(|head| head.split_whitespace().last())
+        .is_some_and(|token| token.starts_with('|'));
+    let first = node.start.line.saturating_sub(1);
+    move |offset: usize| {
+        if literal {
+            first + value[..offset.min(value.len())].matches('\n').count()
+        } else {
+            first
+        }
+    }
+}
+
+/// The platforms' block advisories of an object file
+/// (`_platform_advisory_findings`): each a `queries` warning at its field
+/// path. A file that does not load as YAML has none: the parse error is
+/// another check's finding.
+fn block_advisories(
+    file: &Path,
+    relative: &str,
+    uuid: Option<&str>,
+    text: &str,
+    graylog_tenants: &[ConfiguredTenant],
+) -> Vec<opentide_workspace::lint::LintFinding> {
+    let Ok(document) = opentide_schema::node::load(text) else {
+        return Vec::new();
+    };
+    let Some(root) = document.root() else {
+        return Vec::new();
+    };
+    let locator = document.locator();
+    let tenants: Vec<_> = graylog_tenants.iter().map(ConfiguredTenant::view).collect();
+    opentide_schema::objects::platform::block_advisories(root, &tenants)
+        .into_iter()
+        .map(|advisory| {
+            let mut diagnostic =
+                Diagnostic::new(advisory.code, Severity::Warning, advisory.message)
+                    .file(file)
+                    .at(advisory.field_path);
+            diagnostic.yaml_line = locator.yaml_line(&diagnostic.field_path);
+            diagnostic.path = Some(relative.to_owned());
+            diagnostic.line = diagnostic.yaml_line.map(|line| line + 1);
+            // One line, as `_finding` places a finding with a `yaml_line`.
+            diagnostic.end_line = diagnostic.line;
+            opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
+        })
+        .collect()
 }
 
 /// `bytes` as Python's `read_text(encoding="utf-8-sig")` reads them: without
@@ -561,6 +863,54 @@ fn number(value: usize) -> ContextValue {
     ContextValue::Number(serde_json::Number::from(value))
 }
 
+/// Whether `query` is a text section of a Google SecOps block
+/// (`configurations.google_secops.<section>`).
+fn is_secops_section(query: &CheckedQuery) -> bool {
+    matches!(
+        query.field_path.as_slice(),
+        [configurations, platform, _]
+            if configurations == "configurations" && platform == "google_secops"
+    )
+}
+
+/// `checked` with a Google SecOps block's sections as the one query they
+/// are, the rule deploy assembles (0.28.0: "checks a google_secops block's
+/// sections as the one rule deploy assembles"): at the block's field path,
+/// where its first section's text starts, with every section's findings in
+/// source order. Each finding keeps its own section's field path and place.
+fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
+    let mut out: Vec<CheckedQuery> = Vec::with_capacity(checked.len());
+    let mut rule: Option<usize> = None;
+    for query in checked {
+        if !is_secops_section(&query) {
+            out.push(query);
+            continue;
+        }
+        match rule {
+            Some(index) => {
+                let merged = &mut out[index];
+                if (query.line, query.column) < (merged.line, merged.column) {
+                    (merged.line, merged.column) = (query.line, query.column);
+                }
+                merged.placeholder &= query.placeholder;
+                merged.findings.extend(query.findings);
+            }
+            None => {
+                let mut query = query;
+                query.field_path.truncate(2);
+                rule = Some(out.len());
+                out.push(query);
+            }
+        }
+    }
+    if let Some(index) = rule {
+        out[index]
+            .findings
+            .sort_by_key(|finding| (finding.line, finding.column));
+    }
+    out
+}
+
 /// The queries check of `validate` on the query engines.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EngineQueries;
@@ -640,6 +990,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_google_secops_block_is_one_query_at_the_block() {
+        let text = "name: A\nconfigurations:\n  google_secops:\n    events: |\n      \
+                    $e.metadata.event_type = \"USER_LOGIN\"\n    outcome: |\n      \
+                    $risk_score = 10\n    condition: |\n      $e\n  sentinel:\n    query: |\n      \
+                    SecurityEvent\n";
+        let profiles = Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            visibility_problem: None,
+            graylog_tenants: Vec::new(),
+        };
+        let queries = profiles.check_object(text);
+        assert_eq!(queries.len(), 2, "{queries:?}");
+        let rule = &queries[0];
+        assert_eq!(rule.field_path, ["configurations", "google_secops"]);
+        assert_eq!(rule.language, "yaral");
+        // Where the first section's text starts, as 0.28.1 reports it.
+        assert_eq!((rule.line, rule.column), (5, 7));
+        // A finding keeps its own section's field path.
+        let broken = text.replace("$risk_score = 10", "$risk_score = $nowhere");
+        let queries = profiles.check_object(&broken);
+        let rule = &queries[0];
+        assert_eq!(rule.errors(), 1, "{:?}", rule.findings);
+        assert_eq!(
+            rule.findings[0].field_path,
+            ["configurations", "google_secops", "outcome"]
+        );
+        // A block with a section label in a text is not checked: no queries.
+        let header = text.replace("$risk_score = 10", "condition:");
+        let queries = profiles.check_object(&header);
+        assert!(
+            queries
+                .iter()
+                .all(|query| query.platform != "google_secops"),
+            "{queries:?}"
+        );
+    }
+
+    #[test]
     fn a_span_ending_after_a_newline_ends_on_its_own_line() {
         let text = "a\n| where (\nnext\n";
         // From line 2 column 9 to the start of line 3: the `(` and its newline.
@@ -652,6 +1040,28 @@ mod tests {
         // Past the text: one character, where the line is.
         assert_eq!(span_end(9, 2, 10, 1, text), (9, 3));
         assert_eq!(span_end(1, 1, 12, 1, text), (12, 1));
+    }
+
+    #[test]
+    fn lint_keeps_the_graylog_dialects_warnings() {
+        // 0.28.1 (#1015): lint dropped them for want of a reference.
+        for code in [
+            "graylog_analyzed_field",
+            "graylog_regex_operator",
+            "graylog_regex_quote",
+            "graylog_double_backslash",
+        ] {
+            assert!(lint_owned(code), "{code}");
+        }
+        assert!(lint_owned("sysdig_list_self_reference"));
+        assert!(!lint_owned("vocab_unknown"));
+        // A Graylog finding names Graylog's search syntax page.
+        assert!(
+            ENGINE_REFERENCES
+                .iter()
+                .any(|(prefix, language, _)| *prefix == "graylog_"
+                    && *language == "Graylog search query")
+        );
     }
 
     #[test]

@@ -1,0 +1,2 @@
+warning: Skill installed from package · slug: detection-engineering · source: opentidehq/skills · ref: main
+warning: Installed opentide's short packaged copy of .agents/skills/detection-engineering: the catalogue's could not be downloaded from opentidehq/skills@main. Run the command again for the full skill.

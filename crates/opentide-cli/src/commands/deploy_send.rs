@@ -1739,6 +1739,9 @@ impl Sender<'_, '_> {
         };
         let settings = match platform {
             "sysdig" => opentide_connectors::sysdig::http_defaults(),
+            "bitdefender" => opentide_connectors::bitdefender::http_defaults(),
+            "google_secops" => opentide_connectors::google_secops::http_defaults(),
+            "graylog" => opentide_connectors::graylog::http_defaults(),
             _ => http_settings(platform, Duration::from_secs(timeout)),
         };
         let tenant = Tenant::from_setup(
@@ -1790,6 +1793,10 @@ impl Sender<'_, '_> {
         match platform {
             "elastic" => self.elastic(&batches, log),
             "sysdig" => self.sysdig(&batches, log),
+            "bitdefender" => self.bitdefender(&batches, log),
+            "exabeam" => self.exabeam(&batches, log),
+            "google_secops" => self.google_secops(&batches, log),
+            "graylog" => self.graylog(&batches, log),
             "defender_for_endpoint" | "sentinel_one" | "crowdstrike" => {
                 self.with_state(platform, &batches, log)
             }
@@ -3073,6 +3080,814 @@ impl Sender<'_, '_> {
                         );
                         self.failed = true;
                         result.fail(&text);
+                        log.finished(result);
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Bitdefender GravityZone: each rule planned from deployment state,
+    /// compiled for the tenant (its targets resolved), then created (its id
+    /// recorded), updated or disabled with the whole payload, or deleted
+    /// (its id forgotten) (`BitdefenderDeploy.deploy_tenant`).
+    fn bitdefender(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        use opentide_compile::bitdefender::{GravityZoneRule, compile_rule};
+        use opentide_connectors::bitdefender::{
+            Action, Failure, RuleDeploy, StateChange, deploy_rule,
+        };
+        const PLATFORM: &str = "bitdefender";
+        let logger = "opentide.platforms.bitdefender.deployer";
+        for batch in batches {
+            let tenant = batch.tenant.name.clone();
+            let planned = self.screen(PLATFORM, batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect(PLATFORM, batch)?;
+            let automatic = opentide_compile::deploy::setup(&batch.table, "automatic_actions")
+                .is_none_or(CJson::truthy);
+            for (rule, action) in planned {
+                let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
+                let strategy = match self.strategy_of(rule, PLATFORM) {
+                    Ok(strategy) => strategy,
+                    Err(raised) => {
+                        self.close(log, result, Err(raised.clone()))?;
+                        continue;
+                    }
+                };
+                let compiled = match &action {
+                    // A delete sends the recorded id alone.
+                    Planned::Delete(_) => GravityZoneRule {
+                        uuid: rule.uuid.clone(),
+                        kind: opentide_schema::objects::platform::bitdefender::Kind::Detection,
+                        name: rule.name.clone(),
+                        description: String::new(),
+                        tags: Vec::new(),
+                        settings: opentide_compile::json::Object::new(),
+                        targets: None,
+                        company_id: None,
+                    },
+                    _ => match compile_rule(self.compile, rule, strategy, Some(&batch.table)) {
+                        Ok(compiled) => compiled,
+                        Err(error) => {
+                            let message = format!("{}: {}", error.code, error.reason);
+                            tracing::error!(
+                                code = error.code,
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                name = rule.name.as_str(),
+                                error = message.as_str(),
+                                logger,
+                                "{}",
+                                error.code
+                            );
+                            self.rule_error(&mut result, &message);
+                            log.finished(result);
+                            continue;
+                        }
+                    },
+                };
+                let actions_unsupported = !automatic
+                    && rule
+                        .block(PLATFORM)
+                        .and_then(|block| block.get("actions"))
+                        .is_some_and(|actions| !actions.is_null());
+                let root = self.workspace.root().to_path_buf();
+                let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
+                    Some(ignore) => Some(StateError {
+                        code: "deployment_state_ignored",
+                        message: deploy_state::ignored_message(&ignore),
+                    }),
+                    None => self.unpersisted(&rule.uuid, PLATFORM, &tenant),
+                };
+                let request = RuleDeploy {
+                    action: match &action {
+                        Planned::Create => Action::Create,
+                        Planned::Update(id) => Action::Update(id.clone()),
+                        Planned::Delete(id) => Action::Delete(id.clone()),
+                    },
+                    compiled,
+                    disable: strategy == StatusStrategy::Disablement,
+                    actions_unsupported,
+                    recreate_refusal: recreate_refusal
+                        .as_ref()
+                        .map(|refusal| refusal.message.clone()),
+                };
+                let context = self.context(&connection);
+                match self.block(deploy_rule(context, &request)) {
+                    Ok(outcome) => {
+                        for warning in &outcome.warnings {
+                            if warning.raised {
+                                self.warned = true;
+                            }
+                            tracing::warn!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                detail = warning.detail.as_str(),
+                                logger,
+                                "{}",
+                                warning.event
+                            );
+                        }
+                        match &outcome.state {
+                            StateChange::Record(id) => {
+                                tracing::info!(
+                                    uuid = rule.uuid.as_str(),
+                                    rule_id = id.as_str(),
+                                    logger,
+                                    "bitdefender_rule_created"
+                                );
+                                let external = ExternalId::Text(id.clone());
+                                self.record_created(&mut result, PLATFORM, &tenant, &external);
+                            }
+                            StateChange::Forget => {
+                                tracing::info!(
+                                    uuid = rule.uuid.as_str(),
+                                    logger,
+                                    "bitdefender_rule_deleted"
+                                );
+                                self.record_deleted(&mut result, PLATFORM, &tenant);
+                            }
+                            StateChange::Keep => {}
+                        }
+                        match &outcome.failure {
+                            Some(Failure::Refused(message)) => {
+                                if let Some(refusal) = recreate_refusal
+                                    .as_ref()
+                                    .filter(|refusal| refusal.message == *message)
+                                {
+                                    self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
+                                }
+                                self.failed = true;
+                                result.fail(message);
+                            }
+                            Some(Failure::Request {
+                                code,
+                                error,
+                                detail,
+                            }) => {
+                                tracing::error!(
+                                    code = *code,
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    error = error.as_str(),
+                                    detail = detail.as_deref().unwrap_or_default(),
+                                    logger,
+                                    "{}",
+                                    code
+                                );
+                                self.rule_error(&mut result, &format!("{code}: {error}"));
+                            }
+                            None => {}
+                        }
+                        log.finished(result);
+                    }
+                    Err(error) => {
+                        let text = error.text();
+                        tracing::error!(
+                            tenant = tenant.as_str(),
+                            error = text.as_str(),
+                            critical = true,
+                            logger,
+                            "bitdefender_tenant_deployment_failed"
+                        );
+                        self.failed = true;
+                        result.fail(&text);
+                        log.finished(result);
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Google Security Operations: each rule verified, created, updated,
+    /// disabled, archived or deleted by the id deployment state records
+    /// (`GoogleSecopsDeploy`). Credentials that cannot be loaded, refused
+    /// credentials or an instance that cannot be reached stop the tenant.
+    fn google_secops(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        use opentide_connectors::google_secops::deploy::{
+            Action, RuleDeploy, StateChange, deploy_rule,
+        };
+        use opentide_connectors::google_secops::{GoogleSecops, Instance};
+        let platform = "google_secops";
+        let logger = "opentide.platforms.google_secops.deployer";
+        let connector = GoogleSecops::new(self.environment.clone());
+        for batch in batches {
+            let tenant = batch.tenant.name.clone();
+            let planned = self.screen(platform, batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect(platform, batch)?;
+            let ready = Instance::of(&connection.tenant).and_then(|instance| {
+                connector
+                    .authorizer(&connection.tenant)
+                    .map(|authorizer| (instance, authorizer))
+            });
+            let (instance, authorizer) = match ready {
+                Ok(ready) => ready,
+                Err(error) => {
+                    // Unset or unreadable credentials: no rule on the tenant can deploy.
+                    self.google_secops_tenant_failed(&tenant, &error.text(), logger);
+                    continue;
+                }
+            };
+            let scope = instance.scope(&connection.tenant);
+            let delete = opentide_compile::deploy::setup_text(&batch.table, "deletion") == "delete";
+            for (rule, action) in planned {
+                let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
+                let strategy = match self.strategy_of(rule, platform) {
+                    Ok(strategy) => strategy,
+                    Err(raised) => {
+                        self.close(log, result, Err(raised))?;
+                        continue;
+                    }
+                };
+                let assembled = match opentide_compile::google_secops::assemble(self.compile, rule)
+                {
+                    Ok(assembled) => assembled,
+                    Err(error) => {
+                        tracing::error!(
+                            uuid = rule.uuid.as_str(),
+                            tenant = tenant.as_str(),
+                            name = rule.name.as_str(),
+                            error = error.reason.as_str(),
+                            logger,
+                            "compile_failed"
+                        );
+                        self.rule_error(&mut result, &format!("compile_failed: {}", error.reason));
+                        log.finished(result);
+                        continue;
+                    }
+                };
+                let block = rule.block(platform).cloned().unwrap_or(CJson::Null);
+                let root = self.workspace.root().to_path_buf();
+                let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
+                    Some(ignore) => Some(StateError {
+                        code: "deployment_state_ignored",
+                        message: deploy_state::ignored_message(&ignore),
+                    }),
+                    None => self.unpersisted(&rule.uuid, platform, &tenant),
+                };
+                let request = RuleDeploy {
+                    action: match &action {
+                        Planned::Create => Action::Create,
+                        Planned::Update(id) => Action::Update(id.clone()),
+                        Planned::Delete(id) => Action::Delete(id.clone()),
+                    },
+                    assembled,
+                    run_state: opentide_compile::google_secops::run_state(&block, strategy),
+                    run_frequency: block
+                        .get("run_frequency")
+                        .and_then(CJson::as_str)
+                        .map(str::to_owned),
+                    disabling: strategy == StatusStrategy::Disablement,
+                    retiring: matches!(
+                        strategy,
+                        StatusStrategy::Disablement | StatusStrategy::Deletion
+                    ),
+                    scope: scope.clone(),
+                    delete,
+                    recreate_refusal: recreate_refusal
+                        .as_ref()
+                        .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
+                };
+                let context = self.context(&connection);
+                let outcome = self.block(deploy_rule(
+                    context,
+                    &authorizer,
+                    &instance.endpoint,
+                    &instance.resource,
+                    &request,
+                ));
+                match outcome {
+                    Ok(outcome) => {
+                        for warning in &outcome.warnings {
+                            self.warned = true;
+                            tracing::warn!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                code = warning.code,
+                                detail = warning.detail.as_str(),
+                                logger,
+                                "{}",
+                                warning.code
+                            );
+                        }
+                        match &outcome.state {
+                            StateChange::Record(id) => {
+                                tracing::info!(
+                                    uuid = rule.uuid.as_str(),
+                                    rule_id = id.as_str(),
+                                    logger,
+                                    "google_secops_rule_created"
+                                );
+                                let external = ExternalId::Text(id.clone());
+                                self.record_created(&mut result, platform, &tenant, &external);
+                            }
+                            StateChange::Forget => {
+                                self.record_deleted(&mut result, platform, &tenant);
+                            }
+                            StateChange::Keep => {}
+                        }
+                        for failure in &outcome.failures {
+                            match recreate_refusal
+                                .as_ref()
+                                .filter(|refusal| refusal.code == failure.code)
+                            {
+                                Some(refusal) => {
+                                    self.report_failure(refusal, &rule.uuid, platform, &tenant);
+                                    result.fail(&refusal.message);
+                                }
+                                None => {
+                                    tracing::error!(
+                                        uuid = rule.uuid.as_str(),
+                                        tenant = tenant.as_str(),
+                                        name = rule.name.as_str(),
+                                        code = failure.code.as_str(),
+                                        error = failure.message.as_str(),
+                                        logger,
+                                        "{}",
+                                        failure.code
+                                    );
+                                    self.rule_error(
+                                        &mut result,
+                                        &format!("{}: {}", failure.code, failure.message),
+                                    );
+                                }
+                            }
+                        }
+                        log.finished(result);
+                    }
+                    Err(error) => {
+                        // Refused credentials or an unreachable instance fail every rule on it.
+                        let text = error.text();
+                        self.google_secops_tenant_failed(&tenant, &text, logger);
+                        result.fail(&text);
+                        log.finished(result);
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// A Google SecOps tenant no rule can deploy to (`_tenant_failed`): its
+    /// code (`google_secops_credentials_missing`,
+    /// `google_secops_tenant_unauthorized`) when the error names one, else
+    /// `google_secops_tenant_unreachable`.
+    fn google_secops_tenant_failed(&mut self, tenant: &str, text: &str, logger: &str) {
+        let code = text
+            .split_once(": ")
+            .map(|(code, _)| code)
+            .filter(|code| code.starts_with("google_secops_") && !code.contains(' '))
+            .unwrap_or("google_secops_tenant_unreachable");
+        tracing::error!(
+            code,
+            tenant,
+            error = text,
+            critical = true,
+            logger,
+            "google_secops_tenant_deployment_failed"
+        );
+        self.failed = true;
+    }
+
+    /// Graylog: the version is read once per tenant (a vulnerable one warned
+    /// about), then each rule's event definition is created, updated,
+    /// unscheduled or deleted (`GraylogDeploy`).
+    fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        use opentide_connectors::graylog::{Action, Client, RuleDeploy, StateChange, deploy_rule};
+        let logger = "opentide.platforms.graylog.deployer";
+        for batch in batches {
+            let tenant = batch.tenant.name.clone();
+            let planned = self.screen("graylog", batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect("graylog", batch)?;
+            // The version is read once, before any write. A refused token, an
+            // unsupported version or an unreachable tenant stops the tenant.
+            let version = match self.block(Client::new(self.context(&connection)).version()) {
+                Ok(Ok(version)) => version,
+                Ok(Err(error)) => {
+                    let code = if error.forbidden() {
+                        "graylog_forbidden"
+                    } else {
+                        "graylog_request_failed"
+                    };
+                    self.failed = true;
+                    tracing::error!(
+                        tenant = tenant.as_str(),
+                        code,
+                        error = error.reason().as_str(),
+                        critical = true,
+                        logger,
+                        "graylog_tenant_deployment_failed"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    let code = match &error {
+                        ConnectorError::Refused { .. } => "graylog_version_unsupported",
+                        ConnectorError::Authentication { .. } => "graylog_tenant_unauthenticated",
+                        _ => "graylog_tenant_unreachable",
+                    };
+                    self.failed = true;
+                    tracing::error!(
+                        tenant = tenant.as_str(),
+                        code,
+                        error = error.text().as_str(),
+                        critical = true,
+                        logger,
+                        "graylog_tenant_deployment_failed"
+                    );
+                    continue;
+                }
+            };
+            if opentide_compile::graylog::is_vulnerable(version) {
+                self.warned = true;
+                tracing::warn!(
+                    tenant = tenant.as_str(),
+                    detail = format!(
+                        "Graylog {version} does not revoke access tokens reliably ({}); upgrade \
+                         to 6.3.12, 7.0.16, 7.1.12 or later",
+                        opentide_compile::graylog::ADVISORY
+                    ),
+                    logger,
+                    "graylog_version_vulnerable"
+                );
+            }
+            let setup = opentide_compile::deploy::setup(&batch.table, "setup");
+            let root = self.workspace.root().to_path_buf();
+            for (rule, action) in planned {
+                let mut result = RuleResult::new("graylog", Some(&tenant), &rule.uuid, &rule.name);
+                let compiled = match &action {
+                    // A delete reads the definition back from the stored id
+                    // alone, so no rule compile is needed.
+                    Planned::Delete(_) => None,
+                    Planned::Create | Planned::Update(_) => {
+                        match opentide_compile::graylog::compile_definition(
+                            self.compile,
+                            rule,
+                            version,
+                            setup,
+                            Some(&tenant),
+                        ) {
+                            Ok(compiled) => {
+                                // The version's own warnings (a field it cannot
+                                // take, a priority it collapses).
+                                for (code, message) in &compiled.warnings {
+                                    self.warned = true;
+                                    tracing::warn!(
+                                        uuid = rule.uuid.as_str(),
+                                        tenant = tenant.as_str(),
+                                        detail = message.as_str(),
+                                        logger,
+                                        "{code}"
+                                    );
+                                }
+                                Some(compiled)
+                            }
+                            Err(error) => {
+                                // An alias the tenant does not define (or any
+                                // other compile failure) fails the rule with
+                                // its own code (`_deployment_error(exc.code)`).
+                                tracing::error!(
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    name = rule.name.as_str(),
+                                    code = error.code,
+                                    error = error.reason.as_str(),
+                                    logger,
+                                    "{}",
+                                    error.code
+                                );
+                                self.rule_error(&mut result, &error.reason);
+                                log.finished(result);
+                                continue;
+                            }
+                        }
+                    }
+                };
+                let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
+                    Some(ignore) => Some(deploy_state::ignored_message(&ignore)),
+                    None => self
+                        .unpersisted(&rule.uuid, "graylog", &tenant)
+                        .map(|refusal| refusal.message),
+                };
+                let request = RuleDeploy {
+                    action: match &action {
+                        Planned::Create => Action::Create,
+                        Planned::Update(id) => Action::Update(id.clone()),
+                        Planned::Delete(id) => Action::Delete(id.clone()),
+                    },
+                    compiled: compiled.unwrap_or_else(|| {
+                        // A delete carries the title only for the unconfirmed
+                        // message, which a delete never raises.
+                        opentide_compile::graylog::CompiledDefinition {
+                            uuid: rule.uuid.clone(),
+                            title: rule.name.clone(),
+                            version,
+                            definition: opentide_compile::json::Object::new(),
+                            warnings: Vec::new(),
+                            unresolved: Vec::new(),
+                        }
+                    }),
+                    disable: self.strategy_of(rule, "graylog")? == StatusStrategy::Disablement,
+                    recreate_refusal,
+                };
+                let context = self.context(&connection);
+                match self.block(deploy_rule(context, &request)) {
+                    Ok(outcome) => {
+                        for warning in &outcome.warnings {
+                            self.warned = true;
+                            tracing::warn!(
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                detail = warning.detail.as_str(),
+                                logger,
+                                "{}",
+                                warning.event
+                            );
+                        }
+                        if let Some((event, definition_id)) = &outcome.event {
+                            tracing::info!(
+                                uuid = rule.uuid.as_str(),
+                                definition_id = definition_id.as_str(),
+                                logger,
+                                "{event}"
+                            );
+                        }
+                        match &outcome.state {
+                            StateChange::Record(id) => {
+                                self.record_created(
+                                    &mut result,
+                                    "graylog",
+                                    &tenant,
+                                    &ExternalId::Text(id.clone()),
+                                );
+                            }
+                            StateChange::Forget => {
+                                self.record_deleted(&mut result, "graylog", &tenant);
+                            }
+                            StateChange::Keep => {}
+                        }
+                        if let Some(failure) = &outcome.failure {
+                            match failure.status {
+                                Some(status) => tracing::error!(
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    status_code = status,
+                                    code = failure.code,
+                                    error = failure.reason.as_str(),
+                                    logger,
+                                    "{}",
+                                    failure.code
+                                ),
+                                None => tracing::error!(
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    code = failure.code,
+                                    error = failure.reason.as_str(),
+                                    detail = failure.detail.as_deref().unwrap_or_default(),
+                                    logger,
+                                    "{}",
+                                    failure.code
+                                ),
+                            }
+                            self.rule_error(&mut result, &failure.reason);
+                        }
+                        log.finished(result);
+                    }
+                    Err(error) => {
+                        let text = error.text();
+                        let code = match &error {
+                            ConnectorError::Authentication { .. } => {
+                                "graylog_tenant_unauthenticated"
+                            }
+                            _ => "graylog_tenant_unreachable",
+                        };
+                        self.failed = true;
+                        tracing::error!(
+                            tenant = tenant.as_str(),
+                            code,
+                            error = text.as_str(),
+                            critical = true,
+                            logger,
+                            "graylog_tenant_deployment_failed"
+                        );
+                        result.fail(&text);
+                        log.finished(result);
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Sender<'_, '_> {
+    /// Exabeam New-Scale SIEM (`ExabeamDeploy`): each rule planned from
+    /// deployment state, then created after a name check, updated (or
+    /// disabled) by the recorded id, or deleted. A refused key, a tenant
+    /// without the licence or with no answer stops its batch.
+    fn exabeam(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
+        use opentide_connectors::exabeam::{Action, Exabeam, RuleDeploy, StateChange, deploy_rule};
+        let logger = "opentide.platforms.exabeam.deployer";
+        let platform = opentide_compile::exabeam::PLATFORM;
+        let exabeam = Exabeam::new();
+        for batch in batches {
+            let tenant = batch.tenant.name.clone();
+            let planned = self.screen(platform, batch, log);
+            if planned.is_empty() {
+                continue;
+            }
+            let connection = self.connect(platform, batch)?;
+            let cancel = self.cancel.clone();
+            let context = TenantContext {
+                tenant: &connection.tenant,
+                http: &connection.http,
+                cancel: &cancel,
+            };
+            let session = match exabeam.session(context) {
+                Ok(session) => session,
+                Err(error) => {
+                    // An unset credential variable: no rule on the tenant can deploy.
+                    let text = error.text();
+                    tracing::error!(
+                        tenant = tenant.as_str(),
+                        error = text.as_str(),
+                        critical = true,
+                        logger,
+                        "exabeam_tenant_deployment_failed"
+                    );
+                    self.failed = true;
+                    continue;
+                }
+            };
+            for (rule, action) in planned {
+                let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
+                let strategy = match self.strategy_of(rule, platform) {
+                    Ok(strategy) => strategy,
+                    Err(raised) => {
+                        self.close(log, result, Err(raised))?;
+                        continue;
+                    }
+                };
+                let compiled = if matches!(action, Planned::Delete(_)) {
+                    // A delete sends no body.
+                    Ok(None)
+                } else {
+                    opentide_compile::exabeam::compile_rule(
+                        self.compile,
+                        rule,
+                        strategy,
+                        Some(&batch.table),
+                    )
+                    .map(Some)
+                    .map_err(|error| {
+                        Raised::new(
+                            "TideRuleDataModelErrors",
+                            format!("Rule {} ({}): {error}", rule.uuid, rule.name),
+                        )
+                    })
+                };
+                let compiled = match compiled {
+                    Ok(compiled) => compiled,
+                    Err(raised) => {
+                        self.close(log, result, Err(raised))?;
+                        continue;
+                    }
+                };
+                let root = self.workspace.root().to_path_buf();
+                let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
+                    Some(ignore) => Some(StateError {
+                        code: "deployment_state_ignored",
+                        message: deploy_state::ignored_message(&ignore),
+                    }),
+                    None => self.unpersisted(&rule.uuid, platform, &tenant),
+                };
+                let (name, body) = compiled.map_or_else(
+                    || (String::new(), CJson::Null),
+                    |compiled| (compiled.name, compiled.body),
+                );
+                let request = RuleDeploy {
+                    action: match &action {
+                        Planned::Create => Action::Create,
+                        Planned::Update(id) => Action::Update(id.clone()),
+                        Planned::Delete(id) => Action::Delete(id.clone()),
+                    },
+                    body,
+                    name,
+                    disable: strategy == StatusStrategy::Disablement,
+                    recreate_refusal: recreate_refusal
+                        .as_ref()
+                        .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
+                };
+                // The update path's lines name the object; the create path's
+                // name the Exabeam rule (the event carries it); a delete's none.
+                let object_name =
+                    (!matches!(action, Planned::Delete(_))).then_some(rule.name.as_str());
+                match self
+                    .block(async { Ok(deploy_rule(&session, &request).await) })
+                    .map_err(|error| raised(&error, "ConnectionError"))?
+                {
+                    Ok(outcome) => {
+                        for warning in &outcome.warnings {
+                            self.warned = true;
+                            let named = matches!(
+                                warning.code.as_str(),
+                                "exabeam_schedule_retained" | "exabeam_rule_auto_disabled"
+                            );
+                            tracing::warn!(
+                                code = warning.code.as_str(),
+                                uuid = rule.uuid.as_str(),
+                                tenant = tenant.as_str(),
+                                name = named.then_some(rule.name.as_str()),
+                                detail = warning.message.as_str(),
+                                logger,
+                                "{}",
+                                warning.code
+                            );
+                        }
+                        if let Some((event, rule_id)) = &outcome.done {
+                            tracing::info!(
+                                uuid = rule.uuid.as_str(),
+                                rule_id = rule_id.as_str(),
+                                logger,
+                                "{}",
+                                event
+                            );
+                        }
+                        match &outcome.state {
+                            StateChange::Record(id) => self.record_created(
+                                &mut result,
+                                platform,
+                                &tenant,
+                                &ExternalId::Text(id.clone()),
+                            ),
+                            StateChange::Forget => {
+                                self.record_deleted(&mut result, platform, &tenant);
+                            }
+                            StateChange::Keep => {}
+                        }
+                        if let Some(failure) = &outcome.failure {
+                            match recreate_refusal.as_ref().filter(|refusal| {
+                                refusal.code == failure.code && refusal.message == failure.message
+                            }) {
+                                Some(refusal) => {
+                                    self.report_failure(refusal, &rule.uuid, platform, &tenant);
+                                    result.fail(&refusal.message);
+                                }
+                                None => {
+                                    let field = |key: &str| {
+                                        failure
+                                            .fields
+                                            .iter()
+                                            .find(|(name, _)| *name == key)
+                                            .map(|(_, value)| value.as_str())
+                                    };
+                                    tracing::error!(
+                                        code = failure.code.as_str(),
+                                        error = failure.message.as_str(),
+                                        detail = field("detail"),
+                                        existing_id = field("existing_id"),
+                                        errors = field("errors"),
+                                        trace_id = field("trace_id"),
+                                        uuid = rule.uuid.as_str(),
+                                        tenant = tenant.as_str(),
+                                        name = field("name").or(object_name),
+                                        logger,
+                                        "{}",
+                                        failure.code
+                                    );
+                                    self.rule_error(
+                                        &mut result,
+                                        &format!("{}: {}", failure.code, failure.message),
+                                    );
+                                }
+                            }
+                        }
+                        log.finished(result);
+                    }
+                    Err(failure) => {
+                        tracing::error!(
+                            code = failure.code,
+                            tenant = tenant.as_str(),
+                            error = failure.message.as_str(),
+                            critical = true,
+                            logger,
+                            "exabeam_tenant_deployment_failed"
+                        );
+                        self.failed = true;
+                        result.fail(&failure.message);
                         log.finished(result);
                         break;
                     }

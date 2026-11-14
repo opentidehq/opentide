@@ -11,8 +11,10 @@
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
 
+mod bitdefender;
 mod elastic;
 mod falco;
+mod google_secops;
 mod injection;
 mod intel;
 mod outline;
@@ -23,6 +25,7 @@ mod vocabs;
 mod yaml;
 mod yaml_path;
 mod yaml_scalar;
+mod yara;
 
 use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, span_to_range};
@@ -78,9 +81,32 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
         ["configurations", "defender_for_endpoint", "query"] => Some(LanguageId::Kql),
         ["configurations", "splunk", "query" | "search"] => Some(LanguageId::Spl),
-        ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
+        // Lucene in each platform's dialect: the injection's platform
+        // selects it (graylog-1.0, "Query dialect").
+        ["configurations", "carbon_black_cloud" | "graylog", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
+        // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
+        // one rule assembled from several fields ([`yara`]).
+        [
+            "configurations",
+            "harfanglab" | "bitdefender",
+            "yara",
+            "signature",
+        ] => Some(LanguageId::Yara),
+        // A Google SecOps block's text sections: one rule, which
+        // `analyze_injections` checks assembled.
+        [
+            "configurations",
+            "google_secops",
+            "setup" | "events" | "outcome" | "condition" | "export",
+        ] => Some(LanguageId::Yaral),
+        // An Exabeam correlation rule's sequence filters (exabeam-1.0).
+        ["configurations", "exabeam", "sequences", item, "query"]
+            if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            Some(LanguageId::Exabeam)
+        }
         _ => None,
     }
 }
@@ -123,6 +149,54 @@ pub struct InjectedQuery {
     /// Maps inner byte offset → host byte offset.
     pub host_map: Vec<usize>,
     pub host_span: ByteSpan,
+    /// For text assembled from several fields (HarfangLab's decomposed YARA
+    /// rule): which field each region of `inner` comes from, and which
+    /// regions deploy generates. Empty for a query read from one scalar.
+    pub parts: Vec<InjectionPart>,
+}
+
+/// A region of an assembled [`InjectedQuery`]'s text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InjectionPart {
+    /// Byte range in `inner`.
+    pub start: usize,
+    pub end: usize,
+    /// The YAML field the region comes from.
+    pub field_path: Vec<String>,
+    /// Text deploy writes (headers, generated meta): no field holds it, so
+    /// it gets no token, no cursor, and no finding of its own.
+    pub synthetic: bool,
+}
+
+impl InjectedQuery {
+    /// The part holding inner byte `offset`, if the injection has parts.
+    #[must_use]
+    pub fn part_at(&self, offset: usize) -> Option<&InjectionPart> {
+        self.parts
+            .iter()
+            .find(|p| offset >= p.start && offset < p.end)
+            .or_else(|| self.parts.iter().rfind(|p| p.end == offset && !p.synthetic))
+    }
+
+    /// Whether inner byte `offset` is text deploy generates.
+    #[must_use]
+    pub fn is_synthetic(&self, offset: usize) -> bool {
+        self.part_at(offset).is_some_and(|p| p.synthetic)
+    }
+
+    /// The source spans the injection's own text covers: its parts that come
+    /// from the document, or its whole span.
+    #[must_use]
+    pub fn host_spans(&self) -> Vec<ByteSpan> {
+        if self.parts.is_empty() {
+            return vec![self.host_span];
+        }
+        self.parts
+            .iter()
+            .filter(|p| !p.synthetic && p.end > p.start)
+            .map(|p| ByteSpan::new(self.host_map[p.start], self.host_map[p.end - 1] + 1))
+            .collect()
+    }
 }
 
 /// Locate the injected query (if any) covering a host byte offset.
@@ -132,8 +206,17 @@ pub struct InjectedQuery {
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
     let (source, offset) = opentide_core::strip_bom_at(source, offset);
     for inj in extract_injections(source) {
-        if let Some(inner) = inj.host_map.iter().position(|&h| h == offset) {
+        if let Some(inner) = inj
+            .host_map
+            .iter()
+            .enumerate()
+            .position(|(i, &h)| h == offset && !inj.is_synthetic(i))
+        {
             return Some((inj, inner));
+        }
+        // An assembled injection covers only its parts' text.
+        if !inj.parts.is_empty() {
+            continue;
         }
         // Right after the query's last character: where the cursor is while
         // the query is typed. It belongs to the query, at its end.
@@ -435,7 +518,10 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     // Injected query analysis
     let injections = extract_injections(input.source);
-    let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
+    let skip: Vec<ByteSpan> = injections
+        .iter()
+        .flat_map(InjectedQuery::host_spans)
+        .collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
     let mut queries = analyze_injections(
         input.source,
@@ -460,7 +546,9 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
 /// What a rule's platform blocks say that no query of theirs carries: the
 /// Elastic block's advisories, the Sysdig block's tuning and list
-/// advisories, and, when the block has no query to carry them (none, or a
+/// advisories, the Graylog filter whose runs overlap
+/// (`graylog_overlapping_window`, as the engine words it), and, when the
+/// block has no query to carry them (none, or a
 /// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
@@ -499,6 +587,22 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
         if !carried {
             out.extend(falco::exception_diagnostics(source, block));
         }
+    }
+    if let Some(block) = configurations.and_then(|c| c.get("graylog"))
+        && let Some((window, every)) =
+            opentide_schema::objects::platform::graylog::overlapping_runs(block)
+    {
+        let path = ["configurations", "graylog", "schedule"];
+        out.push(
+            Diagnostic::warning(
+                opentide_core::codes::GRAYLOG_OVERLAPPING_WINDOW,
+                format!(
+                    "this filter searches {window}s every {every}s, so runs overlap and each message alerts once per run that sees it; set `window` to `every`, or aggregate"
+                ),
+                elastic::path_range(source, &path),
+            )
+            .with_field_path(path.iter().map(ToString::to_string).collect()),
+        );
     }
     out
 }
@@ -610,9 +714,14 @@ fn analyze_injections(
     injections: Vec<InjectedQuery>,
 ) -> Vec<QueryAnalysis> {
     let mut out = Vec::with_capacity(injections.len());
-    // Every token and finding of every query is placed in the file: one
-    // index of its lines, not a scan from the start for each (#817).
-    let lines = opentide_core::LineIndex::new(source);
+    // A Google SecOps block's sections are checked once, as the rule deploy
+    // assembles; its findings on the block's YAML go with its first section.
+    let secops = injections
+        .iter()
+        .any(is_secops_section)
+        .then(|| google_secops::assembled(source, configurations))
+        .flatten();
+    let mut secops_block = secops.as_ref().map(|found| found.block().to_vec());
     for inj in injections {
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
@@ -667,11 +776,9 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Lucene => {
-                let dialect = if inj.platform == "carbon_black_cloud" {
-                    opentide_lucene::Dialect::CarbonBlack
-                } else {
-                    opentide_lucene::Dialect::Elastic
-                };
+                // Carbon Black's and Graylog's dialects by their block or
+                // hunt `system`; Elastic's otherwise.
+                let dialect = opentide_lucene::Dialect::for_platform(&inj.platform);
                 let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
                 let indices = (dialect == opentide_lucene::Dialect::Elastic)
                     .then(|| elastic::ecs_indices(configurations, &inj.field_path))
@@ -709,22 +816,57 @@ fn analyze_injections(
                 let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
-            // No Tide field injects YARA, the Exabeam Query Language or
-            // YARA-L yet: the HarfangLab, Bitdefender, Exabeam and Google
-            // SecOps block ports bring their injection and its analysis.
-            LanguageId::Yara | LanguageId::Exabeam | LanguageId::Yaral => (Vec::new(), Vec::new()),
+            LanguageId::Yara => {
+                let ctx = opentide_yara::Profile::for_platform(&inj.platform)
+                    .map(opentide_yara::Context::for_profile)
+                    .unwrap_or_default();
+                let r = opentide_yara::analyze_with(&inj.inner, &ctx);
+                let inner_lines = opentide_core::LineIndex::new(&inj.inner);
+                let diagnostics = r
+                    .diagnostics
+                    .into_iter()
+                    .filter_map(|d| yara::on_assembled(&inj, &inner_lines, d))
+                    .collect();
+                (diagnostics, r.tokens)
+            }
+            LanguageId::Yaral if is_secops_section(&inj) => {
+                let key = inj.field_path.last().map_or("", String::as_str);
+                let found = secops
+                    .as_ref()
+                    .map(|found| found.section(key))
+                    .unwrap_or_default();
+                extra.extend(secops_block.take().unwrap_or_default());
+                (found, opentide_yaral::highlight(&inj.inner))
+            }
+            // A hunt with `system: google_secops`: a search.
+            LanguageId::Yaral => {
+                let r = opentide_yaral::analyze_with(&inj.inner, &opentide_yaral::Context::SEARCH);
+                (r.diagnostics, r.tokens)
+            }
+            // A sequence filter of the Exabeam block is a correlation-rule
+            // query (profile `rule`); a hunt with `system: exabeam` is a
+            // search (profile `search`), as a `.exabeam` file is.
+            LanguageId::Exabeam => {
+                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    opentide_exabeam::Context::RULE
+                } else {
+                    opentide_exabeam::Context::SEARCH
+                };
+                let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
+                (r.diagnostics, r.tokens)
+            }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
         if !placeholder::is_placeholder_query(source, &inj) {
-            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(&lines, &inj, d)));
+            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(source, &inj, d)));
             diagnostics.extend(extra);
         }
         let tokens = query_tokens
             .iter()
-            .filter_map(|t| remap_token(&lines, &inj, t))
+            .filter_map(|t| remap_token(source, &inj, t))
             .collect();
         out.push(QueryAnalysis {
             query: inj,
@@ -735,15 +877,26 @@ fn analyze_injections(
     out
 }
 
-fn remap_diagnostic(
-    lines: &opentide_core::LineIndex<'_>,
-    inj: &InjectedQuery,
-    mut d: Diagnostic,
-) -> Diagnostic {
+/// Whether `inj` is a text section of the Google SecOps block.
+fn is_secops_section(inj: &InjectedQuery) -> bool {
+    matches!(
+        inj.field_path.iter().map(String::as_str).collect::<Vec<_>>().as_slice(),
+        ["configurations", google_secops::PLATFORM, key] if google_secops::TEXT_SECTIONS.contains(key)
+    )
+}
+
+fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
     let start = inner_offset(&inj.inner, d.range.start);
-    let end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+    let mut end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+    // A finding stays inside the part it starts in.
+    if let Some(part) = inj.part_at(start) {
+        end = end.min(part.end).max(start + 1);
+        if d.field_path.is_none() {
+            d.field_path = Some(part.field_path.clone());
+        }
+    }
     let span = remap_span(inj, ByteSpan::new(start, end));
-    d.range = lines.range(span);
+    d.range = span_to_range(source, span);
     if d.field_path.is_none() {
         d.field_path = Some(inj.field_path.clone());
     }
@@ -776,14 +929,17 @@ fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
 }
 
 fn remap_token(
-    lines: &opentide_core::LineIndex<'_>,
+    source: &str,
     inj: &InjectedQuery,
     token: &HighlightToken,
 ) -> Option<HighlightToken> {
+    if inj.is_synthetic(token.span.start) {
+        return None;
+    }
     let mapped = remap_span(inj, token.span);
     Some(HighlightToken {
         span: mapped,
-        range: lines.range(mapped),
+        range: span_to_range(source, mapped),
         capture: token.capture.clone(),
         token_type: token.token_type,
     })
@@ -842,31 +998,10 @@ fn join_field_path(parent: &str, key: &str) -> String {
     }
 }
 
-/// The patterns [`highlight_scalar`] tells a scalar's kind by, compiled once:
-/// it runs on every scalar of every file, and compiling them each time was
-/// most of `opentide lint`'s time (#806).
-struct ScalarPatterns {
-    uuid: Regex,
-    schema: Regex,
-    technique: Regex,
-    number: Regex,
-}
-
 #[expect(
     clippy::unwrap_used,
-    reason = "regex literals: an invalid pattern fails every test that reaches it"
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
 )]
-fn scalar_patterns() -> &'static ScalarPatterns {
-    static PATTERNS: std::sync::OnceLock<ScalarPatterns> = std::sync::OnceLock::new();
-    PATTERNS.get_or_init(|| ScalarPatterns {
-        uuid: Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .unwrap(),
-        schema: Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$").unwrap(),
-        technique: Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$").unwrap(),
-        number: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
-    })
-}
-
 fn highlight_scalar(
     spans: &mut Vec<(ByteSpan, &'static str)>,
     skip: &[ByteSpan],
@@ -892,24 +1027,37 @@ fn highlight_scalar(
             || field.default_value.as_deref() == Some(value)
             || field.const_value.as_deref() == Some(value)
     });
-    let patterns = scalar_patterns();
-    let capture = if patterns.uuid.is_match(value) {
-        "tide.uuid"
-    } else if patterns.schema.is_match(value) {
-        "tide.schema"
-    } else if value == "true" || value == "false" {
-        "boolean"
-    } else if (value.starts_with('"') && value.ends_with('"'))
-        || (value.starts_with('\'') && value.ends_with('\''))
-    {
-        "string"
-    } else if in_enum || patterns.technique.is_match(value) {
-        "constant"
-    } else if patterns.number.is_match(value) {
-        "number"
-    } else {
-        "string"
-    };
+    let capture =
+        if Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+            .unwrap()
+            .is_match(value)
+        {
+            "tide.uuid"
+        } else if Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$")
+            .unwrap()
+            .is_match(value)
+        {
+            "tide.schema"
+        } else if value == "true" || value == "false" {
+            "boolean"
+        } else if (value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\''))
+        {
+            "string"
+        } else if in_enum
+            || Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$")
+                .unwrap()
+                .is_match(value)
+        {
+            "constant"
+        } else if Regex::new(r"^-?[0-9]+(\.[0-9]+)?$")
+            .unwrap()
+            .is_match(value)
+        {
+            "number"
+        } else {
+            "string"
+        };
     push_span(spans, skip, start, end, capture);
 }
 

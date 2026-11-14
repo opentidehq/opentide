@@ -11,7 +11,7 @@
     "broken-skill",
     "--yes"
   ],
-  "digest": "sha256:fca0ecca43c82d0784d72b8e66a1640f2006184382f715b9de92d96a4775ea31",
+  "digest": "sha256:de1d2ed193f4dbb354bcdb7709ae1182bc37230823bff4ad13dc694bbff57ef5",
   "interactions": [
     {
       "request": {
@@ -32,7 +32,7 @@
             "text/plain; charset=utf-8"
           ]
         ],
-        "body": "{\n  \"version\": 1,\n  \"source\": \"opentidehq/skills\",\n  \"ref\": \"main\",\n  \"skills\": [\n    {\n      \"slug\": \"sample-skill\",\n      \"name\": \"Sample skill\",\n      \"description\": \"A skill with a reference file, for the install cassettes.\"\n    },\n    {\n      \"slug\": \"broken-skill\",\n      \"name\": \"Broken skill\",\n      \"description\": \"A skill one of whose files cannot be downloaded.\"\n    }\n  ]\n}\n"
+        "body": "{\n  \"version\": 1,\n  \"source\": \"opentidehq/skills\",\n  \"ref\": \"main\",\n  \"skills\": [\n    {\n      \"slug\": \"sample-skill\",\n      \"name\": \"Sample skill\",\n      \"description\": \"A skill with a reference file, for the install cassettes.\"\n    },\n    {\n      \"slug\": \"broken-skill\",\n      \"name\": \"Broken skill\",\n      \"description\": \"A skill one of whose files cannot be downloaded.\"\n    },\n    {\n      \"slug\": \"detection-engineering\",\n      \"name\": \"Detection engineering\",\n      \"description\": \"The catalogue's detection-engineering, longer than the package's.\"\n    }\n  ]\n}\n"
       }
     },
     {
@@ -59,7 +59,7 @@
             "application/json; charset=utf-8"
           ]
         ],
-        "body": "{\"sha\": \"0000000000000000000000000000000000000000\", \"tree\": [{\"path\": \"skills/broken-skill\", \"type\": \"tree\"}, {\"path\": \"skills/broken-skill/references\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill/references\", \"type\": \"tree\"}, {\"path\": \"README.md\", \"type\": \"blob\"}, {\"path\": \"manifest.json\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/references/missing.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/references/notes.md\", \"type\": \"blob\"}], \"truncated\": false}"
+        "body": "{\"sha\": \"0000000000000000000000000000000000000000\", \"tree\": [{\"path\": \"skills/broken-skill\", \"type\": \"tree\"}, {\"path\": \"skills/broken-skill/references\", \"type\": \"tree\"}, {\"path\": \"skills/detection-engineering\", \"type\": \"tree\"}, {\"path\": \"skills/detection-engineering/references\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill\", \"type\": \"tree\"}, {\"path\": \"skills/sample-skill/references\", \"type\": \"tree\"}, {\"path\": \"README.md\", \"type\": \"blob\"}, {\"path\": \"manifest.json\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/broken-skill/references/missing.md\", \"type\": \"blob\"}, {\"path\": \"skills/detection-engineering/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/detection-engineering/references/kql.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/SKILL.md\", \"type\": \"blob\"}, {\"path\": \"skills/sample-skill/references/notes.md\", \"type\": \"blob\"}], \"truncated\": false}"
       }
     },
     {

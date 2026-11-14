@@ -150,6 +150,7 @@ pub fn run(args: &[String]) -> Result<u8> {
     problems.extend(engine_catalog(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
+    let mut oracle = Vec::new();
     if check {
         let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
         let ledger = opentide_compare::ledger::Ledger::parse(
@@ -167,23 +168,27 @@ pub fn run(args: &[String]) -> Result<u8> {
                 let mut usage = opentide_compare::ledger::Usage::default();
                 catalog_parity(&root, &ledger, &mut usage)
             });
-            let join = |handle: std::thread::ScopedJoinHandle<'_, _>| {
+            fn join<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> T {
                 handle
                     .join()
                     .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-            };
+            }
             (join(golden), join(verdicts), join(catalogs))
         });
         let (count, golden) = golden?;
         compared = count;
-        problems.extend(golden);
+        oracle.extend(golden);
         let (count, verdicts) = verdicts?;
         judged = count;
-        problems.extend(verdicts);
-        let (count, catalogs) = catalogs?;
+        oracle.extend(verdicts);
+        let (count, drift, catalogs) = catalogs?;
         compared += count;
-        problems.extend(catalogs);
+        problems.extend(drift);
+        oracle.extend(catalogs);
     }
+    // The differences from the oracle's recordings gate with the committed
+    // artifacts' drift from the generator.
+    problems.extend(oracle);
     for problem in &problems {
         eprintln!("error: {problem}");
     }
@@ -783,7 +788,8 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
 /// `generator` labels aside (`catalog_differences`); and each golden
 /// recording of an `opentide generate` that wrote them must hold, byte for
 /// byte, what the generator writes for the fixture with the oracle's version
-/// as the label. Returns the number of files compared and the differences.
+/// as the label. Returns the number of files compared, the committed copy's
+/// drift and the differences from the oracle's recordings.
 /// A file a run left written, world-readable (the mode does not matter here:
 /// only the bytes are compared).
 fn written(bytes: Vec<u8>) -> opentide_compare::FileState {
@@ -794,9 +800,10 @@ fn catalog_parity(
     root: &Path,
     ledger: &opentide_compare::ledger::Ledger,
     usage: &mut opentide_compare::ledger::Usage,
-) -> Result<(usize, Vec<String>)> {
+) -> Result<(usize, Vec<String>, Vec<String>)> {
     use opentide_compare::Run;
     use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    let mut drift = Vec::new();
     let mut problems = Vec::new();
     let mut compared = 0;
     let sources = bundled_sources()?;
@@ -806,8 +813,8 @@ fn catalog_parity(
             Ok(current) if unlabelled(&path, &current)? == unlabelled(&path, &text)? => {
                 compared += 1;
             }
-            Ok(_) => problems.push(format!("{path}: differs from what the model generates")),
-            Err(_) => problems.push(format!("{path}: missing")),
+            Ok(_) => drift.push(format!("{path}: differs from what the model generates")),
+            Err(_) => drift.push(format!("{path}: missing")),
         }
     }
 
@@ -914,7 +921,7 @@ fn catalog_parity(
     if generated.is_empty() {
         problems.push("no golden recording of `opentide generate` wrote the catalogs".to_owned());
     }
-    Ok((compared, problems))
+    Ok((compared, drift, problems))
 }
 
 /// The fixtures whose object and configuration files are validated against

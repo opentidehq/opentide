@@ -1,7 +1,9 @@
 //! The four Markdown flavours (`documentation/format/`): what each changes in
-//! a page, file names, links, heading anchors and diagrams. The layout of a
-//! page is the templates'; this is what differs from one forge to another.
+//! a page, file names, links, heading anchors, callouts and Mermaid. The
+//! layout of a page is [`super::page`]'s; this is what differs from one forge
+//! to another.
 
+use super::mermaid::Dialect;
 use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory};
 
 /// A Markdown flavour (`DocumentFlavor`).
@@ -29,7 +31,7 @@ impl Flavor {
         }
     }
 
-    /// The flavour's name, as the templates test it.
+    /// The flavour's name (`generic`, `github`, `gitlab`, `azure_devops`).
     pub fn name(self) -> &'static str {
         match self {
             Self::Github => "github",
@@ -105,49 +107,27 @@ impl Flavor {
         }
     }
 
-    /// Mermaid's diagram keyword: Azure DevOps renders `graph`, not
-    /// `flowchart`.
-    pub fn diagram_type(self) -> &'static str {
+    /// The Mermaid features the flavour renders: GitHub and GitLab take
+    /// everything; a CommonMark site's Mermaid release is unknown, so no
+    /// accessibility lines; Azure DevOps' wiki takes neither `flowchart`,
+    /// subgraphs nor styles.
+    pub fn dialect(self) -> Dialect {
         match self {
-            Self::AzureDevops => "graph",
-            _ => "flowchart",
+            Self::Github | Self::Gitlab => Dialect::FULL,
+            Self::Generic => Dialect::COMMONMARK,
+            Self::AzureDevops => Dialect::AZURE_DEVOPS,
         }
     }
 
-    /// Whether diagrams may group nodes in subgraphs (not on Azure DevOps).
-    pub fn subgraphs(self) -> bool {
-        self != Self::AzureDevops
-    }
-
-    /// The diagram as the flavour renders it: Azure DevOps fails on the
-    /// `flowchart` keyword and on arrows longer than `-->`.
-    pub fn diagram(self, diagram: &str) -> String {
-        if self != Self::AzureDevops {
-            return diagram.to_owned();
-        }
-        let downgraded = diagram.replacen("flowchart", "graph", 1);
-        shorten_arrows(&downgraded)
-    }
-}
-
-/// `---->` (four dashes or more before `>`) as `-->`.
-fn shorten_arrows(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find("----") {
-        let dashes = rest[start..].bytes().take_while(|b| *b == b'-').count();
-        let end = start + dashes;
-        out.push_str(&rest[..start]);
-        if rest[end..].starts_with('>') {
-            out.push_str("-->");
-            rest = &rest[end + 1..];
+    /// A diagram in the flavour's Mermaid block: `::: mermaid` on Azure
+    /// DevOps, a fenced block elsewhere.
+    pub fn mermaid_fence(self, diagram: &str) -> String {
+        if self == Self::AzureDevops {
+            format!("::: mermaid\n{diagram}\n:::\n")
         } else {
-            out.push_str(&rest[start..end]);
-            rest = &rest[end..];
+            format!("```mermaid\n{diagram}\n```\n")
         }
     }
-    out.push_str(rest);
-    out
 }
 
 /// A file name's stem from an object's name: ASCII letters and digits, each
@@ -216,11 +196,18 @@ mod tests {
     }
 
     #[test]
-    fn azure_diagrams() {
+    fn mermaid_per_flavour() {
+        assert_eq!(Flavor::Github.dialect(), Dialect::FULL);
+        assert_eq!(Flavor::Gitlab.dialect(), Dialect::FULL);
+        assert_eq!(Flavor::Generic.dialect(), Dialect::COMMONMARK);
+        assert_eq!(Flavor::AzureDevops.dialect(), Dialect::AZURE_DEVOPS);
         assert_eq!(
-            Flavor::AzureDevops.diagram("flowchart TB\na ----> b\nc --- d\nflowchart"),
-            "graph TB\na --> b\nc --- d\nflowchart"
+            Flavor::AzureDevops.mermaid_fence("graph LR"),
+            "::: mermaid\ngraph LR\n:::\n"
         );
-        assert_eq!(Flavor::Github.diagram("flowchart TB"), "flowchart TB");
+        assert_eq!(
+            Flavor::Generic.mermaid_fence("flowchart LR"),
+            "```mermaid\nflowchart LR\n```\n"
+        );
     }
 }

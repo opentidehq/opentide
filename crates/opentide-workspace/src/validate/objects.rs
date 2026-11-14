@@ -54,6 +54,8 @@ pub struct Graph<'a> {
     pub misspelled_enabled: HashMap<String, String>,
     /// Where each platform's configuration lives, for the messages.
     pub platform_files: HashMap<String, String>,
+    /// The configuration's Graylog tenants, which the Graylog advisories read.
+    pub graylog_tenants: Vec<opentide_schema::objects::platform::graylog::ConfiguredTenant>,
     /// What each vocabulary selector accepts, resolved once per run
     /// ([`Graph::resolve`]): every object's fields ask the same few.
     resolved: std::sync::Mutex<HashMap<Selector, std::sync::Arc<Resolved>>>,
@@ -107,6 +109,7 @@ impl<'a> Graph<'a> {
             enabled: None,
             misspelled_enabled: HashMap::new(),
             platform_files: HashMap::new(),
+            graylog_tenants: Vec::new(),
             resolved: std::sync::Mutex::default(),
         }
     }
@@ -440,6 +443,38 @@ pub fn check_object(
             );
         }
         if subject.family == "rule" {
+            let graylog_tenants: Vec<_> = graph
+                .graylog_tenants
+                .iter()
+                .map(opentide_schema::objects::platform::graylog::ConfiguredTenant::view)
+                .collect();
+            warnings.extend(
+                opentide_schema::objects::platform::block_advisories(root, &graylog_tenants)
+                    .into_iter()
+                    .map(|advisory| {
+                        Diagnostic::warning(advisory.code, advisory.message)
+                            .object(subject.uuid, "rule")
+                            .file(subject.path)
+                            .at(advisory.field_path)
+                    }),
+            );
+            if let Some(anchored) =
+                opentide_schema::objects::platform::harfanglab::yara::aliased_signature(root)
+            {
+                let path = opentide_schema::objects::platform::harfanglab::yara::SIGNATURE_PATH;
+                let mut issue = new(
+                    "yara_signature_alias",
+                    format!(
+                        "{} is a YAML alias; what the block deploys must be written in the \
+                             block",
+                        path.join(".")
+                    ),
+                )
+                .at(path.map(str::to_owned));
+                // Where the aliased text is written: the anchor's node.
+                issue.yaml_line = anchored.start.line.checked_sub(1);
+                issues.push(issue);
+            }
             for (platform, key) in states::legacy_external_id_keys(root) {
                 issues.push(
                     new(
@@ -462,6 +497,42 @@ pub fn check_object(
                     new(error.code, error.message).with("shard", shard.display().to_string()),
                 );
             }
+            for (platform, anchored) in
+                opentide_schema::objects::platform::bitdefender::checks::signature_aliases(root)
+            {
+                let mut issue = new(
+                    opentide_core::codes::YARA_SIGNATURE_ALIAS,
+                    format!(
+                        "configurations.{platform}.yara.signature is a YAML alias; \
+                         write the YARA signature out in the block"
+                    ),
+                )
+                .at([
+                    "configurations".to_owned(),
+                    platform.to_owned(),
+                    "yara".to_owned(),
+                    "signature".to_owned(),
+                ])
+                .suggest(Some(
+                    "Replace the alias (*name) with the signature text".to_owned(),
+                ));
+                // Where the aliased text is written: the anchor's node, as
+                // HarfangLab's above.
+                issue.yaml_line = anchored.start.line.checked_sub(1);
+                issues.push(issue);
+            }
+        }
+        if subject.family == "rule" {
+            use opentide_schema::objects::platform::google_secops::advisories::{
+                SECTION_ALIAS, aliased_sections,
+            };
+            issues.extend(aliased_sections(root).into_iter().map(|alias| {
+                let mut diagnostic = new(SECTION_ALIAS, alias.message())
+                    .at(alias.field_path())
+                    .suggest(Some(alias.suggestion()));
+                diagnostic.yaml_line = Some(alias.yaml_line);
+                diagnostic
+            }));
         }
         issues.extend(references(subject, root, graph));
         if subject.family == "threat" {

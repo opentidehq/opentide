@@ -63,7 +63,7 @@ pub const MIN_CHECKED: usize = 100;
 /// points at another spec page, or says what the spec says rather than what
 /// the model enforces. The Python check's list, with the serialised names
 /// (`schema` for `schema_id` and `platform_schema`).
-pub const REWRITTEN: [(&str, &str); 16] = [
+pub const REWRITTEN: [(&str, &str); 17] = [
     ("DetectionObjective", "metadata"),
     ("DetectionRule", "metadata"),
     // The spec calls these the rule's lifecycle status and severity; deploy
@@ -74,6 +74,8 @@ pub const REWRITTEN: [(&str, &str); 16] = [
     ("ElasticActions", "respond"),
     ("ElasticRisk", "score"),
     ("ElasticThreatMatch", "filters"),
+    // The spec row says "See the table below": the hover gives that table's rule.
+    ("ExabeamThreshold", "value"),
     ("ObjectiveBody", "signals"),
     ("ObjectMetadata", "schema"),
     ("PlatformConfigBase", "schema"),

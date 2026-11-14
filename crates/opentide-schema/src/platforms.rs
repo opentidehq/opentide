@@ -24,9 +24,9 @@ pub enum ExternalId {
     Int,
     /// Text, matching `pattern` when the platform names one.
     Text {
-        /// The shape a stored id has, if any. No built-in platform names one
-        /// yet (CrowdStrike's ids are free text); the platforms whose ids have
-        /// a shape bring theirs with their row.
+        /// The shape a stored id has, if any (`_PATTERNED_IDS`): Bitdefender's,
+        /// Graylog's, Exabeam's and Google SecOps' ids have one; CrowdStrike's
+        /// are free text.
         pattern: Option<IdPattern>,
     },
 }
@@ -272,8 +272,10 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: false,
         query_runner: true,
         runner_languages: &["telemetry"],
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // harfanglab-1.0 1.2: its YARA (the HarfangLab profile), and `.yar`
+        // and `.yara` files, checked offline as libyara 4.5 compiles them.
+        offline_languages: &["yara"],
+        query_file_suffixes: &["yar", "yara"],
         cli_rank: 6,
         connector_rank: 6,
         configuration_rank: 6,
@@ -328,6 +330,104 @@ pub const PLATFORMS: &[Platform] = &[
         cli_rank: 8,
         connector_rank: 8,
         configuration_rank: 8,
+    },
+    Platform {
+        id: "bitdefender",
+        label: "Bitdefender GravityZone",
+        configuration_name: "Bitdefender GravityZone",
+        config_class: "BitdefenderConfig",
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "[0-9a-f]{24}",
+                shape: "24 lower-case hex digits",
+            }),
+        },
+        deploys: true,
+        // The createCustomRule request, without the tenant's targets.
+        compiles_offline: true,
+        live_check: false,
+        query_runner: false,
+        runner_languages: &[],
+        // A YARA signature, under the Bitdefender profile.
+        offline_languages: &["yara"],
+        query_file_suffixes: &["yar", "yara"],
+        cli_rank: 9,
+        connector_rank: 9,
+        configuration_rank: 9,
+    },
+    Platform {
+        id: "graylog",
+        label: "Graylog",
+        configuration_name: "Graylog",
+        config_class: "GraylogConfig",
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "[0-9a-f]{24}",
+                shape: "24 lower-case hex digits",
+            }),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["lucene"],
+        // Lucene in the engine's Graylog dialect (graylog-1.0, "Query
+        // dialect"): Elastic's checks and Graylog's own.
+        offline_languages: &["lucene"],
+        query_file_suffixes: &["lucene"],
+        cli_rank: 10,
+        connector_rank: 10,
+        configuration_rank: 10,
+    },
+    Platform {
+        id: "exabeam",
+        label: "Exabeam New-Scale SIEM",
+        configuration_name: "Exabeam New-Scale SIEM",
+        config_class: "ExabeamConfig",
+        // The rule UUID Exabeam assigns, kept lower-case and canonical.
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                shape: "a canonical lower-case UUID (8-4-4-4-12 hex digits)",
+            }),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["exabeam"],
+        // The sequence filters, profile `rule`, and a `.exabeam` file or an
+        // `system: exabeam` hunt, profile `search` (exabeam-1.0).
+        offline_languages: &["exabeam"],
+        query_file_suffixes: &["exabeam"],
+        cli_rank: 11,
+        connector_rank: 11,
+        configuration_rank: 11,
+    },
+    Platform {
+        id: "google_secops",
+        label: "Google Security Operations",
+        configuration_name: "Google Security Operations",
+        config_class: "GoogleSecopsConfig",
+        // google-secops-1.0: the rule id, never a revision (`@v_…`) or a
+        // resource name.
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                shape: "ru_ and a lower-case UUID (ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1)",
+            }),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["yaral"],
+        // The offline YARA-L check arrives with the engine import (E1).
+        offline_languages: &["yaral"],
+        query_file_suffixes: &["yaral", "yl2"],
+        cli_rank: 12,
+        connector_rank: 12,
+        configuration_rank: 12,
     },
 ];
 
@@ -434,9 +534,25 @@ pub fn ids(order: Order) -> Vec<&'static str> {
 }
 
 /// The platforms whose deployer addresses the remote rule by a vendor id kept
-/// in the deployment state (`STATE_PLATFORMS`), by name.
+/// in the deployment state, in the order the oracle lists them
+/// (`states/deployment.py`'s `STATE_PLATFORMS`, which a
+/// `deployment_state_platform` message quotes): by name, but Graylog before
+/// Exabeam.
+const STATE_PLATFORMS: [&str; 8] = [
+    "bitdefender",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "graylog",
+    "exabeam",
+    "google_secops",
+    "sentinel_one",
+    "sysdig",
+];
+
+/// The platforms whose deployer addresses the remote rule by a vendor id kept
+/// in the deployment state, in the order of `STATE_PLATFORMS` above (0.28.1's).
 pub fn state_platforms() -> Vec<&'static str> {
-    ids_where(Order::Name, |platform| platform.external_id.is_stored())
+    STATE_PLATFORMS.to_vec()
 }
 
 /// Whether `id`'s external id is a canonical decimal integer.
@@ -518,7 +634,11 @@ mod tests {
                 "harfanglab",
                 "carbon_black_cloud",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -532,7 +652,11 @@ mod tests {
                 "carbon_black_cloud",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -546,7 +670,11 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
             ]
         );
         assert_eq!(
@@ -560,21 +688,37 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "elastic",
-                "sysdig"
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
             ]
         );
     }
 
     #[test]
     fn the_capability_lists_are_the_oracles() {
+        // 0.28.1's STATE_PLATFORMS, in its order (a message quotes it).
         assert_eq!(
             state_platforms(),
             [
+                "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
+                "graylog",
+                "exabeam",
+                "google_secops",
                 "sentinel_one",
                 "sysdig"
             ]
+        );
+        // Exactly the platforms whose external ids the state stores.
+        let mut sorted = state_platforms();
+        sorted.sort_unstable();
+        assert_eq!(
+            sorted,
+            ids_where(Order::Name, |p| p.external_id.is_stored())
         );
         assert_eq!(
             ids_where(Order::Name, |p| p.external_id == ExternalId::Int),
@@ -586,6 +730,9 @@ mod tests {
                 "carbon_black_cloud",
                 "defender_for_endpoint",
                 "elastic",
+                "exabeam",
+                "google_secops",
+                "graylog",
                 "sentinel",
                 "sentinel_one",
                 "splunk"
@@ -593,18 +740,47 @@ mod tests {
         );
         assert_eq!(
             ids_where(Order::Name, |p| p.query_runner).len(),
-            PLATFORMS.len() - 1
+            PLATFORMS.len() - 2
         );
         assert_eq!(
             ids_where(Order::Container, |p| p.compiles_offline),
-            ["sentinel", "elastic", "sysdig"]
+            [
+                "sentinel",
+                "elastic",
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
+            ]
         );
         assert_eq!(
             query_file_suffixes(),
             [
-                "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco"
+                "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
+                "exabeam", "yaral", "yl2"
             ]
         );
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex() {
+        use super::{IdShape, external_id_problem};
+        assert!(!super::has_integer_id("graylog"));
+        assert_eq!(
+            external_id_problem("graylog", "65f1c0ffee0123456789abcd"),
+            None
+        );
+        for bad in ["65F1C0FFEE0123456789ABCD", "65f1c0ffee0123456789abc", "12"] {
+            assert_eq!(
+                external_id_problem("graylog", bad),
+                Some(IdShape::Pattern(super::IdPattern {
+                    regex: "[0-9a-f]{24}",
+                    shape: "24 lower-case hex digits",
+                })),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

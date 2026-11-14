@@ -1,11 +1,11 @@
-error[deployment_state_uuid_mismatch]: <WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'
-  ╰─▶ .opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json
+error[deployment_state_shape]: <WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json has no platforms object
+  ╰─▶ .opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json
 
-error[deployment_state_shape]: <WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object
-  ╰─▶ .opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json
+error[deployment_state_platform]: <WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json names platform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids
+  ╰─▶ .opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json
 
-error[deployment_state_platform]: <WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external ids
-  ╰─▶ .opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json
+error[deployment_state_uuid_mismatch]: <WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is 'ffa05d91-6966-4583-ac48-7f849cd08261'
+  ╰─▶ .opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json
 
 error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000beef'
    ╭─▶ objects/objectives/elevated-exfiltration-objective-0002.yaml:54:7
@@ -34,242 +34,292 @@ error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000be
    │
    ╰─ help: opentide info threats lists the ones that exist
 
-error[ecs_type_mismatch]: `process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the value `abc`, which is not a number, on it
-   ╭─▶ objects/rules/covert-exfiltration-rule-0083.yaml:71:20
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
+   ╭─▶ objects/rules/covert-beacon-rule-0015.yaml:29:18
    │
-70 │     query: |
-71 │       process.pid: abc
-   │                    ━━━
+28 │     wiki: https://wiki.example.internal/detections/covert-beacon-rule-0015
+29 │ detection_model: 00000000-0000-4000-8000-0000deadbeef
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
    │
-   ╰─ help: the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference
+   ╰─ help: opentide info objectives lists the ones that exist
 
-error[falco_value_type]: abc is not a valid number: `proc.pid` is a number (INT64)
-   ╭─▶ objects/rules/covert-implant-rule-0157.yaml:92:38
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_order
+   ╭─▶ objects/rules/covert-dropper-rule-0064.yaml:41:3
    │
-91 │     condition: |
-92 │       spawned_process and proc.pid = abc
-   │                                      ━━━
-   │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys
-   ╭─▶ objects/rules/covert-loader-rule-0261.yaml:32:3
-   │
-31 │ configurations:
-32 │   sysdig:
+40 │     severity: high
+41 │   sysdig:
    │   ━━━━━━
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/covert-tunnel-rule-0088.yaml:62:7
+   ╭─▶ objects/rules/covert-exfiltration-rule-0157.yaml:45:31
    │
-61 │     query: |
-62 │       union * | take 1
-   │       ━━━━━━━━━━━━━━━━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
-error[eql_unsupported]: Elasticsearch EQL does not support the `unique` pipe; only `head` and `tail`
-   ╭─▶ objects/rules/elevated-downgrade-rule-0197.yaml:53:28
-   │
-52 │     query: |
-53 │       process where true | unique process.name
-   │                            ━━━━━━
-   │
-   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
-
-error[spl_unknown_datamodel]: `Endpointz` is not a CIM data model; did you mean `Endpoint`?
-   ╭─▶ objects/rules/elevated-dropper-rule-0066.yaml:54:37
-   │
-53 │     query: |
-54 │       | tstats count from datamodel=Endpointz
-   │                                     ━━━━━━━━━
-   │
-   ╰─ help: try: Endpoint
-
-error[spl_unknown_datamodel_field]: `process_nam` is not a field of the CIM Endpoint.Processes dataset; did you mean `Processes.process_name`?
-   ╭─▶ objects/rules/elevated-injection-rule-0075.yaml:40:59
-   │
-39 │     query: |
-40 │       | tstats count from datamodel=Endpoint.Processes by Processes.process_nam
-   │                                                           ━━━━━━━━━━━━━━━━━━━━━
-   │
-   ╰─ help: try: Processes.process_name
-
-error[kql_unknown_table]: unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml
-   ╭─▶ objects/rules/elevated-pivot-rule-0038.yaml:59:7
-   │
-58 │     query: |
-59 │       DeviceProcessEvnts
-   │       ━━━━━━━━━━━━━━━━━━
-   │
-   ╰─ help: did you mean 'DeviceProcessEvents'?
-
-error[vocab_unknown]: 'whitish' is not a TLP value
-  ╭─▶ objects/rules/elevated-relay-rule-0034.yaml:9:8
-  │
-8 │   modified: 2025-03-16
-9 │   tlp: whitish
-  │        ━━━━━━━ not in tlp::1.0
-
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/elevated-relay-rule-0034.yaml:64:21
-   │
-63 │     query: |
-64 │       SecurityEvent | where (
-   │                     ━━━━━━━━━
+44 │     query: |
+45 │       search in (SecurityEvent, *) "error"
+   │                               ━━━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
-error[kql_unknown_function]: unknown function 'tolowr'
-   ╭─▶ objects/rules/elevated-relay-rule-0055.yaml:60:20
+error[falco_output_syntax]: invalid formatting syntax: formatting cannot end with a % (libsinsp)
+   ╭─▶ objects/rules/covert-implant-rule-0165.yaml:43:30
    │
-59 │       SecurityEvent
-60 │       | extend x = tolowr(Computer)
-   │                    ━━━━━━
-   │
-   ╰─ help: did you mean 'tolower'?
-
-error[eql_maxspan_unit]: unrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d
-   ╭─▶ objects/rules/elevated-relay-rule-0107.yaml:54:29
-   │
-53 │     query: |
-54 │       sequence with maxspan=5w [process where true] [file where true]
-   │                             ━━
-   │
-   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
-
-error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects the query; quote the value
-   ╭─▶ objects/rules/elevated-tunnel-rule-0053.yaml:40:19
-   │
-39 │     query: |
-40 │       message: cannot run
-   │                   ━━━
-   │
-   ╰─ help: try: "cannot run"
-
-error[falco_operator_type]: 'contains' operator not supported for numeric filters (`proc.pid` is a number (INT64))
-   ╭─▶ objects/rules/encoded-beacon-rule-0124.yaml:68:36
-   │
-67 │     condition: |
-68 │       spawned_process and proc.pid contains 5
-   │                                    ━━━━━━━━━
+42 │           - ksh
+43 │     output: Shell %proc.name %
+   │                              ━
    │
    ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_name
-   ╭─▶ objects/rules/encoded-downgrade-rule-0063.yaml:50:3
-   │
-49 │ configurations:
-50 │   sysdig:
-   │   ━━━━━━
-   │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[esql_unknown_type]: `foo` is not an ES|QL type Elasticsearch can cast to; use a type such as `keyword`, `long`, `double`, `ip`, or `datetime`
-   ╭─▶ objects/rules/encoded-downgrade-rule-0170.yaml:53:56
-   │
-52 │     query: |
-53 │       FROM logs-* METADATA _id | EVAL x = process.pid::foo
-   │                                                        ━━━
-   │
-   ╰─ help: try: bool
-
-error[spl_parse_error]: SPL syntax error: unexpected 'index'
-   ╭─▶ objects/rules/encoded-dropper-rule-0057.yaml:55:7
-   │
-54 │     query: |
-55 │       index=main | eval x=(
-   │       ━━━━━
-   │
-   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
 error[schema_validation]: missing required field 'name'
-  ╭─▶ objects/rules/encoded-harvest-rule-0032.yaml:1:1
+  ╭─▶ objects/rules/covert-injection-rule-0032.yaml:1:1
   │
 1 │ metadata:
   │ ━━━━━━━━ add 'name' at the top level
   │
   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/encoded-loader-rule-0037.yaml:50:7
+error[eql_unknown_function]: unknown EQL function `startsWth`
+   ╭─▶ objects/rules/covert-injection-rule-0262.yaml:81:21
    │
-49 │       SecurityEvent
-50 │       | where (
-   │       ━━━━━━━━━
+80 │     query: |
+81 │       process where startsWth(process.name, "a")
+   │                     ━━━━━━━━━
+   │
+   ╰─ help: did you mean 'startsWith'?
+
+error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects the query; quote the value
+   ╭─▶ objects/rules/covert-pivot-rule-0073.yaml:48:19
+   │
+47 │     query: |
+48 │       message: cannot run
+   │                   ━━━
+   │
+   ╰─ help: try: "cannot run"
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/covert-tunnel-rule-0170.yaml:49:7
+   │
+48 │     query: |
+49 │       union * | take 1
+   │       ━━━━━━━━━━━━━━━━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
-error[schema_validation]: missing required field 'description'
-  ╭─▶ objects/rules/encoded-pivot-rule-0008.yaml:1:1
-  │
-1 │ name: Encoded Pivot Rule 0008
-  │ ━━━━ add 'description' at the top level
-  │
-  ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[schema_validation]: metadata.reviewed: Extra inputs are not permitted
-   ╭─▶ objects/rules/encoded-pivot-rule-0009.yaml:14:3
+error[spl_search_operator]: '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
+   ╭─▶ objects/rules/elevated-dropper-rule-0068.yaml:59:22
    │
-13 │     name: Example Detection Team
-14 │   reviewed: 2026-03-01
-   │   ━━━━━━━━
+58 │     query: |
+59 │       index=main host==x
+   │                      ━━
    │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
+   ╰─ help: try: =
 
 error[yaml_parse]: Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month)
-  ╭─▶ objects/rules/encoded-relay-rule-0014.yaml:9:13
+  ╭─▶ objects/rules/elevated-exfiltration-rule-0014.yaml:9:13
   │
-8 │   modified: 2025-10-17
+8 │   modified: 2026-03-12
 9 │   reviewed: 2026-02-30
   │             ━━━━━━━━━━
   │
   ╰─ help: write the date as YYYY-MM-DD, with a month from 01 to 12
 
-error[kql_unknown_column]: 'EventIDD' is not a column of SecurityEvent
-   ╭─▶ objects/rules/encoded-relay-rule-0052.yaml:50:15
+error[spl_command_without_pipe]: the search starts with the command name `stats` but no `|`; Splunk searches for the word `stats` instead of running the command
+   ╭─▶ objects/rules/elevated-exfiltration-rule-0043.yaml:65:7
    │
-49 │       SecurityEvent
-50 │       | where EventIDD == 4688
-   │               ━━━━━━━━
+64 │     query: |
+65 │       stats count by host
+   │       ━━━━━
    │
-   ╰─ help: try: EventID
+   ╰─ help: try: | stats
+
+error[falco_unknown_field]: `proc.name` is a field of the `syscall` source, not of `k8s_audit`
+   ╭─▶ objects/rules/elevated-harvest-rule-0259.yaml:90:54
+   │
+89 │           - ksh
+90 │     output: Shell spawned in a container (proc.name=%proc.name)
+   │                                                      ━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[spl_unknown_datamodel]: `Endpointz` is not a CIM data model; did you mean `Endpoint`?
+   ╭─▶ objects/rules/elevated-loader-rule-0081.yaml:56:37
+   │
+55 │     query: |
+56 │       | tstats count from datamodel=Endpointz
+   │                                     ━━━━━━━━━
+   │
+   ╰─ help: try: Endpoint
+
+error[config_enum_unknown]: 'Night Shift' is not a configured responder
+   ╭─▶ objects/rules/elevated-pivot-rule-0018.yaml:29:15
+   │
+28 │   playbook: https://wiki.example.internal/playbooks/execution
+29 │   responders: Night Shift
+   │               ━━━━━━━━━━━ not in [[responders]]
+   │
+   ╰─ expected: one of SOC Tier 1, SOC Tier 2, Incident Response
 
 error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
-  ╭─▶ objects/rules/encoded-spray-rule-0023.yaml:53:1
-  ├─ note: while parsing a flow sequence that starts at line 52, column 9
+  ╭─▶ objects/rules/encoded-beacon-rule-0034.yaml:83:1
+  ├─ note: while parsing a flow sequence that starts at line 82, column 9
   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
 
-error[vocab_unknown]: 'clearr' is not a TLP value
-  ╭─▶ objects/rules/encoded-tunnel-rule-0011.yaml:9:8
+error[vocab_unknown]: 'ambr' is not a TLP value
+  ╭─▶ objects/rules/encoded-implant-rule-0042.yaml:9:8
   │
-8 │   modified: 2026-02-15
-9 │   tlp: clearr
-  │        ━━━━━━ not in tlp::1.0
+8 │   modified: 2025-03-25
+9 │   tlp: ambr
+  │        ━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean 'clear'?
+  ╰─ help: did you mean 'amber'?
 
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value
-   ╭─▶ objects/rules/hidden-beacon-rule-0090.yaml:44:3
+error[config_enum_unknown]: 'LIVE' is not a configured status
+   ╭─▶ objects/rules/encoded-implant-rule-0042.yaml:43:13
    │
-43 │ configurations:
-44 │   sysdig:
+42 │     name: Encoded Implant Rule 0042
+43 │     status: LIVE
+   │             ━━━━ not in [[statuses]]
+   │
+   ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
+
+error[eql_parse_error]: use double quotes ["] for string literals, not single quotes [']
+   ╭─▶ objects/rules/encoded-implant-rule-0216.yaml:46:37
+   │
+45 │     query: |
+46 │       process where process.name == 'cmd.exe'
+   │                                     ━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys
+   ╭─▶ objects/rules/encoded-loader-rule-0035.yaml:42:3
+   │
+41 │ configurations:
+42 │   sysdig:
    │   ━━━━━━
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[schema_validation]: missing required field 'description'
-  ╭─▶ objects/rules/hidden-harvest-rule-0026.yaml:1:1
+error[vocab_unknown]: 'whitish' is not a TLP value
+  ╭─▶ objects/rules/encoded-tunnel-rule-0049.yaml:9:8
   │
-1 │ name: Hidden Harvest Rule 0026
+8 │   modified: 2025-09-25
+9 │   tlp: whitish
+  │        ━━━━━━━ not in tlp::1.0
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/encoded-tunnel-rule-0049.yaml:51:21
+   │
+50 │     query: |
+51 │       SecurityEvent | where (
+   │                     ━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[falco_append_condition]: a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator
+   ╭─▶ objects/rules/encoded-tunnel-rule-0077.yaml:65:7
+   │
+64 │     condition: |
+65 │       and proc.name = x
+   │       ━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[lucene_fuzzy]: Elasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2` or `~AUTO`
+   ╭─▶ objects/rules/encoded-tunnel-rule-0080.yaml:55:23
+   │
+54 │     query: |
+55 │       process.name:foo~3
+   │                       ━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+error[kql_control_command_unsupported]: KQL control command '.show' is not valid in detections
+   ╭─▶ objects/rules/hidden-beacon-rule-0062.yaml:63:7
+   │
+62 │     query: |
+63 │       .show tables
+   │       ━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[spl_empty_command]: `stats` with no arguments returns no results
+   ╭─▶ objects/rules/hidden-dropper-rule-0055.yaml:37:17
+   │
+36 │     query: |
+37 │       index=a | stats
+   │                 ━━━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+error[eql_argument_type]: the first argument of `length` must be a string, found integer `1`
+   ╭─▶ objects/rules/hidden-dropper-rule-0067.yaml:66:28
+   │
+65 │     query: |
+66 │       process where length(1) > 0
+   │                            ━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[eql_maxspan_unit]: unrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d
+    ╭─▶ objects/rules/hidden-dropper-rule-0194.yaml:100:29
+    │
+ 99 │     query: |
+100 │       sequence with maxspan=5w [process where true] [file where true]
+    │                             ━━
+    │
+    ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[missing_uuid]: Object YAML has no uuid: hidden-implant-rule-0006.yaml
+  ╭─▶ objects/rules/hidden-implant-rule-0006.yaml
+  ╰─ help: add metadata.uuid with a fresh UUID v4
+
+error[schema_validation]: missing required field 'description'
+  ╭─▶ objects/rules/hidden-loader-rule-0008.yaml:1:1
+  │
+1 │ name: Hidden Loader Rule 0008
+  │ ━━━━ add 'description' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[yaml_parse]: Could not parse object YAML: found a tab character that violates indentation
+   ╭─▶ objects/rules/hidden-loader-rule-0024.yaml:45:1
+   │
+44 │       condition: count() >= 3
+45 │    indent: tab
+   │ ━
+   │
+   ├─ note: while scanning a plain scalar that starts at line 44, column 18
+   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+
+error[kql_unknown_table]: unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml
+   ╭─▶ objects/rules/hidden-pivot-rule-0041.yaml:41:7
+   │
+40 │     query: |
+41 │       DeviceProcessEvnts
+   │       ━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: did you mean 'DeviceProcessEvents'?
+
+error[falco_unknown_event]: unknown event type opne
+   ╭─▶ objects/rules/lateral-downgrade-rule-0139.yaml:58:18
+   │
+57 │     condition: |
+58 │       evt.type = opne and proc.name = bash
+   │                  ━━━━
+   │
+   ╰─ help: did you mean 'open'?
+
+error[schema_validation]: missing required field 'description'
+  ╭─▶ objects/rules/lateral-dropper-rule-0026.yaml:1:1
+  │
+1 │ name: Lateral Dropper Rule 0026
   │ ━━━━ add 'description' at the top level
   │
   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[invalid_uuid]: UUID 'bad-1' is not a valid UUIDv4
-  ╭─▶ objects/rules/hidden-harvest-rule-0026.yaml:4:9
+  ╭─▶ objects/rules/lateral-dropper-rule-0026.yaml:4:9
   │
 3 │ metadata:
 4 │   uuid: bad-1
@@ -277,90 +327,17 @@ error[invalid_uuid]: UUID 'bad-1' is not a valid UUIDv4
   │
   ╰─ help: replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
 
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_source
-   ╭─▶ objects/rules/hidden-injection-rule-0027.yaml:32:3
+error[esql_parse_error]: ES|QL syntax error near `|`
+   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:32
    │
-31 │ configurations:
-32 │   sysdig:
-   │   ━━━━━━
+75 │     query: |
+76 │       FROM logs-* METADATA _id | WHERE (
+   │                                ━━━━━━━━━
    │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
+   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
 
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape
-   ╭─▶ objects/rules/hidden-relay-rule-0054.yaml:33:3
-   │
-32 │ configurations:
-33 │   sysdig:
-   │   ━━━━━━
-   │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[kql_type_mismatch]: `>` is not defined for `ResultType`, a string column; Kusto rejects the query
-   ╭─▶ objects/rules/lateral-dropper-rule-0046.yaml:60:26
-   │
-59 │       SigninLogs
-60 │       | where ResultType > 5
-   │                          ━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
-error[falco_field_argument]: `proc.name` takes no argument, but `[1]` is given
-   ╭─▶ objects/rules/lateral-dropper-rule-0108.yaml:55:27
-   │
-54 │     condition: |
-55 │       spawned_process and proc.name[1] = x
-   │                           ━━━━━━━━━━━━
-   │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[kql_control_command_unsupported]: KQL control command '.show' is not valid in detections
-   ╭─▶ objects/rules/lateral-harvest-rule-0043.yaml:55:7
-   │
-54 │     query: |
-55 │       .show tables
-   │       ━━━━━━━━━━━━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
-error[falco_unknown_event]: unknown event type opne
-   ╭─▶ objects/rules/lateral-harvest-rule-0151.yaml:98:18
-   │
-97 │     condition: |
-98 │       evt.type = opne and proc.name = bash
-   │                  ━━━━
-   │
-   ╰─ help: did you mean 'open'?
-
-error[yaml_parse]: Could not parse object YAML: found character that cannot start any token
-   ╭─▶ objects/rules/lateral-injection-rule-0024.yaml:68:1
-   │
-67 │       lookback: "2h"
-68 │    indent: tab
-   │ ━
-   │
-   ├─ note: while scanning for the next token
-   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
-
-error[falco_misplaced_list]: `corpus_shells_397` is a list, not a macro: use it in a value list, `in (corpus_shells_397)`
-   ╭─▶ objects/rules/lateral-injection-rule-0162.yaml:54:16
-   │
-53 │       - sysdig-production
-54 │     condition: corpus_shells_397
-   │                ━━━━━━━━━━━━━━━━━
-   │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[eql_unknown_function]: unknown EQL function `startsWth`
-   ╭─▶ objects/rules/lateral-loader-rule-0182.yaml:78:21
-   │
-77 │     query: |
-78 │       process where startsWth(process.name, "a")
-   │                     ━━━━━━━━━
-   │
-   ╰─ help: did you mean 'startsWith'?
-
-warning[nested_object_file]: objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)
-  ╰─▶ objects/rules/nested/hidden-harvest-rule-0020.yaml
+warning[nested_object_file]: objects/rules/nested/encoded-spray-rule-0017.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)
+  ╰─▶ objects/rules/nested/encoded-spray-rule-0017.yaml
 
 error[duplicate_id]: UUID not-a-uuid is also used by 'Encoded Exfiltration Rule 0005'
   ╭─▶ objects/rules/persistent-beacon-rule-0004.yaml:4:9
@@ -381,54 +358,57 @@ error[invalid_uuid]: UUID 'not-a-uuid' is not a valid UUIDv4
   │
   ╰─ help: replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
 
-error[esql_unknown_function]: unknown ES|QL function `STARTSWITH`
-   ╭─▶ objects/rules/persistent-injection-rule-0155.yaml:60:43
+error[falco_field_argument]: `proc.name` takes no argument, but `[1]` is given
+   ╭─▶ objects/rules/persistent-beacon-rule-0087.yaml:46:27
    │
-59 │     query: |
-60 │       FROM logs-* METADATA _id | EVAL x = STARTSWITH(process.name, "b")
-   │                                           ━━━━━━━━━━
+45 │     condition: |
+46 │       spawned_process and proc.name[1] = x
+   │                           ━━━━━━━━━━━━
    │
-   ╰─ help: did you mean 'STARTS_WITH'?
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
-error[eql_function_arity]: `length` takes 1 arguments, found 2
-   ╭─▶ objects/rules/persistent-pivot-rule-0092.yaml:69:21
+error[kql_unknown_function]: unknown function 'tolowr'
+   ╭─▶ objects/rules/persistent-beacon-rule-0088.yaml:73:20
    │
-68 │     query: |
-69 │       process where length(process.name, process.pid) > 1
-   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+72 │       SecurityEvent
+73 │       | extend x = tolowr(Computer)
+   │                    ━━━━━━
    │
-   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
-
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
-   ╭─▶ objects/rules/persistent-relay-rule-0013.yaml:29:18
-   │
-28 │     2: https://example.org/research/persistent-relay-rule-0013
-29 │ detection_model: 00000000-0000-4000-8000-0000deadbeef
-   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
-   │
-   ╰─ help: opentide info objectives lists the ones that exist
-
-error[schema_missing]: missing metadata.schema on object
-  ╭─▶ objects/rules/rapid-downgrade-rule-0007.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-
-error[eql_not_boolean]: integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
-   ╭─▶ objects/rules/rapid-dropper-rule-0137.yaml:82:21
-   │
-81 │     query: |
-82 │       process where 1
-   │                     ━
-   │
-   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+   ╰─ help: did you mean 'tolower'?
 
 error[falco_transformer]: can't add field transformer: type 'INT64' is not supported by 'tolower' transformer applied on field 'proc.pid'
-   ╭─▶ objects/rules/rapid-dropper-rule-0144.yaml:50:27
+   ╭─▶ objects/rules/persistent-downgrade-rule-0126.yaml:35:27
    │
-49 │     condition: |
-50 │       spawned_process and tolower(proc.pid) = 1
+34 │     condition: |
+35 │       spawned_process and tolower(proc.pid) = 1
    │                           ━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[falco_value_type]: abc is not a valid number: `proc.pid` is a number (INT64)
+   ╭─▶ objects/rules/persistent-harvest-rule-0152.yaml:52:38
+   │
+51 │     condition: |
+52 │       spawned_process and proc.pid = abc
+   │                                      ━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[schema_validation]: metadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime
+  ╭─▶ objects/rules/persistent-loader-rule-0010.yaml:9:13
+  │
+8 │   modified: 2025-08-02
+9 │   reviewed: yesterday
+  │             ━━━━━━━━━
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[falco_operator_type]: 'contains' operator not supported for numeric filters (`proc.pid` is a number (INT64))
+   ╭─▶ objects/rules/rapid-dropper-rule-0103.yaml:61:36
+   │
+60 │     condition: |
+61 │       spawned_process and proc.pid contains 5
+   │                                    ━━━━━━━━━
    │
    ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
@@ -441,104 +421,110 @@ error[invalid_uuid]: UUID 'not-a-uuid-1' is not a valid UUIDv4
   │
   ╰─ help: replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
 
-error[esql_parse_error]: ES|QL syntax error near `|`
-   ╭─▶ objects/rules/rapid-implant-rule-0080.yaml:37:32
+error[spl_unknown_datamodel_field]: `process_nam` is not a field of the CIM Endpoint.Processes dataset; did you mean `Processes.process_name`?
+   ╭─▶ objects/rules/rapid-implant-rule-0082.yaml:59:59
    │
-36 │     query: |
-37 │       FROM logs-* METADATA _id | WHERE (
-   │                                ━━━━━━━━━
+58 │     query: |
+59 │       | tstats count from datamodel=Endpoint.Processes by Processes.process_nam
+   │                                                           ━━━━━━━━━━━━━━━━━━━━━
    │
-   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+   ╰─ help: try: Processes.process_name
 
-error[falco_unknown_field]: `proc.name` is a field of the `syscall` source, not of `k8s_audit`
-   ╭─▶ objects/rules/rapid-implant-rule-0279.yaml:57:54
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
+   ╭─▶ objects/rules/rapid-injection-rule-0013.yaml:23:18
    │
-56 │           - dash
-57 │     output: Shell spawned in a container (proc.name=%proc.name)
-   │                                                      ━━━━━━━━━
+22 │   - T1543.003
+23 │ detection_model: 00000000-0000-4000-8000-0000deadbeef
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
    │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+   ╰─ help: opentide info objectives lists the ones that exist
 
-error[external_id_in_rule]: Vendor rule id key 'rule_id' is not allowed on the sentinel block; external ids live in .opentide/states/deployment/<uuid>.json
-   ╭─▶ objects/rules/rapid-injection-rule-0028.yaml:75:14
+error[config_enum_unknown]: 'NOPE' is not a configured status
+   ╭─▶ objects/rules/rapid-injection-rule-0023.yaml:62:13
    │
-74 │             column: Computer
-75 │     rule_id: abc-1
-   │              ━━━━━
+61 │     schema: platform::sentinel::1.0
+62 │     status: NOPE
+   │             ━━━━ not in [[statuses]]
    │
-   ╰─ help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/
+   ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
 
-error[lucene_fuzzy]: Elasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2` or `~AUTO`
-   ╭─▶ objects/rules/rapid-injection-rule-0056.yaml:68:23
+error[esql_unknown_type]: `foo` is not an ES|QL type Elasticsearch can cast to; use a type such as `keyword`, `long`, `double`, `ip`, or `datetime`
+   ╭─▶ objects/rules/rapid-pivot-rule-0223.yaml:77:56
    │
-67 │     query: |
-68 │       process.name:foo~3
-   │                       ━━
+76 │     query: |
+77 │       FROM logs-* METADATA _id | EVAL x = process.pid::foo
+   │                                                        ━━━
    │
-   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+   ╰─ help: try: bool
+
+error[schema_missing]: missing metadata.schema on object
+  ╭─▶ objects/rules/rapid-relay-rule-0007.yaml:3:1
+  │
+3 │ metadata:
+  │ ━━━━━━━━
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate
+   ╭─▶ objects/rules/remote-beacon-rule-0061.yaml:46:3
+   │
+45 │ configurations:
+46 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_name
+   ╭─▶ objects/rules/remote-dropper-rule-0048.yaml:36:3
+   │
+35 │ configurations:
+36 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value
+   ╭─▶ objects/rules/remote-dropper-rule-0074.yaml:48:3
+   │
+47 │ configurations:
+48 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/rapid-injection-rule-0097.yaml:75:31
+   ╭─▶ objects/rules/remote-dropper-rule-0140.yaml:75:7
    │
 74 │     query: |
-75 │       search in (SecurityEvent, *) "error"
-   │                               ━━━
+75 │       union * | take 1
+   │       ━━━━━━━━━━━━━━━━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_priority
-   ╭─▶ objects/rules/remote-beacon-rule-0018.yaml:52:3
+error[eql_not_boolean]: integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
+   ╭─▶ objects/rules/remote-dropper-rule-0197.yaml:59:21
    │
-51 │ configurations:
-52 │   sysdig:
-   │   ━━━━━━
-   │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[falco_append_condition]: a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator
-   ╭─▶ objects/rules/remote-beacon-rule-0099.yaml:37:7
-   │
-36 │     condition: |
-37 │       and proc.name = x
-   │       ━━━
-   │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate
-   ╭─▶ objects/rules/remote-dropper-rule-0072.yaml:53:3
-   │
-52 │ configurations:
-53 │   sysdig:
-   │   ━━━━━━
-   │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[config_enum_unknown]: 'Night Shift' is not a configured responder
-   ╭─▶ objects/rules/remote-relay-rule-0017.yaml:34:15
-   │
-33 │   alert_severity: Informational
-34 │   responders: Night Shift
-   │               ━━━━━━━━━━━ not in [[responders]]
-   │
-   ╰─ expected: one of SOC Tier 1, SOC Tier 2, Incident Response
-
-error[falco_invalid_regex]: invalid regex pattern: error: unclosed group
-   ╭─▶ objects/rules/remote-spray-rule-0117.yaml:42:43
-   │
-41 │     condition: |
-42 │       spawned_process and proc.name regex '('
-   │                                           ━━━
-   │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[eql_parse_error]: use double quotes ["] for string literals, not single quotes [']
-   ╭─▶ objects/rules/rogue-dropper-rule-0152.yaml:36:37
-   │
-35 │     query: |
-36 │       process where process.name == 'cmd.exe'
-   │                                     ━━━━━━━━━
+58 │     query: |
+59 │       process where 1
+   │                     ━
    │
    ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[ecs_type_mismatch]: `process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the value `abc`, which is not a number, on it
+   ╭─▶ objects/rules/remote-spray-rule-0119.yaml:69:20
+   │
+68 │     query: |
+69 │       process.pid: abc
+   │                    ━━━
+   │
+   ╰─ help: the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference
+
+error[kql_unknown_operator]: unknown tabular operator 'frobnicate'
+   ╭─▶ objects/rules/rogue-exfiltration-rule-0092.yaml:65:9
+   │
+64 │       SecurityEvent
+65 │       | frobnicate
+   │         ━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
 error[duplicate_id]: UUID 53651415-1c05-4cfb-b1b2-39c888ab0f06 is also used by 'Lateral Pivot Rule 0002'
   ╭─▶ objects/rules/rogue-harvest-rule-0003.yaml:4:9
@@ -550,166 +536,143 @@ error[duplicate_id]: UUID 53651415-1c05-4cfb-b1b2-39c888ab0f06 is also used by '
   ├─ also: objects/rules/lateral-pivot-rule-0002.yaml:4:9
   ╰─ help: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced
 
-error[spl_empty_command]: `stats` with no arguments returns no results
-   ╭─▶ objects/rules/rogue-harvest-rule-0048.yaml:50:17
+error[external_id_in_rule]: Vendor rule id key 'rule_id' is not allowed on the sentinel block; external ids live in .opentide/states/deployment/<uuid>.json
+   ╭─▶ objects/rules/rogue-harvest-rule-0027.yaml:55:14
    │
-49 │     query: |
-50 │       index=a | stats
-   │                 ━━━━━
+54 │         enabled: false
+55 │     rule_id: abc-1
+   │              ━━━━━
+   │
+   ╰─ help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/
+
+error[spl_parse_error]: SPL syntax error: unexpected 'index'
+   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:7
+   │
+69 │     query: |
+70 │       index=main | eval x=(
+   │       ━━━━━
    │
    ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
-error[esql_pattern]: LIKE escapes only `*`, `?`, and `\`; a backslash before `b` fails. Write `\\` for a literal backslash
-   ╭─▶ objects/rules/rogue-implant-rule-0110.yaml:54:58
+error[kql_type_mismatch]: `>` is not defined for `ResultType`, a string column; Kusto rejects the query
+   ╭─▶ objects/rules/rogue-harvest-rule-0066.yaml:61:26
    │
-53 │     query: |
-54 │       FROM logs-* METADATA _id | WHERE process.name LIKE "a\\b"
-   │                                                          ━━━━━━
+60 │       SigninLogs
+61 │       | where ResultType > 5
+   │                          ━
    │
-   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
-error[eql_field_comparison]: Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant
-   ╭─▶ objects/rules/rogue-injection-rule-0062.yaml:43:21
-   │
-42 │     query: |
-43 │       process where process.pid == process.parent.pid
-   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   │
-   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
-
-error[spl_command_without_pipe]: the search starts with the command name `stats` but no `|`; Splunk searches for the word `stats` instead of running the command
-   ╭─▶ objects/rules/rogue-loader-rule-0040.yaml:95:7
-   │
-94 │     query: |
-95 │       stats count by host
-   │       ━━━━━
-   │
-   ╰─ help: try: | stats
+error[vocab_unknown]: 'clearr' is not a TLP value
+  ╭─▶ objects/rules/rogue-relay-rule-0011.yaml:9:8
+  │
+8 │   modified: 2026-03-27
+9 │   tlp: clearr
+  │        ━━━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'clear'?
 
 error[falco_parse_error]: expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)
-   ╭─▶ objects/rules/rogue-loader-rule-0126.yaml:58:37
+   ╭─▶ objects/rules/rogue-spray-rule-0113.yaml:46:37
    │
-57 │     condition: |
-58 │       spawned_process and proc.name =
+45 │     condition: |
+46 │       spawned_process and proc.name =
    │                                     ━
    │
    ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
-error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
-  ╭─▶ objects/rules/rogue-relay-rule-0035.yaml:59:1
-  ├─ note: while parsing a flow sequence that starts at line 58, column 9
-  ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
-
-error[eql_argument_type]: the first argument of `length` must be a string, found integer `1`
-   ╭─▶ objects/rules/scheduled-beacon-rule-0047.yaml:76:28
-   │
-75 │     query: |
-76 │       process where length(1) > 0
-   │                            ━
-   │
-   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
-
-error[falco_output_syntax]: invalid formatting syntax: formatting cannot end with a % (libsinsp)
-   ╭─▶ objects/rules/scheduled-beacon-rule-0171.yaml:59:30
-   │
-58 │           - ksh
-59 │     output: Shell %proc.name %
-   │                              ━
-   │
-   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
-
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_order
-   ╭─▶ objects/rules/scheduled-exfiltration-rule-0081.yaml:50:3
-   │
-49 │ configurations:
-50 │   sysdig:
-   │   ━━━━━━
-   │
-   ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[spl_search_operator]: '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
-   ╭─▶ objects/rules/scheduled-implant-rule-0065.yaml:85:22
-   │
-84 │     query: |
-85 │       index=main host==x
-   │                      ━━
-   │
-   ╰─ help: try: =
-
-error[kql_unknown_operator]: unknown tabular operator 'frobnicate'
-   ╭─▶ objects/rules/scheduled-injection-rule-0061.yaml:58:9
-   │
-57 │       SecurityEvent
-58 │       | frobnicate
-   │         ━━━━━━━━━━
-   │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
-error[esql_unknown_command]: unknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4 and 9.5 run a non-aggregating rule without it
-   ╭─▶ objects/rules/scheduled-injection-rule-0125.yaml:52:34
-   │
-51 │     query: |
-52 │       FROM logs-* METADATA _id | WEHRE process.name == "x"
-   │                                  ━━━━━
-   │
-   ╰─ help: did you mean 'WHERE'?
-
-error[falco_unknown_field]: `proc.nmae` is not a Falco field of the `syscall` source
-   ╭─▶ objects/rules/scheduled-loader-rule-0153.yaml:42:27
-   │
-41 │     condition: |
-42 │       spawned_process and proc.nmae = bash
-   │                           ━━━━━━━━━
-   │
-   ╰─ help: try: proc.name
-
-error[lucene_parse_error]: Lucene syntax error: missing `)`
-   ╭─▶ objects/rules/scheduled-tunnel-rule-0071.yaml:48:7
-   │
-47 │     query: |
-48 │       name:(a OR b
-   │       ━━━━━━━━━━━━
-   │
-   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
-
 error[falco_rhs_field]: field 'proc.name' has type 'a string (CHARBUF)' while the right-hand side field 'proc.pid' has incompatible type 'a number (INT64)'
-   ╭─▶ objects/rules/silent-beacon-rule-0135.yaml:57:39
+   ╭─▶ objects/rules/scheduled-beacon-rule-0116.yaml:67:39
    │
-56 │     condition: |
-57 │       spawned_process and proc.name = val(proc.pid)
+66 │     condition: |
+67 │       spawned_process and proc.name = val(proc.pid)
    │                                       ━━━━━━━━━━━━━
    │
    ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
-   ╭─▶ objects/rules/silent-dropper-rule-0015.yaml:22:18
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape
+   ╭─▶ objects/rules/scheduled-exfiltration-rule-0038.yaml:61:3
    │
-21 │   - T1547.001
-22 │ detection_model: 00000000-0000-4000-8000-0000deadbeef
-   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+60 │     severity: medium
+61 │   sysdig:
+   │   ━━━━━━
    │
-   ╰─ help: opentide info objectives lists the ones that exist
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[vocab_unknown]: 'ambr' is not a TLP value
-  ╭─▶ objects/rules/silent-dropper-rule-0039.yaml:9:8
-  │
-8 │   modified: 2026-04-03
-9 │   tlp: ambr
-  │        ━━━━ not in tlp::1.0
-  │
-  ╰─ help: did you mean 'amber'?
+error[lucene_parse_error]: Lucene syntax error: missing `)`
+   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:7
+   │
+58 │     query: |
+59 │       name:(a OR b
+   │       ━━━━━━━━━━━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
 
-error[config_enum_unknown]: 'LIVE' is not a configured status
-   ╭─▶ objects/rules/silent-dropper-rule-0039.yaml:40:13
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape
+   ╭─▶ objects/rules/scheduled-loader-rule-0030.yaml:65:3
    │
-39 │     schema: platform::splunk::1.0
-40 │     status: LIVE
-   │             ━━━━ not in [[statuses]]
+64 │       severity: Low
+65 │   sysdig:
+   │   ━━━━━━
    │
-   ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[eql_function_arity]: `length` takes 1 arguments, found 2
+   ╭─▶ objects/rules/scheduled-relay-rule-0151.yaml:57:21
+   │
+56 │     query: |
+57 │       process where length(process.name, process.pid) > 1
+   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
 
 error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys
-   ╭─▶ objects/rules/staged-dropper-rule-0045.yaml:51:3
+   ╭─▶ objects/rules/scheduled-relay-rule-0243.yaml:38:3
+   │
+37 │ configurations:
+38 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[kql_unknown_column]: 'EventIDD' is not a column of SecurityEvent
+   ╭─▶ objects/rules/silent-beacon-rule-0079.yaml:43:15
+   │
+42 │       SecurityEvent
+43 │       | where EventIDD == 4688
+   │               ━━━━━━━━
+   │
+   ╰─ help: try: EventID
+
+error[esql_unknown_command]: unknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4 and 9.5 run a non-aggregating rule without it
+   ╭─▶ objects/rules/silent-beacon-rule-0158.yaml:73:34
+   │
+72 │     query: |
+73 │       FROM logs-* METADATA _id | WEHRE process.name == "x"
+   │                                  ━━━━━
+   │
+   ╰─ help: did you mean 'WHERE'?
+
+error[esql_unknown_function]: unknown ES|QL function `STARTSWITH`
+   ╭─▶ objects/rules/silent-dropper-rule-0177.yaml:56:43
+   │
+55 │     query: |
+56 │       FROM logs-* METADATA _id | EVAL x = STARTSWITH(process.name, "b")
+   │                                           ━━━━━━━━━━
+   │
+   ╰─ help: did you mean 'STARTS_WITH'?
+
+error[falco_unknown_field]: `proc.nmae` is not a Falco field of the `syscall` source
+   ╭─▶ objects/rules/silent-implant-rule-0142.yaml:53:27
+   │
+52 │     condition: |
+53 │       spawned_process and proc.nmae = bash
+   │                           ━━━━━━━━━
+   │
+   ╰─ help: try: proc.name
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_priority
+   ╭─▶ objects/rules/silent-injection-rule-0022.yaml:51:3
    │
 50 │ configurations:
 51 │   sysdig:
@@ -717,45 +680,82 @@ error[schema_validation]: configurations.sysdig: Value error, SysdigConfig valid
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[schema_validation]: metadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime
-  ╭─▶ objects/rules/staged-harvest-rule-0010.yaml:9:13
-  │
-8 │   modified: 2025-09-08
-9 │   reviewed: yesterday
-  │             ━━━━━━━━━
-  │
-  ╰─ help: the template in .opentide/templates/ shows the field and its values
-
-error[missing_uuid]: Object YAML has no uuid: staged-implant-rule-0006.yaml
-  ╭─▶ objects/rules/staged-implant-rule-0006.yaml
-  ╰─ help: add metadata.uuid with a fresh UUID v4
-
-error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape
-   ╭─▶ objects/rules/staged-implant-rule-0036.yaml:41:3
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_source
+   ╭─▶ objects/rules/silent-pivot-rule-0025.yaml:68:3
    │
-40 │ configurations:
-41 │   sysdig:
+67 │     severity: medium
+68 │   sysdig:
    │   ━━━━━━
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[config_enum_unknown]: 'NOPE' is not a configured status
-   ╭─▶ objects/rules/staged-injection-rule-0019.yaml:51:13
+error[eql_field_comparison]: Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant
+   ╭─▶ objects/rules/silent-pivot-rule-0086.yaml:50:21
    │
-50 │     schema: platform::sentinel::1.0
-51 │     status: NOPE
-   │             ━━━━ not in [[statuses]]
+49 │     query: |
+50 │       process where process.pid == process.parent.pid
+   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    │
-   ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
 
 error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/staged-injection-rule-0106.yaml:58:7
+   ╭─▶ objects/rules/staged-beacon-rule-0053.yaml:62:7
    │
-57 │     query: |
-58 │       union * | take 1
-   │       ━━━━━━━━━━━━━━━━
+61 │       SecurityEvent
+62 │       | where (
+   │       ━━━━━━━━━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[falco_invalid_regex]: invalid regex pattern: error: unclosed group
+   ╭─▶ objects/rules/staged-beacon-rule-0100.yaml:51:43
+   │
+50 │     condition: |
+51 │       spawned_process and proc.name regex '('
+   │                                           ━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[esql_pattern]: LIKE escapes only `*`, `?`, and `\`; a backslash before `b` fails. Write `\\` for a literal backslash
+   ╭─▶ objects/rules/staged-dropper-rule-0112.yaml:59:58
+   │
+58 │     query: |
+59 │       FROM logs-* METADATA _id | WHERE process.name LIKE "a\\b"
+   │                                                          ━━━━━━
+   │
+   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
+  ╭─▶ objects/rules/staged-exfiltration-rule-0021.yaml:72:1
+  ├─ note: while parsing a flow sequence that starts at line 71, column 9
+  ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+
+error[falco_misplaced_list]: `corpus_shells_416` is a list, not a macro: use it in a value list, `in (corpus_shells_416)`
+   ╭─▶ objects/rules/staged-harvest-rule-0155.yaml:63:16
+   │
+62 │       - Detection Engineering
+63 │     condition: corpus_shells_416
+   │                ━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[eql_unsupported]: Elasticsearch EQL does not support the `unique` pipe; only `head` and `tail`
+   ╭─▶ objects/rules/staged-injection-rule-0281.yaml:55:28
+   │
+54 │     query: |
+55 │       process where true | unique process.name
+   │                            ━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[schema_validation]: metadata.reviewed: Extra inputs are not permitted
+   ╭─▶ objects/rules/staged-pivot-rule-0009.yaml:14:3
+   │
+13 │     name: Example Detection Team
+14 │   reviewed: 2026-03-01
+   │   ━━━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[chaining_relation_unknown]: Unknown chaining relation 'sequence::succeds'
    ╭─▶ objects/threats/elevated-tunnel-threat-0003.yaml:44:17

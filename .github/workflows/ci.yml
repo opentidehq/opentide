@@ -1508,6 +1508,31 @@ jobs:
       - name: cargo deny (publishing/ placeholder crate)
         run: cargo deny --config deny.toml --manifest-path publishing/placeholders/crates/opentide/Cargo.toml --locked check
 
+  # The catch-up train's report-only goldens marker (tests/golden/REPORT_ONLY)
+  # turned the golden-diff gates off while its oracle was the one it was
+  # catching up from. O2 removed it with the code that read it: the goldens
+  # gate everywhere. A required check on development and
+  # integration/unified-core (.github/AGENTS.md), this job keeps its name and
+  # fails if the marker comes back, so nobody reintroduces it by mistake
+  # (tests/test_ci/test_ci_scope.py).
+  report-only-guard:
+    name: Report-only goldens guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The goldens gate, with no report-only marker
+        run: |
+          set -euo pipefail
+          if [ -e tests/golden/REPORT_ONLY ]; then
+            echo "::error::tests/golden/REPORT_ONLY is committed. The report-only goldens were the catch-up train's and O2 removed them: nothing reads the marker any more, and the goldens gate everywhere. Remove the file."
+            exit 1
+          fi
+          echo "tests/golden/REPORT_ONLY is absent: the goldens gate."
+
   # The vendored parser.c of every grammar is what tree-sitter-cli generates
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
   grammars:
@@ -1844,7 +1869,7 @@ jobs:
           { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   # The corpora of UC-0.6 (#804, tests/corpora/README.md) against the oracle,
-  # opentide 0.23.0 from PyPI (every wheel hash-pinned): the heavy workspace has
+  # opentide 0.28.1 from PyPI (every wheel hash-pinned): the heavy workspace has
   # no finding, every fault kind reports exactly its codes, the code inventory is
   # the oracle's and COVERAGE.md is current with no code missing.
   # In five parts on five runners (#841): run one after the other they took
@@ -1937,7 +1962,7 @@ jobs:
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
+      - name: Install the oracle (tests/corpora/oracle.in, hash-pinned, own venv)
         run: |
           uv venv --python 3.12 "$RUNNER_TEMP/oracle"
           uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
@@ -2101,7 +2126,7 @@ jobs:
   # about eight minutes on four cores, so in the full set, not a corpus part.
   # It reads the corpus parts' caches and saves none.
   corpus-queries:
-    name: Corpus (query fault kinds) against opentide 0.23.0
+    name: Corpus (query fault kinds) against the oracle
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -2138,7 +2163,7 @@ jobs:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
           restore-keys: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-
-      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
+      - name: Install the oracle (tests/corpora/oracle.in, hash-pinned, own venv)
         run: |
           uv venv --python 3.12 "$RUNNER_TEMP/oracle"
           uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
@@ -2150,12 +2175,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: sccache --show-stats
 
-  # The required check `Corpus (generator, faults, coverage) against opentide
-  # 0.23.0`: it passes only when every part did. `!cancelled()`, not the
+  # The required check `Corpus (generator, faults, coverage) against the
+  # oracle`: it passes only when every part did. `!cancelled()`, not the
   # implicit success(): a failed part would skip this job, and a skipped
   # required check passes.
   corpus:
-    name: Corpus (generator, faults, coverage) against opentide 0.23.0
+    name: Corpus (generator, faults, coverage) against the oracle
     needs: [changes, corpus-part]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest

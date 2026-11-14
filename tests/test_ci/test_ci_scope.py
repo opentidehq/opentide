@@ -79,6 +79,7 @@ CI_CORE = {
     "gitlab-ci-lint",
     "golden-compare-part",
     "wasi",
+    "report-only-guard",
 }
 # Jobs that gather the parts of a core gate under the required check's name
 # (#841): `if` is exactly GATHER, so a failed part fails it instead of
@@ -258,7 +259,9 @@ def test_golden_compare_runs_every_part_of_the_cases() -> None:
     assert download["with"] == {"pattern": "golden-unused-*", "merge-multiple": True}
 
 
-def _gather_golden(tmp_path: Path, result: str, parts: dict[int, list[int]]) -> bool:
+def _gather_golden(
+    tmp_path: Path, result: str, parts: dict[int, list[int]], extra: dict[str, str] | None = None
+) -> bool:
     """The gather's own shell, over the unused entries each part wrote."""
     for part, entries in parts.items():
         listed = [
@@ -270,7 +273,12 @@ def _gather_golden(tmp_path: Path, result: str, parts: dict[int, list[int]]) -> 
     done = subprocess.run(
         ["bash", "-ec", step["run"]],
         cwd=tmp_path,
-        env={**os.environ, "RESULT": result, "PARTS": step["env"]["PARTS"]},
+        env={
+            **os.environ,
+            "RESULT": result,
+            "PARTS": step["env"]["PARTS"],
+            **(extra or {}),
+        },
         capture_output=True,
         text=True,
         check=False,
@@ -294,6 +302,42 @@ def test_the_golden_gather_fails_on_an_entry_no_part_applied(tmp_path: Path) -> 
     assert not _gather_golden(tmp_path, "success", {1: [4, 7], 2: [7], 3: [4, 7]})
     # Each entry applied in a part at least: none is stale.
     assert _gather_golden(tmp_path, "success", {1: [4, 7], 2: [7], 3: [4]})
+
+
+def test_the_golden_gather_gates_stale_entries_with_no_way_out(tmp_path: Path) -> None:
+    # O2 removed the catch-up train's report-only marker (tests/golden/REPORT_ONLY):
+    # a stale entry fails the gather whatever the environment says, and no part
+    # reads a marker to report instead.
+    stale = {1: [7], 2: [7], 3: [7]}
+    assert not _gather_golden(tmp_path, "success", stale, {"REPORT_ONLY": "true"})
+    assert "REPORT_ONLY" not in _golden_check_step()["env"]
+    part = _ci_jobs()["golden-compare-part"]
+    assert "outputs" not in part
+    assert not [s for s in part["steps"] if "REPORT_ONLY" in s.get("run", "")]
+
+
+def _guard_passes(tmp_path: Path) -> bool:
+    """The report-only guard's own shell, in a checkout at ``tmp_path``."""
+    job = _ci_jobs()["report-only-guard"]
+    (step,) = [s for s in job["steps"] if "run" in s]
+    done = subprocess.run(
+        ["bash", "-ec", step["run"]], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    return done.returncode == 0
+
+
+def test_the_report_only_guard_fails_when_the_marker_comes_back(tmp_path: Path) -> None:
+    # A required check (.github/AGENTS.md) kept under its name since O2 removed
+    # tests/golden/REPORT_ONLY: it runs on every pull request, on any base, and
+    # fails while the marker is committed, which nothing reads any more.
+    job = _ci_jobs()["report-only-guard"]
+    assert job["name"] == "Report-only goldens guard"
+    assert "if" not in job
+    assert not (ROOT / "tests/golden/REPORT_ONLY").exists()
+    assert _guard_passes(tmp_path)
+    (tmp_path / "tests/golden").mkdir(parents=True)
+    (tmp_path / "tests/golden/REPORT_ONLY").write_text("train\n", encoding="utf-8")
+    assert not _guard_passes(tmp_path)
 
 
 @pytest.mark.parametrize(

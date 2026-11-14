@@ -24,8 +24,11 @@ pub fn required(platform: &str) -> &'static [&'static str] {
         ],
         "sentinel_one" => &["status", "condition"],
         "crowdstrike" => &["status", "query", "details", "schedule"],
-        "harfanglab" | "elastic" | "sysdig" => &["status"],
-        // Carbon Black, and the oracle's default for a model it does not list.
+        "harfanglab" | "elastic" | "sysdig" | "bitdefender" => &["status"],
+        "exabeam" => &["status", "sequences"],
+        "google_secops" => &["status", "events", "condition"],
+        // Carbon Black, Graylog, and the oracle's default for a model it does
+        // not list.
         _ => &["status", "query"],
     }
 }
@@ -75,7 +78,7 @@ mod tests {
     #[test]
     fn platform_root_extras_follow_the_oracle() {
         let extras = all_root_extras();
-        assert_eq!(extras.len(), 9);
+        assert_eq!(extras.len(), crate::platforms::COUNT);
         let sentinel = &extras[0].1;
         assert_eq!(
             sentinel["required"],
@@ -102,5 +105,40 @@ mod tests {
             carbon.1["property_extras"]["tenants"]["tide.config.system.tenants"],
             "carbon_black_cloud"
         );
+    }
+
+    /// Every block's required keys are 0.28.1's `_REQUIRED`
+    /// (`models/platform_schema.py`): a Bitdefender block (a detection or a
+    /// YARA rule) and a Google SecOps block (YARA-L sections) have no `query`.
+    #[test]
+    fn every_block_requires_the_oracles_keys() {
+        let oracle: &[(&str, &[&str])] = &[
+            ("sentinel", &["status", "query", "scheduling", "alert"]),
+            (
+                "defender_for_endpoint",
+                &[
+                    "status",
+                    "query",
+                    "alert",
+                    "impacted_entities",
+                    "scheduling",
+                ],
+            ),
+            ("splunk", &["status", "query"]),
+            ("sentinel_one", &["status", "condition"]),
+            ("crowdstrike", &["status", "query", "details", "schedule"]),
+            ("harfanglab", &["status"]),
+            ("carbon_black_cloud", &["status", "query"]),
+            ("elastic", &["status"]),
+            ("sysdig", &["status"]),
+            ("bitdefender", &["status"]),
+            ("graylog", &["status", "query"]),
+            ("exabeam", &["status", "sequences"]),
+            ("google_secops", &["status", "events", "condition"]),
+        ];
+        assert_eq!(oracle.len(), crate::platforms::COUNT);
+        for (key, keys) in oracle {
+            assert_eq!(required(key), *keys, "{key}");
+        }
     }
 }

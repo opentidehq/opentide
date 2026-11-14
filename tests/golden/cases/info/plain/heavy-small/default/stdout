@@ -1,8 +1,12 @@
-  version  0.23.0
-platforms  Carbon Black Cloud               enabled · deploy, validate, query
+  version  0.28.1
+platforms  Bitdefender GravityZone          enabled · deploy
+           Carbon Black Cloud               enabled · deploy, validate, query
            CrowdStrike Falcon               enabled · deploy, query
            Microsoft Defender for Endpoint  enabled · deploy, validate, query
            Elastic Security                 enabled · deploy, validate, query
+           Exabeam New-Scale SIEM           enabled · deploy, validate, query
+           Google Security Operations       enabled · deploy, validate, query
+           Graylog                          enabled · deploy, validate, query
            HarfangLab                       enabled · deploy, query
            Microsoft Sentinel               enabled · deploy, validate, query
            SentinelOne                      enabled · deploy, validate, query

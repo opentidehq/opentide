@@ -614,11 +614,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if !unwritten_lines.is_empty() && !terminal.quiet {
         body.push(Block::Stderr(terminal.stderr.warnings(&unwritten_lines)));
     }
-    body.push(Block::Raw(frames.render(
+    let (text, hidden) = frames.render_notes(
         &shown,
         &mut SourceFiles::default(),
         terminal.quiet,
-    )));
+        terminal.verbose,
+    );
+    body.push(Block::Raw(text));
     let line = if empty {
         message
     } else {
@@ -643,6 +645,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     report.body = body;
     report.outcome_line = Some(line);
+    terminal.hidden_notes_step(&mut report.outcome.next_actions, hidden);
     report
 }
 

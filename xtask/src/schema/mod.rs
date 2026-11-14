@@ -176,11 +176,15 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
         ("CarbonBlackConfig", of::<platform::CarbonBlackConfig>()),
         ("ElasticConfig", of::<platform::ElasticConfig>()),
         ("SysdigConfig", of::<platform::SysdigConfig>()),
+        ("BitdefenderConfig", of::<platform::BitdefenderConfig>()),
+        ("GraylogConfig", of::<platform::GraylogConfig>()),
+        ("ExabeamConfig", of::<platform::ExabeamConfig>()),
+        ("GoogleSecopsConfig", of::<platform::GoogleSecopsConfig>()),
     ]
 }
 
-/// A property the models have and the oracle's do not: a field development
-/// added after the oracle's release (0.23.0), ported on purpose.
+/// A property the models have and the oracle's do not, ported or written on
+/// purpose.
 #[derive(Debug, Clone, Copy)]
 pub struct ApprovedProperty {
     /// The models that hold it, by Pydantic class name.
@@ -196,23 +200,101 @@ pub struct ApprovedProperty {
 /// The approved properties. Each applies only where the oracle has no
 /// property at that path: any other difference there is still reported, and
 /// an entry that approves nothing in a run is stale and fails it.
-pub const APPROVED_PROPERTIES: &[ApprovedProperty] = &[ApprovedProperty {
-    models: &[
-        "SplunkConfig",
-        "RuleConfigurations",
-        "DetectionRule",
-        "DetectionRule_v1_1",
-    ],
-    paths: &[
-        "/properties/advanced",
-        "/properties/splunk/properties/advanced",
-        "/properties/configurations/properties/splunk/properties/advanced",
-    ],
-    reason: "0.24.0 (#878): a Splunk block's `advanced` table is a field of the \
-             platform::splunk::1.0 layout again; the oracle (0.23.0) refused it as a \
-             splunk::2.x key",
-    changelog: "**A Splunk block's `advanced` table validates and deploys again**",
-}];
+pub const APPROVED_PROPERTIES: &[ApprovedProperty] = &[
+    ApprovedProperty {
+        models: &[
+            "SplunkConfig",
+            "RuleConfigurations",
+            "DetectionRule",
+            "DetectionRule_v1_1",
+        ],
+        paths: &[
+            "/properties/advanced/additionalProperties/description",
+            "/properties/splunk/properties/advanced/additionalProperties/description",
+            "/properties/configurations/properties/splunk/properties/advanced/additionalProperties/description",
+        ],
+        reason: "the Rust model's value type of a Splunk block's `advanced` table documents \
+             what a value may be (a scalar or null), the hover text an editor shows; the \
+             oracle's schema describes the table alone. The values it accepts are the \
+             same (schema-descriptions, #900)",
+        changelog: "**The editor schemas read differently, and accept the same files**",
+    },
+    ApprovedProperty {
+        models: &[
+            "BitdefenderConfig",
+            "RuleConfigurations",
+            "DetectionRule",
+            "DetectionRule_v1_1",
+        ],
+        paths: &[
+            "/properties/detection/properties/criteria/items/properties/any/items/description",
+            "/properties/bitdefender/properties/detection/properties/criteria/items/properties/any/items/description",
+            "/properties/configurations/properties/bitdefender/properties/detection/properties/criteria/items/properties/any/items/description",
+        ],
+        reason: "the Rust model's item type of a Bitdefender criterion's `any` list documents \
+             what an item may be (`is: str | int`, an exact-match value), the hover text an \
+             editor shows; 0.28.1's schema describes the list alone. The values it accepts \
+             are the same (schema-descriptions, #900)",
+        changelog: "**The editor schemas read differently, and accept the same files**",
+    },
+    ApprovedProperty {
+        models: &[
+            "GraylogConfig",
+            "RuleConfigurations",
+            "DetectionRule",
+            "DetectionRule_v1_1",
+        ],
+        paths: &[
+            "/properties/event_fields/additionalProperties/description",
+            "/properties/graylog/properties/event_fields/additionalProperties/description",
+            "/properties/configurations/properties/graylog/properties/event_fields/additionalProperties/description",
+        ],
+        reason: "the Rust model's value type of a Graylog block's `event_fields` map documents \
+             what a value may be (a field name, a template, or a lookup), the hover text an \
+             editor shows; 0.28.1's schema describes the map alone. The values it accepts \
+             are the same (schema-descriptions, #900)",
+        changelog: "**The editor schemas read differently, and accept the same files**",
+    },
+];
+
+/// A model revision development made after the oracle's release (0.23.0),
+/// ported on purpose: every difference under one of `paths` in one of
+/// `models` (descriptions, nullability, required keys, new properties).
+#[derive(Debug, Clone, Copy)]
+pub struct ApprovedRevision {
+    /// The models that hold it, by Pydantic class name.
+    pub models: &'static [&'static str],
+    /// The paths it changes in each of them, from the root of the normalised
+    /// schema: a difference at a path or below it is the revision's.
+    pub paths: &'static [&'static str],
+    /// Why the models differ.
+    pub reason: &'static str,
+    /// The bold lead of the `CHANGELOG.md` entry that announces it.
+    pub changelog: &'static str,
+}
+
+/// The approved revisions. Like [`APPROVED_PROPERTIES`], an entry that
+/// approves nothing in a run is stale and fails it. None since O2: the
+/// oracle (0.28.1) has every model revision the ports made (harfanglab-1.0
+/// 1.2, #899, was the last one 0.23.0 lacked).
+pub const APPROVED_REVISIONS: &[ApprovedRevision] = &[];
+
+/// Whether `difference` is under a path of a `revisions` entry (in a run,
+/// [`APPROVED_REVISIONS`]) of `model`: the entry's index, if so.
+fn approved_revision(
+    revisions: &[ApprovedRevision],
+    model: &str,
+    difference: &str,
+) -> Option<usize> {
+    revisions.iter().position(|entry| {
+        entry.models.contains(&model)
+            && entry.paths.iter().any(|path| {
+                difference
+                    .strip_prefix(path)
+                    .is_some_and(|rest| rest.starts_with('/') || rest.starts_with(": "))
+            })
+    })
+}
 
 /// Whether `difference` (a line of [`normalise::differences`]) is a
 /// property of `model` that [`APPROVED_PROPERTIES`] approves: the entry's
@@ -235,6 +317,7 @@ fn approved_property(model: &str, difference: &str) -> Option<usize> {
 pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
     let mut out = Vec::new();
     let mut used = vec![false; APPROVED_PROPERTIES.len()];
+    let mut revised = vec![false; APPROVED_REVISIONS.len()];
     let registered: Vec<&str> = oracle["registered"]
         .as_array()
         .context("the probe wrote no registered identifiers")?
@@ -257,12 +340,16 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         let a = normalise(pydantic, Side::Pydantic, &[]);
         let b = normalise(&rust, Side::Schemars, &[]);
         let mut found = differences(&a, &b);
-        found.retain(|difference| match approved_property(name, difference) {
-            Some(index) => {
+        found.retain(|difference| {
+            if let Some(index) = approved_property(name, difference) {
                 used[index] = true;
-                false
+                return false;
             }
-            None => true,
+            if let Some(index) = approved_revision(APPROVED_REVISIONS, name, difference) {
+                revised[index] = true;
+                return false;
+            }
+            true
         });
         out.push((name.to_owned(), found));
     }
@@ -276,6 +363,18 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
                 entry.paths, entry.changelog
             )
         })
+        .chain(
+            APPROVED_REVISIONS
+                .iter()
+                .zip(&revised)
+                .filter(|(_, used)| !**used)
+                .map(|(entry, _)| {
+                    format!(
+                        "stale: no model differs from the oracle under {:?} ({})",
+                        entry.paths, entry.changelog
+                    )
+                }),
+        )
         .collect();
     out.push(("(approvals)".to_owned(), stale));
     Ok(out)
@@ -511,28 +610,29 @@ mod tests {
 
     #[test]
     fn an_approved_property_is_one_the_oracle_lacks_at_its_path() {
-        let added = "/properties/advanced: pydantic (absent), rust {\"type\":\"object\"}";
-        assert_eq!(approved_property("SplunkConfig", added), Some(0));
+        let path = "/properties/advanced/additionalProperties/description";
+        let added = format!("{path}: pydantic (absent), rust \"A value\"");
+        assert_eq!(approved_property("SplunkConfig", &added), Some(0));
         // Another model, another path, or a property both have.
-        assert_eq!(approved_property("SentinelConfig", added), None);
+        assert_eq!(approved_property("SentinelConfig", &added), None);
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advancedx: pydantic (absent), rust {}"
+                "/properties/advanced: pydantic (absent), rust {}"
             ),
             None
         );
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advanced/type: pydantic \"object\", rust \"array\""
+                &format!("{path}: pydantic \"Other\", rust \"A value\"")
             ),
             None
         );
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advanced: pydantic {}, rust (absent)"
+                &format!("{path}: pydantic \"A value\", rust (absent)")
             ),
             None
         );
@@ -545,12 +645,20 @@ mod tests {
     /// reported stale.
     #[test]
     fn approved_properties_pass_and_go_stale() {
+        // The approved descriptions, by the words they start with.
+        const VALUES: [&str; 3] = [
+            "A `savedsearches.conf` value",
+            "`is: str | int`",
+            "An `event_fields` value",
+        ];
         let mut schemas = serde_json::Map::new();
         for (name, schema) in rust_schemas() {
             let mut schema = schema;
             for entry in APPROVED_PROPERTIES {
                 if entry.models.contains(&name) {
-                    remove_property(&mut schema, "advanced");
+                    for value in VALUES {
+                        remove_description(&mut schema, value);
+                    }
                 }
             }
             schemas.insert(name.to_owned(), schema);
@@ -567,11 +675,16 @@ mod tests {
                 .all(|difference| !difference.contains("advanced")),
             "{compared:#?}"
         );
-        assert_eq!(
-            compared.last(),
-            Some(&("(approvals)".to_owned(), Vec::new()))
+        // Every property approval applied; a revision of the models' own
+        // schemas, which this oracle also has, is stale.
+        let (name, stale) = compared.last().unwrap();
+        assert_eq!(name, "(approvals)");
+        assert_eq!(stale.len(), APPROVED_REVISIONS.len(), "{stale:?}");
+        assert!(
+            stale.iter().all(|line| line.contains(" under ")),
+            "{stale:?}"
         );
-        // The oracle with the property too: the approval is stale.
+        // The oracle with the description too: the approval is stale.
         let mut full = serde_json::Map::new();
         for (name, schema) in rust_schemas() {
             full.insert(name.to_owned(), schema);
@@ -579,25 +692,90 @@ mod tests {
         let oracle = json!({"registered": objects::checks::REGISTERED, "schemas": full});
         let compared = compare_schemas(&oracle).unwrap();
         let (_, stale) = compared.last().unwrap();
-        assert_eq!(stale.len(), 1, "{stale:?}");
-        assert!(stale[0].starts_with("stale: "), "{stale:?}");
+        assert_eq!(
+            stale.len(),
+            APPROVED_PROPERTIES.len() + APPROVED_REVISIONS.len(),
+            "{stale:?}"
+        );
+        assert!(
+            stale.iter().all(|line| line.starts_with("stale: ")),
+            "{stale:?}"
+        );
     }
 
-    /// Removes every property named `name` from `schema`, its definitions
-    /// included.
-    fn remove_property(schema: &mut Value, name: &str) {
+    /// A revision as the ports made them: harfanglab-1.0 1.2 (#899), which
+    /// the 0.23.0 oracle lacked.
+    const HARFANGLAB_1_2: &[ApprovedRevision] = &[ApprovedRevision {
+        models: &["HarfangLabConfig"],
+        paths: &[
+            "/properties/sigma/description",
+            "/properties/tags/description",
+            "/properties/yara",
+        ],
+        reason: "harfanglab-1.0 1.2",
+        changelog: "**A HarfangLab block is a Sigma rule or a YARA rule, not both**",
+    }];
+
+    #[test]
+    fn an_approved_revision_takes_what_is_under_its_paths() {
+        let model = "HarfangLabConfig";
+        for difference in [
+            "/properties/yara/required: pydantic [\"meta\"], rust (absent)",
+            "/properties/yara/properties/signature: pydantic (absent), rust {}",
+            "/properties/sigma/description: pydantic \"a\", rust \"b\"",
+        ] {
+            assert_eq!(
+                approved_revision(HARFANGLAB_1_2, model, difference),
+                Some(0),
+                "{difference}"
+            );
+        }
+        // Another key of the block, a prefix that is no path, another model.
+        assert_eq!(
+            approved_revision(
+                HARFANGLAB_1_2,
+                model,
+                "/properties/sigma/required: pydantic [], rust (absent)"
+            ),
+            None
+        );
+        assert_eq!(
+            approved_revision(
+                HARFANGLAB_1_2,
+                model,
+                "/properties/yarax: pydantic (absent), rust {}"
+            ),
+            None
+        );
+        assert_eq!(
+            approved_revision(
+                HARFANGLAB_1_2,
+                "SentinelConfig",
+                "/properties/yara/required: pydantic [], rust (absent)"
+            ),
+            None
+        );
+    }
+
+    /// Removes every `description` that starts with `prefix` from `schema`,
+    /// its definitions included.
+    fn remove_description(schema: &mut Value, prefix: &str) {
         match schema {
             Value::Object(map) => {
-                if let Some(Value::Object(properties)) = map.get_mut("properties") {
-                    properties.remove(name);
+                if map
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .is_some_and(|text| text.starts_with(prefix))
+                {
+                    map.remove("description");
                 }
                 for value in map.values_mut() {
-                    remove_property(value, name);
+                    remove_description(value, prefix);
                 }
             }
             Value::Array(items) => items
                 .iter_mut()
-                .for_each(|item| remove_property(item, name)),
+                .for_each(|item| remove_description(item, prefix)),
             _ => {}
         }
     }
@@ -605,7 +783,7 @@ mod tests {
     #[test]
     fn every_model_and_every_platform_block_has_a_schema() {
         let schemas = rust_schemas();
-        assert_eq!(schemas.len(), 29);
+        assert_eq!(schemas.len(), 33);
         for entry in platform::PLATFORM_CONFIG_MODELS {
             assert!(
                 schemas.iter().any(|(name, _)| *name == entry.model),

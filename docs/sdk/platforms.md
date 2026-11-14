@@ -5,7 +5,7 @@ description: The built-in platforms, and platform plugins (opentide.plugins) tha
 
 # Platforms API
 
-The nine built-in platforms are the Rust core's connectors: the command line, the [Workspace](./workspace.md) and its [tenant operations](./workspace.md#tenant-operations) reach them, and `opentide.Connection.capabilities` says what each can do ([capability matrix](#capability-matrix)). Python adds a platform through a **plugin**.
+The thirteen built-in platforms are the Rust core's connectors: the command line, the [Workspace](./workspace.md) and its [tenant operations](./workspace.md#tenant-operations) reach them, and `opentide.Connection.capabilities` says what each can do ([capability matrix](#capability-matrix)). Python adds a platform through a **plugin**.
 
 The Python platform registry (`Opentide.Platforms`, `opentide.platforms`, the `declare()` entry points of the built-in platforms) is gone with the Python implementation ([#841](https://github.com/opentidehq/opentide/issues/841)).
 
@@ -147,7 +147,7 @@ Any other exception fails the call with its type and message. In `query` and `va
 
 ### Deployment
 
-A plugin platform deploys as the built-in platforms that keep the vendor's id of a rule do (CrowdStrike, Defender for Endpoint, SentinelOne, Sysdig):
+A plugin platform deploys as the built-in platforms that keep the vendor's id of a rule do (CrowdStrike, Defender for Endpoint, SentinelOne, Sysdig, Exabeam):
 
 - `--strategy` is required, and the block's `status` decides whether a run sends the rule, as for every platform: `PREVIEW` and `RELEASE` runs, tenants' `strategies`, `--wide`, `--keep-deprecated`. `--dry-run` shows the plan and the block each tenant would receive, and sends nothing.
 - Each rule is planned from its [deployment state](../usage/concepts/deployment-state.md) shard, `.opentide/states/deployment/<uuid>.json`, where the plugin's ids sit under `platforms.<plugin>.<tenant>`. Without an id there, the plugin receives `create`, and the `remote_id` it returns is recorded. With one, it receives `update`, `disable` (a status whose strategy is `DISABLEMENT`) or `delete` (`DELETION`), with that id as `remote_id`; after a `delete`, the id is forgotten. A `disable` or `delete` of a rule with no recorded id is skipped with `external_id_missing`, as for the built-in platforms.

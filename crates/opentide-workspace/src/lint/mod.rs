@@ -4,7 +4,9 @@
 //! object without a name (`name_missing`), a file name that is not the one
 //! its name gives (`filename_mismatch`), one the configured pattern refuses
 //! (`filename_pattern`), recommended metadata that is missing
-//! (`metadata_recommended`), a value `opentide new` marked as a placeholder
+//! (`metadata_recommended`), a field the templates ask for and validation
+//! does not require (`recommended_field_missing`), a value `opentide new`
+//! marked as a placeholder
 //! (`placeholder`), and a YAML file in a subfolder of an object folder
 //! (`nested_object_file`). The queries check's findings come from the host
 //! ([`LintQueryCheck`], UC-2.5).
@@ -21,7 +23,8 @@
 //! A finding is a [`LintFinding`]: the JSON entry of `lint --json`'s
 //! `findings`, key for key in the oracle's order, and the [`Diagnostic`] its
 //! frame, SARIF and CI annotations are drawn from. Lint's `info` is
-//! [`Severity::Info`]: the JSON says `info`, the frame says `note`.
+//! [`Severity::Info`]: the JSON says `info`, the frame says `note`. A note
+//! (a missing optional field) never fails a run, `--strict` included.
 
 pub mod stems;
 
@@ -59,6 +62,9 @@ pub mod codes {
     pub const FILENAME_PATTERN: &str = "filename_pattern";
     /// Recommended metadata is missing.
     pub const METADATA: &str = "metadata_recommended";
+    /// A field the templates ask for and validation does not require is
+    /// missing: the engine's code, which the editor reports too.
+    pub const RECOMMENDED: &str = "recommended_field_missing";
     /// A value `opentide new` marked as a placeholder.
     pub const PLACEHOLDER: &str = "placeholder";
     /// A YAML file in a subfolder of an object folder.
@@ -66,12 +72,13 @@ pub mod codes {
 }
 
 /// Every code a lint rule reports (`LINT_CODES.values()`).
-pub const LINT_CODES: [&str; 7] = [
+pub const LINT_CODES: [&str; 8] = [
     codes::PARSE,
     codes::NAME,
     codes::FILENAME,
     codes::FILENAME_PATTERN,
     codes::METADATA,
+    codes::RECOMMENDED,
     codes::PLACEHOLDER,
     codes::NESTED,
 ];
@@ -92,6 +99,9 @@ pub enum LintCheck {
     Filenames,
     /// Recommended metadata.
     Metadata,
+    /// Fields the templates ask for and validation does not require (a
+    /// rule's `configurations` and `response`).
+    Recommended,
     /// Values `opentide new` marked.
     Placeholders,
     /// The query engines' style findings (the host's, UC-2.5).
@@ -100,9 +110,10 @@ pub enum LintCheck {
 
 impl LintCheck {
     /// Every check, in the order `lint.toml` lists them.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Filenames,
         Self::Metadata,
+        Self::Recommended,
         Self::Placeholders,
         Self::Queries,
     ];
@@ -112,6 +123,7 @@ impl LintCheck {
         match self {
             Self::Filenames => "filenames",
             Self::Metadata => "metadata",
+            Self::Recommended => "recommended",
             Self::Placeholders => "placeholders",
             Self::Queries => "queries",
         }
@@ -174,7 +186,8 @@ pub struct LintOptions<'a> {
     pub checks: Vec<LintCheck>,
     /// `--fix`: rename files to their names.
     pub fix: bool,
-    /// `--strict`: any finding fails the run.
+    /// `--strict`: an error or a warning left fails the run; a note never
+    /// does.
     pub strict: bool,
     /// `--file`, repeatable.
     pub files: Vec<String>,
@@ -215,7 +228,12 @@ pub struct LintFinding {
 impl LintFinding {
     /// A finding of the queries check, from the engine's diagnostic: the host
     /// builds it (UC-2.5); `severity` is lint's (`warning` or `info`).
-    pub fn from_engine(relative: &str, uuid: Option<&str>, diagnostic: Diagnostic) -> Self {
+    pub fn from_engine(relative: &str, uuid: Option<&str>, mut diagnostic: Diagnostic) -> Self {
+        if diagnostic.object_uuid.is_empty()
+            && let Some(uuid) = uuid
+        {
+            uuid.clone_into(&mut diagnostic.object_uuid);
+        }
         let mut json = IndexMap::new();
         json.insert("check".to_owned(), json!("queries"));
         json.insert("severity".to_owned(), json!(diagnostic.severity.as_str()));
@@ -398,6 +416,8 @@ struct Record {
     name: Option<String>,
     uuid: Option<String>,
     metadata: Option<std::sync::Arc<Node>>,
+    /// The parsed mapping, for the recommended check.
+    root: Option<std::sync::Arc<Node>>,
     schema: Option<String>,
     parse_error: Option<String>,
     parse_position: Option<(usize, usize)>,
@@ -468,6 +488,9 @@ fn lint_with(
             &config.required_metadata,
         ));
     }
+    if selected.contains(&LintCheck::Recommended) {
+        findings.extend(recommended_findings(shown.iter().map(|&i| &records[i])));
+    }
     if selected.contains(&LintCheck::Placeholders) {
         findings.extend(placeholder_findings(shown.iter().map(|&i| &records[i])));
     }
@@ -537,11 +560,13 @@ fn lint_with(
     report(fs, &target, selected, all, scope, shown.len(), options)
 }
 
-/// Lint's file name and metadata findings on one object file: what the
-/// language server reports for an open file (KG-03 and KG-05, approved on
-/// #893; UC-2.6 wires it), `filename_mismatch` and `metadata_recommended` in
-/// place of the editor's `filename_slug`, `missing_author`,
-/// `missing_organisation` and `recommended_field_missing`. The checks are
+/// Lint's file name, metadata and recommended findings on one object file:
+/// what the language server reports for an open file (KG-03 and KG-05,
+/// approved on #893; UC-2.6 wires it), `filename_mismatch` and
+/// `metadata_recommended` in place of the editor's `filename_slug`,
+/// `missing_author` and `missing_organisation`, and
+/// `recommended_field_missing` as `opentide lint` reports it (a note, unless
+/// `[recommended]` raises it: language-server #250, opentide 0.28.1). The checks are
 /// the ones `lint.toml` enables, at its severities; the other files of the
 /// folder are read for the stems they hold, so a name another object has is
 /// expected with its UUID's prefix, as `lint` expects it. A file that is not
@@ -572,7 +597,12 @@ fn editor_findings(
 ) -> Vec<LintFinding> {
     let checks: Vec<LintCheck> = enabled_checks(config)
         .into_iter()
-        .filter(|check| matches!(check, LintCheck::Filenames | LintCheck::Metadata))
+        .filter(|check| {
+            matches!(
+                check,
+                LintCheck::Filenames | LintCheck::Metadata | LintCheck::Recommended
+            )
+        })
         .collect();
     if checks.is_empty() || files.is_some_and(<[PathBuf]>::is_empty) {
         return Vec::new();
@@ -591,7 +621,12 @@ fn editor_findings(
     report
         .findings
         .into_iter()
-        .filter(|finding| matches!(finding.code(), codes::FILENAME | codes::METADATA))
+        .filter(|finding| {
+            matches!(
+                finding.code(),
+                codes::FILENAME | codes::METADATA | codes::RECOMMENDED
+            )
+        })
         .collect()
 }
 
@@ -809,6 +844,7 @@ fn read_document(mut record: Record, text: String, document: &node::Document) ->
     let Some(root_node) = document.root() else {
         return record;
     };
+    record.root = Some(std::sync::Arc::clone(root_node));
     record.name = as_str(root_node.get("name").map(AsRef::as_ref));
     if let Some(metadata) = root_node.get("metadata")
         && matches!(metadata.value, Value::Map(_))
@@ -1226,6 +1262,64 @@ fn metadata_findings<'r>(
     findings
 }
 
+/// The mapping at the dotted `path` under `root` (`""` is `root`), or
+/// `None` when there is none (`_mapping_at`).
+fn mapping_at<'n>(root: &'n Node, path: &str) -> Option<&'n Node> {
+    let mut current = root;
+    for part in path.split('.').filter(|_| !path.is_empty()) {
+        current = current.get(part)?;
+    }
+    matches!(current.value, Value::Map(_)).then_some(current)
+}
+
+/// One note per field the templates ask for and validation does not require
+/// (`_recommended_findings`). The fields are the catalog's
+/// ([`opentide_schema::generate::catalog::recommended_fields`]), so lint
+/// reports what the editor reports, with no engine. A field counts as missing
+/// only inside a mapping the object has; an unknown schema is validate's.
+fn recommended_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft> {
+    let mut by_schema: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut findings = Vec::new();
+    for record in records {
+        let (None, Some(root), Some(schema)) = (&record.parse_error, &record.root, &record.schema)
+        else {
+            continue;
+        };
+        let fields = by_schema
+            .entry(schema.clone())
+            .or_insert_with(|| opentide_schema::generate::catalog::recommended_fields(schema));
+        for path in fields.iter() {
+            let (parent_path, key) = path.rsplit_once('.').unwrap_or(("", path.as_str()));
+            let Some(parent) = mapping_at(root, parent_path) else {
+                continue;
+            };
+            if parent.get(key).is_some() {
+                continue;
+            }
+            let top = path.split('.').next().unwrap_or(path);
+            let line = if parent_path.is_empty() {
+                Some(0)
+            } else {
+                record.key_lines.get(top).copied()
+            };
+            let mut draft = Draft::new(
+                LintCheck::Recommended,
+                "info",
+                record,
+                format!("Recommended field missing: {path}"),
+                codes::RECOMMENDED,
+                None,
+                line,
+            );
+            draft.field_path = path.split('.').map(str::to_owned).collect();
+            draft.position = line.map(|line| (line + 1, 1));
+            findings.push(draft);
+        }
+    }
+    findings
+}
+
 fn placeholder_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Draft> {
     let mut findings = Vec::new();
     for record in records {
@@ -1572,7 +1666,8 @@ fn report(
     options: &LintOptions<'_>,
 ) -> LintReport {
     let left: Vec<&LintFinding> = findings.iter().filter(|f| !f.is_fixed()).collect();
-    let status = if !left.is_empty() && options.strict {
+    // A note (a missing optional field) never fails a run, `--strict` or not.
+    let status = if options.strict && left.iter().any(|f| f.severity() != "info") {
         LintStatus::Failed
     } else if !left.is_empty() {
         LintStatus::Issues

@@ -12,7 +12,7 @@ path = "ws/docs/README.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 248
+size = 3474
 
 [[files]]
 path = "ws/docs/objectives"
@@ -25,7 +25,7 @@ path = "ws/docs/objectives/README.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 203
+size = 509
 
 [[files]]
 path = "ws/docs/rules"
@@ -38,7 +38,7 @@ path = "ws/docs/rules/README.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1204
+size = 2193
 
 [[files]]
 path = "ws/docs/threats"
@@ -51,4 +51,4 @@ path = "ws/docs/threats/README.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 176
+size = 498

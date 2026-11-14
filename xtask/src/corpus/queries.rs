@@ -25,13 +25,14 @@ use serde_json::{Value as Json, json};
 use super::faults::{Catalogue, Kind};
 use crate::validate::Approved;
 
-/// The queries check on the engines, counting the CrowdStrike queries it
-/// checked (the oracle checked none). The counts are the last check's: a
+/// The queries check on the engines, counting the CrowdStrike queries and
+/// HarfangLab YARA rules it checked (the oracle checked neither). The counts are the last check's: a
 /// `validate --fix` that writes validates twice, and its report is the second
 /// run's.
 #[derive(Default)]
 pub struct CountingQueries {
     crowdstrike: std::sync::atomic::AtomicUsize,
+    yara: std::sync::atomic::AtomicUsize,
     /// The other queries checked, by file.
     others: std::sync::Mutex<BTreeMap<PathBuf, usize>>,
 }
@@ -42,8 +43,13 @@ impl CountingQueries {
         self.crowdstrike.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// The queries other than CrowdStrike's checked in the files `files`
-    /// names.
+    /// The YARA rules checked (HarfangLab's `yara` block).
+    pub fn yara(&self) -> usize {
+        self.yara.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The queries other than CrowdStrike's and YARA's checked in the files
+    /// `files` names.
     pub fn others_in(&self, files: &std::collections::BTreeSet<PathBuf>) -> usize {
         let others = self
             .others
@@ -72,6 +78,7 @@ impl QueryCheck for CountingQueries {
         others.clear();
         self.crowdstrike
             .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.yara.store(0, std::sync::atomic::Ordering::Relaxed);
         for object in objects {
             let checked = profiles.check_object(object.source);
             let checked: Vec<_> = checked.iter().filter(|query| !query.placeholder).collect();
@@ -79,9 +86,16 @@ impl QueryCheck for CountingQueries {
                 .iter()
                 .filter(|query| query.platform == "crowdstrike")
                 .count();
+            let yara = checked
+                .iter()
+                .filter(|query| query.language == "yara")
+                .count();
             self.crowdstrike
                 .fetch_add(crowdstrike, std::sync::atomic::Ordering::Relaxed);
-            *others.entry(object.path.to_path_buf()).or_default() += checked.len() - crowdstrike;
+            self.yara
+                .fetch_add(yara, std::sync::atomic::Ordering::Relaxed);
+            *others.entry(object.path.to_path_buf()).or_default() +=
+                checked.len() - crowdstrike - yara;
         }
         found
     }
@@ -91,8 +105,8 @@ impl QueryCheck for CountingQueries {
 pub const GROUP: &str = "queries";
 
 /// Code prefixes of the query engines' findings.
-const ENGINE_PREFIXES: [&str; 9] = [
-    "kql_", "spl_", "esql_", "eql_", "kuery_", "lucene_", "ecs_", "falco_", "cql_",
+const ENGINE_PREFIXES: [&str; 10] = [
+    "kql_", "spl_", "esql_", "eql_", "kuery_", "lucene_", "ecs_", "falco_", "cql_", "yaral_",
 ];
 
 /// The codes lint's queries check reports beside the engines' own: the
@@ -116,11 +130,29 @@ pub fn is_query_kind(kind: &Kind) -> bool {
     is_validate_kind(kind) || is_lint_kind(kind)
 }
 
+/// The YARA-L codes a Google SecOps block's own checks report on its YAML
+/// (the section keys, `match` and `options`), which the queries check
+/// leaves to them: a kind that writes a block and expects only these has no
+/// engine finding to compare. A search (a hunt) reports `yaral_match_window`
+/// and `yaral_option` from the engine.
+const SECOPS_BLOCK_CODES: [&str; 7] = [
+    "yaral_section_missing",
+    "yaral_section_empty",
+    "yaral_section_header",
+    "yaral_section_alias",
+    "yaral_match_shape",
+    "yaral_match_window",
+    "yaral_option",
+];
+
 /// A kind `validate` reports an engine code for.
 pub fn is_validate_kind(kind: &Kind) -> bool {
+    let hunt = kind.target.tags.iter().any(|tag| tag == "hunt");
     kind.command.first().map(String::as_str) == Some("validate")
         && kind.command.get(1).is_none_or(|word| word.starts_with('-'))
-        && kind.codes.iter().any(|code| is_engine_code(code))
+        && kind.codes.iter().any(|code| {
+            is_engine_code(code) && (hunt || !SECOPS_BLOCK_CODES.contains(&code.as_str()))
+        })
 }
 
 /// A kind `lint` reports from its queries check.
@@ -167,13 +199,13 @@ pub fn engine_findings(report: &Json) -> (Vec<Json>, Json) {
 
 /// What the Rust `validate` reports for `command` in the workspace at `dir`:
 /// its report, as `validate --json` writes it, and how many CrowdStrike
-/// queries it checked.
+/// queries and HarfangLab YARA rules it checked.
 ///
 /// # Errors
 ///
 /// The command holds options `validate` on the Rust engine does not take, or
 /// the workspace does not open.
-pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
+pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize, usize)> {
     let args = crate::validate::parse_args(command)
         .filter(|args| args.fix.is_none())
         .ok_or_else(|| anyhow!("`{}` is not a checking validate", command.join(" ")))?;
@@ -203,6 +235,7 @@ pub fn rust_report(dir: &Path, command: &[String]) -> Result<(Json, usize)> {
     Ok((
         serde_json::to_value(&validation.report)?,
         counting.crowdstrike(),
+        counting.yara(),
     ))
 }
 
@@ -402,6 +435,23 @@ mod tests {
     }
 
     #[test]
+    fn yara_l_kinds_are_in_the_group_but_a_block_s_own_checks_are_not() {
+        assert!(is_query_kind(&kind(
+            &["validate"],
+            &["yaral_undefined_variable"]
+        )));
+        assert!(is_query_kind(&kind(&["lint"], &["yaral_string_escape"])));
+        // The block's checks report these on its YAML, not the engine.
+        for code in SECOPS_BLOCK_CODES {
+            assert!(!is_query_kind(&kind(&["validate"], &[code])), "{code}");
+        }
+        // A search's window is the engine's.
+        let mut hunt = kind(&["validate"], &["yaral_match_window"]);
+        hunt.target.tags.push("hunt".to_owned());
+        assert!(is_query_kind(&hunt));
+    }
+
+    #[test]
     fn findings_are_paired_and_each_difference_is_named() {
         let a = json!({"code": "kql_parse_error", "file_path": "a", "line": 1});
         let b = json!({"code": "kql_parse_error", "file_path": "a", "line": 2});
@@ -469,7 +519,7 @@ mod tests {
             .count();
         // Every lint kind whose code the queries check reports, none of the
         // file-name, metadata, placeholder or YAML kinds.
-        assert_eq!(lint, 66);
+        assert_eq!(lint, 71);
         assert!(ids.iter().any(|id| id == "kql-deprecated-function"));
         assert!(!ids.iter().any(|id| id == "lint-filename-mismatch"));
     }

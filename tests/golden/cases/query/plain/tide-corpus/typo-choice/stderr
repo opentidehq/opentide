@@ -1,4 +1,4 @@
-error: Invalid value for '--platform': 'sentinal' is not one of 'sentinel', 'splunk', 'crowdstrike', 'defender_for_endpoint', 'sentinel_one', 'carbon_black_cloud', 'harfanglab', 'elastic', 'sysdig'.
+error: Invalid value for '--platform': 'sentinal' is not one of 'sentinel', 'splunk', 'crowdstrike', 'defender_for_endpoint', 'sentinel_one', 'carbon_black_cloud', 'harfanglab', 'elastic', 'sysdig', 'bitdefender', 'graylog', 'exabeam', 'google_secops'.
   help: did you mean 'sentinel'?
   usage: opentide query [OPTIONS] [query]
   help: run 'opentide query --help'

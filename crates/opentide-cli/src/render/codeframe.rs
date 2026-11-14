@@ -53,50 +53,9 @@ pub struct Frames {
 /// `OPENTIDE_LINKS` values.
 pub const LINK_SCHEMES: [&str; 4] = ["file", "vscode", "cursor", "none"];
 
-/// The query languages' reference pages, by the code prefix of their findings.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 9] = [
-    ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
-    (
-        "spl_",
-        "SPL",
-        "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference",
-    ),
-    (
-        "esql_",
-        "ES|QL",
-        "https://www.elastic.co/docs/reference/query-languages/esql",
-    ),
-    (
-        "eql_",
-        "EQL",
-        "https://www.elastic.co/docs/reference/query-languages/eql",
-    ),
-    (
-        "kuery_",
-        "Kibana KQL",
-        "https://www.elastic.co/docs/reference/query-languages/kql",
-    ),
-    (
-        "lucene_",
-        "Lucene query string",
-        "https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query",
-    ),
-    (
-        "ecs_",
-        "ECS field",
-        "https://www.elastic.co/docs/reference/ecs/ecs-field-reference",
-    ),
-    (
-        "falco_",
-        "Falco condition",
-        "https://falco.org/docs/concepts/rules/conditions/",
-    ),
-    (
-        "cql_",
-        "CQL",
-        "https://library.humio.com/crowdstrike-query-language/",
-    ),
-];
+/// The query languages' reference pages, by the code prefix of their
+/// findings: the one table `validate` and `lint` read (`crate::queries`).
+pub use crate::queries::ENGINE_REFERENCES;
 
 /// `(language, url)` of the reference for an engine `code`, when it is a query code.
 pub fn engine_reference(code: &str) -> Option<(&'static str, &'static str)> {
@@ -760,10 +719,29 @@ impl Frames {
         sources: &mut dyn Sources,
         quiet: bool,
     ) -> String {
+        self.render_notes(diagnostics, sources, quiet, true).0
+    }
+
+    /// [`Frames::render`], and with `notes` false without the notes (a
+    /// missing optional field, say): `validate`, `lint` and `validate query`
+    /// leave them out without `--verbose`. Also how many notes it left out,
+    /// for [`crate::commands::Terminal::hidden_notes_step`].
+    pub fn render_notes(
+        &self,
+        diagnostics: &[Diagnostic],
+        sources: &mut dyn Sources,
+        quiet: bool,
+        notes: bool,
+    ) -> (String, usize) {
         let shown: Vec<&Diagnostic> = diagnostics
             .iter()
-            .filter(|item| !quiet || item.severity == Severity::Error)
+            .filter(|item| shows(item.severity, quiet, notes))
             .collect();
+        let hidden = if notes || quiet {
+            0
+        } else {
+            diagnostics.len() - shown.len()
+        };
         let mut highlighter = QueryHighlighter::default();
         let mut out = String::new();
         for diagnostic in sort_diagnostics(shown) {
@@ -779,8 +757,17 @@ impl Frames {
             }
             out.push('\n');
         }
-        out
+        (out, hidden)
     }
+}
+
+/// Whether a finding of `severity` prints (`shows`): `quiet` keeps errors,
+/// `notes` false leaves out notes.
+fn shows(severity: Severity, quiet: bool, notes: bool) -> bool {
+    if quiet {
+        return severity == Severity::Error;
+    }
+    notes || severity != Severity::Note
 }
 
 /// A unified diff (`validate --fix --dry-run`): `+` lines green, `-` lines red, then a blank line.
@@ -936,8 +923,63 @@ mod tests {
                 "https://library.humio.com/crowdstrike-query-language/"
             ))
         );
+        // 0.28.1: the Graylog dialect's warnings have their reference, so
+        // `lint` keeps them (`graylog_analyzed_field`, `graylog_regex_operator`).
+        assert_eq!(
+            engine_reference("graylog_analyzed_field").map(|(language, _)| language),
+            Some("Graylog search query")
+        );
         assert_eq!(engine_reference("vocab_unknown"), None);
+        assert_eq!(
+            engine_reference("yara_slow_pattern").map(|(language, _)| language),
+            Some("YARA rule")
+        );
+        // 0.28.1's reference page, word for word.
+        assert_eq!(
+            engine_reference("exabeam_unknown_value"),
+            Some((
+                "Exabeam Query Language",
+                "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html"
+            ))
+        );
         assert_eq!(position("ab\ncd", 4), (2, 2));
+    }
+
+    /// `notes` false leaves the notes out and counts them; `quiet` keeps
+    /// errors only and hides nothing it would count (opentide 0.28.1).
+    #[test]
+    fn notes_print_only_when_asked_and_are_counted_when_left_out() {
+        let frames = Frames {
+            colour: Colour::None,
+            links: false,
+            columns: None,
+            highlight: false,
+            cwd: std::env::temp_dir(),
+            env: Env::default(),
+        };
+        let found = [
+            Diagnostic::new("e", Severity::Error, "broken"),
+            Diagnostic::new("w", Severity::Warning, "style"),
+            Diagnostic::new("n1", Severity::Note, "optional one"),
+            Diagnostic::new("n2", Severity::Note, "optional two"),
+        ];
+        let mut sources = super::super::diagnostic::MemorySources::default();
+        let (all, hidden) = frames.render_notes(&found, &mut sources, false, true);
+        assert_eq!(hidden, 0);
+        assert!(
+            all.contains("optional one") && all.contains("style"),
+            "{all}"
+        );
+        assert_eq!(all, frames.render(&found, &mut sources, false));
+        let (some, hidden) = frames.render_notes(&found, &mut sources, false, false);
+        assert_eq!(hidden, 2);
+        assert!(!some.contains("optional") && some.contains("style") && some.contains("broken"));
+        let (quiet, hidden) = frames.render_notes(&found, &mut sources, true, false);
+        assert_eq!(hidden, 0);
+        assert!(
+            quiet.contains("broken") && !quiet.contains("style"),
+            "{quiet}"
+        );
     }
 
     /// A frame of `diagnostic` over `/…/ws/a.yaml` holding `text`, at `columns`.

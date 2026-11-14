@@ -75,7 +75,7 @@ per-runner sccache or restore-only, and engine lint building xtask once.
 | `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test`. The E2E tests that only repeat a golden case through the same console script run in the full set (`full_set`): `test_opentide_console_script_help`, `test_opentide_console_script_json_is_single_document`, `test_opentide_console_script_validates_corpus` and `test_workflow_subprocess_e2e.py` |
 | `wasi` | The WASI build of the command line the VS Code extension runs (ADR 0007's amendment): `scripts/engine/build-wasm.sh cli` builds `opentide.wasm` for `wasm32-wasip1` with the pinned wasi-sdk and fails when its gzip size passes 15 MiB (the sizes go to the step summary); `cargo xtask golden check --runner wasi` runs every golden case that needs no network through it under wasmtime (pinned by `taiki-e/install-action`). The cases it leaves out are the cassette cases and `tests/golden/WASI_EXCLUDED.toml`'s, which xtask's tests hold to network cases. The `golden-wasi` artifact holds its report |
 | `golden-compare` | `cargo xtask golden check --engine rust` (UC-0.7; every case since UC-6.2, #841): every golden case through this repository's CLI, the Rust core, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; `cargo xtask mcp replay --engine rust` (the recorded Python MCP sessions against the Rust server) and the MCP stdio tests. In three parts (`golden-compare-part`, `Golden compare (part K/3)`): each runs `--partition K/3`, the cases whose id's FNV-1a hash falls in it, and writes the ledger entries it did not apply (`--unused`, the `golden-unused-K` artifact); part 2 replays the MCP sessions, part 3 runs the MCP tests. `golden-compare` gathers them under the required check's name, `Golden compare`, with `if: ${{ !cancelled() }}`: it fails unless every part passed, and on an entry every part lists, a stale one. The `golden-compare-K` artifacts hold the reports |
-| `corpus` | On a pull request that changes the corpora's inputs (above), and in the full set. (`corpus-part` in five parts on five runners: `Corpus (generator)`, `(faults)`, `(diffs)`, `(editor)`, `(vocabulary)`; `corpus` gathers them under the required check's name, with `if: ${{ !cancelled() }}` so that a failed part fails it, #841) The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); the platform-block and configuration fault kinds through the Rust engine, finding for finding (`corpus faults --check --engine rust --only platforms` and `--only configuration`, UC-1.4 #810 and UC-1.5 #811, the `faults` part, about a minute); every workspace's resolved configuration and its configuration findings against the oracle's (`cargo xtask config diff --against python`, UC-1.5 #811, the `diffs` part, seconds); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
+| `corpus` | On a pull request that changes the corpora's inputs (above), and in the full set. (`corpus-part` in five parts on five runners: `Corpus (generator)`, `(faults)`, `(diffs)`, `(editor)`, `(vocabulary)`; `corpus` gathers them under the required check's name, with `if: ${{ !cancelled() }}` so that a failed part fails it, #841) The corpora of UC-0.6 against the oracle from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); the platform-block and configuration fault kinds through the Rust engine, finding for finding (`corpus faults --check --engine rust --only platforms` and `--only configuration`, UC-1.4 #810 and UC-1.5 #811, the `faults` part, about a minute); every workspace's resolved configuration and its configuration findings against the oracle's (`cargo xtask config diff --against python`, UC-1.5 #811, the `diffs` part, seconds); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
 | `changes` | `CI paths`: whether the pull request changes the release's inputs, the grammars, the corpora's inputs, the Node package's or the facade's (above) |
 
 **Full set** (nightly, pushes, Run workflow, the `full-ci` label; some also by path, above):
@@ -148,7 +148,7 @@ minutes (#1047). The rust-caches left, target trees: `fuzz` (`fuzz-smoke`: the n
 `fuzz/target` and cargo-fuzz in `~/.cargo/bin`), plus coverage.yml's, golden.yml's, schema.yml's
 and oracle.yml's own; each saves on the nightly and on pushes to `development` only
 (`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose caches every
-pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
+pull request reads. The release dry run
 (`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
 `release-Linux-<arch>` per Linux runner for the binaries (one cell per runner saves; macOS and
 Windows build without one) and `release-wasm`, saved on `development` and by the nightly
@@ -202,7 +202,8 @@ Engine tests (ubuntu-latest)
 Engine tests (macos-latest)
 Engine tests (windows-latest)
 Supply chain (cargo deny)
-Corpus (generator, faults, coverage) against opentide 0.23.0
+Report-only goldens guard
+Corpus (generator, faults, coverage) against the oracle
 Test (3.10)
 Test (3.14)
 E2E (3.14, shard 1/4)
@@ -316,15 +317,6 @@ removed from the rule too, or every pull request that does not run it waits for 
   or golden.yml: the check runs when it does, or with the `full-ci` label. The determinism run is in the full set
   (the `full-ci` label on a pull request). The trigger itself has no path filter, so
   `integration/unified-core` requires `Golden paths` and the check (Required checks, above).
-- [`golden-preview.yml`](workflows/golden-preview.yml), on every push to `train/catchup-0.28`,
-  every pull request into it and on demand (no other branch): the preview of the next oracle
-  (O1 of `docs/internal/catchup-0.28-plan.md`). It records every case from the release
-  `tests/golden/ORACLE.next` names (0.28.1) with `cargo xtask golden record --oracle
-  tests/golden/ORACLE.next --out DIR` into an actions cache keyed on the oracle, the cases and
-  their inputs (saved from pushes only), then runs `cargo xtask golden check --engine rust
-  --recordings DIR` and uploads its report (`golden-preview` artifact) with the summary line in
-  the job summary. Report only: a difference from 0.28.1 passes (exit status 1), a check that
-  cannot run fails (2). Not a required check (`tests/test_ci/test_golden_preview_workflow.py`).
 - [`docs.yml`](workflows/docs.yml) (`scripts/validate-docs.sh`) and
   [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (every publish rehearsed, nothing
   published) are in the full set: nightly, on demand, on a push to `development` or

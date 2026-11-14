@@ -4,12 +4,12 @@ The inputs that make the verifier near-perfect (plan §5.3; UC-0.6, #804): a det
 workspace for performance and scale, a fault catalogue in which every diagnostic code has a fault
 kind that triggers it, and the process for adding real-world repositories. The tooling is
 `cargo xtask corpus` (`xtask/src/corpus/`); the oracle is the Python CLI at the frozen tag,
-opentide 0.23.0.
+opentide 0.28.1 (0.23.0 until O2 of the 0.28 catch-up train).
 
 | File | What it is | Written by |
 |------|------------|------------|
-| [`faults.toml`](faults.toml) | The fault catalogue: kinds, their targets, mutations and expected codes; codes no workspace can produce, with the evidence | hand, reviewed; expectations adjusted to what the oracle reports |
-| [`codes.toml`](codes.toml) | The codes in scope: `VALIDATION_CODES`, `LINT_CODES`, the configuration check's codes, the analysis engine's codes, and the compile check's codes (its `compile_*` explain pages); `out_of_scope` lists the other 52 `opentide explain` codes (usage errors, failure codes, doctor checks, sharing and deploy outcomes), which no workspace finding carries | `cargo xtask corpus codes --engine python --write` |
+| [`faults.toml`](faults.toml) | The fault catalogue: kinds, their targets, mutations and expected codes; codes no workspace can produce, with the evidence | hand, reviewed; expectations adjusted to what the oracle reports. `[[pending]]` names each code in scope whose kind a unit of the 0.28 catch-up train still owes, with its owner; it only shrinks, and is empty outside the train |
+| [`codes.toml`](codes.toml) | The codes in scope: `VALIDATION_CODES`, `LINT_CODES`, the configuration check's codes, the analysis engine's codes, and the compile check's codes (its `compile_*` explain pages); `out_of_scope` lists the other 112 `opentide explain` codes (usage errors, failure codes, doctor checks, sharing and deploy outcomes), which no workspace finding carries | `cargo xtask corpus codes --engine python --write` |
 | [`COVERAGE.md`](COVERAGE.md) | Every code in scope mapped to its fault kinds | `cargo xtask corpus coverage --write` |
 | [`KNOWN_GAPS.md`](KNOWN_GAPS.md) | Faults the oracle misses or reports surprisingly; each has a fault kind; UC-2.2 decides each | hand |
 | [`INTAKE.md`](INTAKE.md) | How a shared real-world repository joins the corpora | hand |
@@ -24,10 +24,10 @@ export OPENTIDE_ORACLE=/tmp/oracle/bin/opentide      # or pass --oracle to each 
 ```
 
 Never the working tree's `opentide`: the commands check that the oracle prints
-`opentide 0.23.0` (the `oracle` key of `faults.toml`). The Linux x86_64 wheel's SHA-256 is
-`de12c30f53327c4790fff5996c20b7d14508b4fd96ac73c81db20a02993211bc`, as PyPI publishes it.
+`opentide 0.28.1` (the `oracle` key of `faults.toml`). The Linux x86_64 wheel's SHA-256 is
+`1f145603aae07b3b23727ed5ee9dc6069cbf35d9a5fd41a5857e70d562e8b3a9`, as PyPI publishes it.
 
-`--repo` is a global option of 0.23.0: `opentide --json --repo DIR validate`, not
+`--repo` is a global option of 0.28.1: `opentide --json --repo DIR validate`, not
 `opentide --json validate --repo DIR` (a usage error, exit 2).
 
 ## The heavy workspace

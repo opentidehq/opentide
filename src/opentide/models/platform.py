@@ -6,10 +6,17 @@ Each class is the frozen Rust model of the same name (``opentide._native.models`
 from __future__ import annotations
 
 from opentide._native.models import (
+    BitdefenderConfig,
     CarbonBlackConfig,
     CrowdstrikeConfig,
     DefenderConfig,
     ElasticConfig,
+    ExabeamConfig,
+    GoogleSecopsConfig,
+    GoogleSecopsMatch,
+    GoogleSecopsOptions,
+    GoogleSecopsSchedule,
+    GraylogConfig,
     HarfangLabConfig,
     RuleConfigurations,
     SentinelConfig,
@@ -19,10 +26,17 @@ from opentide._native.models import (
 )
 
 __all__ = [
+    "BitdefenderConfig",
     "CarbonBlackConfig",
     "CrowdstrikeConfig",
     "DefenderConfig",
     "ElasticConfig",
+    "ExabeamConfig",
+    "GoogleSecopsConfig",
+    "GoogleSecopsMatch",
+    "GoogleSecopsOptions",
+    "GoogleSecopsSchedule",
+    "GraylogConfig",
     "HarfangLabConfig",
     "RuleConfigurations",
     "SentinelConfig",

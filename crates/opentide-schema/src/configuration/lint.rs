@@ -17,7 +17,13 @@ use super::repr;
 use crate::node::{Node, Value};
 
 /// Check names, in the order `opentide lint` runs them.
-pub const CHECK_NAMES: [&str; 4] = ["filenames", "metadata", "placeholders", "queries"];
+pub const CHECK_NAMES: [&str; 5] = [
+    "filenames",
+    "metadata",
+    "recommended",
+    "placeholders",
+    "queries",
+];
 /// Severities a check may be set to.
 pub const SEVERITIES: [&str; 3] = ["error", "warning", "info"];
 /// How `[filenames]` derives a stem from `name`.

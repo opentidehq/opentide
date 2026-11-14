@@ -30,6 +30,7 @@ tokio-util = { workspace = true, features = ["rt"] }
 backon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+base64.workspace = true
 thiserror.workspace = true
 url.workspace = true
 toml.workspace = true
@@ -43,6 +44,11 @@ percent-encoding = "2"
 shlex = "2.0"
 # Sentinel (UC-4.3): the request ids MSAL and azure-core stamp their requests with.
 uuid = { workspace = true, features = ["v4"] }
+# Google SecOps: the service-account JWT (RS256) exchanged for an access token
+# on the tenant's own client (google-cloud-auth sends through a client of its
+# own, so it would bypass the tenant's proxy, CA bundles and timeouts). 9.x
+# signs with ring, the provider rustls already uses here.
+jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }
 
 # The native transport (src/transport.rs, `ReqwestTransport`): reqwest on rustls
 # and the system's certificates, on tokio's multi-thread runtime. Not on WASI,
@@ -62,6 +68,9 @@ opentide-schema.workspace = true
 # wiremock (tests/harness.rs).
 opentide-cassette.workspace = true
 wiremock.workspace = true
-tokio = { workspace = true, features = ["net", "io-util"] }
+# Exabeam's pacer is tested on a paused clock (`tokio::time::pause`).
+tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 tokio-rustls.workspace = true
 tempfile = "3"
+# Google SecOps: the test key's public half, to verify the assertion's signature.
+ring = "0.17"

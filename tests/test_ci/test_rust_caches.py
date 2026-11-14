@@ -596,9 +596,7 @@ def test_target_trees_are_saved_by_the_nightly_and_development_only() -> None:
                 if not str(step.get("uses", "")).startswith(RUST_CACHE):
                     continue
                 save_if = (step.get("with") or {}).get("save-if", True)
-                if save_if is False or path.name == "golden-preview.yml":
-                    # golden-preview runs on the 0.28 train only, never on
-                    # development: it saves on that branch's pushes.
+                if save_if is False:
                     continue
                 assert save_if == TARGET_TREE_SAVE, (path.name, job_id, save_if)
                 checked += 1

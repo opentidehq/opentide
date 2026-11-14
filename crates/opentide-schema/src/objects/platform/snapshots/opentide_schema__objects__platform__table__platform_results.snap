@@ -3048,94 +3048,27 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     }
   },
   "platform-harfanglab-full": {
-    "value": {
-      "configurations": {
-        "harfanglab": {
-          "action": "Block",
-          "confidence": "High",
-          "enabled": false,
-          "maturity": "Stable",
-          "name": "",
-          "sigma": {
-            "condition": "s and l",
-            "false_positives": [
-              "admin"
-            ],
-            "logsource": {
-              "category": "process_creation",
-              "product": "windows"
-            },
-            "selections": [
-              {
-                "field": "Image",
-                "modifiers": [
-                  "endswith"
-                ],
-                "name": "s",
-                "value": "x.exe"
-              },
-              {
-                "field": "CommandLine",
-                "name": "l",
-                "value": [
-                  "a",
-                  "b"
-                ]
-              },
-              {
-                "field": "Signed",
-                "name": "b",
-                "value": false
-              },
-              {
-                "field": "Pid",
-                "name": "i",
-                "value": 4
-              },
-              {
-                "field": "Score",
-                "name": "f",
-                "value": 1.5
-              }
-            ]
-          },
-          "status": "STAGING",
-          "tags": [
-            "attack.t1059"
-          ],
-          "yara": {
-            "condition": "$a",
-            "imports": [
-              "pe"
-            ],
-            "meta": {
-              "arch": [
-                "x64"
-              ],
-              "classification": "c",
-              "context": [
-                "file"
-              ],
-              "os": "Windows",
-              "score": "High"
-            },
-            "strings": "$a = \"x\""
-          }
-        }
-      },
-      "description": "d",
-      "metadata": {
-        "created": "2026-01-01",
-        "modified": "2026-01-02",
-        "schema": "rule::1.1",
-        "tlp": "clear",
-        "uuid": "00000000-0000-4000-8000-000000000001",
-        "version": 1
-      },
-      "name": "Rule",
-      "platforms": {},
-      "techniques": []
-    }
+    "errors": [
+      {
+        "ctx": {
+          "error": "HarfangLabConfig validation failed with code(s): harfanglab_rule_kind"
+        },
+        "field_path": [
+          "configurations",
+          "harfanglab"
+        ],
+        "input": null,
+        "msg": "Value error, HarfangLabConfig validation failed with code(s): harfanglab_rule_kind",
+        "span": [
+          11,
+          3,
+          13,
+          true
+        ],
+        "type": "value_error",
+        "yaml_line": 11
+      }
+    ]
   },
   "platform-harfanglab-value-mixed-list": {
     "errors": [
@@ -3403,25 +3336,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           13,
           12,
           16,
-          false
-        ],
-        "type": "missing",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "yara",
-          "condition"
-        ],
-        "input": null,
-        "msg": "Field required",
-        "span": [
-          13,
-          5,
-          9,
           false
         ],
         "type": "missing",
