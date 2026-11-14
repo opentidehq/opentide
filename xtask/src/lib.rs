@@ -7,25 +7,15 @@
 pub mod bench;
 pub mod cassettes;
 pub mod codegen;
-pub mod compare;
-pub mod config;
 pub mod conformance;
 pub mod corpus;
 pub mod coverage;
-pub mod golden;
 pub mod layers;
-pub mod lint;
 pub mod lsp;
-pub mod mcp;
 pub mod mutants;
 pub mod parallel;
-pub mod payloads;
-pub mod registry;
-pub mod schema;
 #[cfg(unix)]
 pub mod script;
 pub mod spec_fields;
 pub mod stubs;
-pub mod validate;
-pub mod verdict;
 pub mod vocab;

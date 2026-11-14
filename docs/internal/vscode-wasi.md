@@ -95,14 +95,13 @@ Three long-lived processes, one per protocol, each started from the same compile
   and reaches a run that only computes when it ends; a queued run is answered `130` unrun, as native.
 - **One run at a time.** Requests are handled in order, as native; a long run delays the next.
 
-## Held to the goldens
+## Checked in CI
 
-CI's `wasi` job (WASI command line (size, golden)) builds the module, checks its size and runs
-`cargo xtask golden check --runner wasi`: every golden case that needs no network, under wasmtime,
-compared with the oracle's recordings. The cases it leaves out are in
-`tests/golden/WASI_EXCLUDED.toml`, each with its reason: network cases, and the two capabilities
-WASI preview 1 lacks (`process`, `permissions`). Locally, `OPENTIDE_WASI_RUNTIME=node` runs the
-same check under Node's WASI (`scripts/engine/wasi-run.mjs`).
+CI's `wasi` job builds the module, checks its size and runs tenant commands through it with
+`@opentide/wasi-host`. Until #1139 `cargo xtask golden check --runner wasi` also ran every golden
+case that needed no network under wasmtime against the Python CLI's recordings; it was retired
+with them. The capabilities WASI preview 1 lacks are `process` and `permissions`. Locally,
+`scripts/engine/wasi-run.mjs` runs the module under Node's WASI.
 
 ## Before UC-6.1 starts
 

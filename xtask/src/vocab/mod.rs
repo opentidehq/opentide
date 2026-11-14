@@ -5,14 +5,11 @@
 //!   drift gate runs `--check`.
 //! - `sentinel-attack [--check] [--stix-dir DIR]` ([`sentinel`]): Sentinel's
 //!   ATT&CK v18 list from MITRE's STIX bundles.
-//! - `diff --against python` ([`diff`]): `opentide_schema::vocab` against the
-//!   oracle, on every corpus.
 //! - `ingest [--check|--apply]` ([`ingest`]): the weekly ATT&CK and MISP
 //!   ingest into the specifications' vocabularies.
 //! - `malapi [--check|--apply]` ([`malapi`]): the MalAPI vocabulary scraped
 //!   from malapi.io, by hand.
 
-pub mod diff;
 pub mod ingest;
 pub mod malapi;
 pub mod sentinel;
@@ -38,12 +35,6 @@ commands:
                  write src/opentide/data/sentinel/attack-v18.json from MITRE's
                  STIX bundles (downloaded, or read from an attack-stix-data
                  checkout DIR); --check fails when the file would change
-  diff --against python [--fixture NAME ...] [--python PATH] [--per-field N]
-       [--report FILE]
-                 resolve every vocabulary value of every corpus (the fixtures of
-                 tests/golden/cases.toml) and generated misspellings with the
-                 oracle and with opentide-schema, and compare; suggestion
-                 differences on corpus values must be in tests/golden/vocab/APPROVED.toml
   ingest [--check|--apply] [--no-fetch] [--stix-dir DIR] [--misp-url URL]
          [--specifications DIR] [--now TIMESTAMP]
                  fetch the latest MITRE ATT&CK STIX release (into DIR, else
@@ -82,7 +73,6 @@ pub fn main(args: &[String]) -> ExitCode {
         "sentinel-attack" => run_sentinel(rest),
         "ingest" => ingest::parse(rest).and_then(|options| ingest::run(&repo_root()?, &options)),
         "malapi" => malapi::parse(rest).and_then(|options| malapi::run(&repo_root()?, &options)),
-        "diff" => diff::parse(rest).and_then(|options| diff::run(&options)),
         "help" | "--help" | "-h" => {
             print!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -183,7 +173,6 @@ mod tests {
             &["sync", "--specifications"],
             &["sentinel-attack", "--frobnicate"],
             &["sentinel-attack", "--stix-dir"],
-            &["diff"],
             &["ingest", "--check", "--apply"],
             &["ingest", "--frobnicate"],
             &["ingest", "--misp-url"],

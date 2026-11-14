@@ -1,4 +1,0 @@
-error: Missing command.
-  usage: opentide generate extract [OPTIONS] COMMAND [ARGS]...
-  help: run 'opentide generate extract --help'
-tip: add --json for machine-readable output

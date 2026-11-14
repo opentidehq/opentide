@@ -1,8 +1,6 @@
-//! The corpus runner's pass/fail guards, driven through a fake oracle: a
-//! shell script that prints `opentide 0.28.1` for `--version` and canned
-//! JSON documents otherwise (the clean base's from `base-<command>.json`,
-//! every other workspace's from `kind-<command>.json`). Each test fails if
-//! its guard in `xtask/src/corpus/cli.rs` is removed.
+//! The corpus commands' guards: `generate` writes once, `faults --out`
+//! writes its manifest once, `coverage --check` fails on a code no kind
+//! produces, and the usage errors.
 #![cfg(unix)]
 
 #[cfg(test)]
@@ -10,18 +8,6 @@ mod runner {
 
     use std::path::{Path, PathBuf};
     use xtask::corpus::cli::run;
-    use xtask::corpus::faults::Catalogue;
-    use xtask::corpus::generate::generate;
-    use xtask::corpus::workspace::Family;
-
-    const SCRIPT: &str = r#"#!/bin/sh
-if [ "$1" = "--version" ]; then echo "opentide 0.28.1"; exit 0; fi
-dir=$(dirname "$0")
-case "$3" in
-  */_base) cat "$dir/base-$4.json" ;;
-  *) cat "$dir/kind-$4.json" ;;
-esac
-"#;
 
     const CATALOGUE: &str = r#"
 oracle = "0.28.1"
@@ -43,13 +29,7 @@ layout = "explicit"
                 .join(format!("xtask-corpus-runner-{name}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
-            let script = dir.join("opentide");
-            xtask::script::write_executable(&script, SCRIPT).unwrap();
             Self { dir }
-        }
-
-        fn oracle(&self) -> String {
-            self.dir.join("opentide").to_string_lossy().into_owned()
         }
 
         fn path(&self, name: &str) -> String {
@@ -60,55 +40,10 @@ layout = "explicit"
             std::fs::write(self.dir.join(name), text).unwrap();
         }
 
-        /// The document the fake prints for `command`, on the base or on a kind.
-        fn answer(
-            &self,
-            which: &str,
-            command: &str,
-            codes: &[&str],
-            objects: usize,
-            failure: bool,
-        ) {
-            let issues: Vec<serde_json::Value> = codes
-            .iter()
-            .map(|c| serde_json::json!({"code": c, "severity": "error", "path": "objects/rules/x.yaml", "message": c}))
-            .collect();
-            let failure = if failure {
-                serde_json::json!({"code": "command_failed"})
-            } else {
-                serde_json::Value::Null
-            };
-            let document = serde_json::json!({
-                "report": {"issues": issues, "warnings": []},
-                "summary": {"objects": objects, "files": objects},
-                "failure": failure,
-            });
-            self.write(&format!("{which}-{command}.json"), &document.to_string());
-        }
-
         fn catalogue(&self, kinds: &str) -> String {
             let text = format!("{CATALOGUE}{kinds}");
             self.write("faults.toml", &text);
             self.path("faults.toml")
-        }
-
-        fn faults(&self, kinds: &str) -> anyhow::Result<u8> {
-            let catalogue = self.catalogue(kinds);
-            let args = [
-                "faults",
-                "--check",
-                "--engine",
-                "python",
-                "--oracle",
-                &self.oracle(),
-                "--catalogue",
-                &catalogue,
-                "--jobs",
-                "1",
-                "--keep",
-                &self.path("scratch"),
-            ];
-            run(&args.map(str::to_string))
         }
     }
 
@@ -116,16 +51,6 @@ layout = "explicit"
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
-    }
-
-    /// The base's object files, which a whole `validate` must have checked.
-    fn base_objects() -> usize {
-        let catalogue = Catalogue::parse(CATALOGUE).unwrap();
-        generate(&catalogue.base.options().unwrap())
-            .files
-            .iter()
-            .filter(|f| matches!(f.family, Family::Threat | Family::Objective | Family::Rule))
-            .count()
     }
 
     const EXPECTS_UUID: &str = r#"
@@ -137,84 +62,6 @@ target = { family = "rule" }
 per_target = false
 ops = [{ op = "set", path = "metadata.uuid", value = "bad-{n}" }]
 "#;
-
-    const SILENT: &str = r#"
-[[kind]]
-id = "silent"
-codes = []
-severity = "error"
-target = { family = "rule" }
-gap = "KG-00"
-ops = [{ op = "set", path = "status", value = "NOPE" }]
-"#;
-
-    #[test]
-    fn a_kind_whose_codes_differ_fails_the_run() {
-        let lab = Lab::new("mismatch");
-        let n = base_objects();
-        lab.answer("base", "validate", &[], n, false);
-        lab.answer("kind", "validate", &["invalid_uuid"], n, false);
-        assert_eq!(lab.faults(EXPECTS_UUID).unwrap(), 0, "the control passes");
-        let lab = Lab::new("mismatch2");
-        lab.answer("base", "validate", &[], n, false);
-        lab.answer("kind", "validate", &["schema_validation"], n, false);
-        assert_eq!(lab.faults(EXPECTS_UUID).unwrap(), 1);
-    }
-
-    #[test]
-    fn a_base_with_a_finding_is_an_error() {
-        let lab = Lab::new("dirty-base");
-        let n = base_objects();
-        lab.answer("base", "validate", &["vocab_unknown"], n, false);
-        lab.answer("kind", "validate", &["invalid_uuid"], n, false);
-        let error = lab.faults(EXPECTS_UUID).unwrap_err();
-        assert!(format!("{error:#}").contains("clean base"), "{error:#}");
-    }
-
-    #[test]
-    fn a_silent_kind_must_have_checked_everything() {
-        let n = base_objects();
-        let lab = Lab::new("silent-ok");
-        lab.answer("base", "validate", &[], n, false);
-        lab.answer("kind", "validate", &[], n, false);
-        assert_eq!(lab.faults(SILENT).unwrap(), 0, "the control passes");
-        let lab = Lab::new("silent-failed");
-        lab.answer("base", "validate", &[], n, false);
-        lab.answer("kind", "validate", &[], n, true);
-        assert_eq!(lab.faults(SILENT).unwrap(), 2, "a failed run is no silence");
-        let lab = Lab::new("silent-short");
-        lab.answer("base", "validate", &[], n, false);
-        lab.answer("kind", "validate", &[], n - 1, false);
-        assert_eq!(
-            lab.faults(SILENT).unwrap(),
-            2,
-            "an object left unchecked is no silence"
-        );
-    }
-
-    #[test]
-    fn clean_fails_on_a_finding_and_on_nothing_checked() {
-        let clean = |lab: &Lab| {
-            let args = [
-                "clean",
-                "--engine",
-                "python",
-                "--oracle",
-                &lab.oracle(),
-                "--repo",
-                &lab.path("repo"),
-            ];
-            run(&args.map(str::to_string)).unwrap()
-        };
-        let lab = Lab::new("clean");
-        lab.answer("kind", "validate", &[], 10, false);
-        lab.answer("kind", "lint", &[], 10, false);
-        assert_eq!(clean(&lab), 0, "the control passes");
-        lab.answer("kind", "lint", &["placeholder"], 10, false);
-        assert_eq!(clean(&lab), 1);
-        lab.answer("kind", "lint", &[], 0, false);
-        assert_eq!(clean(&lab), 1);
-    }
 
     #[test]
     fn coverage_check_fails_on_a_missing_code() {
@@ -299,76 +146,11 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
             "no --out and no --digest"
         );
         assert!(fails(&["generate", "--seed"]), "a flag without its value");
-        assert!(fails(&["faults"]), "needs --check or --out");
-        assert!(fails(&["faults", "--check", "--engine", "perl"]));
-        assert!(fails(&[
-            "faults",
-            "--check",
-            "--engine",
-            "python",
-            "--only",
-            "no-such-kind",
-            "--oracle",
-            "/nonexistent/opentide"
-        ]));
-        assert!(fails(&["clean", "--engine", "python"]), "no --repo");
-        assert!(fails(&["codes", "--bogus"]));
+        assert!(fails(&["faults"]), "needs --out");
+        assert!(fails(&["faults", "--check"]), "retired with the oracle");
+        assert!(fails(&["clean"]), "retired with the oracle");
+        assert!(fails(&["codes"]), "retired with the oracle");
         assert!(fails(&["coverage", "--bogus"]));
-        // The Rust engine checks the structural kinds against the oracle
-        // (UC-1.2): without one it cannot run; any other kind is refused.
-        assert!(fails(&[
-            "faults",
-            "--check",
-            "--engine",
-            "rust",
-            "--oracle",
-            "/nonexistent/opentide"
-        ]));
-        assert!(fails(&[
-            "faults",
-            "--check",
-            "--engine",
-            "rust",
-            "--only",
-            "uuid-invalid-rule"
-        ]));
-        // The configuration kinds (UC-1.5) need the oracle too.
-        assert!(fails(&[
-            "faults",
-            "--check",
-            "--engine",
-            "rust",
-            "--only",
-            "configuration",
-            "--oracle",
-            "/nonexistent/opentide"
-        ]));
-        let args = ["clean", "--engine", "rust", "--repo", "."].map(str::to_string);
-        assert_eq!(run(&args).unwrap(), 1, "clean has no Rust run: it fails");
         assert_eq!(run(&["help".to_string()]).unwrap(), 0);
-    }
-
-    #[test]
-    fn a_wrong_oracle_version_is_refused() {
-        let lab = Lab::new("version");
-        std::fs::write(
-            lab.dir.join("opentide"),
-            "#!/bin/sh\necho \"opentide 0.22.0\"\n",
-        )
-        .unwrap();
-        let args = [
-            "clean",
-            "--engine",
-            "python",
-            "--oracle",
-            &lab.oracle(),
-            "--repo",
-            &lab.path("repo"),
-        ];
-        let error = run(&args.map(str::to_string)).unwrap_err();
-        assert!(
-            format!("{error:#}").contains("not opentide 0.28.1"),
-            "{error:#}"
-        );
     }
 }

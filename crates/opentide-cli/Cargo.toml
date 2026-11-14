@@ -10,11 +10,11 @@ authors.workspace = true
 # Published by the release train (publish.yml, UC-5.5), for the facade's `cli`
 # feature. Its explain pages and MCP templates come from src/opentide/data
 # (build.rs, OPENTIDE_ASSETS), which `release.py vendor` copies into the package.
-# The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
-# oracles: the explain pages it holds quote vendor SDK names the licence scan
-# keeps out of release artifacts (scripts/engine/license-scan.sh).
-# `generate extract sentinel`'s oracle files (tests/extract_sentinel.rs) are
-# CI-only too: the test replays a cassette of the repository's tests/.
+# The renderers' inputs and snapshots (tests/render.rs) are CI-only, like the
+# vendor oracles: the explain pages they hold quote vendor SDK names the
+# licence scan keeps out of release artifacts (scripts/engine/license-scan.sh).
+# `generate extract sentinel`'s workspace and snapshot (tests/extract_sentinel.rs)
+# are CI-only too: the test replays a cassette of the repository's tests/.
 exclude = [
     "tests/render/",
     "tests/render.rs",
@@ -24,6 +24,8 @@ exclude = [
     # fixtures are the repository's tests/golden/.
     "tests/cli_snapshots/",
     "tests/cli_snapshots.rs",
+    # The serve session's and the Sentinel extract's snapshots.
+    "tests/snapshots/",
 ]
 description = "opentide engine component: the command line (command tree, output modes, JSON envelope, exit codes, crash handler). Internal: depend on the opentide facade (its `cli` feature)."
 readme = "README.md"
@@ -184,20 +186,18 @@ rustix = { version = "1.1", default-features = false, features = ["std", "fs", "
 vt100 = "0.18"
 
 [dev-dependencies]
-# The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
+# The recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
 opentide-cassette.workspace = true
 # A stand-in Google SecOps instance (tests/google_secops.rs): its rules are
 # deployed and checked through the CLI flow against wiremock, no recording
 # of a real instance being shareable.
 wiremock.workspace = true
-# The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
+# The snapshots' normalisation (tests/common/snapshot.rs).
 opentide-compare.workspace = true
 tempfile = "3"
 # The pseudo-terminal tests (tests/setup_wizard.rs, tests/tui_pty.rs), on
 # wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
 # that drives a run at a terminal.
 portable-pty = "0.9"
-# The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
-
-# The renderers' snapshots, written by the oracle (tests/render.rs).
+# The snapshots: the command line's cases, the renderers, serve and extract.
 insta.workspace = true

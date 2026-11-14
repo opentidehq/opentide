@@ -1,25 +1,25 @@
 # opentide-compare — agent guide
 
-The differential comparator of the unified core (plan §5.2, UC-0.7 #805): it compares what the
-oracle (the Python CLI) and a candidate (a Rust implementation) did on the same input, and
-reports every difference the approved-diffs ledger (`tests/golden/APPROVED_DIFFS.toml`) does
-not approve. I/O-free: callers read runs and the ledger and write the report.
+The differential comparator of the unified core (plan §5.2, UC-0.7 #805), and the normaliser
+the CLI's snapshots use. The comparator compared what the oracle (the Python CLI) and a candidate
+did on the same input, under an approved-diffs ledger; the oracle's recordings, the ledger and the
+tooling that ran it were retired in #1139, so today `normalise` (the snapshots,
+`crates/opentide-cli/tests/common/snapshot.rs`) and `json` (the conformance suite) are its
+users. I/O-free.
 
 | Module | What |
 |--------|------|
 | `lib.rs` | `Run`, `FileState`, `compare()`, `compare_normalised()`, `CaseReport`, `RunReport` (stale entries) |
 | `json.rs` | An ordered JSON tree (key order kept, duplicates kept), pointers, structural and key-order differences, the CLI's two layouts |
 | `ledger.rs` | The ledger's schema, its checks, and which entries apply where |
-| `normalise.rs` | The goldens' normaliser (UC-0.5's, moved here): paths, live regions, crash logs, timestamps on the run's dates, durations, hyperlink ids; `xtask::golden::normalise` re-exports it |
+| `normalise.rs` | The snapshots' normaliser (UC-0.5's, moved here): paths, live regions, crash logs, timestamps on the run's dates, durations, hyperlink ids |
 | `glob.rs` | The ledger's case globs |
 
 ## Place
 
-foundation, tier 0 (`xtask/layers.toml`): it depends on no workspace crate. xtask (`cargo xtask
-compare`, `golden check --engine rust`) and opentide-cli's golden replays (dev-dependency) depend
-on it. `publish = false`: it holds the Rust command line to the oracle's recordings, the goldens
-that stay its specification since UC-6.2 (#841) removed the Python implementation and compare
-mode.
+foundation, tier 0 (`xtask/layers.toml`): it depends on no workspace crate. opentide-cli's
+snapshot tests and the facade's conformance test (dev-dependencies) and xtask depend on it.
+`publish = false`.
 
 ## Invariants
 
@@ -53,8 +53,7 @@ mode.
   oracle side is always quoted.
 - A ledger entry that applies to no case in a complete run is stale, and the run fails
   (`RunReport::new`). A single CLI run (`compare_normalised`) does not check staleness.
-- Every ledger field is required; the schema is in the comment at the top of
-  `tests/golden/APPROVED_DIFFS.toml` and in `ledger.rs`. Change both together.
+- Every ledger field is required; the schema is in `ledger.rs`.
 - serde_json is used without `preserve_order`: enabling it would change the map type of every
   crate built with this one. Key order lives in `json::Json`.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`).
@@ -64,7 +63,6 @@ mode.
 ```bash
 cargo nextest run --profile fast -p opentide-compare     # unit tests
 cargo nextest run -p xtask comparator                     # the acceptance cases of #805
-cargo xtask compare --check-ledger                        # the repository's ledger
 ```
 
 ## Do not

@@ -1,8 +1,7 @@
 //! `validate` over a workspace in memory: each check's findings, their
-//! places and steps, the scope options, the verdict and the counts. The
-//! oracle comparison is `cargo xtask validate diff` (every recorded
-//! `validate --json` case); `diagnostic_json` holds the finding shape to the
-//! recordings byte for byte.
+//! places and steps, the scope options, the verdict and the counts. What
+//! `validate` prints for them is the CLI's snapshots'
+//! (`crates/opentide-cli/tests/cli_snapshots/validate/`).
 
 #![expect(
     clippy::unwrap_used,
@@ -1426,55 +1425,5 @@ mod validate {
             .find(|d| d.field_path == place(&["configurations", "acme", "note"]))
             .unwrap();
         assert_eq!(note.message, "acme: note is deprecated");
-    }
-}
-
-/// Every finding recorded by the oracle's `validate --json` reads into the
-/// one `Diagnostic` and is written back byte for byte, keys in order.
-mod diagnostic_json {
-    use std::path::Path;
-
-    use opentide_workspace::Diagnostic;
-
-    #[derive(serde::Deserialize)]
-    struct Recorded {
-        report: Report,
-    }
-
-    #[derive(serde::Deserialize)]
-    struct Report {
-        issues: Vec<Diagnostic>,
-        warnings: Vec<Diagnostic>,
-    }
-
-    #[test]
-    #[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-    fn every_recorded_finding_round_trips() {
-        let root =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/cases/validate/json");
-        let mut findings = 0;
-        for fixture in std::fs::read_dir(&root).unwrap() {
-            for case in std::fs::read_dir(fixture.unwrap().path()).unwrap() {
-                let stdout = std::fs::read_to_string(case.unwrap().path().join("stdout")).unwrap();
-                // Read from the text, so `context` keeps the order it was written in.
-                let Ok(document) = serde_json::from_str::<Recorded>(&stdout) else {
-                    continue;
-                };
-                for diagnostic in document
-                    .report
-                    .issues
-                    .iter()
-                    .chain(&document.report.warnings)
-                {
-                    let written = serde_json::to_string(diagnostic).unwrap();
-                    assert!(
-                        stdout.contains(&written),
-                        "not written as recorded: {written}"
-                    );
-                    findings += 1;
-                }
-            }
-        }
-        assert!(findings > 500, "only {findings} findings read");
     }
 }

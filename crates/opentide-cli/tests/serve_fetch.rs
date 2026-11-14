@@ -19,8 +19,8 @@
     reason = "a test helper: a broken stand-in is a failure"
 )]
 
-#[path = "common/replay.rs"]
-mod replay;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -69,7 +69,7 @@ fn copy_tree(from: &Path, to: &Path) {
 
 /// A fresh copy of the golden fixture *name* (`tests/golden/fixtures/`).
 fn workspace(name: &str) -> (tempfile::TempDir, PathBuf) {
-    let root = replay::case_root();
+    let root = fixtures::case_root();
     let ws = std::fs::canonicalize(root.path()).unwrap().join("ws");
     copy_tree(&repo().join("tests/golden/fixtures").join(name), &ws);
     (root, ws)

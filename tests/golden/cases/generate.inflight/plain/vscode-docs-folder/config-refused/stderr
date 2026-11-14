@@ -1,2 +1,0 @@
-✗ inflight · <SECONDS>
-error: inflight: ConfigurationError: paths.toml is invalid: paths.core: unknown key

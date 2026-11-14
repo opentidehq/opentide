@@ -90,11 +90,12 @@ tracing = "0.1"
 # Shell words in the pipelines, quoted as the oracle's `shlex.quote` quotes them.
 shlex = "2.0"
 # `setup ci` reads each enabled platform's tenants for the variables its
-# live query check needs; the oracle test reads its approved differences
-# (tests/golden/payloads/APPROVED.toml) with it too.
+# live query check needs.
 toml.workspace = true
 
 [dev-dependencies]
+# The compile corpus's bodies held to a snapshot (tests/compile_corpus.rs).
+insta.workspace = true
 proptest.workspace = true
 # Repositories the git baseline's tests build (the version xtask locks).
 tempfile = "3"

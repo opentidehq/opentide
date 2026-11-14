@@ -52,7 +52,6 @@ because napi-derive's registration (a `ctor` static constructor per `#[napi]` it
 cargo clippy -p opentide-node --all-targets -- -D warnings
 cargo test -p opentide-node
 cd bindings/node && npm ci && npm run build && npm test
-cargo xtask golden check --runner node     # after `uv sync --group dev`
 cargo xtask conformance                    # the same documents as the Rust and Python SDKs
 ```
 

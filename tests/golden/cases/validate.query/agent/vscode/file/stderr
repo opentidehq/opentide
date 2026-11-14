@@ -1,2 +1,0 @@
-error: No rule file directly in detections/rules matched: objects/rules/suspicious-lsass-access.yaml
-tip: add --json for machine-readable output

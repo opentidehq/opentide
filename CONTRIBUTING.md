@@ -60,15 +60,14 @@ the nextest profiles, insta snapshots, trycmd cases, `cargo xtask` and how to ad
 [`crates/AGENTS.md`](crates/AGENTS.md) holds the engine's rules, and each crate has its own
 `AGENTS.md`. Lint with the pinned toolchain: CI does, and denies warnings.
 
-## Porting to Rust
+## What a command prints or writes
 
-The Python CLI at a frozen tag is the oracle. A Rust implementation of a command must match it
-byte for byte, and every intended difference goes in the approved-diffs ledger with a reason, an
-issue and a changelog entry. Goldens are generated, never edited by hand. The
-[`golden`](.agents/skills/golden/SKILL.md) skill has the rules and the tools, which UC-0.5
-([#803](https://github.com/opentidehq/opentide/issues/803)) and UC-0.7
-([#805](https://github.com/opentidehq/opentide/issues/805)) are building. Architecture decisions
-are recorded in [`docs/internal/adr/`](docs/internal/adr/index.md).
+Every case of `tests/golden/cases.toml` is held to a snapshot of the Rust CLI's own output
+(`crates/opentide-cli/tests/cli_snapshots/`). A change to what a command prints or writes updates
+its snapshots in the same pull request (`cargo insta review`), and a user-visible one has its
+changelog entry. Snapshots are accepted, never edited by hand. The
+[`golden`](.agents/skills/golden/SKILL.md) skill has the rules and the tools. Architecture
+decisions are recorded in [`docs/internal/adr/`](docs/internal/adr/index.md).
 
 ## Parallel work: worktrees and target directories
 

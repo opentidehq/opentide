@@ -40,9 +40,10 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
   object writes any more, the docs folders. Nothing reaches the network. Only
   `generate/files.rs` writes: rendering is pure (a phase returns its `Output`s), and the
   command line writes them with `files::write_all`.
-- A generated file the oracle writes is byte for byte the oracle's on every recorded fixture
-  (`tests/generate_exports.rs` reads the golden recordings); a machine-read JSON export matches
-  as bytes, not only as data.
+- A generated file is held by the CLI's `generate` snapshots (every export and page of the
+  tide-corpus and vscode fixtures) and, for the GitLab and Azure DevOps docs and `setup ci`'s
+  pipelines, by the committed files of `tests/docs_pages/` and `tests/ci/`; a machine-read JSON
+  export is compared as bytes, not only as data.
 - gitoxide's crates, never the `gix` facade: its object cache (clru) brings a second `hashbrown`,
   which `deny.toml` bans.
 - A body's key order is the oracle's: build it with `json::Object` (an `IndexMap`) in the order
@@ -50,26 +51,19 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
   keys follow the model's field order whatever the file's order (`elastic::model_order`).
 - A rule a platform cannot compile is a `CompileError` with the oracle's `code`, reason and hint,
   never a panic.
-- `cargo xtask payloads diff --against python --corpus all` compares every body of every rule of
-  every corpus with the oracle's, on every platform; a difference is a bug or an entry of
-  `tests/golden/payloads/APPROVED.toml` (moved to `tests/golden/APPROVED_DIFFS.toml` when deploy
-  runs on the Rust command line): one difference (`[[diff]]`), or a class of the model-dump
-  previews (`[[dump]]`: `nulls`, `order`), which serde writes and Pydantic's `model_dump` did not.
-- A request body is the oracle's byte for byte as JSON. A text inside it that another format
-  serialises (Splunk's risk JSON, HarfangLab's Sigma YAML) is the crate's natural output
-  (serde_json, serde-saphyr), never a port of `json.dumps` or PyYAML; its difference is approved.
+- `tests/compile_corpus.rs` holds every body of every rule of the compile corpus
+  (`tests/golden/payloads/corpus`), on every platform and tenant, to its snapshot: a change to a
+  request body is a reviewed snapshot diff and, when a tenant sees it, a changelog entry.
+- A text inside a body that another format serialises (Splunk's risk JSON, HarfangLab's Sigma
+  YAML) is the crate's natural output (serde_json, serde-saphyr), never a port of `json.dumps` or
+  PyYAML.
 - What a deploy reads that is not the rule (a Splunk schedule's random or current minute, Carbon
   Black's report timestamp, the id the deployment state records) is an input, never read here.
 
 ## Test
 
 ```bash
-cargo nextest run -p opentide-compile
-cargo nextest run -p opentide-cli generate_goldens         # every recorded generate case, in-process
-cargo nextest run -p opentide-compile generate_docs         # every page of the tide corpus, generic and GitHub
-cargo xtask payloads diff --against python --corpus all   # every body, every corpus
-cargo xtask payloads plan                                  # the dry run's plan against the recordings
-cargo xtask payloads git --against python                  # a scripted git history
+cargo nextest run -p opentide-compile                       # the compile corpus's snapshot included
+cargo nextest run -p opentide-compile generate_docs         # every GitLab and Azure DevOps page of the tide corpus
+cargo nextest run -p opentide-cli --test cli_snapshots      # what `generate` and `deploy` print and write
 ```
-
-`tests/golden/payloads/APPROVED.toml` holds the intended differences of all three.

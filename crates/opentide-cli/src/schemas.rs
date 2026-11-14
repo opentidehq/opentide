@@ -3,15 +3,14 @@
 //! Each command's `output_schema` is a `$ref` into `$defs`. Until a command's
 //! typed result is Rust (its port, UC-3.5 and UC-3.6, derives it with
 //! schemars), its schema is the one the Python models generate, kept in
-//! `data/output-schemas.json`. That file is generated from the oracle's
-//! `opentide --json commands` recording, never edited:
-//! `OPENTIDE_CLI_BLESS=1 cargo nextest run -p opentide-cli framework_schemas`
-//! rewrites it, and the same test fails when it drifts from the recording.
+//! `data/output-schemas.json` (first generated from the Python CLI's
+//! `opentide --json commands`): a command whose document changes edits it,
+//! and the `commands` snapshots (`tests/cli_snapshots/commands/`) show it.
 
 use crate::json::Json;
 use std::sync::OnceLock;
 
-/// The generated file, as text.
+/// The schemas file, as text.
 pub const SOURCE: &str = include_str!("../data/output-schemas.json");
 
 /// The schemas: each command's `output_schema`, and the shared `$defs`.

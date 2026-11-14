@@ -1,5 +1,0 @@
-warning: Vocabulary not found · vocab: reviewed
-✗ 40 errors in 39 files · 871 objects checked · <SECONDS>
-→ opentide explain deployment_state_shape · how to fix it
-→ opentide validate · check again
-tip: add --json for machine-readable output

@@ -10,8 +10,8 @@
     reason = "a test harness: a broken manifest or fixture is a failure"
 )]
 
-#[path = "common/replay.rs"]
-mod replay;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 #[path = "common/snapshot.rs"]
 mod snapshot;
 

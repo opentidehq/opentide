@@ -1,47 +1,37 @@
-# Goldens: what the frozen Python CLI does
+# The CLI's snapshot cases
 
-The recordings here are the specification every Rust port is checked against
-([plan §5.1](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md),
-UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803)). They record, for every command
-path of `opentide --json commands`, every output mode and every fixture, what the oracle prints, the
-exit code and every file it creates, changes or deletes.
+[`cases.toml`](cases.toml) is the manifest of the command line's snapshot tests,
+`crates/opentide-cli/tests/cli_snapshots.rs` (#1139): every command path of
+`opentide --json commands`, in every output mode, on the fixtures each case lists. The
+fixtures it names are in [`fixtures/`](fixtures/) and `tests/fixtures/`. The cases were first
+written to record the frozen Python CLI; since the command line is Rust's, the snapshots of the
+Rust CLI's own output are the specification.
 
-```bash
-cargo xtask golden record                       # run every case through the oracle, write cases/
-cargo xtask golden record --check-determinism   # the same, each case twice: both runs must agree
-cargo xtask golden check --engine python        # a fresh run against the recordings
-cargo xtask golden diff --filter 'validate/*'   # check, printing every difference in full
-cargo xtask golden lock                         # rewrite oracle-requirements.txt from ORACLE
-```
+## Snapshots: the command line's behaviour, owned by Rust
 
-`--filter` takes a glob over case ids, `<command>/<mode>/<fixture>/<variant>`, or over their
-leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). The code is
-`xtask/src/golden/`, a library the comparator (UC-0.7) reuses.
-
-## Snapshots: the command line's behaviour, owned by Rust (#1139)
-
-`cases.toml` is also the manifest of the CLI's snapshot tests,
-`crates/opentide-cli/tests/cli_snapshots.rs`. Each case (its command, flags, mode, fixture and
-cassette) runs in-process through `opentide_cli::run` on a fresh copy of its fixture, and what
-it did is held to an insta snapshot of the **Rust CLI's own output**, one file per case:
+Each case (its command, flags, mode, fixture and cassette) runs in-process through
+`opentide_cli::run` on a fresh copy of its fixture, and what it did is held to an insta snapshot of
+the **Rust CLI's own output**, one file per case:
 `crates/opentide-cli/tests/cli_snapshots/<command>/<mode>__<fixture>__<variant>.snap`. A
 snapshot holds the arguments, the exit code, stdout, stderr, and every file the run created,
 modified or deleted under the workspace, home and the temporary directory, with its mode.
-Byte-for-byte parity with Python is not what they check; what the Rust CLI does today is.
 
 - **JSON is its parsed value**: a stream or a `.json` file that is one JSON document is
-  pretty-printed with sorted keys, so its fields and values are checked and its spacing is not.
+  pretty-printed with sorted keys, so its fields and values are checked and its spacing (and
+  key order) is not.
 - **Control characters are shown**: ESC as `␛`, so a colour or cursor change is a visible diff.
 - **A file over 64 KiB** (the editor schemas) or one that is not UTF-8 is its size and SHA-256.
 - **Normalised, and only because it differs between two runs** (`opentide-compare`'s normaliser,
-  the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of fixed
-  length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`), the
-  spinner's glyph and a live frame's content where the case opts in, crash-log names, catalog
-  fingerprints, and UUIDs a run mints where the case opts in (`fresh-uuids`). The host reports a
-  fixed version (`0.28.1`, `tests/common/snapshot.rs` `VERSION`), so a release changes nothing.
+  `crates/opentide-compare/src/normalise.rs`, each rule with its unit test): the case's temporary
+  root (`<WS>`, `<HOME>`, `<TMP>`, a root of fixed length, so wrapping is stable), the clock
+  (dates, timestamps, durations, `<SECONDS>`), the spinner's glyph and a live frame's content
+  where the case opts in (`live-frames`), crash-log names, catalog fingerprints, the host's git
+  version where the case opts in (`host-git`), and UUIDs a run mints where the case opts in
+  (`fresh-uuids`). The host reports a fixed version (`0.28.1`, `tests/common/snapshot.rs`
+  `VERSION`), so a release changes nothing.
 - **Left out**: cases on the generated fixtures (`fault`, `fault-lint`, `heavy-small`: `cargo
   xtask corpus` builds them, which a crate test cannot), and `serve`'s session, which feeds
-  standard input (`tests/serve.rs` drives it).
+  standard input (`tests/serve.rs` drives it and holds it to its own snapshots).
 
 They are ordinary nextest tests, one per command group, in the PR gate whenever `opentide-cli` or
 a crate below it changes. A change to what a command prints or writes fails them, by design:
@@ -59,254 +49,61 @@ normalisation rule to make a diff go away. A new case is a `[[case]]` in `cases.
 snapshot is written on the first run outside CI (CI sets `INSTA_UPDATE=no`, so a missing
 snapshot fails there).
 
-**In CI: none of it, since 2026-11-14.** The Rust port is done, and the maintainer took the oracle
-policing out of CI: no workflow records, checks or compares the goldens (golden compare and check,
-golden determinism, the golden preview, the corpora, the MCP replay, the payload, config,
-validate and lint diffs, `codegen --check --oracle`), and `APPROVED_DIFFS.toml` gates nothing.
-Every command here stays, run by hand when a change calls for it: a re-record, a new oracle, or a
-behaviour change you want measured against the oracle. The Rust crates' own tests that replay the
-recordings in-process (`crates/opentide-cli/tests/command_goldens.rs`, `framework_goldens.rs`,
-`generate_goldens.rs` and every other test that diffs against recorded Python output) are
-`#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`:
-no CI tier runs them. Run them by hand:
-
-```bash
-cargo nextest run -p opentide-cli --run-ignored only   # the oracle replays only
-cargo nextest run --workspace --run-ignored all        # everything, the replays included
-```
-
-### A preview of the next oracle
-
-`ORACLE.next` names the next oracle, in `ORACLE`'s format, with its own requirements,
-`oracle-requirements.next.txt`. None is committed now: the 0.28 catch-up train (#1122) used one
-for 0.28.1 while its features were ported, then made 0.28.1 the oracle. Nothing committed is
-recorded from it: a port compares its work with it in a directory of its own.
-
-```bash
-cargo xtask golden lock --oracle tests/golden/ORACLE.next          # its requirements, beside it
-cargo xtask golden record --oracle tests/golden/ORACLE.next --out target/golden-next --filter 'validate*/**'
-cargo xtask golden check --engine rust --recordings target/golden-next --filter 'validate*/**'
-```
-
-`record --out DIR` writes `DIR/cases` and `DIR/blobs` (the same content-addressed format) and
-copies the oracle file into `DIR/ORACLE` with its requirements; a case the oracle cannot run is
-reported and the others are still written; no `COVERAGE.md`. `--out` inside `tests/golden` is
-refused, and so is `record --oracle` without `--out`. `check --recordings DIR` and `diff
---recordings DIR` compare with those recordings and DIR's oracle, without the `COVERAGE.md`
-check, and with `--engine rust` without the stale-ledger check (the ledger approves differences
-from the committed oracle). `cargo xtask cassettes record --oracle FILE` and `cargo xtask mcp
-record --oracle FILE` take the same file. Run the record and the check by hand (the
-`Golden preview` workflow left CI).
-
-## Review rules
-
-1. **Never edit a recording by hand**: not `cases/`, not `blobs/`, not `COVERAGE.md`. A change is
-   a re-record (`cargo xtask golden record`) plus a reviewed diff. `golden check` fails on any byte
-   that differs, and on a blob whose bytes do not match its name.
-2. **A change to the recordings has a cause in the same PR**: a new or changed case in
-   `cases.toml`, a fixture change, a normalisation rule (with its unit test), or a new oracle.
-   Review the diff of `cases/` as you would code: each changed line follows from that cause.
-3. **The oracle changes only in a PR of its own**: edit `ORACLE` (tag, wheel, its SHA-256 from
-   PyPI), run `cargo xtask golden lock` (`git diff` must show the new requirements only) and
-   `cargo xtask golden record --check-determinism`, and review every difference: each one is a
-   behaviour change between the two releases.
-4. **Normalisation hides only what differs between two runs of the same case** (below). A rule
-   is code in `crates/opentide-compare/src/normalise.rs` (moved there by UC-0.7 so the CLI's compare mode shares it) with a unit test; widening one to make a difference
-   go away is a review failure.
-5. **Recording is deterministic**: a pull request that re-records runs
-   `cargo xtask golden record --check-determinism` before it is opened, and says so in its
-   description. It records every case twice (about 26 minutes on a CI runner) and fails, writing
-   nothing, on any difference between the runs; `git diff tests/golden` must then show only the
-   change the pull request is for. CI does not re-record or check the recordings: the oracle is
-   a pinned, frozen release, so only a re-record can change them, and its pull request runs
-   `cargo xtask golden check --engine python` by hand as well.
-6. **Coverage**: every command path has at least one case in every mode. `COVERAGE.md` is
-   generated with the recordings; `record` and `check` fail when a path or mode has none, or when
-   the recordings outgrow their budget.
-7. **An approved difference is as narrow as the change**: an entry in `APPROVED_DIFFS.toml`
-   (UC-0.7) names one command, a case glob and a target. A text rule is one whole line on each
-   side, approved where the oracle and candidate lines match it at the same line number (its
-   candidate may write `<SHA256>` once, for any digest there, where the oracle's line is the same
-   with a digest in its place: a digest over the installed version, which every build changes); a lines
-   rule is a block of consecutive whole lines on each side, of any length, approved where the
-   candidate has its block at the place the oracle has its own (a row a port adds or drops;
-   `(absent)` on the candidate's side where it writes no line there, as in a stream it leaves
-   empty),
-   each block quoted exactly and the entry naming its one case (no `*`): a block one character
-   off, or one the output extends by a line, is not approved, and the lines after an approved
-   block are compared at their new place; a case may take one lines entry per block, each placed
-   by its oracle lines; a
-   JSON rule is one value at one pointer; a `help` rule (`oracle = "typer"`, `candidate =
-   "clap"`, stdout only) approves the layout of a help screen, and only where both sides are
-   help of the entry's command that say the same thing, read by `opentide_compare::help`: the
-   usage path, the about text, every section's options, arguments and commands in order with
-   their descriptions, defaults and environment variables, and the examples; a `help-text`
-   rule approves one description, about text or epilog worded otherwise on such a screen; a `json-extend:` rule names the elements a candidate
-   adds to the oracle's array at one pointer, each by its index in the candidate's array: the
-   rest must be the oracle's elements, in order, compared as any value is, so it fixes the
-   candidate's array as a whole-value entry would without quoting the oracle's elements, and a
-   JSON rule under it addresses the array by the oracle's indices; a `json-drop:` rule is its
-   mirror, naming the oracle's elements the candidate drops from the array, each by its index in
-   the oracle's array, with the candidate's array length: the dropped elements are put back where
-   the oracle has them and the array is compared as any value is (a check a port no longer runs);
-   a `sha256` rule approves one
-   whole file by the digests of both sides' normalised bytes, for a generated file compared by
-   another check (each editor schema `generate schemas` writes, judged by verdict in `cargo
-   xtask codegen --check`); a mode rule (`oracle = "0600"`, `candidate = "0644"`) approves one
-   file's permission bits where both sides wrote it with exactly those bits, its bytes still
-   compared (a fix the frozen oracle cannot take, #987); a presence rule (`oracle = "written"`, `candidate = "(absent)"`)
-   approves one file the oracle wrote and the candidate did not, named by its exact path, and only in the oracle's language-server catalog
-   cache (`home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/`, and the folders above it
-   it creates): a cache outside the workspace is not a file a user commits, and any other file
-   only one side wrote is still a difference.
-
-## The oracle
-
-[`ORACLE`](ORACLE) names the release (`v0.23.0`, commit `f41fe5e5`), its manylinux x86-64
-wheel and the wheel's SHA-256, the CPython it runs on (uv-managed, so every machine runs the same
-build) and the platform. [`oracle-requirements.txt`](oracle-requirements.txt) pins every package
-with its hashes; the opentide line carries the ORACLE wheel's hash alone, so the install fails
-unless PyPI serves that very file. The oracle is installed with `uv pip install --require-hashes`
-into a virtual environment under the Cargo target directory (`target/golden/`, or
-`$OPENTIDE_GOLDEN_CACHE`), never from the working tree. Recording needs Linux (pseudo-terminals,
-`setsid`) and uv.
-
 ## Cases
 
-[`cases.toml`](cases.toml) is the reviewed source. Each `[[case]]` is an argument set run in every
-mode against every fixture it lists:
+Each `[[case]]` is an argument set (`args`, after `opentide`) run in every mode of `modes`
+against every fixture of `fixtures` (`[defaults]` unless the case sets its own); `{name}` in an
+argument is a variable of the fixture (`vars`), and a fixture without it is left out of that
+case. `input` is the case's standard input; `cassette = "<name>"` serves its HTTP traffic from
+`tests/cassettes/<name>.json` through a replaying proxy that fails the run unless its requests are
+the cassette's, in order (`crates/opentide-cassette/AGENTS.md`); `normalise` opts the case into
+the rules above.
 
 | Mode | How it runs |
 |------|-------------|
-| `human` | stdin, stdout and stderr are pseudo-terminals of 100 × 40, `TERM=xterm-256color`, stdin the controlling terminal; the input is followed by end of file (Ctrl-D) |
-| `plain` | pipes, so output resolves to plain mode |
-| `json` | pipes, with `--json` right after `opentide` |
-| `agent` | pipes, with `AI_AGENT=golden` |
+| `human` | stdout and stderr are terminals of 100 columns, `TERM=xterm-256color` |
+| `plain` | not terminals, so output resolves to plain mode |
+| `json` | not terminals, with `--json` right after `opentide` |
+| `agent` | not terminals, with `AI_AGENT=golden` |
 
-`mcp` mode (`opentide mcp start`) is not a mode of these cases: its recorded sessions are in
-[`mcp/`](mcp/) (UC-3.7, #829): `sessions.toml` holds the requests, `cargo xtask mcp record --python
-PATH` writes each session's answers from the Python server of an opentide release that still has
-one (they are frozen since UC-6.2, #841), and `cargo xtask mcp replay --engine rust mcp/*.jsonl`
-replays them against this repository's server, the Rust one; its differences are approved in
-`APPROVED_DIFFS.toml` (command `mcp start`, case `<session>/<step>`);
-a session's `launch` starts the server in the workspace (the default), outside it with `--repo`, or
-in an Agent Plugin root that names no workspace. The environment is exactly the one in each case's
-`case.toml`: no CI or agent variable unless the case sets one, `HOME` and `TMPDIR` inside the case's
-directory (cases live under `/tmp`, whatever `TMPDIR` says, so absolute paths have one length), `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
-Network traffic goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths
-(`deploy`, `query`, `share`, `validate query --live`, `generate extract`) are recorded as their
-failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. A case with
-`cassette = "<name>"` in `cases.toml` is served from `tests/cassettes/<name>.json` instead: its
-proxy variables are `<CASSETTE_PROXY>`, a replaying proxy started for the case, and `SSL_CERT_FILE`,
-`REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` name that proxy's CA (`<TMP>/cassette-ca.pem`). The run
-fails unless its requests are the cassette's, byte for byte and in order (a compare run sends them
-twice: once per implementation). Cassettes are recorded from the oracle with `cargo xtask cassettes
-record <name>` and checked with `cargo xtask cassettes check` (`crates/opentide-cassette/AGENTS.md`). On Linux each
-case runs in a session of its own (`setsid`), so it never reaches the terminal of whoever records.
-
-A command no golden case can replay (`generate extract sentinel`: MSAL and azure-core stamp its requests with random ids) is compared by an integration test against its connector's cassette (`crates/opentide-cli/tests/extract_sentinel.rs`); its approved differences name the case `cassette:<scenario>`, and that test, not `golden check`, applies them and finds them stale.
-
-The arguments come from the examples of `opentide --json commands` and `docs/cli/`, the error cases
-of `docs/internal/cli-experience.md` ("Errors people and agents make": a typo in a command, an
-option or a choice, a missing option, a prompt without a terminal, `--json` after the subcommand,
-`DEBUG='*'`), and one `--help` case per command path. Two things are not recorded in human mode:
-`opentide tui` (only `tui --help`: the full-screen app redraws on a timer) and an interactive prompt
-(prompt_toolkit works the terminal in raw mode and asks it for the cursor position, which needs a
-terminal emulator); their non-terminal behaviour, exit 2 naming the flags, is recorded in the other modes.
-
-Examples in `docs/cli` that are not recorded, and why: `--install-completion` and
-`--show-completion` (they detect the shell from the parent process); `--proxy
-http://proxy.internal.example:8080 …` (a host name to resolve: the network is refused through a
-proxy on the loopback instead); `--repo /path/to/repo …` and `--repo path/to/detections tui`
-(stand-in paths; `--repo does-not-exist` is recorded); `mcp start` (UC-3.7) and `lsp start` (the
-language server's own stdio tests), recorded as `--help`; `opentide --debug generate` (its debug
-log names each phase's time and the slowest phase, so it is recorded as `--no-color generate`).
-Examples with a placeholder (`<uuid>`) run with a fixture's real identifier.
-
-A path that `COVERAGE.md` marks "`--help` or bare only" is a group that does nothing alone (run
-bare, it prints its usage) or one of the two protocol servers above, `mcp start` and `lsp start`.
-`opentide serve` is recorded in plain mode only: it speaks JSON-RPC on stdio, and its replies are
-the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo of its input.
+The environment is exactly the case's: no CI or agent variable unless the case sets one, `HOME`
+and `TMPDIR` inside the case's root (`/tmp/golden-XXXXXX`, so absolute paths have one length),
+`TZ=UTC`, `LANG=C.UTF-8`, git without system or user configuration. Network traffic without a
+cassette goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths (`deploy`,
+`query`, `share`, `validate query --live`, `generate extract`) are recorded as their failure
+without tenants, and their success paths are the cassette cases'. `generate extract sentinel`'s
+tenant run (MSAL and azure-core stamp its requests with random ids) is
+`crates/opentide-cli/tests/extract_sentinel.rs`'.
 
 ## Fixtures
+
+`[fixtures.<name>]` in `cases.toml` declares each fixture: its `source`, the `edits` laid over it
+(each `find` found once and replaced; an empty `find` writes a new file), and, for a git checkout
+of two commits, the `pushed` edits of its second commit (fixed author and time, so the commit ids
+are the same on every host). `crates/opentide-cli/tests/common/fixtures.rs` lays them out; each
+case gets a fresh copy.
 
 | Name | What |
 |------|------|
 | `tide-corpus` | [`tests/fixtures/tide_corpus/current`](../fixtures/tide_corpus/), moved to the `.opentide/` layout as `tests/corpus_support.py` does |
 | `vscode` | the VS Code extension's fixture workspace, vendored unchanged in [`fixtures/vscode-workspace/`](fixtures/vscode-workspace/) (source and commit in `vscode-workspace.SOURCE.toml`, MIT licence in `vscode-workspace.LICENSE`) |
-| `tide-corpus-typo` | `tide-corpus` with one declared edit (`edits` in `cases.toml`): `severity: high`, a typo `validate --fix` repairs, so a file changed in place is recorded |
-| `vscode-unscoped` | `vscode` with one declared edit: signal entities written without their stage or in the wrong case (`hostname`, `'host::command line'`, `Process`), so the file `migrate vocab-scope --apply` rewrites is recorded (`tide-corpus` links its object folders, which the command does not follow) |
-| `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
-| `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
-| `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
-| `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
-| `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
-| `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |
-| `deploy-tenants-sysdig` | `deploy-tenants` with every platform but Sysdig disabled (`edits` in `cases.toml`): a deploy without `--platform` sends to the workspace's enabled platforms, so the `golden/deploy-sysdig` cassette serves it (UC-4.4c) |
-| `deploy-push`, `deploy-push-production`, `deploy-push-anchor` | `deploy-tenants` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one rule, in `STAGING`, already in `PRODUCTION`, or with its status written as an anchor: the status promotion of a `RELEASE` deploy on a push (UC-4.6c). The commits' author and time are fixed, so their ids are the same on every host |
-| `deploy-push-no-target`, `deploy-push-key`, `deploy-push-unreadable` | `deploy-tenants` as the same git checkout, the push giving the status promotion something it fails the run on: a `deployment.toml` (an `edits` entry with an empty `find` writes a file the fixture does not have) whose `promotion_target` is a number, a `STAGING` block whose key is a number, or a flow-mapping block promoted to a status named `LIVE}`, whose promoted text does not read back (UC-6.2e) |
-| `share-misp` | [`fixtures/share-misp/`](fixtures/share-misp/): three `[[misp]]` destinations (one served by the MISP stand-in of `tests/cassettes/misp/tenant.py`, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before, for `share` (UC-4.4b); a cassette's client copies it before a push or retract writes the ledger |
-| `share-misp-broken` | `share-misp` with one declared edit: a `max_tlp` that is no TLP name, the `sharing_config` preflight |
-| `share-misp-push`, `share-misp-push-config` | `share-misp` as a git checkout of two commits (`pushed` in `cases.toml`): the fixture, then a push that changed one shared rule, or `sharing.toml` alone: `share push --changed` on a GitHub, GitLab or Azure push and with `--since` (UC-4.4e); the `golden/share-push-changed` cassette's client builds the same checkout |
-| `tide-corpus-compile-missing-field`, `-invalid-value`, `-empty-block`, `-invalid-rule`, `-elastic-severity` | `tide-corpus` with one declared edit each, a rule the platform's compiler refuses: the Sentinel rule without `grouping.alert`, with `alert.suppression: true`, with an empty `response`, with `frequency: hourly`; the Elastic rule's `severity` without `mapping`: `validate`'s compile check (UC-2.2, #817) |
-| `tide-corpus-compile-hidden` | `tide-corpus-compile-missing-field` with an unrelated `tlp: clearr` in another rule: the compile check runs only when nothing else failed (KG-10) |
+| `tide-corpus-*`, `vscode-*` | those two with the edits `cases.toml` declares: a typo `validate --fix` repairs, legacy rule ids, a rule each platform's compiler refuses, signal entities `migrate vocab-scope` rewrites, a legacy docs folder |
+| `heavy-small`, `fault`, `fault-lint` | `cargo xtask corpus generate` (seed 1: 30 threats, 30 objectives, 50 rules) and `cargo xtask corpus faults --out`: generated, never committed, and left out of the snapshots |
+| `setup-merge`, `skills-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/), [`fixtures/skills-merge/`](fixtures/skills-merge/): the files `setup` merges into |
+| `tenants`, `live-tenants`, `deploy-tenants` | [`fixtures/`](fixtures/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py`, with rules for `query`, `validate query --live` and a deploy that sends |
+| `deploy-tenants-sysdig`, `deploy-push*` | `deploy-tenants` with every platform but Sysdig disabled, or as a git checkout whose last commit is a push (the status promotion of a `RELEASE` deploy) |
+| `share-misp*` | [`fixtures/share-misp/`](fixtures/share-misp/): MISP destinations, objects and a sharing ledger for `share`, broken or as a pushed checkout |
 | `empty` | a workspace with an empty `.opentide/` |
 | `none` | no workspace: an empty directory |
 
-Each case gets a fresh copy of its fixture.
+## Other data here
 
-## A recording
+- [`payloads/corpus/`](payloads/corpus/) and [`payloads/oracle.json`](payloads/oracle.json): the
+  compile corpus and the list of its rules, platforms and tenants that
+  `crates/opentide-compile/tests/compile_corpus.rs` compiles and holds to its snapshot (first
+  written to compare the compiler with the Python CLI's; the list keeps its name).
 
-`cases/<command>/<mode>/<fixture>/<variant>/` (the command path's words joined by `.`, `_root`
-for the root):
-
-| File | Holds |
-|------|-------|
-| `case.toml` | argv, the full environment, stdin, mode, fixture, timeout |
-| `stdout`, `stderr` | the streams, normalised; ANSI codes are kept in human mode |
-| `outcome.toml` | the exit code, and each file created, modified or deleted under the case's root (`ws/`, `home/`, `tmp/`): path, kind, mode, size |
-| `files/<path>` | the bytes of each created or modified file under 16 KiB, normalised. Stored paths are portable: `%` and the characters Windows forbids (`<>:"\|?*\`) become `%XX`, and a name that starts with `.git` or `~`, a reserved Windows name (`CON`, `NUL`, …) or one ending in `.` or a space gets a `~` before it |
-
-A file of 16 KiB or more is stored once in `blobs/<sha256>` and named in `outcome.toml`: the
-generated schemas and catalogs, which many cases write.
-
-## Normalisation
-
-Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this order:
-
-| Rule | Becomes | Why |
-|------|---------|-----|
-| A Rich live region (spinner, progress) between hiding and showing the cursor | `<LIVE>`, keeping what was printed above it | its frames are redrawn on a timer |
-| The case's workspace, home, root, the engine's directories and the Python its environment links to | `<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>`, `<PYTHON>` | temporary directories, the recorder's home |
-| The host's kernel release (the crash handler's `os` fact and issue link) | `<KERNEL>` | the host |
-| `crash-<time>-<pid>.log` | `crash-<TIMESTAMP>-<PID>.log` | the crash handler's log name |
-| ISO 8601 date-times on the dates the case ran or the 7 days before (a default window reaches back), and the clock time that starts a log line (`18:22:33 debug: …`) | every digit `0` (`0000-00-00T00:00:00.000000+00:00`), so the format is still compared | the clock |
-| The dates the case ran (`YYYY-MM-DD`) | `<TODAY>` | the clock |
-| JSON `duration_ms`, `elapsed_ms`, `wall_ms`, `seconds` | `0`, or `0.0` for a float | wall times; the document keeps its types |
-| `1.3s`, `2m05s` in text, and the spaces around it | `<SECONDS>`, one space each side at most | wall times in outcome lines and padded table columns |
-| `id=` of a terminal hyperlink (`ESC]8;id=…`) | `id=<ID>` | Rich numbers hyperlinks at random |
-| `git <version>`, in cases with `normalise = ["host-git"]` (`doctor`) | `git <GIT_VERSION>` | `opentide doctor` prints the host's git; help text quotes a literal example, which stays |
-| `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
-| UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
-| The frame a live region keeps, in cases with `normalise = ["live-frames"]` (`deploy` in human mode) | `<LIVE></LIVE>`: what was printed during the region and the outcome lines after it are still compared | worker threads update the platform row, so Live's first render can already show their progress |
-
-When `golden check --engine rust` compares a run with its recording (not when a case is
-recorded), one more rule applies to each side:
-
-| Rule | Becomes | Why |
-|------|---------|-----|
-| opentide's own version, the exact string each side reports (the oracle's: `version` in `ORACLE`; the candidate's: what `.venv/bin/opentide --version` prints), as a whole token | `<OPENTIDE_VERSION>` | the oracle is a release and the candidate a build of this checkout; the installed version is not behaviour. Another package's version, a rule's `version`, a longer version containing it (`10.23.0`, `0.23.0.dev1`) and any other version-shaped text stay (`normalise::opentide_version`) |
-| The spaces that pad a line holding that version to a width (the home screen's title row) | as many as keep the line as wide as it was printed | the padding follows the version's length, not behaviour; only a line's trailing spaces change, and only on a line that held the version (`normalise::opentide_version_padded`) |
-
-Known limits, each a one-in-a-million chance or a case no fixture has today: a timestamp whose
-microseconds are exactly 0 loses its fraction in Python's `isoformat()`, so it records shorter; two
-files that differ only by fresh UUIDs (same masked path and bytes) are numbered in path order; the
-8-hex suffix `new` adds to a colliding file name is not normalised. Any of them shows as a
-determinism failure, never as a silent pass.
-
-## Size
-
-`COVERAGE.md` reports the size of `cases/` and `blobs/` in bytes (apparent size: the sum of the
-files' lengths, not the blocks they take on disk) against a budget of 128 MiB (`BUDGET_BYTES` in
-`xtask/src/golden/coverage.rs`); `record` and `check` fail over it. Git stores them far smaller: the schemas of one
-fixture differ from another's in a few lines, and pack deltas keep one copy.
+The byte-for-byte recordings of the Python CLI (`cases/`, `blobs/`), their ledger of approved
+differences, the oracle's pin and the tooling that recorded and compared them (`cargo xtask
+golden`, `compare` and the other `--against python` diffs) were retired in #1139: git history
+holds them.

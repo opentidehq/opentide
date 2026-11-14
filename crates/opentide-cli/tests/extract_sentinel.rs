@@ -1,16 +1,10 @@
-//! `generate extract sentinel` against the oracle (UC-4.4e, #834). A golden
-//! case cannot replay it: MSAL and azure-core stamp the oracle's requests
-//! with random ids. `tests/cassettes/sentinel/extract.json` was recorded from
-//! the oracle's command line with those ids fixed (`client.py extract`), and
-//! the oracle's files and document in `tests/extract_sentinel/oracle/`. Here the
-//! Rust command runs in a copy of the same workspace, its ids fixed the same
-//! way, against that cassette: it must send exactly the oracle's requests,
-//! and write each rule file as the oracle did, but for the differences
-//! `tests/golden/APPROVED_DIFFS.toml` approves (case
-//! `cassette:sentinel/extract`), and load to the oracle's data. Two things
-//! the oracle did are left out on purpose: it dumped the listing to
-//! `output-<tenant>.json` in the working directory, and it padded each file
-//! name with a space at both ends ([`unpadded`]).
+//! `generate extract sentinel` (UC-4.4e, #834) against its tenant. A
+//! snapshot case cannot run it: MSAL and azure-core stamp each request with
+//! random ids. `tests/cassettes/sentinel/extract.json` was recorded with
+//! those ids fixed (`client.py extract`); here the command runs in a copy of
+//! the workspace (`tests/extract_sentinel/workspace`), its ids fixed the
+//! same way, against that cassette: it must send exactly the cassette's
+//! requests, and what it writes is held to a snapshot.
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -23,13 +17,9 @@ use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::extract::{Context, sentinel_with};
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
-use opentide_compare::{Case, FileState, Run};
 
 /// The credential the replayed tenant gets; redacted, as the recording's was.
 const SECRET: &str = "replayed-credential-value";
-/// The ledger's case for this test's comparison.
-const CASE: &str = "cassette:sentinel/extract";
-const COMMAND: &str = "generate extract sentinel";
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -121,164 +111,40 @@ fn extract_edited(
     let unmatched = proxy.verify();
     assert!(
         unmatched.is_empty(),
-        "requests not the oracle's: {unmatched:#?}"
+        "requests not the cassette's: {unmatched:#?}"
     );
     (scratch, ws, report)
 }
 
-/// The oracle's file name as the command writes it: the oracle named a file
-/// `sanitize_filename(f'"{name}"')`, so each name had a space at both ends
-/// (` Rule - soc .yaml`, ` Rule - soc  00000000.yaml` for a second rule of
-/// that name); the command writes `Rule - soc.yaml`, `Rule - soc 00000000.yaml`.
-fn unpadded(oracle: &str) -> String {
-    let (folder, name) = oracle.rsplit_once('/').unwrap();
-    let name = name.strip_prefix(' ').unwrap();
-    let name = match name.strip_suffix(" .yaml") {
-        Some(stem) => format!("{stem}.yaml"),
-        None => {
-            let (stem, id) = name.rsplit_once("  ").unwrap();
-            format!("{stem} {id}")
-        }
-    };
-    format!("{folder}/{name}")
-}
-
-fn as_data(path: &str, bytes: &[u8]) -> String {
-    let text = std::str::from_utf8(bytes).unwrap();
-    let loaded = opentide_schema::node::load(text)
-        .unwrap_or_else(|error| panic!("{path}: {error:?}\n{text}"));
-    opentide_compile::json::Json::from_node(loaded.root().unwrap()).to_compact()
-}
-
+/// The run against the cassette: its outcome and every rule file it writes
+/// under `Imported/`, held to a snapshot. It leaves no debug dump of the
+/// listing in the working directory (the Python CLI wrote
+/// `output-<tenant>.json` there on every run).
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn sentinel_rules_are_extracted_as_the_oracle_extracted_them() {
+fn sentinel_rules_are_extracted_as_the_snapshot_says() {
     let (_scratch, ws, report) = extract();
-
-    // The document: the oracle's keys, message and counts.
-    let oracle: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(here().join("oracle/result.json")).unwrap())
-            .unwrap();
     assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.failure);
-    assert_eq!(report.outcome.status, oracle["status"].as_str().unwrap());
-    assert_eq!(report.outcome.message, oracle["message"].as_str().unwrap());
     assert_eq!(
         report.outcome.data,
         vec![("import".to_owned(), Json::str("sentinel"))]
     );
-    let summary: Vec<(String, i64)> = report
-        .outcome
-        .summary
-        .iter()
-        .map(|(key, value)| match value {
-            Json::Int(count) => (key.clone(), *count),
-            other => panic!("{key}: {other:?}"),
-        })
-        .collect();
-    assert_eq!(
-        summary,
-        [
-            (
-                "imported".to_owned(),
-                oracle["summary"]["imported"].as_i64().unwrap()
-            ),
-            (
-                "skipped".to_owned(),
-                oracle["summary"]["skipped"].as_i64().unwrap()
-            ),
-        ]
-    );
-
-    // No debug dump of the listing in the working directory (the oracle
-    // wrote `output-<tenant>.json` there on every run).
     let dumped: Vec<_> = std::fs::read_dir(&ws)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .filter(|name| name.starts_with("output-"))
         .collect();
     assert!(dumped.is_empty(), "{dumped:?}");
-
-    // The rule files: named as the oracle named them without its padding,
-    // and holding the oracle's bytes but for the approved differences, and
-    // the oracle's data. They are compared under the oracle's names, which
-    // the ledger's entries name.
-    let oracle_files = files(&here().join("oracle"), "Imported");
-    let written = files(&ws, "Imported");
-    assert_eq!(
-        written.keys().cloned().collect::<Vec<_>>(),
-        [
-            "Imported/Encoded PowerShell — Ünïcode - soc 00000000.yaml",
-            "Imported/Encoded PowerShell — Ünïcode - soc.yaml",
-            "Imported/Quotes  and  back slash  a  name  - soc.yaml",
-            "Imported/Sign-in from a new country - soc.yaml",
-        ]
+    let mut shown = format!(
+        "status: {}\nmessage: {}\nsummary: {:?}\n",
+        report.outcome.status, report.outcome.message, report.outcome.summary
     );
-    let candidate_files: BTreeMap<String, Vec<u8>> = oracle_files
-        .keys()
-        .map(|path| {
-            let bytes = written
-                .get(&unpadded(path))
-                .unwrap_or_else(|| panic!("{path}: not written as {}", unpadded(path)));
-            (path.clone(), bytes.clone())
-        })
-        .collect();
-    assert_eq!(candidate_files.len(), written.len());
-    for (path, bytes) in &oracle_files {
-        assert_eq!(
-            as_data(path, &candidate_files[path]),
-            as_data(path, bytes),
-            "{path} loads to other data than the oracle's"
-        );
+    for (path, bytes) in files(&ws, "Imported") {
+        shown.push_str(&format!(
+            "\n--- {path}\n{}",
+            String::from_utf8(bytes).unwrap()
+        ));
     }
-    let run = |files: &BTreeMap<String, Vec<u8>>| Run {
-        exit_code: 0,
-        stdout: Vec::new(),
-        stderr: Vec::new(),
-        files: files
-            .iter()
-            .map(|(path, bytes)| {
-                (
-                    format!("ws/{path}"),
-                    FileState::Written {
-                        mode: 0o644,
-                        bytes: bytes.clone(),
-                    },
-                )
-            })
-            .collect(),
-    };
-    let ledger = opentide_compare::ledger::Ledger::parse(
-        &std::fs::read_to_string(repo().join("tests/golden/APPROVED_DIFFS.toml")).unwrap(),
-    )
-    .unwrap();
-    let mut usage = opentide_compare::ledger::Usage::default();
-    let compared = opentide_compare::compare(
-        Case {
-            command: COMMAND,
-            id: CASE,
-        },
-        &run(&oracle_files),
-        &run(&candidate_files),
-        &ledger,
-        &mut usage,
-    );
-    assert!(
-        compared.equal,
-        "differences the ledger does not approve:\n{:#?}",
-        compared.differences
-    );
-    // Every entry of this comparison applied: none is stale.
-    for (index, entry) in ledger.entries.iter().enumerate() {
-        if entry.case == CASE {
-            assert!(
-                usage.is_used(index),
-                "APPROVED_DIFFS.toml entry {} ({:?} {}) applied nowhere: it is stale",
-                index + 1,
-                entry.target,
-                entry.rule_text
-            );
-        }
-    }
+    insta::assert_snapshot!("sentinel_extract", shown);
 }
 
 /// A rule whose field is of the wrong type is skipped and listed with the

@@ -1,6 +1,5 @@
-//! The index as one JSON document, the form `cargo xtask registry diff`
-//! compares with the Python registry's (`xtask/oracle/registry_export.py`
-//! writes the oracle's side in the same shape).
+//! The index as one JSON document (the form it was compared with the
+//! Python registry's in, until #1139).
 //!
 //! Paths are relative to the workspace, `/` separated; a path outside it is
 //! written whole. Bodies are the documents as JSON (a float JSON cannot hold

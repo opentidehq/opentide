@@ -1,4 +1,0 @@
-error: Missing command: choose from threat, objective, rule.
-  usage: opentide new [OPTIONS] COMMAND [ARGS]...
-  help: run 'opentide new --help'
-tip: add --json for machine-readable output

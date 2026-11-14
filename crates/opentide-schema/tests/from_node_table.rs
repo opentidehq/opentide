@@ -1,14 +1,10 @@
-//! The structural conversion against the oracle (UC-1.2, #808): every case of
-//! `tests/oracle/from_node_cases.toml` converted with the models below, which
-//! mirror the Pydantic models of `tests/oracle/from_node_table.py` field for
-//! field. `tests/oracle/from_node_table.json` is what the oracle reports: each
-//! error's type, path, message, input and context, the span the CLI prints
-//! and the `yaml_line` it attaches, or the validated value.
-//!
-//! A case whose result differs from the oracle's names one of the file's
-//! `[[difference]]` entries (its reason and the bold lead of its CHANGELOG.md
-//! entry); a case that names one and does not differ fails, as does an entry
-//! no case uses. Every Rust result, the same or not, is the reviewed snapshot
+//! The structural conversion (UC-1.2, #808) on a table of cases: every case
+//! of `tests/tables/from_node.json` (a YAML document and the model it is
+//! converted to) converted with the models below, which mirror, field for
+//! field, the Pydantic models the cases were first compared with. Each
+//! result (every error's type, path, message, input and context, the span
+//! the CLI prints and the `yaml_line` it attaches, or the validated value) is
+//! held to the reviewed snapshot
 //! `tests/snapshots/from_node_table__rust_results.snap`.
 
 #![expect(
@@ -16,8 +12,7 @@
     reason = "helpers of the tests: a fixture that does not parse fails them"
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::collections::BTreeMap;
 
 use opentide_schema::from_node::{self, Context};
 use opentide_schema::node::{self, Node};
@@ -26,7 +21,7 @@ use opentide_schema::{ErrorKind, FromNode, SchemaError};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
-const TABLE: &str = include_str!("oracle/from_node_table.json");
+const TABLE: &str = include_str!("tables/from_node.json");
 
 #[expect(
     clippy::ref_option,
@@ -198,61 +193,13 @@ fn error_json(error: &SchemaError) -> Json {
     })
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct Difference {
-    id: String,
-    changelog: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct CaseNote {
-    id: String,
-    #[serde(default)]
-    difference: Vec<String>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct Cases {
-    #[serde(default)]
-    difference: Vec<Difference>,
-    case: Vec<CaseNote>,
-}
-
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
+fn every_case_converts_as_its_snapshot_says() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    assert_eq!(table["oracle"], "0.28.1");
-    let notes: Cases = toml::from_str(include_str!("oracle/from_node_cases.toml")).unwrap();
-    let differences: BTreeMap<&str, &Difference> = notes
-        .difference
-        .iter()
-        .map(|difference| (difference.id.as_str(), difference))
-        .collect();
-    let named: BTreeMap<&str, &[String]> = notes
-        .case
-        .iter()
-        .map(|case| (case.id.as_str(), case.difference.as_slice()))
-        .collect();
-    let changelog =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../CHANGELOG.md"))
-            .unwrap();
     let cases = table["cases"].as_array().unwrap();
     assert!(cases.len() >= 90, "{} cases", cases.len());
-    assert_eq!(cases.len(), named.len(), "run from_node_table.py");
-    let mut failures = Vec::new();
-    for difference in differences.values() {
-        if !changelog.contains(&difference.changelog) {
-            failures.push(format!(
-                "difference {}: CHANGELOG.md has no {:?}",
-                difference.id, difference.changelog
-            ));
-        }
-    }
-    let mut used = BTreeSet::new();
     let mut results = BTreeMap::new();
     for case in cases {
-        let id = case["id"].as_str().unwrap();
         let actual = match node::load(case["yaml"].as_str().unwrap()) {
             Err(error) => json!({ "load_error": error.problem }),
             Ok(document) => match convert(case["model"].as_str().unwrap(), &document) {
@@ -262,42 +209,8 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
                 }
             },
         };
-        let mut expected = json!({});
-        for key in ["value", "errors"] {
-            if let Some(value) = case.get(key) {
-                expected[key] = value.clone();
-            }
-        }
-        let listed = named.get(id).copied().unwrap_or_default();
-        match (listed.is_empty(), actual == expected) {
-            (true, false) => failures.push(format!(
-                "{id}: differs from the oracle without a difference entry\n  oracle: {expected}\n  rust:   {actual}"
-            )),
-            (false, true) => failures.push(format!(
-                "{id}: names {listed:?} but converts as the oracle does"
-            )),
-            _ => {}
-        }
-        for name in listed {
-            if !differences.contains_key(name.as_str()) {
-                failures.push(format!("{id}: no difference entry {name}"));
-            }
-            used.insert(name.as_str());
-        }
-        results.insert(id.to_owned(), actual);
+        results.insert(case["id"].as_str().unwrap().to_owned(), actual);
     }
-    for id in differences.keys() {
-        if !used.contains(id) {
-            failures.push(format!("difference {id}: no case names it"));
-        }
-    }
-    assert!(
-        failures.is_empty(),
-        "{} of {} cases:\n{}",
-        failures.len(),
-        cases.len(),
-        failures.join("\n")
-    );
     insta::assert_snapshot!(
         "rust_results",
         serde_json::to_string_pretty(&results).unwrap()

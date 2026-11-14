@@ -3313,6 +3313,7 @@ dependencies = [
  "gix-revwalk",
  "gix-worktree",
  "indexmap",
+ "insta",
  "jiff",
  "minijinja",
  "opentide-core",

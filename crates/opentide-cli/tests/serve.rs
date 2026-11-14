@@ -1,7 +1,7 @@
 //! `opentide serve`'s protocol (UC-3.8, #830): the scenarios the Python host
 //! was held to (`tests/test_cli/test_serve.py`, vscode-extension's
-//! `fake-opentide.mjs`), on the Rust host, and the oracle's recorded
-//! sessions (`tests/golden/cases/serve/*/session`) replayed byte for byte.
+//! `fake-opentide.mjs`), on the Rust host, and a scripted session held to
+//! its snapshots (`tests/snapshots/serve__session_*.snap`).
 //!
 //! The runs that reach the process's warm workspaces and its one run in
 //! progress take [`SESSION`] first: those are process-wide.
@@ -9,11 +9,11 @@
 #![cfg(unix)]
 #![expect(
     clippy::unwrap_used,
-    reason = "a test helper: a broken recording is a failure"
+    reason = "a test helper: a broken fixture is a failure"
 )]
 
-#[path = "common/replay.rs"]
-mod replay;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -502,10 +502,10 @@ fn an_internal_failure_is_answered_and_the_server_keeps_serving() {
 // --- runs on the Rust implementation ----------------------------------------------------
 
 fn workspace(name: &str) -> (tempfile::TempDir, PathBuf) {
-    let root = replay::case_root();
+    let root = fixtures::case_root();
     let ws = std::fs::canonicalize(root.path()).unwrap().join("ws");
     std::fs::create_dir_all(&ws).unwrap();
-    replay::fixture(name, &ws);
+    fixtures::fixture(name, &ws);
     (root, ws)
 }
 
@@ -626,19 +626,27 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
     assert!(!job.cancel(), "a cancel after the run changes nothing");
 }
 
-/// The oracle's recorded sessions, replayed: the same lines in, the same
-/// bytes out.
+/// `serve`'s session in `tests/golden/cases.toml` (initialize, two runs, a
+/// refused run, protocol errors, shutdown, exit) on each of its fixtures:
+/// every line the host writes, held to a snapshot, the workspace written
+/// `<WS>` and the command tree's digest `<COMMANDS-DIGEST>`.
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
+fn a_scripted_session_is_answered_as_its_snapshot_says() {
     let _session = session();
-    let cases = replay::repo().join("tests/golden/cases/serve/plain");
+    let spec: toml::Table = toml::from_str(
+        &std::fs::read_to_string(fixtures::repo().join("tests/golden/cases.toml")).unwrap(),
+    )
+    .unwrap();
+    let case = spec["case"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| {
+            case["command"].as_str() == Some("serve") && case["variant"].as_str() == Some("session")
+        })
+        .unwrap();
+    let input = case["input"].as_str().unwrap();
     for fixture in ["tide-corpus", "vscode"] {
-        let dir = cases.join(fixture).join("session");
-        let case: toml::Table =
-            toml::from_str(&std::fs::read_to_string(dir.join("case.toml")).unwrap()).unwrap();
-        let input = case["stdin"]["input"].as_str().unwrap().to_owned();
-        let expected = std::fs::read_to_string(dir.join("stdout")).unwrap();
         let (_root, ws) = workspace(fixture);
         let (sender, lines) = channel();
         let sender = Mutex::new(sender);
@@ -654,23 +662,13 @@ fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
         assert!(server.serve(&|| false));
         drop(server);
         let output: String = lines.try_iter().collect();
-        // The digest names today's command tree, which has changed since
-        // the oracle under approved entries (`commands`'s own cases); it is
-        // computed as the oracle computed it from the oracle's tree.
-        let recorded =
-            std::fs::read_to_string(cases.join("../../commands/json/none/default/stdout")).unwrap();
-        let oracle_digest = commands_digest(&Json::parse(&recorded).unwrap());
-        assert!(
-            expected.contains(&oracle_digest),
-            "the oracle's digest is its tree's"
-        );
         let today = host(&ws).run("{\"argv\":[\"commands\"]}");
-        let today = commands_digest(today.get("document").unwrap());
-        assert_eq!(
-            output,
-            expected.replace(&oracle_digest, &today),
-            "{fixture}"
-        );
+        let digest = commands_digest(today.get("document").unwrap());
+        assert!(output.contains(&digest), "{output}");
+        let output = output
+            .replace(&digest, "<COMMANDS-DIGEST>")
+            .replace(&ws.display().to_string(), "<WS>");
+        insta::assert_snapshot!(format!("session_{fixture}"), output);
     }
 }
 
@@ -695,7 +693,7 @@ fn the_serve_fuzz_seeds_and_regressions_are_served_to_the_end() {
         fn interrupt(&self) {}
         fn invalidate(&self, _: &[String]) {}
     }
-    let fuzz = replay::repo().join("fuzz");
+    let fuzz = fixtures::repo().join("fuzz");
     let mut replayed = 0;
     for dir in ["seeds/serve", "regressions/serve"] {
         let Ok(entries) = std::fs::read_dir(fuzz.join(dir)) else {

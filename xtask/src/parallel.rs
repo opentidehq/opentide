@@ -1,5 +1,5 @@
 //! Independent work on every core, reported in a fixed order (#841): the
-//! comparisons CI runs over hundreds of cases (`golden check`, `lsp parity`)
+//! comparisons CI runs over hundreds of cases (`lsp parity`)
 //! printed their results one case at a time, on one core.
 
 use std::num::NonZero;

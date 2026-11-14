@@ -22,7 +22,7 @@ past `-timeout`, is a failure.
 | `config` | `fuzz/seeds/config/` (opentide's configuration templates, `src/opentide/data/configurations/`, each with its file byte and a few field paths) |
 | `cli` | `fuzz/seeds/cli/` (`\0`-separated command lines: the framework goldens' usage errors, hoisting, `--version`, `--help`) |
 | `serve` | `fuzz/seeds/serve/` (sessions: the recorded `serve` goldens' input, protocol problems, cancels, `invalidate`, shutdown) |
-| `from_node` | `fuzz/seeds/from_node/` (every document of `crates/opentide-schema/tests/oracle/*_cases.toml`, and the sample fixture) |
+| `from_node` | `fuzz/seeds/from_node/` (every document of the schema crate's former oracle tables, now `crates/opentide-schema/tests/tables/`, and the sample fixture) |
 
 ## Targets the plan adds later
 

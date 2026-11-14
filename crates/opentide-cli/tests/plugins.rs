@@ -11,8 +11,8 @@
     reason = "a test helper: a broken fixture is a failure"
 )]
 
-#[path = "common/replay.rs"]
-mod replay;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -26,8 +26,8 @@ use serde_json::Value;
 fn workspace() -> (tempfile::TempDir, PathBuf) {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
-    replay::fixture("tide-corpus", &ws);
-    let sample = replay::repo().join("tests/fixtures/plugin_platform/workspace");
+    fixtures::fixture("tide-corpus", &ws);
+    let sample = fixtures::repo().join("tests/fixtures/plugin_platform/workspace");
     let platforms = ws.join(".opentide/configurations/platforms");
     std::fs::create_dir_all(&platforms).unwrap();
     std::fs::copy(sample.join("acme.toml"), platforms.join("acme.toml")).unwrap();
@@ -46,7 +46,7 @@ fn opentide(cwd: &Path, words: &[&str]) -> (i32, Value) {
         version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
-        log_sink: Arc::new(Mutex::new(replay::Buffer::default())) as Sink,
+        log_sink: Arc::new(Mutex::new(fixtures::Buffer::default())) as Sink,
         cwd: Some(cwd.to_path_buf()),
         width: None,
         interrupt: opentide_cli::app::Interrupt::default(),

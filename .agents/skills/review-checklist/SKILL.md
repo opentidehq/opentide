@@ -1,6 +1,6 @@
 ---
 name: review-checklist
-description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; behaviour changes without an approved-diffs ledger entry and the other golden and compare rules) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching the connectors (crates/opentide-connectors), the command line (crates/opentide-cli), the Python package (src/opentide) or anything else in the Rust workspace.
+description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; behaviour changes without a reviewed snapshot diff and the other snapshot rules) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching the connectors (crates/opentide-connectors), the command line (crates/opentide-cli), the Python package (src/opentide) or anything else in the Rust workspace.
 ---
 
 # Review checklist — opentide
@@ -139,27 +139,24 @@ and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../c
       diagnostic code is a constant in `opentide_core::codes`, never a second string at the call
       site.
 
-## Goldens and compare (unified core)
+## Snapshots (the command line's behaviour)
 
-The Python CLI at the frozen tag is the oracle; the rules: [`golden`](../golden/SKILL.md).
+The command line's behaviour is the Rust-owned snapshots of every case of
+`tests/golden/cases.toml`; the rules: [`golden`](../golden/SKILL.md).
 
-- [ ] **A behaviour change is deliberate and in `CHANGELOG.md`.** No CI tier compares with the
-      oracle any more and `tests/golden/APPROVED_DIFFS.toml` gates nothing (since 2026-11-14);
-      when the change is measured against the oracle by hand, each difference it finds has a
-      ledger entry with its reason, its issue and its `CHANGELOG.md` entry, or is a bug.
-- [ ] **Recordings are re-recorded, never hand-edited**: `tests/golden/cases/`, `blobs/` and
-      `COVERAGE.md`. Each changed recording has a cause in the same pull request: a new or changed
-      case in `cases.toml`, a fixture change, a normalisation rule with its unit test, or a new
-      oracle in a PR of its own.
+- [ ] **A behaviour change is deliberate and in `CHANGELOG.md`**, and its `.snap` diffs are in
+      the same pull request: each changed line follows from the change, and the exit code, error
+      codes, JSON fields and files a user or an agent relies on are still there.
+- [ ] **Snapshots are accepted, never hand-edited**: no edited `.snap`, no committed `.snap.new`.
+      Each changed snapshot has a cause in the same pull request: a code change, a new or changed
+      case in `cases.toml`, a fixture change, or a normalisation rule with its unit test.
 - [ ] **The comparison is not loosened.** A normalisation rule hides only a value that differs
       between two runs of the same case, and is code in `crates/opentide-compare/src/normalise.rs`
-      with a unit test; no widened rule; no ledger entry broader than the difference; no stale
-      entry; no skipped, deleted or `#[ignore]`d case beyond the byte-level oracle replays #1121
-      marked `#[ignore = "byte-level replay against the Python oracle: ..."]`.
+      with a unit test; no widened rule; no skipped, deleted or `#[ignore]`d case.
 - [ ] **No plan §3 invariant moves** in a port: the CLI contract, the command tree, diagnostic
       codes, cross-repository contracts, MCP, workspace formats, SDK import paths, platforms, the
       security posture. A change to one is a separate decision with its own changelog entry.
-- [ ] **Secrets never reach a recording**: goldens, cassettes, compare reports and fixtures.
+- [ ] **Secrets never reach a recording**: snapshots, cassettes and fixtures.
 
 ## Definition of done
 

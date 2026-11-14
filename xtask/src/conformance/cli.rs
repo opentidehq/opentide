@@ -17,7 +17,6 @@ use super::{
 };
 use crate::corpus::cli::{corpora_dir, load_catalogue, materialise, repo_root, write_workspace};
 use crate::corpus::{configuration, faults, generate};
-use crate::golden::fixture::copy_tree;
 
 const USAGE: &str = "\
 usage: cargo xtask conformance [--runners rust,python,node] [--corpus NAME,...]
@@ -547,6 +546,22 @@ fn remove(path: &Path) -> Result<()> {
     if path.exists() {
         std::fs::remove_dir_all(path)
             .with_context(|| format!("cannot remove {}", path.display()))?;
+    }
+    Ok(())
+}
+
+/// Copies a directory tree of regular files.
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to).with_context(|| format!("create {}", to.display()))?;
+    for entry in std::fs::read_dir(from).with_context(|| format!("read {}", from.display()))? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)
+                .with_context(|| format!("copy {}", entry.path().display()))?;
+        }
     }
     Ok(())
 }

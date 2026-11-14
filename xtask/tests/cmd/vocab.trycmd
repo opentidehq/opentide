@@ -15,14 +15,6 @@ $ xtask vocab frobnicate
 xtask vocab: unknown command `frobnicate`
 ...
 
-$ xtask vocab diff
-? 2
-error: vocab diff needs --against python
-
-$ xtask vocab diff --against rust
-? 2
-error: --against rust: only `python` (the oracle) is supported
-
 $ xtask vocab sync --bogus
 ? 2
 error: unknown option `--bogus`

@@ -1,0 +1,1509 @@
+{
+ "cases": [
+  {
+   "id": "rule-1-1-minimal",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-1-0-minimal",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-1-1-everything",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  author: A\n  contributors: [B, C]\n  organisation:\n    uuid: 00000000-0000-4000-8000-0000000000aa\n    name: Org\n  reviewed: 2026-09-01\ndescription: d\nstatus: STAGING\nseverity: High\ntechniques: [T1059, T1003.001]\nplatforms:\n  legacy: {key: value, n: 1}\nreferences:\n  public:\n    1: https://example.org/a\n    \"2\": https://example.org/b\n  internal: {wiki: https://wiki.example.org}\n  reports: [https://example.org/report]\ndetection_model: 00000000-0000-4000-8000-000000000099\nresponse:\n  alert_severity: High\n  playbook: https://example.org/playbook\n  responders: soc\n  procedure:\n    analysis: |\n      Look.\n    searches:\n      - purpose: p\n        system: sentinel\n        query: |\n          SecurityEvent\n    containment: isolate\nconfigurations: {}\n"
+  },
+  {
+   "id": "rule-response-default-severity",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nresponse:\n  playbook: p\n"
+  },
+  {
+   "id": "rule-reviewed-datetime-z",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-09-01T15:04:05Z\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-09-01T15:04:05+02:00\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-quoted-space",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-09-01 15:04:05Z'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-fraction",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-09-01T15:04:05.25-05:30'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-word",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: yesterday\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: ''\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-padded",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '  2026-09-01  '\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: null\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 20260101\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-boolean",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: true\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: [2026-09-01]\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-no-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-09-01T15:04:05'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-impossible-quoted",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-02-30'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-impossible-hour",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '2026-01-01T25:00:00Z'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-impossible-plain",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-02-30\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-spaced-timestamp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-09-01 15:04:05Z\ndescription: d\n"
+  },
+  {
+   "id": "rule-1-0-reviewed",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: 2026-03-01\ndescription: d\n"
+  },
+  {
+   "id": "rule-created-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 20260101\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-created-boolean",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: true\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-created-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: null\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-created-spaced-timestamp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01 10:00:00\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-created-quoted",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: '1 January 2026'\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-missing-description-and-name",
+   "family": "rule",
+   "yaml": "metadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n"
+  },
+  {
+   "id": "rule-metadata-missing-fields",
+   "family": "rule",
+   "yaml": "name: n\nmetadata:\n  schema: rule::1.1\ndescription: d\n"
+  },
+  {
+   "id": "rule-unknown-keys",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  colour: blue\ndescription: d\nextra: 1\nconfigurations:\n  unknown_platform: {}\n"
+  },
+  {
+   "id": "rule-version-forms",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: '1.2'\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-version-float",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1.5\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-version-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: [1]\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "rule-techniques-not-a-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\ntechniques: T1059\n"
+  },
+  {
+   "id": "rule-techniques-item-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\ntechniques: [T1059, 1059]\n"
+  },
+  {
+   "id": "rule-contributors-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  contributors: B\ndescription: d\n"
+  },
+  {
+   "id": "rule-organisation-missing-name",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  organisation: {uuid: u}\ndescription: d\n"
+  },
+  {
+   "id": "rule-platforms-wrong-shape",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nplatforms:\n  sentinel: x\n  splunk: [1]\n"
+  },
+  {
+   "id": "rule-configurations-not-a-mapping",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations: sentinel\n"
+  },
+  {
+   "id": "rule-configurations-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations: null\nresponse: null\nreferences: null\n"
+  },
+  {
+   "id": "rule-response-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nresponse:\n  alert_severity: [High]\n  colour: red\n  procedure:\n    searches:\n      - purpose: p\n        system: s\n      - x\n"
+  },
+  {
+   "id": "rule-references-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public: [a]\n  internal: {a: 1}\n  reports: a\n"
+  },
+  {
+   "id": "rule-references-public-value",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    1: [a]\n"
+  },
+  {
+   "id": "rule-references-public-word-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    abc: https://example.org\n"
+  },
+  {
+   "id": "rule-reviewed-year-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0000-01-01'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-year-zero-datetime",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0000-01-01T00:00:00Z'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-offset-before-year-one",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0001-01-01T00:00:00+23:59'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-offset-after-year-9999",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '9999-12-31T23:59:59-23:59'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-first-instant",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '0001-01-01T00:00:00Z'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-last-instant-with-offset",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '9999-12-31T23:59:59+00:00'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-arabic-indic-digits",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: '٢٠٢٦-٠٩-٠١'\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-control-padding",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: \"\\x1c2026-09-01\"\ndescription: d\n"
+  },
+  {
+   "id": "rule-reviewed-control-padding-after",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: \"2026-09-01\\x1f\"\ndescription: d\n"
+  },
+  {
+   "id": "rule-references-public-padded-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    ' 12 ': https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-underscore-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '1_000': https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-arabic-indic-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '١٢': https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-float-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    1.5: https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-bool-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    true: https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-wide-integer-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    9223372036854775808: https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-wide-string-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public:\n    '9223372036854775808': https://example.org\n"
+  },
+  {
+   "id": "rule-references-public-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nreferences:\n  public: null\n"
+  },
+  {
+   "id": "rule-file-is-loader-only",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nfile: rules/x.yaml\n"
+  },
+  {
+   "id": "rule-detection-model-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\ndetection_model: 12\n"
+  },
+  {
+   "id": "threat-minimal",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-everything",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  actors:\n    - name: att&ck::G0006\n      sighting: Simulated credential access.\n      references: [https://attack.mitre.org/groups/G0006]\n  killchain: Exploitation\n  chaining:\n    - relation: preceded_by\n      vector: 00000000-0000-4000-8000-000000000004\n  cve: [CVE-2024-3094, GHSA-rxwq-x6h5-x525]\nreferences:\n  public:\n    1: https://example.org\n"
+  },
+  {
+   "id": "threat-impact-string",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: Data Breach\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-leverage-packed-string",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: 'High; Low'\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-impact-packed-item",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach, 'Identity Theft; Fraud']\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-impact-empty",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: []\n  leverage: []\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-impact-number-item",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [1, 'a;b']\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-impact-null",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: null\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-impact-mapping",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: {a: b}\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-actors-strings",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  actors: [G0006, G0007]\n"
+  },
+  {
+   "id": "threat-actor-unknown-key",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  actors:\n    - name: att&ck::G0006\n      alias: x\n"
+  },
+  {
+   "id": "threat-killchain-list",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  killchain: [Delivery, Exploitation]\n"
+  },
+  {
+   "id": "threat-killchain-number",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  killchain: 3\n"
+  },
+  {
+   "id": "threat-killchain-mixed-list",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  killchain: [Delivery, 3]\n"
+  },
+  {
+   "id": "threat-chaining-errors",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  terrain: Endpoints.\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n  chaining:\n    - relation: 1\n    - x\n"
+  },
+  {
+   "id": "threat-missing-body-fields",
+   "family": "threat",
+   "yaml": "name: Threat\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  impact: [Data Breach]\n  leverage: [High]\n  viability: High\n  surface: [OS::Windows::Desktop]\n  mitre_attack: [T1059]\n"
+  },
+  {
+   "id": "threat-body-not-a-mapping",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat: text\n"
+  },
+  {
+   "id": "objective-minimal",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n"
+  },
+  {
+   "id": "objective-everything",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n        logsources: [Windows Security]\n      effort: 3\n      detectors:\n        - name: EDR\n          technology: edr\n          description: d\n          link: https://example.org\n      examples:\n        - description: e\n          link: https://example.org\n          language: kql\n          query: SecurityEvent\n      parent: 00000000-0000-4000-8000-000000000098\n  investment: Medium\n  threats: [00000000-0000-4000-8000-000000000002]\n  mitre_attack: [T1059]\nreferences:\n  reports: [https://example.org]\n"
+  },
+  {
+   "id": "objective-effort-quoted",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n      effort: '3'\n"
+  },
+  {
+   "id": "objective-effort-boolean",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n      effort: true\n"
+  },
+  {
+   "id": "objective-effort-float",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n      effort: 3.0\n"
+  },
+  {
+   "id": "objective-root-composition",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\ncomposition:\n  strategy: synergetic\n  description: compose\n"
+  },
+  {
+   "id": "objective-signal-errors",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      data:\n        availability: Complete\n        requirements: logs\n      detectors:\n        - name: EDR\n      examples:\n        - description: e\n      entities: Host::Process\n"
+  },
+  {
+   "id": "objective-signals-missing",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n"
+  },
+  {
+   "id": "objective-mitre-attack-string",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n  type: Threat\n  description: obj\n  composition:\n    strategy: synergetic\n    description: compose\n  signals:\n    - name: Signal\n      uuid: 00000000-0000-4000-8000-000000000099\n      description: sig\n      severity: Medium\n      methodology: analytics\n      entities: [Host::Process]\n      data:\n        availability: Complete\n        requirements: logs\n  mitre_attack: T1059\n"
+  },
+  {
+   "id": "revision-unknown-rule",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::7.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  future_field: 1\ndescription: d\nadded_in_7: true\n"
+  },
+  {
+   "id": "revision-unknown-rule-reports-the-newest-revisions-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.2\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n  reviewed: someday\n"
+  },
+  {
+   "id": "revision-unknown-family-spelling",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: Rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-unknown-objective",
+   "family": "objective",
+   "yaml": "name: Objective\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000003\n  schema: objective::2.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nobjective:\n  priority: High\n"
+  },
+  {
+   "id": "revision-unknown-threat",
+   "family": "threat",
+   "yaml": "name: Threat\ncriticality: High\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000002\n  schema: threat::1.5\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\nthreat:\n  description: d\n  severity: High\n  impact: [Data Breach]\n"
+  },
+  {
+   "id": "revision-other-family",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-visibility-is-another-family",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: visibility::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-platform-identifier",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: platform::sentinel::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-unknown-other-family",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: threat::9.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-not-an-identifier",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-bad-version",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.x\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: 1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: ''\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-null",
+   "family": "threat",
+   "yaml": "name: Threat\nmetadata:\n  schema:\n"
+  },
+  {
+   "id": "revision-no-metadata",
+   "family": "objective",
+   "yaml": "name: Objective\n"
+  },
+  {
+   "id": "revision-metadata-not-a-mapping",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata: rule::1.1\ndescription: d\n"
+  },
+  {
+   "id": "revision-metadata-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  - schema: rule::1.1\ndescription: d\n"
+  },
+  {
+   "id": "revision-schema-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: true\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-schema-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: [rule::1.1]\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-schema-map",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: {rule: 1.1}\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-schema-quote",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: \"rule's::1.1\"\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-schema-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: 0.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-schema-negative-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: -0.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\n"
+  },
+  {
+   "id": "revision-metadata-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata: 0.0\ndescription: d\n"
+  },
+  {
+   "id": "platform-unknown-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinal: {status: STAGING}\n"
+  },
+  {
+   "id": "platform-null-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel: null\n"
+  },
+  {
+   "id": "platform-string-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel: on\n"
+  },
+  {
+   "id": "platform-empty-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk: {}\n"
+  },
+  {
+   "id": "platform-list-block",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic: []\n"
+  },
+  {
+   "id": "platform-all-nine",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection}\n    schedule: {frequency: 1h, lookback: 2h}\n    query: '#event_simpleName=ProcessRollup2'\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe}\n      condition: s\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n"
+  },
+  {
+   "id": "platform-external-id",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    rule_id: abc\n"
+  },
+  {
+   "id": "platform-base-missing-status",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    query: q\n"
+  },
+  {
+   "id": "platform-base-fields",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n    enabled: true\n    name: n\n    schema: platform::carbon_black_cloud::1.0\n    flags: [a]\n    tenants: [t1]\n    contributors: [c]\n"
+  },
+  {
+   "id": "platform-base-wrong-schema",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    schema: platform::sentinel::1.0\n"
+  },
+  {
+   "id": "platform-base-schema-null",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    schema: null\n"
+  },
+  {
+   "id": "platform-base-schema-alias",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    platform_schema: platform::splunk::1.0\n"
+  },
+  {
+   "id": "platform-base-schema-quote",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    schema: \"it's\"\n"
+  },
+  {
+   "id": "platform-base-types",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    enabled: 1\n    name: 2\n    tenants: t\n    status2: x\n"
+  },
+  {
+   "id": "platform-base-status-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: 3\n    query: q\n"
+  },
+  {
+   "id": "platform-query-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    status: STAGING\n    query: ''\n"
+  },
+  {
+   "id": "platform-query-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: '   '\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n"
+  },
+  {
+   "id": "platform-query-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection}\n    schedule: {frequency: 1h, lookback: 2h}\n    query: 5\n"
+  },
+  {
+   "id": "platform-query-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n"
+  },
+  {
+   "id": "platform-query-separator",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: \"\\x1c\"\n"
+  },
+  {
+   "id": "platform-query-nbsp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: \"\\u00a0\"\n"
+  },
+  {
+   "id": "platform-sentinel-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n    exclusions:\n    - {query: '| where x', reason: r, tenant: t, let: {a: 1, b: x, c: true}}\n    - {query: '', reason: empty}\n    template: {uuid: u, version: '1.0'}\n    trigger: {operator: GreaterThan, threshold: 0}\n    grouping:\n      event: SingleAlert\n      alert: {enabled: true, grouping_lookback: PT5H, matching: Selected, group_by_entities: [Host]}\n    entities:\n    - entity: Host\n      mappings: [{identifier: HostName, column: Computer}]\n"
+  },
+  {
+   "id": "platform-sentinel-alert-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert:\n      title: t\n      description: d\n      severity: High\n      suppression: PT1H\n      create_incident: false\n      tactics: [Execution]\n      techniques: [T1059, T1059.001]\n      custom_details: [{key: k, column: c}]\n      dynamic_properties: [{property: Severity, column: c}]\n"
+  },
+  {
+   "id": "platform-sentinel-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: q\n"
+  },
+  {
+   "id": "platform-sentinel-suppression-int",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {suppression: 5}\n"
+  },
+  {
+   "id": "platform-sentinel-suppression-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {suppression: [a]}\n"
+  },
+  {
+   "id": "platform-sentinel-technique-unknown",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: [T9999, T1059]}\n"
+  },
+  {
+   "id": "platform-sentinel-technique-typo",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: [T1059.01]}\n"
+  },
+  {
+   "id": "platform-sentinel-technique-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: [1059]}\n"
+  },
+  {
+   "id": "platform-sentinel-technique-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {techniques: T1059}\n"
+  },
+  {
+   "id": "platform-sentinel-scheduling-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: hourly\n    alert: {title: t}\n"
+  },
+  {
+   "id": "platform-sentinel-frequency-hourly",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: hourly, lookback: daily}\n    alert: {title: t}\n"
+  },
+  {
+   "id": "platform-sentinel-durations-shorthand",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: 1h, lookback: 1h10m}\n    alert: {suppression: p1d}\n"
+  },
+  {
+   "id": "platform-sentinel-durations-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {suppression: 'one hour'}\n    grouping: {event: SingleAlert, alert: {enabled: true, grouping_lookback: 5 hours}}\n"
+  },
+  {
+   "id": "platform-sentinel-durations-overflow",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: 1000000000d, lookback: P99999999999D}\n    alert: {suppression: P142857143W}\n    grouping: {event: SingleAlert, alert: {enabled: true, grouping_lookback: P999999999DT23H59M59S}}\n"
+  },
+  {
+   "id": "platform-sentinel-nrt",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {nrt: true}\n    alert: {title: t}\n"
+  },
+  {
+   "id": "platform-sentinel-nested-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n    exclusions: [{query: 1}]\n    trigger: {operator: GreaterThan, threshold: x}\n    grouping: {alert: {enabled: yes}}\n    entities: [{entity: Host, mappings: [{column: c}]}]\n    template: {uuid: u, version: 1, extra: 1}\n"
+  },
+  {
+   "id": "platform-defender-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    actions:\n      devices: {isolate_device: Full, collect_investigation_package: true, run_antivirus_scan: true}\n      files:\n        allow_block: {action: Block, identifier: SHA1, groups: {selection: Specific, device_groups: [g]}}\n        quarantine_file: SHA1\n      users: {mark_as_compromised: AccountSid, disable_user: AccountSid}\n    scope: {selection: All}\n    exclusions: [{query: '| where 1', reason: r, let: {a: 1}}]\n"
+  },
+  {
+   "id": "platform-defender-schedule",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 2H\n"
+  },
+  {
+   "id": "platform-defender-schedule-int",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1\n"
+  },
+  {
+   "id": "platform-defender-literals",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {category: Execution}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    scope: {selection: Some}\n    actions: {files: {allow_block: {action: allow, identifier: x}}, devices: {run_antivirus_scan: maybe}}\n"
+  },
+  {
+   "id": "platform-defender-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: q\n    alert: {}\n"
+  },
+  {
+   "id": "platform-splunk-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    scheduling:\n      type: Scheduled\n      expires: 1d\n      schedule: {frequency: 5m, cron: '*/5 * * * *', custom_time: 09h15}\n      timerange: {lookback: 1h, earliest: -1h, latest: now}\n    trigger:\n      condition: number of events\n      comparator: greater than\n      threshold: 0\n      severity: 3\n      custom_condition: search x\n      type: once\n      throttling: {fields: [host], duration: 1h, group_name: g}\n    actions:\n      notable:\n        event: {title: t, description: d}\n        drilldown: {name: n, search: s}\n        security_domain: endpoint\n      risk:\n        message: m\n        risk_objects: [{field: host, type: system, score: 50}]\n        threat_objects: [{field: ip, type: ip_address}]\n      email:\n        to: a@example.org\n        send_csv: true\n        include: {results_link: true, trigger_time: false}\n    correlation_search: false\n"
+  },
+  {
+   "id": "platform-splunk-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    trigger: {severity: high, threshold: 1.5}\n    actions: {risk: {risk_objects: [{field: host, type: system}]}, email: {send_pdf: 1}}\n    scheduling: {schedule: {frequency: 5}}\n    correlation_search: maybe\n"
+  },
+  {
+   "id": "platform-s1-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Correlation\n      correlation:\n        entity: host\n        match_in_order: true\n        time_window: 1h\n        sub_queries:\n        - {query: a, matches_required: 1}\n        - {query: b, matches_required: 2}\n      cool_off: 30m\n    response: {treat_as_threat: Malicious, network_quarantine: false}\n    details: {name: n, description: d, severity: High, expiration: '2027-01-01'}\n"
+  },
+  {
+   "id": "platform-s1-treat-false",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n    response: {treat_as_threat: false, network_quarantine: true}\n"
+  },
+  {
+   "id": "platform-s1-treat-true",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n    response: {treat_as_threat: true, network_quarantine: true}\n"
+  },
+  {
+   "id": "platform-s1-treat-word",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n    response: {treat_as_threat: malicious, network_quarantine: no}\n"
+  },
+  {
+   "id": "platform-s1-type",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition: {type: single event}\n"
+  },
+  {
+   "id": "platform-s1-correlation-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Correlation\n      correlation: {entity: host, match_in_order: 1, sub_queries: [{query: a}]}\n"
+  },
+  {
+   "id": "platform-crowdstrike-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection, name: n, description: d, severity: High, tactic: TA0002, technique: T1059}\n    schedule: {frequency: 1h, lookback: 2h, start: '2026-01-01T00:00:00Z', end: '2027-01-01T00:00:00Z'}\n    query: '#event_simpleName=ProcessRollup2'\n"
+  },
+  {
+   "id": "platform-crowdstrike-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  crowdstrike:\n    status: STAGING\n    query: q\n    details: {trigger: verbose}\n"
+  },
+  {
+   "id": "platform-harfanglab-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe, modifiers: [endswith]}\n      - {name: l, field: CommandLine, value: [a, b]}\n      - {name: b, field: Signed, value: false}\n      - {name: i, field: Pid, value: 4}\n      - {name: f, field: Score, value: 1.5}\n      condition: s and l\n      false_positives: [admin]\n    maturity: Stable\n    confidence: High\n    action: Block\n    tags: [attack.t1059]\n    yara:\n      meta: {context: [file], os: Windows, arch: [x64], score: High, classification: c}\n      strings: '$a = \"x\"'\n      condition: $a\n      imports: [pe]\n"
+  },
+  {
+   "id": "platform-harfanglab-defaults",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n"
+  },
+  {
+   "id": "platform-harfanglab-value-union",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: {a: 1}}\n      condition: s\n"
+  },
+  {
+   "id": "platform-harfanglab-value-mixed-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: [a, 1]}\n      condition: s\n"
+  },
+  {
+   "id": "platform-harfanglab-yara-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  harfanglab:\n    status: STAGING\n    yara: {meta: {context: file}, strings: s}\n"
+  },
+  {
+   "id": "platform-carbon-black-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n    organizations: [o]\n    watchlist: w\n    report: r\n    tags: [t]\n"
+  },
+  {
+   "id": "platform-elastic-minimal",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n"
+  },
+  {
+   "id": "platform-elastic-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    language: kuery\n    index: [logs-*]\n    filters:\n    - {field: host.name, value: h, negate: true}\n    - {meta: {alias: x}, query: {match_phrase: {a: b}}}\n    scheduling: {interval: 5m, lookback: 0m, max_alerts: 100}\n    severity: {default: High, mapping: [{field: f, value: v, severity: critical}]}\n    risk: {score: 50, mapping: [{field: f}]}\n    suppression: {group_by: [host.name], duration: 1h, missing_fields_strategy: doNotSuppress}\n    highlighted_fields: [host.name]\n    integration: [windows, {package: endpoint, integration: e, version: ^8.0.0}]\n    required_fields: [{name: host.name, type: keyword}]\n    guide: {investigation: i, setup: s}\n    false_positives: [fp]\n    tags: [t]\n    exceptions: {endpoint: true, lists: [{id: i, list_id: l, namespace_type: single, type: detection}]}\n    building_block: true\n    overrides: {name: rule.name, timestamp: event.ingested, disable_fallback: true}\n    actions:\n      notify: [{id: c, action_type_id: .email, group: default, params: {}}]\n      respond: [{endpoint: isolate, comment: c}, {osquery: {query: select 1}}]\n      timeline: {id: t, title: T}\n"
+  },
+  {
+   "id": "platform-elastic-no-status",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    type: bogus\n"
+  },
+  {
+   "id": "platform-elastic-type-unknown",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: bogus\n    query: q\n"
+  },
+  {
+   "id": "platform-elastic-type-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    query: q\n"
+  },
+  {
+   "id": "platform-elastic-removed-flat",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk_score: 21\n    note: n\n"
+  },
+  {
+   "id": "platform-elastic-query-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n"
+  },
+  {
+   "id": "platform-elastic-query-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: eql\n    query: ''\n"
+  },
+  {
+   "id": "platform-elastic-query-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: '  '\n"
+  },
+  {
+   "id": "platform-elastic-eql",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: eql\n    query: process where true\n    eql: {timestamp_field: t, event_category_override: c, tiebreaker_field: x}\n"
+  },
+  {
+   "id": "platform-elastic-eql-on-query",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    eql: {timestamp_field: t}\n"
+  },
+  {
+   "id": "platform-elastic-esql-language",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: esql\n    query: from logs-*\n    language: kuery\n    index: [a]\n"
+  },
+  {
+   "id": "platform-elastic-ml",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: [a, b], anomaly_threshold: 75}\n"
+  },
+  {
+   "id": "platform-elastic-ml-one-job",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: a, anomaly_threshold: 75}\n"
+  },
+  {
+   "id": "platform-elastic-ml-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: a}\n    filters: [{field: a, value: b}]\n"
+  },
+  {
+   "id": "platform-elastic-ml-job-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: 5, anomaly_threshold: 75}\n"
+  },
+  {
+   "id": "platform-elastic-threshold",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b], value: 10, cardinality: {field: c, value: 2}}\n    suppression: {duration: 1h}\n"
+  },
+  {
+   "id": "platform-elastic-threshold-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n"
+  },
+  {
+   "id": "platform-elastic-threshold-fields",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b, c, d, e, f], value: 0}\n"
+  },
+  {
+   "id": "platform-elastic-threshold-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {value: true}\n"
+  },
+  {
+   "id": "platform-elastic-threshold-suppression",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {value: 1}\n    suppression: {group_by: [a]}\n"
+  },
+  {
+   "id": "platform-elastic-new-terms",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a], history_window_start: 7d}\n"
+  },
+  {
+   "id": "platform-elastic-new-terms-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a, b, c, d], history_window_start: 7x}\n"
+  },
+  {
+   "id": "platform-elastic-new-terms-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a]}\n"
+  },
+  {
+   "id": "platform-elastic-threat-match",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threat_match\n    query: q\n    threat:\n      index: [ti-*]\n      query: '*'\n      language: lucene\n      mapping: [{entries: [{field: a, value: b, negate: false}]}]\n      filters: [{meta: {}, query: {}}]\n      indicator_path: threat.indicator\n"
+  },
+  {
+   "id": "platform-elastic-threat-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threat_match\n    query: q\n    threat:\n      index: ti-*\n      query: '*'\n      mapping: []\n      filters: [{field: a}]\n"
+  },
+  {
+   "id": "platform-elastic-index-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    index: logs-*\n"
+  },
+  {
+   "id": "platform-elastic-index-empty-item",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    index: ['']\n"
+  },
+  {
+   "id": "platform-elastic-index-and-view",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    index: [a]\n    data_view_id: v\n"
+  },
+  {
+   "id": "platform-elastic-filters",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    filters: [{}, x, {field: a}, {meta: {}}, {field: a, value: b, meta: {}, query: {}}]\n"
+  },
+  {
+   "id": "platform-elastic-filters-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    filters: abc\n"
+  },
+  {
+   "id": "platform-elastic-exception-type",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    exceptions: {lists: [{id: i, list_id: l, namespace_type: single, type: endpoint}, x]}\n"
+  },
+  {
+   "id": "platform-elastic-exception-lists-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    exceptions: {lists: ab}\n"
+  },
+  {
+   "id": "platform-elastic-actions-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: [a]\n"
+  },
+  {
+   "id": "platform-elastic-respond",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: [{endpoint: reboot}, {endpoint: isolate, extra: 1}, {osquery: {}}, {osquery: {query: q}, x: 1}, {}, z]}\n"
+  },
+  {
+   "id": "platform-elastic-respond-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: ab}\n"
+  },
+  {
+   "id": "platform-elastic-suppression-shape",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a, b, c, d]}\n"
+  },
+  {
+   "id": "platform-elastic-suppression-dupe",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a, a]}\n"
+  },
+  {
+   "id": "platform-elastic-suppression-empty-item",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: ['']}\n"
+  },
+  {
+   "id": "platform-elastic-suppression-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: x\n"
+  },
+  {
+   "id": "platform-elastic-suppression-no-group",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {duration: 1h}\n"
+  },
+  {
+   "id": "platform-elastic-suppression-duration",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a], duration: ''}\n"
+  },
+  {
+   "id": "platform-elastic-severity-unknown",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: Severe\n"
+  },
+  {
+   "id": "platform-elastic-severity-case",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: ' HIGH '\n"
+  },
+  {
+   "id": "platform-elastic-severity-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: 3\n"
+  },
+  {
+   "id": "platform-elastic-severity-mapping-bad",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: {default: nope}\n"
+  },
+  {
+   "id": "platform-elastic-severity-mapping-fields",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    severity: {default: low, mapping: [{field: f, value: v, severity: urgent, operator: is}]}\n"
+  },
+  {
+   "id": "platform-elastic-risk-range",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: 150\n"
+  },
+  {
+   "id": "platform-elastic-risk-float",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: 5.5\n"
+  },
+  {
+   "id": "platform-elastic-risk-bool",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: true\n"
+  },
+  {
+   "id": "platform-elastic-risk-dict",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: {score: -1}\n"
+  },
+  {
+   "id": "platform-elastic-risk-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: high\n"
+  },
+  {
+   "id": "platform-elastic-durations",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: 0m, lookback: '-1m'}\n"
+  },
+  {
+   "id": "platform-elastic-durations-iso",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: PT5M, lookback: P1D}\n"
+  },
+  {
+   "id": "platform-elastic-duration-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: 5}\n"
+  },
+  {
+   "id": "platform-elastic-scheduling-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: 5m\n"
+  },
+  {
+   "id": "platform-elastic-many-codes",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: esql\n    language: lucene\n    index: x\n    data_view_id: v\n    risk: 101\n    severity: x\n"
+  },
+  {
+   "id": "platform-elastic-field-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    tags: t\n    building_block: 1\n    required_fields: [{name: a, type: str}]\n    integration: [5, {version: 1}]\n    language: KQL\n"
+  },
+  {
+   "id": "platform-elastic-integration-dict",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    integration: [{package: p, extra: 1}]\n"
+  },
+  {
+   "id": "platform-elastic-threat-no-mapping",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threat_match\n    query: q\n    threat: {index: [ti-*], query: '*'}\n"
+  },
+  {
+   "id": "platform-elastic-ml-language",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: machine_learning\n    machine_learning: {job_id: [a], anomaly_threshold: 75}\n    language: kuery\n"
+  },
+  {
+   "id": "platform-elastic-respond-int-key",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: [{endpoint: isolate, 1: x}]}\n"
+  },
+  {
+   "id": "platform-elastic-respond-osquery-extra",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    actions: {respond: [{osquery: {query: q}, comment: c}]}\n"
+  },
+  {
+   "id": "platform-elastic-new-terms-fields-empty",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [], history_window_start: 7d}\n"
+  },
+  {
+   "id": "platform-elastic-new-terms-fields-three",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a, b, c], history_window_start: 7d}\n"
+  },
+  {
+   "id": "platform-elastic-new-terms-fields-four",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: new_terms\n    query: q\n    new_terms: {fields: [a, b, c, d], history_window_start: 7d}\n"
+  },
+  {
+   "id": "platform-elastic-threshold-fields-five",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b, c, d, e], value: 10}\n"
+  },
+  {
+   "id": "platform-elastic-threshold-fields-six",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: threshold\n    query: q\n    threshold: {field: [a, b, c, d, e, f], value: 10}\n"
+  },
+  {
+   "id": "platform-elastic-risk-score-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: {score: 0}\n"
+  },
+  {
+   "id": "platform-elastic-risk-score-hundred",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    risk: {score: 100}\n"
+  },
+  {
+   "id": "platform-elastic-interval-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    scheduling: {interval: 0m}\n"
+  },
+  {
+   "id": "platform-elastic-suppression-duration-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n    suppression: {group_by: [a], duration: 0m}\n"
+  },
+  {
+   "id": "platform-elastic-query-float-zero",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  elastic:\n    status: STAGING\n    type: query\n    query: 0.0\n"
+  },
+  {
+   "id": "platform-sysdig-full",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: syscall\n    output: 'shell %proc.name'\n    priority: WARNING\n    tags: [t]\n    exceptions:\n    - {name: e1, fields: proc.name, comps: in, values: [sh, bash]}\n    - {name: e2, fields: [proc.pname, fd.name], comps: ['=', 'startswith oneof'], values: [[a, [/tmp, /var]]]}\n    macros: [{name: m1, condition: proc.name = sh}]\n    lists: [{name: l1, items: [sh, 1, 2.5]}]\n    policies: [p]\n    minimum_engine_version: 0\n"
+  },
+  {
+   "id": "platform-sysdig-no-status",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    priority: LOUD\n"
+  },
+  {
+   "id": "platform-sysdig-priority",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    priority: LOUD\n"
+  },
+  {
+   "id": "platform-sysdig-priority-info",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    priority: ' info '\n"
+  },
+  {
+   "id": "platform-sysdig-priority-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    priority: 3\n"
+  },
+  {
+   "id": "platform-sysdig-source",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: k8s-audit\n"
+  },
+  {
+   "id": "platform-sysdig-source-upper",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: Syscall\n"
+  },
+  {
+   "id": "platform-sysdig-condition-missing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n"
+  },
+  {
+   "id": "platform-sysdig-condition-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: '  '\n"
+  },
+  {
+   "id": "platform-sysdig-condition-number",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: 5\n"
+  },
+  {
+   "id": "platform-sysdig-tuning",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: Terminal shell in container\n    condition: and not proc.pname = x\n"
+  },
+  {
+   "id": "platform-sysdig-tuning-exceptions",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n    exceptions: [{name: e, fields: proc.name, values: [a]}]\n"
+  },
+  {
+   "id": "platform-sysdig-tuning-nothing",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n"
+  },
+  {
+   "id": "platform-sysdig-tuning-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: ' '\n    condition: and x\n"
+  },
+  {
+   "id": "platform-sysdig-tuning-keys",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n    condition: and x\n    output: o\n    priority: ERROR\n    policies: []\n    source: ''\n    name: n\n"
+  },
+  {
+   "id": "platform-sysdig-exception-shapes",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions:\n    - {name: a, fields: [x, y], comps: ['=']}\n    - {name: b, fields: x, comps: '='}\n    - {name: '', fields: x}\n    - {name: d, fields: [x], values: [[{a: 1}]]}\n"
+  },
+  {
+   "id": "platform-sysdig-exception-ok-forms",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions:\n    - {name: a, fields: proc.name, comps: ' startswith anyof ', values: [x]}\n    - {name: b, fields: [proc.name], comps: [exists]}\n    - {name: c, fields: [proc.name, proc.pid], values: [[x, 1], [[a, b], 2]]}\n"
+  },
+  {
+   "id": "platform-sysdig-exceptions-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions: x\n"
+  },
+  {
+   "id": "platform-sysdig-definition-name",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: 9bad, items: [a]}]\n    macros: [{name: contains, condition: x}]\n"
+  },
+  {
+   "id": "platform-sysdig-definition-duplicate",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: d, items: [a]}]\n    macros: [{name: d, condition: proc.name = x}]\n"
+  },
+  {
+   "id": "platform-sysdig-definition-order",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: m2}, {name: m2, condition: proc.name = sh}]\n"
+  },
+  {
+   "id": "platform-sysdig-definition-self",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: m1 and proc.name = sh}]\n"
+  },
+  {
+   "id": "platform-sysdig-definition-ok-order",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: proc.name in (l1)}, {name: m2, condition: m1 and evt.type = execve}]\n    lists: [{name: l1, items: [sh]}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-self",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l1, items: [l1, zsh]}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-later",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l1, items: [l2, zsh]}, {name: l2, items: [bash]}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-in-value",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[x parents]]}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-scalar-comp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[parents]]}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-in-comp",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions:\n    - {name: e, fields: [proc.name], comps: [in], values: [[parents]]}\n    - {name: f, fields: proc.pname, values: [parents, bash]}\n    - {name: g, fields: [proc.name], values: [[[parents, x]]]}\n"
+  },
+  {
+   "id": "platform-sysdig-list-in-single",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: parents, items: [sshd]}]\n    exceptions: [{name: f, fields: proc.pname, values: ['(parents)']}]\n"
+  },
+  {
+   "id": "platform-sysdig-engine-version",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    minimum_engine_version: -1\n"
+  },
+  {
+   "id": "platform-sysdig-engine-version-string",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    minimum_engine_version: '3'\n"
+  },
+  {
+   "id": "platform-sysdig-engine-version-float",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    minimum_engine_version: 3.0\n"
+  },
+  {
+   "id": "platform-sysdig-field-errors",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    exceptions: [{name: e, fields: 5}]\n    lists: [{name: l, items: [[a]]}]\n    macros: [{name: m}]\n    tags: t\n"
+  },
+  {
+   "id": "platform-sysdig-tuning-condition-blank",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    append_to_rule: R\n    condition: '  '\n    exceptions: [{name: e, fields: proc.name, values: [a]}]\n"
+  },
+  {
+   "id": "platform-sysdig-source-digit",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    source: 1abc\n"
+  },
+  {
+   "id": "platform-sysdig-list-flattened",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l0, items: [a]}, {name: l1, items: ['x l0']}, {name: l2, items: [l1, y]}]\n    exceptions: [{name: e, fields: proc.name, comps: in, values: [l2]}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-pass",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l0, items: [a]}, {name: l1, items: ['x l0']}]\n    exceptions: [{name: e, fields: proc.name, comps: in, values: [l1]}]\n"
+  },
+  {
+   "id": "platform-sysdig-exception-shape-gates-list",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: l1, items: [a]}]\n    exceptions: [{name: e1, fields: [a, b], comps: ['=']}, {name: e2, fields: proc.name, values: ['x l1']}]\n"
+  },
+  {
+   "id": "platform-sysdig-name-gates-order",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: m2}, {name: m2, condition: proc.name = sh}]\n    lists: [{name: 1bad, items: [a]}, {name: l1, items: [b]}]\n    exceptions: [{name: e, fields: proc.name, values: ['x l1']}]\n"
+  },
+  {
+   "id": "platform-sysdig-list-named-true",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    lists: [{name: 'true', items: [a]}]\n    exceptions: [{name: e, fields: [proc.name], comps: ['='], values: [[true]]}]\n"
+  },
+  {
+   "id": "platform-sysdig-macro-form-feed",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: \"m2\\fand proc.name = x\"}, {name: m2, condition: proc.name = sh}]\n"
+  },
+  {
+   "id": "platform-sysdig-macro-line-separator",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: \"m2\\u2028and proc.name = x\"}, {name: m2, condition: proc.name = sh}]\n"
+  },
+  {
+   "id": "platform-sysdig-macro-unparsed",
+   "family": "rule",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n    macros: [{name: m1, condition: 'm2 and ('}, {name: m2, condition: proc.name = sh}]\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Objectives/objective-0001-credential-access.yaml",
+   "family": "objective",
+   "yaml": "name: Credential Access Objective\n\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\nobjective:\n  priority: High\n  type: Threat\n  description: Detect credential access techniques\n  composition:\n    strategy: Combined\n    description: Compose signals for credential access detection\n  threats:\n    - 00000000-0000-4000-8001-000000000001\n  signals:\n    - name: Suspicious logon signal\n      uuid: 00000000-0000-4000-8099-000000000001\n      description: Suspicious authentication activity\n      severity: Medium\n      methodology: Statistical\n      entities:\n        - Host::Hostname\n      data:\n        availability: Complete\n        requirements: Security event logs\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+   "family": "rule",
+   "yaml": "name: Sentinel KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Sentinel rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  sentinel:\n    enabled: true\n    name: Sentinel KQL Rule\n    status: STAGING\n    query: |\n      SecurityEvent\n      | where EventID == 4688\n      | take 1\n    scheduling:\n      frequency: PT1H\n      lookback: PT2H\n    alert:\n      title: Sentinel KQL Rule\n      suppression: false\n    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+   "family": "rule",
+   "yaml": "name: Defender KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Defender rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  defender_for_endpoint:\n    enabled: true\n    name: Defender KQL Rule\n    status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    scheduling: 1H\n    alert:\n      category: Execution\n    impacted_entities:\n      device: device_id\n    scope:\n      selection: All\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0003-splunk-spl.yaml",
+   "family": "rule",
+   "yaml": "name: Splunk SPL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000003\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Splunk rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  splunk:\n    enabled: true\n    name: Splunk SPL Rule\n    status: STAGING\n    query: index=main | head 1\n    scheduling:\n      schedule:\n        cron: \"0 * * * *\"\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml",
+   "family": "rule",
+   "yaml": "name: SentinelOne S1QL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000004\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated SentinelOne rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  sentinel_one:\n    enabled: true\n    name: SentinelOne S1QL Rule\n    status: STAGING\n    condition:\n      type: Correlation\n      correlation:\n        entity: host\n        match_in_order: true\n        time_window: 1h\n        sub_queries:\n          - query: EventType = \"Process Create\"\n            matches_required: 1\n    response:\n      treat_as_threat: Malicious\n      network_quarantine: false\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0005-carbon-black-lucene.yaml",
+   "family": "rule",
+   "yaml": "name: Carbon Black Lucene Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000005\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Carbon Black rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  carbon_black_cloud:\n    enabled: true\n    name: Carbon Black Lucene Rule\n    status: STAGING\n    query: process_name:cmd.exe\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+   "family": "rule",
+   "yaml": "name: CrowdStrike Deploy Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000006\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  crowdstrike:\n    enabled: true\n    name: CrowdStrike Deploy Rule\n    status: STAGING\n    query: index=main\n    details:\n      trigger: event\n      outcome: detection\n    schedule:\n      frequency: 1h\n      lookback: 2h\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0007-harfanglab-deploy-only.yaml",
+   "family": "rule",
+   "yaml": "name: HarfangLab Deploy Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000007\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  harfanglab:\n    enabled: true\n    name: HarfangLab Deploy Rule\n    status: STAGING\n    action: Alert\n    sigma:\n      logsource:\n        category: process_creation\n        product: windows\n      selections:\n        - name: selection\n          field: Image\n          value: cmd.exe\n      condition: selection\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0008-staging-promote.yaml",
+   "family": "rule",
+   "yaml": "name: Staging Promote Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000008\n  schema: rule::1.0\n  version: 2\n  created: 2026-01-01\n  modified: 2026-01-03\n  tlp: clear\n\ndescription: |\n  Rule with higher metadata.version for mutate/promote E2E tests.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: Medium\n\nconfigurations:\n  sentinel:\n    enabled: true\n    name: Staging Promote Rule\n    status: STAGING\n    query: |\n      SecurityEvent | take 1\n    scheduling:\n      frequency: PT1H\n      lookback: PT2H\n    alert:\n      title: Staging Promote Rule\n      suppression: false\n    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0009-elastic-kql.yaml",
+   "family": "rule",
+   "yaml": "name: Elastic KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000009\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Elastic rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  elastic:\n    enabled: true\n    schema: platform::elastic::1.0\n    status: STAGING\n    type: query\n    language: kuery\n    query: |\n      process.name: \"powershell.exe\"\n    index:\n      - logs-*\n    scheduling:\n      interval: 5m\n      lookback: 1m\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0013-sysdig-falco.yaml",
+   "family": "rule",
+   "yaml": "name: Sysdig Falco Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000005d1a90\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in\n  a container.\nstatus: STAGING\nseverity: Medium\ntechniques:\n  - T1059.004\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: Medium\n\nconfigurations:\n  sysdig:\n    enabled: true\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: >\n      spawned_process and container\n      and proc.name in (corpus_shells)\n    lists:\n      - name: corpus_shells\n        items: [bash, sh, zsh]\n    tags: [container, shell]\n"
+  },
+  {
+   "id": "file:tests/fixtures/tide_corpus/current/Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+   "family": "threat",
+   "yaml": "name: Simulated Actor\ncriticality: High\n\nmetadata:\n  uuid: 00000000-0000-4000-8001-000000000001\n  schema: threat::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n  severity: Substantial incident\n  impact:\n    - Data Breach\n    - Identity Theft\n  leverage:\n    - Information Gathering\n    - Elevation of privilege\n  viability: Likely\n  terrain: Endpoint workstations and user devices.\n  surface:\n    - OS::Windows::Desktop\n  mitre_attack:\n    - T1059\n  actors:\n    - name: att&ck::G0006\n"
+  },
+  {
+   "id": "file:tests/golden/fixtures/vscode-workspace/objects/objectives/detect-lsass-access.yaml",
+   "family": "objective",
+   "yaml": "name: Detect LSASS access\nmetadata:\n  uuid: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f\n  schema: objective::1.0\n  tlp: amber\n"
+  },
+  {
+   "id": "file:tests/golden/fixtures/vscode-workspace/objects/rules/suspicious-lsass-access.yaml",
+   "family": "rule",
+   "yaml": "name: Suspicious LSASS Access\nmetadata:\n  uuid: ff8bf67e-64dc-460d-b5df-48db643f3560\n  schema: rule::1.1\n  tlp: amber\ndetection_model: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f\nconfigurations:\n  sentinel:\n    query: |\n      DeviceProcessEvents\n      | where FileName =~ \"procdump.exe\"\n"
+  }
+ ]
+}

@@ -1,3 +1,0 @@
-[1;32m✓[0m 2 notes in 1 file
-[1;36m→[0m [1mopentide lint --file objects/rules/suspicious-lsass-access.yaml --verbose[0m[2m · [0m[2mshow 2 notes, such as[0m
-  [2ma missing optional field[0m

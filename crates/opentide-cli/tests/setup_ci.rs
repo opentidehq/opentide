@@ -10,8 +10,8 @@
     reason = "a test helper: a broken fixture is a failure"
 )]
 
-#[path = "common/replay.rs"]
-mod replay;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -27,7 +27,7 @@ fn opentide(cwd: &Path, words: &[&str]) -> (i32, String, String) {
         version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
-        log_sink: Arc::new(Mutex::new(replay::Buffer::default())) as Sink,
+        log_sink: Arc::new(Mutex::new(fixtures::Buffer::default())) as Sink,
         cwd: Some(cwd.to_path_buf()),
         width: None,
         interrupt: opentide_cli::app::Interrupt::default(),
@@ -48,14 +48,14 @@ fn opentide(cwd: &Path, words: &[&str]) -> (i32, String, String) {
 fn tide_corpus() -> (tempfile::TempDir, std::path::PathBuf) {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
-    replay::fixture("tide-corpus", &ws);
+    fixtures::fixture("tide-corpus", &ws);
     (scratch, ws)
 }
 
 #[test]
 fn none_is_not_a_provider() {
     let (_scratch, ws) = tide_corpus();
-    let before = replay::files(&ws);
+    let before = fixtures::files(&ws);
     let (code, stdout, stderr) = opentide(&ws, &["setup", "ci", "none", "--yes"]);
     assert_eq!(code, 2, "{stdout}{stderr}");
     assert!(
@@ -64,7 +64,7 @@ fn none_is_not_a_provider() {
         ),
         "{stderr}"
     );
-    assert_eq!(replay::files(&ws), before, "setup ci wrote a file");
+    assert_eq!(fixtures::files(&ws), before, "setup ci wrote a file");
     assert!(!ws.join(".github").exists());
 }
 

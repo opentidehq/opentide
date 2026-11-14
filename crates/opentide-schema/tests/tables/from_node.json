@@ -1,0 +1,469 @@
+{
+ "cases": [
+  {
+   "id": "valid-minimal",
+   "model": "Probe",
+   "yaml": "text: hello\n"
+  },
+  {
+   "id": "valid-everything",
+   "model": "Probe",
+   "yaml": "text: hello\nnumber: 7\nratio: 1.5\nflag: false\nitems: [a, b]\ninners:\n  - label: x\n    count: 1\n  - label: y\ninner: {label: z}\nmapping: {a: 1, b: 2}\nchoice: two\nkind: beta\neither: 3\nsome: [p, q]\nschema: s\nvocab: [v]\n"
+  },
+  {
+   "id": "missing-required-top",
+   "model": "Probe",
+   "yaml": "number: 1\nflag: true\n"
+  },
+  {
+   "id": "missing-required-nested",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  count: 2\n"
+  },
+  {
+   "id": "missing-in-list-item",
+   "model": "Probe",
+   "yaml": "text: t\ninners:\n  - label: a\n  - count: 3\n  - {}\n"
+  },
+  {
+   "id": "extra-top",
+   "model": "Probe",
+   "yaml": "text: t\ncolour: blue\nsize: 3\n"
+  },
+  {
+   "id": "extra-nested-block",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  label: a\n  extra:\n    deep: 1\n"
+  },
+  {
+   "id": "extra-and-missing-order",
+   "model": "Probe",
+   "yaml": "zeta: 1\nnumber: x\nalpha: 2\n"
+  },
+  {
+   "id": "string-wrong-types",
+   "model": "Probe",
+   "yaml": "text: 12\nitems: [1, true, null, 1.5, [x], {a: b}, ok]\n"
+  },
+  {
+   "id": "string-null",
+   "model": "Probe",
+   "yaml": "text: ~\n"
+  },
+  {
+   "id": "string-empty-value",
+   "model": "Probe",
+   "yaml": "text:\nnumber: 1\n"
+  },
+  {
+   "id": "string-date-text",
+   "model": "Probe",
+   "yaml": "text: 2026-01-01\nitems: [2026-01-01T10:00:00Z]\n"
+  },
+  {
+   "id": "int-lax",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: '42'\ninners:\n  - {label: a, count: true}\n  - {label: b, count: 3.0}\n  - {label: c, count: ' 7 '}\n  - {label: d, count: '3.0'}\n  - {label: e, count: '-0'}\n  - {label: f, count: '+5'}\n  - {label: g, count: '1_000'}\n"
+  },
+  {
+   "id": "int-errors",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: abc\ninners:\n  - {label: a, count: 3.5}\n  - {label: b, count: .inf}\n  - {label: c, count: [1]}\n  - {label: d, count: {}}\n  - {label: e, count: '3.5'}\n  - {label: f, count: ''}\n  - {label: g, count: .nan}\n  - {label: h, count: '0x10'}\n"
+  },
+  {
+   "id": "int-null-on-defaulted",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: ~\n"
+  },
+  {
+   "id": "float-lax",
+   "model": "Probe",
+   "yaml": "text: t\nratio: 2\n"
+  },
+  {
+   "id": "float-from-string",
+   "model": "Probe",
+   "yaml": "text: t\nratio: '2.5'\n"
+  },
+  {
+   "id": "float-from-bool",
+   "model": "Probe",
+   "yaml": "text: t\nratio: true\n"
+  },
+  {
+   "id": "float-errors",
+   "model": "Probe",
+   "yaml": "text: t\nratio: abc\n"
+  },
+  {
+   "id": "float-list",
+   "model": "Probe",
+   "yaml": "text: t\nratio: [1]\n"
+  },
+  {
+   "id": "float-inf",
+   "model": "Probe",
+   "yaml": "text: t\nratio: .inf\n"
+  },
+  {
+   "id": "bool-lax-words",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 'yes'\n"
+  },
+  {
+   "id": "bool-lax-y",
+   "model": "Probe",
+   "yaml": "text: t\nflag: y\n"
+  },
+  {
+   "id": "bool-lax-off-string",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 'OFF'\n"
+  },
+  {
+   "id": "bool-lax-int-1",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 1\n"
+  },
+  {
+   "id": "bool-lax-float-0",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 0.0\n"
+  },
+  {
+   "id": "bool-errors-int",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 2\n"
+  },
+  {
+   "id": "bool-errors-string",
+   "model": "Probe",
+   "yaml": "text: t\nflag: maybe\n"
+  },
+  {
+   "id": "bool-errors-null",
+   "model": "Probe",
+   "yaml": "text: t\nflag: ~\n"
+  },
+  {
+   "id": "bool-errors-list",
+   "model": "Probe",
+   "yaml": "text: t\nflag: []\n"
+  },
+  {
+   "id": "bool-errors-float",
+   "model": "Probe",
+   "yaml": "text: t\nflag: 0.5\n"
+  },
+  {
+   "id": "list-errors",
+   "model": "Probe",
+   "yaml": "text: t\nitems: one\ninners: {label: x}\n"
+  },
+  {
+   "id": "list-null-optional",
+   "model": "Probe",
+   "yaml": "text: t\nitems: ~\ninners:\n"
+  },
+  {
+   "id": "model-errors",
+   "model": "Probe",
+   "yaml": "text: t\ninner: [a]\ninners: [x, 1, ~]\n"
+  },
+  {
+   "id": "model-from-string",
+   "model": "Probe",
+   "yaml": "text: t\ninner: label\n"
+  },
+  {
+   "id": "dict-errors",
+   "model": "Probe",
+   "yaml": "text: t\nmapping:\n  a: x\n  1: 2\n  b: [1]\n"
+  },
+  {
+   "id": "dict-not-a-dict",
+   "model": "Probe",
+   "yaml": "text: t\nmapping: [a]\n"
+  },
+  {
+   "id": "literal-errors",
+   "model": "Probe",
+   "yaml": "text: t\nchoice: three\n"
+  },
+  {
+   "id": "literal-int",
+   "model": "Probe",
+   "yaml": "text: t\nchoice: 1\n"
+  },
+  {
+   "id": "enum-errors",
+   "model": "Probe",
+   "yaml": "text: t\nkind: delta\n"
+  },
+  {
+   "id": "enum-case",
+   "model": "Probe",
+   "yaml": "text: t\nkind: ALPHA\n"
+  },
+  {
+   "id": "enum-int",
+   "model": "Probe",
+   "yaml": "text: t\nkind: 3\n"
+  },
+  {
+   "id": "union-str-int",
+   "model": "Probe",
+   "yaml": "text: t\neither: '5'\nsome: x\n"
+  },
+  {
+   "id": "union-int",
+   "model": "Probe",
+   "yaml": "text: t\neither: 5\n"
+  },
+  {
+   "id": "union-bool",
+   "model": "Probe",
+   "yaml": "text: t\neither: true\n"
+  },
+  {
+   "id": "union-float",
+   "model": "Probe",
+   "yaml": "text: t\neither: 1.5\n"
+  },
+  {
+   "id": "union-errors",
+   "model": "Probe",
+   "yaml": "text: t\neither: [1]\nsome: {a: 1}\n"
+  },
+  {
+   "id": "union-list-inner-error",
+   "model": "Probe",
+   "yaml": "text: t\nsome: [a, 1]\n"
+  },
+  {
+   "id": "union-float-whole",
+   "model": "Probe",
+   "yaml": "text: t\neither: 2.0\n"
+  },
+  {
+   "id": "alias-and-name",
+   "model": "Probe",
+   "yaml": "text: t\nschema: a\nschema_id: b\n"
+  },
+  {
+   "id": "name-only",
+   "model": "Probe",
+   "yaml": "text: t\nschema_id: b\n"
+  },
+  {
+   "id": "alias-wrong-type",
+   "model": "Probe",
+   "yaml": "text: t\nschema: [1]\n"
+  },
+  {
+   "id": "name-wrong-type",
+   "model": "Probe",
+   "yaml": "text: t\nschema_id: 3\n"
+  },
+  {
+   "id": "key-not-string",
+   "model": "Probe",
+   "yaml": "text: t\n1: x\nyes: y\n~: z\n"
+  },
+  {
+   "id": "key-not-string-nested",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  label: x\n  2: y\n"
+  },
+  {
+   "id": "vocab-single-string",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: Data Breach\n"
+  },
+  {
+   "id": "vocab-packed",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: 'a;b'\n"
+  },
+  {
+   "id": "vocab-list-wrong-items",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: [1, x]\n"
+  },
+  {
+   "id": "vocab-not-a-list",
+   "model": "Probe",
+   "yaml": "text: t\nvocab: 3\n"
+  },
+  {
+   "id": "root-not-a-mapping",
+   "model": "Probe",
+   "yaml": "- a\n- b\n"
+  },
+  {
+   "id": "root-scalar",
+   "model": "Probe",
+   "yaml": "hello\n"
+  },
+  {
+   "id": "root-null",
+   "model": "Probe",
+   "yaml": "~\n"
+  },
+  {
+   "id": "before-model-validator",
+   "model": "Guarded",
+   "yaml": "name: n\nlegacy: 1\nother: 3\n"
+  },
+  {
+   "id": "before-model-validator-passes",
+   "model": "Guarded",
+   "yaml": "other: 3\n"
+  },
+  {
+   "id": "quoted-values-span",
+   "model": "Probe",
+   "yaml": "text: \"x\"\nitems: ['a', 2, \"b\"]\nnumber: 'z'\n"
+  },
+  {
+   "id": "flow-values-span",
+   "model": "Probe",
+   "yaml": "text: t\ninner: {label: 1, count: x}\n"
+  },
+  {
+   "id": "comment-after-value",
+   "model": "Probe",
+   "yaml": "text: 5 # a comment\nnumber: x  # another\n"
+  },
+  {
+   "id": "block-scalar-value",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: |\n  abc\n"
+  },
+  {
+   "id": "multiline-plain-value",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: abc\n  def\n"
+  },
+  {
+   "id": "unicode-columns",
+   "model": "Probe",
+   "yaml": "text: \"日本🔥\"\nitems: [é, 1]\nnumber: 日本\n"
+  },
+  {
+   "id": "anchor-alias-values",
+   "model": "Probe",
+   "yaml": "text: &t 5\nitems: [*t]\n"
+  },
+  {
+   "id": "merge-key-values",
+   "model": "Probe",
+   "yaml": "base: &b\n  label: 1\ntext: t\ninner:\n  <<: *b\n  count: x\n"
+  },
+  {
+   "id": "crlf",
+   "model": "Probe",
+   "yaml": "text: t\r\nnumber: x\r\ninner:\r\n  label: 3\r\n"
+  },
+  {
+   "id": "key-quoted",
+   "model": "Probe",
+   "yaml": "\"text\": t\n'number': x\n"
+  },
+  {
+   "id": "key-quoted-extra",
+   "model": "Probe",
+   "yaml": "text: t\n\"odd key\": 1\n"
+  },
+  {
+   "id": "duplicate-error-at-two-items",
+   "model": "Probe",
+   "yaml": "text: t\nitems: [1, 1]\n"
+  },
+  {
+   "id": "explicit-key",
+   "model": "Probe",
+   "yaml": "? text\n: 5\n"
+  },
+  {
+   "id": "sample-valid",
+   "model": "SampleV1_1",
+   "yaml": "name: n\nuuid: u\nschema: sample::1.1\ndescription: d\nseverity: Low\neffort: 3\nexamples:\n  - description: e\n    link: https://example.org\ntags: [a]\n"
+  },
+  {
+   "id": "sample-everything-wrong",
+   "model": "SampleV1_1",
+   "yaml": "name: [n]\nschema_id: 1\ndescription: ~\nseverity:\neffort: lots\nenabled: perhaps\nexamples:\n  - description: e\n  - link: 3\n    language: rust\n    extra: 1\n  - not an example\ntags: a\nunknown: 1\n"
+  },
+  {
+   "id": "sample-empty-mapping",
+   "model": "SampleV1_1",
+   "yaml": "{}\n"
+  },
+  {
+   "id": "empty-value-trailing-comment",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: # c\nflag: true\n"
+  },
+  {
+   "id": "empty-value-comment-line",
+   "model": "Probe",
+   "yaml": "text: t\nnumber:\n# c\nflag: true\n"
+  },
+  {
+   "id": "empty-value-blank-line",
+   "model": "Probe",
+   "yaml": "text: t\nnumber:\n\nflag: true\n"
+  },
+  {
+   "id": "empty-value-last",
+   "model": "Probe",
+   "yaml": "text: t\nnumber:\n"
+  },
+  {
+   "id": "empty-value-dedent",
+   "model": "Probe",
+   "yaml": "text: t\ninner:\n  label:\nnumber: 1\n"
+  },
+  {
+   "id": "empty-value-in-list-item",
+   "model": "Probe",
+   "yaml": "text: t\ninners:\n  - label:\n  - label: x\n"
+  },
+  {
+   "id": "empty-value-flow",
+   "model": "Probe",
+   "yaml": "text: t\ninner: {label: , count: 1}\n"
+  },
+  {
+   "id": "empty-sequence-item",
+   "model": "Probe",
+   "yaml": "text: t\nitems:\n  -\n  - b\n"
+  },
+  {
+   "id": "empty-value-anchor",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: &a\nflag: true\n"
+  },
+  {
+   "id": "int-from-float-too-large",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: 1.0e+20\n"
+  },
+  {
+   "id": "int-beyond-i64",
+   "model": "Probe",
+   "yaml": "text: t\nnumber: 123456789012345678901234567890\n"
+  },
+  {
+   "id": "missing-top-with-int-first-key",
+   "model": "Probe",
+   "yaml": "1: x\nnumber: 2\n"
+  },
+  {
+   "id": "extra-in-merge",
+   "model": "Probe",
+   "yaml": "base: &b {odd: 1}\ntext: t\ninner:\n  <<: *b\n  label: x\n"
+  }
+ ]
+}

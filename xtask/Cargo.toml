@@ -8,7 +8,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "The repository's Rust tooling: cargo xtask check-layers, compare, golden and bench, and the codegen command to come"
+description = "The repository's Rust tooling: cargo xtask check-layers, codegen, corpus, bench and the rest (xtask/AGENTS.md)"
 
 [lints]
 workspace = true
@@ -16,21 +16,17 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 # Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
-# with `/` does not resolve under it, and the oracle names no such path.
+# with `/` does not resolve under it.
 dunce = "1"
 opentide-compare.workspace = true
-# `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
+# `cargo xtask cassettes` (UC-4.1, #831): the cassettes.
 opentide-cassette.workspace = true
-# The object models' oracle comparisons (`corpus faults --engine rust`,
-# `schema diff`), the rules' platform blocks included (UC-1.4).
+# `codegen` (the generated artifacts) and the corpus generator.
 opentide-schema = { workspace = true }
-# `registry diff` (UC-2.1, #816) and the `load` benchmark.
+# `lsp parity` and the `load` benchmark.
 opentide-workspace.workspace = true
-# `validate diff` and `corpus faults --only queries` (UC-2.5): the queries
-# check on the query engines, `opentide_cli::queries`.
+# `codegen`: the diagnostics reference (`opentide_cli::explain`).
 opentide-cli.workspace = true
-# xtask payloads (src/payloads/): the deploy compile against the oracle.
-opentide-compile.workspace = true
 # `lsp parity` (UC-2.6): the language server in this process, and the
 # engine's own analysis it adds to validate's findings.
 opentide-lsp.workspace = true
@@ -42,9 +38,9 @@ serde_json.workspace = true
 toml.workspace = true
 wait4.workspace = true
 regex.workspace = true
-# xtask golden (src/golden/): only the tooling uses these, at the versions
-# Cargo.lock already holds for the engine's dev-dependencies.
+# At the versions Cargo.lock already holds for the engine's dev-dependencies.
 glob = "0.3"
+# `stubs --check`: the drift shown as a diff.
 similar = "2.7"
 tempfile = "3"
 # xtask vocab (src/vocab/) also reads opentide-schema's vocabularies.
@@ -53,7 +49,6 @@ indexmap = { version = "2", features = ["serde"] }
 # the introspection data PyO3 compiles into the extension (`maturin
 # generate-stubs` uses the same crate). Its version is PyO3's.
 pyo3-introspection = "0.30.1"
-jsonschema = { version = "0.61.1", default-features = false }
 # xtask vocab malapi (src/vocab/malapi/): malapi.io's pages, parsed with
 # html5ever (the parser scraper wraps) into markup5ever_rcdom's tree. Not
 # scraper itself: its selectors and cssparser are MPL-2.0, which deny.toml's
@@ -61,10 +56,5 @@ jsonschema = { version = "0.61.1", default-features = false }
 html5ever = "0.40.1"
 markup5ever_rcdom = "0.40.1"
 
-[target.'cfg(unix)'.dependencies]
-# The pseudo-terminals of human mode and killing a case's process group.
-rustix = { version = "1.1", features = ["fs", "process", "pty", "termios"] }
-
 [dev-dependencies]
 trycmd.workspace = true
-strsim.workspace = true

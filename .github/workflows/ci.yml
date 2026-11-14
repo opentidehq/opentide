@@ -32,10 +32,10 @@ run-name: >-
 #   the schema checks, the Elastic sweep and the rest. It never gates; a
 #   failure opens or updates one issue labelled `nightly-failure`.
 #
-# Byte-for-byte comparison with the frozen Python CLI is no requirement
-# anywhere: the oracle's comparisons (golden, corpus, MCP replay, the payload,
-# config, validate and lint diffs) run by hand only (`cargo xtask golden`,
-# `compare`, `corpus`; the replay tests are #[ignore]d), tests/golden/README.md.
+# Nothing compares with the frozen Python CLI: its recordings and the tooling
+# that compared with them were retired (#1139). The command line's behaviour is
+# the Rust-owned snapshots of crates/opentide-cli/tests/cli_snapshots.rs
+# (tests/golden/README.md), which run with opentide-cli's tests.
 
 on:
   push:
@@ -947,9 +947,6 @@ jobs:
   # bin, the packages, the TypeScript page's snippets and a `tsc --noEmit`
   # consumer); and its command line against this repository's console
   # script's: `--json commands` byte for byte. Nightly and on Run workflow.
-  # (`cargo xtask golden check --runner node`, the ported golden cases
-  # through the Node bin, is no gate since the oracle policing left CI; it
-  # stays runnable by hand.)
   node:
     name: Node package (napi-rs build, tests)
     needs: changes
@@ -1045,9 +1042,6 @@ jobs:
   # build-wasm.sh pins, its deflated size held to the .vsix's 15 MiB, and
   # tenant commands through the module with @opentide/wasi-host performing
   # their requests from the cassettes. Nightly and on Run workflow.
-  # (`cargo xtask golden check --runner wasi`, every golden case through the
-  # module, is no gate since the oracle policing left CI; it stays runnable
-  # by hand.)
   wasi:
     name: WASI command line (size, serve)
     needs: changes

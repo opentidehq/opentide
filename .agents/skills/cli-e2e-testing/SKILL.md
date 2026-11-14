@@ -10,8 +10,8 @@ description: >-
 # CLI E2E Testing
 
 The command line is the Rust core's (UC-6.2, #841): what a command prints and writes is held by
-the goldens (`cargo xtask golden check --engine rust`, [golden](../golden/SKILL.md)) and by
-`crates/opentide-cli`'s tests (`tests/cmd/*.trycmd`, `command_goldens.rs`). The Python E2E tests
+the snapshots (`crates/opentide-cli/tests/cli_snapshots.rs`, [golden](../golden/SKILL.md)) and
+by `crates/opentide-cli`'s other tests (`tests/cmd/*.trycmd`, `commands.rs`). The Python E2E tests
 cover what only the installed package can show: the console script and `python -m opentide`,
 signals through them, the MCP and LSP servers over stdio, a wheel installed in a fresh
 environment, and platform plugins loaded from their entry points.
@@ -91,8 +91,8 @@ vacuously, because object parsing never engages.
 3. Include platform `configurations.*` blocks for deploy payload tests
 4. Register new forward slices in `manifest.toml` (`status = "reserved"` → `"active"`)
 
-A change to the corpus changes the golden recordings that use it: re-record them from the oracle
-(`cargo xtask golden record`) in the same pull request.
+A change to the corpus changes the snapshots of the cases that use it: review and commit them
+(`cargo insta review`) in the same pull request.
 
 ### Author-shaped YAML (do not sanitize timestamps)
 

@@ -44,7 +44,7 @@ WRITES = {
     ("publish.yml", "npm"): {"id-token"},
 }
 
-#: The Python oracle's byte-level comparisons run by hand only.
+#: The Python oracle's comparisons, retired (#1139): no workflow runs one.
 ORACLE = re.compile(
     r"xtask (?:golden|compare|mcp)\b|xtask corpus (?!generate\b)|--oracle\b|--check-determinism|"
     r"golden (?:check|record|diff)\b|--runner (?:node|wasi)\b"

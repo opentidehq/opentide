@@ -1,6 +1,6 @@
-# The golden cases: what `cargo xtask golden record` runs through the oracle
-# (tests/golden/README.md). Reviewed like code; the recordings under cases/
-# are generated from it and never edited.
+# The CLI's snapshot cases (tests/golden/README.md): what
+# crates/opentide-cli/tests/cli_snapshots.rs runs and holds to a snapshot.
+# Reviewed like code.
 #
 # Each [[case]] runs in every mode of `modes` against every fixture of
 # `fixtures` (the defaults below unless it sets its own). `args` follow

@@ -10,8 +10,8 @@
     reason = "a test helper: a broken fixture is a failure"
 )]
 
-#[path = "common/replay.rs"]
-mod replay;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -28,7 +28,7 @@ const SENTINEL_UUID: &str = "00000000-0000-4000-8003-000000000001";
 fn corpus() -> (tempfile::TempDir, PathBuf) {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
-    replay::fixture("tide-corpus", &ws);
+    fixtures::fixture("tide-corpus", &ws);
     (scratch, ws)
 }
 
@@ -47,7 +47,7 @@ impl Ran {
 
 /// Runs `opentide <words>` from `cwd` with `extra` variables.
 fn opentide(cwd: &Path, words: &[&str], extra: &[(&str, &str)]) -> Ran {
-    let log = replay::Buffer::default();
+    let log = fixtures::Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(log.clone()));
     let host = Host {
         version: "0.28.1".into(),

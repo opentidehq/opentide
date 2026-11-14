@@ -38,8 +38,9 @@ authenticates, negotiates content or selects an API version is a review failure,
 
 ## Invariants
 
-- **A cassette is recorded, never written.** `cargo xtask cassettes record <scenario>` records the
-  oracle (the frozen Python CLI of `tests/golden/ORACLE`) through `Proxy` in record mode;
+- **A cassette is recorded, never written.** The cassettes of `tests/cassettes/` were recorded
+  from the Python CLI's clients through `Proxy` in record mode (`cargo xtask cassettes record`,
+  retired with the Python CLI in #1139);
   `cargo xtask cassettes check` fails on a digest that does not match, on anything redaction would
   still change, and on a scenario without its cassette. Scenarios are `tests/cassettes/scenarios.toml`.
 - **The client is never patched.** Recording and replay are a proxy: whatever HTTP library the

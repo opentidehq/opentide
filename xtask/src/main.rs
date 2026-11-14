@@ -8,7 +8,6 @@ use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
-use xtask::compare;
 use xtask::layers::{self, LayerTable, Metadata};
 use xtask::{coverage, mutants};
 
@@ -36,15 +35,6 @@ commands:
                  scores against the baseline; --issues writes DIR/<crate>.md for
                  each crate whose surviving mutants exceed its threshold;
                  --write-baseline records this run as the baseline
-  compare --oracle DIR --candidate DIR --command PATH [--case ID]
-          [--ledger FILE] [--report FILE]
-                 compare a candidate's run with the oracle's, applying the
-                 approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml); a
-                 run is a folder with exit_code, stdout, stderr, files/ and
-                 deleted. --report writes the JSON report to FILE
-  compare --check-ledger [--ledger FILE] [--changelog FILE]
-                 check the ledger's schema, and that CHANGELOG.md holds each
-                 entry's changelog reference
   conformance [--runners rust,python,node] [--corpus NAME,...] [--out DIR]
               [--diverge RUNNER] [--keep]
                  run every operation of tests/conformance/manifest.json on every
@@ -52,66 +42,28 @@ commands:
                  byte-identical documents; a difference is named by its JSON
                  pointer. --diverge is the suite's own test (UC-5.4, #839)
   corpus <command>
-                 generate the heavy workspace, run the fault catalogue
-                 against the oracle, report coverage (UC-0.6, #804);
+                 generate the heavy workspace and the fault workspace, report
+                 the fault catalogue's coverage (UC-0.6, #804);
                  `cargo xtask corpus help` lists its commands
-  config diff --against python [--oracle BIN]
-              [--corpus all|fixtures|generated]
-                 resolve every fixture and generated workspace's configuration
-                 with opentide-schema and compare it, as JSON, and its
-                 configuration findings with the oracle's (UC-1.5, #811)
-  registry diff --against python [--oracle BIN]
-                [--corpus all|fixtures|generated|faults]
-                 load every corpus with opentide-workspace and compare its
-                 index (objects, UUIDs, types, paths, load errors, references,
-                 signals), as JSON, with the Python registry's (UC-2.1, #816)
   lsp parity --corpus faults [--only ID,...] [--keep DIR]
                  for each fault kind `opentide validate` reports, the
                  language server's published diagnostics against validate's
                  findings: codes, severities, ranges in UTF-16 (UC-2.6, #821)
-  validate diff [--filter GLOB] [--keep DIR] [--show-approved]
-                 run opentide-workspace's validate on every recorded
-                 `validate --json` case that checks or fixes, and compare its
-                 report, checks and summary with the recording (UC-2.2, #817)
-                 and, for --fix and --fix --dry-run, what it fixed, the diff
-                 and the files written (UC-2.3, #818)
-  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
-                 run opentide-workspace's lint on every recorded `lint --json`
-                 case and compare its findings, verdict, next steps and the
-                 files --fix renamed with the recording (UC-2.3, #818)
   codegen [--check]
                  write the artifacts generated from the Rust model (the
-                 platform templates); --check compares them, and what
-                 `opentide generate` writes with each golden recording of an
-                 `opentide generate` that ran its schemas, templates and
-                 snippets phases and exited 0 (UC-1.8, #814)
-  mcp record --python PATH [--only NAME]
-  mcp replay --engine rust FILE...
-                 record the MCP sessions of tests/golden/mcp/sessions.toml from
-                 the Python server of an opentide release that has one, and
-                 replay them against the Rust server (UC-3.7, #829)
-  cassettes <check|record|list>
+                 platform templates, the editor schemas, the language
+                 server's catalogs, the diagnostics reference); --check
+                 compares them instead (UC-1.8, #814)
+  cassettes <check|list>
                  the recorded-HTTP cassettes of tests/cassettes (UC-4.1,
-                 #831): record a scenario from the oracle through the
-                 recording proxy, or check every cassette's digest and
-                 redaction
-  golden <record|check|diff|lock|coverage> [options]
-                 record what the frozen Python CLI does, and check an engine
-                 against the recordings (tests/golden/README.md);
-                 `cargo xtask golden help` lists the options
+                 #831): check every cassette's digest and redaction, or list
+                 the scenarios
   bench          run the benchmarks against their budgets (UC-0.8, #806)
-  payloads diff --against python [--corpus NAME|all]
-                 the deploy compile's request bodies against the oracle's, on
-                 every corpus (UC-3.1, #823); `cargo xtask payloads help`
-  vocab <sync|sentinel-attack|diff|ingest|malapi> [options]
+  vocab <sync|sentinel-attack|ingest|malapi> [options]
                  the vocabularies: sync and check them against specifications,
-                 generate Sentinel's ATT&CK list, compare with the oracle
-                 (UC-1.6, #812), ingest ATT&CK, MISP and MalAPI into
-                 specifications; `cargo xtask vocab help` lists the options
-  schema diff --against python [options]
-                 the object models against the oracle: their JSON Schemas,
-                 and their verdict on every object file of every corpus
-                 (UC-1.3, #809); `cargo xtask schema help` lists the options
+                 generate Sentinel's ATT&CK list (UC-1.6, #812), ingest
+                 ATT&CK, MISP and MalAPI into specifications;
+                 `cargo xtask vocab help` lists the options
   spec-fields [--specifications DIR] [--list]
                  check every model field's description against its row in the
                  field tables of the specifications checkout (DIR, else
@@ -157,14 +109,6 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "compare" => match run_compare(rest) {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
-            Err(error) => {
-                eprintln!("xtask compare: {error:#}");
-                ExitCode::from(2)
-            }
-        },
         "conformance" => match xtask::conformance::cli::run(rest) {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
@@ -179,45 +123,10 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "config" => match xtask::config::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask config: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "registry" => match xtask::registry::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask registry: {error:#}");
-                ExitCode::from(2)
-            }
-        },
         "lsp" => match xtask::lsp::run(rest) {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("xtask lsp: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "validate" => match xtask::validate::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask validate: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "mcp" => match xtask::mcp::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask mcp: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "lint" => match xtask::lint::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask lint: {error:#}");
                 ExitCode::from(2)
             }
         },
@@ -235,11 +144,8 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "golden" => xtask::golden::main(rest),
         "bench" => xtask::bench::main(rest),
-        "payloads" => xtask::payloads::main(rest),
         "vocab" => xtask::vocab::main(rest),
-        "schema" => xtask::schema::main(rest),
         "spec-fields" => xtask::spec_fields::main(rest),
         "stubs" => xtask::stubs::main(rest),
         "help" | "--help" | "-h" => {
@@ -250,146 +156,6 @@ fn main() -> ExitCode {
             eprint!("xtask: unknown command `{other}`\n\n{USAGE}");
             ExitCode::from(2)
         }
-    }
-}
-
-/// `compare`: whether the runs are equal, or the ledger is valid.
-fn run_compare(args: &[String]) -> Result<bool> {
-    let mut options: std::collections::BTreeMap<&str, PathBuf> = std::collections::BTreeMap::new();
-    let mut check_ledger = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let name = match arg.as_str() {
-            "--check-ledger" => {
-                check_ledger = true;
-                continue;
-            }
-            name @ ("--oracle" | "--candidate" | "--command" | "--case" | "--ledger"
-            | "--report" | "--changelog") => name,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        };
-        let value = args
-            .next()
-            .map(PathBuf::from)
-            .with_context(|| format!("{name} needs a value"))?;
-        options.insert(name, value);
-    }
-    let root = workspace_root()?;
-    let ledger_path = options
-        .remove("--ledger")
-        .unwrap_or_else(|| root.join(compare::LEDGER));
-    let changelog_path = options
-        .remove("--changelog")
-        .unwrap_or_else(|| root.join("CHANGELOG.md"));
-    let changelog = std::fs::read_to_string(&changelog_path)
-        .with_context(|| format!("read {}", changelog_path.display()))?;
-    let ledger = match compare::read_ledger(&ledger_path, &changelog) {
-        Ok(ledger) => ledger,
-        Err(error) => {
-            eprintln!("error: {error:#}");
-            return Ok(false);
-        }
-    };
-    if check_ledger {
-        if let Some(extra) = options.keys().next() {
-            bail!("--check-ledger takes only --ledger and --changelog, not {extra}");
-        }
-        println!(
-            "compare: {} holds {} approved difference(s), each with every field",
-            ledger_path.display(),
-            ledger.entries.len()
-        );
-        return Ok(true);
-    }
-    let required = |name: &str, options: &mut std::collections::BTreeMap<&str, PathBuf>| {
-        options
-            .remove(name)
-            .with_context(|| format!("{name} is required\n\n{USAGE}"))
-    };
-    let oracle_dir = required("--oracle", &mut options)?;
-    let candidate_dir = required("--candidate", &mut options)?;
-    let command = required("--command", &mut options)?
-        .to_string_lossy()
-        .into_owned();
-    let case = options
-        .remove("--case")
-        .map(|case| case.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let report_path = options.remove("--report");
-
-    let oracle = compare::read_run(&oracle_dir)?;
-    let candidate = compare::read_run(&candidate_dir)?;
-    let mut usage = opentide_compare::ledger::Usage::default();
-    let report = opentide_compare::compare(
-        opentide_compare::Case {
-            command: &command,
-            id: &case,
-        },
-        &oracle,
-        &candidate,
-        &ledger,
-        &mut usage,
-    );
-    for difference in &report.differences {
-        let pointer = difference
-            .pointer
-            .as_deref()
-            .map(|pointer| {
-                format!(
-                    " at {}",
-                    if pointer.is_empty() {
-                        "the root"
-                    } else {
-                        pointer
-                    }
-                )
-            })
-            .unwrap_or_default();
-        let at = difference
-            .at
-            .as_deref()
-            .map(|at| format!(", {at}"))
-            .unwrap_or_default();
-        eprintln!(
-            "error: {} {}{pointer}{at}\n  oracle:    {}\n  candidate: {}",
-            difference.target,
-            difference.kind.as_str(),
-            difference.oracle,
-            difference.candidate
-        );
-    }
-    if let Some(path) = &report_path {
-        let text = serde_json::to_string_pretty(&report).context("serialise the report")?;
-        std::fs::write(path, text + "\n").with_context(|| format!("write {}", path.display()))?;
-    }
-    if report.equal {
-        println!(
-            "compare: `{command}` is equal ({} approved difference(s))",
-            report.approved.len()
-        );
-    } else {
-        eprintln!(
-            "compare: `{command}` differs: {} difference(s){}",
-            report.differences.len() + report.omitted,
-            if report.approved.is_empty() {
-                String::new()
-            } else {
-                format!(", {} approved", report.approved.len())
-            }
-        );
-    }
-    Ok(report.equal)
-}
-
-/// The workspace root, found at run time: the parent of `CARGO_MANIFEST_DIR`
-/// (`cargo run` sets it to xtask's folder), else the working directory.
-fn workspace_root() -> Result<PathBuf> {
-    match std::env::var_os("CARGO_MANIFEST_DIR") {
-        Some(dir) => PathBuf::from(dir)
-            .parent()
-            .map(std::path::Path::to_path_buf)
-            .context("CARGO_MANIFEST_DIR has no parent"),
-        None => std::env::current_dir().context("read the working directory"),
     }
 }
 

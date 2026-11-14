@@ -1,14 +1,12 @@
-//! The generated templates against what the oracle writes (UC-1.8, #814):
-//! the committed platform templates
+//! The generated platform templates against the committed ones
 //! (`src/opentide/schemas/data/platform_templates`, which the Python suite
-//! keeps equal to its render) and the golden recordings of `opentide
-//! generate` on the tide-corpus fixture. They read files, so they live here:
-//! the crate's `src` stays I/O-free (`scripts/engine/check-io-free.sh`).
+//! keeps equal to its render). They read files, so they live here: the
+//! crate's `src` stays I/O-free (`scripts/engine/check-io-free.sh`). What
+//! `opentide generate` writes is the CLI's snapshots'.
 
 use std::path::{Path, PathBuf};
 
-use opentide_schema::generate::template::Options;
-use opentide_schema::generate::workspace::{object_template, platform_template};
+use opentide_schema::generate::workspace::platform_template;
 use opentide_schema::objects::platform::PLATFORM_CONFIG_MODELS;
 
 fn repo() -> PathBuf {
@@ -28,24 +26,4 @@ fn every_platform_template_is_the_committed_one() {
         assert_eq!(rendered, expected, "{}", registered.key);
     }
     assert_eq!(platform_template("plugin").unwrap(), None);
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_object_template_is_the_oracles_on_the_tide_corpus() {
-    // tide-corpus requires lint's default metadata keys.
-    let dir = repo()
-        .join("tests/golden/cases/generate/agent/tide-corpus/default/files/ws/.opentide/templates");
-    for identifier in ["objective::1.0", "rule::1.0", "rule::1.1", "threat::1.0"] {
-        let file = format!("{}.template.yaml", identifier.replace("::", "."));
-        let expected = read(&dir.join(&file));
-        let rendered = object_template(identifier, &Options::default())
-            .unwrap()
-            .unwrap();
-        assert_eq!(rendered, expected, "{identifier}");
-    }
-    assert_eq!(
-        object_template("visibility::1.0", &Options::default()).unwrap(),
-        None
-    );
 }

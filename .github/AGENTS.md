@@ -120,13 +120,11 @@ publish-dry-run.yml have `workflow_call` and `workflow_dispatch` only: ci.yml ru
 schedule runs `development`'s copy of the workflows: test a change to the nightly with Run
 workflow (`scope: nightly`) on its branch.
 
-**No byte-for-byte comparison with the Python CLI** (the maintainer's decision, 2026-11-14): golden
-compare and check, golden determinism, the corpora's diffs against the oracle, the MCP replay, the
-payload, config, validate, lint, registry, schema and vocab diffs left every workflow, with
-`golden.yml` and `golden-preview.yml`. `cargo xtask golden`, `compare` and `corpus` stay, run by
-hand; the Rust tests that replay the oracle's recordings are
-`#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`
-(`cargo nextest run --run-ignored only`); `tests/golden/APPROVED_DIFFS.toml` gates nothing
+**No comparison with the Python CLI** (the maintainer's decision, 2026-11-14): the oracle's
+comparisons left every workflow, with `golden.yml` and `golden-preview.yml`, and its recordings,
+ledger and tooling (`cargo xtask golden`, `compare` and the `--against python` diffs) were
+retired in #1139. The command line's behaviour is the Rust-owned snapshots of
+`crates/opentide-cli/tests/cli_snapshots.rs`, which run with `opentide-cli`'s tests
 ([`tests/golden/README.md`](../tests/golden/README.md)). The vendor-parser oracles (Kusto.Language,
 Splunk, Elasticsearch, Lucene, Falco) are real products' parsers: they run nightly.
 
@@ -244,8 +242,7 @@ merging** → add `PR gate`, remove the others → **Save changes**.
 - [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (every publish rehearsed, nothing
   published): in a release pull request's checks and the nightly (ci.yml calls it), and on demand.
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
-  and `golden-preview.yml` (`cargo xtask golden check --engine python` and `golden record
-  --check-determinism` run by hand: `tests/golden/README.md`).
+  and `golden-preview.yml` (the oracle's tooling they ran was retired in #1139).
 - [`codeql.yml`](workflows/codeql.yml) (below) and [`vocab-upstream.yml`](workflows/vocab-upstream.yml)
   (its own header).
 

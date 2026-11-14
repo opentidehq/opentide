@@ -1,19 +1,18 @@
 //! `generate docs` (UC-3.2b, #915; the 0.26.0 redesign): every file a run
-//! writes for the tide-corpus fixture, in each of the four flavours,
-//! compared byte for byte with the files opentide 0.28.1 writes for it
-//! (`tests/docs_0_28/<flavor>`: pages, folder indexes, GitLab's `.order`
-//! files and the catalogue overview, diagrams included), and the oracle's
-//! failure on the vscode fixture. The flavour a run picks from its CI and
-//! `origin`, a rule with several platform blocks, a rule's tenants and
-//! remote ids, and a threat's CVEs have no recording: their tests assert
-//! what 0.28.x writes for them (compared with its pages on the same edits of
-//! the fixture when they were written).
+//! writes for the tide-corpus fixture in the GitLab and Azure DevOps
+//! flavours, compared byte for byte with the committed pages
+//! (`tests/docs_pages/<flavor>`: pages, folder indexes, GitLab's `.order`
+//! files and the catalogue overview, diagrams included; first written by
+//! opentide 0.28.1); the generic and GitHub flavours are the CLI's
+//! snapshots'. The flavour a run picks from its CI and `origin`, a rule
+//! with several platform blocks, a rule's tenants and remote ids, and a
+//! threat's CVEs: their tests assert what 0.28.x writes for them.
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a broken fixture is a failure")]
 
-#[path = "common/golden.rs"]
-mod golden;
+#[path = "common/fixture.rs"]
+mod fixture;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -44,7 +43,7 @@ fn open_edited(fixture: &str, edit: impl FnOnce(&Path)) -> (tempfile::TempDir, W
     let dir = tempfile::tempdir().unwrap();
     let ws = dunce::canonicalize(dir.path()).unwrap().join("ws");
     std::fs::create_dir_all(&ws).unwrap();
-    golden::fixture(fixture, &ws);
+    fixture::fixture(fixture, &ws);
     edit(&ws);
     let options = RootOptions {
         repo: Some(ws.clone()),
@@ -139,15 +138,16 @@ fn files_under(dir: &Path, prefix: &str, out: &mut BTreeMap<String, String>) {
     }
 }
 
-/// Every file a run writes for the tide corpus in `flavor` is the one
-/// opentide 0.28.1 writes (`tests/docs_0_28/<flavor>`).
+/// Every file a run writes for the tide corpus in `flavor` is the committed
+/// one (`tests/docs_pages/<flavor>`). The generic and GitHub flavours'
+/// pages are the CLI's snapshots' (`generate docs` on `tide-corpus`).
 fn check(flavor: &str) {
     let (_dir, workspace) = open("tide-corpus");
     let written = render(&workspace, Some(flavor)).unwrap();
     let mut expected = BTreeMap::new();
     files_under(
         &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/docs_0_28")
+            .join("tests/docs_pages")
             .join(flavor),
         "docs",
         &mut expected,
@@ -163,41 +163,13 @@ fn check(flavor: &str) {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_page_is_0_28s() {
-    check("generic");
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_github_page_is_0_28s() {
-    check("github");
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_gitlab_page_is_0_28s() {
+fn every_gitlab_page_is_the_committed_one() {
     check("gitlab");
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_azure_devops_page_is_0_28s() {
+fn every_azure_devops_page_is_the_committed_one() {
     check("azure_devops");
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn an_object_that_does_not_validate_fails_as_the_oracle_does() {
-    let (_dir, workspace) = open("vscode");
-    let error = render(&workspace, None).unwrap_err();
-    let stdout =
-        std::fs::read_to_string(golden::case("generate.docs/json/vscode/default").join("stdout"))
-            .unwrap();
-    assert!(
-        stdout.contains(&format!("\"message\":\"docs: {error}\"")),
-        "{error} is not the oracle's failure: {stdout}"
-    );
 }
 
 fn append(ws: &Path, file: &str, text: &str) {

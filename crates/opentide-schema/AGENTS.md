@@ -37,12 +37,11 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/node.rs` | The YAML node tree (UC-1.2), re-exported from `opentide_core::node` (#850: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars, every node's position, `locate` placing a field path), and `node/dump.rs`, which writes a model (serde-saphyr) |
 | `src/from_node.rs` | `FromNode` and what `#[derive(FromNode)]` (`opentide-schema-derive`) expands to: every structural error collected, with its path and position |
 | `src/configuration/` | The configuration TOML files (UC-1.5): `toml` (toml_edit into the node tree, with positions), `models` (one per file, `#[derive(FromNode)]`), `types` (constraints with Pydantic's messages), `errors` (`model_errors`: union branches dropped as the oracle drops them), `merge` and `resolve` (the layering, once per run), `checks` (`configuration_text_issues`, the buffer and workspace checks), `sharing`, `lint`, `repr` (values quoted as the CLI quotes them), `bundled` (the bundled files, compiled in from `src/opentide/data/`) |
-| `tests/configuration.rs` | `tests/oracle/config_cases.toml` against the oracle (`config_table.json`, from `config_table.py`): findings, resolved JSON, lint settings, sharing findings; the bundled list; no panic (proptest) |
-| `YAML.md` | Generated: every YAML case read by the oracle (PyYAML, YAML 1.1) and by `node` (YAML 1.2), with each difference and its reason |
-| `tests/yaml_table.rs` | `tests/oracle/yaml_cases.toml` against the oracle (`yaml_table.json`, from `yaml_table.py`); writes `YAML.md` |
-| `tests/from_node_table.rs` | `tests/oracle/from_node_cases.toml` against the oracle (`from_node_table.json`, from `from_node_table.py`); the Rust results are the insta snapshot |
-| `src/objects/table.rs` (a unit test: rules read under `cfg(test)`; no disk reads) | `tests/oracle/objects_cases.toml` and every object file of `tests/fixtures/tide_corpus` and the VS Code fixture against the oracle (`objects_table.json`, from `objects_table.py`); the Rust results are the insta snapshot |
-| `tests/objects_table_files.rs` | The table holds every corpus object file as it is on disk; each `[[difference]]` has its CHANGELOG.md entry |
+| `tests/configuration.rs` | `tests/tables/configuration.toml`'s cases held to their snapshot: findings, resolved JSON, lint settings, sharing findings; the bundled list; no panic (proptest) |
+| `YAML.md` | Frozen (#1139): every YAML case as the Python CLI (PyYAML, YAML 1.1) and `node` (YAML 1.2) read it, with each difference and its reason |
+| `tests/yaml_table.rs` | `tests/tables/yaml.toml`'s cases as `node` reads them, held to their snapshot |
+| `tests/from_node_table.rs` | `tests/tables/from_node.json`'s cases converted, held to their snapshot |
+| `src/objects/table.rs`, `src/objects/platform/table.rs` (unit tests: the table read under `cfg(test)`; no disk reads) | `tests/tables/objects.json`'s cases (the object models, the platform blocks, and the object files of `tests/fixtures/tide_corpus` and the VS Code fixture as they were when the table was written), held to their snapshots |
 | `tests/round_trip_property.rs`, `tests/from_node_api.rs`, `tests/fuzz_regressions.rs` | proptest round trip, the API, and the `from_node` fuzz target's seeds and saved crashes |
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
 | `tests/json_schema.rs` | The derived schema (insta snapshot) and its `tide.*` keys |
@@ -54,10 +53,9 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 
 ## Invariants
 
-- The Pydantic models in `src/opentide/models` at the frozen tag are the oracle. A model here is
-  the same shape: field names, serialised names, order, optional and defaulted fields, closure,
-  constraints, metadata keys. A difference is an approved diff (`tests/golden/APPROVED_DIFFS.toml`)
-  or a bug.
+- A model here keeps the shape of the Pydantic model it was ported from (field names, serialised
+  names, order, optional and defaulted fields, closure, constraints, metadata keys): a change to
+  one is a user-visible change, with its snapshot diffs and its changelog entry.
 - One concrete struct per revision; no generic model (`#[pyclass]` cannot take one).
 - Every model is a `#[pyclass(frozen, get_all, eq, name = "<Pydantic name>", module =
   "opentide._native.models")]` behind `python`, listed in `python.rs` (`py_models!` and the
@@ -75,42 +73,31 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   `opentide_core::codes::SCHEMA_VALIDATION`): never mint one, never a second string at a call site.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`). The derives compile for wasm32.
 - Suggestions are `opentide_core::suggest`'s (strsim), never a port of Python's `difflib`: where
-  one differs from the oracle's on a corpus value, `tests/golden/vocab/APPROVED.toml` lists it and
-  `cargo xtask vocab diff --against python` checks it. Accepted values and validity never differ.
-- YAML is YAML 1.2, read by the saphyr crates; never re-implement a YAML 1.1 rule to match the
-  oracle. A case where the oracle reads YAML differently names a `[[difference]]` in
-  `tests/oracle/yaml_cases.toml` (reason, CHANGELOG lead); `YAML.md` shows them all.
-- Configuration TOML is read by `toml_edit` (TOML 1.0), never by a hand-written parser; a case of
-  `tests/oracle/config_cases.toml` where the result differs from the oracle names its
-  `[[difference]]`. Regenerate the table with `<oracle python> -I tests/oracle/config_table.py`.
-- A field takes its declared type, without Pydantic's lax coercion; a case of
-  `tests/oracle/from_node_cases.toml` or `objects_cases.toml` where the result differs from the
-  oracle names its `[[difference]]`.
+  one differs from what a user saw before, the change is a changelog entry. Accepted values and
+  validity never change unannounced.
+- YAML is YAML 1.2, read by the saphyr crates; never re-implement a YAML 1.1 rule. `YAML.md`
+  lists where the Python CLI read YAML differently, and why.
+- Configuration TOML is read by `toml_edit` (TOML 1.0), never by a hand-written parser.
+- A field takes its declared type, without Pydantic's lax coercion.
 - A validator is written once (`objects::checks`) and run by both hosts: the structural
   conversion (`#[from_node(with = ...)]`, so its error sits among the others in Pydantic's order)
   and garde (`#[garde(custom(...))]`).
 - A platform block's checks are the oracle's, with its messages: a before-validator's codes are
   judged on the raw block in the oracle's terms (Python's truthiness, `isinstance(x, int)` taking
   a boolean) and reported as one `value_error` on the block (`<Model> validation failed with
-  code(s): a, b`); a block without `status` is left to "Field required". A case of
-  `tests/oracle/platform_cases.toml` where the result differs from the oracle names its
-  `[[difference]]`.
+  code(s): a, b`); a block without `status` is left to "Field required".
 - Falco's terms (operators, modifiers, priorities, keywords, the name rule) and the Elastic
   duration grammar are `opentide_core::falco` and `opentide_core::duration`, shared with
   opentide-tide's `sysdig` and `elastic` (the language server): never a second table here. This
-  crate is the one Sysdig constraint engine: it is checked against the oracle
-  (`tests/oracle/platform_cases.toml`) and `opentide validate` reports it, the language server
+  crate is the one Sysdig constraint engine: its cases are the platform table's
+  (`tests/tables/objects.json`) and `opentide validate` reports it, the language server
   with it (UC-2.6, #821). The language server's own walk of the block, and
   `xtask/tests/sysdig_engines.rs`, which held the two engines together, went with that;
   opentide-tide's `sysdig` keeps only `sysdig_list_self_reference`, the advisory `lint` owns.
-- A generated template, snippet file or router schema is byte for byte what the oracle writes:
-  `cargo xtask codegen --check` compares them with every golden recording of `opentide
-  generate`. A generated JSON Schema (each revision's, `visibility.toml`'s, the configuration
-  schemas) is compared by verdict instead (UC-1.8b, #900): it must accept and refuse every corpus
-  object, configuration file and fault as the oracle's does; its text (titles, descriptions, key
-  order, `type` arrays for Pydantic's `anyOf` with `null`, the dropdown Markdown) is schemars' and
-  is listed in `tests/golden/APPROVED_DIFFS.toml`. Never port Pydantic's schema pipeline to close
-  a text difference; adapt schemars' output with a `Transform`. A model a template or schema reaches is listed in `generate::models` (its field
+- A generated template, snippet file or schema is what `opentide generate` writes, held by the
+  CLI's `generate` snapshots and, for the committed copies, `cargo xtask codegen --check`. A JSON
+  Schema's text (titles, descriptions, key order, the dropdown Markdown) is schemars': never port
+  Pydantic's schema pipeline; adapt schemars' output with a `Transform`. A model a template or schema reaches is listed in `generate::models` (its field
   order); `generate::tests` fails on one it does not list. A Pydantic `Literal` is written in place
   (`literal_enum!`'s `inline_schema`), as Pydantic writes it: the template offers its first value.
 - `metadata.schema` is read through `revisions` (`select`, `read`), never matched by hand; a new
@@ -125,23 +112,17 @@ cargo nextest run -p opentide-schema                       # native, no Python
 cargo nextest run -p opentide-schema --features python     # + the Python class and trybuild
 cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
-cargo xtask vocab diff --against python                    # against the oracle, every corpus
-cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
-cargo nextest run -p opentide-schema platform              # the platform blocks, against the oracle's table too
-cargo xtask corpus faults --check --engine rust --only platforms
+cargo nextest run -p opentide-schema objects::table        # the object models' table and its snapshot
+cargo nextest run -p opentide-schema platform              # the platform blocks, their table too
 cargo nextest run -p opentide-schema revision migration    # the registry, dispatch and migrations (properties)
-cargo xtask schema diff --against python                   # JSON Schemas and every corpus, live
-cargo xtask corpus faults --check --engine rust --only objects
 cargo nextest run -p opentide-schema generate             # the generated templates, snippets, router
-cargo xtask codegen --check                                # against every golden `opentide generate`
+cargo xtask codegen --check                                # the committed generated artifacts
 ```
 
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),
 which must be 3.10 or later; put its `LIBDIR` on `LD_LIBRARY_PATH` if the loader cannot find it.
-The oracle tables are regenerated with the oracle's interpreter (`tests/golden/ORACLE`):
-`<oracle python> tests/oracle/yaml_table.py`, `from_node_table.py` and `objects_table.py`; after a change to what the
-loader reads, `UPDATE_YAML_TABLE=1 cargo test -p opentide-schema --test yaml_table` rewrites
-`YAML.md`. After an intended schema change, `cargo insta review`; after a compiler message change,
+A table's case is a row of `tests/tables/`; after an intended change to what the models, the
+loader or the configuration checks report, `cargo insta review`; after a compiler message change,
 `TRYBUILD=overwrite cargo test -p opentide-schema --features python --test ui`. The
 `.stderr` quotes PyO3's documentation URL with its exact version, so a PyO3 bump regenerates it in
 the same change.
