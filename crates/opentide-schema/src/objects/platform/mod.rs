@@ -472,6 +472,22 @@ pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
     found
 }
 
+/// The node a platform block's `yara.signature` names when it is written as
+/// a YAML alias (`yara_signature_alias`): its anchor's, which starts where
+/// the oracle places the finding. HarfangLab's own check
+/// ([`harfanglab::yara::aliased_signature`]), or the yara-1.0 one every other
+/// platform with a `YaraSignature` takes ([`bitdefender::checks::signature_aliases`]).
+#[must_use]
+pub fn aliased_yara_signature<'n>(rule: &'n Node, platform: &str) -> Option<&'n Node> {
+    if platform == "harfanglab" {
+        return harfanglab::yara::aliased_signature(rule);
+    }
+    bitdefender::checks::signature_aliases(rule)
+        .into_iter()
+        .find(|(aliased, _)| *aliased == platform)
+        .map(|(_, node)| node)
+}
+
 /// The named check called `name`.
 pub fn named_check(name: &str) -> Option<&'static NamedCheck> {
     NAMED_CHECKS.iter().find(|check| check.name == name)
