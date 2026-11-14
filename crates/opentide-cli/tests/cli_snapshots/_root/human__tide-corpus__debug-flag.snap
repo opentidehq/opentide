@@ -6,8 +6,8 @@ args: opentide --debug info
 exit: 0
 
 ━━━ stdout
-  ␛[1;2mversion␛[0m  0.28.1
-␛[1;2mplatforms␛[0m  ␛[1mMicrosoft Sentinel␛[0m               ␛[32menabled␛[0m␛[2m · deploy, validate, query␛[0m
+  ␛[1m␛[2mversion␛[0m  0.28.1
+␛[1m␛[2mplatforms␛[0m  ␛[1mMicrosoft Sentinel␛[0m               ␛[32menabled␛[0m␛[2m · deploy, validate, query␛[0m
            ␛[1mMicrosoft Defender for Endpoint␛[0m  ␛[32menabled␛[0m␛[2m · deploy, validate, query␛[0m
            ␛[1mSplunk Enterprise Security␛[0m       ␛[32menabled␛[0m␛[2m · deploy, validate, query␛[0m
            ␛[1mSentinelOne␛[0m                      ␛[32menabled␛[0m␛[2m · deploy, validate, query␛[0m
@@ -20,6 +20,6 @@ exit: 0
            ␛[2mGraylog␛[0m                          ␛[2mdisabled · deploy, validate, query␛[0m
            ␛[2mExabeam New-Scale SIEM␛[0m           ␛[2mdisabled · deploy, validate, query␛[0m
            ␛[2mGoogle Security Operations␛[0m       ␛[2mdisabled · deploy, validate, query␛[0m
-␛[1;32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
+␛[1m␛[32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
 
 ━━━ stderr · empty

@@ -6,12 +6,12 @@ args: opentide validate --fix
 exit: 0
 
 ━━━ stdout
-␛[1;32mfixed:␛[0m Objects/Detection Rules/rule-0001-sentinel-kql.yaml:14:11 "high" → "High"
+␛[1m␛[32mfixed:␛[0m Objects/Detection Rules/rule-0001-sentinel-kql.yaml:14:11 "high" → "High"
 
-␛[1;32m✓␛[0m Fixed 1 value in 1 file · 12 objects valid · 8 queries · <SECONDS>
+␛[1m␛[32m✓␛[0m Fixed 1 value in 1 file · 12 objects valid · 8 queries · <SECONDS>
 
 ━━━ stderr
-␛[?25l<LIVE>␛[1;36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
+␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
 ⏎ no final newline
 
 ━━━ ws/Objects/Detection Rules/rule-0001-sentinel-kql.yaml · modified 0644

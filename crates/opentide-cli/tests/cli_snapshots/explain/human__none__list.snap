@@ -905,6 +905,6 @@ exit: 0
 ␛[1myaral_unknown_udm_field                   ␛[0mThe field path is not in the Unified Data Model.
 ␛[1myaral_window_bound                        ␛[0m`window_start` or `window_end` is used in `events`, or in
                                           a rule or search with no `match` window.
-␛[1;32m✓␛[0m 466 diagnostic codes
+␛[1m␛[32m✓␛[0m 466 diagnostic codes
 
 ━━━ stderr · empty

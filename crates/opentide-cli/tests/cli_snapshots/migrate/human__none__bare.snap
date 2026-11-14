@@ -8,6 +8,6 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m Missing command.
-  ␛[1musage:␛[0m opentide migrate <COMMAND>
-  ␛[1;36mhelp:␛[0m run 'opentide migrate --help'
+␛[1m␛[31merror:␛[0m Missing command.
+  ␛[1musage:␛[0m opentide migrate [OPTIONS] <COMMAND>
+  ␛[1m␛[36mhelp:␛[0m run 'opentide migrate --help'
