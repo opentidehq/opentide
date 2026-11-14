@@ -188,9 +188,12 @@ impl HttpClient {
                 Err(TransportFailure::Connect { .. }) => Outcome::NotSent,
                 Err(_) => Outcome::Failed,
             };
-            let Some(delay) =
-                retry.wait(request.method(), attempt, retried, jiff::Timestamp::now())
-            else {
+            let Some(delay) = retry.wait_for(
+                request.is_idempotent(),
+                attempt,
+                retried,
+                jiff::Timestamp::now(),
+            ) else {
                 return outcome.map_err(|failure| self.error(failure, &url));
             };
             retried += 1;

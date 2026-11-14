@@ -198,6 +198,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **A tenant whose certificate is refused fails at once.** A certificate the tenant's TLS settings do not trust (self-signed, expired, issued for another host) was handshaken four times, with 3.5 seconds of waits, before the run reported it, as if it were a connection the network dropped. It is now reported on the first refusal; a connection refused, a DNS failure or a connect timeout is still retried ([Configuration → Retries](docs/usage/configuration.md#retries)).
 - **`generate extract` keeps a single string as one value, and Sentinel's files are named cleanly.** Three behaviours inherited from the Python CLI are gone:
   - a value given as one string where a list is expected, such as an Elastic rule's `index: "logs-*"` or a Sentinel rule's `tactics`, is extracted as a list of that string, where it became a list of its characters (`- l`, `- o`, …);
   - `generate extract sentinel` no longer writes an `output-<tenant>.json` debug dump of the listing into the working directory on every run;

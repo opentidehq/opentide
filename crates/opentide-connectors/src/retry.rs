@@ -6,16 +6,21 @@
 //! What is retried depends on whether sending the request twice is safe:
 //!
 //! - A connection that could not be made ([`Outcome::NotSent`]: DNS, refused,
-//!   TLS, the proxy's tunnel, the connect timeout) is retried for every
-//!   method: the request never left, so the tenant cannot have acted on it.
+//!   the proxy's tunnel, the connect timeout) is retried for every method:
+//!   the request never left, so the tenant cannot have acted on it. A TLS
+//!   handshake that refused the tenant's certificate is not: it would be
+//!   refused again ([`Outcome::Failed`]).
 //! - A transient answer (408, 429, 502, 503, 504) is retried only for an
-//!   idempotent method: `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE`. Every
-//!   connector's `PUT` replaces a resource it names by id (a rule, a
-//!   watchlist, a report, a policy) and every `DELETE` removes one, so a
-//!   second copy leaves the tenant as the first did. `POST` and `PATCH`
-//!   create rules, start searches and run JSON-RPC calls: the tenant may
-//!   have acted on a request it answered with a 502, so they are sent once,
-//!   and the answer is the caller's to read.
+//!   idempotent request: by default a `GET`, `HEAD`, `OPTIONS`, `PUT` or
+//!   `DELETE`. A `PUT` that replaces a resource it names by id (a watchlist,
+//!   a report) and a `DELETE` leave the tenant as the first copy did. A
+//!   connector marks a request that is not idempotent whatever its method
+//!   ([`Request::set_idempotent`](crate::transport::Request::set_idempotent)):
+//!   Sysdig's `PUT`s send back the tenant's object with the `version` it
+//!   held, so a second copy after the tenant applied the first names a stale
+//!   version. `POST` and `PATCH` create rules, start searches and run
+//!   JSON-RPC calls: the tenant may have acted on a request it answered with
+//!   a 502, so they are sent once, and the answer is the caller's to read.
 //! - Any other answer, a 500 included, is returned at once: a server error
 //!   that is not a gateway's or a rate limit's does not go away on its own.
 //! - A request sent and not answered within the tenant's timeout is not
@@ -61,7 +66,8 @@ pub enum Outcome<'a> {
     },
     /// No connection was made: the request was not sent.
     NotSent,
-    /// Any other failure, a read timeout included: never retried.
+    /// Any other failure, a read timeout or a refused certificate included:
+    /// never retried.
     Failed,
 }
 
@@ -117,6 +123,19 @@ impl RetryPolicy {
         retried: u32,
         now: jiff::Timestamp,
     ) -> Option<Duration> {
+        self.wait_for(Self::is_idempotent(method), outcome, retried, now)
+    }
+
+    /// [`wait`](Self::wait) for a request whose idempotency is known
+    /// ([`Request::is_idempotent`](crate::transport::Request::is_idempotent)):
+    /// a transient answer is retried only when *idempotent*.
+    pub fn wait_for(
+        &self,
+        idempotent: bool,
+        outcome: Outcome<'_>,
+        retried: u32,
+        now: jiff::Timestamp,
+    ) -> Option<Duration> {
         if retried >= self.max_retries {
             return None;
         }
@@ -126,7 +145,7 @@ impl RetryPolicy {
             Outcome::Answer {
                 status,
                 retry_after,
-            } if Self::is_idempotent(method) && Self::is_transient(status) => Some(
+            } if idempotent && Self::is_transient(status) => Some(
                 matches!(status.as_u16(), 429 | 503)
                     .then(|| retry_after.and_then(|value| parse_retry_after(value, now)))
                     .flatten()
@@ -170,6 +189,25 @@ mod tests {
             status: StatusCode::from_u16(status).unwrap(),
             retry_after: None,
         }
+    }
+
+    /// A request marked not idempotent is not retried after an answer,
+    /// whatever its method; one never sent still is.
+    #[test]
+    fn a_request_marked_not_idempotent_is_not_retried_after_an_answer() {
+        let policy = RetryPolicy::standard();
+        assert_eq!(policy.wait_for(false, answer(503), 0, now()), None);
+        assert_eq!(
+            policy.wait_for(false, Outcome::NotSent, 0, now()),
+            Some(Duration::from_millis(500))
+        );
+        let mut request = crate::transport::Request::new(
+            Method::PUT,
+            url::Url::parse("https://tenant.invalid/r/1").unwrap(),
+        );
+        assert!(request.is_idempotent());
+        request.set_idempotent(false);
+        assert!(!request.clone().is_idempotent());
     }
 
     #[test]
