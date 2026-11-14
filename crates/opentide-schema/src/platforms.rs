@@ -534,9 +534,25 @@ pub fn ids(order: Order) -> Vec<&'static str> {
 }
 
 /// The platforms whose deployer addresses the remote rule by a vendor id kept
-/// in the deployment state (`STATE_PLATFORMS`), by name.
+/// in the deployment state, in the order the oracle lists them
+/// (`states/deployment.py`'s `STATE_PLATFORMS`, which a
+/// `deployment_state_platform` message quotes): by name, but Graylog before
+/// Exabeam.
+const STATE_PLATFORMS: [&str; 8] = [
+    "bitdefender",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "graylog",
+    "exabeam",
+    "google_secops",
+    "sentinel_one",
+    "sysdig",
+];
+
+/// The platforms whose deployer addresses the remote rule by a vendor id kept
+/// in the deployment state, in [`STATE_PLATFORMS`]'s order.
 pub fn state_platforms() -> Vec<&'static str> {
-    ids_where(Order::Name, |platform| platform.external_id.is_stored())
+    STATE_PLATFORMS.to_vec()
 }
 
 /// Whether `id`'s external id is a canonical decimal integer.
@@ -683,18 +699,26 @@ mod tests {
 
     #[test]
     fn the_capability_lists_are_the_oracles() {
+        // 0.28.1's STATE_PLATFORMS, in its order (a message quotes it).
         assert_eq!(
             state_platforms(),
             [
                 "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
+                "graylog",
                 "exabeam",
                 "google_secops",
-                "graylog",
                 "sentinel_one",
                 "sysdig"
             ]
+        );
+        // Exactly the platforms whose external ids the state stores.
+        let mut sorted = state_platforms();
+        sorted.sort_unstable();
+        assert_eq!(
+            sorted,
+            ids_where(Order::Name, |p| p.external_id.is_stored())
         );
         assert_eq!(
             ids_where(Order::Name, |p| p.external_id == ExternalId::Int),
