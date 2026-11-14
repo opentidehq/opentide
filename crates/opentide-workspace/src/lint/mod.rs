@@ -417,7 +417,9 @@ struct Record {
     uuid: Option<String>,
     metadata: Option<std::sync::Arc<Node>>,
     /// The parsed mapping, for the recommended check: taken as soon as the
-    /// record is loaded, so lint never holds every file's tree at once.
+    /// record is loaded. A file lint parsed itself (the command line's
+    /// `lint`) is then freed; one read from the workspace's index stays
+    /// alive in the index.
     root: Option<std::sync::Arc<Node>>,
     schema: Option<String>,
     parse_error: Option<String>,
@@ -482,8 +484,9 @@ fn lint_with(
         .filter(|path| every || in_scope(path))
         .map(|path| {
             let mut record = load_record(fs, &target, path, parses.get(path));
-            // The tree is read here and dropped: kept on every record, the
-            // trees of the whole workspace stayed alive to the end of the run.
+            // The tree is read here and dropped: kept on every record, every
+            // tree lint parsed itself stayed alive to the end of the run (one
+            // from the workspace's index is the index's to free).
             if let Some(root) = record.root.take()
                 && recommended
                 && in_scope(&record.path)

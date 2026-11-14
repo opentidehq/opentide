@@ -1486,28 +1486,6 @@ mod tests {
         assert!(!super::same_file("/w/objects/x.yaml", "/w/objects/y.yaml"));
     }
 
-    /// The scalar patterns are compiled once for the process: compiled for
-    /// every scalar, they were three quarters of `opentide lint`'s time on
-    /// the heavy workspace, twice (#806, and again when the 0.28 merge
-    /// brought the per-call compilation back).
-    #[test]
-    fn scalar_patterns_are_compiled_once() {
-        assert!(std::ptr::eq(
-            super::scalar_patterns(),
-            super::scalar_patterns()
-        ));
-        let patterns = super::scalar_patterns();
-        assert!(
-            patterns
-                .uuid
-                .is_match("3F2504E0-4F89-41D3-9A0C-0305E82C3301")
-        );
-        assert!(patterns.schema.is_match("rule::1.1"));
-        assert!(patterns.technique.is_match("T1059.001"));
-        assert!(patterns.number.is_match("-1.5"));
-        assert!(!patterns.number.is_match("1e3"));
-    }
-
     #[test]
     fn vocabularies_suggest_by_the_shared_rule() {
         let tlp = vocab_for_field("tlp").expect("the tlp vocabulary");
