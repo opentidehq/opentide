@@ -486,19 +486,19 @@ fn a_deletion_archives_when_google_refuses_the_delete() {
         deleting.delete = true;
         // Refused (a 4xx but 401/403/404/429): disabled and archived instead,
         // the binding kept.
-        let server = server().await;
+        let api = server().await;
         let refused = google_error(400, "FAILED_PRECONDITION", "rule has detections");
-        serve(&server, on("DELETE", &rule_path()), refused, 1).await;
+        serve(&api, on("DELETE", &rule_path()), refused, 1).await;
         serve(
-            &server,
+            &api,
             on("GET", &deployment()),
             answer(200, json!({"enabled": true})),
             ..,
         )
         .await;
-        serve(&server, patch(&deployment(), "enabled,alerting"), ok(), 1).await;
-        serve(&server, patch(&deployment(), "archived"), ok(), 1).await;
-        let outcome = deploy(&server, &deleting).await;
+        serve(&api, patch(&deployment(), "enabled,alerting"), ok(), 1).await;
+        serve(&api, patch(&deployment(), "archived"), ok(), 1).await;
+        let outcome = deploy(&api, &deleting).await;
         assert_eq!(outcome.state, StateChange::Keep);
         assert_eq!(codes(&outcome).1, ["google_secops_delete_refused"]);
         assert!(
@@ -506,7 +506,7 @@ fn a_deletion_archives_when_google_refuses_the_delete() {
                 .detail
                 .contains("HTTP 400 FAILED_PRECONDITION: rule has")
         );
-        server.verify().await;
+        api.verify().await;
 
         // Deleted or already gone: forgotten. A 5xx: the rule fails, its id kept.
         for (status, state, failures) in [
@@ -514,20 +514,20 @@ fn a_deletion_archives_when_google_refuses_the_delete() {
             (404, StateChange::Forget, vec![]),
             (500, StateChange::Keep, vec!["google_secops_request_failed"]),
         ] {
-            let server = self::server().await;
+            let api = server().await;
             serve(
-                &server,
+                &api,
                 on("DELETE", &rule_path()),
                 google_error(status, "X", "m"),
                 1,
             )
             .await;
-            let outcome = deploy(&server, &deleting).await;
+            let outcome = deploy(&api, &deleting).await;
             assert_eq!(
                 (outcome.state.clone(), codes(&outcome).0),
                 (state, failures)
             );
-            server.verify().await;
+            api.verify().await;
         }
 
         // Archiving a rule that is gone forgets it; one already archived is
@@ -537,13 +537,13 @@ fn a_deletion_archives_when_google_refuses_the_delete() {
             (google_error(404, "NOT_FOUND", "gone"), StateChange::Forget),
             (answer(200, json!({"archived": true})), StateChange::Keep),
         ] {
-            let server = self::server().await;
-            serve(&server, on("GET", &deployment()), reply, 1).await;
-            serve(&server, on("PATCH", &deployment()), ok(), 0).await;
-            let outcome = deploy(&server, &archiving).await;
+            let api = server().await;
+            serve(&api, on("GET", &deployment()), reply, 1).await;
+            serve(&api, on("PATCH", &deployment()), ok(), 0).await;
+            let outcome = deploy(&api, &archiving).await;
             assert_eq!(outcome.state, state);
             assert!(outcome.failures.is_empty());
-            server.verify().await;
+            api.verify().await;
         }
     });
 }
@@ -551,12 +551,12 @@ fn a_deletion_archives_when_google_refuses_the_delete() {
 #[test]
 fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
     runtime().block_on(async {
-        let server = server().await;
+        let api = server().await;
         let error = json!({"message": "unknown function", "severity": "ERROR"});
         let diagnostics = answer(200, json!({"compilationDiagnostics": [error]}));
-        serve(&server, on("POST", VERIFY), diagnostics, ..).await;
+        serve(&api, on("POST", VERIFY), diagnostics, ..).await;
         let refused = google_error(400, "INVALID_ARGUMENT", "bad query");
-        serve(&server, on("GET", ":udmSearch"), refused, 1).await;
+        serve(&api, on("GET", ":udmSearch"), refused, 1).await;
         let window = TimeWindow::check(jiff::Timestamp::from_second(1_800_000_000).unwrap());
         let request = QueryRequest::new(TEXT, "yaral", window);
         let create = DeployRequest {
@@ -565,7 +565,7 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             body: serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
         };
         let settings = HttpSettings::default();
-        let [check, search, deploy] = with_tenant(&server, "", &settings, async |cx, connector| {
+        let [check, search, deploy] = with_tenant(&api, "", &settings, async |cx, connector| {
             [
                 connector.validate(cx, &request).await.unwrap_err(),
                 connector.run(cx, &request).await.unwrap_err(),
@@ -573,9 +573,12 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             ]
         })
         .await;
-        // Each is a refusal: the tenant's words in the detail, the token nowhere.
+        // Each is a refusal: the tenant's words in the detail, no secret anywhere.
         let refusal = |error: &ConnectorError| {
-            assert!(!format!("{error:?}").contains(TOKEN));
+            let shown = format!("{error} {error:?}");
+            for secret in [TOKEN, CLIENT_SECRET, REFRESH_TOKEN] {
+                assert!(!shown.contains(secret), "{secret} leaked: {shown}");
+            }
             match error {
                 ConnectorError::Refused {
                     message, detail, ..
@@ -600,25 +603,25 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             message.starts_with("google_secops_verify_failed: "),
             "{message}"
         );
-        server.verify().await;
+        api.verify().await;
     });
 }
 
 #[test]
 fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
     runtime().block_on(async {
-        let server = server().await;
-        serve(&server, on("POST", VERIFY), verified(), 1).await;
+        let api = server().await;
+        serve(&api, on("POST", VERIFY), verified(), 1).await;
         let created = answer(200, json!({"name": format!("{RESOURCE}/rules/{ID}")}));
-        serve(&server, on("POST", "/rules"), created, 1).await;
+        serve(&api, on("POST", "/rules"), created, 1).await;
         serve(
-            &server,
+            &api,
             on("GET", &deployment()),
             google_error(404, "NOT_FOUND", "gone"),
             1,
         )
         .await;
-        serve(&server, on("PATCH", &deployment()), ok(), 1).await;
+        serve(&api, on("PATCH", &deployment()), ok(), 1).await;
         let request = |operation, rule_id: &str| DeployRequest {
             rule_id: rule_id.to_owned(),
             operation,
@@ -626,7 +629,7 @@ fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
         };
         let settings = HttpSettings::default();
         let scoped = "data_access_scope = \"soc\"";
-        with_tenant(&server, scoped, &settings, async |cx, connector| {
+        with_tenant(&api, scoped, &settings, async |cx, connector| {
             let created = connector
                 .deploy(cx, &request(Operation::Create, ""))
                 .await
@@ -644,7 +647,16 @@ fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
             assert_eq!(scope, Some(format!("{RESOURCE}/dataAccessScopes/soc")));
         })
         .await;
-        server.verify().await;
+        api.verify().await;
+        // The create carried the tenant's scope, not only the instance.
+        let received = api.received_requests().await.unwrap();
+        let bodies: Vec<Value> = received
+            .iter()
+            .filter(|r| r.method.as_str() == "POST" && r.url.path().ends_with("/rules"))
+            .map(|r| serde_json::from_slice(&r.body).unwrap())
+            .collect();
+        let expected = json!({"text": TEXT, "scope": format!("{RESOURCE}/dataAccessScopes/soc")});
+        assert_eq!(bodies, [expected]);
     });
 }
 

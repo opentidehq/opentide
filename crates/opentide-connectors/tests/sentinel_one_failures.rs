@@ -24,11 +24,11 @@ fn wait<F: Future>(work: F) -> F::Output {
 
 const TOKEN: &str = "s1-token-never-in-a-message";
 
-/// Runs `body` with a tenant whose console is `server`.
-fn with_tenant<T>(server: &MockServer, body: impl FnOnce(TenantContext<'_>) -> T) -> T {
+/// Runs `body` with a tenant whose console is `api`.
+fn with_tenant<T>(api: &MockServer, body: impl FnOnce(TenantContext<'_>) -> T) -> T {
     let setup: toml::Table = toml::from_str(&format!(
         "url = \"{}\"\napi_token = \"$S1_TOKEN\"\naccount_id = 4242\nsite_id = 0\n",
-        server.uri()
+        api.uri()
     ))
     .unwrap();
     let env = Environment::from_pairs([("S1_TOKEN", TOKEN)]);
@@ -54,18 +54,18 @@ fn with_tenant<T>(server: &MockServer, body: impl FnOnce(TenantContext<'_>) -> T
 /// A server that answers every `verb` to `route` with `reply`.
 fn server(verb: &str, route: &str, reply: ResponseTemplate) -> MockServer {
     wait(async {
-        let server = MockServer::start().await;
+        let api = MockServer::start().await;
         Mock::given(method(verb))
             .and(path(route))
             .respond_with(reply)
-            .mount(&server)
+            .mount(&api)
             .await;
-        server
+        api
     })
 }
 
 fn deploy(
-    server: &MockServer,
+    api: &MockServer,
     operation: Operation,
     rule_id: &str,
     body: &[u8],
@@ -75,8 +75,7 @@ fn deploy(
         operation,
         body: body.to_vec(),
     };
-    with_tenant(server, |cx| wait(SentinelOne.deploy(cx, &request)))
-        .map(|outcome| outcome.remote_id)
+    with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request))).map(|outcome| outcome.remote_id)
 }
 
 fn reason(error: ConnectorError) -> String {
@@ -116,53 +115,56 @@ fn the_deployer_reports_each_refusal_in_the_consoles_words() {
             "SentinelOne answered without the rule's id",
         ),
     ] {
-        let server = server(
+        let api = server(
             "POST",
             RULES_PATH,
             ResponseTemplate::new(status).set_body_json(body),
         );
-        let error = deploy(&server, Operation::Create, "", rule).unwrap_err();
+        let error = deploy(&api, Operation::Create, "", rule).unwrap_err();
         let reason = reason(error);
         assert!(reason.starts_with(expected), "{status}: {reason}");
     }
     // A rule that is gone says how to clear its deployment state.
-    let server = server(
+    let api = server(
         "PUT",
         &format!("{RULES_PATH}/77"),
         ResponseTemplate::new(404),
     );
-    let error = deploy(&server, Operation::Update, "77", rule).unwrap_err();
+    let error = deploy(&api, Operation::Update, "77", rule).unwrap_err();
     assert!(reason(error).contains("remove its sentinel_one entry"));
 }
 
 #[test]
 fn the_deployer_creates_replaces_and_deletes_by_the_recorded_id() {
     let created = ResponseTemplate::new(200).set_body_json(json!({"data": {"id": " 9001 "}}));
-    let server = server("POST", RULES_PATH, created);
+    let api = server("POST", RULES_PATH, created);
     assert_eq!(
-        deploy(&server, Operation::Create, "", b"{}")
+        deploy(&api, Operation::Create, "", b"{}")
             .unwrap()
             .as_deref(),
         Some("9001")
     );
     let replaced = ResponseTemplate::new(200).set_body_json(json!({"data": {"id": 9001}}));
-    let server = self::server("PUT", &format!("{RULES_PATH}/9001"), replaced);
+    let api = server("PUT", &format!("{RULES_PATH}/9001"), replaced);
     assert_eq!(
-        deploy(&server, Operation::Disable, "9001", b"{}")
+        deploy(&api, Operation::Disable, "9001", b"{}")
             .unwrap()
             .as_deref(),
         Some("9001")
     );
-    let server = self::server("DELETE", RULES_PATH, ResponseTemplate::new(200));
-    assert_eq!(
-        deploy(&server, Operation::Delete, "9001", b"").unwrap(),
-        None
-    );
+    let api = server("DELETE", RULES_PATH, ResponseTemplate::new(200));
+    assert_eq!(deploy(&api, Operation::Delete, "9001", b"").unwrap(), None);
+    let deletes = wait(api.received_requests()).unwrap();
+    let [delete] = deletes.as_slice() else {
+        panic!("{deletes:?}")
+    };
+    let filter: serde_json::Value = serde_json::from_slice(&delete.body).unwrap();
+    assert_eq!(filter["filter"]["ids"], json!([9001]), "{filter}");
     // Nothing is sent for an id that is not a number or a body that is not JSON.
-    let server = self::server("DELETE", RULES_PATH, ResponseTemplate::new(200));
-    let error = deploy(&server, Operation::Delete, "ru-1", b"").unwrap_err();
+    let api = server("DELETE", RULES_PATH, ResponseTemplate::new(200));
+    let error = deploy(&api, Operation::Delete, "ru-1", b"").unwrap_err();
     assert_eq!(reason(error), "deployment id \"ru-1\" is not a number");
-    let error = deploy(&server, Operation::Create, "", b"{not json").unwrap_err();
+    let error = deploy(&api, Operation::Create, "", b"{not json").unwrap_err();
     let ConnectorError::Setup { message, .. } = &error else {
         panic!("{error:?}")
     };
@@ -170,7 +172,7 @@ fn the_deployer_creates_replaces_and_deletes_by_the_recorded_id() {
         message.starts_with("the compiled rule is not JSON"),
         "{message}"
     );
-    assert!(wait(server.received_requests()).unwrap().is_empty());
+    assert!(wait(api.received_requests()).unwrap().is_empty());
 }
 
 #[test]
@@ -178,8 +180,8 @@ fn a_query_check_the_console_cannot_run_is_refused_or_unforeseen() {
     let now = jiff::Timestamp::from_second(1_800_000_000).unwrap();
     let refused = ResponseTemplate::new(400)
         .set_body_json(json!({"errors": [{"detail": "unknown field src.x"}]}));
-    let server = server("POST", QUERY_PATH, refused);
-    let outcome = with_tenant(&server, |cx| {
+    let api = server("POST", QUERY_PATH, refused);
+    let outcome = with_tenant(&api, |cx| {
         wait(SentinelOne.validate_query(cx, "src.x = 1", now))
     });
     assert_eq!(
@@ -187,12 +189,12 @@ fn a_query_check_the_console_cannot_run_is_refused_or_unforeseen() {
         QueryValidation::Refused("unknown field src.x".into())
     );
 
-    let server = self::server(
+    let api = server(
         "POST",
         QUERY_PATH,
         ResponseTemplate::new(500).set_body_string("down"),
     );
-    let outcome = with_tenant(&server, |cx| {
+    let outcome = with_tenant(&api, |cx| {
         wait(SentinelOne.validate_query(cx, "src.x = 1", now))
     });
     let Err(SentinelOneError::Unforeseen { status, context }) = outcome else {
@@ -215,8 +217,8 @@ fn a_powerquery_answered_without_json_or_without_an_id_is_refused() {
             "SentinelOne returned no query id on s1",
         ),
     ] {
-        let server = server("POST", QUERY_PATH, reply);
-        let error = with_tenant(&server, |cx| wait(SentinelOne.run(cx, &request))).unwrap_err();
+        let api = server("POST", QUERY_PATH, reply);
+        let error = with_tenant(&api, |cx| wait(SentinelOne.run(cx, &request))).unwrap_err();
         let ConnectorError::Refused { message, .. } = &error else {
             panic!("{error:?}")
         };
