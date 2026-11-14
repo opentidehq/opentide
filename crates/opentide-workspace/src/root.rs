@@ -135,18 +135,9 @@ pub fn resolve(fs: &dyn FileSystem, options: &RootOptions) -> Roots {
             tide_workspace: true,
         };
     }
-    let fixture = repo.join("tests/fixtures/generation/tide_workspace");
-    let workspace = if fs.is_dir(&repo.join("objects")) {
-        fs.resolve(&repo)
-    } else if fs.is_dir(&fixture) {
-        // The opentide checkout itself: the generation fixture, as in Python.
-        fs.resolve(&fixture)
-    } else {
-        fs.resolve(&repo)
-    };
     Roots {
+        workspace: fs.resolve(&repo),
         repo,
-        workspace,
         tide_workspace: false,
     }
 }
@@ -230,17 +221,22 @@ mod tests {
         assert!(roots.tide_workspace);
     }
 
+    /// The workspace is the repository root, whatever it holds: a repository
+    /// with `tests/fixtures/generation/tide_workspace` (opentide's own
+    /// checkout, or any that happens to have that path) does not make the
+    /// fixture its workspace, as Python did.
     #[test]
-    fn a_repo_without_objects_falls_back_to_the_generation_fixture() {
+    fn a_generation_fixture_in_the_repo_is_not_the_workspace() {
         let fs = MemoryFs::new();
         fs.create_dir("/checkout/.git");
-        fs.create_dir("/checkout/tests/fixtures/generation/tide_workspace");
+        fs.create_dir("/checkout/src");
+        fs.create_dir("/checkout/tests/fixtures/generation/tide_workspace/objects");
         let roots = resolve(&fs, &options("/checkout/src"));
         assert_eq!(roots.repo, PathBuf::from("/checkout"));
-        assert_eq!(
-            roots.workspace,
-            PathBuf::from("/checkout/tests/fixtures/generation/tide_workspace")
-        );
+        assert_eq!(roots.workspace, PathBuf::from("/checkout"));
+        let mut opts = options("/elsewhere");
+        opts.repo = Some(PathBuf::from("/checkout"));
+        assert_eq!(resolve(&fs, &opts).workspace, PathBuf::from("/checkout"));
         let fs = MemoryFs::new();
         fs.create_dir("/plain/.git");
         assert_eq!(
