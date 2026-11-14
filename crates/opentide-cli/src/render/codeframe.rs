@@ -259,68 +259,6 @@ fn notes(diagnostic: &Diagnostic) -> Vec<(String, String)> {
     notes
 }
 
-/// `text` in lines of at most `width` cells, each after the first led by `indent`
-/// (a character wider than a whole row is the one exception).
-///
-/// Breaks at a space, or after a `/` inside a word too long for the line (a
-/// path), and mid-word only when neither is there. Styles carry over.
-pub fn wrap_text(text: &Text, width: usize, indent: &Text) -> Vec<Text> {
-    let plain: Vec<char> = text.as_plain().chars().collect();
-    let cells = |start: usize| -> usize {
-        plain[start.min(plain.len())..]
-            .iter()
-            .copied()
-            .map(char_width)
-            .sum()
-    };
-    let mut lines = Vec::new();
-    let (mut start, mut room) = (0usize, width);
-    while room > 0 && cells(start) > room {
-        // The characters from `start` that fit in `room` cells (one at least,
-        // so a character wider than the row still moves on).
-        let mut used = 0;
-        let fit = plain[start..]
-            .iter()
-            .take_while(|ch| {
-                used += char_width(**ch);
-                used <= room
-            })
-            .count()
-            .max(1);
-        // A space just past them still ends a row that fits.
-        let window = &plain[start..(start + fit + 1).min(plain.len())];
-        let space = window.iter().rposition(|ch| *ch == ' ');
-        let slash = window[..fit.min(window.len())]
-            .iter()
-            .rposition(|ch| *ch == '/');
-        let (end, resume) = match (space, slash) {
-            (Some(space), _) if space > 0 => (start + space, start + space + 1),
-            (_, Some(slash)) if slash > 0 => (start + slash + 1, start + slash + 1),
-            _ => (start + fit, start + fit),
-        };
-        lines.push(text.slice(start, end));
-        start = resume;
-        room = width.saturating_sub(indent.cell_len());
-    }
-    // Only a character wider than a row can be the whole remainder.
-    if start < plain.len() || lines.is_empty() || plain.get(start.saturating_sub(1)) == Some(&' ') {
-        lines.push(text.slice(start, plain.len()));
-    }
-    lines
-        .into_iter()
-        .enumerate()
-        .map(|(index, line)| {
-            if index == 0 {
-                line
-            } else {
-                let mut led = indent.clone();
-                led.append_text(&line);
-                led
-            }
-        })
-        .collect()
-}
-
 /// `location` in at most `room` cells, its middle folders replaced by `…`.
 ///
 /// Keeps the first folder, the file name and the `:line:col`; cuts the middle
@@ -505,7 +443,7 @@ impl Frames {
             row.append_text(&part);
             match self.columns {
                 Some(columns) if columns > 0 => {
-                    lines.extend(wrap_text(&row, columns, &Text::plain("  ")));
+                    lines.extend(row.wrap(columns, &Text::plain("  ")));
                 }
                 _ => lines.push(row),
             }
@@ -690,7 +628,7 @@ impl Frames {
                     continued
                 };
                 match self.columns.filter(|columns| *columns > 0) {
-                    Some(columns) => lines.extend(wrap_text(&part, columns, &indent)),
+                    Some(columns) => lines.extend(part.wrap(columns, &indent)),
                     None => lines.push(part),
                 }
             }
@@ -880,12 +818,12 @@ mod tests {
         );
         assert_eq!(shorten_path("abcdefghijkl", 7), "ab…ijkl");
         assert_eq!(shorten_path("short", 10), "short");
-        let lines = wrap_text(&Text::plain("aaa bbb/ccc/ddd"), 6, &Text::plain("  "));
+        let lines = &Text::plain("aaa bbb/ccc/ddd").wrap(6, &Text::plain("  "));
         let plain: Vec<String> = lines.iter().map(Text::as_plain).collect();
         assert_eq!(plain, ["aaa", "  bbb/", "  ccc/", "  ddd"]);
-        let lines = wrap_text(&Text::plain("abcdefghij"), 4, &Text::plain(" "));
+        let lines = &Text::plain("abcdefghij").wrap(4, &Text::plain(" "));
         let plain: Vec<String> = lines.iter().map(Text::as_plain).collect();
-        assert_eq!(plain, ["abcd", " efg", " hij"]);
+        assert_eq!(plain, ["abc", " def", " ghi", " j"]);
     }
 
     #[test]
@@ -1025,18 +963,14 @@ mod tests {
                 "{line:?} is wider than {columns}:\n{out}"
             );
         }
-        let lines = wrap_text(
-            &Text::plain("名前名前名前名前名前 x"),
-            10,
-            &Text::plain("  "),
-        );
+        let lines = Text::plain("名前名前名前名前名前 x").wrap(10, &Text::plain("  "));
         let plain: Vec<String> = lines.iter().map(Text::as_plain).collect();
-        assert_eq!(plain, ["名前名前名", "  前名前名", "  前 x"]);
+        assert_eq!(plain, ["名前名前", "  名前名前", "  名前 x"]);
         let shortened = shorten_path("名前名前名前名前名前名前.yaml:1:2", 9);
         assert!(cell_len(&shortened) <= 9, "{shortened}");
         assert_eq!(shortened, "名…ml:1:2");
         // A character wider than the row still moves on.
-        let lines = wrap_text(&Text::plain("名名"), 1, &Text::default());
+        let lines = &Text::plain("名名").wrap(1, &Text::default());
         assert_eq!(lines.len(), 2);
     }
 

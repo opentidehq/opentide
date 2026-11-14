@@ -8,11 +8,20 @@
 //! columns.
 
 use anstyle::Style;
-use unicode_width::UnicodeWidthChar;
+use textwrap::WordSeparator;
+use textwrap::core::Word;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// The cells `text` takes in a terminal: a wide character two, a combining one none.
+/// The cells `text` takes in a terminal, as unicode-width measures a string
+/// (an emoji sequence joined by ZWJ, or with VS16, as one glyph), each
+/// character [`shown`] as a [`Text`] holds it; tabs and line breaks take none.
 pub fn cell_len(text: &str) -> usize {
-    text.chars().map(char_width).sum()
+    let shown: String = text
+        .chars()
+        .filter_map(shown)
+        .filter(|ch| !matches!(ch, '\t' | '\n'))
+        .collect();
+    shown.width()
 }
 
 /// The cells one character takes as a [`Text`] shows it: a control character
@@ -53,6 +62,29 @@ pub fn layer(base: Style, top: Style) -> Style {
     base.effects(base.get_effects() | top.get_effects())
         .fg_color(top.get_fg_color().or(base.get_fg_color()))
         .bg_color(top.get_bg_color().or(base.get_bg_color()))
+}
+
+/// A line's words for [`Text::wrap`]: each run up to a space (the spaces its
+/// whitespace), cut again after a `/`, so a long path breaks between folders.
+fn words(line: &str) -> Box<dyn Iterator<Item = Word<'_>> + '_> {
+    let mut start = 0;
+    let mut found = Vec::new();
+    for (at, ch) in line.char_indices() {
+        let next = at + ch.len_utf8();
+        if matches!(ch, ' ' | '/')
+            && line[next..]
+                .chars()
+                .next()
+                .is_some_and(|after| after != ' ')
+        {
+            found.push(Word::from(&line[start..next]));
+            start = next;
+        }
+    }
+    if start < line.len() {
+        found.push(Word::from(&line[start..]));
+    }
+    Box::new(found.into_iter())
 }
 
 /// A styled span: characters `start..end` of a [`Text`].
@@ -109,7 +141,42 @@ impl Text {
 
     /// The cells it takes in a terminal.
     pub fn cell_len(&self) -> usize {
-        self.chars.iter().copied().map(char_width).sum()
+        cell_len(&self.as_plain())
+    }
+
+    /// The text in rows of at most `width` cells (textwrap's first fit), each
+    /// row after the first led by `indent`: broken at a space, or after a `/`
+    /// (a path), and a word wider than a row cut into pieces; styles carry over.
+    pub fn wrap(&self, width: usize, indent: &Text) -> Vec<Text> {
+        if width == 0 || self.cell_len() <= width {
+            return vec![self.clone()];
+        }
+        let plain = self.as_plain();
+        let rest = width.saturating_sub(indent.cell_len()).max(1);
+        let words =
+            textwrap::core::break_words(WordSeparator::Custom(words).find_words(&plain), rest);
+        #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
+        let widths = [width as f64, rest as f64];
+        let mut start = 0;
+        let mut rows = Vec::new();
+        for (index, row) in textwrap::wrap_algorithms::wrap_first_fit(&words, &widths)
+            .iter()
+            .enumerate()
+        {
+            let length =
+                |word: &Word<'_>| word.word.chars().count() + word.whitespace.chars().count();
+            let taken: usize = row.iter().map(length).sum();
+            let trailing = row.last().map_or(0, |word| word.whitespace.chars().count());
+            let mut line = if index == 0 {
+                Text::default()
+            } else {
+                indent.clone()
+            };
+            line.append_text(&self.slice(start, start + taken - trailing));
+            rows.push(line);
+            start += taken;
+        }
+        rows
     }
 
     /// Adds `text` in `style` (none when `style` is plain) at the end.
@@ -466,6 +533,10 @@ mod tests {
         text.rstrip();
         assert_eq!(text.render(Colour::Full, false), "\u{1b}[31mab\u{1b}[0m");
         assert_eq!(cell_len("名前x"), 5);
+        // A ZWJ sequence and a VS16 emoji are one glyph each, two cells wide.
+        assert_eq!(cell_len("\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"), 2);
+        assert_eq!(cell_len("\u{2764}\u{fe0f}"), 2);
+        assert_eq!(Text::plain("a\u{1f468}\u{200d}\u{1f469}").cell_len(), 3);
         assert_eq!(Text::plain("abc").slice(1, 9).as_plain(), "bc");
         assert!(Text::default().is_empty());
         assert_eq!(Text::plain("ab").len(), 2);
