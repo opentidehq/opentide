@@ -1576,14 +1576,14 @@ mod tests {
         let report = phase_failed(
             "generate exports objects",
             "exports",
-            "KeyError: 'version' while rendering x",
+            "missing key `version` while rendering x",
             vec![("target".into(), Json::str("objects"))],
             vec![],
         );
         assert_eq!(report.outcome.exit_code, 1);
         assert_eq!(
             report.outcome.message,
-            "exports: KeyError: 'version' while rendering x"
+            "exports: missing key `version` while rendering x"
         );
         assert_eq!(report.outcome.data[0].0, "phase");
         assert_eq!(report.outcome.data[1].0, "target");
