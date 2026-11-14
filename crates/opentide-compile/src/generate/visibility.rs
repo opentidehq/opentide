@@ -447,7 +447,6 @@ fn opt(text: Option<&str>) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generate::json_text::line;
     use std::path::PathBuf;
 
     fn index_of(objects: &[(&str, &str, &str)]) -> Index {
@@ -515,26 +514,26 @@ mod tests {
         };
         let report = report(&index, &inputs);
         assert_eq!(
-            line(report.get("logsources").unwrap()),
-            "[{\"name\": \"SecurityEvent\", \"system\": \"sentinel\", \"description\": \"d\", \"tenants\": [\"a\"], \
-             \"columns\": [{\"name\": \"Account\", \"type\": \"string\", \"description\": \"\"}], \"read_by\": [\"r3\"], \
-             \"objectives\": [\"o1\"], \"signals\": [{\"objective\": \"o1\", \"uuid\": \"s1\", \"name\": \"Logons\"}], \
-             \"signal_rules\": [\"r1\", \"r2\"], \"rules\": [\"r3\", \"r1\", \"r2\"]}, \
-             {\"name\": \"Other\", \"system\": \"splunk\", \"description\": \"\", \"tenants\": [], \"columns\": [], \
-             \"read_by\": [], \"objectives\": [], \"signals\": [], \"signal_rules\": [], \"rules\": []}]"
+            report.get("logsources").unwrap().to_compact(),
+            "[{\"name\":\"SecurityEvent\",\"system\":\"sentinel\",\"description\":\"d\",\"tenants\":[\"a\"],\
+             \"columns\":[{\"name\":\"Account\",\"type\":\"string\",\"description\":\"\"}],\"read_by\":[\"r3\"],\
+             \"objectives\":[\"o1\"],\"signals\":[{\"objective\":\"o1\",\"uuid\":\"s1\",\"name\":\"Logons\"}],\
+             \"signal_rules\":[\"r1\",\"r2\"],\"rules\":[\"r3\",\"r1\",\"r2\"]},\
+             {\"name\":\"Other\",\"system\":\"splunk\",\"description\":\"\",\"tenants\":[],\"columns\":[],\
+             \"read_by\":[],\"objectives\":[],\"signals\":[],\"signal_rules\":[],\"rules\":[]}]"
         );
         assert_eq!(
-            line(report.get("undeclared").unwrap()),
-            "[{\"system\": \"elastic\", \"name\": \"logs-*\", \"rules\": [\"r4\"], \"system_declares\": false}, \
-             {\"system\": \"sentinel\", \"name\": \"DeviceEvents\", \"rules\": [\"r3\", \"r5\"], \"system_declares\": true}]"
+            report.get("undeclared").unwrap().to_compact(),
+            "[{\"system\":\"elastic\",\"name\":\"logs-*\",\"rules\":[\"r4\"],\"system_declares\":false},\
+             {\"system\":\"sentinel\",\"name\":\"DeviceEvents\",\"rules\":[\"r3\",\"r5\"],\"system_declares\":true}]"
         );
         assert_eq!(
-            line(report.get("unknown_signal_sources").unwrap()),
-            "[{\"name\": \"Missing\", \"objectives\": [\"o1\"]}]"
+            report.get("unknown_signal_sources").unwrap().to_compact(),
+            "[{\"name\":\"Missing\",\"objectives\":[\"o1\"]}]"
         );
         assert_eq!(
-            line(report.get("systems").unwrap()),
-            "{\"sentinel\": {\"logsources\": 1, \"with_columns\": 1, \"used\": 1}, \"splunk\": {\"logsources\": 1, \"with_columns\": 0, \"used\": 0}}"
+            report.get("systems").unwrap().to_compact(),
+            "{\"sentinel\":{\"logsources\":1,\"with_columns\":1,\"used\":1},\"splunk\":{\"logsources\":1,\"with_columns\":0,\"used\":0}}"
         );
         assert_eq!(report.get("present"), Some(&Json::Bool(true)));
     }
@@ -558,15 +557,15 @@ mod tests {
         };
         let report = report(&index, &inputs);
         assert_eq!(
-            line(report.get("systems").unwrap()),
-            "{\"sentinel\": {\"logsources\": 1, \"with_columns\": 0, \"used\": 1}}"
+            report.get("systems").unwrap().to_compact(),
+            "{\"sentinel\":{\"logsources\":1,\"with_columns\":0,\"used\":1}}"
         );
         assert_eq!(
-            line(report.get("logsources").unwrap()),
-            "[{\"name\": \"Syslog\", \"system\": \"sentinel\", \"description\": \"d\", \"tenants\": [], \
-             \"columns\": [], \"read_by\": [], \"objectives\": [\"o1\"], \
-             \"signals\": [{\"objective\": \"o1\", \"uuid\": \"s1\", \"name\": \"Logons\"}], \
-             \"signal_rules\": [], \"rules\": []}]"
+            report.get("logsources").unwrap().to_compact(),
+            "[{\"name\":\"Syslog\",\"system\":\"sentinel\",\"description\":\"d\",\"tenants\":[],\
+             \"columns\":[],\"read_by\":[],\"objectives\":[\"o1\"],\
+             \"signals\":[{\"objective\":\"o1\",\"uuid\":\"s1\",\"name\":\"Logons\"}],\
+             \"signal_rules\":[],\"rules\":[]}]"
         );
     }
 

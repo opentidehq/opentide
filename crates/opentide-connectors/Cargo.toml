@@ -71,5 +71,7 @@ wiremock.workspace = true
 tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 tokio-rustls.workspace = true
 tempfile = "3"
+# Entra's sign-in: what it logs is collected, to show the secret is not in it.
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 # Google SecOps: the test key's public half, to verify the assertion's signature.
 ring = "0.17"
