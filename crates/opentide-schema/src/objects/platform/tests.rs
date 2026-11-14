@@ -128,7 +128,7 @@ fn every_query_text_refuses_a_blank_query() {
                    "scheduling": "NRT"}),
         ),
     ] {
-        for blank in ["", "   ", "\n\t", "\u{1c}", "\u{a0}"] {
+        for blank in ["", "   ", "\n\t", "\r\n", "\u{a0}"] {
             let found = errors(platform, &merged(&block, &json!({"query": blank})));
             assert_eq!(
                 found, "query: Value error, query must not be empty",

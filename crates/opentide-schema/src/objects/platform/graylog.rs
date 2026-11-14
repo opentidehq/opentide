@@ -29,7 +29,7 @@ use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::checks::Violation;
 use crate::objects::platform::durations::duration_seconds;
-use crate::objects::platform::{Finding, platform_block, python_strip};
+use crate::objects::platform::{Finding, platform_block};
 use crate::pins::Pins;
 
 pub use condition::{FUNCTIONS, field_name, parse_condition};
@@ -365,7 +365,7 @@ fn get<'n>(node: &'n Node, key: &str) -> Option<&'n Node> {
 }
 
 fn non_blank(text: &str) -> bool {
-    !python_strip(text).is_empty()
+    !text.trim().is_empty()
 }
 
 /// `list_ok`: absent, a non-blank string, or a list of distinct non-blank

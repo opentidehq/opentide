@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
 
-use super::value::{Table, Value, strip, text, truthy};
+use super::value::{Table, Value, text, truthy};
 
 /// The version of a key that names none.
 pub const DEFAULT_VERSION: &str = "1.0";
@@ -61,21 +61,21 @@ impl Lifecycle {
     }
 }
 
-/// A key's identity: `str(entry[key_field]).strip()`, `None` when absent or
+/// A key's identity: the trimmed `str(entry[key_field])`, `None` when absent or
 /// blank.
 pub fn identity(entry: &Table, key_field: &str) -> Result<Option<String>> {
     let Some(value) = entry.get(key_field) else {
         return Ok(None);
     };
     let text = text(value)?;
-    let text = strip(&text);
+    let text = text.trim();
     Ok((!text.is_empty()).then(|| text.to_owned()))
 }
 
 /// Python's `int()` of a version part: surrounding white space, a sign and
 /// digit-separating underscores allowed.
 fn py_int(text: &str) -> Result<i64> {
-    let trimmed = strip(text);
+    let trimmed = text.trim();
     let body = trimmed.trim_start_matches(['+', '-']);
     let valid = !body.is_empty()
         && !body.starts_with('_')

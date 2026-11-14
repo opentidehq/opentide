@@ -90,7 +90,7 @@ pub struct SentinelTrigger {
 /// deploy's `timedelta` holds ([`MAX_DURATION_SECONDS`]: `1000000000d`,
 /// `P99999999999D`), both of which the oracle accepted and deploy refused.
 pub fn check_duration(value: &str) -> Result<(), Violation> {
-    let text = crate::objects::platform::python_strip(value);
+    let text = value.trim();
     if text.is_empty() {
         return Ok(());
     }

@@ -29,7 +29,7 @@ use crate::error::{ErrorKind, PathSegment};
 use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::checks::check_at_least_one;
-use crate::objects::platform::{literal_enum, platform_block, python_strip};
+use crate::objects::platform::{literal_enum, platform_block};
 use crate::pins::Pins;
 
 /// The schema identifier.
@@ -636,7 +636,7 @@ fn text(node: Option<&Node>) -> Option<&str> {
 
 /// A string with something besides whitespace.
 fn non_blank(node: Option<&Node>) -> bool {
-    text(node).is_some_and(|text| !python_strip(text).is_empty())
+    text(node).is_some_and(|text| !text.trim().is_empty())
 }
 
 /// `_number`: an integer or a float, not a boolean.
@@ -837,7 +837,7 @@ fn threshold_findings(threshold: &Node, at: &[PathSegment]) -> Vec<Finding> {
                 if !items.is_empty() && items.iter().all(|item| {
                     number(item)
                         || text(Some(item)).is_some_and(|text| {
-                            !python_strip(text).is_empty() && !text.contains(',')
+                            !text.trim().is_empty() && !text.contains(',')
                         })
                 }));
                 (

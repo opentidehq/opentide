@@ -9,8 +9,7 @@
 //! model's `sysdig_rule_shape` check reads the block with.
 
 use opentide_core::falco::{
-    flatten_lists, is_list_comparison, is_python_space, list_inside, normalize_comp, python_strip,
-    resolve_list, upsert,
+    flatten_lists, is_list_comparison, list_inside, normalize_comp, resolve_list, upsert,
 };
 use opentide_schema::objects::platform::falco_text::{
     check_position_names, join_lines, substitute_macros,
@@ -421,7 +420,7 @@ fn text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
 /// (`derive_priority`).
 fn derive_priority(rule: &Rule, block: &Json) -> String {
     if let Some(priority) = text(block, "priority") {
-        let value = python_strip(priority).to_uppercase();
+        let value = priority.trim().to_uppercase();
         return if value == "INFO" {
             "INFORMATIONAL".to_owned()
         } else {
@@ -431,7 +430,7 @@ fn derive_priority(rule: &Rule, block: &Json) -> String {
     if rule.response().is_none() {
         return DEFAULT_PRIORITY.to_owned();
     }
-    severity_priority(&python_strip(rule.alert_severity()).to_lowercase())
+    severity_priority(&rule.alert_severity().trim().to_lowercase())
         .unwrap_or(DEFAULT_PRIORITY)
         .to_owned()
 }
@@ -549,8 +548,7 @@ pub fn compile(
         exceptions,
         desc: rule
             .description()
-            .split(is_python_space)
-            .filter(|word| !word.is_empty())
+            .split_whitespace()
             .collect::<Vec<_>>()
             .join(" "),
         output,

@@ -10,7 +10,7 @@ use crate::FromNode;
 use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::checks::Violation;
-use crate::objects::platform::{platform_block, python_strip};
+use crate::objects::platform::platform_block;
 use crate::pins::Pins;
 
 /// Declares a Splunk model whose every field is optional: `name: Type`, each
@@ -361,7 +361,7 @@ const BLANK_KEY: &str = "a savedsearches.conf key must not be empty";
 
 /// A key of the `advanced` table must not be blank.
 fn check_saved_search_key(key: &str) -> Result<(), Violation> {
-    if python_strip(key).is_empty() {
+    if key.trim().is_empty() {
         Err(Violation::value_error(BLANK_KEY))
     } else {
         Ok(())

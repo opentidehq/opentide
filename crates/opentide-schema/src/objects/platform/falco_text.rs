@@ -239,36 +239,14 @@ pub fn check_position_names(text: &str) -> Vec<String> {
     names
 }
 
-/// `join_lines`: multiline text as one line, each line stripped. Lines end
-/// where Python's `str.splitlines` ends them (also at `\r`, vertical tab,
-/// form feed, the file, group and record separators, NEL and the Unicode
-/// line and paragraph separators), not only at `\n` and `\r\n`:
-/// `m2\x0cand x` is the words `m2` and `and x`.
+/// `join_lines`: multiline text as one line, each line trimmed and the
+/// blank ones dropped. Lines end at `\n` and `\r\n`.
 pub fn join_lines(text: &str) -> String {
-    text.split(is_line_boundary)
-        .map(opentide_core::falco::python_strip)
+    text.lines()
+        .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// A line boundary of the oracle's `str.splitlines`: `\n`, `\r` (and so
-/// `\r\n`, whose empty middle line [`join_lines`] drops), vertical tab,
-/// form feed, the file, group and record separators, NEL, and the Unicode
-/// line and paragraph separators.
-fn is_line_boundary(c: char) -> bool {
-    matches!(
-        c,
-        '\n' | '\r'
-            | '\x0b'
-            | '\x0c'
-            | '\x1c'
-            | '\x1d'
-            | '\x1e'
-            | '\u{85}'
-            | '\u{2028}'
-            | '\u{2029}'
-    )
 }
 
 #[cfg(test)]
@@ -317,8 +295,8 @@ mod tests {
     }
 
     #[test]
-    fn lines_are_joined_where_python_splits_them() {
-        assert_eq!(join_lines("  a\n b \r\n\n c\x0cd\u{2028}e "), "a b c d e");
+    fn lines_are_trimmed_and_joined() {
+        assert_eq!(join_lines("  a\n b \r\n\n c\td\r\n\te "), "a b c\td e");
         assert_eq!(join_lines(""), "");
     }
 }
