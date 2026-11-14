@@ -229,7 +229,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 # profile) mid-build: hatch_build.py's `rustc -vV` hid a failed install, and
 # cargo then failed "recovering from a partially installed toolchain" with
 # `detected conflict: 'bin/cargo-clippy'`. A wheel needs rustc and cargo only.
-# tests/test_ci/test_rust_toolchain.py holds the version to the file's.
+# tests/test_ci/test_workflows.py holds the version to the file's.
 before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain \"$RUSTUP_TOOLCHAIN\""
 environment = { PATH = "$HOME/.cargo/bin:$PATH", RUSTUP_TOOLCHAIN = "1.99.1" }
 

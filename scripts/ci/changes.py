@@ -90,7 +90,9 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     (".claude/*", ("lint",), ()),
     # GitLab CI lint's own inputs (with opentide-cli's renderer, below).
     ("scripts/install-gitlab-ci-linters.sh", ("gitlab",), ()),
-    ("tests/test_ci/test_gitlab_pipeline_lint.py", ("gitlab", "python", "lint"), ()),
+    ("tests/test_ci/test_gitlab_pipeline_lint.py", ("gitlab", "lint"), ()),
+    # The CI contracts run in lint (no extension): not the Python job's.
+    ("tests/test_ci/*", ("lint",), ()),
     # The Python package and its tests.
     ("src/opentide/data/*", ("python",), ALL),
     ("src/opentide/schemas/*", ("python",), ALL),
@@ -135,7 +137,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("NOTICE", (), ()),
     (".gitignore", (), ()),
     (".gitattributes", (), ()),
-    (".github/*", ("python",), ()),
+    # .github/AGENTS.md and the rest: the CI contracts read them.
+    (".github/*", ("lint",), ()),
 )
 
 #: Paths inside crates that run a specialised job. Only the paths a job is

@@ -8,7 +8,7 @@ run-name: >-
   || '' }}
 
 # One workflow, four tiers (.github/AGENTS.md, "What runs where";
-# tests/test_ci/test_ci_scope.py). `changes` decides which, and what each
+# tests/test_ci/test_workflows.py). `changes` decides which, and what each
 # run checks (scripts/ci/changes.py):
 #
 # - The PR gate, on a pull request into integration/unified-core,
@@ -65,7 +65,7 @@ concurrency:
   # A pull request's new push cancels its stale run; every other run (a push
   # to a base branch, the nightly, Run workflow) has a group of its own, its
   # run id, so none cancels another and each push to a base branch gets a
-  # complete run (tests/test_ci/test_concurrency.py).
+  # complete run (tests/test_ci/test_workflows.py).
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -76,7 +76,7 @@ env:
   # The Python of the gate's Python jobs (and the coverage gate).
   COVERAGE_PYTHON: "3.14"
 
-# Compiler caches (tests/test_ci/test_rust_caches.py): sccache (RUSTC_WRAPPER)
+# Compiler caches (tests/test_ci/test_workflows.py): sccache (RUSTC_WRAPPER)
 # in .sccache/, kept by actions/cache under
 # `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the
 # family and toolchain as restore-keys and saved by exactly one job when the
@@ -209,6 +209,11 @@ jobs:
 
       - name: The engine release script's tests
         run: python -m unittest discover -s scripts/engine -p "test_*.py"
+
+      # The CI contracts (tests/test_ci): plain Python over the workflows and
+      # scripts/ci/changes.py, no extension.
+      - name: CI contracts
+        run: uv run --no-sync pytest tests/test_ci -q --no-cov -p no:cacheprovider
 
   # rustfmt, clippy and rustdoc, workspace-wide whatever changed: with a warm
   # cache, clippy re-checks only what changed.
@@ -640,11 +645,14 @@ jobs:
           path: target/nextest/ci/junit.xml
           retention-days: 14
 
-  # What the Python package holds: the SDK, the models, the plugin API, the
-  # console script, the docs' snippets and CI's contracts, on the build's
-  # `_native` extension, with the coverage gate.
+  # The Python package as a package (UC-6.2: Python is the packaging layer):
+  # its surface (the SDK, the models, the plugin API, the console script) and
+  # the console script end to end (CLI, MCP and LSP over stdio), on the build's
+  # `_native` extension, in ONE pytest run with the coverage gate. No shards:
+  # the run is a minute and a half. tests/test_ci runs in `lint`; the tests
+  # marked `full_set` (a wheel built per test) run nightly.
   python:
-    name: Python (3.14, coverage)
+    name: Python (3.14, package and E2E, coverage)
     needs: [changes, build]
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
@@ -688,15 +696,17 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      # `-n 4` for the runner's four cores. Coverage is combined across the
-      # xdist workers by pytest-cov, so the gate reads the same number as a
-      # serial run.
-      - name: Pytest with coverage
+      # `-n 4` for the runner's four cores (measured: more workers hit a memory
+      # cliff, each holding an interpreter and the subprocess its test runs).
+      # Coverage is combined across the xdist workers by pytest-cov, so the
+      # gate reads the same number as a serial run.
+      - name: Pytest with coverage (unit and E2E)
         env:
           COVERAGE_CORE: sysmon
         run: |
           uv run pytest tests/ \
-            -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" \
+            --ignore=tests/test_ci \
+            -m "not full_set and not gitlab_ci_lint" \
             -n 4 \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
@@ -730,56 +740,6 @@ jobs:
           name: htmlcov
           path: htmlcov/
           retention-days: 14
-
-  # The console script end to end (CLI, MCP and LSP over stdio), on the
-  # build's extension, in two shards balanced by .test_durations_e2e (a test
-  # missing from it is assigned the average). `-n 4`: measured, more workers
-  # hit a memory cliff on the 4-vCPU runner. The tests marked `full_set` (a
-  # wheel built per test) run in the nightly.
-  e2e:
-    name: E2E (3.14, ${{ matrix.shard }}/2)
-    needs: [changes, build]
-    if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        # Keep the length of this list equal to `--splits` below
-        # (tests/test_ci/test_own_ci_workflow.py).
-        shard: [1, 2]
-    env:
-      OPENTIDE_ENGINE_PREBUILT: ${{ github.workspace }}/.native/_native.abi3.so
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.COVERAGE_PYTHON }}
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: native
-          path: .native
-
-      - name: Install dependencies
-        run: uv sync --group dev
-
-      - name: E2E pytest (CLI + MCP stdio)
-        run: >-
-          uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -q --no-cov -n 4
-          --splits 2
-          --group ${{ matrix.shard }}
-          --durations-path .test_durations_e2e
 
   # The pipeline `opentide setup ci gitlab` renders, linted with glint and
   # gitlab-ci-verify: when the renderer, the test or the linters change.
@@ -881,7 +841,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -974,7 +934,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -1177,7 +1137,7 @@ jobs:
     permissions:
       contents: read
     # cargo-deny only reads `cargo metadata`, but every cargo job here denies
-    # warnings (tests/test_ci/test_one_ci.py).
+    # warnings (tests/test_ci/test_workflows.py).
     env:
       RUSTFLAGS: -Dwarnings
     steps:
@@ -1541,7 +1501,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
       - name: Pytest
-        run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
+        run: uv run pytest tests/ --ignore=tests/test_ci --no-cov -q -n 4 -m "not full_set and not gitlab_ci_lint"
 
   # The E2E tests too slow for every pull request, marked `full_set`: the
   # platform plugin on opentide installed from its wheel (UC-4.5c, #835),
@@ -1652,7 +1612,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -1673,7 +1633,7 @@ jobs:
       # PyO3 and Node.js bindings, xtask, the test harnesses opentide-compare
       # and opentide-cassette, and opentide-wasm, which ships as a release
       # asset), whose sources are scanned instead
-      # (tests/test_ci/test_own_ci_workflow.py holds both to it). opentide-cli
+      # (tests/test_ci/test_workflows.py holds both to it). opentide-cli
       # carries opentide's package data, its explain pages, as the wheel does:
       # scanned as a product (license-scan.sh --product).
       - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
@@ -1744,7 +1704,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         if: runner.os == 'Linux'
@@ -1866,7 +1826,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -1969,7 +1929,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -2053,7 +2013,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -2083,7 +2043,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_one_ci.py),
+        # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_workflows.py),
         # up to three to a runner: one build serves them all.
         targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol", "config framing serve", "cql", "yara exabeam yaral", "cli", "from_node"]
     steps:
@@ -2169,7 +2129,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -2225,7 +2185,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
@@ -2342,7 +2302,6 @@ jobs:
       - build
       - rust-tests
       - python
-      - e2e
       - gitlab-ci-lint
       - docs
       - facade

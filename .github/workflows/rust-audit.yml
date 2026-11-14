@@ -9,7 +9,7 @@ name: Rust audit
 # The audit job installs and runs third-party code with a read-only token. The
 # issue job runs no checked-out code beyond reading the report artifact, and is
 # the only job here, or in any workflow, that may write issues
-# (tests/test_ci/test_supply_chain.py). It never runs on a pull request.
+# (tests/test_ci/test_workflows.py). It never runs on a pull request.
 on:
   schedule:
     - cron: "17 4 * * *"
