@@ -292,12 +292,10 @@ fn strings(values: Option<Vec<String>>) -> Json {
     })
 }
 
-/// The visible options of `command`, the negative half of a pair and the
-/// root's global flags (outside the root) left out.
+/// The visible options of `command`, the negative half of a pair left out.
 pub fn options<'a>(path: &'a str, command: &'a Command) -> impl Iterator<Item = &'a Arg> + 'a {
     command.get_arguments().filter(move |arg| {
         !arg.is_positional()
-            && (path.is_empty() || !arg.is_global_set())
             && !arg.is_hide_set()
             && !tree_meta::PLUMBING.contains(&arg.get_id().as_str())
             && !tree_meta::is_secondary(path, arg.get_id().as_str())

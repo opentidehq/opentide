@@ -153,8 +153,19 @@ pub fn command_words(root: &clap::Command, args: &[String]) -> Vec<String> {
     command_path(&lenient_matches(root, args))
 }
 
-/// Reads the root's options and the global flags from `matches`.
-pub fn globals(matches: &clap::ArgMatches, env: &Env) -> Globals {
+/// Reads the root's options and the global flags of `args`, parsed into
+/// `matches` by [`lenient_matches`].
+///
+/// A global flag is any of its words before `--`: no option takes a value
+/// that starts with `-` but by `=`, so that is what clap reads too, and it
+/// still holds where clap stopped short, after a usage error
+/// (`valdiate --json`) or after `generate`'s phases (`generate docs --json`).
+pub fn globals(args: &[String], matches: &clap::ArgMatches, env: &Env) -> Globals {
+    let typed_flag = |name: &str| {
+        args.iter()
+            .take_while(|word| *word != "--")
+            .any(|word| word == name)
+    };
     let flag = |id: &str| matches.try_get_one::<bool>(id).ok().flatten() == Some(&true);
     // `--repo` and `--data` as typed: their environment variables are read
     // where the workspace is found.
@@ -163,11 +174,11 @@ pub fn globals(matches: &clap::ArgMatches, env: &Env) -> Globals {
         (matches.value_source(id) == Some(ValueSource::CommandLine)).then(|| value.clone())
     };
     Globals {
-        json: flag("json_output"),
-        no_color: flag("no_color"),
-        debug: flag("debug"),
-        quiet: flag("quiet"),
-        verbose: flag("verbose"),
+        json: typed_flag("--json"),
+        no_color: typed_flag("--no-color"),
+        debug: typed_flag("--debug"),
+        quiet: typed_flag("--quiet"),
+        verbose: typed_flag("--verbose"),
         version: flag("version"),
         install_completion: flag("install_completion"),
         show_completion: flag("show_completion"),
@@ -332,7 +343,7 @@ impl Run<'_> {
             .iter()
             .skip_while(|word| !option.eq(*word))
             .skip(1)
-            .take_while(|word| !word.starts_with('-'))
+            .filter(|word| !word.starts_with('-'))
             .cloned()
             .collect();
         let refuse = |failure: Failure| {
@@ -2760,7 +2771,7 @@ fn run_with(
     let started = Instant::now();
     let root = catalog::root();
     let matches = lenient_matches(&root, argv);
-    let globals = globals(&matches, env);
+    let globals = globals(argv, &matches, env);
     let leading = command_path(&matches);
     let mode = mode::resolve(
         Inputs {
@@ -3092,13 +3103,37 @@ mod tests {
     }
 
     #[test]
+    fn framework_command_words_and_late_global_flags() {
+        let root = catalog::root();
+        let words = |text: &str| {
+            let args: Vec<String> = text.split_whitespace().map(str::to_owned).collect();
+            command_words(&root, &args).join(" ")
+        };
+        assert_eq!(words("generate docs rules --x"), "generate docs rules");
+        assert_eq!(words("explain invalid_ref"), "explain");
+        assert_eq!(words("--json validate --json query"), "validate query");
+        assert_eq!(words("--repo r mcp start --x"), "mcp start");
+        assert_eq!(words("valdiate"), "");
+        // A global flag after a usage error, or after `generate`'s phases,
+        // still counts; after `--` it does not.
+        for line in [
+            "valdiate --json",
+            "validate --bogus --json",
+            "generate docs --json",
+        ] {
+            assert!(globals_of(&root, line, &Env::default()).json, "{line}");
+        }
+        assert!(!globals_of(&root, "explain -- --json", &Env::default()).json);
+    }
+
+    #[test]
     fn framework_globals_read_root_options_and_global_flags() {
         let root = catalog::root();
         let args: Vec<String> = "--repo r --proxy=http://p --debug -V --data d validate --quiet"
             .split_whitespace()
             .map(str::to_owned)
             .collect();
-        let globals = globals(&lenient_matches(&root, &args), &Env::default());
+        let globals = globals(&args, &lenient_matches(&root, &args), &Env::default());
         assert_eq!(globals.repo.as_deref(), Some("r"));
         assert_eq!(globals.proxy.as_deref(), Some("http://p"));
         // `--quiet` is global: after the command too.
@@ -4250,7 +4285,7 @@ mod tests {
 
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {
         let args: Vec<String> = text.split_whitespace().map(str::to_owned).collect();
-        globals(&lenient_matches(root, &args), env)
+        globals(&args, &lenient_matches(root, &args), env)
     }
 
     /// `generate <phase>...`: the words after `generate` that are no

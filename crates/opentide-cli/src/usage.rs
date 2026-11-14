@@ -10,7 +10,7 @@
 use crate::envelope::{Failure, code};
 use crate::suggest::did_you_mean;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use clap::{Arg, ArgAction, Command};
+use clap::{Arg, Command};
 
 /// A usage error, ready to print.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,16 +83,7 @@ fn usage_of(command: &mut Command, path: &[String]) -> clap::builder::StyledStr 
 
 /// Whether `arg` reads a value after it.
 fn takes_value(arg: &Arg) -> bool {
-    !matches!(
-        arg.get_action(),
-        ArgAction::SetTrue
-            | ArgAction::SetFalse
-            | ArgAction::Count
-            | ArgAction::Help
-            | ArgAction::HelpShort
-            | ArgAction::HelpLong
-            | ArgAction::Version
-    )
+    arg.get_action().takes_values()
 }
 
 /// The option `name` (`--strict`, `-C`) of `command`.
