@@ -7,7 +7,7 @@
 # Nothing here can publish. The token is read-only (contents: read), no job may
 # mint an OIDC token (no id-token: write), which trusted publishing on all
 # three registries needs, no secret is read, and every publish command runs
-# with --dry-run. tests/test_ci/test_publish_dry_run_workflow.py keeps it so.
+# with --dry-run. tests/test_ci/test_workflows.py keeps it so.
 #
 # What it leaves out on purpose: the release guard's checks on the state of
 # the repository (`release.py check`, the version not tagged yet, and
@@ -34,7 +34,7 @@ concurrency:
   # A pull request's new push cancels its stale run; every other run (a push
   # to development, integration/unified-core or main, the nightly, Run
   # workflow) has a group of its own, its run id, so none cancels another and
-  # each push to a base branch gets a complete run (tests/test_ci/test_concurrency.py).
+  # each push to a base branch gets a complete run (tests/test_ci/test_workflows.py).
   group: publish-dry-run-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 

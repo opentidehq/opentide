@@ -659,7 +659,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # scripts/build/install-rust.sh, which installs that release by name
         # with the minimal profile, without the file's components, adds the
         # target and names the release in RUSTUP_TOOLCHAIN, so that rustup
-        # installs nothing mid-build (tests/test_ci/test_rust_toolchain.py).
+        # installs nothing mid-build (tests/test_ci/test_workflows.py).
         install = "rustup toolchain install --profile minimal --no-self-update"
         script = "scripts/build/install-rust.sh"
         target = r"--target (\$\{\{[^}]*\}\}|\S+)"

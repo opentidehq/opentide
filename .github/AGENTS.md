@@ -13,7 +13,7 @@ deeper nightly never gates; a release pull request also proves the packages on e
 workflow compares with the frozen Python CLI byte for byte (below). `tests/test_ci/` holds every
 rule here.
 
-**Concurrency** (`tests/test_ci/test_concurrency.py`): a pull request's new push cancels its stale
+**Concurrency** (`tests/test_ci/test_workflows.py`): a pull request's new push cancels its stale
 run; every other run (a push to a base branch, the nightly, Run workflow) is in a group of its
 own, `${{ github.run_id }}`, so no run cancels it and every merge to a base branch gets a complete
 run. Every workflow with a push trigger and a concurrency group (`ci.yml`, `codeql.yml`) uses the
@@ -52,17 +52,24 @@ closed). Then:
 
 - the Rust jobs (`engine-lint`, `build`, `rust-tests`) run when a crate is affected, and test only
   the affected crates;
-- the Python jobs (`python`, `e2e`) run when Python changes (`src/opentide`, `tests/`,
-  `pyproject.toml`, `uv.lock`, `hatch_build.py`, the scripts) or the affected crates reach
-  `opentide-native`, the binding that holds the command line (in practice most Rust changes; a
-  docs-only, skills-only or Node-only change does not);
+- the Python job (`python`: the `_native` wheel built by `build`, then one pytest run of the
+  package and the E2E suite) runs **only when the Python surface changes**: `src/opentide/`,
+  `bindings/python/`, the facade's API (`crates/opentide/src/`), `pyproject.toml`,
+  `hatch_build.py`, `uv.lock`, `tests/` (but `tests/test_ci` and the docs tests that need no
+  wheel). A Rust-only change to an engine, schema, compile or CLI crate builds no wheel and runs
+  no pytest: the Rust tests cover it (the maintainer's rule). Every push runs it; a release pull
+  request and the nightly run Python 3.10 to 3.14 and the `full_set` E2E tests;
+- `lint`'s steps run on their own inputs: ruff, ty, the sdist and twine when a Python file
+  changes; actionlint and `tests/test_ci` when a workflow, `scripts/ci/` or those tests change;
+  the skills' validation; the engine's invariant scripts when a crate changes. `docs` validates
+  the pages and runs the docs tests that need no wheel;
 - each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasi`
   (`crates/opentide-wasm/`, the WASI shims: `crates/*wasi*`, `vendor/`, `packages/`,
   `build-wasm.sh`), `grammars` (`grammars/`), `textmate` (`highlights/`, `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
   manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides);
-- a docs-only pull request runs `docs` alone; a skills-only one, `lint` alone.
+- a docs-only pull request runs `docs` alone; a skills-only one, `lint`'s skills step alone.
 
 The push to the base branch runs everything, so what a pull request's filter leaves out is still
 checked before the next pull request builds on it.
@@ -72,14 +79,13 @@ checked before the next pull request builds on it.
 | Job | What it checks |
 |-----|----------------|
 | `changes` | The plan: the tier, the affected crates (`packages`: `--workspace` or `-p` per crate, with the facade's and opentide-schema's test features), the Rust test partitions, the areas. Seconds: the runner's stable cargo reads the manifests |
-| `lint` | ruff, ty over `src/opentide` on the checked-in stubs of `_native` (`src/opentide/_native/*.pyi`: nothing compiles), actionlint 1.7.7 with shellcheck (`.github/actionlint.yaml`), `uv build --sdist` and `twine check`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`) and the engine release script's tests. About a minute |
+| `lint` | ruff, ty over `src/opentide` on the checked-in stubs of `_native` (`src/opentide/_native/*.pyi`: nothing compiles), actionlint 1.7.7 with shellcheck (`.github/actionlint.yaml`), `uv build --sdist` and `twine check`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`), the engine release script's tests and the CI contracts (`tests/test_ci`). About a minute |
 | `engine-lint` | rustfmt, clippy `-D warnings` and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`, **workspace-wide** whatever changed (a warm cache re-checks only what changed) |
 | `build` | **The gate's one build** (the only gate job that compiles the workspace): the affected crates' tests as a `cargo nextest archive` (their binaries, the binaries their tests run, build-script output), and the `_native` extension (`cargo build -p opentide-native --lib`, `PYO3_BUILD_EXTENSION_MODULE=1`, in the profile the tests used, so their dependencies are compiled once), linked with mold, one sccache family; both uploaded at once. Then, while the test jobs run: `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (and on every push and nightly), the doctests (nextest runs none), and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change |
 | `rust-tests` | The archive's tests, `cargo nextest run --archive-file ... --partition count:k/N --profile ci`: two partitions when the heavy crates (`opentide-cli`, `opentide-analysis`, `opentide-lsp`, `xtask`, the facade) are affected, one otherwise; nothing compiles. Fails when a test leaves a file in the checkout (#931) |
-| `python` | Python **3.14** with the coverage gate, on the build's extension (`OPENTIDE_ENGINE_PREBUILT`: `hatch_build.py` installs it instead of compiling) |
-| `e2e` | The E2E suite (CLI, MCP and LSP over stdio) in two shards (`--splits 2`, balanced by `.test_durations_e2e`), on the build's extension; the tests marked `full_set` run nightly |
+| `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on the build's extension (`OPENTIDE_ENGINE_PREBUILT`: `hatch_build.py` installs it, nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
-| `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) |
+| `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, `npm test`, and `npx . --json commands` byte for byte the console script's (on the build's extension) |
 | `wasi` | The WASI command line the VS Code extension runs: `build-wasm.sh cli`, its size held to the .vsix's 15 MiB, tenant commands through `@opentide/wasi-host` |
@@ -126,7 +132,7 @@ Splunk, Elasticsearch, Lucene, Falco) are real products' parsers: they run night
 
 Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no
 name, never floating `stable`), then its targets with `rustup target add`: that install drops
-`--target` and `--component` silently (`tests/test_ci/test_rust_toolchain.py`). `changes` alone
+`--target` and `--component` silently. `changes` alone
 uses the runner's stable cargo, for `cargo metadata --no-deps`. Only the fuzz jobs name a
 toolchain, the dated nightly `fuzz/NIGHTLY` pins. The package builds are stricter
 (`build-packages.yml`): `scripts/build/install-rust.sh` installs the pinned release by name with
@@ -135,7 +141,7 @@ in `pyproject.toml`'s `[tool.cibuildwheel.linux]`. Every job that runs cargo set
 `RUSTFLAGS=-Dwarnings` (the nightly fuzz build aside); the test jobs also set
 `CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (CI never writes a snapshot).
 
-**Compiler caches** (`tests/test_ci/test_rust_caches.py`, #841, #1047): sccache (`RUSTC_WRAPPER`,
+**Compiler caches** (#841, #1047): sccache (`RUSTC_WRAPPER`,
 0.19.0) in `.sccache/`, kept by actions/cache under
 `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the family and
 toolchain as `restore-keys`, saved by exactly one job when the key missed: once a week. sccache is
@@ -165,7 +171,7 @@ Branch protection on `development` and `integration/unified-core` requires **one
 `gate` job: it passes when `changes` succeeded and every job it needs succeeded or was skipped
 (a job is skipped exactly when the change does not need it), and fails on any failure or
 cancellation (`if: always()`: a failed job must not skip it, since a skipped required check
-passes). `tests/test_ci/test_one_ci.py` fails when this list and the workflows differ. CodeQL is
+passes). `tests/test_ci/test_workflows.py` fails when this list and the workflows differ. CodeQL is
 path-scoped on pull requests, so it is not a required check: a path-filtered workflow does not
 report when it does not run, and a required check that never starts blocks the merge.
 
@@ -218,7 +224,7 @@ merging** → add `PR gate`, remove the others → **Save changes**.
 - [`rust-audit.yml`](workflows/rust-audit.yml) runs `cargo audit` on every Rust lock file
   (`git ls-files`) every day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
-  request (`tests/test_ci/test_supply_chain.py`).
+  request (`tests/test_ci/test_workflows.py`).
 - [`schema.yml`](workflows/schema.yml), in the nightly (ci.yml calls it) and on demand:
   `opentide-schema` (UC-1.1)
   built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
@@ -233,7 +239,7 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   and on demand: every reference on each run. Its network-heavy references keep it out of ci.yml. The pinned Elastic
   references (Lucene's jars from Maven Central, the EQL and kuery grammars) are cached under
   `oracle.py`'s pins and saved by the scheduled run; `oracle.py` checks each file's SHA-256, a
-  restored one too (`tests/test_ci/test_ci_scope.py`).
+  restored one too.
 - [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (every publish rehearsed, nothing
   published): in a release pull request's checks and the nightly (ci.yml calls it), and on demand.
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
@@ -248,7 +254,7 @@ Where each of language-server's workflow jobs went (or why it was dropped):
 ## Test strength (UC-X.2, #844)
 
 [`docs/internal/test-strength.md`](../docs/internal/test-strength.md) explains the three measures;
-`tests/test_ci/test_test_strength_workflows.py` holds their permissions and triggers.
+`tests/test_ci/test_workflows.py` holds their permissions and triggers.
 
 - [`coverage.yml`](workflows/coverage.yml), in the nightly (ci.yml calls it) and on demand: job **Rust coverage gates**. One cargo-llvm-cov build measured by the workspace's Rust tests and by the whole Python
   suite, which drives `opentide._native`; `cargo xtask coverage gate` checks each crate against
@@ -279,7 +285,7 @@ aside), and resuming an `-rc` tag is refused. `dry_run` publishes nothing;
 `checkout_ref: vX.Y.Z` resumes a release. Steps:
 [release-management](../.agents/skills/release-management/SKILL.md); the registries' settings and
 the decisions (no musl, the free-threaded sdist): [`docs/internal/publishing.md`](../docs/internal/publishing.md#the-release-train).
-`tests/test_ci/test_one_ci.py` fails if any workflow can run on a `v*` tag, or if anything
+`tests/test_ci/test_workflows.py` fails if any workflow can run on a `v*` tag, or if anything
 publishes from a trigger that is not a release; `scripts/engine/test_release.py` holds the
 workflow's shape (which jobs may mint an OIDC token, what runs before what).
 
@@ -323,6 +329,9 @@ also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`. Skill:
   workflow (and its resume dispatch) only.
 - A step that must fail when its tool is missing must not sit in an `if` that reads "missing"
   as "no match" (the drift gate once used `rg`, which runners lack).
-- The workflow contracts have tests under `tests/test_ci/` (`test_one_ci.py`,
-  `test_own_ci_workflow.py`, `test_rust_caches.py`, `test_rust_toolchain.py`,
-  `test_workflow_contexts.py`, ...): run them after a change.
+- actionlint (in `lint`) checks the workflows' syntax, expressions and shell. `tests/test_ci/`
+  holds only what it cannot, in about 25 tests (the maintainer's rule: no test restates a
+  workflow's YAML): `test_workflows.py` (every job feeds `PR gate`, no workflow runs a Python
+  oracle comparison, pinned actions, least-privilege permissions, concurrency, only the release
+  train publishes, OIDC in publish.yml's publish jobs only, the internal channel reaches no
+  registry) and `test_changes.py` (scripts/ci/changes.py). `lint` runs them.

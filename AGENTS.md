@@ -11,7 +11,7 @@
 | Path | What it is | Read first |
 |------|------------|------------|
 | `src/opentide/` | The PyPI package: the console script, the SDK, the models, the plugin API, bundled data (`src/opentide/data/`) around the Rust core | [`src/AGENTS.md`](src/AGENTS.md) |
-| `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E (sharded), MCP and LSP stdio, docs and CI contracts | the testing skills below |
+| `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E, MCP and LSP stdio, docs and CI contracts | the testing skills below |
 | `tests/golden/` | The goldens of the frozen Python CLI (the oracle): `cargo xtask golden record\|check` | [`tests/golden/README.md`](tests/golden/README.md) |
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide/` | The `opentide` crate: the Rust SDK (the facade), the only crate with a stability promise | [`crates/opentide/AGENTS.md`](crates/opentide/AGENTS.md) |
