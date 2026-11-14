@@ -1514,6 +1514,9 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
+      # cargo for the test that reads the workspace's metadata.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: native
