@@ -7,6 +7,8 @@
 //! in a build that unifies features.
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
+use serde_json::ser::PrettyFormatter;
 use std::fmt;
 
 /// A parsed JSON value. Objects keep their keys in document order, duplicates
@@ -388,7 +390,7 @@ fn key_order(oracle: &Json, candidate: &Json, at: &mut Vec<String>, out: &mut Ve
     }
 }
 
-/// How the CLI lays a document out: orjson's compact line or its two-space
+/// How the CLI lays a document out: a compact line or a two-space
 /// indentation, each with or without a final newline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layout {
@@ -398,86 +400,60 @@ pub enum Layout {
     Indented,
 }
 
-/// `value` written in `layout`, ending in a newline when `newline` is set.
-pub fn write(value: &Json, layout: Layout, newline: bool) -> Vec<u8> {
-    let mut out = String::new();
-    write_value(value, layout, 0, &mut out);
-    if newline {
-        out.push('\n');
+impl Serialize for Json {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Json::Null => serializer.serialize_unit(),
+            Json::Bool(value) => serializer.serialize_bool(*value),
+            Json::Number(number) => number.serialize(serializer),
+            Json::String(text) => serializer.serialize_str(text),
+            Json::Array(items) => {
+                let mut seq = serializer.serialize_seq(Some(items.len()))?;
+                for item in items {
+                    seq.serialize_element(item)?;
+                }
+                seq.end()
+            }
+            // Members in document order, a repeated key repeated.
+            Json::Object(members) => {
+                let mut map = serializer.serialize_map(Some(members.len()))?;
+                for (key, item) in members {
+                    map.serialize_entry(key, item)?;
+                }
+                map.end()
+            }
+        }
     }
-    out.into_bytes()
+}
+
+/// `value` written in `layout` by serde_json, ending in a newline when
+/// `newline` is set.
+pub fn write(value: &Json, layout: Layout, newline: bool) -> Vec<u8> {
+    let mut out = Vec::new();
+    // Writing into a Vec cannot fail, and every `Json` serialises: its keys
+    // are strings and its numbers are serde_json's.
+    let written = match layout {
+        Layout::Compact => serde_json::to_writer(&mut out, value),
+        Layout::Indented => {
+            let mut serializer = serde_json::Serializer::with_formatter(
+                &mut out,
+                PrettyFormatter::with_indent(b"  "),
+            );
+            value.serialize(&mut serializer)
+        }
+    };
+    if written.is_err() {
+        out.clear();
+    }
+    if newline {
+        out.push(b'\n');
+    }
+    out
 }
 
 /// `value` on one line, for a report.
 pub fn compact(value: &Json) -> String {
-    let mut out = String::new();
-    write_value(value, Layout::Compact, 0, &mut out);
-    out
-}
-
-fn write_value(value: &Json, layout: Layout, depth: usize, out: &mut String) {
-    match value {
-        Json::Null => out.push_str("null"),
-        Json::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
-        Json::Number(number) => out.push_str(&number.to_string()),
-        Json::String(text) => write_string(text, out),
-        Json::Array(items) => {
-            if items.is_empty() {
-                out.push_str("[]");
-                return;
-            }
-            out.push('[');
-            for (index, item) in items.iter().enumerate() {
-                if index > 0 {
-                    out.push(',');
-                }
-                indent(layout, depth + 1, out);
-                write_value(item, layout, depth + 1, out);
-            }
-            indent(layout, depth, out);
-            out.push(']');
-        }
-        Json::Object(members) => {
-            if members.is_empty() {
-                out.push_str("{}");
-                return;
-            }
-            out.push('{');
-            for (index, (key, item)) in members.iter().enumerate() {
-                if index > 0 {
-                    out.push(',');
-                }
-                indent(layout, depth + 1, out);
-                write_string(key, out);
-                out.push(':');
-                if layout == Layout::Indented {
-                    out.push(' ');
-                }
-                write_value(item, layout, depth + 1, out);
-            }
-            indent(layout, depth, out);
-            out.push('}');
-        }
-    }
-}
-
-fn indent(layout: Layout, depth: usize, out: &mut String) {
-    if layout == Layout::Indented {
-        out.push('\n');
-        for _ in 0..depth {
-            out.push_str("  ");
-        }
-    }
-}
-
-fn write_string(text: &str, out: &mut String) {
-    // serde_json escapes as orjson does: `"`, `\`, and control characters,
-    // with the short forms for \b \f \n \r \t; everything else is literal.
-    match serde_json::to_string(text) {
-        Ok(quoted) => out.push_str(&quoted),
-        // A str always serialises; keep the output a JSON string regardless.
-        Err(_) => out.push_str("\"\""),
-    }
+    serde_json::to_string(value).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -591,6 +567,21 @@ mod tests {
                 candidate: vec!["b".into(), "a".into()],
             }]
         );
+    }
+
+    #[test]
+    fn layouts_keep_document_order_and_repeated_keys() {
+        // A repeated key, in its place; numbers as read; a control character
+        // escaped; nested empty containers inline.
+        let text = "{\"z\":1,\"a\":[[],{}],\"z\":-2.5e-7,\"t\":true,\"u\":\"\\u0001\\t/\",\"n\":18446744073709551615}";
+        let value = json(text);
+        assert_eq!(compact(&value), text);
+        assert_eq!(
+            String::from_utf8(write(&value, Layout::Indented, true)).unwrap(),
+            "{\n  \"z\": 1,\n  \"a\": [\n    [],\n    {}\n  ],\n  \"z\": -2.5e-7,\n  \"t\": true,\n  \"u\": \"\\u0001\\t/\",\n  \"n\": 18446744073709551615\n}\n"
+        );
+        assert_eq!(compact(&json("[]")), "[]");
+        assert_eq!(write(&json("\"x\""), Layout::Indented, false), b"\"x\"");
     }
 
     #[test]

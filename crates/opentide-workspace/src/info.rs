@@ -119,8 +119,9 @@ fn strategies(raw: Option<&Node>) -> Vec<String> {
         .collect()
 }
 
-fn truthy_text(node: Option<&Node>) -> Option<String> {
-    node.filter(|node| crate::index::truthy(node))
+/// The text of `node` when it holds a name.
+fn name_text(node: Option<&Node>) -> Option<String> {
+    node.filter(|node| crate::index::holds_name(node))
         .map(|node| node.value.to_string())
 }
 
@@ -150,9 +151,9 @@ pub fn tenants(configured: Option<&Node>, is_set: &dyn Fn(&str) -> bool) -> Vec<
             }
         }
         out.push(Tenant {
-            name: truthy_text(get(tenant, "name"))
+            name: name_text(get(tenant, "name"))
                 .unwrap_or_else(|| format!("tenant {}", position + 1)),
-            description: truthy_text(get(tenant, "description")).unwrap_or_default(),
+            description: name_text(get(tenant, "description")).unwrap_or_default(),
             strategies: strategies(get(tenant, "strategies")),
             manual: matches!(
                 get(tenant, "manual").map(|n| &n.value),
