@@ -116,7 +116,6 @@ fn workspace_case(case: &toml::Value) -> Json {
     let parent = case.get("parent").map(|files| folder(PARENT, Some(files)));
     match resolve(&Instance {
         workspace: Some(&workspace),
-        overlay: None,
         parent: parent.as_ref(),
         // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,
@@ -186,7 +185,6 @@ fn sharing_case(case: &toml::Value) -> Json {
     let parent = case.get("parent").map(|files| folder(PARENT, Some(files)));
     let resolved = resolve(&Instance {
         workspace: Some(&workspace),
-        overlay: None,
         parent: parent.as_ref(),
         // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,

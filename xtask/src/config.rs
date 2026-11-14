@@ -190,7 +190,6 @@ fn rust_result(workspace: &Path) -> Result<Json> {
     Ok(
         match resolve(&Instance {
             workspace: own.as_ref(),
-            overlay: None,
             parent: parent.as_ref(),
             // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
             skip_parent: false,
