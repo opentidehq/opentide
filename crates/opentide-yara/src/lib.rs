@@ -418,3 +418,5 @@ rule Loader_Stage1 : loader {
         assert_eq!(format("rule a { condition: }"), None);
     }
 }
+
+// A throwaway change to measure the PR gate (do not merge).
