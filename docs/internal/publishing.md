@@ -142,6 +142,19 @@ The guard runs `scripts/build/release.py check-candidate`, which refuses a candi
 
 **Run workflow needs `publish.yml` on the default branch.** GitHub runs a `workflow_dispatch` workflow only once a file of that name is on the default branch, `development`: until then the Actions page does not list it, and the API (`gh workflow run`, the GitHub MCP `actions_run_trigger`) does not find it. A run uses the workflow file of the ref it is dispatched on, so the smallest way to run a candidate from `integration/unified-core` before it merges is to land a `publish.yml` stub on `development` first: `workflow_dispatch` with the same four inputs, `permissions: {}`, and one job that fails (it never publishes; `development`'s own release still goes through `publish-pypi.yml` until the integration merge replaces the stub with this file). The PR that adds this file says what the stub holds.
 
+### Live-tenant checks before a release candidate is promoted
+
+CI proves the connectors against recorded cassettes and stand-in servers, never against a real tenant. Before a candidate (internal or public) is promoted, the maintainer runs these against real tenants, with the candidate's binary, and records the result on the candidate's release notes. Each item is something no cassette can prove ([#1171](https://github.com/opentidehq/opentide/pull/1171), [#1169](https://github.com/opentidehq/opentide/pull/1169)).
+
+- **`validate --live`, `query` and `deploy` against real Sentinel, Defender for Endpoint and CrowdStrike tenants**: each command once per platform, `deploy` with a rule created, updated and deleted.
+- **Entra ID takes the plain sign-in**: the token `POST` with no `Accept` header and the form fields in opentide's order (`grant_type`, `client_id`, `client_secret`, `scope`), for Sentinel (ARM and Log Analytics scopes) and Defender (Graph).
+- **An expired token is a `401`, not a `403`**: ARM, Log Analytics and Graph answer a token past its expiry with `401`, so the connector signs in again once and resends (a `403` is not retried).
+- **Entra ID's refusals read as documented**: a wrong tenant id (`AADSTS90002`), a wrong secret (`AADSTS7000215`) and an expired secret (`AADSTS7000222`) each fail the tenant as an authentication failure carrying Entra's `error_description`, and the secret appears in no output, log or `--json` document.
+- **A run longer than an hour renews its tokens**: a `deploy` or `validate --live` of more than an hour on Defender and on Sentinel signs in again about five minutes before the first token expires and carries on.
+- **A corporate proxy and a custom CA reach `login.microsoftonline.com`**: a tenant with `proxy` and a CA bundle signs in through them (the sign-in uses the tenant's own client), and a TLS failure there is reported once, not retried.
+- **Resume from suspend**: a run suspended past its token's lifetime (on Linux the monotonic clock does not count the suspension) recovers through the `401` rule after resuming.
+- **CrowdStrike renews its token on every cloud**: a run longer than the token's lifetime on `us-1`, `us-2`, `eu-1` and `us-gov-1` signs in again at `{base_url}/oauth2/token` and carries on.
+
 ### Testing a build without publishing
 
 ci.yml's nightly set (nightly, and Run workflow on any branch) runs [`build-packages.yml`](../../.github/workflows/build-packages.yml), the build `publish.yml` uses, as its `packages` job, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
