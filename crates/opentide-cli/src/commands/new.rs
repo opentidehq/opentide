@@ -658,7 +658,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             return with_steps(
                 new_error(
                     &command,
-                    format!("{argument} takes a UUID, got '{value}'"),
+                    format!("{argument} takes a UUID, got {value:?}"),
                     code::USAGE_INVALID_VALUE,
                     USAGE_EXIT_CODE,
                     Some(argument),
@@ -707,7 +707,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         return with_steps(
             Report::error(
                 &command,
-                format!("unknown schema identifier: '{schema_id}'"),
+                format!("unknown schema identifier: {schema_id:?}"),
             ),
             &steps,
         );

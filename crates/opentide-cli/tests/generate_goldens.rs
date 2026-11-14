@@ -278,13 +278,13 @@ fn setup_ci_refuses_then_writes() {
     assert_eq!(failure(&stdout)["argument"], "--default-branch");
     assert_eq!(
         failure(&stdout)["message"],
-        "Invalid value for '--default-branch': \"a b\" cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'"
+        "--default-branch: \"a b\" cannot be written into a pipeline; use letters, digits, '.', '_', '/' and '-'"
     );
     let (code, stdout) = run_json(&ws, &["setup", "--name", "x", "ci", "github", "--yes"]);
     assert_eq!(code, 2, "{stdout}");
     assert_eq!(
         failure(&stdout)["message"],
-        "Invalid value: --name configures `opentide setup` itself and would be ignored by `opentide setup ci`."
+        "--name configures `opentide setup` itself and would be ignored by `opentide setup ci`."
     );
     let (code, stdout) = run_json(
         &ws,
@@ -302,7 +302,7 @@ fn setup_ci_refuses_then_writes() {
         failure(&stdout)["message"]
             .as_str()
             .unwrap()
-            .starts_with("Invalid value for '--promotion-target': \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+            .starts_with("--promotion-target: \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
         "{stdout}"
     );
     assert!(!ws.join(".github").exists());
@@ -390,7 +390,7 @@ fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
         document(&stdout)["failure"]["message"]
             .as_str()
             .unwrap()
-            .starts_with("Invalid value for '--promotion-target': \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+            .starts_with("--promotion-target: \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
         "{stdout}"
     );
 }
@@ -650,7 +650,7 @@ fn setup_ci_reads_enabled_platforms_and_one_path() {
     assert_eq!(refused["failure"]["code"], "usage_invalid_value");
     assert_eq!(
         refused["failure"]["message"],
-        "Invalid value: Pass the repository path once: . and other name different targets."
+        "Pass the repository path once: . and other name different targets."
     );
     assert!(!ws.join(".github").exists());
     assert!(!ws.join("other/.github").exists());

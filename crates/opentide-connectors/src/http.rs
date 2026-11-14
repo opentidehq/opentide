@@ -3,11 +3,11 @@
 //! One [`HttpClient`] per tenant, built from that tenant's [`HttpSettings`]
 //! and the run's environment: TLS on or off and the CA bundles it trusts
 //! ([`crate::tls`]), the proxy ([`crate::proxy`]), a timeout on connecting
-//! and on each read of the answer (`requests`' `timeout`, 120 s when a
-//! platform names none: `transport.DEFAULT_TIMEOUT`), the retries
-//! ([`crate::retry`]) and how many requests may be in flight to it at once.
-//! HTTP/1.1, as `requests` speaks it; no default `User-Agent`, compression or
-//! redirects beyond reqwest's.
+//! and on each read of the answer (120 s when a platform names none:
+//! [`DEFAULT_TIMEOUT`]), the retries ([`crate::retry`]) and how many requests
+//! may be in flight to it at once. HTTP/2 when the tenant offers it, else
+//! HTTP/1.1; no default `User-Agent`, compression or redirects beyond
+//! reqwest's.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,8 +24,8 @@ use crate::transport::{
 };
 use crate::{Environment, TenantLabel};
 
-/// `transport.DEFAULT_TIMEOUT`: seconds a tenant has to accept a connection
-/// and then to send each part of its answer, when a platform names none.
+/// How long a tenant has to accept a connection and then to send each
+/// part of its answer, when a platform names none.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// How one tenant is reached.
