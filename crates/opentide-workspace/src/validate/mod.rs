@@ -504,7 +504,7 @@ fn id_rows(index: &Index) -> Vec<IdRow<'_>> {
             .get("metadata")
             .filter(|m| matches!(m.value, Value::Map(_)))
             .and_then(|m| m.get("uuid"))
-            .filter(|uuid| crate::index::truthy(uuid));
+            .filter(|uuid| crate::index::holds_name(uuid));
         if let Some(uuid) = uuid {
             rows.push(IdRow {
                 path: &source.path,
@@ -524,7 +524,7 @@ fn id_rows(index: &Index) -> Vec<IdRow<'_>> {
                     if !matches!(signal.value, Value::Map(_)) {
                         continue;
                     }
-                    if let Some(uuid) = signal.get("uuid").filter(|u| crate::index::truthy(u)) {
+                    if let Some(uuid) = signal.get("uuid").filter(|u| crate::index::holds_name(u)) {
                         rows.push(IdRow {
                             path: &source.path,
                             family: "signal",
@@ -608,7 +608,7 @@ fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
             .get("metadata")
             .filter(|m| matches!(m.value, Value::Map(_)))
             .and_then(|m| m.get("uuid"))
-            .filter(|uuid| crate::index::truthy(uuid))
+            .filter(|uuid| crate::index::holds_name(uuid))
         else {
             continue;
         };

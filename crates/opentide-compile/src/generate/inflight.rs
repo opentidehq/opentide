@@ -86,14 +86,14 @@ pub fn object_version(body: &Node) -> i64 {
 
 /// An object's UUID (`_object_uuid`): `uuid`, else `metadata.uuid`.
 pub fn object_uuid(body: &Node) -> Option<String> {
-    let truthy = |node: &&Arc<Node>| opentide_workspace::index::truthy(node);
+    let named = |node: &&Arc<Node>| opentide_workspace::index::holds_name(node);
     body.get("uuid")
-        .filter(truthy)
+        .filter(named)
         .or_else(|| {
             body.get("metadata")
                 .filter(|m| matches!(m.value, Value::Map(_)))
                 .and_then(|metadata| metadata.get("uuid"))
-                .filter(truthy)
+                .filter(named)
         })
         .map(|uuid| node_text(uuid))
 }
@@ -112,7 +112,7 @@ pub fn object_family(body: &Node) -> Option<String> {
     }
     let has = |key: &str| {
         body.get(key)
-            .is_some_and(|value| opentide_workspace::index::truthy(value))
+            .is_some_and(|value| matches!(&value.value, Value::Map(entries) if !entries.is_empty()))
     };
     if has("threat") {
         Some("threat".into())
