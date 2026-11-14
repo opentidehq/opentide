@@ -595,6 +595,7 @@ jobs:
       # would print.
       - name: Extract the archive into target/
         run: |
+          mkdir -p "${RUNNER_TEMP}/nextest"
           cargo nextest list --archive-file "${RUNNER_TEMP}/tests.tar.zst" \
             --workspace-remap "${GITHUB_WORKSPACE}" --extract-to "${RUNNER_TEMP}/nextest" >/dev/null
           mv "${RUNNER_TEMP}/nextest/target" target
