@@ -65,8 +65,6 @@ const EXTENSION_ID: &str = "opentidehq.opentide";
 
 const OPENTIDE_DIR: &str = ".opentide";
 
-const PROXY_VARIABLES: [&str; 4] = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"];
-
 /// One line of the checklist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
@@ -875,17 +873,18 @@ impl Doctor<'_> {
         checks
     }
 
-    /// `check_proxy`: whether the proxy accepts a TCP connection.
+    /// `check_proxy`: whether the proxy the connectors' requests go through
+    /// accepts a TCP connection.
     fn proxy(&self, offline: bool) -> Check {
-        let url = self.cx.proxy.filter(|value| !value.is_empty()).or_else(|| {
-            PROXY_VARIABLES
-                .iter()
-                .find_map(|name| self.cx.env.get(name).filter(|value| !value.is_empty()))
-        });
-        let Some(url) = url else {
-            return Check::new("proxy", "skip", "No proxy set (--proxy, HTTPS_PROXY)");
+        let environment = opentide_connectors::Environment::from_pairs(self.cx.env.iter());
+        let Some((url, http_only)) = network::proxy_to_test(&environment, self.cx.proxy) else {
+            return Check::new(
+                "proxy",
+                "skip",
+                "No proxy set (--proxy, OPENTIDE_PROXY, https_proxy, http_proxy, all_proxy)",
+            );
         };
-        let shown = redact_url(url);
+        let shown = redact_url(&url);
         if offline {
             return Check::new(
                 "proxy",
@@ -893,19 +892,20 @@ impl Doctor<'_> {
                 format!("Proxy {shown} not checked: --offline"),
             );
         }
-        let environment = opentide_connectors::Environment::from_pairs(self.cx.env.iter());
-        let note = if network::bypasses_proxy(&environment, self.cx.proxy, network::PYPI_URL) {
+        let note = if http_only {
+            "; only http:// requests go through it"
+        } else if network::bypasses_proxy(&environment, self.cx.proxy, network::PYPI_URL) {
             "; pypi.org bypasses it (NO_PROXY)"
         } else {
             ""
         };
-        let parsed = match network::parse_proxy(url) {
+        let parsed = match opentide_connectors::proxy::parse(&url) {
             Ok(parsed) => parsed,
-            Err(error) => {
+            Err(reason) => {
                 return Check::new(
                     "proxy",
                     "fail",
-                    format!("The proxy URL cannot be parsed: {error}"),
+                    format!("The proxy URL cannot be parsed: {reason}"),
                 )
                 .fix("pass --proxy http://host:port");
             }
@@ -942,7 +942,9 @@ impl Doctor<'_> {
                 "fail",
                 format!("Cannot connect to proxy {shown} ({name})"),
             )
-            .fix("check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up"),
+            .fix(
+                "check --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up",
+            ),
         }
     }
 
@@ -1298,12 +1300,11 @@ fn toml_problem(path: &Path) -> Option<(Option<usize>, String)> {
     }
 }
 
-/// `url` without its user and password: `http://proxy:8080`.
+/// `url` without its user and password: `http://proxy:8080`; a URL that
+/// cannot be read safely ([`opentide_connectors::proxy::parse`]) is not
+/// shown at all.
 fn redact_url(url: &str) -> String {
-    network::parse_proxy(url).map_or_else(
-        |_| "<unparseable proxy URL>".to_owned(),
-        |parsed| opentide_connectors::error::origin(&parsed),
-    )
+    opentide_connectors::proxy::redact(url).unwrap_or_else(|| "<unparseable proxy URL>".to_owned())
 }
 
 /// A JSON file as VS Code reads it (comments, trailing commas, a byte order
@@ -1778,6 +1779,111 @@ mod tests {
         );
         assert_eq!(redact_url("proxy.example"), "http://proxy.example");
         assert_eq!(redact_url("ht tp://x"), "<unparseable proxy URL>");
+        // An unencoded `@` in the password: the last `@` ends the user info.
+        assert_eq!(
+            redact_url("http://user:p@ss@proxy:8080"),
+            "http://proxy:8080"
+        );
+        // An unencoded `/`, `#` or `?` ends the host early, where the url
+        // crate would read a piece of the password as the host: not shown.
+        for unsafe_url in [
+            "http://user:p@ss/w#rd@proxy:8080",
+            "http://user:pa/ss@proxy:8080",
+            "http://user:pa#ss@proxy:8080",
+            "http://user:pa?ss@proxy:8080",
+            "user:pa/ss@proxy:8080",
+        ] {
+            assert_eq!(
+                redact_url(unsafe_url),
+                "<unparseable proxy URL>",
+                "{unsafe_url}"
+            );
+        }
+    }
+
+    /// The `proxy` check of a run with *env* and `--proxy` *flag*.
+    fn proxy_check(env: &[(&str, &str)], flag: Option<&str>) -> Check {
+        let env = Env::from_pairs(
+            env.iter()
+                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned())),
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let cx = Context {
+            proxy: flag,
+            ..context(&env, dir.path())
+        };
+        let doctor = Doctor {
+            cx: &cx,
+            workspace: dir.path().to_path_buf(),
+            explicit: false,
+            cwd: dir.path().to_path_buf(),
+            config: None,
+        };
+        doctor.proxy(false)
+    }
+
+    #[test]
+    fn the_proxy_checked_is_the_one_the_connectors_use() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let up = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let down = format!("http://127.0.0.1:{}", closed.local_addr().unwrap().port());
+        drop(closed);
+        let passes = |env: &[(&str, &str)], flag: Option<&str>| {
+            let check = proxy_check(env, flag);
+            assert_eq!(
+                (check.status, check.message.as_str()),
+                ("pass", format!("Proxy {up} accepts connections").as_str()),
+                "{env:?} {flag:?}"
+            );
+        };
+        // `OPENTIDE_PROXY` wins over the scheme variables, as `--proxy` does.
+        passes(&[("OPENTIDE_PROXY", &up), ("HTTPS_PROXY", &down)], None);
+        passes(&[("OPENTIDE_PROXY", &down)], Some(&up));
+        // `all_proxy` (else `ALL_PROXY`) when no scheme variable is set.
+        passes(&[("all_proxy", &up)], None);
+        passes(&[("ALL_PROXY", &up)], None);
+        passes(&[("all_proxy", &down), ("HTTPS_PROXY", &up)], None);
+        // The lower-case spelling first, as curl and the connectors read them.
+        passes(&[("https_proxy", &up), ("HTTPS_PROXY", &down)], None);
+        // `https_proxy` before `http_proxy`: PyPI and the tenants are https.
+        passes(&[("http_proxy", &down), ("HTTPS_PROXY", &up)], None);
+        // Only `http_proxy`: an https request goes direct, so it says so.
+        let check = proxy_check(&[("http_proxy", &up)], None);
+        assert_eq!(
+            (check.status, check.message),
+            (
+                "pass",
+                format!("Proxy {up} accepts connections; only http:// requests go through it")
+            )
+        );
+        let check = proxy_check(&[("HTTP_PROXY", ""), ("NO_PROXY", "*")], None);
+        assert_eq!(
+            (check.status, check.message.as_str()),
+            (
+                "skip",
+                "No proxy set (--proxy, OPENTIDE_PROXY, https_proxy, http_proxy, all_proxy)"
+            )
+        );
+    }
+
+    #[test]
+    fn a_proxy_whose_password_hides_its_host_is_never_echoed() {
+        let check = proxy_check(
+            &[("HTTPS_PROXY", "http://al1ce:Qz7k/Wm4r@proxy:8080")],
+            None,
+        );
+        assert_eq!(check.status, "fail");
+        assert!(
+            check
+                .message
+                .starts_with("The proxy URL cannot be parsed: its user or password"),
+            "{}",
+            check.message
+        );
+        for fragment in ["al1ce", "Qz7k", "Wm4r", "proxy:8080"] {
+            assert!(!check.message.contains(fragment), "{}", check.message);
+        }
     }
 
     #[test]
