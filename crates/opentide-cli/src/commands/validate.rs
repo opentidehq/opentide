@@ -277,17 +277,23 @@ pub struct Run {
 
 /// The CVE lookups of `--check cve`, with the workspace's `[cve]`
 /// settings; `None` for every other check.
+///
+/// # Errors
+///
+/// A `[cve]` setting of the wrong type.
 fn online_cve(
     args: &Args,
     ws: &opentide_workspace::Workspace,
     cx: &Context<'_>,
-) -> Option<super::cve::OnlineCve> {
-    (args.check == Some(Check::Cve)).then(|| {
-        let settings = super::cve::Settings::from_documentation(
-            ws.configuration().resolved.get("documentation"),
-        );
-        super::cve::OnlineCve::new(&settings, cx.env, cx.proxy, cx.version)
-    })
+) -> Result<Option<super::cve::OnlineCve>, String> {
+    if args.check != Some(Check::Cve) {
+        return Ok(None);
+    }
+    let settings =
+        super::cve::Settings::from_documentation(ws.configuration().resolved.get("documentation"))?;
+    Ok(Some(super::cve::OnlineCve::new(
+        &settings, cx.env, cx.proxy, cx.version,
+    )))
 }
 
 /// Opens the workspace and validates it once; `Err` with the message when
@@ -296,7 +302,7 @@ pub fn validate_once(args: &Args, cx: &Context<'_>) -> Result<Run, String> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     let ws = super::open(options)?;
     let queries = args.queries.unwrap_or_default();
-    let cve = online_cve(args, &ws, cx);
+    let cve = online_cve(args, &ws, cx)?;
     let options = Options {
         check: args.check,
         selection: Some(&args.selection),
@@ -396,7 +402,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         Ok(ws) => ws,
         Err(message) => return Report::error(COMMAND, message),
     };
-    let cve = online_cve(args, &ws, cx);
+    let cve = match online_cve(args, &ws, cx) {
+        Ok(cve) => cve,
+        Err(message) => return Report::error(COMMAND, message),
+    };
     let options = Options {
         check: args.check,
         selection: Some(&args.selection),

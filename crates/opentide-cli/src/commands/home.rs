@@ -333,7 +333,7 @@ fn facts_rows(facts: &Facts, screen: &Screen<'_>) -> Vec<Text> {
                 &Style::new("underline"),
             );
             if let Some(git) = &facts.git {
-                // Rich's base style (underline) runs under what is appended.
+                // The whole place is underlined, its git part dim too.
                 place.append(&format!("  git: {git}"), &Style::new("underline dim"));
             }
             rows.push(vec![label("workspace"), place]);
@@ -368,7 +368,7 @@ fn facts_rows(facts: &Facts, screen: &Screen<'_>) -> Vec<Text> {
                 } else {
                     format!(" ({})", plural(*tenants, "tenant"))
                 };
-                // Rich's base style (bold) runs under what is appended.
+                // The whole value is bold, its count dim too.
                 value.append(&count, &Style::new("bold dim"));
                 rows.push(vec![
                     label(if number == 0 { "platforms" } else { "" }),

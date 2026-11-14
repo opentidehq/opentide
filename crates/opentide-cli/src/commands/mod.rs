@@ -126,15 +126,12 @@ impl AfterSteps {
     pub fn log(&self) {
         match self {
             AfterSteps::NestedObjectFiles { detail, files } => {
-                // structlog prints the list as Python's `repr` writes it.
-                let listed: Vec<String> = files
-                    .iter()
-                    .map(|file| opentide_schema::configuration::repr::quote(file))
-                    .collect();
+                // The files as a JSON array of strings.
+                let listed = serde_json::to_string(files).unwrap_or_default();
                 tracing::warn!(
                     detail = detail.as_str(),
                     count = files.len(),
-                    files = format!("[{}]", listed.join(", ")).as_str(),
+                    files = listed.as_str(),
                     issue = NESTED_OBJECTS_ISSUE,
                     "nested_object_file"
                 );
