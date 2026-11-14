@@ -6,6 +6,6 @@ args: opentide deploy migrate-state
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m No vendor rule ids left on rules
+␛[1m␛[32m✓␛[0m No vendor rule ids left on rules
 
 ━━━ stderr · empty

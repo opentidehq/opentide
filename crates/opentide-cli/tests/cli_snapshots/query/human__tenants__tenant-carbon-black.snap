@@ -13,6 +13,6 @@ c:\windows\system32\cmd.exe  [4001]       ws-1         2026-10-27T07:51:00.000Z 
 c:\windows\system32\cmd.exe  [4002]       ws-2         2026-10-27T07:52:00.000Z  ORGKEY01-00000002-…
 ␛[2m1 more columns: name them with --columns, or use --format jsonl␛[0m
 
-␛[1;32m✓␛[0m 2 rows from 1 carbon_black_cloud tenant (limited to 2 per tenant)
+␛[1m␛[32m✓␛[0m 2 rows from 1 carbon_black_cloud tenant (limited to 2 per tenant)
 
 ━━━ stderr · empty

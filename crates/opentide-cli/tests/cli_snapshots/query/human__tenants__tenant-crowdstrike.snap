@@ -12,8 +12,8 @@ exit: 0
 ws-01         a1      c1       1761465600000
 ws-02         a2                              Ünïcode   ["x",1]
 
-␛[1;32m✓␛[0m 2 rows from 1 crowdstrike tenant
+␛[1m␛[32m✓␛[0m 2 rows from 1 crowdstrike tenant
 
 ━━━ stderr
-␛[1;33mwarning␛[0m: the search hit a limit
-␛[1;33mwarning␛[0m: plain warning
+␛[1m␛[33mwarning␛[0m: the search hit a limit
+␛[1m␛[33mwarning␛[0m: plain warning

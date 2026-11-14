@@ -6,14 +6,14 @@ args: opentide deploy migrate-state
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Moved 4 vendor ids to .opentide/states/deployment/ · 4 rules edited, 3 shards written
-  ␛[1;36mhelp:␛[0m Commit the edited rules together with every new or changed file under
+␛[1m␛[32m✓␛[0m Moved 4 vendor ids to .opentide/states/deployment/ · 4 rules edited, 3 shards written
+  ␛[1m␛[36mhelp:␛[0m Commit the edited rules together with every new or changed file under
         .opentide/states/deployment/. A deploy from a checkout that has the stripped rules but not
         the shards creates a second remote rule.
 
 ━━━ stderr
 warning: External id unused · platform: sentinel · tenant: soc · value: 9f2c · file: Objects/Detection Rules/rule-0001-sentinel-kql.yaml
-␛[1;33mwarning:␛[0m external_id_unused: sentinel tenant soc id 9f2c removed from Objects/Detection
+␛[1m␛[33mwarning:␛[0m external_id_unused: sentinel tenant soc id 9f2c removed from Objects/Detection
          Rules/rule-0001-sentinel-kql.yaml (never read by its deployer; not stored)
 
 ━━━ ws/.opentide/states/ · created 0755

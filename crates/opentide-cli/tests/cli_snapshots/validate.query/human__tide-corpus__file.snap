@@ -6,6 +6,6 @@ args: opentide validate query --file objects/rules/rule-0001-sentinel-kql.yaml -
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m 1 query valid
+␛[1m␛[32m✓␛[0m 1 query valid
 
 ━━━ stderr · empty

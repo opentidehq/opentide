@@ -8,9 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m Invalid value "sentinal" for --platform: choose from sentinel, defender_for_endpoint, splunk,
+␛[1m␛[31merror:␛[0m Invalid value "sentinal" for --platform: choose from sentinel, defender_for_endpoint, splunk,
        sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender,
        graylog, exabeam, google_secops.
-  ␛[1;36mhelp:␛[0m did you mean "sentinel"?
+  ␛[1m␛[36mhelp:␛[0m did you mean "sentinel"?
   ␛[1musage:␛[0m opentide query [OPTIONS] --platform <PLATFORM> [query]
-  ␛[1;36mhelp:␛[0m run 'opentide query --help'
+  ␛[1m␛[36mhelp:␛[0m run 'opentide query --help'

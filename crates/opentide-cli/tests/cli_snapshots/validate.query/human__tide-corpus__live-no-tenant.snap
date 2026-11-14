@@ -8,6 +8,6 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m Cannot run live query validation: sentinel has no tenants configured in
+␛[1m␛[31merror:␛[0m Cannot run live query validation: sentinel has no tenants configured in
        .opentide/configurations/platforms/sentinel.toml
-  ␛[1;36mhelp:␛[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+  ␛[1m␛[36mhelp:␛[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml

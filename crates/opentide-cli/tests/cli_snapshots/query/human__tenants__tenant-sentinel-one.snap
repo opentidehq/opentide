@@ -12,7 +12,7 @@ exit: 0
 cmd.exe           ws-1
 powershell.exe    ws-2
 
-␛[1;32m✓␛[0m 2 rows from 1 sentinel_one tenant
+␛[1m␛[32m✓␛[0m 2 rows from 1 sentinel_one tenant
 
 ━━━ stderr
-␛[1;33mwarning␛[0m: Add a filter on event.type to speed up the query
+␛[1m␛[33mwarning␛[0m: Add a filter on event.type to speed up the query
