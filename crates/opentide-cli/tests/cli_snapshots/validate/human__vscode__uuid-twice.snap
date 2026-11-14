@@ -115,6 +115,6 @@ exit: 1
 
 
 ━━━ stderr
-␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h␛[1m␛[31m✗␛[0m 11 errors in 2 files · 2 objects checked · 1 query · <SECONDS>
+␛[1m␛[31m✗␛[0m 11 errors in 2 files · 2 objects checked · 1 query · <SECONDS>
 ␛[1m␛[36m→␛[0m ␛[1mopentide explain schema_validation␛[0m␛[2m · how to fix it␛[0m
 ␛[1m␛[36m→␛[0m ␛[1mopentide validate␛[0m␛[2m · check again␛[0m
