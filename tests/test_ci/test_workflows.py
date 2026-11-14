@@ -147,7 +147,7 @@ def test_the_pr_gates_jobs_run_on_linux() -> None:
 
 
 def test_only_the_build_compiles_the_gates_workspace() -> None:
-    """One build, which runs the Rust tests: the Python jobs use its extension."""
+    """`build` builds and runs the Rust tests; `native` builds the Python jobs' extension."""
     compiles = re.compile(r"\bcargo (?:build|test|nextest run)\b|\buv sync\b(?!.*--no-install)")
     for job_id in ("python", "gitlab-ci-lint", "lint"):
         job = ci_jobs()[job_id]
