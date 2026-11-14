@@ -15,7 +15,9 @@
 //! The tenant's `index` (a list) is not a [`crate::Tenant`] setup value:
 //! the calls that fall back on it take it as an argument.
 
+use opentide_compile::deploy::PATH_SEGMENT;
 use opentide_compile::json::{Json, Object};
+use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
 use crate::connector::{BoxFuture, LiveCheck, LiveValidator, Platform, QueryRunner, TenantContext};
@@ -172,10 +174,12 @@ impl Elastic {
         let url = format!(
             "{}/api/detection_engine/rules/_find?{}",
             client.kibana_base,
-            crate::encode::urlencode([
-                ("page", page.to_string().as_str()),
-                ("per_page", per_page.to_string().as_str()),
-            ])
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs([
+                    ("page", page.to_string().as_str()),
+                    ("per_page", per_page.to_string().as_str()),
+                ])
+                .finish()
         );
         let answer = client
             .call(cx, crate::transport::Method::GET, &url, None, false)
@@ -265,7 +269,9 @@ impl Client {
         format!(
             "{}?{}",
             self.rules(),
-            crate::encode::urlencode([("rule_id", rule_id)])
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs([("rule_id", rule_id)])
+                .finish()
         )
     }
 
@@ -390,7 +396,7 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         let url = self.es(&format!(
             "/_resolve/index/{}?ignore_unavailable=true&allow_no_indices=true",
-            crate::encode::quote(pattern, "")
+            utf8_percent_encode(pattern, PATH_SEGMENT)
         ));
         self.call(cx, crate::transport::Method::GET, &url, None, false)
             .await
@@ -403,10 +409,14 @@ impl Client {
         sources: &str,
         fields: &[String],
     ) -> Result<Answer, ConnectorError> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("fields", &fields.join(","))
+            .append_pair("ignore_unavailable", "true")
+            .append_pair("allow_no_indices", "true")
+            .finish();
         let url = self.es(&format!(
-            "/{}/_field_caps?fields={}&ignore_unavailable=true&allow_no_indices=true",
-            crate::encode::quote(sources, ",*-_"),
-            crate::encode::quote(&fields.join(","), ",*-_.")
+            "/{}/_field_caps?{query}",
+            utf8_percent_encode(sources, PATH_SEGMENT),
         ));
         self.call(cx, crate::transport::Method::GET, &url, None, false)
             .await
@@ -1581,7 +1591,7 @@ async fn eql(
     ]);
     let url = client.es(&format!(
         "/{}/_eql/search",
-        crate::encode::quote(indices, ",*-_.")
+        utf8_percent_encode(indices, PATH_SEGMENT)
     ));
     let answer = client
         .call(
@@ -1650,7 +1660,7 @@ async fn lucene(
     ]);
     let url = client.es(&format!(
         "/{}/_search",
-        crate::encode::quote(indices, ",*-_.")
+        utf8_percent_encode(indices, PATH_SEGMENT)
     ));
     let answer = client
         .call(
@@ -1767,7 +1777,7 @@ async fn kuery_preview(
     ]);
     let url = client.es(&format!(
         "/.preview.alerts-security.alerts-{}/_search",
-        crate::encode::quote(&client.space, "")
+        utf8_percent_encode(&client.space, PATH_SEGMENT)
     ));
     let found = client
         .call(

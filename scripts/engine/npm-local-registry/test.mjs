@@ -69,7 +69,7 @@ function parseArgs(argv) {
     else fail(`unknown argument: ${flag}`)
   }
   if (!args.version) fail('--version is required')
-  if (!/^\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?$/.test(args.version)) fail(`not a release version: ${args.version}`)
+  if (!/^\d+\.\d+\.\d+(?:-(?:rc|dev)\.[1-9]\d*)?$/.test(args.version)) fail(`not a release version: ${args.version}`)
   if (Boolean(args.tarballs) === Boolean(args.pack)) fail('give one of --tarballs DIR and --pack DIR')
   return args
 }

@@ -17,7 +17,7 @@
 //! ```
 
 use super::glyphs;
-use super::text::{Colour, Style, Text};
+use super::text::{Color, Colour, Style, Text};
 use crate::env::Env;
 use crate::json::Json;
 use std::io::Write;
@@ -126,11 +126,13 @@ impl Step {
     /// Its glyph and the glyph's style; a running step shows as failed.
     fn mark(&self) -> Text {
         let (glyph, style) = match self.status {
-            StepStatus::Ok => (glyphs::OK, "bold green"),
-            StepStatus::Failed | StepStatus::Running => (glyphs::FAILED, "bold red"),
-            StepStatus::Skipped => (glyphs::DISABLE, "dim"),
+            StepStatus::Ok => (glyphs::OK, Style::fg(Color::Green).bold()),
+            StepStatus::Failed | StepStatus::Running => {
+                (glyphs::FAILED, Style::fg(Color::Red).bold())
+            }
+            StepStatus::Skipped => (glyphs::DISABLE, Style::DIM),
         };
-        Text::styled(glyph, &Style::new(style))
+        Text::styled(glyph, &style)
     }
 }
 
@@ -139,7 +141,7 @@ pub fn step_line(step: &Step) -> Text {
     let mut line = step.mark();
     line.push_str(" ");
     line.push_str(&step.name);
-    let dim = Style::new("dim");
+    let dim = Style::DIM;
     for part in step.facts() {
         line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
         line.push_str(&part);
@@ -157,7 +159,7 @@ pub fn checklist(steps: &[Step], width: usize, colour: Colour) -> String {
         .map(|count| count.to_string().len())
         .max()
         .unwrap_or(0);
-    let dim = Style::new("dim");
+    let dim = Style::DIM;
     let rows: Vec<Vec<Text>> = steps
         .iter()
         .map(|step| {
@@ -179,7 +181,7 @@ pub fn checklist(steps: &[Step], width: usize, colour: Colour) -> String {
             }
             vec![
                 step.mark(),
-                Text::styled(&step.name, &Style::new("bold")),
+                Text::styled(&step.name, &Style::BOLD),
                 Text::styled(&count, &dim),
                 Text::styled(&seconds_text(step.seconds), &dim),
                 Text::styled(step.place.as_deref().unwrap_or_default(), &dim),

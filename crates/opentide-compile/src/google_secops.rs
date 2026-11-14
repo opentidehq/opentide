@@ -331,18 +331,12 @@ pub fn scope_id(scope: &str) -> &str {
         .map_or(scope, |(_, id)| id)
 }
 
-/// A rule id as a path segment: percent-encoded, nothing kept (Python's
-/// `quote(rule_id, safe='')`).
+/// A rule id as a path segment under `rules/`.
 pub fn rule_path(rule_id: &str) -> String {
-    let mut out = String::from("rules/");
-    for byte in rule_id.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-' | b'~') {
-            out.push(char::from(byte));
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
+    format!(
+        "rules/{}",
+        percent_encoding::utf8_percent_encode(rule_id, crate::deploy::PATH_SEGMENT)
+    )
 }
 
 /// One request: method, path from the API root (`/v1/<instance>…`), query

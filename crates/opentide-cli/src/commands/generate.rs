@@ -341,9 +341,9 @@ struct DocsRun {
 fn cve_source(
     resolved: &opentide_schema::configuration::resolve::Resolved,
     cx: &Context<'_>,
-) -> opentide_compile::generate::docs::cve::CveSource {
+) -> Result<opentide_compile::generate::docs::cve::CveSource, String> {
     use opentide_compile::generate::docs::cve::{CveDetail, CveSource, EpssDetail};
-    let settings = super::cve::Settings::from_documentation(resolved.get("documentation"));
+    let settings = super::cve::Settings::from_documentation(resolved.get("documentation"))?;
     let links = settings.links();
     let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
     let lookup = opentide_connectors::vulnerability::VulnerabilityLookup::new(
@@ -355,8 +355,8 @@ fn cve_source(
         cx.proxy,
         cx.version,
     );
-    CveSource::new(
-        move |id: &str| match lookup.get(id, true, &|key: &str| links.page_url(key)) {
+    Ok(CveSource::new(move |id: &str| {
+        match lookup.get(id, true, &|key: &str| links.page_url(key)) {
             Ok(Some(record)) => {
                 let epss = match record.cve_id().map(|cve| lookup.epss(&cve)) {
                     Some(Ok(Some(score))) => EpssDetail::Score(score),
@@ -367,8 +367,8 @@ fn cve_source(
             }
             Ok(None) => CveDetail::NotFound,
             Err(_) => CveDetail::Unavailable,
-        },
-    )
+        }
+    }))
 }
 
 fn counts_json(counts: Counts) -> Json {
@@ -493,7 +493,7 @@ fn docs_phase(
     )
     .map_err(|error| error.detail)?;
     if settings.cve_details {
-        settings.cve_source = cve_source(resolved, cx);
+        settings.cve_source = cve_source(resolved, cx)?;
     }
     // Documentation previews open pull requests: their inflight shards are
     // overlaid on the index for the run (`inflight_preview`).

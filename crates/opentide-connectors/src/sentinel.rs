@@ -11,7 +11,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use opentide_compile::deploy::PATH_SEGMENT;
 use opentide_compile::json::{Json, Object};
+use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
 use crate::connector::{
@@ -19,7 +21,6 @@ use crate::connector::{
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
     kql_with_limit,
 };
-use crate::encode::segment;
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
@@ -138,13 +139,13 @@ impl Sentinel {
         let workspace = cx.tenant.secret("workspace_name")?.expose();
         let mut url = format!(
             "{ARM_ENDPOINT}/subscriptions/{}/resourceGroups/{}/providers/Microsoft.OperationalInsights/workspaces/{}/providers/Microsoft.SecurityInsights/alertRules",
-            segment(subscription),
-            segment(group),
-            segment(workspace)
+            utf8_percent_encode(subscription, PATH_SEGMENT),
+            utf8_percent_encode(group, PATH_SEGMENT),
+            utf8_percent_encode(workspace, PATH_SEGMENT)
         );
         if let Some(rule_id) = rule_id {
             url.push('/');
-            url.push_str(&segment(rule_id));
+            url.extend(utf8_percent_encode(rule_id, PATH_SEGMENT));
         }
         Ok(url)
     }
@@ -294,7 +295,10 @@ impl Sentinel {
                 message: format!("the request body cannot be written: {error}"),
             })?;
         let wait = request.timeout.min(MAX_SERVER_TIMEOUT).as_secs();
-        let url = format!("{LOGS_ENDPOINT}/workspaces/{}/query", segment(&workspace));
+        let url = format!(
+            "{LOGS_ENDPOINT}/workspaces/{}/query",
+            utf8_percent_encode(&workspace, PATH_SEGMENT)
+        );
         let answer = self
             .send(cx, LOGS_SCOPE, |token| {
                 cx.http

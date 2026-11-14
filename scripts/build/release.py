@@ -3,9 +3,10 @@
 ``publish.yml``, the release train, releases from "Run workflow" on
 ``development``, as language-server's Release workflow did from ``main``: the
 workflow builds the version the changelog names, creates its tag with the
-GitHub Release, and publishes it everywhere. opentide's Python version is the
-git tag's (hatch-vcs), so before the tag exists the newest dated
-``CHANGELOG.md`` heading is the only statement of the version in the tree::
+GitHub Release, and publishes it everywhere. The newest dated ``CHANGELOG.md``
+heading states the version to release; the Cargo workspace's (which the wheel
+takes, through maturin) must already be at it (``scripts/engine/release.py
+lockstep``)::
 
     uv run python scripts/build/release.py version                  # 0.24.0
     uv run python scripts/build/release.py check v0.24.0            # the notes PR merged
