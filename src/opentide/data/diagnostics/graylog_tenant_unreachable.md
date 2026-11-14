@@ -7,7 +7,7 @@ Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.
 ## Example
 
 ```text
-graylog_tenant_unreachable: HTTPSConnectionPool(host='graylog.example.com', port=443): Max retries exceeded
+graylog_tenant_unreachable: Cannot reach graylog tenant 'lab' at https://graylog.example.com: connection refused
 ```
 
 ## How to fix

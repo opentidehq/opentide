@@ -7,7 +7,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 ## Example
 
 ```text
-google_secops_tenant_unreachable: HTTPSConnectionPool(host='eu-chronicle.googleapis.com', port=443): Read timed out
+google_secops_tenant_unreachable: google_secops tenant 'eu' at https://eu-chronicle.googleapis.com sent no answer within 30s
 ```
 
 ## How to fix

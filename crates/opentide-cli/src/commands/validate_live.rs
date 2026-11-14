@@ -35,7 +35,7 @@ use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 use tokio_util::sync::CancellationToken;
 
 use super::query::{
-    Configured, default_host, http_settings, log_unset, seconds_g, toml_value, unset_credentials,
+    Configured, default_host, http_settings, log_unset, toml_value, unset_credentials,
 };
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
@@ -739,7 +739,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
                 message.push_str(&format!(
                     " · {} with no answer within {}s",
                     timed_out.len(),
-                    seconds_g(timeout)
+                    timeout
                 ));
             }
             let mut result = head(Some(platform), if failed_any { "failed" } else { "passed" });
@@ -854,8 +854,7 @@ pub(crate) fn batches(
     let mut out: IndexMap<String, Batch> = IndexMap::new();
     for uuid in uuids {
         let Some(rule) = rule_of(workspace, uuid) else {
-            // The registry's `KeyError`, as `str()` reads it.
-            return Err(format!("{uuid:?}"));
+            return Err(format!("rule {uuid} is not in the workspace"));
         };
         let (block, strategy) = block_strategy(&rule, platform, cx)?;
         for tenant in opentide_compile::plan::rule_tenants(&tenants, &block, strategy, runs, wide) {
@@ -1070,8 +1069,7 @@ impl Streak {
                 "{} queries in a row got no answer within the {}s check timeout (the last: \
                  {error}); a tenant is reported unreachable after {UNREACHABLE_AFTER_TIMEOUTS} \
                  in a row",
-                self.count,
-                seconds_g(self.timeout)
+                self.count, self.timeout
             )));
         }
         Ok(())
@@ -1084,8 +1082,7 @@ impl Streak {
                 "it answered no request: {} timed out after {}s (the last: {last}). A \
                  connection that opens but never completes its TLS handshake, behind a proxy \
                  or a load balancer, looks like this",
-                self.count,
-                seconds_g(self.timeout)
+                self.count, self.timeout
             ))),
             _ => Ok(()),
         }
@@ -1101,9 +1098,8 @@ fn seconds(timeout: f64) -> Duration {
 /// The text of a check that got no answer within *timeout* (`timeout_text`).
 fn timeout_text(reason: &str, timeout: f64) -> String {
     format!(
-        "no answer within the {}s check timeout ({reason}). Raise it with --check-timeout or \
-         {CHECK_TIMEOUT_ENV}, or make the query cheaper",
-        seconds_g(timeout)
+        "no answer within the {timeout}s check timeout ({reason}). Raise it with \
+         --check-timeout or {CHECK_TIMEOUT_ENV}, or make the query cheaper"
     )
 }
 
@@ -1315,18 +1311,9 @@ fn connect(
     Ok(Connection { tenant, http })
 }
 
-/// The Python text of a read timeout on *host* (`requests`' `ReadTimeout`).
-fn read_timeout_text(platform: &str, host: &str, seconds: u64) -> String {
-    let host = url::Url::parse(host)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_owned))
-        .unwrap_or_else(|| host.to_owned());
-    if platform == "splunk" {
-        return "timed out".to_owned();
-    }
-    format!(
-        "HTTPSConnectionPool(host='{host}', port=443): Read timed out. (read timeout={seconds})"
-    )
+/// A read timeout: the request was sent to *address* and got no answer.
+fn read_timeout_text(address: &str, seconds: u64) -> String {
+    format!("no answer from {address} within {seconds}s")
 }
 
 /// Runs *work* with Ctrl-C watched: a press cancels it.
@@ -1549,8 +1536,10 @@ async fn generic(
                             Vec::new(),
                         ));
                     }
-                    Err(ConnectorError::Timeout { seconds, .. }) => {
-                        let error = read_timeout_text(platform, &host, seconds);
+                    Err(ConnectorError::Timeout {
+                        address, seconds, ..
+                    }) => {
+                        let error = read_timeout_text(&address, seconds);
                         streak.timed_out(&error, true).map_err(Early::Unreachable)?;
                         report.checks.push(timed_out(
                             platform,
@@ -1562,7 +1551,7 @@ async fn generic(
                             Vec::new(),
                         ));
                     }
-                    Err(error) => return Err(early(platform, &tenant.name, &host, error)),
+                    Err(error) => return Err(early(platform, &tenant.name, error)),
                 }
             }
         }
@@ -1705,8 +1694,10 @@ async fn google_secops(
                         .push(rejected(platform, rule, &tenant.name, None, &text));
                     break;
                 }
-                Err(ConnectorError::Timeout { seconds, .. }) => {
-                    let error = read_timeout_text(platform, &host, seconds);
+                Err(ConnectorError::Timeout {
+                    address, seconds, ..
+                }) => {
+                    let error = read_timeout_text(&address, seconds);
                     streak.timed_out(&error, true).map_err(Early::Unreachable)?;
                     report.checks.push(timed_out(
                         platform,
@@ -1718,7 +1709,7 @@ async fn google_secops(
                         Vec::new(),
                     ));
                 }
-                Err(error) => return Err(early(platform, &tenant.name, &host, error)),
+                Err(error) => return Err(early(platform, &tenant.name, error)),
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
@@ -1728,26 +1719,16 @@ async fn google_secops(
 
 /// A failure that stops the check (`reaching_tenant`, then the service's
 /// handlers).
-fn early(platform: &str, tenant: &str, host: &str, error: ConnectorError) -> Early {
+fn early(platform: &str, tenant: &str, error: ConnectorError) -> Early {
     match error {
         ConnectorError::Unreachable {
             address, reason, ..
-        } => {
-            // urllib names no URL: Splunk's address is the validator's host.
-            let address = if platform == "splunk" {
-                host.to_owned()
-            } else {
-                address
-            };
-            Early::Unreachable(Unreachable {
-                tenant: tenant.to_owned(),
-                message: format!(
-                    "Cannot reach {platform} tenant '{tenant}' at {address}: {reason}"
-                ),
-                host: address,
-                timeouts: 0,
-            })
-        }
+        } => Early::Unreachable(Unreachable {
+            tenant: tenant.to_owned(),
+            message: format!("Cannot reach {platform} tenant '{tenant}' at {address}: {reason}"),
+            host: address,
+            timeouts: 0,
+        }),
         ConnectorError::Setup { message, .. } => Early::Failed(message),
         ConnectorError::Cancelled => Early::Failed("interrupted".to_owned()),
         ConnectorError::Authentication { message, .. } => {
@@ -2191,8 +2172,10 @@ async fn elastic(
                         "elastic_rule_validation_failed"
                     );
                 }
-                Err(RuleFailure::Connector(ConnectorError::Timeout { seconds, .. })) => {
-                    let error = read_timeout_text("elastic", &host, seconds);
+                Err(RuleFailure::Connector(ConnectorError::Timeout {
+                    address, seconds, ..
+                })) => {
+                    let error = read_timeout_text(&address, seconds);
                     streak.timed_out(&error, true).map_err(Early::Unreachable)?;
                     report.checks.push(timed_out(
                         "elastic",
@@ -2219,7 +2202,7 @@ async fn elastic(
                     ));
                 }
                 Err(RuleFailure::Connector(error)) => {
-                    return Err(early("elastic", &tenant.name, &host, error));
+                    return Err(early("elastic", &tenant.name, error));
                 }
                 Err(RuleFailure::Other(early)) => return Err(early),
             }
@@ -2403,10 +2386,9 @@ mod tests {
         );
         assert_eq!(tenant_host("google_secops", &tenant(&[])), "");
         assert_eq!(
-            read_timeout_text("sentinel_one", "https://s1.invalid", 5),
-            "HTTPSConnectionPool(host='s1.invalid', port=443): Read timed out. (read timeout=5)"
+            read_timeout_text("https://s1.invalid", 5),
+            "no answer from https://s1.invalid within 5s"
         );
-        assert_eq!(read_timeout_text("splunk", "x:1", 5), "timed out");
         assert_eq!(seconds(1e300), Duration::MAX);
         assert_eq!(seconds(2.5), Duration::from_millis(2500));
         assert!(timeout_text("r", 2.5).starts_with("no answer within the 2.5s check timeout (r)."));
