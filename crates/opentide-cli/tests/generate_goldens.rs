@@ -61,7 +61,7 @@ fn exports_before_a_failure_are_written() {
     std::fs::write(&threat, text.replace("  version: 1\n", "")).unwrap();
     let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,
@@ -99,7 +99,7 @@ fn run_json(ws: &Path, words: &[&str]) -> (i32, String) {
 fn run_json_with(ws: &Path, words: &[&str], extra: &[(&str, &str)]) -> (i32, String) {
     let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,
@@ -682,7 +682,7 @@ fn setup_ci_reads_enabled_platforms_and_one_path() {
 fn run_at(ws: &Path, words: &[&str]) -> (i32, String) {
     let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,
@@ -1361,7 +1361,7 @@ fn generate_steps_fail_on_a_configuration_they_cannot_load() {
 fn run_plain(ws: &Path, words: &[&str]) -> (i32, String) {
     let sink: Sink = Arc::new(Mutex::new(Buffer::default()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,
@@ -1400,7 +1400,7 @@ fn the_full_pipeline_names_the_nested_files_it_skipped() {
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,

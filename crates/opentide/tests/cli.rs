@@ -30,7 +30,7 @@ fn the_binary_prints_the_pypi_command_tree() {
     // (APPROVED_DIFFS.toml: the approved additions) judge the rest.
     let oracle = Run {
         exit_code: 0,
-        stdout: opentide_version(&read("stdout"), "0.23.0").into_bytes(),
+        stdout: opentide_version(&read("stdout"), "0.28.1").into_bytes(),
         stderr: read("stderr").into_bytes(),
         files: std::collections::BTreeMap::new(),
     };
