@@ -8,5 +8,5 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: 1 of 1 queries failed on 1 crowdstrike tenant: lab: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: 1 of 1 queries failed on 1 crowdstrike tenant: lab: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output

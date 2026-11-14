@@ -8,5 +8,5 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: 1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: 1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output

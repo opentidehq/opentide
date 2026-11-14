@@ -21,15 +21,15 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
 
 ━━━ ws/.opentide/lsp/catalogs/generated/deprecations.json · created 0644
 {
-  "fields": [],
+  "opentide": "0.28.1",
   "generator": "opentide.generation.lsp_catalog",
-  "opentide": "0.28.1"
+  "fields": []
 }
 
 ━━━ ws/.opentide/lsp/catalogs/generated/fields.json · created 0644
 (1133481 bytes; long strings and the largest parts elided)
 {
-  "fields": "<elided 425970 bytes, sha256 ded05197215e064a153e2b18fdd318a55629c643fa2b3960812c5e4731db4c45>",
+  "fields": "<elided 425922 bytes, sha256 0efef0f216054deb3d30b649752ed7470a9d182a6fe744467ccbd1acc9963bcb>",
   "generator": "opentide.generation.lsp_catalog",
   "opentide": "0.28.1",
   "ref_leaves": {
@@ -128,7 +128,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "entities": {
           "description": "Signal entity vocabulary values, stage-scoped (signal.entities::1.0; e.g. Host::Process, Cloud::Account).",
-          "items": "<elided 10173 bytes, sha256 303b0155532f844c64157e2d190f762a7d3e20b80c076e0335258e9de8bbb60c>",
+          "items": "<elided 10074 bytes, sha256 b28c5bf3fe37f552562ad3dbff136e4582a8ed9e9be514d8441f2b5a1026573d>",
           "markdownDescription": "Signal entity vocabulary values, stage-scoped (`signal.entities::1.0`; e.g. `Host::Process`,\n`Cloud::Account`).",
           "type": "array",
           "uniqueItems": true
@@ -143,7 +143,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
             "null"
           ]
         },
-        "methodology": "<elided 4281 bytes, sha256 ff381d8f5baec3fb1c4afe8d50ffdec00732bae76cfc54fa0f986b8ba826d6f5>",
+        "methodology": "<elided 4251 bytes, sha256 992605d43384040def069f78ff5772f74572a4a4a796e5423524f015bd8a7174>",
         "name": {
           "description": "Signal name.",
           "type": "string"
@@ -301,8 +301,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
           ],
           "markdownEnumDescriptions": [
             "### Clear\n\n**Identifier**: `TLP:CLEAR`\n\n_Vocabulary_ : `Traffic Light Protocol`\n\n---\n\nRecipients can spread this to the world, there is no limit on disclosure.\n",
-            "<262 chars, 262 bytes, sha256 89d37b5d04ba00845d96caaaadfa51fc9a2f3ace4b3d98bdebfb87a27d04593f)\n>",
-            "<205 chars, 205 bytes, sha256 063bb4ba105b601827470e82a27cd993dbdf513885152647f92eeb516194de90)\n>",
+            "<262 chars, 262 bytes, sha256 89d37b5d04ba00845d96caaaadfa51fc9a2f3ace4b3d98bdebfb87a27d04593f>",
+            "<205 chars, 205 bytes, sha256 063bb4ba105b601827470e82a27cd993dbdf513885152647f92eeb516194de90>",
             "### Amber+Strict\n\n**Identifier**: `TLP:AMBER+STRICT`\n\n_Vocabulary_ : `Traffic Light Protocol`\n\n---\n\nSimilar to TLP:AMBER, but restricts sharing to the organization only.\n",
             "### Red\n\n**Identifier**: `TLP:RED`\n\n_Vocabulary_ : `Traffic Light Protocol`\n\n---\n\nFor the eyes and ears of individual recipients only, no further disclosure.\n"
           ],
@@ -392,9 +392,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
           "description": "ATT&CK technique ids (att&ck::1.2).",
           "items": {
             "enum": "<elided 56413 bytes, sha256 54c79a14afdcc2ef77a66a4429b8a5e6a7dc2305ff1441eb41e3ccfc29dd391c>",
-            "enumDescriptions": "<elided 273549 bytes, sha256 a9f93fce6e989c747258b1dd39a9c81ec8317300127391f15811a5f0aa28e8b2>",
-            "markdownEnumDescriptions": "<elided 197165 bytes, sha256 e0f280600e8a2b0c524ce1e6c7d17d717da8ee8c6b6cf4b78e4ce2999197c632>",
-            "x-enumDescriptions": "<elided 273549 bytes, sha256 a9f93fce6e989c747258b1dd39a9c81ec8317300127391f15811a5f0aa28e8b2>"
+            "enumDescriptions": "<elided 272619 bytes, sha256 5cef46f1ab44a81f7d11307fd1a057a6bb17f48f2461d60a50464cf439fdc157>",
+            "markdownEnumDescriptions": "<elided 191393 bytes, sha256 892c2b41b3e478d8acf6e5398fe5dba9db5229986013ba4e52525e93e10c243d>",
+            "x-enumDescriptions": "<elided 272619 bytes, sha256 5cef46f1ab44a81f7d11307fd1a057a6bb17f48f2461d60a50464cf439fdc157>"
           },
           "markdownDescription": "ATT&CK technique ids (`att&ck::1.2`).",
           "type": [
@@ -439,10 +439,10 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
             "Objective not directly related to threat detection capabilities, but which may support another objective."
           ],
           "markdownEnumDescriptions": [
-            "<215 chars, 215 bytes, sha256 e75f663650f8867e27cc6f5664f601c08024a7ee1bf1aa8f0081eb2880bbc548)\n>",
-            "<245 chars, 245 bytes, sha256 18fb40f05187b33bb414d94c7b4c2826edeba1980812c8402432aa9fa4004ca1)\n>",
-            "<302 chars, 302 bytes, sha256 3aca5dddfea4156eadc2a73ae999fdaba872230c9dc82ef9181e9f6ae89afd6b)\n>",
-            "<217 chars, 217 bytes, sha256 7d72df756f13eaaed74b454458070dacf7d3c7b37dfe9771ae4ccc8d921ee3b6)\n>"
+            "<215 chars, 215 bytes, sha256 e75f663650f8867e27cc6f5664f601c08024a7ee1bf1aa8f0081eb2880bbc548>",
+            "<245 chars, 245 bytes, sha256 18fb40f05187b33bb414d94c7b4c2826edeba1980812c8402432aa9fa4004ca1>",
+            "<302 chars, 302 bytes, sha256 3aca5dddfea4156eadc2a73ae999fdaba872230c9dc82ef9181e9f6ae89afd6b>",
+            "<217 chars, 217 bytes, sha256 7d72df756f13eaaed74b454458070dacf7d3c7b37dfe9771ae4ccc8d921ee3b6>"
           ],
           "type": "string",
           "x-enumDescriptions": [
@@ -488,12 +488,12 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
             "Advanced strategy where signals contribute a risk score over time to entities in a permanent risk store."
           ],
           "markdownEnumDescriptions": [
-            "<216 chars, 216 bytes, sha256 2c4c11adea3f809a66a5cb93feff33b31a5d42980722fbc46a2eef64114088cb)\n>",
-            "<268 chars, 268 bytes, sha256 1df1da25ec4e8399ee188cda38eab85d6552c985da8474a58eec9a4b1a8d99d2)\n>",
-            "<253 chars, 253 bytes, sha256 7e86fee80ac6b3835cfe74c38dc8c9c5f892e93ee0ddbefa9070909521e7974b)\n>",
-            "<302 chars, 302 bytes, sha256 0a778348c5aa025fa819a1f0598187efd55854c59aeb3ac390eaecc8fed79ef7)\n>",
-            "<371 chars, 371 bytes, sha256 f19e23e918b9fcbe4c6e10813f118337903ba8e431a58117b0707307c2d944a9)\n>",
-            "<654 chars, 654 bytes, sha256 69892ffda3118b9b4f460a40722086a6fcdfd38570ad9aef1e768e7721f288a1)\n>"
+            "<216 chars, 216 bytes, sha256 2c4c11adea3f809a66a5cb93feff33b31a5d42980722fbc46a2eef64114088cb>",
+            "<268 chars, 268 bytes, sha256 1df1da25ec4e8399ee188cda38eab85d6552c985da8474a58eec9a4b1a8d99d2>",
+            "<253 chars, 253 bytes, sha256 7e86fee80ac6b3835cfe74c38dc8c9c5f892e93ee0ddbefa9070909521e7974b>",
+            "<302 chars, 302 bytes, sha256 0a778348c5aa025fa819a1f0598187efd55854c59aeb3ac390eaecc8fed79ef7>",
+            "<371 chars, 371 bytes, sha256 f19e23e918b9fcbe4c6e10813f118337903ba8e431a58117b0707307c2d944a9>",
+            "<654 chars, 654 bytes, sha256 69892ffda3118b9b4f460a40722086a6fcdfd38570ad9aef1e768e7721f288a1>"
           ],
           "type": "string",
           "x-enumDescriptions": [
@@ -612,156 +612,156 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
 
 ━━━ ws/.opentide/schemas/opentide.schema.json · created 0644
 {
-  "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand.",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "metadata": {
-            "properties": {
-              "schema": {
-                "const": "objective::1.0"
-              }
-            },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "opentide Object Router",
+    "description": "Validates any opentide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor.",
+    "type": "object",
+    "required": [
+        "metadata"
+    ],
+    "properties": {
+        "metadata": {
+            "title": "Metadata",
+            "description": "Object metadata. schema selects the revision schema.",
+            "type": "object",
             "required": [
-              "schema"
+                "schema"
             ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "metadata"
-        ],
-        "type": "object"
-      },
-      "then": {
-        "$ref": "objective.1.0.schema.json"
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "metadata": {
             "properties": {
-              "schema": {
-                "const": "rule::1.0"
-              }
+                "schema": {
+                    "title": "Schema",
+                    "description": "Schema identifier (family::major.minor). Selects the revision schema that validates this object.",
+                    "type": "string",
+                    "enum": [
+                        "objective::1.0",
+                        "rule::1.0",
+                        "rule::1.1",
+                        "threat::1.0"
+                    ],
+                    "enumDescriptions": [
+                        "Detection Objective, schema revision 1.0",
+                        "Detection Rule, schema revision 1.0",
+                        "Detection Rule, schema revision 1.1",
+                        "Threat Vector, schema revision 1.0"
+                    ],
+                    "x-enumDescriptions": [
+                        "Detection Objective, schema revision 1.0",
+                        "Detection Rule, schema revision 1.0",
+                        "Detection Rule, schema revision 1.1",
+                        "Threat Vector, schema revision 1.0"
+                    ]
+                }
             },
-            "required": [
-              "schema"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "metadata"
-        ],
-        "type": "object"
-      },
-      "then": {
-        "$ref": "rule.1.0.schema.json"
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "metadata": {
-            "properties": {
-              "schema": {
-                "const": "rule::1.1"
-              }
-            },
-            "required": [
-              "schema"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "metadata"
-        ],
-        "type": "object"
-      },
-      "then": {
-        "$ref": "rule.1.1.schema.json"
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "metadata": {
-            "properties": {
-              "schema": {
-                "const": "threat::1.0"
-              }
-            },
-            "required": [
-              "schema"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "metadata"
-        ],
-        "type": "object"
-      },
-      "then": {
-        "$ref": "threat.1.0.schema.json"
-      }
-    }
-  ],
-  "description": "Validates any opentide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor.",
-  "markdownDescription": "Validates any opentide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor.",
-  "properties": {
-    "metadata": {
-      "description": "Object metadata. schema selects the revision schema.",
-      "markdownDescription": "Object metadata. `schema` selects the revision schema.",
-      "properties": {
-        "schema": {
-          "description": "Schema identifier (family::major.minor). Selects the revision schema that validates this object.",
-          "enum": [
-            "objective::1.0",
-            "rule::1.0",
-            "rule::1.1",
-            "threat::1.0"
-          ],
-          "enumDescriptions": [
-            "Detection Objective, schema revision 1.0",
-            "Detection Rule, schema revision 1.0",
-            "Detection Rule, schema revision 1.1",
-            "Threat Vector, schema revision 1.0"
-          ],
-          "title": "Schema",
-          "type": "string",
-          "x-enumDescriptions": [
-            "Detection Objective, schema revision 1.0",
-            "Detection Rule, schema revision 1.0",
-            "Detection Rule, schema revision 1.1",
-            "Threat Vector, schema revision 1.0"
-          ]
+            "markdownDescription": "Object metadata. `schema` selects the revision schema."
         }
-      },
-      "required": [
-        "schema"
-      ],
-      "title": "Metadata",
-      "type": "object"
-    }
-  },
-  "required": [
-    "metadata"
-  ],
-  "title": "opentide Object Router",
-  "type": "object"
+    },
+    "allOf": [
+        {
+            "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
+                "properties": {
+                    "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
+                        "properties": {
+                            "schema": {
+                                "const": "objective::1.0"
+                            }
+                        }
+                    }
+                }
+            },
+            "then": {
+                "$ref": "objective.1.0.schema.json"
+            }
+        },
+        {
+            "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
+                "properties": {
+                    "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
+                        "properties": {
+                            "schema": {
+                                "const": "rule::1.0"
+                            }
+                        }
+                    }
+                }
+            },
+            "then": {
+                "$ref": "rule.1.0.schema.json"
+            }
+        },
+        {
+            "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
+                "properties": {
+                    "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
+                        "properties": {
+                            "schema": {
+                                "const": "rule::1.1"
+                            }
+                        }
+                    }
+                }
+            },
+            "then": {
+                "$ref": "rule.1.1.schema.json"
+            }
+        },
+        {
+            "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
+                "properties": {
+                    "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
+                        "properties": {
+                            "schema": {
+                                "const": "threat::1.0"
+                            }
+                        }
+                    }
+                }
+            },
+            "then": {
+                "$ref": "threat.1.0.schema.json"
+            }
+        }
+    ],
+    "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand.",
+    "markdownDescription": "Validates any opentide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor."
 }
 
 ━━━ ws/.opentide/schemas/rule.1.0.schema.json · created 0644
 (4332010 bytes; long strings and the largest parts elided)
 {
   "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand.",
-  "$defs": "<elided 106179 bytes, sha256 cef471c8baad23bbf6886457f221a286e9a2c1920acbdcded7c7d2b7df944b46>",
+  "$defs": "<elided 106125 bytes, sha256 d94d2a7839cff4b024813bb11d285d8758c4dd1e3392e6c00b9ad355119fb43a>",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "A detection rule defines how a detection opportunity is implemented.",
@@ -779,8 +779,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       "properties": {
         "carbon_black_cloud": {
           "additionalProperties": false,
-          "description": "<205 chars, 205 bytes, sha256 aa5e26e3646e4948f934de4fe11f5f90d07ca14115c6595eb9ed26b674161a6f)\n>",
-          "properties": "<elided 5384 bytes, sha256 50f7ab1f3f1aec63849bb155ecc5581e96d52ac8e42b7fbf14f1f541bd95cf85>",
+          "description": "<205 chars, 205 bytes, sha256 aa5e26e3646e4948f934de4fe11f5f90d07ca14115c6595eb9ed26b674161a6f>",
+          "properties": "<elided 5366 bytes, sha256 0981fcdefada0fea22ef6593d5d3b486474ad46582328af56cef9bff5e7c119b>",
           "required": [
             "status",
             "query"
@@ -791,7 +791,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "crowdstrike": {
           "additionalProperties": false,
           "description": "The CrowdStrike Falcon® platform delivers real-time threat detection, simplified management, and proactive threat hunting for unmatched protection.",
-          "properties": "<elided 5019 bytes, sha256 251043985dd8b444461e1cb6663dce11ea32447990bcfe7cd1e14ff5fa7af490>",
+          "properties": "<elided 5001 bytes, sha256 045746a2c75925314db8ea271ef9f29b026a03339cc779c6003813741796dfa0>",
           "required": [
             "status",
             "query",
@@ -803,8 +803,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "defender_for_endpoint": {
           "additionalProperties": false,
-          "description": "<231 chars, 231 bytes, sha256 5ce3162495cc694c803d859782e1b6daecf14166cab4dac2499a4adf4f8a7f27)\n>",
-          "properties": "<elided 5744 bytes, sha256 18bc862269ce33532f18f548a4479d0eabcd7d04204cb93465ea46248fec0c9b>",
+          "description": "<231 chars, 231 bytes, sha256 5ce3162495cc694c803d859782e1b6daecf14166cab4dac2499a4adf4f8a7f27>",
+          "properties": "<elided 5726 bytes, sha256 542cc92cdbbabc2b7458b43e9a2a970899844006316f7f434215b224185742b1>",
           "required": [
             "status",
             "query",
@@ -818,7 +818,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "elastic": {
           "additionalProperties": false,
           "description": "Elastic Security detection rules via the Kibana detection engine API.",
-          "properties": "<elided 9311 bytes, sha256 82f61bdecb5a9e2b6ffb0f39411195f8b510e1a601616188db2cfe4f7b2c25ce>",
+          "properties": "<elided 9293 bytes, sha256 b2a02885f31c51ffce6a7652f8c852c3ea1d9382cc9bf6be4b605f7057420b64>",
           "required": [
             "status",
             "type"
@@ -828,8 +828,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "harfanglab": {
           "additionalProperties": false,
-          "description": "<301 chars, 301 bytes, sha256 72c65c534e2b758a12b1dc814cb7e8057493f45891632fc75c8dfd04c4526be3)\n>",
-          "properties": "<elided 5785 bytes, sha256 1bbd1f515102d8ac972341187d6d71cb0217dc97898948d4df828a82378f01c1>",
+          "description": "<301 chars, 301 bytes, sha256 72c65c534e2b758a12b1dc814cb7e8057493f45891632fc75c8dfd04c4526be3>",
+          "properties": "<elided 5767 bytes, sha256 ddc553fd967fc5a20fcb277d4d15e49e8963fbe57dab9fc78c6007ecca1ef410>",
           "required": [
             "status"
           ],
@@ -838,8 +838,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "sentinel": {
           "additionalProperties": false,
-          "description": "<237 chars, 237 bytes, sha256 349edf4b11404f553233d02c70f6b246052d267a42762c65d2dac4336a95ae3f)\n>",
-          "properties": "<elided 5827 bytes, sha256 9c4e3f8c4656d4117c92d0e3e35509f0b560abdb5969b470627698387a1791f1>",
+          "description": "<237 chars, 237 bytes, sha256 349edf4b11404f553233d02c70f6b246052d267a42762c65d2dac4336a95ae3f>",
+          "properties": "<elided 5809 bytes, sha256 8503e1e6664990ce7cf02eb5adf0c9a07462c2ec3cdba1c5832c2f392374731d>",
           "required": [
             "status",
             "query",
@@ -851,7 +851,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "sentinel_one": {
           "additionalProperties": false,
-          "description": "<252 chars, 252 bytes, sha256 94124cdc4c4b322a07237e061db44aca2289e438ee372fd7d13d3cb5a8f01f1a)\n>",
+          "description": "<252 chars, 252 bytes, sha256 94124cdc4c4b322a07237e061db44aca2289e438ee372fd7d13d3cb5a8f01f1a>",
           "properties": {
             "condition": {
               "$ref": "#/$defs/SentinelOneCondition",
@@ -941,9 +941,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Under active technical implementation, going in exploratory rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Rule is qualified functionally, but is undergoing refinement rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Deployed in staging environment for operational testing",
-                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab)\n>",
+                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab>",
                 "Strategy: RELEASE - Deployment from the default branch (also called trunk, or main branch). Deployed in active production environment, potentially raising alerts",
-                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83)\n>",
+                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83>",
                 "Strategy: DELETION - Deployment from the default branch, but removes the rule from the target system. Rule is fully deprecated, and only flagged under this status for archival purposes"
               ],
               "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it.",
@@ -952,9 +952,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
                 "**Strategy**: `PREVIEW` - _Deployment from Pull/Merge Requests_\n\nUnder active technical implementation, going in exploratory rounds",
                 "**Strategy**: `PREVIEW` - _Deployment from Pull/Merge Requests_\n\nRule is qualified functionally, but is undergoing refinement rounds",
                 "**Strategy**: `PREVIEW` - _Deployment from Pull/Merge Requests_\n\nDeployed in staging environment for operational testing",
-                "<236 chars, 236 bytes, sha256 6a32ef15cc142afddaf688d34c142d28ee29ba6292e991c94f2fa4bdf7178444)\n>",
+                "<236 chars, 236 bytes, sha256 6a32ef15cc142afddaf688d34c142d28ee29ba6292e991c94f2fa4bdf7178444>",
                 "**Strategy**: `RELEASE` - _Deployment from the default branch (also called trunk, or main branch)_\n\nDeployed in active production environment, potentially raising alerts",
-                "<263 chars, 263 bytes, sha256 2d20a703ec0c4f96b8a5881d4fbff749dfe2f998345a77e645b28275624dd706)\n>",
+                "<263 chars, 263 bytes, sha256 2d20a703ec0c4f96b8a5881d4fbff749dfe2f998345a77e645b28275624dd706>",
                 "**Strategy**: `DELETION` - _Deployment from the default branch, but removes the rule from the target system._\n\nRule is fully deprecated, and only flagged under this status for archival purposes"
               ],
               "title": "Status of the use-case",
@@ -964,9 +964,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Under active technical implementation, going in exploratory rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Rule is qualified functionally, but is undergoing refinement rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Deployed in staging environment for operational testing",
-                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab)\n>",
+                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab>",
                 "Strategy: RELEASE - Deployment from the default branch (also called trunk, or main branch). Deployed in active production environment, potentially raising alerts",
-                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83)\n>",
+                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83>",
                 "Strategy: DELETION - Deployment from the default branch, but removes the rule from the target system. Rule is fully deprecated, and only flagged under this status for archival purposes"
               ]
             },
@@ -992,7 +992,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "splunk": {
           "additionalProperties": false,
           "description": "Splunk Enterprise enables you to search, analyze and visualize your data to quickly act on insights from across your technology landscape.",
-          "properties": "<elided 5666 bytes, sha256 379357c40afa191840465bf85b4b794ad68292113b0b2f6b87dcbc84e4ce42ff>",
+          "properties": "<elided 5642 bytes, sha256 904beb08de6b27747046f04c6157e34bf2c644b5dbc59b5a2714ccf5ba7ba3f8>",
           "required": [
             "status",
             "query"
@@ -1003,7 +1003,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "sysdig": {
           "additionalProperties": false,
           "description": "Custom Falco rules for Sysdig Secure runtime detection.",
-          "properties": "<elided 7526 bytes, sha256 a02e5554c17d33ed3b210037082091228d46659b3823b4fe499e8aa3031ac9c0>",
+          "properties": "<elided 7508 bytes, sha256 7bb52d1e74931296c2db52a79aee0946ecd7ace43058078c23b7e29981f28c05>",
           "required": [
             "status"
           ],
@@ -1035,10 +1035,10 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       ],
       "markdownDescription": "UUID of the objective, or of a signal defined under an objective, that this rule implements\n(`objective::1.0` or `objective::1.1`).",
       "markdownEnumDescriptions": [
-        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb)\n>",
-        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509)\n>",
-        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb)\n>",
-        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509)\n>"
+        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb>",
+        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509>",
+        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb>",
+        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509>"
       ],
       "type": [
         "string",
@@ -1153,9 +1153,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       "description": "MITRE ATT&CK technique ids (att&ck::1.2).",
       "items": {
         "enum": "<elided 56413 bytes, sha256 54c79a14afdcc2ef77a66a4429b8a5e6a7dc2305ff1441eb41e3ccfc29dd391c>",
-        "enumDescriptions": "<elided 273549 bytes, sha256 a9f93fce6e989c747258b1dd39a9c81ec8317300127391f15811a5f0aa28e8b2>",
-        "markdownEnumDescriptions": "<elided 197165 bytes, sha256 e0f280600e8a2b0c524ce1e6c7d17d717da8ee8c6b6cf4b78e4ce2999197c632>",
-        "x-enumDescriptions": "<elided 273549 bytes, sha256 a9f93fce6e989c747258b1dd39a9c81ec8317300127391f15811a5f0aa28e8b2>"
+        "enumDescriptions": "<elided 272619 bytes, sha256 5cef46f1ab44a81f7d11307fd1a057a6bb17f48f2461d60a50464cf439fdc157>",
+        "markdownEnumDescriptions": "<elided 191393 bytes, sha256 892c2b41b3e478d8acf6e5398fe5dba9db5229986013ba4e52525e93e10c243d>",
+        "x-enumDescriptions": "<elided 272619 bytes, sha256 5cef46f1ab44a81f7d11307fd1a057a6bb17f48f2461d60a50464cf439fdc157>"
       },
       "markdownDescription": "MITRE ATT&CK technique ids (`att&ck::1.2`).",
       "type": "array",
@@ -1177,7 +1177,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
 (4333218 bytes; long strings and the largest parts elided)
 {
   "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand.",
-  "$defs": "<elided 106673 bytes, sha256 8f23db8074e7dfc030cf820064fdecd0503c00c47a408c8bef533c6b5cdc72f7>",
+  "$defs": "<elided 106619 bytes, sha256 7fedee5473c7bee5e6c8b3028cdbeb90879d0570a3de5f94e9e3eb27287866d8>",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "A detection rule defines how a detection opportunity is implemented.",
@@ -1195,8 +1195,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       "properties": {
         "carbon_black_cloud": {
           "additionalProperties": false,
-          "description": "<205 chars, 205 bytes, sha256 aa5e26e3646e4948f934de4fe11f5f90d07ca14115c6595eb9ed26b674161a6f)\n>",
-          "properties": "<elided 5384 bytes, sha256 50f7ab1f3f1aec63849bb155ecc5581e96d52ac8e42b7fbf14f1f541bd95cf85>",
+          "description": "<205 chars, 205 bytes, sha256 aa5e26e3646e4948f934de4fe11f5f90d07ca14115c6595eb9ed26b674161a6f>",
+          "properties": "<elided 5366 bytes, sha256 0981fcdefada0fea22ef6593d5d3b486474ad46582328af56cef9bff5e7c119b>",
           "required": [
             "status",
             "query"
@@ -1207,7 +1207,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "crowdstrike": {
           "additionalProperties": false,
           "description": "The CrowdStrike Falcon® platform delivers real-time threat detection, simplified management, and proactive threat hunting for unmatched protection.",
-          "properties": "<elided 5019 bytes, sha256 251043985dd8b444461e1cb6663dce11ea32447990bcfe7cd1e14ff5fa7af490>",
+          "properties": "<elided 5001 bytes, sha256 045746a2c75925314db8ea271ef9f29b026a03339cc779c6003813741796dfa0>",
           "required": [
             "status",
             "query",
@@ -1219,8 +1219,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "defender_for_endpoint": {
           "additionalProperties": false,
-          "description": "<231 chars, 231 bytes, sha256 5ce3162495cc694c803d859782e1b6daecf14166cab4dac2499a4adf4f8a7f27)\n>",
-          "properties": "<elided 5744 bytes, sha256 18bc862269ce33532f18f548a4479d0eabcd7d04204cb93465ea46248fec0c9b>",
+          "description": "<231 chars, 231 bytes, sha256 5ce3162495cc694c803d859782e1b6daecf14166cab4dac2499a4adf4f8a7f27>",
+          "properties": "<elided 5726 bytes, sha256 542cc92cdbbabc2b7458b43e9a2a970899844006316f7f434215b224185742b1>",
           "required": [
             "status",
             "query",
@@ -1234,7 +1234,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "elastic": {
           "additionalProperties": false,
           "description": "Elastic Security detection rules via the Kibana detection engine API.",
-          "properties": "<elided 9311 bytes, sha256 82f61bdecb5a9e2b6ffb0f39411195f8b510e1a601616188db2cfe4f7b2c25ce>",
+          "properties": "<elided 9293 bytes, sha256 b2a02885f31c51ffce6a7652f8c852c3ea1d9382cc9bf6be4b605f7057420b64>",
           "required": [
             "status",
             "type"
@@ -1244,8 +1244,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "harfanglab": {
           "additionalProperties": false,
-          "description": "<301 chars, 301 bytes, sha256 72c65c534e2b758a12b1dc814cb7e8057493f45891632fc75c8dfd04c4526be3)\n>",
-          "properties": "<elided 5785 bytes, sha256 1bbd1f515102d8ac972341187d6d71cb0217dc97898948d4df828a82378f01c1>",
+          "description": "<301 chars, 301 bytes, sha256 72c65c534e2b758a12b1dc814cb7e8057493f45891632fc75c8dfd04c4526be3>",
+          "properties": "<elided 5767 bytes, sha256 ddc553fd967fc5a20fcb277d4d15e49e8963fbe57dab9fc78c6007ecca1ef410>",
           "required": [
             "status"
           ],
@@ -1254,8 +1254,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "sentinel": {
           "additionalProperties": false,
-          "description": "<237 chars, 237 bytes, sha256 349edf4b11404f553233d02c70f6b246052d267a42762c65d2dac4336a95ae3f)\n>",
-          "properties": "<elided 5827 bytes, sha256 9c4e3f8c4656d4117c92d0e3e35509f0b560abdb5969b470627698387a1791f1>",
+          "description": "<237 chars, 237 bytes, sha256 349edf4b11404f553233d02c70f6b246052d267a42762c65d2dac4336a95ae3f>",
+          "properties": "<elided 5809 bytes, sha256 8503e1e6664990ce7cf02eb5adf0c9a07462c2ec3cdba1c5832c2f392374731d>",
           "required": [
             "status",
             "query",
@@ -1267,7 +1267,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         },
         "sentinel_one": {
           "additionalProperties": false,
-          "description": "<252 chars, 252 bytes, sha256 94124cdc4c4b322a07237e061db44aca2289e438ee372fd7d13d3cb5a8f01f1a)\n>",
+          "description": "<252 chars, 252 bytes, sha256 94124cdc4c4b322a07237e061db44aca2289e438ee372fd7d13d3cb5a8f01f1a>",
           "properties": {
             "condition": {
               "$ref": "#/$defs/SentinelOneCondition",
@@ -1357,9 +1357,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Under active technical implementation, going in exploratory rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Rule is qualified functionally, but is undergoing refinement rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Deployed in staging environment for operational testing",
-                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab)\n>",
+                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab>",
                 "Strategy: RELEASE - Deployment from the default branch (also called trunk, or main branch). Deployed in active production environment, potentially raising alerts",
-                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83)\n>",
+                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83>",
                 "Strategy: DELETION - Deployment from the default branch, but removes the rule from the target system. Rule is fully deprecated, and only flagged under this status for archival purposes"
               ],
               "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it.",
@@ -1368,9 +1368,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
                 "**Strategy**: `PREVIEW` - _Deployment from Pull/Merge Requests_\n\nUnder active technical implementation, going in exploratory rounds",
                 "**Strategy**: `PREVIEW` - _Deployment from Pull/Merge Requests_\n\nRule is qualified functionally, but is undergoing refinement rounds",
                 "**Strategy**: `PREVIEW` - _Deployment from Pull/Merge Requests_\n\nDeployed in staging environment for operational testing",
-                "<236 chars, 236 bytes, sha256 6a32ef15cc142afddaf688d34c142d28ee29ba6292e991c94f2fa4bdf7178444)\n>",
+                "<236 chars, 236 bytes, sha256 6a32ef15cc142afddaf688d34c142d28ee29ba6292e991c94f2fa4bdf7178444>",
                 "**Strategy**: `RELEASE` - _Deployment from the default branch (also called trunk, or main branch)_\n\nDeployed in active production environment, potentially raising alerts",
-                "<263 chars, 263 bytes, sha256 2d20a703ec0c4f96b8a5881d4fbff749dfe2f998345a77e645b28275624dd706)\n>",
+                "<263 chars, 263 bytes, sha256 2d20a703ec0c4f96b8a5881d4fbff749dfe2f998345a77e645b28275624dd706>",
                 "**Strategy**: `DELETION` - _Deployment from the default branch, but removes the rule from the target system._\n\nRule is fully deprecated, and only flagged under this status for archival purposes"
               ],
               "title": "Status of the use-case",
@@ -1380,9 +1380,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Under active technical implementation, going in exploratory rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Rule is qualified functionally, but is undergoing refinement rounds",
                 "Strategy: PREVIEW - Deployment from Pull/Merge Requests. Deployed in staging environment for operational testing",
-                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab)\n>",
+                "<228 chars, 228 bytes, sha256 32b6e7f518a8cf10ef424b349b5c8b6786f8cca2e2af524924a6c0eb9d3bebab>",
                 "Strategy: RELEASE - Deployment from the default branch (also called trunk, or main branch). Deployed in active production environment, potentially raising alerts",
-                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83)\n>",
+                "<254 chars, 254 bytes, sha256 c4ec74d4ca0e4840e98d201f2e77364aaaf3ff3d9ab01ad60f62a27654dadb83>",
                 "Strategy: DELETION - Deployment from the default branch, but removes the rule from the target system. Rule is fully deprecated, and only flagged under this status for archival purposes"
               ]
             },
@@ -1408,7 +1408,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "splunk": {
           "additionalProperties": false,
           "description": "Splunk Enterprise enables you to search, analyze and visualize your data to quickly act on insights from across your technology landscape.",
-          "properties": "<elided 5666 bytes, sha256 379357c40afa191840465bf85b4b794ad68292113b0b2f6b87dcbc84e4ce42ff>",
+          "properties": "<elided 5642 bytes, sha256 904beb08de6b27747046f04c6157e34bf2c644b5dbc59b5a2714ccf5ba7ba3f8>",
           "required": [
             "status",
             "query"
@@ -1419,7 +1419,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "sysdig": {
           "additionalProperties": false,
           "description": "Custom Falco rules for Sysdig Secure runtime detection.",
-          "properties": "<elided 7526 bytes, sha256 a02e5554c17d33ed3b210037082091228d46659b3823b4fe499e8aa3031ac9c0>",
+          "properties": "<elided 7508 bytes, sha256 7bb52d1e74931296c2db52a79aee0946ecd7ace43058078c23b7e29981f28c05>",
           "required": [
             "status"
           ],
@@ -1451,10 +1451,10 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       ],
       "markdownDescription": "UUID of the objective, or of a signal defined under an objective, that this rule implements\n(`objective::1.0` or `objective::1.1`).",
       "markdownEnumDescriptions": [
-        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb)\n>",
-        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509)\n>",
-        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb)\n>",
-        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509)\n>"
+        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb>",
+        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509>",
+        "<205 chars, 205 bytes, sha256 933ce0339a95d86894b2e417160f4a6e40f13ba0589ca61c531bc6590f5f37cb>",
+        "<231 chars, 231 bytes, sha256 654f73866c21e1319cde7775332fee9e7cb7e0c27cf9c15554e6ab43d5858509>"
       ],
       "type": [
         "string",
@@ -1570,9 +1570,9 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       "description": "MITRE ATT&CK technique ids (att&ck::1.2).",
       "items": {
         "enum": "<elided 56413 bytes, sha256 54c79a14afdcc2ef77a66a4429b8a5e6a7dc2305ff1441eb41e3ccfc29dd391c>",
-        "enumDescriptions": "<elided 273549 bytes, sha256 a9f93fce6e989c747258b1dd39a9c81ec8317300127391f15811a5f0aa28e8b2>",
-        "markdownEnumDescriptions": "<elided 197165 bytes, sha256 e0f280600e8a2b0c524ce1e6c7d17d717da8ee8c6b6cf4b78e4ce2999197c632>",
-        "x-enumDescriptions": "<elided 273549 bytes, sha256 a9f93fce6e989c747258b1dd39a9c81ec8317300127391f15811a5f0aa28e8b2>"
+        "enumDescriptions": "<elided 272619 bytes, sha256 5cef46f1ab44a81f7d11307fd1a057a6bb17f48f2461d60a50464cf439fdc157>",
+        "markdownEnumDescriptions": "<elided 191393 bytes, sha256 892c2b41b3e478d8acf6e5398fe5dba9db5229986013ba4e52525e93e10c243d>",
+        "x-enumDescriptions": "<elided 272619 bytes, sha256 5cef46f1ab44a81f7d11307fd1a057a6bb17f48f2461d60a50464cf439fdc157>"
       },
       "markdownDescription": "MITRE ATT&CK technique ids (`att&ck::1.2`).",
       "type": "array",
@@ -1676,8 +1676,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
           ],
           "markdownEnumDescriptions": [
             "### Clear\n\n**Identifier**: `TLP:CLEAR`\n\n_Vocabulary_ : `Traffic Light Protocol`\n\n---\n\nRecipients can spread this to the world, there is no limit on disclosure.\n",
-            "<262 chars, 262 bytes, sha256 89d37b5d04ba00845d96caaaadfa51fc9a2f3ace4b3d98bdebfb87a27d04593f)\n>",
-            "<205 chars, 205 bytes, sha256 063bb4ba105b601827470e82a27cd993dbdf513885152647f92eeb516194de90)\n>",
+            "<262 chars, 262 bytes, sha256 89d37b5d04ba00845d96caaaadfa51fc9a2f3ace4b3d98bdebfb87a27d04593f>",
+            "<205 chars, 205 bytes, sha256 063bb4ba105b601827470e82a27cd993dbdf513885152647f92eeb516194de90>",
             "### Amber+Strict\n\n**Identifier**: `TLP:AMBER+STRICT`\n\n_Vocabulary_ : `Traffic Light Protocol`\n\n---\n\nSimilar to TLP:AMBER, but restricts sharing to the organization only.\n",
             "### Red\n\n**Identifier**: `TLP:RED`\n\n_Vocabulary_ : `Traffic Light Protocol`\n\n---\n\nFor the eyes and ears of individual recipients only, no further disclosure.\n"
           ],
@@ -1770,12 +1770,12 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
       "properties": {
         "name": {
           "description": "Scoped actors::1.0 value: att&ck::<id> or misp::<id>.",
-          "enum": "<elided 139723 bytes, sha256 149fb16a8bdb97d94fb7ca402b02a2523465e5186df0c0d5b6d154901abebbd6>",
-          "enumDescriptions": "<elided 313845 bytes, sha256 8805d55859a668ea4d1f1aae53467bac365d4fe3a1b1072ec502f69c201b5189>",
+          "enum": "<elided 139648 bytes, sha256 c85abab4b1eefdaa1b6a90a2954e70595df0d2fb0ebb8b19716f40cda596cd1c>",
+          "enumDescriptions": "<elided 311991 bytes, sha256 84757245d94668213825a905926c3f7affe8decf7ea2093cb160c342b684ba7a>",
           "markdownDescription": "Scoped `actors::1.0` value: `att&ck::<id>` or `misp::<id>`.",
-          "markdownEnumDescriptions": "<elided 254673 bytes, sha256 f42fde219d21e145e1d2e94f463a76ec318a8a5a3c390031dc36d7b35521b327>",
+          "markdownEnumDescriptions": "<elided 247227 bytes, sha256 9d07e2a2e8ad6f6e02ce93cd3f68cc816f0a0048bf5de602277b789548f9c554>",
           "type": "string",
-          "x-enumDescriptions": "<elided 313845 bytes, sha256 8805d55859a668ea4d1f1aae53467bac365d4fe3a1b1072ec502f69c201b5189>"
+          "x-enumDescriptions": "<elided 311991 bytes, sha256 84757245d94668213825a905926c3f7affe8decf7ea2093cb160c342b684ba7a>"
         },
         "references": {
           "description": "Optional actor reference URLs.",
@@ -1802,7 +1802,7 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
     },
     "ThreatBody": {
       "additionalProperties": false,
-      "properties": "<elided 7656 bytes, sha256 c217ea6fcf4682726edb47f9ae557e6c86d784f706788c212d79301d647aff74>",
+      "properties": "<elided 7632 bytes, sha256 53f44fd543a3b70f9f08e71252782b5b7c2743c91f6a00bf6ab90817cc69469f>",
       "required": [
         "description",
         "severity",
@@ -1845,8 +1845,8 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "Emergency"
       ],
       "enumDescriptions": [
-        "<209 chars, 211 bytes, sha256 cbafc253cab017dbc23d40e86cedfdd0f66d2cb486df0a5f961698b898096746)\n>",
-        "<204 chars, 206 bytes, sha256 59e7528c048d40ff64b97e6d3aa439dc62d03a8c93d4242973f5a436a8abcbfc)\n>",
+        "<209 chars, 211 bytes, sha256 cbafc253cab017dbc23d40e86cedfdd0f66d2cb486df0a5f961698b898096746>",
+        "<204 chars, 206 bytes, sha256 59e7528c048d40ff64b97e6d3aa439dc62d03a8c93d4242973f5a436a8abcbfc>",
         "A Low priority incident is unlikely to affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.",
         "A Medium priority incident may affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.",
         "A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.",
@@ -1854,18 +1854,18 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
         "An Emergency priority incident poses an imminent threat to the provision of wide-scale critical infrastructure services, national government stability, or human lives."
       ],
       "markdownEnumDescriptions": [
-        "<389 chars, 391 bytes, sha256 fa492da47e1e81f4fbb2d3e300c25f03725afdd79ed8bbc989c7e06ad37fb177)\n>",
-        "<374 chars, 376 bytes, sha256 eb62f79fa1c09dd7dab2da3f5e3fc7fc233bbd96c87b105c171bff9fdc78562e)\n>",
-        "<234 chars, 234 bytes, sha256 30400efd2a770620f2237ae6ecb854287b197cf61888d1eadf059088d4aae189)\n>",
-        "<232 chars, 232 bytes, sha256 e34f095679c868b008fc6a15b7340d167da935fff3bacb2cf6546fee4478a856)\n>",
-        "<263 chars, 263 bytes, sha256 2bd6733208563ac0b7c04c16e2b43f7362fc7703635a280e0a68fc17b7f65f7e)\n>",
-        "<249 chars, 249 bytes, sha256 4f771c3136017e3c5a7f4ee2bb7eb6218d489bcad1259274617eb973e2d9fd5d)\n>",
-        "<247 chars, 247 bytes, sha256 fe07e05c5a2bd589dc0dfc7ebd3f07d538b2db4e2fecb745d5703ed86cfb7526)\n>"
+        "<389 chars, 391 bytes, sha256 fa492da47e1e81f4fbb2d3e300c25f03725afdd79ed8bbc989c7e06ad37fb177>",
+        "<374 chars, 376 bytes, sha256 eb62f79fa1c09dd7dab2da3f5e3fc7fc233bbd96c87b105c171bff9fdc78562e>",
+        "<234 chars, 234 bytes, sha256 30400efd2a770620f2237ae6ecb854287b197cf61888d1eadf059088d4aae189>",
+        "<232 chars, 232 bytes, sha256 e34f095679c868b008fc6a15b7340d167da935fff3bacb2cf6546fee4478a856>",
+        "<263 chars, 263 bytes, sha256 2bd6733208563ac0b7c04c16e2b43f7362fc7703635a280e0a68fc17b7f65f7e>",
+        "<249 chars, 249 bytes, sha256 4f771c3136017e3c5a7f4ee2bb7eb6218d489bcad1259274617eb973e2d9fd5d>",
+        "<247 chars, 247 bytes, sha256 fe07e05c5a2bd589dc0dfc7ebd3f07d538b2db4e2fecb745d5703ed86cfb7526>"
       ],
       "type": "string",
       "x-enumDescriptions": [
-        "<209 chars, 211 bytes, sha256 cbafc253cab017dbc23d40e86cedfdd0f66d2cb486df0a5f961698b898096746)\n>",
-        "<204 chars, 206 bytes, sha256 59e7528c048d40ff64b97e6d3aa439dc62d03a8c93d4242973f5a436a8abcbfc)\n>",
+        "<209 chars, 211 bytes, sha256 cbafc253cab017dbc23d40e86cedfdd0f66d2cb486df0a5f961698b898096746>",
+        "<204 chars, 206 bytes, sha256 59e7528c048d40ff64b97e6d3aa439dc62d03a8c93d4242973f5a436a8abcbfc>",
         "A Low priority incident is unlikely to affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.",
         "A Medium priority incident may affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.",
         "A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.",
@@ -1909,252 +1909,252 @@ warning: opentide setup vscode is deprecated and will be removed when the openti
 
 ━━━ ws/.opentide/schemas/visibility.1.0.schema.json · created 0644
 {
-  "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand.",
-  "$defs": {
-    "DetailValue": {
-      "anyOf": [
-        {
-          "description": "A string.",
-          "type": "string"
+    "$defs": {
+        "DetailValue": {
+            "anyOf": [
+                {
+                    "description": "A string.",
+                    "type": "string"
+                },
+                {
+                    "description": "A boolean.",
+                    "type": "boolean"
+                },
+                {
+                    "description": "An integer.",
+                    "format": "int64",
+                    "type": "integer"
+                },
+                {
+                    "description": "A number.",
+                    "format": "double",
+                    "type": "number"
+                }
+            ],
+            "description": "A custom_details value.",
+            "markdownDescription": "A `custom_details` value."
         },
-        {
-          "description": "A boolean.",
-          "type": "boolean"
+        "VisibilityAsset": {
+            "additionalProperties": false,
+            "description": "One [[assets]] entry.",
+            "properties": {
+                "criticality": {
+                    "description": "Criticality vocabulary value.",
+                    "type": "string"
+                },
+                "custom_details": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/DetailValue"
+                    },
+                    "default": null,
+                    "description": "Free-form keys.",
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "description": "What the asset is.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Asset name.",
+                    "type": "string"
+                },
+                "surface": {
+                    "default": null,
+                    "description": "Threat surface vocabulary values.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name",
+                "description",
+                "criticality"
+            ],
+            "type": "object",
+            "markdownDescription": "One `[[assets]]` entry."
         },
-        {
-          "description": "An integer.",
-          "format": "int64",
-          "type": "integer"
+        "VisibilityColumn": {
+            "additionalProperties": false,
+            "description": "One column of a log source's dataset.",
+            "properties": {
+                "description": {
+                    "default": null,
+                    "description": "What the column holds.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "type": {
+                    "description": "Column type, from the system's type set.",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "type": "object"
         },
-        {
-          "description": "A number.",
-          "format": "double",
-          "type": "number"
+        "VisibilityDetector": {
+            "additionalProperties": false,
+            "description": "One [[detectors]] entry.",
+            "properties": {
+                "assets": {
+                    "default": null,
+                    "description": "Names of the assets the detector monitors.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "description": "What the detector covers.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Detector name.",
+                    "type": "string"
+                },
+                "references": {
+                    "default": null,
+                    "description": "Reference links.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name",
+                "description"
+            ],
+            "type": "object",
+            "markdownDescription": "One `[[detectors]]` entry."
+        },
+        "VisibilityLogSource": {
+            "additionalProperties": false,
+            "description": "One [[logsources]] entry: one dataset.",
+            "properties": {
+                "assets": {
+                    "description": "Names of the [[assets]] that produce the logs.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ],
+                    "markdownDescription": "Names of the `[[assets]]` that produce the logs."
+                },
+                "columns": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/VisibilityColumn"
+                    },
+                    "description": "The dataset's columns, keyed by column name, in the file's order.",
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "description": {
+                    "description": "What the log source records.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "The dataset, unique per system.",
+                    "type": "string",
+                    "markdownDescription": "The dataset, unique per `system`."
+                },
+                "references": {
+                    "description": "Reference links.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "system": {
+                    "description": "Platform identifier of the system that holds the logs.",
+                    "type": "string"
+                },
+                "tenants": {
+                    "description": "Tenants of system that hold the logs.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ],
+                    "markdownDescription": "Tenants of `system` that hold the logs."
+                }
+            },
+            "required": [
+                "name",
+                "description",
+                "system"
+            ],
+            "type": "object",
+            "markdownDescription": "One `[[logsources]]` entry: one dataset."
         }
-      ],
-      "description": "A custom_details value.",
-      "markdownDescription": "A `custom_details` value."
     },
-    "VisibilityAsset": {
-      "additionalProperties": false,
-      "description": "One [[assets]] entry.",
-      "markdownDescription": "One `[[assets]]` entry.",
-      "properties": {
-        "criticality": {
-          "description": "Criticality vocabulary value.",
-          "type": "string"
-        },
-        "custom_details": {
-          "additionalProperties": {
-            "$ref": "#/$defs/DetailValue"
-          },
-          "default": null,
-          "description": "Free-form keys.",
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "description": {
-          "description": "What the asset is.",
-          "type": "string"
-        },
-        "name": {
-          "description": "Asset name.",
-          "type": "string"
-        },
-        "surface": {
-          "default": null,
-          "description": "Threat surface vocabulary values.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "name",
-        "description",
-        "criticality"
-      ],
-      "type": "object"
-    },
-    "VisibilityColumn": {
-      "additionalProperties": false,
-      "description": "One column of a log source's dataset.",
-      "properties": {
-        "description": {
-          "default": null,
-          "description": "What the column holds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "type": {
-          "description": "Column type, from the system's type set.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "type": "object"
-    },
-    "VisibilityDetector": {
-      "additionalProperties": false,
-      "description": "One [[detectors]] entry.",
-      "markdownDescription": "One `[[detectors]]` entry.",
-      "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Merged visibility.toml, with name unique per system.",
+    "properties": {
         "assets": {
-          "default": null,
-          "description": "Names of the assets the detector monitors.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
+            "default": null,
+            "description": "Assets that generate logs.",
+            "items": {
+                "$ref": "#/$defs/VisibilityAsset"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
         },
-        "description": {
-          "description": "What the detector covers.",
-          "type": "string"
+        "detectors": {
+            "default": null,
+            "description": "External detectors.",
+            "items": {
+                "$ref": "#/$defs/VisibilityDetector"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
         },
-        "name": {
-          "description": "Detector name.",
-          "type": "string"
-        },
-        "references": {
-          "default": null,
-          "description": "Reference links.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
+        "logsources": {
+            "description": "Log sources, one dataset each.",
+            "items": {
+                "$ref": "#/$defs/VisibilityLogSource"
+            },
+            "type": "array"
         }
-      },
-      "required": [
-        "name",
-        "description"
-      ],
-      "type": "object"
     },
-    "VisibilityLogSource": {
-      "additionalProperties": false,
-      "description": "One [[logsources]] entry: one dataset.",
-      "markdownDescription": "One `[[logsources]]` entry: one dataset.",
-      "properties": {
-        "assets": {
-          "description": "Names of the [[assets]] that produce the logs.",
-          "items": {
-            "type": "string"
-          },
-          "markdownDescription": "Names of the `[[assets]]` that produce the logs.",
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "columns": {
-          "additionalProperties": {
-            "$ref": "#/$defs/VisibilityColumn"
-          },
-          "description": "The dataset's columns, keyed by column name, in the file's order.",
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "description": {
-          "description": "What the log source records.",
-          "type": "string"
-        },
-        "name": {
-          "description": "The dataset, unique per system.",
-          "markdownDescription": "The dataset, unique per `system`.",
-          "type": "string"
-        },
-        "references": {
-          "description": "Reference links.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "system": {
-          "description": "Platform identifier of the system that holds the logs.",
-          "type": "string"
-        },
-        "tenants": {
-          "description": "Tenants of system that hold the logs.",
-          "items": {
-            "type": "string"
-          },
-          "markdownDescription": "Tenants of `system` that hold the logs.",
-          "type": [
-            "array",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "name",
-        "description",
-        "system"
-      ],
-      "type": "object"
-    }
-  },
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "description": "Merged visibility.toml, with name unique per system.",
-  "markdownDescription": "Merged `visibility.toml`, with `name` unique per `system`.",
-  "properties": {
-    "assets": {
-      "default": null,
-      "description": "Assets that generate logs.",
-      "items": {
-        "$ref": "#/$defs/VisibilityAsset"
-      },
-      "type": [
-        "array",
-        "null"
-      ]
-    },
-    "detectors": {
-      "default": null,
-      "description": "External detectors.",
-      "items": {
-        "$ref": "#/$defs/VisibilityDetector"
-      },
-      "type": [
-        "array",
-        "null"
-      ]
-    },
-    "logsources": {
-      "description": "Log sources, one dataset each.",
-      "items": {
-        "$ref": "#/$defs/VisibilityLogSource"
-      },
-      "type": "array"
-    }
-  },
-  "required": [
-    "logsources"
-  ],
-  "title": "visibility.toml",
-  "type": "object"
+    "required": [
+        "logsources"
+    ],
+    "title": "visibility.toml",
+    "type": "object",
+    "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand.",
+    "markdownDescription": "Merged `visibility.toml`, with `name` unique per `system`."
 }
 
 ━━━ ws/.vscode/ · created 0755

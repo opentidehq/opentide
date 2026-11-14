@@ -33,11 +33,11 @@ exit: 0
 {
   "mcpServers": {
     "opentide": {
+      "command": "opentide",
       "args": [
         "mcp",
         "start"
       ],
-      "command": "opentide",
       "env": {
         "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
       }
@@ -51,11 +51,11 @@ exit: 0
 {
   "servers": {
     "opentide": {
+      "command": "opentide",
       "args": [
         "mcp",
         "start"
       ],
-      "command": "opentide",
       "env": {
         "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
       }

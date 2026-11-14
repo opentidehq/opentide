@@ -61,7 +61,7 @@ exit: 1
   "results": [
     {
       "action": "create",
-      "error": "Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)",
+      "error": "Cannot reach sysdig tenant 'lab' at https://sysdig-tenant.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
       "id": "00000000-0000-4000-8047-000000000031",
       "name": "Sysdig create rule",
       "platform": "sysdig",
@@ -116,7 +116,7 @@ exit: 1
 
 ━━━ stderr · json, 1 lines
 {
-  "error": "Cannot reach sysdig tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)",
+  "error": "Cannot reach sysdig tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "event": "sysdig_tenant_deployment_failed",
   "level": "critical",
   "logger": "opentide.platforms.sysdig.deployer",
