@@ -1,21 +1,15 @@
-//! Microsoft Sentinel (UC-4.3, #833): what `platforms/sentinel/` sends,
-//! request for request: the ARM `alertRules` calls of `client.py` (already
-//! plain REST in Python), the sign-in azure-identity's
-//! `ClientSecretCredential` makes through MSAL (the tenant's OpenID
-//! configuration, then the OAuth2 client-credentials grant: the only
-//! credential opentide uses), and `runner.py`'s Log Analytics queries, one
-//! REST call each, in place of `azure-monitor-query`.
+//! Microsoft Sentinel (UC-4.3, #833): the ARM `alertRules` calls of
+//! `platforms/sentinel/client.py`, and its runner's Log Analytics queries,
+//! one REST call each.
 //!
-//! A token is asked for once per tenant and scope (ARM's, Log Analytics')
-//! and kept until it nearly expires, as MSAL's cache keeps it. MSAL and
-//! azure-core stamp their requests with a fresh id (`client-request-id`,
-//! `x-ms-client-request-id`): [`Sentinel::with_identity`] takes the source
-//! of those ids and the operating system MSAL names (`x-client-os`), so a
-//! test replays a recording made on another machine.
+//! Both sign in to Entra ID with the tenant's app registration
+//! ([`crate::entra`]: `azure_tenant_id`, `azure_client_id`,
+//! `azure_client_secret`), one token per tenant and resource (ARM's,
+//! Log Analytics'), kept in the connector's [`TokenCache`] until it is due
+//! for renewal. An API's `401` gets one new token and one resend.
 
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use opentide_compile::deploy::PATH_SEGMENT;
 use opentide_compile::json::{Json, Object};
@@ -27,16 +21,22 @@ use crate::connector::{
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
     kql_with_limit,
 };
+use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
 use crate::text::json_text;
-use crate::{HttpSettings, Secret, TenantLabel};
+use crate::token::TokenCache;
+use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "sentinel";
 
-/// Entra ID.
-pub const LOGIN_ENDPOINT: &str = "https://login.microsoftonline.com";
+/// The tenant setup's names for the app registration.
+pub const CREDENTIALS: CredentialNames = CredentialNames {
+    tenant_id: "azure_tenant_id",
+    client_id: "azure_client_id",
+    client_secret: "azure_client_secret",
+};
 /// Azure Resource Manager.
 pub const ARM_ENDPOINT: &str = "https://management.azure.com";
 /// The scope of ARM's tokens.
@@ -48,8 +48,6 @@ pub const LOGS_SCOPE: &str = "https://api.loganalytics.io/.default";
 /// The `alertRules` API version (`ALERT_RULES_API_VERSION`): NRT rules exist
 /// only in the preview versions.
 pub const ALERT_RULES_API_VERSION: &str = "2025-10-01-preview";
-/// The MSAL release the sign-in reads as (`x-client-ver`).
-pub const MSAL_VERSION: &str = "1.39.0";
 /// The longest a Log Analytics query may run on the server (`server_timeout`).
 pub const MAX_SERVER_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -62,18 +60,6 @@ pub fn http_settings(timeout: Duration) -> HttpSettings {
         ..HttpSettings::default()
     }
 }
-
-/// The operating system as Python's `sys.platform` names it (`x-client-os`).
-pub fn python_platform() -> &'static str {
-    match std::env::consts::OS {
-        "macos" => "darwin",
-        "windows" => "win32",
-        other => other,
-    }
-}
-
-/// A source of request ids.
-pub type RequestIds = Arc<dyn Fn() -> String + Send + Sync>;
 
 /// ARM's answer to an alert-rule call with an error status
 /// (`SentinelApiError`).
@@ -92,168 +78,57 @@ pub struct ArmError {
     pub message: String,
 }
 
-/// A cached token.
-#[derive(Clone, Debug)]
-struct Token {
-    secret: Secret,
-    until: Instant,
-}
-
 /// The Sentinel connector.
+#[derive(Debug, Default)]
 pub struct Sentinel {
-    tokens: Mutex<BTreeMap<(TenantLabel, &'static str), Token>>,
-    ids: RequestIds,
-    client_os: String,
-}
-
-impl std::fmt::Debug for Sentinel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Sentinel")
-            .field("client_os", &self.client_os)
-            .finish_non_exhaustive()
-    }
-}
-
-impl Default for Sentinel {
-    fn default() -> Self {
-        Self::new()
-    }
+    tokens: Arc<TokenCache>,
 }
 
 impl Sentinel {
-    /// A connector with random request ids and this machine's `x-client-os`.
+    /// A connector with no token yet.
     pub fn new() -> Self {
-        Self::with_identity(
-            Arc::new(|| uuid::Uuid::new_v4().to_string()),
-            python_platform(),
-        )
+        Self::default()
     }
 
-    /// A connector whose request ids come from *ids* and whose sign-in names
-    /// *client_os*.
-    pub fn with_identity(ids: RequestIds, client_os: &str) -> Self {
-        Self {
-            tokens: Mutex::new(BTreeMap::new()),
-            ids,
-            client_os: client_os.to_owned(),
-        }
+    /// A connector whose tokens are kept in *tokens*.
+    pub fn with_tokens(tokens: Arc<TokenCache>) -> Self {
+        Self { tokens }
     }
 
-    /// A bearer token for *scope*, signing in on first use
-    /// (`ClientSecretCredential.get_token`).
+    /// A bearer token for *scope*, signing in when none is kept.
+    ///
+    /// # Errors
+    ///
+    /// A credential that is not set, or a sign-in Entra ID refused.
     pub async fn token(
         &self,
         cx: TenantContext<'_>,
         scope: &'static str,
     ) -> Result<Secret, ConnectorError> {
-        let key = (cx.tenant.label.clone(), scope);
-        if let Some(token) = self
-            .tokens
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(&key)
-            .filter(|token| token.until > Instant::now())
-        {
-            return Ok(token.secret.clone());
-        }
-        let token = self.sign_in(cx, scope).await?;
         self.tokens
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(key, token.clone());
-        Ok(token.secret)
+            .token(&cx.tenant.label, scope, || {
+                crate::entra::sign_in(cx, CREDENTIALS, scope)
+            })
+            .await
     }
 
-    /// MSAL's client-credentials flow: the authority's OpenID
-    /// configuration, then the token.
-    async fn sign_in(
+    /// Sends the request *build* makes with the token for *scope*; a `401`
+    /// gets one new token and one resend.
+    async fn send(
         &self,
         cx: TenantContext<'_>,
         scope: &'static str,
-    ) -> Result<Token, ConnectorError> {
-        let tenant = cx.tenant.label.tenant.clone();
-        let tenant_id = cx.tenant.secret("azure_tenant_id")?.expose().to_owned();
-        let client_id = cx.tenant.secret("azure_client_id")?.expose().to_owned();
-        let client_secret = cx.tenant.secret("azure_client_secret")?.expose().to_owned();
-        let failed = |message: String| ConnectorError::Authentication {
-            platform: PLATFORM.into(),
-            tenant: tenant.clone(),
-            message,
-            detail: None,
-        };
-        let authority = format!("{LOGIN_ENDPOINT}/{tenant_id}");
-        let discovery = cx
-            .http
-            .request(
-                crate::transport::Method::GET,
-                &format!("{authority}/v2.0/.well-known/openid-configuration"),
+        build: impl Fn(&Secret) -> crate::transport::RequestBuilder,
+    ) -> Result<Answer, ConnectorError> {
+        self.tokens
+            .send(
+                cx,
+                scope,
+                || crate::entra::sign_in(cx, CREDENTIALS, scope),
+                build,
+                cx.cancel,
             )
-            .header("x-ms-client-request-id", (self.ids)());
-        let answer = crate::answer::exchange(cx, discovery).await?;
-        if answer.status != 200 {
-            return Err(failed(format!(
-                "Authentication failed: the authority {authority} answered its OpenID \
-                 configuration with HTTP {}",
-                answer.status
-            )));
-        }
-        // MSAL draws a correlation id it does not send.
-        let _ = (self.ids)();
-        let form = url::form_urlencoded::Serializer::new(String::new())
-            .extend_pairs([
-                ("client_id", client_id.as_str()),
-                ("grant_type", "client_credentials"),
-                ("client_info", "1"),
-                ("client_secret", client_secret.as_str()),
-                ("scope", scope),
-            ])
-            .finish();
-        let request = cx
-            .http
-            .request(
-                crate::transport::Method::POST,
-                &format!("{authority}/oauth2/v2.0/token"),
-            )
-            .header("Accept", "application/json")
-            .header("client-request-id", (self.ids)())
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("x-client-current-telemetry", "4|730,2|")
-            .header("x-client-last-telemetry", "4|0|||")
-            .header("x-client-os", self.client_os.as_str())
-            .header("x-client-sku", "MSAL.Python")
-            .header("x-client-ver", MSAL_VERSION)
-            .header("x-ms-client-request-id", (self.ids)())
-            .header("x-ms-lib-capability", "retry-after, h429")
-            .body(form);
-        let answer = crate::answer::exchange(cx, request).await?;
-        let body = answer.json().unwrap_or(Json::Null);
-        let token = body
-            .get("access_token")
-            .and_then(Json::as_str)
-            .filter(|token| !token.is_empty());
-        match token {
-            Some(token) if answer.status == 200 => {
-                let seconds = match body.get("expires_in") {
-                    Some(Json::Int(seconds)) => u64::try_from(*seconds).unwrap_or(0),
-                    Some(Json::Str(text)) => text.parse().unwrap_or(0),
-                    _ => 0,
-                };
-                // Asked for again five minutes before it expires.
-                let lifetime = Duration::from_secs(seconds.saturating_sub(300));
-                Ok(Token {
-                    secret: Secret::new(token),
-                    until: Instant::now() + lifetime,
-                })
-            }
-            _ => {
-                let reason = body
-                    .get("error_description")
-                    .filter(|value| value.truthy())
-                    .or_else(|| body.get("error"))
-                    .map_or_else(|| format!("HTTP {}", answer.status), json_text);
-                Err(failed(format!("Authentication failed: {reason}")))
-            }
-        }
+            .await
     }
 
     /// The `alertRules` collection of the tenant's workspace, or one rule
@@ -284,29 +159,35 @@ impl Sentinel {
         url: &str,
         body: Option<&Json>,
     ) -> Result<Result<Answer, ArmError>, ConnectorError> {
-        let token = self.token(cx, ARM_SCOPE).await?;
         let sent = if url.contains("api-version=") {
             url.to_owned()
         } else {
             let joiner = if url.contains('?') { '&' } else { '?' };
             format!("{url}{joiner}api-version={ALERT_RULES_API_VERSION}")
         };
-        let mut builder = cx
-            .http
-            .request(method.clone(), &sent)
-            .header("Accept", "application/json")
-            .header("Authorization", format!("Bearer {}", token.expose()));
-        if let Some(body) = body {
-            let bytes = serde_json::to_vec(body).map_err(|error| ConnectorError::Setup {
-                platform: PLATFORM.into(),
-                tenant: cx.tenant.label.tenant.clone(),
-                message: format!("the request body cannot be written: {error}"),
-            })?;
-            builder = builder
-                .header("Content-Type", "application/json")
-                .body(bytes);
-        }
-        let answer = crate::answer::exchange(cx, builder).await?;
+        let bytes =
+            body.map(serde_json::to_vec)
+                .transpose()
+                .map_err(|error| ConnectorError::Setup {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    message: format!("the request body cannot be written: {error}"),
+                })?;
+        let answer = self
+            .send(cx, ARM_SCOPE, |token| {
+                let builder = cx
+                    .http
+                    .request(method.clone(), &sent)
+                    .header("Accept", "application/json")
+                    .header("Authorization", format!("Bearer {}", token.expose()));
+                match &bytes {
+                    Some(bytes) => builder
+                        .header("Content-Type", "application/json")
+                        .body(bytes.clone()),
+                    None => builder,
+                }
+            })
+            .await?;
         if answer.status < 400 {
             return Ok(Ok(answer));
         }
@@ -396,9 +277,6 @@ impl Sentinel {
         }
         let workspace = cx.tenant.secret("workspace_id")?.expose().to_owned();
         let sent = kql_with_limit(&request.text, request.limit);
-        // azure-core stamps the request before it asks for the token.
-        let request_id = (self.ids)();
-        let token = self.token(cx, LOGS_SCOPE).await?;
         let mut body = Object::new();
         body.insert("query".into(), Json::Str(sent.clone()));
         body.insert(
@@ -417,22 +295,21 @@ impl Sentinel {
                 message: format!("the request body cannot be written: {error}"),
             })?;
         let wait = request.timeout.min(MAX_SERVER_TIMEOUT).as_secs();
-        let builder = cx
-            .http
-            .request(
-                crate::transport::Method::POST,
-                &format!(
-                    "{LOGS_ENDPOINT}/workspaces/{}/query",
-                    utf8_percent_encode(&workspace, PATH_SEGMENT)
-                ),
-            )
-            .header("Accept", "application/json")
-            .header("Authorization", format!("Bearer {}", token.expose()))
-            .header("Content-Type", "application/json")
-            .header("Prefer", format!("wait={wait}"))
-            .header("x-ms-client-request-id", request_id)
-            .body(bytes);
-        let answer = crate::answer::exchange(cx, builder).await?;
+        let url = format!(
+            "{LOGS_ENDPOINT}/workspaces/{}/query",
+            utf8_percent_encode(&workspace, PATH_SEGMENT)
+        );
+        let answer = self
+            .send(cx, LOGS_SCOPE, |token| {
+                cx.http
+                    .request(crate::transport::Method::POST, &url)
+                    .header("Accept", "application/json")
+                    .header("Authorization", format!("Bearer {}", token.expose()))
+                    .header("Content-Type", "application/json")
+                    .header("Prefer", format!("wait={wait}"))
+                    .body(bytes.clone())
+            })
+            .await?;
         if answer.status != 200 {
             return Err(ConnectorError::refused(
                 PLATFORM,

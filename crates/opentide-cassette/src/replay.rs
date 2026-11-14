@@ -18,17 +18,24 @@
 //!   names itself or its telemetry and stamps a fresh correlation id.
 //!   Authorization, content type, `Accept` and every other header are
 //!   compared by value.
+//!   On a request to an OAuth2 token endpoint, `Accept` is left out on both
+//!   sides too: the endpoint answers JSON whatever it says (RFC 6749 §5.1).
 //! - **Body**: a form body (the recorded request's `Content-Type` is
 //!   `application/x-www-form-urlencoded`) as its decoded fields
-//!   ([`same_form`]), as the query; a JSON body as the same data
+//!   ([`same_form`]), as the query, but for [`IGNORED_FORM_FIELDS`] in a
+//!   request to Entra ID's token endpoint; a JSON
+//!   body as the same data
 //!   ([`same_body`]): key order, spacing and escapes are layout; any other
 //!   body byte for byte.
 //! - **Order**: the requests in the order recorded, but for the requests
 //!   a client may leave out ([`optional`]): a `POST` to an OAuth2 token
 //!   endpoint that repeats an earlier recorded one (the same URL and
-//!   body). The recording client signed in again where the replayed one
-//!   still holds a valid token. The first sign-in of every pass is never
-//!   optional.
+//!   body), where the recording client signed in again and the replayed one
+//!   still holds a valid token (the first sign-in of every pass is never
+//!   optional); and a `GET` of Entra ID's OpenID Provider configuration
+//!   (`https://login.microsoftonline.com/…/.well-known/openid-configuration`),
+//!   the discovery MSAL made before a client-credentials sign-in, which
+//!   needs none.
 //!
 //! A cassette replays as many times as it is run through: after its last
 //! interaction the next request is compared with its first. Each pass must
@@ -112,12 +119,10 @@ pub fn optional(interactions: &[Interaction], position: usize) -> bool {
         return false;
     }
     let request = &interactions[position % len].request;
-    let path = url::Url::parse(&request.url)
-        .map(|url| url.path().to_owned())
-        .unwrap_or_default();
-    if request.method != "POST"
-        || !(path.ends_with("/oauth2/token") || path.ends_with("/oauth2/v2.0/token"))
-    {
+    if request.method == "GET" && is_entra_discovery(&request.url) {
+        return true;
+    }
+    if request.method != "POST" || !is_token_endpoint(&request.url) {
         return false;
     }
     // Within its own pass only: each pass signs in at least once, as each
@@ -127,6 +132,36 @@ pub fn optional(interactions: &[Interaction], position: usize) -> bool {
             && earlier.request.url == request.url
             && earlier.request.body == request.body
     })
+}
+
+/// The path of *url*, empty when it is not a URL.
+fn path_of(url: &str) -> String {
+    url::Url::parse(url)
+        .map(|url| url.path().to_owned())
+        .unwrap_or_default()
+}
+
+/// Whether *url* is an OAuth2 token endpoint: its path ends in
+/// `/oauth2/token` or `/oauth2/v2.0/token`.
+fn is_token_endpoint(url: &str) -> bool {
+    let path = path_of(url);
+    path.ends_with("/oauth2/token") || path.ends_with("/oauth2/v2.0/token")
+}
+
+/// Entra ID's sign-in host, the only one whose OpenID discovery and MSAL
+/// form fields the matcher passes over.
+const ENTRA_HOST: &str = "login.microsoftonline.com";
+
+/// Whether *url* is on [`ENTRA_HOST`] over HTTPS.
+fn on_entra(url: &str) -> bool {
+    url::Url::parse(url)
+        .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some(ENTRA_HOST))
+}
+
+/// Whether *url* is Entra ID's OpenID Provider configuration
+/// (`https://login.microsoftonline.com/…/.well-known/openid-configuration`).
+fn is_entra_discovery(url: &str) -> bool {
+    on_entra(url) && path_of(url).ends_with("/.well-known/openid-configuration")
 }
 
 /// Serves each request the answer of the next interaction it matches,
@@ -248,26 +283,18 @@ pub fn verify(interactions: &[Interaction], actual: &[cassette::Request]) -> Vec
             continue;
         }
         let mut at = position;
-        let matched = loop {
-            if differences(&interactions[at % len].request, got).is_none() {
-                break Some(at);
-            }
-            if !optional(interactions, at) || at + 1 >= position + len {
-                break None;
+        // The first recorded request that is not optional, or matches.
+        let detail = loop {
+            let detail = differences(&interactions[at % len].request, got);
+            if detail.is_none() || !optional(interactions, at) || at + 1 >= position + len {
+                break detail;
             }
             at += 1;
         };
-        match matched {
-            Some(at) => position = at + 1,
-            None => {
-                let want = &interactions[position % len].request;
-                mismatches.push(Mismatch {
-                    index,
-                    detail: differences(want, got).unwrap_or_default(),
-                });
-                position += 1;
-            }
+        if let Some(detail) = detail {
+            mismatches.push(Mismatch { index, detail });
         }
+        position = at + 1;
     }
     let end = if len == 0 {
         0
@@ -321,14 +348,20 @@ fn differences(want: &cassette::Request, got: &cassette::Request) -> Option<Stri
     if !same_url(&want.url, &got.url) {
         return Some(format!("URL {} was recorded, {} sent", want.url, got.url));
     }
-    let (want_headers, got_headers) = (meaningful(&want.headers), meaningful(&got.headers));
+    let (mut want_headers, mut got_headers) = (meaningful(&want.headers), meaningful(&got.headers));
+    if is_token_endpoint(&want.url) {
+        want_headers.retain(|(name, _)| name != "accept");
+        got_headers.retain(|(name, _)| name != "accept");
+    }
     if want_headers != got_headers {
         return Some(format!(
             "headers {want_headers:?} were recorded, {got_headers:?} sent"
         ));
     }
     let (want_body, got_body) = (want.body.bytes(), got.body.bytes());
-    let same = if is_form(&want.headers) {
+    let same = if is_form(&want.headers) && on_entra(&want.url) && is_token_endpoint(&want.url) {
+        want_body == got_body || form_fields(&want_body) == form_fields(&got_body)
+    } else if is_form(&want.headers) {
         same_form(&want_body, &got_body)
     } else {
         same_body(&want_body, &got_body)
@@ -429,6 +462,21 @@ fn segments(url: &url::Url) -> Vec<Vec<u8>> {
 /// `true`.
 pub fn same_form(want: &[u8], got: &[u8]) -> bool {
     want == got || fields(want) == fields(got)
+}
+
+/// Form body fields that only a client library sends and the server ignores,
+/// left out on both sides of a `POST` to Entra ID's token endpoint (and
+/// nowhere else): `client_info`, which MSAL adds to ask for account
+/// information that Entra ID does not return for the client-credentials
+/// grant.
+pub const IGNORED_FORM_FIELDS: [&str; 1] = ["client_info"];
+
+/// A form body's decoded fields ([`fields`]) without
+/// [`IGNORED_FORM_FIELDS`].
+fn form_fields(text: &[u8]) -> Vec<(String, String)> {
+    let mut fields = fields(text);
+    fields.retain(|(name, _)| !IGNORED_FORM_FIELDS.contains(&name.as_str()));
+    fields
 }
 
 /// The decoded fields of a form text, ordered by name (a stable sort: a

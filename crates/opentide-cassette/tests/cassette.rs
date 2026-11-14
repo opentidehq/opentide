@@ -392,7 +392,7 @@ fn request(method: &str, url: &str, headers: &[(&str, &str)], body: &str) -> Req
 
 #[test]
 fn identity_headers_are_ignored_and_meaningful_ones_compared() {
-    const URL: &str = "https://login.invalid/tenant/oauth2/v2.0/token";
+    const URL: &str = "https://login.microsoftonline.com/tenant/oauth2/v2.0/token";
     const ACCEPT: (&str, &str) = ("accept", "application/json");
     const FORM: (&str, &str) = ("content-type", "application/x-www-form-urlencoded");
     const BODY: &str =
@@ -448,8 +448,51 @@ fn identity_headers_are_ignored_and_meaningful_ones_compared() {
     let header_mismatch = |headers: &[(&str, &str)]| {
         differs(headers, BODY).is_some_and(|detail| detail.starts_with("headers "))
     };
-    assert!(header_mismatch(&[FORM]));
-    assert!(header_mismatch(&[("accept", "application/xml"), FORM]));
+    // `Accept` at a token endpoint: it answers JSON whatever is asked
+    // (RFC 6749 §5.1), so the header is left out on both sides.
+    assert_eq!(differs(&[FORM], BODY), None);
+    assert_eq!(differs(&[("accept", "application/xml"), FORM], BODY), None);
+    // Anywhere else it is compared.
+    let elsewhere = request("GET", "https://api.invalid/rules", &[ACCEPT], "");
+    assert!(
+        compare(
+            &[&elsewhere],
+            &[request("GET", "https://api.invalid/rules", &[], "")]
+        )
+        .first()
+        .is_some_and(|mismatch| mismatch.detail.starts_with("headers "))
+    );
+    // MSAL's `client_info=1` is left out of a form on both sides; any other
+    // field is not.
+    assert_eq!(
+        differs(&[ACCEPT, FORM], &format!("{BODY}&client_info=1")),
+        None
+    );
+    assert!(
+        differs(&[ACCEPT, FORM], &format!("{BODY}&client_extra=1"))
+            .is_some_and(|detail| detail.starts_with("bodies differ"))
+    );
+    // Only at Entra ID's token endpoint: another host's token endpoint, or
+    // another Entra path, compares `client_info` like any field.
+    for elsewhere in [
+        "https://api.crowdstrike.invalid/oauth2/token",
+        "https://login.microsoftonline.com.evil.invalid/tenant/oauth2/v2.0/token",
+        "https://login.microsoftonline.com/tenant/oauth2/v2.0/authorize",
+    ] {
+        let want = request("POST", elsewhere, &[ACCEPT, FORM], BODY);
+        let got = request(
+            "POST",
+            elsewhere,
+            &[ACCEPT, FORM],
+            &format!("{BODY}&client_info=1"),
+        );
+        assert!(
+            compare(&[&want], &[got])
+                .first()
+                .is_some_and(|mismatch| mismatch.detail.starts_with("bodies differ")),
+            "{elsewhere}"
+        );
+    }
     assert!(header_mismatch(&[
         ACCEPT,
         ("content-type", "application/json")
@@ -581,4 +624,50 @@ fn only_a_repeated_token_request_may_be_left_out() {
     let mismatches = runtime.block_on(replay.verify());
     assert_eq!(mismatches.len(), 1);
     assert_eq!(mismatches[0].index, 3);
+}
+
+/// MSAL's OpenID discovery `GET` before a sign-in is optional: a
+/// client-credentials client goes straight to the token endpoint.
+#[test]
+fn an_openid_discovery_get_may_be_left_out() {
+    const DISCOVERY: &str =
+        "https://login.microsoftonline.com/t/v2.0/.well-known/openid-configuration";
+    const TOKEN: &str = "https://login.microsoftonline.com/t/oauth2/v2.0/token";
+    // A discovery on any other host is a request like any other.
+    for elsewhere in [
+        "https://login.invalid/t/v2.0/.well-known/openid-configuration",
+        "https://login.microsoftonline.com.evil.invalid/t/v2.0/.well-known/openid-configuration",
+        "http://login.microsoftonline.com/t/v2.0/.well-known/openid-configuration",
+    ] {
+        let interactions = vec![interaction("GET", elsewhere, "", 200, "{}")];
+        assert!(!optional(&interactions, 0), "{elsewhere}");
+    }
+    let interactions = vec![
+        interaction("GET", DISCOVERY, "", 200, "{}"),
+        interaction("POST", TOKEN, "client_id=a", 200, "{}"),
+        interaction("GET", "https://api.invalid/x", "", 200, "{}"),
+    ];
+    assert_eq!(
+        (0..3)
+            .map(|at| optional(&interactions, at))
+            .collect::<Vec<_>>(),
+        [true, false, false]
+    );
+    let sent = |indices: &[usize]| -> Vec<Request> {
+        indices
+            .iter()
+            .map(|&i| interactions[i].request.clone())
+            .collect()
+    };
+    assert_eq!(verify(&interactions, &sent(&[1, 2])), Vec::new());
+    assert_eq!(verify(&interactions, &sent(&[0, 1, 2])), Vec::new());
+    // Only the discovery: the token request is still due.
+    let mismatches = verify(&interactions, &sent(&[0, 2]));
+    assert_eq!(mismatches[0].index, 1, "{mismatches:?}");
+    assert!(
+        mismatches[0]
+            .detail
+            .starts_with("method POST was recorded, GET sent"),
+        "{mismatches:?}"
+    );
 }
