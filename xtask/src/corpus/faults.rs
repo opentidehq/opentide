@@ -306,6 +306,11 @@ pub enum Op {
         path: String,
         /// Content.
         text: String,
+        /// Replace the file the base workspace has at `path` (a generated
+        /// configuration file), which is otherwise an error: a kind writes
+        /// each path once.
+        #[serde(default)]
+        replace: bool,
     },
 }
 
@@ -656,6 +661,7 @@ pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Resul
         .map(|&i| workspace.files[i].clone())
         .collect();
     let mut added = Vec::new();
+    let mut replaced = BTreeSet::new();
     let mut deleted = BTreeSet::new();
     for (position, &index) in targets.iter().enumerate() {
         for op in &kind.ops {
@@ -755,8 +761,15 @@ pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Resul
                     let path = expand(path, file, position);
                     set_value(file, &path, node)?;
                 }
-                Op::AddFile { path, text } => {
+                Op::AddFile {
+                    path,
+                    text,
+                    replace,
+                } => {
                     let path = expand(path, file, position);
+                    if *replace {
+                        replaced.insert(path.clone());
+                    }
                     if !added.iter().any(|f: &File| f.path == path) {
                         added.push(File {
                             path,
@@ -781,6 +794,9 @@ pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Resul
         index += 1;
         keep
     });
+    workspace
+        .files
+        .retain(|file| !replaced.contains(&file.path));
     workspace.files.extend(added);
     let mut paths = BTreeSet::new();
     for file in &workspace.files {
@@ -1141,6 +1157,33 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
         assert_eq!(ws.files.len(), before - targets.len());
         let bad_id = CATALOGUE.replace("id = \"toml\"", "id = \"../toml\"");
         assert!(Catalogue::parse(&bad_id).is_err());
+    }
+
+    #[test]
+    fn a_kind_replaces_a_generated_file_only_when_it_says_so() {
+        let original =
+            r#"ops = [{ op = "set", path = "metadata.uuid", value = "not-a-uuid-{n}" }]"#;
+        let path = ".opentide/configurations/platforms/sentinel.toml";
+        let op = |replace: &str| {
+            CATALOGUE.replace(
+                original,
+                &format!(r#"ops = [{{ op = "add_file", path = "{path}", text = "x"{replace} }}]"#),
+            )
+        };
+        for (text, replaces) in [(op(""), false), (op(", replace = true"), true)] {
+            let catalogue = Catalogue::parse(&text).unwrap();
+            let mut ws = workspace();
+            assert!(ws.files.iter().any(|f| f.path == path));
+            let kind = catalogue.kind("bad-uuid").unwrap();
+            let targets = select(&ws, kind, &BTreeSet::new()).unwrap();
+            let applied = apply(&mut ws, kind, &targets);
+            assert_eq!(applied.is_ok(), replaces, "{applied:?}");
+            if replaces {
+                let file: Vec<_> = ws.files.iter().filter(|f| f.path == path).collect();
+                assert_eq!(file.len(), 1);
+                assert!(matches!(&file[0].body, Body::Text(text) if text == "x"));
+            }
+        }
     }
 
     #[test]
