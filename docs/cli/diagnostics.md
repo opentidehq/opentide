@@ -451,13 +451,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yaral_export_value`](#yaral_export_value) | An `export` `write_row` value is not an outcome variable: Google exports outcome variables only. |
 | [`yaral_function_unavailable`](#yaral_function_unavailable) | The function exists, but not in this profile (rules or search). |
 | [`yaral_leading_wildcard_regex`](#yaral_leading_wildcard_regex) | The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time. |
-| [`yaral_match_shape`](#yaral_match_shape) | The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`. |
+| [`yaral_match_shape`](#yaral_match_shape) | A YARA-L `match` is not a `YaraLMatch` object. |
 | [`yaral_match_variable`](#yaral_match_variable) | A `match` name is not a placeholder bound in `events`. |
-| [`yaral_match_window`](#yaral_match_window) | The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d. |
+| [`yaral_match_window`](#yaral_match_window) | A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows. |
 | [`yaral_meta_duplicate`](#yaral_meta_duplicate) | A meta key appears twice, or a meta value is not a double-quoted string. |
 | [`yaral_multi_event_match`](#yaral_multi_event_match) | A rule with two or more event variables has no `match` section. |
 | [`yaral_nocase_on_enum`](#yaral_nocase_on_enum) | `nocase` is applied to a comparison with an enumerated UDM field. |
-| [`yaral_option`](#yaral_option) | An unknown option, or an option value of the wrong kind. |
+| [`yaral_option`](#yaral_option) | A YARA-L `options` key is unknown, or its value is of the wrong kind. |
 | [`yaral_outcome_aggregation`](#yaral_outcome_aggregation) | With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable. |
 | [`yaral_outcome_limit`](#yaral_outcome_limit) | A rule or search assigns more than 20 outcome variables. |
 | [`yaral_parse_error`](#yaral_parse_error) | The YARA-L text does not parse, or a text holds a second rule. |
@@ -465,10 +465,10 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yaral_reference_list_limit`](#yaral_reference_list_limit) | More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2). |
 | [`yaral_regex`](#yaral_regex) | The regular expression is not valid RE2. |
 | [`yaral_reserved_identifier`](#yaral_reserved_identifier) | A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`. |
-| [`yaral_section_alias`](#yaral_section_alias) | A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys. |
-| [`yaral_section_empty`](#yaral_section_empty) | A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`). |
-| [`yaral_section_header`](#yaral_section_header) | A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only. |
-| [`yaral_section_missing`](#yaral_section_missing) | A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule. |
+| [`yaral_section_alias`](#yaral_section_alias) | A YARA-L section key is a YAML alias instead of its own text. |
+| [`yaral_section_empty`](#yaral_section_empty) | A YARA-L section key is present with no text. |
+| [`yaral_section_header`](#yaral_section_header) | A YARA-L section text holds a section label, a `rule` header or a rule's braces. |
+| [`yaral_section_missing`](#yaral_section_missing) | A YARA-L rule has no `events` or no `condition` section. |
 | [`yaral_section_order`](#yaral_section_order) | A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export). |
 | [`yaral_section_unavailable`](#yaral_section_unavailable) | The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections. |
 | [`yaral_string_escape`](#yaral_string_escape) | A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles. |
@@ -8001,19 +8001,35 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yaral_match_shape
 
-The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`.
+A YARA-L `match` is not a `YaraLMatch` object.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). `match` takes `group_by` (a non-empty list of distinct `$placeholders`), `window`, `type` (`hop`, `tumbling` or `sliding`), and, for `sliding` only, `pivot` (an `$event`) and `direction` (`before` or `after`). The finding is on `match` or on the field at fault.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  google_secops:
+    match:
+      group_by: [$user]
+      window: 5m
+      type: sliding
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Add the event the sliding window is anchored on and its direction, or use a hop window:
+
+```yaml
+configurations:
+  google_secops:
+    match:
+      group_by: [$user]
+      window: 5m
+      type: sliding
+      pivot: $login
+      direction: after
+```
 
 ## yaral_match_variable
 
@@ -8033,19 +8049,23 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yaral_match_window
 
-The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d.
+A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). A hop or sliding window in a rule is 1 minute to 14 days; a tumbling window (`type: tumbling`) at most 72 hours. Seconds are not a window unit.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  google_secops:
+    match:
+      group_by: [$user]
+      window: 15d
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Write a window within the bounds, such as `30m`, `12h` or `14d`.
 
 ## yaral_meta_duplicate
 
@@ -8097,19 +8117,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yaral_option
 
-An unknown option, or an option value of the wrong kind.
+A YARA-L `options` key is unknown, or its value is of the wrong kind.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). `options` takes `allow_zero_values` (`true` or `false`) and `suppression_window` (a duration in `m`, `h` or `d`). The finding is on `options.<key>`.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  google_secops:
+    options:
+      suppression_window: 1 hour
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Write `suppression_window: 1h`, and `allow_zero_values: true` without quotes.
 
 ## yaral_outcome_aggregation
 
@@ -8225,67 +8248,107 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yaral_section_alias
 
-A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys.
+A YARA-L section key is a YAML alias instead of its own text.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+description: &shared |
+  $e
+configurations:
+  google_secops:
+    condition: *shared
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Write the section text under its key with a block scalar (`|`).
 
 ## yaral_section_empty
 
-A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`).
+A YARA-L section key is present with no text.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). The key loaded as YAML `null` or blank text, or as a YAML list or mapping instead of text. A plain YAML scalar that starts with `#` is a YAML comment, so `condition: #fail > 3` loads as null.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  google_secops:
+    condition: #e > 5
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Write each section as a block scalar (`|`), which YAML keeps verbatim:
+
+```yaml
+configurations:
+  google_secops:
+    condition: |
+      #e > 5
+```
 
 ## yaral_section_header
 
-A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only.
+A YARA-L section text holds a section label, a `rule` header or a rule's braces.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). Each section is its own key, and deploy writes the `rule <name> {` header, the `meta` section and the labels itself. A label or a header inside a comment or a string does not count.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  google_secops:
+    events: |
+      rule office_powershell {
+        events:
+          $e.metadata.event_type = "PROCESS_LAUNCH"
+        condition:
+          $e
+      }
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Move each section's lines under its own key and drop the header, `meta` and braces:
+
+```yaml
+configurations:
+  google_secops:
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    condition: |
+      $e
+```
 
 ## yaral_section_missing
 
-A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule.
+A YARA-L rule has no `events` or no `condition` section.
 
-Reported by the analysis engine in a YARA-L 2.0 query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `configurations.google_secops` block (yara-l-1.0). A rule needs both: `events` names what to match, `condition` when it fires. The finding is on the missing key.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  google_secops:
+    events: |
+      $e.metadata.event_type = "NETWORK_DNS"
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA-L 2.0 reference](https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax) describes the syntax and the commands the engine checks against.
+Add the missing key, as a block scalar:
+
+```yaml
+configurations:
+  google_secops:
+    condition: |
+      $e
+```
 
 ## yaral_section_order
 
