@@ -174,7 +174,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
   - a `#` inside a word of a HarfangLab telemetry query is part of the word;
   - a Defender sign-in answered `200` without JSON is an authentication failure.
 - **`deploy` previews and sends rules in a few other formats** ([#823](https://github.com/opentidehq/opentide/issues/823), [#895](https://github.com/opentidehq/opentide/issues/895)). Every request body is the one 0.28.0 sent, but for:
-  - **A dry run's preview leaves out unset fields**: a block with no request body to show is written from its model without the `null` of every optional field it does not set, and a block its model refuses is shown as written.
+  - **A dry run's preview leaves out unset fields**: a block with no request body to show (Defender for Endpoint, Splunk, SentinelOne, CrowdStrike, HarfangLab, Carbon Black Cloud) is written from its model without the `null` of every optional field it does not set, and a block its model refuses is shown as written. Read a missing key in `deploy --dry-run --json`'s `api_request` as `null` did. The request a deploy sends is unchanged, and a `null` a Splunk block writes in `advanced` is still shown.
   - **Unset variables are named in plan order**: "a real deploy would need $A, $B and $C" lists them platform by platform, then tenant by tenant.
   - **Splunk's risk objects are compact JSON**: `action.risk.param._risk` is written without spaces after `,` and `:`.
   - **HarfangLab's Sigma YAML quotes with double quotes**: a title with `: ` is written `"..."` where it was `'...'`; the rule reads the same.

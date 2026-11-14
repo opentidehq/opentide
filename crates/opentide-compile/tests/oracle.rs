@@ -295,3 +295,95 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     // a delete) is one the 0.23.0 client never sent.
     assert!(faulted >= 5, "{faulted} oracle faults");
 }
+
+/// The JSON pointers of every `null` in `value`, except the values of a
+/// Splunk block's `advanced` table: there `null` is a value the rule writes
+/// (the empty `savedsearches.conf` value), not a field it leaves unset.
+fn nulls(value: &Json, at: &str, out: &mut Vec<String>) {
+    match value {
+        Json::Null => out.push(at.to_owned()),
+        Json::Object(object) => {
+            for (key, member) in object {
+                if at.is_empty() && key == "advanced" {
+                    continue;
+                }
+                nulls(member, &format!("{at}/{key}"), out);
+            }
+        }
+        Json::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                nulls(item, &format!("{at}/{index}"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// One rule across platforms for a dry run's preview of a block it builds
+/// no request body for (`deployers()`: Defender, Splunk, SentinelOne,
+/// CrowdStrike, HarfangLab, Carbon Black Cloud): the block's model dump
+/// leaves an unset field out, where the oracle printed it `null`
+/// (`[[dump]]` `nulls`, #895). What the tenant receives is not the dump:
+/// [`the_compile_corpus_compiles_as_the_oracle_compiles_it`] holds each
+/// tenant's requests to the oracle's, which carry no `null` field either.
+#[test]
+fn a_model_dump_preview_leaves_unset_fields_out_on_every_platform() {
+    let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
+    let record: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
+    )
+    .unwrap();
+    let workspace = Workspace::open(
+        Arc::new(OsFs) as Arc<dyn FileSystem>,
+        Options {
+            roots: RootOptions {
+                repo: Some(corpus.clone()),
+                cwd: corpus,
+                ..RootOptions::default()
+            },
+        },
+    )
+    .unwrap();
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let dumped = preview::deployers();
+    let mut seen: Vec<&str> = Vec::new();
+    let mut found = Vec::new();
+    for entry in record["rules"].as_array().unwrap() {
+        let platform = entry["platform"].as_str().unwrap();
+        let Some(platform) = dumped.iter().copied().find(|known| *known == platform) else {
+            continue;
+        };
+        let uuid = entry["uuid"].as_str().unwrap();
+        let object = index.get("rule", uuid).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let shown = preview::preview(&cx, platform, &rule);
+        let request = shown.get("api_request").unwrap();
+        assert!(
+            request.as_object().is_some(),
+            "{uuid} {platform}: {shown:?}"
+        );
+        let mut at = Vec::new();
+        nulls(request, "", &mut at);
+        found.extend(at.into_iter().map(|at| format!("{uuid} {platform} {at}")));
+        if !seen.contains(&platform) {
+            seen.push(platform);
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "unset fields printed null:\n{}",
+        found.join("\n")
+    );
+    seen.sort_unstable();
+    let mut expected = dumped.clone();
+    expected.sort_unstable();
+    assert_eq!(
+        seen, expected,
+        "the corpus previews every model-dump platform"
+    );
+}
