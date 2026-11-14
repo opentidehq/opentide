@@ -15,14 +15,14 @@
 use std::time::{Duration, Instant};
 
 use opentide_compile::json::{Json as CJson, Object};
+use opentide_connectors::Environment;
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::sentinel::Sentinel;
 use opentide_connectors::text::json_text;
-use opentide_connectors::{ConnectorError, Environment};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    Context, Outcome, block_on, configured, format, json_string, key_error, report,
+    Context, FieldError, Outcome, Skipped, block_on, configured, fill, json_string, report,
     sanitize_filename, tenant, under, write_text,
 };
 
@@ -112,68 +112,58 @@ pub(crate) fn flat_rule(rule: &CJson) -> CJson {
     snake_keys(&CJson::Object(merged))
 }
 
-// ------------------------------------------------------ the oracle's helpers
+// ------------------------------------------------------ reading a listed rule
 
-/// The name of a JSON value's Python type, as an `AttributeError` names it.
-fn type_name(value: &CJson) -> &'static str {
-    match value {
-        CJson::Null => "NoneType",
-        CJson::Bool(_) => "bool",
-        CJson::Int(_) => "int",
-        CJson::Float(_) => "float",
-        CJson::Str(_) => "str",
-        CJson::Array(_) => "list",
-        CJson::Object(_) => "dict",
-    }
-}
-
-fn no_attribute(value: &CJson, attribute: &str) -> String {
-    format!(
-        "AttributeError: '{}' object has no attribute '{attribute}'",
-        type_name(value)
-    )
-}
-
-/// `mapping.get(key, {})`: the mapping at `key`, none when it is missing;
-/// any other value fails the run where the oracle called `.get` on it.
-fn mapping<'j>(object: &'j Object, key: &str) -> Result<Option<&'j Object>, String> {
+/// The mapping at `key`: none when it is missing, `null` or empty.
+fn mapping<'j>(object: &'j Object, key: &str) -> Result<Option<&'j Object>, FieldError> {
     match object.get(key) {
-        None => Ok(None),
+        None | Some(CJson::Null) => Ok(None),
+        Some(CJson::Object(inner)) if inner.is_empty() => Ok(None),
         Some(CJson::Object(inner)) => Ok(Some(inner)),
-        Some(other) => Err(no_attribute(other, "get")),
+        Some(_) => Err(FieldError::not(key, "a mapping")),
     }
 }
 
-/// `mapping.get(key) or {}`: the mapping at `key`, none when it is falsy.
-fn mapping_or_empty<'j>(object: &'j Object, key: &str) -> Result<Option<&'j Object>, String> {
-    match object.get(key) {
-        Some(value) if !value.truthy() => Ok(None),
-        other => match other {
-            None => Ok(None),
-            Some(CJson::Object(inner)) => Ok(Some(inner)),
-            Some(other) => Err(no_attribute(other, "get")),
-        },
-    }
+/// The value at `key`, which must be there and not `null`.
+fn required<'j>(object: &'j Object, key: &str) -> Result<&'j CJson, FieldError> {
+    object
+        .get(key)
+        .filter(|value| !value.is_null())
+        .ok_or_else(|| FieldError::missing(key))
 }
 
-/// `mapping[key]`.
-fn required<'j>(object: &'j Object, key: &str) -> Result<&'j CJson, String> {
-    object.get(key).ok_or_else(|| key_error(key))
+/// The string at `key`, which must be there.
+fn required_text<'j>(object: &'j Object, key: &str) -> Result<&'j str, FieldError> {
+    required(object, key)?
+        .as_str()
+        .ok_or_else(|| FieldError::not(key, "a string"))
 }
 
-/// `mapping[key]` used as a string (`.split`, `.removeprefix`).
-fn required_text<'j>(object: &'j Object, key: &str, method: &str) -> Result<&'j str, String> {
-    match required(object, key)? {
-        CJson::Str(text) => Ok(text),
-        other => Err(no_attribute(other, method)),
-    }
+/// The value at `key` when ARM set it: not missing, `null`, `false`, nor an
+/// empty string, list or object, each of which leaves a block commented out.
+fn given<'j>(object: &'j Object, key: &str) -> Option<&'j CJson> {
+    object.get(key).filter(|value| match value {
+        CJson::Null | CJson::Bool(false) => false,
+        CJson::Str(text) => !text.is_empty(),
+        CJson::Array(items) => !items.is_empty(),
+        CJson::Object(members) => !members.is_empty(),
+        CJson::Bool(true) | CJson::Int(_) | CJson::Float(_) => true,
+    })
 }
 
-/// `mapping.get(key)` when it is truthy.
-fn truthy<'j>(object: &'j Object, key: &str) -> Option<&'j CJson> {
-    object.get(key).filter(|value| value.truthy())
+/// The objects of the list at `key` (`shown` in an error).
+fn objects<'j>(value: &'j CJson, shown: &str) -> Result<Vec<&'j Object>, FieldError> {
+    let CJson::Array(items) = value else {
+        return Err(FieldError::not(shown, "a list"));
+    };
+    items
+        .iter()
+        .map(|item| match item {
+            CJson::Object(object) => Ok(object),
+            _ => Err(FieldError::not(shown, "a list of mappings")),
+        })
+        .collect()
 }
-
 /// `convert_period`: an ISO 8601 duration as the shorthand rules use
 /// (`PT1H` as `1h`).
 fn convert_period(period: &str) -> String {
@@ -227,19 +217,15 @@ fn list_items(values: &[CJson], indent: &str) -> String {
     out
 }
 
-/// The items of a list value: none when it is absent or empty, a single
-/// string as its one item; any other value that is not a list fails.
-fn items(object: &Object, key: &str) -> Result<Vec<CJson>, String> {
+/// The items of a list value: none when it is missing, `null` or an empty
+/// string, and a single string as its one item, never its characters.
+fn items(object: &Object, key: &str) -> Result<Vec<CJson>, FieldError> {
     match object.get(key) {
         Some(CJson::Array(items)) => Ok(items.clone()),
-        Some(value) if !value.truthy() => Ok(Vec::new()),
-        None => Ok(Vec::new()),
-        // A single string is the one item it is, never its characters.
+        None | Some(CJson::Null) => Ok(Vec::new()),
+        Some(CJson::Str(text)) if text.is_empty() => Ok(Vec::new()),
         Some(text @ CJson::Str(_)) => Ok(vec![text.clone()]),
-        Some(other) => Err(format!(
-            "TypeError: '{}' object is not iterable",
-            type_name(other)
-        )),
+        Some(_) => Err(FieldError::not(key, "a list")),
     }
 }
 
@@ -277,14 +263,14 @@ fn alert_techniques(techniques: &[CJson], sub_techniques: &[CJson]) -> Vec<CJson
 }
 
 /// The key and column lines of a map (`CUSTOM_DETAILS`), one pair a key.
-fn key_columns(value: &CJson) -> Result<String, String> {
+fn key_columns(value: &CJson, key: &str) -> Result<String, FieldError> {
     let CJson::Object(object) = value else {
-        return Err(no_attribute(value, "items"));
+        return Err(FieldError::not(key, "a mapping"));
     };
     Ok(object
         .iter()
         .map(|(key, column)| {
-            format(
+            fill(
                 CUSTOM_DETAILS,
                 &[
                     ("key", &scalar(&CJson::Str(key.clone()))),
@@ -310,7 +296,10 @@ fn indent_lines(text: &str, indent: &str) -> String {
     clippy::too_many_lines,
     reason = "the oracle's loop body, block by block, in one place"
 )]
-pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String, String)>, String> {
+pub(crate) fn render(
+    rule: &Object,
+    tenant_name: &str,
+) -> Result<Option<(String, String)>, FieldError> {
     let tenant_scalar = scalar(&CJson::Str(tenant_name.to_owned()));
     let status = if rule.get("enabled") == Some(&CJson::Bool(true)) {
         "PRODUCTION"
@@ -324,14 +313,14 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     } else if kind == Some(&CJson::Str("Scheduled".into())) {
         let operator = scalar(required(rule, "trigger_operator")?);
         let threshold = json_text(required(rule, "trigger_threshold")?);
-        let frequency = convert_period(required_text(rule, "query_frequency", "removeprefix")?);
-        let lookback = convert_period(required_text(rule, "query_period", "removeprefix")?);
+        let frequency = convert_period(required_text(rule, "query_frequency")?);
+        let lookback = convert_period(required_text(rule, "query_period")?);
         (
-            format(
+            fill(
                 TRIGGER,
                 &[("operator", &operator), ("threshold", &threshold)],
             ),
-            format(
+            fill(
                 SCHEDULING,
                 &[("frequency", &frequency), ("lookback", &lookback)],
             ),
@@ -347,17 +336,17 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     {
         "false".to_owned()
     } else {
-        convert_period(required_text(rule, "suppression_duration", "removeprefix")?)
+        convert_period(required_text(rule, "suppression_duration")?)
     };
 
-    let (custom_details_commented, custom_details) = match truthy(rule, "custom_details") {
-        Some(details) => ("", key_columns(details)?),
+    let (custom_details_commented, custom_details) = match given(rule, "custom_details") {
+        Some(details) => ("", key_columns(details, "custom_details")?),
         None => ("#", CUSTOM_DETAILS_TEMPLATE.to_owned()),
     };
     // The oracle also marked this block commented or not here; every branch
     // below sets the mark again, so only the lines carry over.
-    let mut dynamic_properties = match truthy(rule, "dynamic_properties") {
-        Some(properties) => key_columns(properties)?,
+    let mut dynamic_properties = match given(rule, "dynamic_properties") {
+        Some(properties) => key_columns(properties, "dynamic_properties")?,
         None => DYNAMIC_PROPERTIES_TEMPLATE.to_owned(),
     };
     let dynamic_properties_commented;
@@ -367,7 +356,7 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     let alert_description_commented;
     let alert_description_override;
     let alert_description_style;
-    match truthy(rule, "alert_details_override") {
+    match given(rule, "alert_details_override") {
         None => {
             alert_title_commented = "#";
             alert_description_commented = "#";
@@ -378,18 +367,21 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
         }
         Some(details) => {
             let CJson::Object(details) = details else {
-                return Err(no_attribute(details, "get"));
+                return Err(FieldError::not("alert_details_override", "a mapping"));
             };
-            if let Some(title) = truthy(details, "alert_display_name_format") {
+            if let Some(title) = given(details, "alert_display_name_format") {
                 alert_title_commented = "";
                 alert_title_override = scalar(title);
             } else {
                 alert_title_commented = "#";
                 alert_title_override = String::new();
             }
-            if let Some(description) = truthy(details, "alert_description_format") {
+            if let Some(description) = given(details, "alert_description_format") {
                 let CJson::Str(description) = description else {
-                    return Err(no_attribute(description, "split"));
+                    return Err(FieldError::not(
+                        "alert_details_override.alert_description_format",
+                        "a string",
+                    ));
                 };
                 alert_description_commented = "";
                 alert_description_style = block_style(description);
@@ -399,28 +391,24 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
                 alert_description_style = "|";
                 alert_description_override = "#...".to_owned();
             }
-            if let Some(properties) = truthy(details, "alert_dynamic_properties") {
-                let CJson::Array(properties) = properties else {
-                    return Err(format!(
-                        "TypeError: '{}' object is not iterable",
-                        type_name(properties)
-                    ));
-                };
+            if let Some(properties) = given(details, "alert_dynamic_properties") {
+                const SHOWN: &str = "alert_details_override.alert_dynamic_properties";
+                let in_list = |error: FieldError| error.under(SHOWN);
                 dynamic_properties_commented = "";
                 dynamic_properties = String::new();
-                for property in properties {
-                    let CJson::Object(property) = property else {
-                        return Err(format!(
-                            "TypeError: '{}' object is not subscriptable",
-                            type_name(property)
-                        ));
-                    };
+                for property in objects(properties, SHOWN)? {
                     dynamic_properties.push('\n');
-                    dynamic_properties.push_str(&format(
+                    dynamic_properties.push_str(&fill(
                         DYNAMIC_PROPERTIES,
                         &[
-                            ("property", &scalar(required(property, "alert_property")?)),
-                            ("column", &scalar(required(property, "value")?)),
+                            (
+                                "property",
+                                &scalar(required(property, "alert_property").map_err(in_list)?),
+                            ),
+                            (
+                                "column",
+                                &scalar(required(property, "value").map_err(in_list)?),
+                            ),
                         ],
                     ));
                 }
@@ -431,7 +419,7 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
         }
     }
 
-    let tactics = match truthy(rule, "tactics") {
+    let tactics = match given(rule, "tactics") {
         Some(_) => format!("tactics:{}", list_items(&items(rule, "tactics")?, "      ")),
         None => REMOVE.to_owned(),
     };
@@ -445,36 +433,37 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     let event_aggregation = scalar(
         mapping(rule, "event_grouping_settings")?
             .and_then(|settings| settings.get("aggregation_kind"))
-            .filter(|kind| kind.truthy())
+            .filter(|kind| kind.as_str().is_some_and(|kind| !kind.is_empty()))
             .unwrap_or(&CJson::Str("SingleAlert".into())),
     );
     let empty = Object::new();
-    let incident = mapping_or_empty(rule, "incident_configuration")?.unwrap_or(&empty);
-    let grouping = mapping_or_empty(incident, "grouping_configuration")?.unwrap_or(&empty);
+    let incident = mapping(rule, "incident_configuration")?.unwrap_or(&empty);
+    let grouping = mapping(incident, "grouping_configuration")
+        .map_err(|error| error.under("incident_configuration"))?
+        .unwrap_or(&empty);
+    let in_grouping =
+        |error: FieldError| error.under("incident_configuration.grouping_configuration");
     let (
         alert_grouping_enabled,
         reopen_closed_incidents_commented,
         reopen_closed_incidents,
         grouping_configuration,
-    ) = if required(grouping, "enabled")? == &CJson::Bool(false) {
+    ) = if required(grouping, "enabled").map_err(in_grouping)? == &CJson::Bool(false) {
         ("false", "#", String::new(), String::new())
     } else {
         let reopen = grouping
             .get("reopen_closed_incident")
             .map_or_else(|| "false".to_owned(), json_text);
-        let lookback = convert_period(required_text(
-            grouping,
-            "lookback_duration",
-            "removeprefix",
-        )?);
-        let matching = scalar(required(grouping, "matching_method")?);
-        let group = |key: &str, label: &str| -> Result<String, String> {
-            Ok(match truthy(grouping, key) {
+        let lookback =
+            convert_period(required_text(grouping, "lookback_duration").map_err(in_grouping)?);
+        let matching = scalar(required(grouping, "matching_method").map_err(in_grouping)?);
+        let group = |key: &str, label: &str| -> Result<String, FieldError> {
+            Ok(match given(grouping, key) {
                 Some(_) => format!("{label}:{}", list_items(&items(grouping, key)?, "        ")),
                 None => REMOVE.to_owned(),
             })
         };
-        let configuration = format(
+        let configuration = fill(
             GROUPING_CONFIGURATION,
             &[
                 ("grouping_lookback", &lookback),
@@ -501,49 +490,38 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
         )
     };
 
-    let (entities_commented, entities) = match truthy(rule, "entity_mappings") {
+    let (entities_commented, entities) = match given(rule, "entity_mappings") {
         Some(mappings) => {
-            let CJson::Array(mappings) = mappings else {
-                return Err(format!(
-                    "TypeError: '{}' object is not iterable",
-                    type_name(mappings)
-                ));
-            };
+            const SHOWN: &str = "entity_mappings";
+            const FIELDS: &str = "entity_mappings.field_mappings";
+            let in_list = |error: FieldError| error.under(SHOWN);
+            let in_fields = |error: FieldError| error.under(FIELDS);
             let mut entities = Vec::new();
-            for entity in mappings {
-                let CJson::Object(entity) = entity else {
-                    return Err(format!(
-                        "TypeError: '{}' object is not subscriptable",
-                        type_name(entity)
-                    ));
-                };
+            for entity in objects(mappings, SHOWN)? {
                 let mut lines = Vec::new();
-                let fields = required(entity, "field_mappings")?;
-                let CJson::Array(fields) = fields else {
-                    return Err(format!(
-                        "TypeError: '{}' object is not iterable",
-                        type_name(fields)
-                    ));
-                };
-                for field in fields {
-                    let CJson::Object(field) = field else {
-                        return Err(format!(
-                            "TypeError: '{}' object is not subscriptable",
-                            type_name(field)
-                        ));
-                    };
-                    lines.push(format(
+                let fields = required(entity, "field_mappings").map_err(in_list)?;
+                for field in objects(fields, FIELDS)? {
+                    lines.push(fill(
                         ENTITIES_MAPPINGS,
                         &[
-                            ("identifier", &scalar(required(field, "identifier")?)),
-                            ("column", &scalar(required(field, "column_name")?)),
+                            (
+                                "identifier",
+                                &scalar(required(field, "identifier").map_err(in_fields)?),
+                            ),
+                            (
+                                "column",
+                                &scalar(required(field, "column_name").map_err(in_fields)?),
+                            ),
                         ],
                     ));
                 }
-                entities.push(format(
+                entities.push(fill(
                     ENTITIES,
                     &[
-                        ("entity", &scalar(required(entity, "entity_type")?)),
+                        (
+                            "entity",
+                            &scalar(required(entity, "entity_type").map_err(in_list)?),
+                        ),
                         ("mappings", &lines.join("\n")),
                     ],
                 ));
@@ -553,8 +531,8 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
         None => ("#", ENTITIES_TEMPLATE.to_owned()),
     };
 
-    let query = required_text(rule, "query", "split")?;
-    let block = format(
+    let query = required_text(rule, "query")?;
+    let block = fill(
         BLOCK,
         &[
             ("status", status),
@@ -591,22 +569,14 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     let block = indent_lines(&block, "  ");
     let block = block.trim_matches('\n');
 
-    let display_name = match required(rule, "display_name")? {
-        CJson::Str(name) => format!("{name} - {tenant_name}"),
-        other => {
-            return Err(format!(
-                "TypeError: unsupported operand type(s) for +: '{}' and 'str'",
-                type_name(other)
-            ));
-        }
-    };
-    let description = required_text(rule, "description", "split")?;
-    let created = required_text(rule, "last_modified_utc", "split")?
+    let display_name = format!("{} - {tenant_name}", required_text(rule, "display_name")?);
+    let description = required_text(rule, "description")?;
+    let created = required_text(rule, "last_modified_utc")?
         .split('T')
         .next()
         .unwrap_or_default()
         .to_owned();
-    let text = format(
+    let text = fill(
         MDR,
         &[
             ("rule_name", &json_string(&display_name)),
@@ -660,6 +630,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
     let environment = Environment::from_pairs(cx.env.iter());
     // Display names are not unique in Sentinel; never overwrite a file from this run.
     let mut written: Vec<String> = Vec::new();
+    let mut skipped = Skipped::new(LOGGER, "sentinel_import_rule_skipped");
     for configured in &tenants {
         let (tenant, http) = tenant(
             SENTINEL,
@@ -677,28 +648,30 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
             };
             connector.list(context).await
         })?
-        .map_err(|error| failure(&error))?
+        .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
         let rules: Vec<CJson> = rules.iter().map(flat_rule).collect();
         for rule in &rules {
             let CJson::Object(rule) = rule else {
-                return Err(no_attribute(rule, "get"));
-            };
-            let Some((display_name, text)) = render(rule, &configured.name)? else {
+                skipped.push("", "the listed rule is not a JSON object");
                 continue;
+            };
+            let field = |key: &str| rule.get(key).map(json_text).unwrap_or_default();
+            let (display_name, text) = match render(rule, &configured.name) {
+                Ok(Some(rendered)) => rendered,
+                Ok(None) => continue,
+                Err(error) => {
+                    let shown = format!("{} - {}", field("display_name"), configured.name);
+                    skipped.push(&shown, &format!("rule {}: {error}", field("name")));
+                    continue;
+                }
             };
             if let Err(error) = opentide_schema::node::load(&text) {
                 let first = format!("{error}");
                 let first = first.lines().next().unwrap_or_default();
-                tracing::error!(
-                    rule = display_name.as_str(),
-                    reason = format!("would write invalid YAML: {first}").as_str(),
-                    logger = LOGGER,
-                    "sentinel_import_rule_skipped"
-                );
+                skipped.push(&display_name, &format!("would write invalid YAML: {first}"));
                 continue;
             }
-            let field = |key: &str| rule.get(key).map(json_text).unwrap_or_default();
             let stem = file_stem(&field("display_name"), &configured.name, &field("name"));
             let stem = unique_stem(stem, &field("name"), &written);
             written.push(stem.to_lowercase());
@@ -712,7 +685,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
             }
         }
     }
-    Ok(Vec::new())
+    Ok(skipped.into_keys())
 }
 
 /// The name of a rule's file, without `.yaml`: `<display name> - <tenant>`,
@@ -756,16 +729,6 @@ fn unique_stem(stem: String, id: &str, taken: &[String]) -> String {
         .map(|n| format!("{stem} {n}"))
         .find(|candidate| free(candidate))
         .unwrap_or(stem)
-}
-
-/// A failure before ARM answered, as the importer's exception reads.
-fn failure(error: &ConnectorError) -> String {
-    match error {
-        ConnectorError::Authentication { message, .. } => {
-            format!("ClientAuthenticationError: {message}")
-        }
-        other => super::connector_message(other),
-    }
 }
 
 #[cfg(test)]
@@ -926,24 +889,37 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_or_mistyped_field_fails_as_the_importer_did() {
-        let failed =
-            |from: &str, to: &str| render(&object(&RULE.replace(from, to)), "soc").unwrap_err();
+    fn a_missing_or_mistyped_field_names_the_field() {
+        let failed = |from: &str, to: &str| {
+            render(&object(&RULE.replace(from, to)), "soc")
+                .unwrap_err()
+                .to_string()
+        };
         assert_eq!(
             failed("\"triggerOperator\": \"GreaterThan\",", ""),
-            "KeyError: 'trigger_operator'"
+            "field `trigger_operator` is missing"
         );
-        assert_eq!(failed("{\"enabled\": false}", "{}"), "KeyError: 'enabled'");
+        assert_eq!(
+            failed("{\"enabled\": false}", "{}"),
+            "field `incident_configuration.grouping_configuration.enabled` is missing"
+        );
         assert_eq!(
             failed("\"queryPeriod\": \"PT1H\"", "\"queryPeriod\": 3"),
-            "AttributeError: 'int' object has no attribute 'removeprefix'"
+            "field `query_period` is not a string"
         );
         assert_eq!(
             failed(
                 "\"incidentConfiguration\": {\"createIncident\": true,",
                 "\"incidentConfiguration\": [], \"x\": {\"createIncident\": true,"
             ),
-            "AttributeError: 'list' object has no attribute 'get'"
+            "field `incident_configuration` is not a mapping"
+        );
+        assert_eq!(
+            failed(
+                "\"severity\": \"High\",",
+                "\"severity\": \"High\", \"tactics\": 7,"
+            ),
+            "field `tactics` is not a list"
         );
     }
 }
