@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: _root/human/none/typo-root-option
+---
+args: opentide --jsn validate
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1m␛[31merror:␛[0m Unknown option "--jsn".
+  ␛[1m␛[36mhelp:␛[0m did you mean "--json"?
+  ␛[1musage:␛[0m opentide [OPTIONS] <COMMAND>
+  ␛[1m␛[36mhelp:␛[0m run 'opentide --help'

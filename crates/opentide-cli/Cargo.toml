@@ -20,6 +20,10 @@ exclude = [
     "tests/render.rs",
     "tests/extract_sentinel/",
     "tests/extract_sentinel.rs",
+    # The command line's snapshots (#1139): megabytes, and their manifest and
+    # fixtures are the repository's tests/golden/.
+    "tests/cli_snapshots/",
+    "tests/cli_snapshots.rs",
 ]
 description = "opentide engine component: the command line (command tree, output modes, JSON envelope, exit codes, crash handler). Internal: depend on the opentide facade (its `cli` feature)."
 readme = "README.md"
